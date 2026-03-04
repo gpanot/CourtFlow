@@ -8,7 +8,8 @@ import { joinVenue } from "@/lib/socket-client";
 import { CourtCard, type CourtData } from "@/components/court-card";
 import { QueuePanel, type QueueEntryData } from "@/components/queue-panel";
 import { cn } from "@/lib/cn";
-import { Plus, X, LogOut, Users, LayoutGrid, AlertTriangle, User } from "lucide-react";
+import { Plus, X, LogOut, Users, LayoutGrid, AlertTriangle, User, Flame } from "lucide-react";
+import { WARMUP_PLAYER_THRESHOLD } from "@/lib/constants";
 
 interface SessionData {
   id: string;
@@ -148,6 +149,10 @@ export function StaffDashboard() {
     }
   };
 
+  const waitingCount = queue.filter((e) => e.status === "waiting").length;
+  const isWarmupMode = !!session && courts.length > 0 && courts.every((c) => c.status === "idle");
+  const warmupReady = isWarmupMode && waitingCount >= WARMUP_PLAYER_THRESHOLD;
+
   if (!venueId) {
     return (
       <div className="flex min-h-dvh items-center justify-center">
@@ -214,8 +219,9 @@ export function StaffDashboard() {
       {/* Content */}
       <main className="flex-1 overflow-y-auto p-4">
         {!session && !showOpenSession && (
-          <div className="flex h-64 items-center justify-center">
-            <p className="text-lg text-neutral-500">No active session. Open a session to begin.</p>
+          <div className="flex h-64 flex-col items-center justify-center gap-3 text-center">
+            <p className="text-lg text-neutral-500">No active session.</p>
+            <p className="text-sm text-neutral-600">Open a session so players can check in and warm up.</p>
           </div>
         )}
 
@@ -229,12 +235,54 @@ export function StaffDashboard() {
 
         {session && tab === "courts" && (
           <div className="space-y-4">
+            {/* Warmup banner */}
+            {isWarmupMode && (
+              <div className={cn(
+                "rounded-xl border p-4",
+                warmupReady
+                  ? "border-green-500/50 bg-green-600/10"
+                  : "border-amber-500/40 bg-amber-600/10"
+              )}>
+                {warmupReady ? (
+                  <div className="flex items-center gap-3">
+                    <Flame className="h-6 w-6 shrink-0 text-green-400" />
+                    <div className="flex-1">
+                      <p className="font-semibold text-green-300">Ready to start rotation!</p>
+                      <p className="text-sm text-green-400/70">{waitingCount} players warmed up — assign courts to begin.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="flex items-center gap-3 mb-3">
+                      <Flame className="h-5 w-5 shrink-0 text-amber-400" />
+                      <div>
+                        <p className="font-semibold text-amber-300">Warm Up in Progress</p>
+                        <p className="text-xs text-amber-400/70">Courts are open — players play freely</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-2 rounded-full bg-neutral-700 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-amber-500 transition-all duration-500"
+                          style={{ width: `${Math.min(100, (waitingCount / WARMUP_PLAYER_THRESHOLD) * 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-sm font-mono text-amber-300 shrink-0">
+                        {waitingCount} / {WARMUP_PLAYER_THRESHOLD}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="grid gap-3 sm:grid-cols-2">
               {courts.map((court) => (
                 <CourtCard
                   key={court.id}
                   court={court}
                   variant="staff"
+                  warmup={isWarmupMode}
                   onClick={() => setSelectedCourt(court)}
                 />
               ))}

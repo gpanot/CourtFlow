@@ -7,8 +7,9 @@ import { useSocket } from "@/hooks/use-socket";
 import { joinVenue } from "@/lib/socket-client";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { Wifi, WifiOff } from "lucide-react";
+import { Wifi, WifiOff, Flame } from "lucide-react";
 import Link from "next/link";
+import { WARMUP_PLAYER_THRESHOLD } from "@/lib/constants";
 
 interface VenueState {
   session: { id: string; status: string } | null;
@@ -98,6 +99,8 @@ export default function TVDisplayPage() {
   const venueName = venues.find((v) => v.id === venueId)?.name || "Court Display";
   const activeCourts = state.courts.filter((c) => c.status !== "maintenance");
   const courtCount = activeCourts.length;
+  const waitingCount = state.queue.filter((e: { status: string }) => e.status === "waiting").length;
+  const isWarmupMode = !!state.session && state.courts.length > 0 && state.courts.every((c) => c.status === "idle");
 
   const gridCols =
     courtCount <= 3 ? "grid-cols-1 lg:grid-cols-3"
@@ -114,7 +117,11 @@ export default function TVDisplayPage() {
           <span className="text-xl text-neutral-300">{venueName}</span>
         </div>
         <div className="flex items-center gap-4">
-          {state.session ? (
+          {isWarmupMode ? (
+            <span className="flex items-center gap-2 rounded-full bg-amber-500/20 px-3 py-1 text-sm font-medium text-amber-400">
+              <Flame className="h-4 w-4" /> Warm Up · {waitingCount} players checked in
+            </span>
+          ) : state.session ? (
             <span className="rounded-full bg-green-600/20 px-3 py-1 text-sm font-medium text-green-400">
               Session Active &middot; {courtCount} courts
             </span>
@@ -145,6 +152,33 @@ export default function TVDisplayPage() {
             <div className="flex h-full items-center justify-center">
               <p className="text-4xl text-neutral-600">Waiting for session to start...</p>
             </div>
+          ) : isWarmupMode ? (
+            <div className="flex h-full flex-col">
+              {/* Warmup hero */}
+              <div className="flex flex-col items-center justify-center gap-4 py-8 text-center">
+                <Flame className="h-16 w-16 text-amber-400 opacity-80" />
+                <p className="text-5xl font-bold text-amber-300">Warm Up Time</p>
+                <p className="text-2xl text-amber-400/70">Courts are open — play freely while others check in</p>
+                {/* progress toward threshold */}
+                <div className="mt-2 flex items-center gap-4">
+                  <div className="w-64 h-3 rounded-full bg-neutral-700 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-amber-500 transition-all duration-700"
+                      style={{ width: `${Math.min(100, (waitingCount / WARMUP_PLAYER_THRESHOLD) * 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-xl font-mono text-amber-300">
+                    {waitingCount} / {WARMUP_PLAYER_THRESHOLD} players
+                  </span>
+                </div>
+              </div>
+              {/* Court cards in warmup state */}
+              <div className={cn("grid gap-4 auto-rows-fr", gridCols)}>
+                {state.courts.map((court) => (
+                  <CourtCard key={court.id} court={court} variant="tv" warmup={true} />
+                ))}
+              </div>
+            </div>
           ) : (
             <div className={cn("grid gap-4 auto-rows-fr", gridCols)}>
               {state.courts.map((court) => (
@@ -154,9 +188,12 @@ export default function TVDisplayPage() {
           )}
         </main>
 
-        {/* Queue sidebar */}
+        {/* Queue sidebar — show during warmup and rotation */}
         {state.session && (
           <aside className="w-80 shrink-0 overflow-y-auto border-l border-neutral-800 p-4 lg:w-96">
+            {isWarmupMode && (
+              <p className="mb-3 text-sm font-semibold text-amber-400 uppercase tracking-wider">Checked In</p>
+            )}
             <QueuePanel entries={state.queue} variant="tv" />
           </aside>
         )}

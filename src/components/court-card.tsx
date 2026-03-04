@@ -30,6 +30,7 @@ export interface CourtData {
 interface CourtCardProps {
   court: CourtData;
   variant?: "tv" | "staff";
+  warmup?: boolean;
   onClick?: () => void;
 }
 
@@ -37,6 +38,7 @@ const statusConfig = {
   active: { bg: "bg-green-600/20 border-green-500", dot: "bg-green-500" },
   idle: { bg: "bg-neutral-800/50 border-neutral-600", dot: "bg-neutral-500" },
   maintenance: { bg: "bg-red-900/30 border-red-700", dot: "bg-red-500" },
+  warmup: { bg: "bg-amber-600/15 border-amber-500/60", dot: "bg-amber-400" },
 };
 
 const skillBadgeColors: Record<string, string> = {
@@ -46,8 +48,10 @@ const skillBadgeColors: Record<string, string> = {
   pro: "bg-red-700 text-red-100",
 };
 
-export function CourtCard({ court, variant = "tv", onClick }: CourtCardProps) {
-  const config = statusConfig[court.status] || statusConfig.idle;
+export function CourtCard({ court, variant = "tv", warmup = false, onClick }: CourtCardProps) {
+  const config = (warmup && court.status === "idle")
+    ? statusConfig.warmup
+    : (statusConfig[court.status] || statusConfig.idle);
   const isTV = variant === "tv";
 
   return (
@@ -108,10 +112,21 @@ export function CourtCard({ court, variant = "tv", onClick }: CourtCardProps) {
         </>
       )}
 
-      {court.status === "idle" && (
+      {court.status === "idle" && !warmup && (
         <p className={cn("mt-4 text-neutral-400", isTV ? "text-3xl" : "text-lg")}>
           Available
         </p>
+      )}
+
+      {court.status === "idle" && warmup && (
+        <div className="mt-3">
+          <p className={cn("font-semibold text-amber-400", isTV ? "text-3xl" : "text-lg")}>
+            Warm Up
+          </p>
+          <p className={cn("text-amber-300/60", isTV ? "text-xl mt-1" : "text-sm mt-0.5")}>
+            Open — play freely
+          </p>
+        </div>
       )}
 
       {court.status === "maintenance" && (
