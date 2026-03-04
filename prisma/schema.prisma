@@ -1,0 +1,208 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SkillLevel {
+  beginner
+  intermediate
+  advanced
+  pro
+}
+
+enum Gender {
+  male
+  female
+  other
+}
+
+enum CourtStatus {
+  idle
+  active
+  maintenance
+}
+
+enum GameType {
+  men
+  women
+  mixed
+}
+
+enum SessionStatus {
+  open
+  closed
+}
+
+enum QueueStatus {
+  waiting
+  assigned
+  playing
+  on_break
+  left
+}
+
+enum GroupStatus {
+  forming
+  active
+  disbanded
+}
+
+enum StaffRole {
+  staff
+  superadmin
+}
+
+model Venue {
+  id        String    @id @default(cuid())
+  name      String
+  location  String?
+  settings  Json      @default("{}")
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  courts       Court[]
+  sessions     Session[]
+  staff        StaffMember[]
+  auditLogs    AuditLog[]
+
+  @@map("venues")
+}
+
+model Player {
+  id         String     @id @default(cuid())
+  name       String
+  phone      String     @unique
+  avatar     String     @default("🏓")
+  skillLevel SkillLevel @default(beginner) @map("skill_level")
+  gender     Gender
+  createdAt  DateTime   @default(now()) @map("created_at")
+
+  queueEntries QueueEntry[]
+
+  @@map("players")
+}
+
+model StaffMember {
+  id           String    @id @default(cuid())
+  name         String
+  phone        String    @unique
+  role         StaffRole @default(staff)
+  passwordHash String    @map("password_hash")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  venues    Venue[]
+  auditLogs AuditLog[]
+
+  @@map("staff_members")
+}
+
+model Court {
+  id              String      @id @default(cuid())
+  venueId         String      @map("venue_id")
+  label           String
+  status          CourtStatus @default(idle)
+  activeInSession Boolean     @default(false) @map("active_in_session")
+  gameType        GameType    @default(mixed) @map("game_type")
+
+  venue            Venue              @relation(fields: [venueId], references: [id])
+  courtAssignments CourtAssignment[]
+
+  @@map("courts")
+}
+
+model Session {
+  id       String        @id @default(cuid())
+  venueId  String        @map("venue_id")
+  date     DateTime      @default(now())
+  openedAt DateTime      @default(now()) @map("opened_at")
+  closedAt DateTime?     @map("closed_at")
+  status   SessionStatus @default(open)
+
+  venue            Venue              @relation(fields: [venueId], references: [id])
+  queueEntries     QueueEntry[]
+  playerGroups     PlayerGroup[]
+  courtAssignments CourtAssignment[]
+
+  @@map("sessions")
+}
+
+model QueueEntry {
+  id                   String      @id @default(cuid())
+  sessionId            String      @map("session_id")
+  playerId             String      @map("player_id")
+  groupId              String?     @map("group_id")
+  joinedAt             DateTime    @default(now()) @map("joined_at")
+  status               QueueStatus @default(waiting)
+  breakUntil           DateTime?   @map("break_until")
+  totalPlayMinutesToday Int        @default(0) @map("total_play_minutes_today")
+
+  session Session      @relation(fields: [sessionId], references: [id])
+  player  Player       @relation(fields: [playerId], references: [id])
+  group   PlayerGroup? @relation(fields: [groupId], references: [id])
+
+  @@unique([sessionId, playerId])
+  @@map("queue_entries")
+}
+
+model PlayerGroup {
+  id        String      @id @default(cuid())
+  sessionId String      @map("session_id")
+  code      String
+  status    GroupStatus  @default(forming)
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  session      Session      @relation(fields: [sessionId], references: [id])
+  queueEntries QueueEntry[]
+
+  @@unique([sessionId, code])
+  @@map("player_groups")
+}
+
+model CourtAssignment {
+  id        String    @id @default(cuid())
+  courtId   String    @map("court_id")
+  sessionId String    @map("session_id")
+  playerIds String[]  @map("player_ids")
+  groupIds  String[]  @map("group_ids")
+  gameType  GameType  @default(mixed) @map("game_type")
+  startedAt DateTime  @default(now()) @map("started_at")
+  endedAt   DateTime? @map("ended_at")
+  endedBy   String?   @map("ended_by")
+
+  court   Court   @relation(fields: [courtId], references: [id])
+  session Session @relation(fields: [sessionId], references: [id])
+
+  @@map("court_assignments")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  venueId   String   @map("venue_id")
+  staffId   String?  @map("staff_id")
+  action    String
+  targetId  String?  @map("target_id")
+  reason    String?
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  venue Venue        @relation(fields: [venueId], references: [id])
+  staff StaffMember? @relation(fields: [staffId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  phone     String
+  code      String
+  expiresAt DateTime @map("expires_at")
+  verified  Boolean  @default(false)
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("otp_codes")
+}
