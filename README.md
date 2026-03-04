@@ -1,36 +1,73 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# CourtFlow
 
-## Getting Started
+Pickleball court management system — queue, rotation, sessions, and real-time TV display.
 
-First, run the development server:
+## Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- **Next.js 16** (App Router), **Express** (custom server), **Socket.io** (real-time)
+- **PostgreSQL** + **Prisma**
+- **Tailwind CSS**, **Zustand**
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Getting started
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. **Clone and install**
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+   ```bash
+   git clone https://github.com/gpanot/CourtFlow.git && cd CourtFlow
+   npm install
+   ```
 
-## Learn More
+2. **Database**
 
-To learn more about Next.js, take a look at the following resources:
+   ```bash
+   cp .env.example .env
+   # Edit .env: set DATABASE_URL to your Postgres connection string
+   npx prisma generate
+   npx prisma db push
+   npx prisma db seed
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+3. **Run**
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+   ```bash
+   npm run dev
+   ```
 
-## Deploy on Vercel
+   Open [http://localhost:3000](http://localhost:3000). Use **Player**, **Staff**, **TV**, or **Super Admin** from the landing page.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Deployment
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This app uses a **custom Express server** and **Socket.io** for real-time updates. That implies:
+
+- **Vercel** does **not** support custom Node servers or long-lived WebSockets. Deploying this repo to Vercel will not run the real-time features (and may fail or run in a limited way).
+- For a **working production deploy** (HTTPS, WebSockets, DB), use a platform that runs a Node server, e.g. **Railway** or **Render**.
+
+### Deploy on Railway (recommended for full app)
+
+1. [railway.app](https://railway.app) → New project → **Deploy from GitHub** → select `CourtFlow`.
+2. Add **PostgreSQL** (New → Database → PostgreSQL).
+3. In the CourtFlow service: **Variables** → add `DATABASE_URL` from the Postgres service (e.g. `DATABASE_URL` → Connect → copy the variable).
+4. Add `JWT_SECRET` (and any other vars from `.env.example`).
+5. Railway will run `npm run build` and `npm start` (custom server + Socket.io). Open the generated URL (HTTPS). Run migrations/seed once if needed (e.g. via Railway shell: `npx prisma db push` and `npx prisma db seed`).
+
+### Deploy on Vercel (frontend / preview only)
+
+You can import the repo on [vercel.com](https://vercel.com) for previews or a static/SSR frontend, but:
+
+- The **custom server and Socket.io will not run** on Vercel.
+- Real-time (queue, courts, TV) and any API that depends on the shared Socket.io server will not work.
+
+For a full working app with real-time and DB, use **Railway** (or Render / Fly.io / a VPS).
+
+## Scripts
+
+| Command        | Description                |
+|----------------|----------------------------|
+| `npm run dev`  | Dev server (Express+Next)   |
+| `npm run build`| Build Next + server        |
+| `npm run start`| Production server          |
+| `npm run db:seed` | Seed database           |
+
+## Repo
+
+**GitHub:** [github.com/gpanot/CourtFlow](https://github.com/gpanot/CourtFlow)
