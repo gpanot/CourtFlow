@@ -41,6 +41,7 @@ export function PlayerHome() {
   const [showProfile, setShowProfile] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
+  const [isWarmup, setIsWarmup] = useState(false);
   const { on } = useSocket();
 
   useEffect(() => {
@@ -60,6 +61,11 @@ export function PlayerHome() {
         setView("home");
         return;
       }
+
+      // Detect warmup mode (session open + all courts idle)
+      const courtsState = await api.get<{ courts: { status: string }[] }>(`/api/courts/state?venueId=${selectedVenue}`);
+      const allIdle = courtsState.courts.length > 0 && courtsState.courts.every((c) => c.status === "idle");
+      setIsWarmup(allIdle);
 
       if (playerId) {
         const entries = await api.get<QueueEntry[]>(`/api/queue?sessionId=${sess.id}`);
@@ -222,6 +228,7 @@ export function PlayerHome() {
         venueId={selectedVenue}
         venueName={venueName}
         sessionId={session?.id || ""}
+        warmup={isWarmup}
         onRefresh={fetchPlayerState}
       />
     );

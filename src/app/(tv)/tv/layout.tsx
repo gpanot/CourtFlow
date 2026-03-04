@@ -20,5 +20,5 @@ export const viewport: Viewport = {
 };
 
 export default function TVLayout({ children }: { children: React.ReactNode }) {
-  return <div className="h-dvh overflow-hidden bg-black">{children}</div>;
+  return <div className="h-dvh w-screen overflow-hidden bg-black">{children}</div>;
 }

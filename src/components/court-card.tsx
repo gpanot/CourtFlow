@@ -57,7 +57,9 @@ export function CourtCard({ court, variant = "tv", warmup = false, onClick }: Co
   return (
     <div
       className={cn(
-        "flex flex-col rounded-2xl border-2 p-4 transition-all duration-300",
+        "flex flex-col rounded-2xl border-2 transition-all duration-300",
+        isTV ? "p-[1.5vw]" : "p-4",
+        isTV ? "h-full" : "",
         config.bg,
         onClick && "cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
       )}
@@ -67,15 +69,15 @@ export function CourtCard({ court, variant = "tv", warmup = false, onClick }: Co
         <h3
           className={cn(
             "font-bold tracking-tight",
-            isTV ? "text-5xl lg:text-7xl" : "text-3xl"
+            isTV ? "text-[clamp(1.75rem,4vw,5rem)]" : "text-3xl"
           )}
         >
           {court.label}
         </h3>
         <div className="flex items-center gap-2">
-          <div className={cn("h-3 w-3 rounded-full", config.dot)} />
+          <div className={cn("rounded-full", isTV ? "h-[1vw] w-[1vw] min-h-2 min-w-2" : "h-3 w-3", config.dot)} />
           {court.gameType !== "mixed" && (
-            <span className="rounded-md bg-neutral-700 px-2 py-0.5 text-xs font-medium uppercase">
+            <span className={cn("rounded-md bg-neutral-700 px-2 py-0.5 font-medium uppercase", isTV ? "text-[clamp(0.6rem,1vw,0.875rem)]" : "text-xs")}>
               {court.gameType}
             </span>
           )}
@@ -84,23 +86,24 @@ export function CourtCard({ court, variant = "tv", warmup = false, onClick }: Co
 
       {court.status === "active" && court.assignment && (
         <>
-          <div className="mt-3">
+          <div className={isTV ? "mt-[1vh]" : "mt-3"}>
             <ElapsedTimer
               startedAt={court.assignment.startedAt}
-              size={isTV ? "xl" : "lg"}
+              size={isTV ? "tv" : "lg"}
             />
           </div>
 
-          <div className={cn("mt-3 space-y-1", isTV ? "text-2xl lg:text-3xl" : "text-base")}>
+          <div className={cn(isTV ? "mt-[1vh] space-y-[0.5vh] text-[clamp(0.8rem,2vw,2.25rem)]" : "mt-3 space-y-1 text-base")}>
             {court.players.map((player) => (
               <div key={player.id} className="flex items-center gap-2">
                 {player.groupId && (
-                  <Link className={cn("text-blue-400", isTV ? "h-6 w-6" : "h-4 w-4")} />
+                  <Link className={cn("shrink-0 text-blue-400", isTV ? "h-[1.5vw] w-[1.5vw] min-h-3 min-w-3" : "h-4 w-4")} />
                 )}
-                <span className="font-medium">{player.name}</span>
+                <span className="font-medium truncate">{player.name}</span>
                 <span
                   className={cn(
-                    "rounded-full px-2 py-0.5 text-xs font-medium",
+                    "shrink-0 rounded-full px-2 py-0.5 font-medium",
+                    isTV ? "text-[clamp(0.6rem,0.9vw,0.8rem)]" : "text-xs",
                     skillBadgeColors[player.skillLevel] || "bg-neutral-600"
                   )}
                 >
@@ -113,24 +116,24 @@ export function CourtCard({ court, variant = "tv", warmup = false, onClick }: Co
       )}
 
       {court.status === "idle" && !warmup && (
-        <p className={cn("mt-4 text-neutral-400", isTV ? "text-3xl" : "text-lg")}>
+        <p className={cn("text-neutral-400", isTV ? "mt-[1vh] text-[clamp(1rem,2.5vw,3rem)]" : "mt-4 text-lg")}>
           Available
         </p>
       )}
 
       {court.status === "idle" && warmup && (
-        <div className="mt-3">
-          <p className={cn("font-semibold text-amber-400", isTV ? "text-3xl" : "text-lg")}>
+        <div className={isTV ? "mt-[1vh]" : "mt-3"}>
+          <p className={cn("font-semibold text-amber-400", isTV ? "text-[clamp(1rem,2.5vw,3rem)]" : "text-lg")}>
             Warm Up
           </p>
-          <p className={cn("text-amber-300/60", isTV ? "text-xl mt-1" : "text-sm mt-0.5")}>
+          <p className={cn("text-amber-300/60", isTV ? "mt-[0.25vh] text-[clamp(0.75rem,1.8vw,2rem)]" : "mt-0.5 text-sm")}>
             Open — play freely
           </p>
         </div>
       )}
 
       {court.status === "maintenance" && (
-        <p className={cn("mt-4 text-red-400", isTV ? "text-3xl" : "text-lg")}>
+        <p className={cn("text-red-400", isTV ? "mt-[1vh] text-[clamp(1rem,2.5vw,3rem)]" : "mt-4 text-lg")}>
           Out of Service
         </p>
       )}

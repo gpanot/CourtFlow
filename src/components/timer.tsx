@@ -6,7 +6,7 @@ import { cn } from "@/lib/cn";
 
 interface TimerProps {
   startedAt: string;
-  size?: "sm" | "md" | "lg" | "xl";
+  size?: "sm" | "md" | "lg" | "xl" | "tv";
 }
 
 const sizeClasses = {
@@ -14,6 +14,7 @@ const sizeClasses = {
   md: "text-2xl",
   lg: "text-4xl",
   xl: "text-6xl",
+  tv: "text-[clamp(1.5rem,4vw,5rem)]",
 };
 
 export function ElapsedTimer({ startedAt, size = "md" }: TimerProps) {
