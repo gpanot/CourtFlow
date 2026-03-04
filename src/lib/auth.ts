@@ -50,7 +50,8 @@ export async function sendOtp(phone: string): Promise<{ success: boolean; code?:
   console.log(`  Expires at: ${expiresAt.toISOString()}`);
   console.log(`========================================\n`);
 
-  return { success: true, code: process.env.NODE_ENV === "development" ? code : undefined };
+  // Mock OTP — always return code until real SMS is integrated
+  return { success: true, code };
 }
 
 export async function verifyOtp(

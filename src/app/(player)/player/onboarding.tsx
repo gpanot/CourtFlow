@@ -115,9 +115,10 @@ export function OnboardingFlow() {
             Enter the 6-digit code sent to {phone}
           </p>
           {devCode && (
-            <p className="text-center text-sm text-amber-400">
-              Dev mode — code: <span className="font-mono font-bold">{devCode}</span>
-            </p>
+            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-center">
+              <p className="text-xs text-amber-400/70 mb-1">Demo mode — no SMS sent</p>
+              <p className="text-amber-300 font-mono text-2xl font-bold tracking-widest">{devCode}</p>
+            </div>
           )}
           <input
             type="text"
