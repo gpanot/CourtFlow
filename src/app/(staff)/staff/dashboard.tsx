@@ -8,7 +8,7 @@ import { joinVenue } from "@/lib/socket-client";
 import { CourtCard, type CourtData } from "@/components/court-card";
 import { QueuePanel, type QueueEntryData } from "@/components/queue-panel";
 import { cn } from "@/lib/cn";
-import { Plus, X, LogOut, Users, LayoutGrid, AlertTriangle, User, Flame } from "lucide-react";
+import { Plus, X, LogOut, Users, LayoutGrid, AlertTriangle, User, Flame, Wrench, RotateCcw } from "lucide-react";
 import { WARMUP_PLAYER_THRESHOLD } from "@/lib/constants";
 
 interface SessionData {
@@ -35,6 +35,8 @@ export function StaffDashboard() {
   const [selectedCourt, setSelectedCourt] = useState<CourtData | null>(null);
   const [showOpenSession, setShowOpenSession] = useState(false);
   const [confirmAddCourt, setConfirmAddCourt] = useState<{ id: string; label: string } | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState<{ courtId: string; courtLabel: string; step: 1 | 2 } | null>(null);
+  const [confirmMaintenance, setConfirmMaintenance] = useState<{ courtId: string; courtLabel: string } | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const { on } = useSocket();
 
@@ -110,6 +112,7 @@ export function StaffDashboard() {
     try {
       await api.patch(`/api/courts/${courtId}`, { activeInSession: false });
       setSelectedCourt(null);
+      setConfirmRemove(null);
       await fetchState();
     } catch (e) {
       alert((e as Error).message);
@@ -119,6 +122,17 @@ export function StaffDashboard() {
   const handleSetMaintenance = async (courtId: string) => {
     try {
       await api.patch(`/api/courts/${courtId}`, { status: "maintenance" });
+      setSelectedCourt(null);
+      setConfirmMaintenance(null);
+      await fetchState();
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  };
+
+  const handleRestoreFromMaintenance = async (courtId: string) => {
+    try {
+      await api.patch(`/api/courts/${courtId}`, { status: "idle" });
       setSelectedCourt(null);
       await fetchState();
     } catch (e) {
@@ -353,20 +367,38 @@ export function StaffDashboard() {
                 ))}
               </div>
 
-              <div className="flex gap-2 pt-2">
-                <button
-                  onClick={() => handleRemoveCourt(selectedCourt.id)}
-                  className="flex-1 rounded-xl bg-neutral-800 py-3 text-sm font-medium text-neutral-300 hover:bg-neutral-700"
-                >
-                  Remove from Session
-                </button>
-                <button
-                  onClick={() => handleSetMaintenance(selectedCourt.id)}
-                  className="flex-1 rounded-xl bg-neutral-800 py-3 text-sm font-medium text-red-400 hover:bg-neutral-700"
-                >
-                  Set Maintenance
-                </button>
-              </div>
+              {selectedCourt.status === "maintenance" ? (
+                <div className="flex gap-2 pt-2">
+                  <button
+                    onClick={() => handleRestoreFromMaintenance(selectedCourt.id)}
+                    className="flex-1 rounded-xl bg-green-600/20 py-3 text-sm font-medium text-green-400 hover:bg-green-600/30 flex items-center justify-center gap-2"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Restore Court
+                  </button>
+                  <button
+                    onClick={() => setConfirmRemove({ courtId: selectedCourt.id, courtLabel: selectedCourt.label, step: 1 })}
+                    className="flex-1 rounded-xl bg-neutral-800 py-3 text-sm font-medium text-neutral-300 hover:bg-neutral-700"
+                  >
+                    Remove from Session
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2 pt-2">
+                  <button
+                    onClick={() => setConfirmRemove({ courtId: selectedCourt.id, courtLabel: selectedCourt.label, step: 1 })}
+                    className="flex-1 rounded-xl bg-neutral-800 py-3 text-sm font-medium text-neutral-300 hover:bg-neutral-700"
+                  >
+                    Remove from Session
+                  </button>
+                  <button
+                    onClick={() => setConfirmMaintenance({ courtId: selectedCourt.id, courtLabel: selectedCourt.label })}
+                    className="flex-1 rounded-xl bg-neutral-800 py-3 text-sm font-medium text-red-400 hover:bg-neutral-700"
+                  >
+                    Set Maintenance
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -410,6 +442,110 @@ export function StaffDashboard() {
               </button>
               <button
                 onClick={() => setConfirmAddCourt(null)}
+                className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Remove from Session — 2-step */}
+      {confirmRemove && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setConfirmRemove(null)}>
+          <div
+            className="w-full max-w-sm rounded-2xl border border-neutral-700 bg-neutral-900 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {confirmRemove.step === 1 ? (
+              <>
+                <div className="mb-4 flex flex-col items-center gap-3 text-center">
+                  <div className="rounded-full bg-amber-600/20 p-3">
+                    <AlertTriangle className="h-6 w-6 text-amber-400" />
+                  </div>
+                  <h3 className="text-lg font-bold">Remove {confirmRemove.courtLabel}?</h3>
+                  <p className="text-sm text-neutral-400">
+                    This will remove the court from the current session. Any active game on this court will be affected.
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setConfirmRemove({ ...confirmRemove, step: 2 })}
+                    className="flex-1 rounded-xl bg-amber-600 py-3 font-semibold text-white hover:bg-amber-500"
+                  >
+                    Continue
+                  </button>
+                  <button
+                    onClick={() => setConfirmRemove(null)}
+                    className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mb-4 flex flex-col items-center gap-3 text-center">
+                  <div className="rounded-full bg-red-600/20 p-3">
+                    <AlertTriangle className="h-6 w-6 text-red-400" />
+                  </div>
+                  <h3 className="text-lg font-bold">Are you sure?</h3>
+                  <p className="text-sm text-neutral-400">
+                    Please confirm you want to remove <span className="font-semibold text-neutral-200">{confirmRemove.courtLabel}</span> from this session. Players on this court will need to be reassigned.
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => handleRemoveCourt(confirmRemove.courtId)}
+                    className="flex-1 rounded-xl bg-red-600 py-3 font-semibold text-white hover:bg-red-500"
+                  >
+                    Yes, Remove Court
+                  </button>
+                  <button
+                    onClick={() => setConfirmRemove(null)}
+                    className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Set Maintenance */}
+      {confirmMaintenance && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setConfirmMaintenance(null)}>
+          <div
+            className="w-full max-w-sm rounded-2xl border border-neutral-700 bg-neutral-900 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex flex-col items-center gap-3 text-center">
+              <div className="rounded-full bg-red-600/20 p-3">
+                <Wrench className="h-6 w-6 text-red-400" />
+              </div>
+              <h3 className="text-lg font-bold">Set {confirmMaintenance.courtLabel} to Maintenance?</h3>
+              <p className="text-sm text-neutral-400">
+                This court will be <span className="font-semibold text-neutral-200">temporarily suspended</span>. No players will be assigned to it until you restore it.
+              </p>
+              <p className="text-sm text-neutral-400">
+                All other courts will continue to operate normally.
+              </p>
+              <p className="text-xs text-neutral-500 mt-1">
+                To bring the court back, tap on it and select &ldquo;Restore Court&rdquo;.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => handleSetMaintenance(confirmMaintenance.courtId)}
+                className="flex-1 rounded-xl bg-red-600 py-3 font-semibold text-white hover:bg-red-500"
+              >
+                Yes, Set Maintenance
+              </button>
+              <button
+                onClick={() => setConfirmMaintenance(null)}
                 className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
               >
                 Cancel
