@@ -30,9 +30,9 @@ export default function AdminOverview() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-2xl font-bold">Dashboard</h2>
+      <h2 className="text-xl font-bold md:text-2xl">Dashboard</h2>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-3 grid-cols-3 md:gap-4">
         <StatCard icon={Users} label="Total Players" value={data.overview.totalPlayers} color="text-green-500" />
         <StatCard icon={Trophy} label="Total Games" value={data.overview.totalGames} color="text-blue-500" />
         <StatCard icon={MapPin} label="Total Sessions" value={data.overview.totalSessions} color="text-purple-500" />
@@ -40,7 +40,9 @@ export default function AdminOverview() {
 
       <div>
         <h3 className="mb-3 text-lg font-semibold text-neutral-300">Recent Sessions</h3>
-        <div className="rounded-xl border border-neutral-800">
+
+        {/* Desktop table */}
+        <div className="hidden md:block rounded-xl border border-neutral-800">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-neutral-800 text-neutral-400">
               <tr>
@@ -59,15 +61,7 @@ export default function AdminOverview() {
                     {new Date(s.date).toLocaleDateString()}
                   </td>
                   <td className="px-4 py-3">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                        s.status === "open"
-                          ? "bg-green-600/20 text-green-400"
-                          : "bg-neutral-700 text-neutral-400"
-                      }`}
-                    >
-                      {s.status}
-                    </span>
+                    <StatusBadge status={s.status} />
                   </td>
                   <td className="px-4 py-3">{s.players}</td>
                   <td className="px-4 py-3">{s.games}</td>
@@ -83,8 +77,42 @@ export default function AdminOverview() {
             </tbody>
           </table>
         </div>
+
+        {/* Mobile cards */}
+        <div className="space-y-2 md:hidden">
+          {data.recentSessions.map((s) => (
+            <div key={s.id} className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="font-medium text-sm">{s.venueName}</span>
+                <StatusBadge status={s.status} />
+              </div>
+              <div className="flex items-center gap-3 text-xs text-neutral-400">
+                <span>{new Date(s.date).toLocaleDateString()}</span>
+                <span>{s.players} players</span>
+                <span>{s.games} games</span>
+              </div>
+            </div>
+          ))}
+          {data.recentSessions.length === 0 && (
+            <p className="py-6 text-center text-neutral-500 text-sm">No sessions yet</p>
+          )}
+        </div>
       </div>
     </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  return (
+    <span
+      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+        status === "open"
+          ? "bg-green-600/20 text-green-400"
+          : "bg-neutral-700 text-neutral-400"
+      }`}
+    >
+      {status}
+    </span>
   );
 }
 
@@ -100,10 +128,10 @@ function StatCard({
   color: string;
 }) {
   return (
-    <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
-      <Icon className={`mb-2 h-5 w-5 ${color}`} />
-      <p className="text-2xl font-bold">{value}</p>
-      <p className="text-sm text-neutral-400">{label}</p>
+    <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 md:p-4">
+      <Icon className={`mb-1.5 h-4 w-4 md:mb-2 md:h-5 md:w-5 ${color}`} />
+      <p className="text-lg font-bold md:text-2xl">{value}</p>
+      <p className="text-[11px] text-neutral-400 md:text-sm">{label}</p>
     </div>
   );
 }

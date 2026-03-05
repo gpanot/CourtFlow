@@ -171,25 +171,24 @@ export default function StaffPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Staff Management</h2>
+        <h2 className="text-xl font-bold md:text-2xl">Staff Management</h2>
         <button
           onClick={openCreate}
-          className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500"
+          className="flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-500 md:px-4"
         >
           <Plus className="h-4 w-4" /> Add Staff
         </button>
       </div>
 
-      {/* Staff list */}
       <div className="space-y-3">
         {staff.map((s) => (
           <div
             key={s.id}
-            className="rounded-xl border border-neutral-800 bg-neutral-900 p-4"
+            className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 md:p-4"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
                   {s.role === "superadmin" ? (
                     <Shield className="h-4 w-4 text-purple-400 shrink-0" />
                   ) : (
@@ -209,7 +208,7 @@ export default function StaffPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="flex items-center gap-0.5 shrink-0">
                 <button
                   onClick={() => openEdit(s)}
                   className="rounded-lg p-2 text-neutral-500 hover:bg-neutral-800 hover:text-white"
@@ -243,8 +242,11 @@ export default function StaffPage() {
 
       {/* Create / Edit modal */}
       {(modalMode === "create" || modalMode === "edit") && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={closeModal}>
-          <div className="w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60" onClick={closeModal}>
+          <div
+            className="w-full max-w-md rounded-t-2xl md:rounded-2xl border border-neutral-700 bg-neutral-900 p-5 md:p-6 pb-[calc(1.25rem+env(safe-area-inset-bottom))] md:pb-6 max-h-[85dvh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold">
                 {modalMode === "create" ? "Add Staff Member" : `Edit ${selectedStaff?.name}`}
@@ -342,8 +344,11 @@ export default function StaffPage() {
 
       {/* Delete confirmation */}
       {modalMode === "delete" && selectedStaff && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={closeModal}>
-          <div className="w-full max-w-sm rounded-2xl border border-neutral-700 bg-neutral-900 p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60" onClick={closeModal}>
+          <div
+            className="w-full max-w-sm rounded-t-2xl md:rounded-2xl border border-neutral-700 bg-neutral-900 p-5 md:p-6 pb-[calc(1.25rem+env(safe-area-inset-bottom))] md:pb-6"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="mb-4 flex flex-col items-center gap-3 text-center">
               <div className="rounded-full bg-red-600/20 p-3">
                 <Trash2 className="h-6 w-6 text-red-400" />
@@ -377,8 +382,11 @@ export default function StaffPage() {
 
       {/* Reset password */}
       {modalMode === "reset-password" && selectedStaff && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={closeModal}>
-          <div className="w-full max-w-sm rounded-2xl border border-neutral-700 bg-neutral-900 p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60" onClick={closeModal}>
+          <div
+            className="w-full max-w-sm rounded-t-2xl md:rounded-2xl border border-neutral-700 bg-neutral-900 p-5 md:p-6 pb-[calc(1.25rem+env(safe-area-inset-bottom))] md:pb-6"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold">Reset Password</h3>
               <button onClick={closeModal} className="text-neutral-400 hover:text-white">
