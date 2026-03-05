@@ -177,7 +177,7 @@ export function StaffDashboard() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-neutral-950 text-white">
+    <div className="flex h-dvh flex-col overflow-hidden bg-neutral-950 text-white">
       {/* Header */}
       <header className="flex items-center gap-3 border-b border-neutral-800 px-4 py-3">
         <button
