@@ -8,7 +8,7 @@ import { joinVenue } from "@/lib/socket-client";
 import { CourtCard, type CourtData } from "@/components/court-card";
 import { QueuePanel, type QueueEntryData } from "@/components/queue-panel";
 import { cn } from "@/lib/cn";
-import { Plus, X, LogOut, Users, LayoutGrid, AlertTriangle, User, Flame, Wrench, RotateCcw, QrCode } from "lucide-react";
+import { Plus, X, LogOut, Users, LayoutGrid, AlertTriangle, User, Flame, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft } from "lucide-react";
 import { WARMUP_PLAYER_THRESHOLD } from "@/lib/constants";
 import { QRCodeSVG } from "qrcode.react";
 
@@ -638,6 +638,7 @@ function QRCodeTab({
   hasSession: boolean;
 }) {
   const [origin, setOrigin] = useState("");
+  const [showTvSetup, setShowTvSetup] = useState(false);
 
   useEffect(() => {
     setOrigin(window.location.origin);
@@ -646,9 +647,88 @@ function QRCodeTab({
   if (!venueId || !origin) return null;
 
   const playerUrl = `${origin}/player?venueId=${venueId}`;
+  const tvFullUrl = `${origin}/tv?venueId=${venueId}`;
+  const tvShortUrl = `${origin.replace(/^https?:\/\//, "")}/tv`;
+
+  if (showTvSetup) {
+    return (
+      <div className="flex flex-col gap-6 py-4">
+        <button
+          onClick={() => setShowTvSetup(false)}
+          className="flex items-center gap-2 self-start text-sm text-neutral-400 hover:text-white transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to QR Codes
+        </button>
+
+        <div className="flex flex-col items-center gap-6">
+          <div className="rounded-full bg-blue-600/20 p-4">
+            <Tv className="h-8 w-8 text-blue-400" />
+          </div>
+
+          <div className="text-center">
+            <h2 className="text-xl font-bold">Setup the TV Display</h2>
+            <p className="mt-1 text-sm text-neutral-400">
+              Show live court status on a TV screen for <span className="font-medium text-neutral-200">{venueName}</span>
+            </p>
+          </div>
+
+          <div className="w-full max-w-sm space-y-4">
+            <div className="rounded-xl border border-blue-500/30 bg-blue-600/10 p-4">
+              <p className="text-xs font-medium text-blue-400 uppercase tracking-wider mb-2">Type this on the TV</p>
+              <p className="text-2xl font-bold font-mono text-center text-white tracking-wide py-2">{tvShortUrl}</p>
+              <p className="text-xs text-blue-300/60 text-center mt-1">
+                Open the TV browser and type this URL. You&apos;ll pick the venue on screen.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="h-px flex-1 bg-neutral-700" />
+              <span className="text-xs text-neutral-500">or scan to auto-connect</span>
+              <div className="h-px flex-1 bg-neutral-700" />
+            </div>
+
+            <div className="flex flex-col items-center gap-3">
+              <div className="rounded-2xl bg-white p-5">
+                <QRCodeSVG
+                  value={tvFullUrl}
+                  size={200}
+                  level="H"
+                  includeMargin={false}
+                />
+              </div>
+              <p className="text-xs text-neutral-500 text-center">
+                If the TV has a camera or QR scanner, this links directly to the right venue.
+              </p>
+            </div>
+
+            <div className="rounded-xl bg-neutral-800/50 px-4 py-3">
+              <p className="text-xs text-neutral-500 mb-1">Full link (with venue pre-selected)</p>
+              <p className="break-all text-sm text-neutral-300 font-mono">{tvFullUrl}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col items-center gap-6 py-6">
+    <div className="flex flex-col items-center gap-6 py-4">
+      {/* Setup TV banner */}
+      <button
+        onClick={() => setShowTvSetup(true)}
+        className="w-full flex items-center gap-3 rounded-xl border border-neutral-700 bg-neutral-800/50 p-4 text-left hover:border-blue-500/50 hover:bg-neutral-800 transition-colors"
+      >
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-600/20">
+          <Tv className="h-5 w-5 text-blue-400" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-medium text-white">Setup the TV</p>
+          <p className="text-xs text-neutral-400">Get the URL to display courts on a TV screen</p>
+        </div>
+        <ChevronRight className="h-5 w-5 shrink-0 text-neutral-500" />
+      </button>
+
       <div className="text-center">
         <h2 className="text-xl font-bold">Player Check-in</h2>
         <p className="mt-1 text-sm text-neutral-400">
