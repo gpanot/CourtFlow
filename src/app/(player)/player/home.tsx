@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { useSessionStore } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { useSocket } from "@/hooks/use-socket";
@@ -32,6 +33,7 @@ type PlayerView = "home" | "queue" | "assigned" | "playing" | "postgame" | "brea
 
 export function PlayerHome() {
   const { playerId, playerName, venueId, setAuth, clearAuth } = useSessionStore();
+  const searchParams = useSearchParams();
   const [venues, setVenues] = useState<Venue[]>([]);
   const [selectedVenue, setSelectedVenue] = useState<string | null>(venueId);
   const [session, setSession] = useState<{ id: string } | null>(null);
@@ -47,6 +49,14 @@ export function PlayerHome() {
   useEffect(() => {
     api.get<Venue[]>("/api/venues").then(setVenues).catch(console.error);
   }, []);
+
+  useEffect(() => {
+    if (selectedVenue) return;
+    const urlVenueId = searchParams.get("venueId");
+    if (urlVenueId) {
+      setSelectedVenue(urlVenueId);
+    }
+  }, [searchParams, selectedVenue]);
 
   const fetchPlayerState = useCallback(async () => {
     if (!selectedVenue) return;

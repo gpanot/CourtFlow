@@ -8,8 +8,9 @@ import { joinVenue } from "@/lib/socket-client";
 import { CourtCard, type CourtData } from "@/components/court-card";
 import { QueuePanel, type QueueEntryData } from "@/components/queue-panel";
 import { cn } from "@/lib/cn";
-import { Plus, X, LogOut, Users, LayoutGrid, AlertTriangle, User, Flame, Wrench, RotateCcw } from "lucide-react";
+import { Plus, X, LogOut, Users, LayoutGrid, AlertTriangle, User, Flame, Wrench, RotateCcw, QrCode } from "lucide-react";
 import { WARMUP_PLAYER_THRESHOLD } from "@/lib/constants";
+import { QRCodeSVG } from "qrcode.react";
 
 interface SessionData {
   id: string;
@@ -23,7 +24,7 @@ interface VenueData {
   courts: { id: string; label: string; activeInSession: boolean }[];
 }
 
-type Tab = "courts" | "queue";
+type Tab = "courts" | "queue" | "qr";
 
 export function StaffDashboard() {
   const { venueId, staffName, clearAuth } = useSessionStore();
@@ -228,6 +229,15 @@ export function StaffDashboard() {
         >
           <Users className="h-4 w-4" /> Queue ({queue.filter((e) => e.status === "waiting").length})
         </button>
+        <button
+          onClick={() => setTab("qr")}
+          className={cn(
+            "flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2",
+            tab === "qr" ? "border-b-2 border-blue-500 text-white" : "text-neutral-400"
+          )}
+        >
+          <QrCode className="h-4 w-4" /> QR Code
+        </button>
       </div>
 
       {/* Content */}
@@ -322,6 +332,10 @@ export function StaffDashboard() {
 
         {session && tab === "queue" && (
           <QueuePanel entries={queue} variant="staff" maxDisplay={50} onPlayerAction={handlePlayerAction} />
+        )}
+
+        {tab === "qr" && (
+          <QRCodeTab venueId={venueId} venueName={venue?.name} hasSession={!!session} />
         )}
 
       </main>
@@ -609,6 +623,63 @@ function OpenSessionPanel({
         <button onClick={onCancel} className="rounded-xl bg-neutral-800 px-6 py-3 text-neutral-300">
           Cancel
         </button>
+      </div>
+    </div>
+  );
+}
+
+function QRCodeTab({
+  venueId,
+  venueName,
+  hasSession,
+}: {
+  venueId: string | null;
+  venueName: string | undefined;
+  hasSession: boolean;
+}) {
+  const [origin, setOrigin] = useState("");
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
+
+  if (!venueId || !origin) return null;
+
+  const playerUrl = `${origin}/player?venueId=${venueId}`;
+
+  return (
+    <div className="flex flex-col items-center gap-6 py-6">
+      <div className="text-center">
+        <h2 className="text-xl font-bold">Player Check-in</h2>
+        <p className="mt-1 text-sm text-neutral-400">
+          Players scan this code to join <span className="font-medium text-neutral-200">{venueName}</span>
+        </p>
+      </div>
+
+      <div className="rounded-2xl bg-white p-6">
+        <QRCodeSVG
+          value={playerUrl}
+          size={240}
+          level="H"
+          includeMargin={false}
+        />
+      </div>
+
+      {!hasSession && (
+        <div className="flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-600/10 px-4 py-3">
+          <AlertTriangle className="h-5 w-5 shrink-0 text-amber-400" />
+          <p className="text-sm text-amber-300">No active session — players can sign up but won&apos;t be able to join a game yet.</p>
+        </div>
+      )}
+
+      <div className="w-full max-w-sm space-y-3">
+        <p className="text-center text-xs text-neutral-500">
+          Display this QR code at the entrance so players go directly to the right venue.
+        </p>
+        <div className="rounded-xl bg-neutral-800/50 px-4 py-3">
+          <p className="text-xs text-neutral-500 mb-1">Link</p>
+          <p className="break-all text-sm text-neutral-300 font-mono">{playerUrl}</p>
+        </div>
       </div>
     </div>
   );
