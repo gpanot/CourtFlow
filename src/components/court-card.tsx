@@ -22,7 +22,6 @@ export interface CourtData {
   id: string;
   label: string;
   status: "idle" | "active" | "maintenance";
-  gameType: string;
   assignment: Assignment | null;
   players: Player[];
 }
@@ -76,9 +75,9 @@ export function CourtCard({ court, variant = "tv", warmup = false, onClick }: Co
         </h3>
         <div className="flex items-center gap-2">
           <div className={cn("rounded-full", isTV ? "h-[1vw] w-[1vw] min-h-2 min-w-2" : "h-3 w-3", config.dot)} />
-          {court.gameType !== "mixed" && (
+          {court.assignment && court.assignment.gameType !== "mixed" && (
             <span className={cn("rounded-md bg-neutral-700 px-2 py-0.5 font-medium uppercase", isTV ? "text-[clamp(0.6rem,1vw,0.875rem)]" : "text-xs")}>
-              {court.gameType}
+              {court.assignment.gameType}
             </span>
           )}
         </div>

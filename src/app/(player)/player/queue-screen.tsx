@@ -4,13 +4,15 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api-client";
 import { useSessionStore } from "@/stores/session-store";
 import { cn } from "@/lib/cn";
+import { PREFERENCE_LABELS, type GamePreferenceType } from "@/lib/constants";
 import { Link, Copy, Check, Users, Coffee, Flame } from "lucide-react";
 
 interface QueueScreenProps {
-  entry: { id: string; groupId: string | null; sessionId: string };
+  entry: { id: string; groupId: string | null; sessionId: string; gamePreference?: string };
   venueId: string;
   venueName: string;
   sessionId: string;
+  playerGender?: string;
   warmup?: boolean;
   onRefresh: () => void;
 }
@@ -22,7 +24,7 @@ interface QueueInfo {
   group: { id: string; code: string; members: { name: string }[] } | null;
 }
 
-export function QueueScreen({ entry, venueId, venueName, sessionId, warmup = false, onRefresh }: QueueScreenProps) {
+export function QueueScreen({ entry, venueId, venueName, sessionId, playerGender, warmup = false, onRefresh }: QueueScreenProps) {
   const { playerId } = useSessionStore();
   const [info, setInfo] = useState<QueueInfo | null>(null);
   const [showGroupCreate, setShowGroupCreate] = useState(false);
@@ -31,6 +33,20 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, warmup = fal
   const [groupCode, setGroupCode] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [copied, setCopied] = useState(false);
+  const [currentPreference, setCurrentPreference] = useState<GamePreferenceType>(
+    (entry.gamePreference as GamePreferenceType) || "no_preference"
+  );
+  const showPreferenceToggle = playerGender !== "other";
+
+  const togglePreference = async () => {
+    const next: GamePreferenceType = currentPreference === "no_preference" ? "same_gender" : "no_preference";
+    try {
+      await api.patch("/api/queue/preference", { gamePreference: next });
+      setCurrentPreference(next);
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   const fetchQueueInfo = useCallback(async () => {
     try {
@@ -176,6 +192,20 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, warmup = fal
         <p className="text-xl font-medium text-neutral-300">
           {warmup ? "You're checked in!" : "In line \u2014 Get ready to play!"}
         </p>
+
+        {showPreferenceToggle && (
+          <button
+            onClick={togglePreference}
+            className={cn(
+              "mt-2 rounded-full px-4 py-1.5 text-xs font-medium transition-colors",
+              currentPreference === "same_gender"
+                ? "bg-blue-600/20 text-blue-400 border border-blue-500/40"
+                : "bg-neutral-800 text-neutral-400 border border-neutral-700"
+            )}
+          >
+            {PREFERENCE_LABELS[currentPreference]}
+          </button>
+        )}
 
         {info?.group && (
           <div className="mt-2 rounded-xl border border-neutral-800 p-3 text-center">

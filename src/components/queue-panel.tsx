@@ -73,18 +73,18 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
   }
 
   return (
-    <div className={cn("flex flex-col", isTV ? "gap-2" : "gap-1")}>
+    <div className={cn("flex flex-col", isTV ? "gap-[0.5vh]" : "gap-1")}>
       <h4
         className={cn(
           "font-semibold text-neutral-400 uppercase tracking-wider",
-          isTV ? "text-xl mb-2" : "text-sm mb-1"
+          isTV ? "text-[clamp(0.65rem,1.2vw,1.25rem)] mb-[0.5vh]" : "text-sm mb-1"
         )}
       >
         Queue ({entries.filter((e) => e.status === "waiting").length} waiting)
       </h4>
 
       {displayEntries.length === 0 && (
-        <p className={cn("text-neutral-500", isTV ? "text-2xl" : "text-sm")}>
+        <p className={cn("text-neutral-500", isTV ? "text-[clamp(0.75rem,1.5vw,1.5rem)]" : "text-sm")}>
           No players in queue
         </p>
       )}
@@ -134,15 +134,15 @@ function QueueRow({
     <div className="relative">
       <div
         className={cn(
-          "flex items-center gap-3 rounded-xl border border-neutral-800 px-4",
-          isTV ? "py-3" : "py-2",
+          "flex items-center rounded-xl border border-neutral-800",
+          isTV ? "gap-[0.5vw] px-[0.8vw] py-[0.6vh]" : "gap-3 px-4 py-2",
           entry.status === "on_break" && "opacity-60"
         )}
       >
         <span
           className={cn(
-            "font-bold text-neutral-500 tabular-nums",
-            isTV ? "text-2xl w-10" : "text-base w-6"
+            "font-bold text-neutral-500 tabular-nums shrink-0",
+            isTV ? "text-[clamp(0.75rem,1.5vw,1.5rem)] w-[2.5vw] min-w-6" : "text-base w-6"
           )}
         >
           #{position}
@@ -152,8 +152,8 @@ function QueueRow({
           {isGroup ? (
             <div className="flex flex-col gap-0.5">
               <div className="flex items-center gap-2">
-                <Link className={cn("text-blue-400 shrink-0", isTV ? "h-6 w-6" : "h-4 w-4")} />
-                <span className={cn("font-medium", isTV ? "text-2xl" : "text-sm")}>
+                <Link className={cn("text-blue-400 shrink-0", isTV ? "h-[1.2vw] w-[1.2vw] min-h-3 min-w-3" : "h-4 w-4")} />
+                <span className={cn("font-medium", isTV ? "text-[clamp(0.75rem,1.5vw,1.5rem)]" : "text-sm")}>
                   Group of {groupSize}
                 </span>
               </div>
@@ -171,13 +171,13 @@ function QueueRow({
                 </div>
               )}
               {(isTV || !onPlayerAction) && entry.group && (
-                <span className={cn("text-neutral-500 truncate", isTV ? "" : "ml-6 text-xs")}>
+                <span className={cn("text-neutral-500 truncate", isTV ? "text-[clamp(0.6rem,1vw,1rem)]" : "ml-6 text-xs")}>
                   {entry.group.queueEntries.map((e) => e.player.name).join(", ")}
                 </span>
               )}
             </div>
           ) : (
-            <span className={cn("font-medium", isTV ? "text-2xl" : "text-sm")}>
+            <span className={cn("font-medium truncate", isTV ? "text-[clamp(0.75rem,1.5vw,1.5rem)]" : "text-sm")}>
               {entry.player.name}
             </span>
           )}
@@ -185,7 +185,7 @@ function QueueRow({
 
         {entry.status === "on_break" && (
           <div className="flex items-center gap-1 text-amber-400">
-            <Coffee className={cn(isTV ? "h-5 w-5" : "h-4 w-4")} />
+            <Coffee className={cn(isTV ? "h-[1.2vw] w-[1.2vw] min-h-3 min-w-3" : "h-4 w-4")} />
             {entry.breakUntil && (
               <BreakCountdown until={entry.breakUntil} isTV={isTV} />
             )}
@@ -306,7 +306,7 @@ function BreakCountdown({ until, isTV }: { until: string; isTV: boolean }) {
   const remaining = Math.max(0, Math.floor((end - now) / 60000));
 
   return (
-    <span className={cn("tabular-nums", isTV ? "text-lg" : "text-xs")}>
+    <span className={cn("tabular-nums", isTV ? "text-[clamp(0.6rem,1.1vw,1.125rem)]" : "text-xs")}>
       {remaining}m
     </span>
   );

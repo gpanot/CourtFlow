@@ -36,7 +36,6 @@ async function main() {
         label,
         status: "idle",
         activeInSession: false,
-        gameType: "mixed",
       },
     });
   }

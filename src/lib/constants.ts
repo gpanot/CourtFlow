@@ -36,6 +36,19 @@ export const SKILL_DESCRIPTIONS: Record<SkillLevelType, string> = {
   pro: "Tournament-level player",
 };
 
+export const GAME_PREFERENCES = ["no_preference", "same_gender"] as const;
+export type GamePreferenceType = (typeof GAME_PREFERENCES)[number];
+
+export const PREFERENCE_LABELS: Record<GamePreferenceType, string> = {
+  no_preference: "No preference",
+  same_gender: "Same gender",
+};
+
+export const PREFERENCE_DESCRIPTIONS: Record<GamePreferenceType, string> = {
+  no_preference: "Play with anyone",
+  same_gender: "Only matched with players of your gender",
+};
+
 export function getSkillIndex(level: SkillLevelType): number {
   return SKILL_LEVELS.indexOf(level);
 }

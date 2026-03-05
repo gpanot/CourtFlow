@@ -18,7 +18,6 @@ interface Court {
   id: string;
   label: string;
   status: string;
-  gameType: string;
 }
 
 interface Venue {
@@ -396,9 +395,6 @@ function CourtsManager({
                   )}
                 >
                   {court.status}
-                </span>
-                <span className="text-xs text-neutral-500 capitalize shrink-0 hidden sm:inline">
-                  {court.gameType}
                 </span>
                 <button
                   onClick={() => startEdit(court)}

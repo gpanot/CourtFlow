@@ -190,8 +190,8 @@ export default function TVDisplayPage() {
 
         {/* Queue sidebar — show during warmup and rotation */}
         {state.session && (
-          <aside className="shrink-0 overflow-y-auto border-l border-neutral-800 flex flex-col" style={{ width: "clamp(14rem, 22vw, 26rem)", padding: "clamp(0.75rem, 1.5vw, 1.5rem)" }}>
-            <div className="shrink-0 w-full mb-[1.5vh]">
+          <aside className="shrink-0 border-l border-neutral-800 flex flex-col overflow-hidden" style={{ width: "clamp(10rem, 22vw, 26rem)", padding: "clamp(0.5rem, 1.5vw, 1.5rem)" }}>
+            <div className="shrink-0 w-full mb-[1vh]">
               <div className="w-full rounded-[1vw] bg-white p-[1vw] aspect-square flex items-center justify-center">
                 <QRCodeSVG
                   value={`${typeof window !== "undefined" ? window.location.origin : ""}/player?venueId=${venueId}`}
@@ -203,7 +203,7 @@ export default function TVDisplayPage() {
               </div>
             </div>
             {isWarmupMode && (
-              <p className="mb-3 font-semibold text-amber-400 uppercase tracking-wider text-[clamp(0.65rem,1vw,0.875rem)]">Checked In</p>
+              <p className="mb-[0.5vh] font-semibold text-amber-400 uppercase tracking-wider text-[clamp(0.5rem,1vw,0.875rem)]">Checked In</p>
             )}
             <div className="flex-1 min-h-0 overflow-y-auto">
               <QueuePanel entries={state.queue} variant="tv" />

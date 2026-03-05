@@ -30,7 +30,7 @@ export async function PATCH(
     }
 
     const body = await parseBody<Record<string, unknown>>(request);
-    const allowed = ["name", "skillLevel", "gender", "avatar"];
+    const allowed = ["name", "skillLevel", "gender", "avatar", "gamePreference"];
     const updates: Record<string, unknown> = {};
     for (const key of allowed) {
       if (body[key] !== undefined) updates[key] = body[key];

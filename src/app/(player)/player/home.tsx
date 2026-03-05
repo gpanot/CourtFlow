@@ -27,6 +27,8 @@ interface QueueEntry {
   groupId: string | null;
   breakUntil: string | null;
   sessionId: string;
+  gamePreference?: string;
+  player?: { gender: string };
 }
 
 type PlayerView = "home" | "queue" | "assigned" | "playing" | "postgame" | "break" | "profile";
@@ -238,6 +240,7 @@ export function PlayerHome() {
         venueId={selectedVenue}
         venueName={venueName}
         sessionId={session?.id || ""}
+        playerGender={queueEntry.player?.gender}
         warmup={isWarmup}
         onRefresh={fetchPlayerState}
       />

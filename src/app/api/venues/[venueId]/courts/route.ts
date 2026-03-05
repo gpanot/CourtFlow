@@ -28,7 +28,6 @@ export async function POST(
         label: label.trim(),
         status: "idle",
         activeInSession: false,
-        gameType: "mixed",
       },
     });
 

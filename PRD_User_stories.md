@@ -499,17 +499,18 @@ Full rewrite it is. Let me write all stories from scratch based on PRD v2.2.
 
 ---
 
-### US-029 · Staff configures court type
-**As a** staff member
-**I want to** set each court to Men / Women / Mixed
-**So that** the rotation algorithm respects the session structure
+### US-029 · Player sets game preference
+**As a** player
+**I want to** optionally set a game preference (No preference / Same gender)
+**So that** I can indicate whether I prefer to play with my gender or don't mind either way
 
 **Acceptance Criteria:**
-- [ ] Court type settable per court individually from dashboard
-- [ ] Visible as badge on TV court card
-- [ ] Algorithm respects setting; staff can change mid-session, takes effect next rotation
-- [ ] If insufficient players of required gender → dashboard alert shown
-- [ ] Staff switches to Mixed in 2 taps from the alert
+- [ ] Game preference editable from profile screen: "No preference" (default) or "Same gender"
+- [ ] Preference changeable per session via a toggle on the queue screen
+- [ ] Players with gender "other" only see "No preference" (same-gender pool too small)
+- [ ] Algorithm respects preference as a soft filter — priority is still wait-time-based
+- [ ] When in a voluntary group (Play Together), individual preferences are relaxed to match group composition
+- [ ] Game type badge on court cards and TV derived from assigned players (all male = MEN, all female = WOMEN, otherwise hidden)
 
 ---
 

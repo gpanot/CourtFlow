@@ -51,6 +51,11 @@ enum GroupStatus {
   disbanded
 }
 
+enum GamePreference {
+  no_preference
+  same_gender
+}
+
 enum StaffRole {
   staff
   superadmin
@@ -73,13 +78,14 @@ model Venue {
 }
 
 model Player {
-  id         String     @id @default(cuid())
-  name       String
-  phone      String     @unique
-  avatar     String     @default("🏓")
-  skillLevel SkillLevel @default(beginner) @map("skill_level")
-  gender     Gender
-  createdAt  DateTime   @default(now()) @map("created_at")
+  id             String         @id @default(cuid())
+  name           String
+  phone          String         @unique
+  avatar         String         @default("🏓")
+  skillLevel     SkillLevel     @default(beginner) @map("skill_level")
+  gender         Gender
+  gamePreference GamePreference @default(no_preference) @map("game_preference")
+  createdAt      DateTime       @default(now()) @map("created_at")
 
   queueEntries QueueEntry[]
 
@@ -106,7 +112,6 @@ model Court {
   label           String
   status          CourtStatus @default(idle)
   activeInSession Boolean     @default(false) @map("active_in_session")
-  gameType        GameType    @default(mixed) @map("game_type")
 
   venue            Venue              @relation(fields: [venueId], references: [id])
   courtAssignments CourtAssignment[]
@@ -131,14 +136,15 @@ model Session {
 }
 
 model QueueEntry {
-  id                   String      @id @default(cuid())
-  sessionId            String      @map("session_id")
-  playerId             String      @map("player_id")
-  groupId              String?     @map("group_id")
-  joinedAt             DateTime    @default(now()) @map("joined_at")
-  status               QueueStatus @default(waiting)
-  breakUntil           DateTime?   @map("break_until")
-  totalPlayMinutesToday Int        @default(0) @map("total_play_minutes_today")
+  id                    String         @id @default(cuid())
+  sessionId             String         @map("session_id")
+  playerId              String         @map("player_id")
+  groupId               String?        @map("group_id")
+  joinedAt              DateTime       @default(now()) @map("joined_at")
+  status                QueueStatus    @default(waiting)
+  breakUntil            DateTime?      @map("break_until")
+  totalPlayMinutesToday Int            @default(0) @map("total_play_minutes_today")
+  gamePreference        GamePreference @default(no_preference) @map("game_preference")
 
   session Session      @relation(fields: [sessionId], references: [id])
   player  Player       @relation(fields: [playerId], references: [id])

@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import { useSessionStore } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
-import { SKILL_LEVELS, SKILL_DESCRIPTIONS, type SkillLevelType } from "@/lib/constants";
+import {
+  SKILL_LEVELS, SKILL_DESCRIPTIONS, type SkillLevelType,
+  GAME_PREFERENCES, PREFERENCE_LABELS, PREFERENCE_DESCRIPTIONS, type GamePreferenceType,
+} from "@/lib/constants";
 import { cn } from "@/lib/cn";
 import { ArrowLeft, Trophy, Clock, Check, Pencil } from "lucide-react";
 
@@ -19,6 +22,7 @@ interface PlayerProfile {
   avatar: string;
   skillLevel: string;
   gender: string;
+  gamePreference: string;
 }
 
 interface MatchHistory {
@@ -41,6 +45,7 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
   const [nameValue, setNameValue] = useState("");
   const [editingAvatar, setEditingAvatar] = useState(false);
   const [editSkill, setEditSkill] = useState(false);
+  const [editPreference, setEditPreference] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -85,6 +90,13 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
     await saveField({ skillLevel: level });
     setEditSkill(false);
   };
+
+  const updatePreference = async (pref: GamePreferenceType) => {
+    await saveField({ gamePreference: pref });
+    setEditPreference(false);
+  };
+
+  const showPreferenceOption = profile?.gender !== "other";
 
   return (
     <div className="min-h-dvh p-6">
@@ -183,6 +195,42 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
               <p className="mt-1 capitalize text-green-400">{profile.skillLevel}</p>
             )}
           </div>
+
+          {/* Game Preference */}
+          {showPreferenceOption && (
+            <div>
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-neutral-300">Game Preference</h3>
+                <button onClick={() => setEditPreference(!editPreference)} className="text-sm text-blue-400">
+                  {editPreference ? "Cancel" : "Change"}
+                </button>
+              </div>
+              {editPreference ? (
+                <div className="mt-2 space-y-2">
+                  {GAME_PREFERENCES.map((pref) => (
+                    <button
+                      key={pref}
+                      onClick={() => updatePreference(pref)}
+                      disabled={saving}
+                      className={cn(
+                        "w-full rounded-xl border-2 p-3 text-left transition-colors",
+                        profile?.gamePreference === pref
+                          ? "border-green-500 bg-green-600/20"
+                          : "border-neutral-700 hover:border-neutral-500"
+                      )}
+                    >
+                      <span className="font-medium">{PREFERENCE_LABELS[pref]}</span>
+                      <p className="text-sm text-neutral-400">{PREFERENCE_DESCRIPTIONS[pref]}</p>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-1 text-green-400">
+                  {PREFERENCE_LABELS[(profile?.gamePreference as GamePreferenceType) || "no_preference"]}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Recent Matches */}
           <div>

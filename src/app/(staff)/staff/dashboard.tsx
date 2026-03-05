@@ -141,16 +141,6 @@ export function StaffDashboard() {
     }
   };
 
-  const handleSetCourtType = async (courtId: string, gameType: string) => {
-    try {
-      await api.patch(`/api/courts/${courtId}`, { gameType });
-      setSelectedCourt(null);
-      await fetchState();
-    } catch (e) {
-      alert((e as Error).message);
-    }
-  };
-
   const handlePlayerAction = async (playerId: string, _playerName: string, action: "remove_from_queue" | "end_session") => {
     try {
       if (action === "remove_from_queue") {
@@ -363,23 +353,6 @@ export function StaffDashboard() {
                   End Game
                 </button>
               )}
-
-              <div className="grid grid-cols-3 gap-2">
-                {(["men", "women", "mixed"] as const).map((type) => (
-                  <button
-                    key={type}
-                    onClick={() => handleSetCourtType(selectedCourt.id, type)}
-                    className={cn(
-                      "rounded-lg py-2 text-sm font-medium capitalize",
-                      selectedCourt.gameType === type
-                        ? "bg-blue-600 text-white"
-                        : "bg-neutral-800 text-neutral-300 hover:bg-neutral-700"
-                    )}
-                  >
-                    {type}
-                  </button>
-                ))}
-              </div>
 
               {selectedCourt.status === "maintenance" ? (
                 <div className="flex gap-2 pt-2">

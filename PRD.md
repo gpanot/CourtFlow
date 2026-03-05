@@ -82,17 +82,16 @@ Everyone looks at the TV. Court labels match the physical signs on the walls. Sh
 ### Core Data Models
 ```
 Venue
-  id, name, location, default_court_type, active
+  id, name, location, active
 
 Player
   id, name, phone, skill_level (beginner/intermediate/advanced/pro)
-  gender, created_at
+  gender, game_preference (no_preference/same_gender), created_at
 
 Court
   id, venue_id, label (free text — e.g. "Court A", "7", "North")
   status (idle/active/maintenance)
   active_in_session (boolean, toggled live by staff)
-  current_game_type
 
 Session
   id, venue_id, date, opened_at, closed_at, status
@@ -107,6 +106,7 @@ QueueEntry
   id, session_id, player_id, group_id (nullable)
   joined_at, status (waiting/assigned/playing/on_break/left)
   break_until, total_play_minutes_today
+  game_preference (no_preference/same_gender — per-session override)
 
 CourtAssignment
   id, court_id, session_id, player_ids[4]
@@ -128,7 +128,7 @@ Scan QR at venue → phone OTP → name, gender, skill level (with description p
 GPS auto-detects venue or manual select. Single dominant CTA: **"Join the Game"**. Already queued: shows **"#4 in line"** or **"Group #4 in line"**.
 
 **Queue Screen — Solo**
-Position only — large: **"#4 in line"**. First names of players/groups ahead (up to 5 entries). No wait time estimate. Options: "Leave Queue" · "Play with Friends"
+Position only — large: **"#4 in line"**. First names of players/groups ahead (up to 5 entries). No wait time estimate. Game preference toggle (No preference / Same gender) — defaults to profile setting, changeable per session. Options: "Leave Queue" · "Play with Friends"
 
 **Play Together — Group Formation**
 Player taps **"Play with Friends"** in queue screen:
@@ -168,7 +168,7 @@ Timer visible in app. Push 2 min before end. Tap "I'm Back" → re-queues at fai
 Double confirmation: *"Are you sure? You'll be removed from today's session."* Stats saved. Can rejoin same day. If in a group → group notified that member left, group continues with remaining players (min 2 to stay a group, otherwise dissolves).
 
 **Profile & History**
-Total games, total time played across all venues. Match history: date, venue, court label, teammates. Skill level — player can update anytime.
+Total games, total time played across all venues. Match history: date, venue, court label, teammates. Skill level — player can update anytime. Game preference (No preference / Same gender) — optional, editable anytime. Players with gender "other" default to "No preference" only.
 
 ---
 
@@ -219,9 +219,6 @@ TV grid reflows smoothly on every add/remove.
 
 **Queue Management**
 Full queue visible: position, name, skill badge, group indicator (🔗). Bump / remove / add manual player (no smartphone — name entered, staff badge shown everywhere). Staff can break a group manually if needed (injury, dispute). Manual player court confirmations done by staff from dashboard.
-
-**Court Type Control**
-Set per court: Men / Women / Mixed. Change takes effect next rotation. Gender shortage → dashboard alert → staff switches to Mixed in 2 taps.
 
 **Group Management**
 Staff can view group composition from queue panel. Can break a group (members become solo players at their current queue positions). Can merge solo players into a group manually if requested.
@@ -284,15 +281,23 @@ Groups are treated as a single queue unit. Their position is anchored to their l
 
 **Assignment when court becomes available:**
 1. Evaluate top entries in queue (solo players and groups as units)
-2. If a group of 4 is next → assign them directly to court (subject to skill and gender constraints)
-3. If a group of 2–3 is next → assign group, fill remaining spots with best-matched solo players
-4. If all solo → take top 4 by priority score
-5. Filter by court type (Men / Women / Mixed)
-6. Skill balance check — prefer max 1 level gap between any two players on court
+2. If a group of 4 is next → assign them directly to court (skill check only — group composition overrides individual game preferences since they chose to play together)
+3. If a group of 2–3 is next → assign group, fill remaining spots with best-matched solo players (respecting both skill and game preference compatibility)
+4. If all solo → take top 4 by priority score, checking both skill balance and game preference compatibility
+5. Skill balance check — max 1 level gap between any two players on court
+6. Game preference check — players with "same gender" preference only matched with players of the same gender; "no preference" players match with anyone
 7. If balance impossible with top entries → look ahead up to 8 positions in queue
-8. Assign, push *"Court A — go play!"* to all 4
-9. TV → 🔵 Blue, 3-min countdown
-10. 3 min later → auto-start, timer 0:00, TV → 🟢 Green
+8. Derive game type from assigned players (all male = men, all female = women, mixed genders = mixed) — recorded on the assignment for display and analytics
+9. Assign, push *"Court A — go play!"* to all 4
+10. TV → 🔵 Blue, 3-min countdown
+11. 3 min later → auto-start, timer 0:00, TV → 🟢 Green
+
+**Game Preference Rules**
+- Players optionally set a preference in their profile: "No preference" (default) or "Same gender"
+- Preference can be changed per session from the queue screen
+- Preference is best-effort — priority is still driven by wait time
+- When in a voluntary group (Play Together), individual preferences are relaxed to match the group composition
+- Players with gender "other" always use "No preference"
 
 **Group Skill Constraint**
 If a group's internal skill spread exceeds 1 level → staff notified on dashboard. Staff can approve the assignment anyway or break the group. Algorithm never silently violates the skill rule.
@@ -325,7 +330,6 @@ When one player is removed from an active court → algorithm pulls the single b
 
 | Setting | Default | Range |
 |---------|---------|-------|
-| Default court type | Mixed | Men / Women / Mixed |
 | Auto-start delay | 3 min | 1–5 min |
 | Post-game re-queue timeout | 3 min | 1–5 min |
 | Break duration options | 5/10/15/20/30 min | Configurable |
@@ -432,6 +436,8 @@ When one player is removed from an active court → algorithm pulls the single b
 | Group queue position | Anchored to longest-waiting member |
 | Group priority penalty | Based on average play time of all members today |
 | Group skill constraint | Max 1 level gap, staff can override |
+| Game preference | Player-controlled (No preference / Same gender), not staff-controlled per court |
+| Court type | Derived from assigned players (men/women/mixed), no longer set on courts |
 | Group post-game | Members choose independently (re-queue / break / leave) |
 | Group dissolution | Auto if below 2 members, or staff manual break |
 

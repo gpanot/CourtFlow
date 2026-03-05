@@ -1,7 +1,7 @@
 import { prisma } from "./db";
 import { emitToPlayer, emitToVenue } from "./socket-server";
 import { getSkillIndex, QUEUE_LOOKAHEAD, MAX_SKILL_GAP } from "./constants";
-import type { SkillLevel, GameType } from "@prisma/client";
+import type { SkillLevel, GameType, GamePreference } from "@prisma/client";
 
 interface QueueCandidate {
   entryId: string;
@@ -9,6 +9,7 @@ interface QueueCandidate {
   playerName: string;
   skillLevel: SkillLevel;
   gender: string;
+  gamePreference: GamePreference;
   groupId: string | null;
   joinedAt: Date;
   totalPlayMinutesToday: number;
@@ -47,11 +48,43 @@ function checkSkillBalance(players: QueueCandidate[]): boolean {
   return true;
 }
 
-function matchesCourtType(player: QueueCandidate, courtType: GameType): boolean {
-  if (courtType === "mixed") return true;
-  if (courtType === "men" && player.gender === "male") return true;
-  if (courtType === "women" && player.gender === "female") return true;
-  return false;
+function checkPreferenceCompatibility(players: QueueCandidate[], isVoluntaryGroup = false): boolean {
+  if (isVoluntaryGroup) return true;
+
+  for (const player of players) {
+    if (player.gamePreference !== "same_gender") continue;
+    for (const other of players) {
+      if (other === player) continue;
+      if (other.gender !== player.gender) return false;
+    }
+  }
+  return true;
+}
+
+function checkGroupFillCompatibility(
+  groupMembers: QueueCandidate[],
+  soloCandidate: QueueCandidate
+): boolean {
+  if (soloCandidate.gamePreference === "same_gender") {
+    const allSameGender = groupMembers.every((m) => m.gender === soloCandidate.gender);
+    if (!allSameGender) return false;
+  }
+
+  for (const member of groupMembers) {
+    if (member.gamePreference === "same_gender" && soloCandidate.gender !== member.gender) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function deriveGameType(players: QueueCandidate[]): GameType {
+  const allMale = players.every((p) => p.gender === "male");
+  const allFemale = players.every((p) => p.gender === "female");
+  if (allMale) return "men";
+  if (allFemale) return "women";
+  return "mixed";
 }
 
 export async function runRotation(
@@ -77,19 +110,16 @@ export async function runRotation(
     playerName: e.player.name,
     skillLevel: e.player.skillLevel,
     gender: e.player.gender,
+    gamePreference: e.gamePreference,
     groupId: e.groupId,
     joinedAt: e.joinedAt,
     totalPlayMinutesToday: e.totalPlayMinutesToday,
   }));
 
-  const eligible = candidates.filter((c) => matchesCourtType(c, court.gameType));
-  if (eligible.length < 4) return false;
-
-  // Build group and solo lists
   const groupMap = new Map<string, QueueCandidate[]>();
   const solos: QueueCandidate[] = [];
 
-  for (const c of eligible) {
+  for (const c of candidates) {
     if (c.groupId) {
       const arr = groupMap.get(c.groupId) || [];
       arr.push(c);
@@ -107,15 +137,16 @@ export async function runRotation(
 
   const soloWithPriority = solos.map((s) => ({ ...s, priority: computeSoloPriority(s) }));
 
-  // Sort by priority (highest first)
   groups.sort((a, b) => b.priority - a.priority);
   soloWithPriority.sort((a, b) => b.priority - a.priority);
 
   const selectedPlayers: QueueCandidate[] = [];
 
-  // Try group of 4 first
-  const group4 = groups.find((g) => g.members.length === 4);
-  if (group4 && checkSkillBalance(group4.members)) {
+  // Try group of 4 first (voluntary group — preference relaxed within group)
+  const group4 = groups.find(
+    (g) => g.members.length === 4 && checkSkillBalance(g.members)
+  );
+  if (group4) {
     selectedPlayers.push(...group4.members);
   }
 
@@ -129,7 +160,11 @@ export async function runRotation(
         for (const solo of soloWithPriority) {
           if (fills.length >= needed) break;
           const testSet = [...group.members, ...fills, solo];
-          if (checkSkillBalance(testSet)) {
+          if (
+            checkSkillBalance(testSet) &&
+            checkGroupFillCompatibility(group.members, solo) &&
+            checkPreferenceCompatibility([...fills, solo])
+          ) {
             fills.push(solo);
           }
         }
@@ -146,7 +181,10 @@ export async function runRotation(
   if (selectedPlayers.length === 0) {
     for (let i = 0; i < Math.min(soloWithPriority.length, QUEUE_LOOKAHEAD); i++) {
       const testSet = [...selectedPlayers, soloWithPriority[i]];
-      if (selectedPlayers.length === 0 || checkSkillBalance(testSet)) {
+      if (
+        (selectedPlayers.length === 0 || checkSkillBalance(testSet)) &&
+        checkPreferenceCompatibility(testSet)
+      ) {
         selectedPlayers.push(soloWithPriority[i]);
       }
       if (selectedPlayers.length >= 4) break;
@@ -155,9 +193,9 @@ export async function runRotation(
 
   if (selectedPlayers.length < 4) return false;
 
-  // Create the assignment
   const playerIds = selectedPlayers.map((p) => p.playerId);
-  const groupIds = [...new Set(selectedPlayers.filter((p) => p.groupId).map((p) => p.groupId!))] ;
+  const groupIds = [...new Set(selectedPlayers.filter((p) => p.groupId).map((p) => p.groupId!))];
+  const gameType = deriveGameType(selectedPlayers);
 
   const assignment = await prisma.courtAssignment.create({
     data: {
@@ -165,17 +203,15 @@ export async function runRotation(
       sessionId,
       playerIds,
       groupIds,
-      gameType: court.gameType,
+      gameType,
     },
   });
 
-  // Update court to starting (will auto-transition to active after 3 min)
   await prisma.court.update({
     where: { id: courtId },
     data: { status: "active" },
   });
 
-  // Update queue entries
   for (const p of selectedPlayers) {
     await prisma.queueEntry.update({
       where: { id: p.entryId },
@@ -183,7 +219,6 @@ export async function runRotation(
     });
   }
 
-  // Notify all assigned players
   for (const p of selectedPlayers) {
     emitToPlayer(p.playerId, "player:notification", {
       type: "court_assigned",
@@ -194,11 +229,10 @@ export async function runRotation(
       teammates: selectedPlayers
         .filter((t) => t.playerId !== p.playerId)
         .map((t) => ({ name: t.playerName, skillLevel: t.skillLevel, groupId: t.groupId })),
-      gameType: court.gameType,
+      gameType,
     });
   }
 
-  // Schedule auto-start after 3 minutes
   setTimeout(async () => {
     try {
       const current = await prisma.courtAssignment.findUnique({
@@ -250,38 +284,36 @@ export async function findReplacement(
   });
 
   for (const entry of waitingSolos) {
-    if (!matchesCourtType({
+    const candidate: QueueCandidate = {
       entryId: entry.id,
       playerId: entry.playerId,
       playerName: entry.player.name,
       skillLevel: entry.player.skillLevel,
       gender: entry.player.gender,
+      gamePreference: entry.gamePreference,
       groupId: null,
       joinedAt: entry.joinedAt,
       totalPlayMinutesToday: entry.totalPlayMinutesToday,
-    }, court.gameType)) continue;
+    };
 
-    const allOnCourt = [
+    if (candidate.gamePreference === "same_gender") {
+      const allSameGender = currentPlayers.every((p) => p.gender === candidate.gender);
+      if (!allSameGender) continue;
+    }
+
+    const allOnCourt: QueueCandidate[] = [
       ...currentPlayers.map((p) => ({
         entryId: "",
         playerId: p.id,
         playerName: p.name,
         skillLevel: p.skillLevel,
         gender: p.gender,
+        gamePreference: "no_preference" as GamePreference,
         groupId: null,
         joinedAt: new Date(),
         totalPlayMinutesToday: 0,
       })),
-      {
-        entryId: entry.id,
-        playerId: entry.playerId,
-        playerName: entry.player.name,
-        skillLevel: entry.player.skillLevel,
-        gender: entry.player.gender,
-        groupId: null,
-        joinedAt: entry.joinedAt,
-        totalPlayMinutesToday: entry.totalPlayMinutesToday,
-      },
+      candidate,
     ];
 
     if (checkSkillBalance(allOnCourt)) {
