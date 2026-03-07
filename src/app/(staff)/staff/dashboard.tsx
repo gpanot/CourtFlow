@@ -8,7 +8,7 @@ import { joinVenue } from "@/lib/socket-client";
 import { CourtCard, type CourtData } from "@/components/court-card";
 import { QueuePanel, type QueueEntryData } from "@/components/queue-panel";
 import { cn } from "@/lib/cn";
-import { Plus, X, LogOut, Users, LayoutGrid, AlertTriangle, User, Flame, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft, Repeat } from "lucide-react";
+import { Plus, X, LogOut, Users, LayoutGrid, AlertTriangle, User, Flame, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, History, Calendar, Loader2 } from "lucide-react";
 import { WARMUP_DURATION_SECONDS } from "@/lib/constants";
 import { QRCodeSVG } from "qrcode.react";
 import { SessionSummary } from "./session-summary";
@@ -50,6 +50,8 @@ export function StaffDashboard() {
   const [replaceBusy, setReplaceBusy] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [closedSessionId, setClosedSessionId] = useState<string | null>(null);
+  const [viewingSessionId, setViewingSessionId] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
   const { on } = useSocket();
 
   const fetchState = useCallback(async () => {
@@ -458,6 +460,10 @@ export function StaffDashboard() {
           venueName={venue?.name}
           onLogout={clearAuth}
           onClose={() => setShowProfile(false)}
+          onHistory={() => {
+            setShowProfile(false);
+            setShowHistory(true);
+          }}
         />
       )}
 
@@ -746,6 +752,33 @@ export function StaffDashboard() {
           />
         </div>
       )}
+
+      {/* Session History */}
+      {showHistory && (
+        <div className="fixed inset-0 z-50">
+          <SessionHistoryPanel
+            venueId={venueId!}
+            onViewSession={(id) => {
+              setViewingSessionId(id);
+              setShowHistory(false);
+            }}
+            onClose={() => setShowHistory(false)}
+          />
+        </div>
+      )}
+
+      {/* Viewing past session stats */}
+      {viewingSessionId && (
+        <div className="fixed inset-0 z-50">
+          <SessionSummary
+            sessionId={viewingSessionId}
+            onClose={() => {
+              setViewingSessionId(null);
+              setShowHistory(true);
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -948,11 +981,13 @@ function StaffProfile({
   venueName,
   onLogout,
   onClose,
+  onHistory,
 }: {
   staffName: string | null;
   venueName: string | undefined;
   onLogout: () => void;
   onClose: () => void;
+  onHistory: () => void;
 }) {
   const [confirmLogout, setConfirmLogout] = useState(false);
 
@@ -1007,6 +1042,17 @@ function StaffProfile({
           </div>
         </div>
 
+        <button
+          onClick={onHistory}
+          className="flex w-full items-center justify-between rounded-xl bg-neutral-800 px-4 py-3.5 mb-3 hover:bg-neutral-700 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <History className="h-5 w-5 text-blue-400" />
+            <span className="font-medium text-neutral-200">Session History</span>
+          </div>
+          <ChevronRight className="h-5 w-5 text-neutral-500" />
+        </button>
+
         <p className="text-xs text-neutral-500 mb-4">
           This device may be shared between staff members. Log out at the end of your shift.
         </p>
@@ -1019,6 +1065,117 @@ function StaffProfile({
           Log Out
         </button>
       </div>
+    </div>
+  );
+}
+
+interface SessionHistoryItem {
+  id: string;
+  date: string;
+  openedAt: string;
+  closedAt: string | null;
+  playerCount: number;
+  gameCount: number;
+}
+
+function SessionHistoryPanel({
+  venueId,
+  onViewSession,
+  onClose,
+}: {
+  venueId: string;
+  onViewSession: (sessionId: string) => void;
+  onClose: () => void;
+}) {
+  const [sessions, setSessions] = useState<SessionHistoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api
+      .get<SessionHistoryItem[]>(`/api/sessions/history?venueId=${venueId}`)
+      .then(setSessions)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [venueId]);
+
+  const formatDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  };
+
+  const formatTime = (dateStr: string) => {
+    return new Date(dateStr).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+  };
+
+  const getDuration = (openedAt: string, closedAt: string | null) => {
+    if (!closedAt) return "—";
+    const ms = new Date(closedAt).getTime() - new Date(openedAt).getTime();
+    const totalMin = Math.round(ms / 60000);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  };
+
+  return (
+    <div className="flex h-dvh flex-col overflow-hidden bg-neutral-950 text-white">
+      <header className="flex items-center gap-3 border-b border-neutral-800 px-4 py-3">
+        <button
+          onClick={onClose}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-neutral-400 hover:bg-neutral-700 transition-colors"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </button>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-lg font-bold leading-tight">Session History</h1>
+          <p className="text-sm text-neutral-400">Past sessions at this venue</p>
+        </div>
+      </header>
+
+      <main className="flex-1 overflow-y-auto p-4">
+        {loading ? (
+          <div className="flex h-48 items-center justify-center">
+            <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
+          </div>
+        ) : sessions.length === 0 ? (
+          <div className="flex h-48 flex-col items-center justify-center gap-2 text-center">
+            <Calendar className="h-10 w-10 text-neutral-700" />
+            <p className="text-neutral-500">No past sessions yet</p>
+            <p className="text-sm text-neutral-600">Session statistics will appear here after you close a session.</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {sessions.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => onViewSession(s.id)}
+                className="flex w-full items-center gap-4 rounded-xl border border-neutral-800 bg-neutral-900 p-4 text-left hover:border-neutral-700 hover:bg-neutral-800/80 transition-colors"
+              >
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600/15">
+                  <Calendar className="h-5 w-5 text-blue-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-neutral-200">{formatDate(s.date)}</p>
+                  <p className="text-sm text-neutral-500">
+                    {formatTime(s.openedAt)} → {s.closedAt ? formatTime(s.closedAt) : "—"}{" "}
+                    <span className="text-neutral-600">·</span> {getDuration(s.openedAt, s.closedAt)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <div className="text-right">
+                    <p className="text-sm font-medium text-neutral-300">{s.playerCount}</p>
+                    <p className="text-[10px] text-neutral-600">players</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-medium text-neutral-300">{s.gameCount}</p>
+                    <p className="text-[10px] text-neutral-600">games</p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-neutral-600" />
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </main>
     </div>
   );
 }

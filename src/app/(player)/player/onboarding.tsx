@@ -15,7 +15,7 @@ export function OnboardingFlow() {
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [name, setName] = useState("");
-  const [gender, setGender] = useState<"male" | "female" | "other" | "">("");
+  const [gender, setGender] = useState<"male" | "female" | "">("");
   const [skill, setSkill] = useState<SkillLevelType | "">("");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
@@ -161,8 +161,8 @@ export function OnboardingFlow() {
 
           <div>
             <p className="mb-2 text-sm text-neutral-400">Gender</p>
-            <div className="grid grid-cols-3 gap-2">
-              {(["male", "female", "other"] as const).map((g) => (
+            <div className="grid grid-cols-2 gap-2">
+              {(["male", "female"] as const).map((g) => (
                 <button
                   key={g}
                   onClick={() => setGender(g)}

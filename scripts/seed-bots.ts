@@ -1,5 +1,5 @@
 const BASE_URL = "http://localhost:3000";
-const VENUE_ID = "cmm96oluh0008t5v3hwlv9mmc";
+const VENUE_ID = "cmmftcuj30000t5muapkb28e7";
 const BOT_COUNT = 62;
 const DELAY_BETWEEN_JOINS_MS = 3000;
 
@@ -16,7 +16,7 @@ const NAMES = [
 
 const AVATARS = ["🏓", "🎾", "⚡", "🔥", "🌟", "💪", "🦊", "🐻", "🦁", "🐯", "🦅", "🐬", "🎯", "🏆", "👑", "💎"];
 const SKILLS: string[] = ["beginner", "beginner", "intermediate", "intermediate", "intermediate", "advanced", "advanced", "pro"];
-const GENDERS: string[] = ["male", "male", "male", "female", "female", "female", "other"];
+const GENDERS: string[] = ["male", "male", "male", "female", "female", "female"];
 
 function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];

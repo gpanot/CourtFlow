@@ -5,7 +5,7 @@ import { api } from "@/lib/api-client";
 import { useSessionStore } from "@/stores/session-store";
 import { cn } from "@/lib/cn";
 import { PREFERENCE_LABELS, type GamePreferenceType } from "@/lib/constants";
-import { Link, Copy, Check, Users, Coffee, Flame } from "lucide-react";
+import { Link, Copy, Check, Users, Coffee } from "lucide-react";
 
 interface QueueScreenProps {
   entry: { id: string; groupId: string | null; sessionId: string; gamePreference?: string };
@@ -13,7 +13,6 @@ interface QueueScreenProps {
   venueName: string;
   sessionId: string;
   playerGender?: string;
-  warmup?: boolean;
   avatar?: string;
   onShowProfile?: () => void;
   onRefresh: () => void;
@@ -27,7 +26,7 @@ interface QueueInfo {
   group: { id: string; code: string; members: { name: string }[] } | null;
 }
 
-export function QueueScreen({ entry, venueId, venueName, sessionId, playerGender, warmup = false, avatar, onShowProfile, onRefresh, onLeaveVenue }: QueueScreenProps) {
+export function QueueScreen({ entry, venueId, venueName, sessionId, playerGender, avatar, onShowProfile, onRefresh, onLeaveVenue }: QueueScreenProps) {
   const { playerId } = useSessionStore();
   const [info, setInfo] = useState<QueueInfo | null>(null);
   const [showGroupCreate, setShowGroupCreate] = useState(false);
@@ -186,16 +185,6 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, playerGender
 
       {/* Center content */}
       <div className="my-auto flex flex-col items-center gap-3">
-        {warmup && (
-          <div className="mb-2 flex flex-col items-center gap-2 rounded-2xl border border-orange-500/30 bg-orange-500/10 px-6 py-4 text-center">
-            <div className="flex items-center gap-2 text-orange-400">
-              <Flame className="h-6 w-6" />
-              <span className="text-lg font-bold">Warm Up Time</span>
-              <Flame className="h-6 w-6" />
-            </div>
-            <p className="text-sm text-orange-300/80">Go to any court and warm up freely</p>
-          </div>
-        )}
         <p className={cn(
           "font-bold text-green-500",
           info?.group ? "text-6xl" : "text-8xl"
@@ -203,7 +192,7 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, playerGender
           #{info?.position || "—"}
         </p>
         <p className="text-xl font-medium text-neutral-300">
-          {warmup ? "You're checked in!" : "In line \u2014 Get ready to play!"}
+          In line &mdash; Get ready to play!
         </p>
 
         {showPreferenceToggle && (

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireAuth } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
+import { assignToWarmup } from "@/lib/algorithm";
 
 export async function POST(request: NextRequest) {
   try {
@@ -47,6 +48,15 @@ export async function POST(request: NextRequest) {
       where: { id: entry.id },
       data: { status: "left", groupId: null },
     });
+
+    // Immediately find a replacement from the waiting queue
+    const nextWaiting = await prisma.queueEntry.findFirst({
+      where: { sessionId: entry.sessionId, status: "waiting" },
+      orderBy: { joinedAt: "asc" },
+    });
+    if (nextWaiting) {
+      await assignToWarmup(venueId, entry.sessionId, nextWaiting.playerId);
+    }
 
     const allEntries = await prisma.queueEntry.findMany({
       where: { sessionId: entry.sessionId, status: { in: ["waiting", "on_break"] } },

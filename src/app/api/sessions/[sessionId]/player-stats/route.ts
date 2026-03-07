@@ -129,9 +129,12 @@ export async function GET(
       gamesPlayed: partnerCounts[p.id] || 0,
     }));
 
+    const topPercent = Math.max(1, 100 - courtTimePercentile);
+    const enoughPlayersForRanking = Object.keys(playTimeByPlayer).length >= 4;
+
     let funStat: { text: string; emoji: string };
-    if (courtTimePercentile >= 80) {
-      funStat = { text: `Top ${100 - courtTimePercentile}% of players by court time today`, emoji: "🥇" };
+    if (enoughPlayersForRanking && courtTimePercentile >= 80) {
+      funStat = { text: `Top ${topPercent}% of players by court time today`, emoji: "🥇" };
     } else if (topPartner && topPartner[1] >= 2) {
       funStat = { text: `You and ${partnerNames[topPartner[0]]} played together ${topPartner[1]} times today`, emoji: "🔗" };
     } else if (partnersForDisplay.length >= 6) {

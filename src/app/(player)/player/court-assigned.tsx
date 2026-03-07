@@ -120,11 +120,9 @@ export function CourtAssignedScreen({ notification, venueId, onRefresh }: CourtA
         ))}
       </div>
 
-      {gameType !== "mixed" && (
-        <span className="mt-4 rounded-lg bg-neutral-800 px-3 py-1 text-sm capitalize text-neutral-300">
-          {gameType}
-        </span>
-      )}
+      <span className="mt-4 rounded-lg bg-neutral-800 px-3 py-1 text-sm capitalize text-neutral-300">
+        {gameType === "mixed" ? "Mix" : gameType}
+      </span>
     </div>
   );
 }

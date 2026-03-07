@@ -8,7 +8,7 @@ import {
   GAME_PREFERENCES, PREFERENCE_LABELS, PREFERENCE_DESCRIPTIONS, type GamePreferenceType,
 } from "@/lib/constants";
 import { cn } from "@/lib/cn";
-import { ArrowLeft, Trophy, Clock, Check, Pencil } from "lucide-react";
+import { ArrowLeft, Trophy, Clock, Check, Pencil, ChevronRight } from "lucide-react";
 
 const AVATAR_OPTIONS = [
   "🏓", "🎾", "⚡", "🔥", "🌟", "💪", "🦊", "🐻",
@@ -37,10 +37,48 @@ interface MatchHistory {
   }[];
 }
 
+interface SessionHistory {
+  sessionId: string;
+  date: string;
+  openedAt: string;
+  closedAt: string | null;
+  status: string;
+  venue: { id: string; name: string };
+  gamesPlayed: number;
+  totalPlayMinutes: number;
+  partnersCount: number;
+  gamesByType: { men: number; women: number; mixed: number };
+  feedback: { experience: number; matchQuality: string; wouldReturn: string } | null;
+}
+
+const EXPERIENCE_EMOJIS: Record<number, string> = { 1: "😞", 2: "😐", 3: "🙂", 4: "😄", 5: "🤩" };
+const MATCH_QUALITY_LABELS: Record<string, string> = { too_easy: "😤 Too easy", perfect: "👌 Perfect", too_hard: "💪 Too hard" };
+const RETURN_LABELS: Record<string, string> = { no: "👎 No", maybe: "🤷 Maybe", yes: "👍 Yes" };
+
+interface PlayerSessionStats {
+  player: { id: string; name: string; avatar: string };
+  venue: { name: string };
+  session: { id: string; date: string; openedAt: string; closedAt: string | null; status: string };
+  stats: {
+    totalPlayMinutes: number;
+    sessionDurationMin: number;
+    playPercentage: number;
+    gamesPlayed: number;
+    gamesByType: { men: number; women: number; mixed: number };
+    partners: { id: string; name: string; avatar: string; gamesPlayed: number }[];
+    longestGameMinutes: number;
+    courtTimePercentile: number;
+    funStat: { text: string; emoji: string };
+  };
+  career: { totalSessions: number; totalHoursPlayed: number; totalPlayersMet: number };
+}
+
 export function ProfileScreen({ onBack }: { onBack: () => void }) {
   const { playerId, setAuth } = useSessionStore();
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
   const [history, setHistory] = useState<MatchHistory | null>(null);
+  const [sessionHistory, setSessionHistory] = useState<SessionHistory[]>([]);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState("");
   const [editingAvatar, setEditingAvatar] = useState(false);
@@ -55,6 +93,7 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
       setNameValue(p.name);
     }).catch(console.error);
     api.get<MatchHistory>(`/api/players/${playerId}/history`).then(setHistory).catch(console.error);
+    api.get<SessionHistory[]>(`/api/players/${playerId}/sessions`).then(setSessionHistory).catch(console.error);
   }, [playerId]);
 
   const saveField = async (updates: Partial<PlayerProfile>) => {
@@ -97,6 +136,17 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
   };
 
   const showPreferenceOption = profile?.gender !== "other";
+
+  if (selectedSessionId) {
+    const sessionMeta = sessionHistory.find((s) => s.sessionId === selectedSessionId);
+    return (
+      <SessionDetailScreen
+        sessionId={selectedSessionId}
+        feedback={sessionMeta?.feedback || null}
+        onBack={() => setSelectedSessionId(null)}
+      />
+    );
+  }
 
   return (
     <div className="min-h-dvh p-6">
@@ -232,29 +282,80 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
             </div>
           )}
 
-          {/* Recent Matches */}
+          {/* Session History */}
           <div>
-            <h3 className="mb-3 font-semibold text-neutral-300">Recent Matches</h3>
-            {history?.matches.length === 0 && (
-              <p className="text-neutral-500">No matches yet. Join a game!</p>
+            <h3 className="mb-3 font-semibold text-neutral-300">Session History</h3>
+            {sessionHistory.length === 0 && (
+              <p className="text-neutral-500">No sessions yet. Join a game!</p>
             )}
-            <div className="space-y-2">
-              {history?.matches.slice(0, 20).map((m) => (
-                <div key={m.id} className="rounded-xl bg-neutral-900 p-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium">{m.court.label}</span>
-                    <span className="text-xs text-neutral-400">
-                      {new Date(m.startedAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <p className="text-sm text-neutral-400">
-                    {m.court.venue.name} &middot;{" "}
-                    {m.endedAt
-                      ? `${Math.floor((new Date(m.endedAt).getTime() - new Date(m.startedAt).getTime()) / 60000)} min`
-                      : "In progress"}
-                  </p>
-                </div>
-              ))}
+            <div className="space-y-3">
+              {sessionHistory.slice(0, 20).map((s) => {
+                const dateStr = new Date(s.date).toLocaleDateString("en-US", {
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                });
+                return (
+                  <button
+                    key={s.sessionId}
+                    onClick={() => setSelectedSessionId(s.sessionId)}
+                    className="w-full rounded-xl border border-neutral-800 bg-neutral-900 p-4 text-left transition-colors hover:border-neutral-700 hover:bg-neutral-800/80"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-white">{s.venue.name}</p>
+                        <p className="text-xs text-neutral-500">{dateStr}</p>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {s.feedback && (
+                          <span className="text-2xl" title={`Rated ${s.feedback.experience}/5`}>
+                            {EXPERIENCE_EMOJIS[s.feedback.experience] || "🙂"}
+                          </span>
+                        )}
+                        <ChevronRight className="h-4 w-4 text-neutral-600" />
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex gap-4 text-sm">
+                      <div className="flex items-center gap-1.5 text-neutral-300">
+                        <span className="text-xs">🎮</span>
+                        <span className="font-medium">{s.gamesPlayed}</span>
+                        <span className="text-neutral-500">games</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-neutral-300">
+                        <span className="text-xs">⏱</span>
+                        <span className="font-medium">{s.totalPlayMinutes}</span>
+                        <span className="text-neutral-500">min</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-neutral-300">
+                        <span className="text-xs">👥</span>
+                        <span className="font-medium">{s.partnersCount}</span>
+                        <span className="text-neutral-500">players</span>
+                      </div>
+                    </div>
+
+                    {s.gamesPlayed > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {s.gamesByType.mixed > 0 && (
+                          <span className="rounded-full bg-purple-600/15 px-2 py-0.5 text-[10px] font-medium text-purple-300">
+                            Mixed {s.gamesByType.mixed}
+                          </span>
+                        )}
+                        {s.gamesByType.men > 0 && (
+                          <span className="rounded-full bg-blue-600/15 px-2 py-0.5 text-[10px] font-medium text-blue-300">
+                            Men {s.gamesByType.men}
+                          </span>
+                        )}
+                        {s.gamesByType.women > 0 && (
+                          <span className="rounded-full bg-pink-600/15 px-2 py-0.5 text-[10px] font-medium text-pink-300">
+                            Women {s.gamesByType.women}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -288,6 +389,208 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function SessionDetailScreen({
+  sessionId,
+  feedback,
+  onBack,
+}: {
+  sessionId: string;
+  feedback: { experience: number; matchQuality: string; wouldReturn: string } | null;
+  onBack: () => void;
+}) {
+  const [data, setData] = useState<PlayerSessionStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api
+      .get<PlayerSessionStats>(`/api/sessions/${sessionId}/player-stats`)
+      .then(setData)
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [sessionId]);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-green-500 border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="min-h-dvh p-6">
+        <button onClick={onBack} className="mb-6 flex items-center gap-2 text-neutral-400 hover:text-white">
+          <ArrowLeft className="h-5 w-5" /> Back
+        </button>
+        <p className="text-center text-neutral-400">Could not load session details</p>
+      </div>
+    );
+  }
+
+  const { venue, session, stats, career } = data;
+  const dateStr = new Date(session.date).toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
+
+  return (
+    <div className="min-h-dvh pb-8">
+      {/* Header */}
+      <div className="bg-gradient-to-b from-green-950/60 to-transparent px-6 pb-5 pt-6">
+        <button onClick={onBack} className="mb-4 flex items-center gap-2 text-neutral-400 hover:text-white">
+          <ArrowLeft className="h-5 w-5" /> Back
+        </button>
+        <h1 className="text-xl font-bold text-white">{venue.name}</h1>
+        <p className="mt-0.5 text-sm text-neutral-400">{dateStr}</p>
+      </div>
+
+      <div className="space-y-4 px-5">
+        {/* Rating */}
+        {feedback && (
+          <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">Your Rating</h3>
+            <div className="flex items-center gap-4">
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-3xl">{EXPERIENCE_EMOJIS[feedback.experience] || "🙂"}</span>
+                <span className="text-[10px] text-neutral-500">Session</span>
+              </div>
+              <div className="h-8 w-px bg-neutral-800" />
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-sm font-medium text-neutral-300">{MATCH_QUALITY_LABELS[feedback.matchQuality] || feedback.matchQuality}</span>
+                <span className="text-[10px] text-neutral-500">Matches</span>
+              </div>
+              <div className="h-8 w-px bg-neutral-800" />
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-sm font-medium text-neutral-300">{RETURN_LABELS[feedback.wouldReturn] || feedback.wouldReturn}</span>
+                <span className="text-[10px] text-neutral-500">Return</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Time */}
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-neutral-400">
+            <span>⏱</span> Time on Court
+          </h3>
+          <p className="text-3xl font-bold text-white">
+            {stats.totalPlayMinutes} <span className="text-lg font-normal text-neutral-400">min played</span>
+          </p>
+          <p className="mt-1 text-sm text-neutral-500">
+            out of {stats.sessionDurationMin} min session
+          </p>
+          <div className="mt-4">
+            <div className="h-3 overflow-hidden rounded-full bg-neutral-800">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-green-600 to-green-400"
+                style={{ width: `${Math.min(stats.playPercentage, 100)}%` }}
+              />
+            </div>
+            <p className="mt-2 text-sm text-green-400">
+              {stats.playPercentage}% of session
+            </p>
+          </div>
+        </div>
+
+        {/* Games */}
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-neutral-400">
+            <span>🎮</span> Games Played
+          </h3>
+          <p className="text-3xl font-bold text-white">
+            {stats.gamesPlayed} <span className="text-lg font-normal text-neutral-400">games</span>
+          </p>
+          {stats.gamesPlayed > 0 && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {stats.gamesByType.mixed > 0 && (
+                <span className="rounded-full bg-purple-600/20 px-3 py-1 text-xs font-medium text-purple-300">
+                  Mixed: {stats.gamesByType.mixed}
+                </span>
+              )}
+              {stats.gamesByType.men > 0 && (
+                <span className="rounded-full bg-blue-600/20 px-3 py-1 text-xs font-medium text-blue-300">
+                  Men: {stats.gamesByType.men}
+                </span>
+              )}
+              {stats.gamesByType.women > 0 && (
+                <span className="rounded-full bg-pink-600/20 px-3 py-1 text-xs font-medium text-pink-300">
+                  Women: {stats.gamesByType.women}
+                </span>
+              )}
+            </div>
+          )}
+          {stats.longestGameMinutes > 0 && (
+            <p className="mt-3 text-sm text-neutral-500">
+              Longest game: {stats.longestGameMinutes} min
+            </p>
+          )}
+        </div>
+
+        {/* Partners */}
+        <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
+          <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-neutral-400">
+            <span>👥</span> Played With
+          </h3>
+          <p className="mb-4 text-3xl font-bold text-white">
+            {stats.partners.length}{" "}
+            <span className="text-lg font-normal text-neutral-400">
+              player{stats.partners.length !== 1 ? "s" : ""}
+            </span>
+          </p>
+          {stats.partners.length > 0 && (
+            <div className="space-y-2">
+              {stats.partners.map((p) => (
+                <div key={p.id} className="flex items-center gap-3 rounded-xl bg-neutral-800/60 px-3 py-2.5">
+                  <span className="text-xl">{p.avatar}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-white truncate">{p.name}</p>
+                  </div>
+                  <span className="shrink-0 text-xs text-neutral-500">
+                    {p.gamesPlayed} game{p.gamesPlayed !== 1 ? "s" : ""} together
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Fun Stat */}
+        <div className="rounded-2xl border border-green-900/50 bg-gradient-to-br from-green-950/40 to-neutral-900 p-5 text-center">
+          <p className="text-4xl">{stats.funStat.emoji}</p>
+          <p className="mt-3 text-lg font-semibold text-green-300">
+            {stats.funStat.text}
+          </p>
+        </div>
+
+        {/* Career */}
+        <div className="rounded-2xl border border-neutral-800/60 bg-neutral-900/50 p-5">
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">
+            All Time at {venue.name}
+          </h3>
+          <div className="flex justify-between text-center">
+            <div>
+              <p className="text-xl font-bold text-neutral-300">{career.totalSessions}</p>
+              <p className="text-xs text-neutral-500">sessions</p>
+            </div>
+            <div className="h-8 w-px bg-neutral-800" />
+            <div>
+              <p className="text-xl font-bold text-neutral-300">{career.totalHoursPlayed}h</p>
+              <p className="text-xs text-neutral-500">played</p>
+            </div>
+            <div className="h-8 w-px bg-neutral-800" />
+            <div>
+              <p className="text-xl font-bold text-neutral-300">{career.totalPlayersMet}</p>
+              <p className="text-xs text-neutral-500">players met</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -90,12 +90,12 @@ export function CourtCard({ court, variant = "tv", warmup = false, onClick }: Co
         </h3>
         <div className={cn("flex items-center gap-2", tvStarting && "animate-blink-sharp")}>
           <div className={cn("rounded-full", isTV ? "h-[min(1vw,1.5vh)] w-[min(1vw,1.5vh)] min-h-1.5 min-w-1.5" : "h-3 w-3", config.dot)} />
-          {court.status === "active" && court.assignment && court.assignment.gameType !== "mixed" && (
+          {court.status === "active" && court.assignment && (
             <span
               className={cn("rounded-md bg-neutral-700 px-2 py-0.5 font-medium uppercase", isTV ? "" : "text-xs")}
               style={isTV ? { fontSize: "clamp(0.5rem, min(1vw,1.5vh), 0.875rem)" } : undefined}
             >
-              {court.assignment.gameType}
+              {court.assignment.gameType === "mixed" ? "mix" : court.assignment.gameType}
             </span>
           )}
         </div>

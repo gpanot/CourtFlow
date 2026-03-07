@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { api } from "@/lib/api-client";
-import { Share2, RotateCcw, Hand, ChevronDown } from "lucide-react";
+import { Share2, Hand, ChevronDown } from "lucide-react";
 
 interface PlayerStats {
   player: { id: string; name: string; avatar: string };
@@ -24,8 +24,6 @@ interface PlayerStats {
 
 interface SessionRecapProps {
   sessionId: string;
-  sessionOpen: boolean;
-  onRequeue: () => void;
   onClose: () => void;
 }
 
@@ -49,7 +47,7 @@ const RETURN_OPTIONS = [
   { value: "yes", emoji: "👍", label: "Yes" },
 ];
 
-export function SessionRecapScreen({ sessionId, sessionOpen, onRequeue, onClose }: SessionRecapProps) {
+export function SessionRecapScreen({ sessionId, onClose }: SessionRecapProps) {
   const [data, setData] = useState<PlayerStats | null>(null);
   const [loading, setLoading] = useState(true);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -463,8 +461,46 @@ export function SessionRecapScreen({ sessionId, sessionOpen, onRequeue, onClose 
             </div>
           </div>
 
+          {/* Share Card Preview */}
+          <div className="pt-2">
+            <p className="mb-3 text-center text-xs font-semibold uppercase tracking-wider text-neutral-500">
+              Your share card
+            </p>
+            <div className="overflow-hidden rounded-2xl border border-neutral-800 bg-gradient-to-b from-neutral-900 to-green-950/30">
+              <div className="px-5 pt-5 pb-4">
+                <p className="text-sm font-bold text-green-500">🎾 CourtFlow</p>
+                <p className="mt-3 text-lg font-bold text-white">{player.name}&apos;s session</p>
+                <p className="mt-0.5 text-xs text-neutral-400">
+                  {venue.name} · {dateStr}
+                </p>
+                <div className="my-4 h-px bg-neutral-800" />
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg">⏱</span>
+                    <span className="font-semibold text-white">{stats.totalPlayMinutes} min on court</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg">🎮</span>
+                    <span className="font-semibold text-white">{stats.gamesPlayed} games played</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg">👥</span>
+                    <span className="font-semibold text-white">{stats.partners.length} players met</span>
+                  </div>
+                </div>
+                <div className="my-4 h-px bg-neutral-800" />
+                <p className="text-center text-sm font-semibold text-green-400">
+                  &ldquo;{stats.funStat.text} {stats.funStat.emoji}&rdquo;
+                </p>
+              </div>
+              <div className="border-t border-neutral-800/60 bg-neutral-950/50 px-5 py-2.5">
+                <p className="text-[11px] text-neutral-600">courtflow.io</p>
+              </div>
+            </div>
+          </div>
+
           {/* Actions */}
-          <div className="space-y-3 pt-2 pb-4">
+          <div className="space-y-3 pt-4 pb-4">
             <button
               onClick={generateShareImage}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-4 font-semibold text-white transition-colors hover:bg-green-500"
@@ -472,16 +508,6 @@ export function SessionRecapScreen({ sessionId, sessionOpen, onRequeue, onClose 
               <Share2 className="h-5 w-5" />
               Share Stats
             </button>
-
-            {sessionOpen && (
-              <button
-                onClick={onRequeue}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-green-600 py-3.5 font-medium text-green-400 transition-colors hover:bg-green-600/10"
-              >
-                <RotateCcw className="h-5 w-5" />
-                Re-queue
-              </button>
-            )}
 
             <button
               onClick={onClose}

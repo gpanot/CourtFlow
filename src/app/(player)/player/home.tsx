@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSessionStore } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
@@ -49,6 +49,7 @@ export function PlayerHome() {
   const [recapSessionId, setRecapSessionId] = useState<string | null>(null);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [showLeaveStep2, setShowLeaveStep2] = useState(false);
+  const inRecapRef = useRef(false);
   const { on } = useSocket();
 
   useEffect(() => {
@@ -70,10 +71,12 @@ export function PlayerHome() {
 
   const fetchPlayerState = useCallback(async () => {
     if (!selectedVenue) return;
+    if (inRecapRef.current) return;
     try {
       const sess = await api.get<{ id: string; status: string } | null>(
         `/api/sessions?venueId=${selectedVenue}`
       );
+      if (inRecapRef.current) return;
       setSession(sess);
 
       if (!sess) {
@@ -161,6 +164,7 @@ export function PlayerHome() {
       else if (notif.type === "session_closing" || notif.type === "session_ended_by_staff") {
         const sid = (notif.sessionId as string) || session?.id;
         if (sid) {
+          inRecapRef.current = true;
           setRecapSessionId(sid);
           setView("session_recap");
         } else {
@@ -298,18 +302,8 @@ export function PlayerHome() {
     return (
       <SessionRecapScreen
         sessionId={recapSessionId}
-        sessionOpen={session?.status === "open" || false}
-        onRequeue={async () => {
-          if (!session) return;
-          try {
-            await api.post("/api/queue", { sessionId: session.id, venueId: selectedVenue });
-            setRecapSessionId(null);
-            await fetchPlayerState();
-          } catch (e) {
-            console.error(e);
-          }
-        }}
         onClose={() => {
+          inRecapRef.current = false;
           setRecapSessionId(null);
           setQueueEntry(null);
           setView("home");
@@ -327,7 +321,6 @@ export function PlayerHome() {
           venueName={venueName}
           sessionId={session?.id || ""}
           playerGender={queueEntry.player?.gender}
-          warmup={isWarmup}
           avatar={avatar}
           onShowProfile={() => setShowProfile(true)}
           onRefresh={fetchPlayerState}
@@ -387,6 +380,7 @@ export function PlayerHome() {
                         try {
                           await api.post("/api/queue/leave", { venueId: selectedVenue });
                           if (sid) {
+                            inRecapRef.current = true;
                             setRecapSessionId(sid);
                             setView("session_recap");
                           } else {
