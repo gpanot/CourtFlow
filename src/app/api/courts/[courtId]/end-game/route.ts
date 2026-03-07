@@ -42,14 +42,26 @@ export async function POST(
         where: { playerId, sessionId: activeAssignment.sessionId, status: "playing" },
         data: {
           status: "waiting",
+          joinedAt: now,
           totalPlayMinutesToday: { increment: gameDuration },
         },
       });
+    }
 
+    // Compute queue positions to notify players
+    const waitingEntries = await prisma.queueEntry.findMany({
+      where: { sessionId: activeAssignment.sessionId, status: "waiting" },
+      orderBy: { joinedAt: "asc" },
+      select: { playerId: true },
+    });
+
+    for (const playerId of activeAssignment.playerIds) {
+      const position = waitingEntries.findIndex((e) => e.playerId === playerId) + 1;
       emitToPlayer(playerId, "player:notification", {
-        type: "game_ended",
-        message: "Good game! What's next?",
+        type: "requeued",
+        message: `Good game! You're #${position} in line.`,
         courtLabel: court.label,
+        position,
       });
     }
 

@@ -22,6 +22,7 @@ enum Gender {
 
 enum CourtStatus {
   idle
+  warmup
   active
   maintenance
 }
@@ -175,6 +176,7 @@ model CourtAssignment {
   playerIds String[]  @map("player_ids")
   groupIds  String[]  @map("group_ids")
   gameType  GameType  @default(mixed) @map("game_type")
+  isWarmup  Boolean   @default(false) @map("is_warmup")
   startedAt DateTime  @default(now()) @map("started_at")
   endedAt   DateTime? @map("ended_at")
   endedBy   String?   @map("ended_by")

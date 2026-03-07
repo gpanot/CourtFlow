@@ -8,9 +8,10 @@ import { joinVenue } from "@/lib/socket-client";
 import { CourtCard, type CourtData } from "@/components/court-card";
 import { QueuePanel, type QueueEntryData } from "@/components/queue-panel";
 import { cn } from "@/lib/cn";
-import { Plus, X, LogOut, Users, LayoutGrid, AlertTriangle, User, Flame, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft } from "lucide-react";
-import { WARMUP_PLAYER_THRESHOLD } from "@/lib/constants";
+import { Plus, X, LogOut, Users, LayoutGrid, AlertTriangle, User, Flame, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft, Repeat } from "lucide-react";
+import { WARMUP_DURATION_SECONDS } from "@/lib/constants";
 import { QRCodeSVG } from "qrcode.react";
+import { SessionSummary } from "./session-summary";
 
 interface SessionData {
   id: string;
@@ -38,7 +39,17 @@ export function StaffDashboard() {
   const [confirmAddCourt, setConfirmAddCourt] = useState<{ id: string; label: string } | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<{ courtId: string; courtLabel: string; step: 1 | 2 } | null>(null);
   const [confirmMaintenance, setConfirmMaintenance] = useState<{ courtId: string; courtLabel: string } | null>(null);
+  const [confirmStartGame, setConfirmStartGame] = useState<{ courtId: string; courtLabel: string; step: 1 | 2 } | null>(null);
+  const [confirmReplace, setConfirmReplace] = useState<{
+    courtId: string;
+    courtLabel: string;
+    playerId: string;
+    playerName: string;
+    step: 1 | 2;
+  } | null>(null);
+  const [replaceBusy, setReplaceBusy] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
+  const [closedSessionId, setClosedSessionId] = useState<string | null>(null);
   const { on } = useSocket();
 
   const fetchState = useCallback(async () => {
@@ -48,7 +59,7 @@ export function StaffDashboard() {
         `/api/courts/state?venueId=${venueId}`
       );
       setSession(data.session);
-      setCourts(data.courts);
+      setCourts([...data.courts].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true })));
       setQueue(data.queue);
     } catch (e) {
       console.error(e);
@@ -83,8 +94,9 @@ export function StaffDashboard() {
     if (!session) return;
     if (!confirm("Close this session? All queuing players will be notified.")) return;
     try {
-      await api.post(`/api/sessions/${session.id}/close`);
-      await fetchState();
+      const closingId = session.id;
+      await api.post(`/api/sessions/${closingId}/close`);
+      setClosedSessionId(closingId);
     } catch (e) {
       alert((e as Error).message);
     }
@@ -133,7 +145,9 @@ export function StaffDashboard() {
 
   const handleRestoreFromMaintenance = async (courtId: string) => {
     try {
-      await api.patch(`/api/courts/${courtId}`, { status: "idle" });
+      const court = courts.find((c) => c.id === courtId);
+      const restoredStatus = court?.assignment ? "active" : "idle";
+      await api.patch(`/api/courts/${courtId}`, { status: restoredStatus });
       setSelectedCourt(null);
       await fetchState();
     } catch (e) {
@@ -154,9 +168,32 @@ export function StaffDashboard() {
     }
   };
 
+  const handleReplacePlayer = async (courtId: string, playerId: string) => {
+    setReplaceBusy(true);
+    try {
+      const result = await api.post<{ success: boolean; replacementPlayerName: string | null }>(
+        `/api/courts/${courtId}/replace-player`,
+        { playerId }
+      );
+      setConfirmReplace(null);
+      setSelectedCourt(null);
+      await fetchState();
+      if (result.replacementPlayerName) {
+        alert(`Replaced with ${result.replacementPlayerName}`);
+      } else {
+        alert("Player removed. No replacement available in the queue.");
+      }
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setReplaceBusy(false);
+    }
+  };
+
   const waitingCount = queue.filter((e) => e.status === "waiting").length;
-  const isWarmupMode = !!session && courts.length > 0 && courts.every((c) => c.status === "idle");
-  const warmupReady = isWarmupMode && waitingCount >= WARMUP_PLAYER_THRESHOLD;
+  const hasWarmupCourts = courts.some((c) => c.status === "warmup");
+  const hasActiveCourts = courts.some((c) => c.status === "active");
+  const isWarmupMode = !!session && courts.length > 0 && !hasActiveCourts && (hasWarmupCourts || courts.every((c) => c.status === "idle"));
 
   if (!venueId) {
     return (
@@ -251,42 +288,16 @@ export function StaffDashboard() {
           <div className="space-y-4">
             {/* Warmup banner */}
             {isWarmupMode && (
-              <div className={cn(
-                "rounded-xl border p-4",
-                warmupReady
-                  ? "border-green-500/50 bg-green-600/10"
-                  : "border-amber-500/40 bg-amber-600/10"
-              )}>
-                {warmupReady ? (
-                  <div className="flex items-center gap-3">
-                    <Flame className="h-6 w-6 shrink-0 text-green-400" />
-                    <div className="flex-1">
-                      <p className="font-semibold text-green-300">Ready to start rotation!</p>
-                      <p className="text-sm text-green-400/70">{waitingCount} players warmed up — assign courts to begin.</p>
-                    </div>
-                  </div>
-                ) : (
+              <div className="rounded-xl border border-amber-500/40 bg-amber-600/10 p-4">
+                <div className="flex items-center gap-3">
+                  <Flame className="h-5 w-5 shrink-0 text-amber-400" />
                   <div>
-                    <div className="flex items-center gap-3 mb-3">
-                      <Flame className="h-5 w-5 shrink-0 text-amber-400" />
-                      <div>
-                        <p className="font-semibold text-amber-300">Warm Up in Progress</p>
-                        <p className="text-xs text-amber-400/70">Courts are open — players play freely</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-2 rounded-full bg-neutral-700 overflow-hidden">
-                        <div
-                          className="h-full rounded-full bg-amber-500 transition-all duration-500"
-                          style={{ width: `${Math.min(100, (waitingCount / WARMUP_PLAYER_THRESHOLD) * 100)}%` }}
-                        />
-                      </div>
-                      <span className="text-sm font-mono text-amber-300 shrink-0">
-                        {waitingCount} / {WARMUP_PLAYER_THRESHOLD}
-                      </span>
-                    </div>
+                    <p className="font-semibold text-amber-300">Warm Up in Progress</p>
+                    <p className="text-xs text-amber-400/70">
+                      Players are being assigned to courts as they arrive. Games start automatically after {WARMUP_DURATION_SECONDS / 60} min warmup.
+                    </p>
                   </div>
-                )}
+                </div>
               </div>
             )}
 
@@ -330,62 +341,111 @@ export function StaffDashboard() {
 
       </main>
 
-      {/* Court Action Sheet */}
+      {/* Court Action Sheet — 80% screen height, generous spacing */}
       {selectedCourt && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={() => setSelectedCourt(null)}>
           <div
             className="w-full max-w-lg rounded-t-2xl border-t border-neutral-700 bg-neutral-900 p-6 pb-10"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-xl font-bold">{selectedCourt.label}</h3>
-              <button onClick={() => setSelectedCourt(null)} className="text-neutral-400">
+            <div className="mb-6 flex items-center justify-between">
+              <h3 className="text-2xl font-bold">{selectedCourt.label}</h3>
+              <button onClick={() => setSelectedCourt(null)} className="rounded-full bg-neutral-800 p-2 text-neutral-400 hover:bg-neutral-700">
                 <X className="h-6 w-6" />
               </button>
             </div>
 
-            <div className="space-y-2">
-              {selectedCourt.status === "active" && selectedCourt.assignment && (
-                <button
-                  onClick={() => handleEndGame(selectedCourt.id)}
-                  className="w-full rounded-xl bg-red-600 py-4 text-lg font-bold text-white transition-colors hover:bg-red-500"
-                >
-                  End Game
-                </button>
+            <div className="flex-1 space-y-6">
+              {/* Players on court */}
+              {selectedCourt.players.length > 0 && (
+                <div className="space-y-3">
+                  <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">Players on court</p>
+                  {selectedCourt.players.map((player) => (
+                    <div
+                      key={player.id}
+                      className="flex items-center justify-between rounded-xl bg-neutral-800/70 px-4 py-4"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="text-base font-medium truncate">{player.name}</span>
+                        <span className={cn(
+                          "shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium",
+                          player.skillLevel === "beginner" && "bg-green-700 text-green-100",
+                          player.skillLevel === "intermediate" && "bg-blue-700 text-blue-100",
+                          player.skillLevel === "advanced" && "bg-purple-700 text-purple-100",
+                          player.skillLevel === "pro" && "bg-red-700 text-red-100",
+                        )}>
+                          {player.skillLevel[0].toUpperCase()}
+                        </span>
+                      </div>
+                      {selectedCourt.status === "active" && (
+                        <button
+                          onClick={() => setConfirmReplace({
+                            courtId: selectedCourt.id,
+                            courtLabel: selectedCourt.label,
+                            playerId: player.id,
+                            playerName: player.name,
+                            step: 1,
+                          })}
+                          className="shrink-0 ml-3 flex items-center gap-1.5 rounded-lg bg-amber-600/15 px-3 py-2 text-sm font-medium text-amber-400 hover:bg-amber-600/25 transition-colors"
+                        >
+                          <Repeat className="h-4 w-4" />
+                          Replace
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               )}
 
-              {selectedCourt.status === "maintenance" ? (
-                <div className="flex gap-2 pt-2">
+              {/* Actions */}
+              <div className="space-y-4">
+                {selectedCourt.status === "active" && selectedCourt.assignment && (
                   <button
-                    onClick={() => handleRestoreFromMaintenance(selectedCourt.id)}
-                    className="flex-1 rounded-xl bg-green-600/20 py-3 text-sm font-medium text-green-400 hover:bg-green-600/30 flex items-center justify-center gap-2"
+                    onClick={() => setConfirmStartGame({
+                      courtId: selectedCourt.id,
+                      courtLabel: selectedCourt.label,
+                      step: 1,
+                    })}
+                    className="w-full rounded-xl bg-green-600 py-5 text-lg font-bold text-white transition-colors hover:bg-green-500 flex items-center justify-center gap-2"
                   >
-                    <RotateCcw className="h-4 w-4" />
-                    Restore Court
+                    <RotateCcw className="h-5 w-5" />
+                    Start New Game
                   </button>
-                  <button
-                    onClick={() => setConfirmRemove({ courtId: selectedCourt.id, courtLabel: selectedCourt.label, step: 1 })}
-                    className="flex-1 rounded-xl bg-neutral-800 py-3 text-sm font-medium text-neutral-300 hover:bg-neutral-700"
-                  >
-                    Remove from Session
-                  </button>
-                </div>
-              ) : (
-                <div className="flex gap-2 pt-2">
-                  <button
-                    onClick={() => setConfirmRemove({ courtId: selectedCourt.id, courtLabel: selectedCourt.label, step: 1 })}
-                    className="flex-1 rounded-xl bg-neutral-800 py-3 text-sm font-medium text-neutral-300 hover:bg-neutral-700"
-                  >
-                    Remove from Session
-                  </button>
-                  <button
-                    onClick={() => setConfirmMaintenance({ courtId: selectedCourt.id, courtLabel: selectedCourt.label })}
-                    className="flex-1 rounded-xl bg-neutral-800 py-3 text-sm font-medium text-red-400 hover:bg-neutral-700"
-                  >
-                    Set Maintenance
-                  </button>
-                </div>
-              )}
+                )}
+
+                {selectedCourt.status === "maintenance" ? (
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      onClick={() => handleRestoreFromMaintenance(selectedCourt.id)}
+                      className="flex-1 rounded-xl bg-green-600/20 py-4 text-sm font-medium text-green-400 hover:bg-green-600/30 flex items-center justify-center gap-2"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      Restore Court
+                    </button>
+                    <button
+                      onClick={() => setConfirmRemove({ courtId: selectedCourt.id, courtLabel: selectedCourt.label, step: 1 })}
+                      className="flex-1 rounded-xl bg-neutral-800 py-4 text-sm font-medium text-neutral-300 hover:bg-neutral-700"
+                    >
+                      Remove from Session
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      onClick={() => setConfirmRemove({ courtId: selectedCourt.id, courtLabel: selectedCourt.label, step: 1 })}
+                      className="flex-1 rounded-xl bg-neutral-800 py-4 text-sm font-medium text-neutral-300 hover:bg-neutral-700"
+                    >
+                      Remove from Session
+                    </button>
+                    <button
+                      onClick={() => setConfirmMaintenance({ courtId: selectedCourt.id, courtLabel: selectedCourt.label })}
+                      className="flex-1 rounded-xl bg-neutral-800 py-4 text-sm font-medium text-red-400 hover:bg-neutral-700"
+                    >
+                      Set Maintenance
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -539,6 +599,151 @@ export function StaffDashboard() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Confirm Start New Game — 2-step */}
+      {confirmStartGame && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setConfirmStartGame(null)}>
+          <div
+            className="w-full max-w-sm rounded-2xl border border-neutral-700 bg-neutral-900 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {confirmStartGame.step === 1 ? (
+              <>
+                <div className="mb-4 flex flex-col items-center gap-3 text-center">
+                  <div className="rounded-full bg-green-600/20 p-3">
+                    <RotateCcw className="h-6 w-6 text-green-400" />
+                  </div>
+                  <h3 className="text-lg font-bold">End current game on {confirmStartGame.courtLabel}?</h3>
+                  <p className="text-sm text-neutral-400">
+                    This will end the current game, requeue the players, and assign the next group from the queue.
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setConfirmStartGame({ ...confirmStartGame, step: 2 })}
+                    className="flex-1 rounded-xl bg-green-600 py-3 font-semibold text-white hover:bg-green-500"
+                  >
+                    Continue
+                  </button>
+                  <button
+                    onClick={() => setConfirmStartGame(null)}
+                    className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mb-4 flex flex-col items-center gap-3 text-center">
+                  <div className="rounded-full bg-amber-600/20 p-3">
+                    <AlertTriangle className="h-6 w-6 text-amber-400" />
+                  </div>
+                  <h3 className="text-lg font-bold">Are you sure?</h3>
+                  <p className="text-sm text-neutral-400">
+                    Players on <span className="font-semibold text-neutral-200">{confirmStartGame.courtLabel}</span> will be sent back to the queue and the next 4 players will be assigned.
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={async () => {
+                      await handleEndGame(confirmStartGame.courtId);
+                      setConfirmStartGame(null);
+                    }}
+                    className="flex-1 rounded-xl bg-green-600 py-3 font-semibold text-white hover:bg-green-500"
+                  >
+                    Yes, Start New Game
+                  </button>
+                  <button
+                    onClick={() => setConfirmStartGame(null)}
+                    className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Replace Player — 2-step */}
+      {confirmReplace && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setConfirmReplace(null)}>
+          <div
+            className="w-full max-w-sm rounded-2xl border border-neutral-700 bg-neutral-900 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {confirmReplace.step === 1 ? (
+              <>
+                <div className="mb-4 flex flex-col items-center gap-3 text-center">
+                  <div className="rounded-full bg-amber-600/20 p-3">
+                    <Repeat className="h-6 w-6 text-amber-400" />
+                  </div>
+                  <h3 className="text-lg font-bold">Replace {confirmReplace.playerName}?</h3>
+                  <p className="text-sm text-neutral-400">
+                    This player will be removed from <span className="font-semibold text-neutral-200">{confirmReplace.courtLabel}</span> and sent back to the queue. A replacement will be pulled from the queue.
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setConfirmReplace({ ...confirmReplace, step: 2 })}
+                    className="flex-1 rounded-xl bg-amber-600 py-3 font-semibold text-white hover:bg-amber-500"
+                  >
+                    Continue
+                  </button>
+                  <button
+                    onClick={() => setConfirmReplace(null)}
+                    className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mb-4 flex flex-col items-center gap-3 text-center">
+                  <div className="rounded-full bg-red-600/20 p-3">
+                    <AlertTriangle className="h-6 w-6 text-red-400" />
+                  </div>
+                  <h3 className="text-lg font-bold">Confirm replacement</h3>
+                  <p className="text-sm text-neutral-400">
+                    <span className="font-semibold text-neutral-200">{confirmReplace.playerName}</span> will be immediately removed and a new player assigned to {confirmReplace.courtLabel}. This cannot be undone.
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => handleReplacePlayer(confirmReplace.courtId, confirmReplace.playerId)}
+                    disabled={replaceBusy}
+                    className="flex-1 rounded-xl bg-red-600 py-3 font-semibold text-white hover:bg-red-500 disabled:opacity-50"
+                  >
+                    {replaceBusy ? "Replacing…" : "Yes, Replace Now"}
+                  </button>
+                  <button
+                    onClick={() => setConfirmReplace(null)}
+                    className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Session Summary (after close) */}
+      {closedSessionId && (
+        <div className="fixed inset-0 z-50">
+          <SessionSummary
+            sessionId={closedSessionId}
+            onClose={() => {
+              setClosedSessionId(null);
+              fetchState();
+            }}
+          />
         </div>
       )}
     </div>

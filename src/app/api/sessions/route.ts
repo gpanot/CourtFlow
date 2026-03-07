@@ -29,6 +29,21 @@ export async function POST(request: NextRequest) {
     });
     if (existing) return error("A session is already open at this venue", 409);
 
+    // Safety net: clean up any stale active queue entries from previously closed sessions
+    const closedSessionIds = await prisma.session.findMany({
+      where: { venueId, status: "closed" },
+      select: { id: true },
+    });
+    if (closedSessionIds.length > 0) {
+      await prisma.queueEntry.updateMany({
+        where: {
+          sessionId: { in: closedSessionIds.map((s) => s.id) },
+          status: { in: ["waiting", "assigned", "playing", "on_break"] },
+        },
+        data: { status: "left" },
+      });
+    }
+
     const session = await prisma.session.create({
       data: { venueId },
     });

@@ -14,7 +14,10 @@ interface QueueScreenProps {
   sessionId: string;
   playerGender?: string;
   warmup?: boolean;
+  avatar?: string;
+  onShowProfile?: () => void;
   onRefresh: () => void;
+  onLeaveVenue?: () => void;
 }
 
 interface QueueInfo {
@@ -24,7 +27,7 @@ interface QueueInfo {
   group: { id: string; code: string; members: { name: string }[] } | null;
 }
 
-export function QueueScreen({ entry, venueId, venueName, sessionId, playerGender, warmup = false, onRefresh }: QueueScreenProps) {
+export function QueueScreen({ entry, venueId, venueName, sessionId, playerGender, warmup = false, avatar, onShowProfile, onRefresh, onLeaveVenue }: QueueScreenProps) {
   const { playerId } = useSessionStore();
   const [info, setInfo] = useState<QueueInfo | null>(null);
   const [showGroupCreate, setShowGroupCreate] = useState(false);
@@ -149,16 +152,26 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, playerGender
     <div className="flex min-h-dvh flex-col p-6">
       {/* Header */}
       <div className="mb-2 flex items-center justify-between">
-        <div>
-          <h2 className="text-sm text-neutral-400">{venueName}</h2>
-          {info?.group && (
-            <div className="flex items-center gap-1 text-blue-400">
-              <Link className="h-4 w-4" />
-              <span className="text-sm font-medium">
-                Group of {info.group.members.length} &middot; {info.group.code}
-              </span>
-            </div>
+        <div className="flex items-center gap-3">
+          {onShowProfile && (
+            <button
+              onClick={onShowProfile}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-lg"
+            >
+              {avatar || "🏓"}
+            </button>
           )}
+          <div>
+            <h2 className="text-sm text-neutral-400">{venueName}</h2>
+            {info?.group && (
+              <div className="flex items-center gap-1 text-blue-400">
+                <Link className="h-4 w-4" />
+                <span className="text-sm font-medium">
+                  Group of {info.group.members.length} &middot; {info.group.code}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
         {!info?.group && (
           <button
@@ -244,6 +257,14 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, playerGender
           <Coffee className="h-4 w-4" />
           I need a break
         </button>
+        {onLeaveVenue && (
+          <button
+            onClick={onLeaveVenue}
+            className="w-full rounded-xl py-2.5 text-sm font-medium text-neutral-500 hover:text-neutral-300 transition-colors"
+          >
+            Leave Venue
+          </button>
+        )}
       </div>
 
       {/* Friends menu (bottom sheet) */}

@@ -9,7 +9,6 @@ import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { Wifi, WifiOff, Flame } from "lucide-react";
 import Link from "next/link";
-import { WARMUP_PLAYER_THRESHOLD } from "@/lib/constants";
 import { QRCodeSVG } from "qrcode.react";
 
 interface VenueState {
@@ -98,10 +97,13 @@ export default function TVDisplayPage() {
   }
 
   const venueName = venues.find((v) => v.id === venueId)?.name || "Court Display";
-  const activeCourts = state.courts.filter((c) => c.status !== "maintenance");
+  const sortedCourts = [...state.courts].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+  const activeCourts = sortedCourts.filter((c) => c.status !== "maintenance");
   const courtCount = activeCourts.length;
   const waitingCount = state.queue.filter((e: { status: string }) => e.status === "waiting").length;
-  const isWarmupMode = !!state.session && state.courts.length > 0 && state.courts.every((c) => c.status === "idle");
+  const hasWarmupCourts = state.courts.some((c) => c.status === "warmup");
+  const hasActiveCourts = state.courts.some((c) => c.status === "active");
+  const isWarmupMode = !!state.session && state.courts.length > 0 && !hasActiveCourts && (hasWarmupCourts || state.courts.every((c) => c.status === "idle"));
 
   const gridCols =
     courtCount <= 3 ? "grid-cols-1 lg:grid-cols-3"
@@ -112,7 +114,7 @@ export default function TVDisplayPage() {
   return (
     <div className="flex h-dvh w-screen flex-col overflow-hidden bg-black text-white">
       {/* Top bar */}
-      <header className="shrink-0 flex items-center justify-between border-b border-neutral-800 px-[2vw] py-[1vh]">
+      <header className="shrink-0 flex items-center justify-between border-b border-neutral-800 px-[2vw] py-[min(1vh,0.5vw)]">
         <div className="flex items-center gap-[1.5vw]">
           <h1 className="font-bold text-green-500 text-[clamp(1rem,2vw,2rem)]">CourtFlow</h1>
           <span className="text-neutral-300 text-[clamp(0.875rem,1.8vw,1.75rem)]">{venueName}</span>
@@ -148,40 +150,31 @@ export default function TVDisplayPage() {
       {/* Main content */}
       <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Court grid */}
-        <main className="flex-1 min-w-0 min-h-0 overflow-hidden p-[1.5vw]">
+        <main className="flex-1 min-w-0 min-h-0 overflow-hidden p-[min(1.5vw,2vh)]">
           {!state.session ? (
             <div className="flex h-full items-center justify-center">
               <p className="text-neutral-600 text-[clamp(1.5rem,4vw,4rem)]">Waiting for session to start...</p>
             </div>
           ) : isWarmupMode ? (
-            <div className="flex h-full flex-col gap-[1.5vh]">
+            <div className="flex h-full flex-col gap-[min(1.5vh,0.8vw)]">
               {/* Warmup hero */}
-              <div className="shrink-0 flex flex-col items-center justify-center gap-[1vh] text-center py-[1.5vh]">
-                <Flame className="text-amber-400 opacity-80" style={{ width: "clamp(2rem, 5vw, 6rem)", height: "clamp(2rem, 5vw, 6rem)" }} />
-                <p className="font-bold text-amber-300 text-[clamp(1.75rem,5vw,6rem)]">Warm Up Time</p>
-                <p className="text-amber-400/70 text-[clamp(0.875rem,2.2vw,2.5rem)]">Courts are open — play freely while others check in</p>
-                <div className="mt-[0.5vh] flex items-center gap-[2vw]">
-                  <div className="h-[1vh] min-h-2 rounded-full bg-neutral-700 overflow-hidden" style={{ width: "clamp(8rem, 20vw, 24rem)" }}>
-                    <div
-                      className="h-full rounded-full bg-amber-500 transition-all duration-700"
-                      style={{ width: `${Math.min(100, (waitingCount / WARMUP_PLAYER_THRESHOLD) * 100)}%` }}
-                    />
-                  </div>
-                  <span className="font-mono text-amber-300 text-[clamp(0.875rem,2vw,2rem)]">
-                    {waitingCount} / {WARMUP_PLAYER_THRESHOLD} players
-                  </span>
-                </div>
+              <div className="shrink-0 flex flex-col items-center justify-center gap-[min(1vh,0.5vw)] text-center py-[min(1.5vh,0.8vw)]">
+                <Flame className="text-amber-400 opacity-80" style={{ width: "clamp(1.25rem, min(5vw,8vh), 6rem)", height: "clamp(1.25rem, min(5vw,8vh), 6rem)" }} />
+                <p className="font-bold text-amber-300" style={{ fontSize: "clamp(1rem, min(5vw,7vh), 6rem)" }}>Warm Up Time</p>
+                <p className="text-amber-400/70" style={{ fontSize: "clamp(0.65rem, min(2.2vw,3vh), 2.5rem)" }}>
+                  Go to your assigned court and warm up freely
+                </p>
               </div>
               {/* Court cards in warmup state */}
-              <div className={cn("grid flex-1 min-h-0 gap-[1vw] auto-rows-fr", gridCols)}>
-                {state.courts.map((court) => (
+              <div className={cn("grid flex-1 min-h-0 overflow-y-auto gap-[min(1vw,1vh)] auto-rows-fr", gridCols)}>
+                {sortedCourts.map((court) => (
                   <CourtCard key={court.id} court={court} variant="tv" warmup={true} />
                 ))}
               </div>
             </div>
           ) : (
-            <div className={cn("grid h-full gap-[1vw] auto-rows-fr", gridCols)}>
-              {state.courts.map((court) => (
+            <div className={cn("grid h-full overflow-y-auto gap-[min(1vw,1vh)] auto-rows-fr", gridCols)}>
+              {sortedCourts.map((court) => (
                 <CourtCard key={court.id} court={court} variant="tv" />
               ))}
             </div>
@@ -190,9 +183,9 @@ export default function TVDisplayPage() {
 
         {/* Queue sidebar — show during warmup and rotation */}
         {state.session && (
-          <aside className="shrink-0 border-l border-neutral-800 flex flex-col overflow-hidden" style={{ width: "clamp(10rem, 22vw, 26rem)", padding: "clamp(0.5rem, 1.5vw, 1.5rem)" }}>
-            <div className="shrink-0 w-full mb-[1vh]">
-              <div className="w-full rounded-[1vw] bg-white p-[1vw] aspect-square flex items-center justify-center">
+          <aside className="shrink-0 border-l border-neutral-800 flex flex-col overflow-hidden" style={{ width: "clamp(8rem, min(22vw, 40vh), 26rem)", padding: "clamp(0.4rem, min(1.5vw, 2vh), 1.5rem)" }}>
+            <div className="shrink-0 w-full mb-[min(1vh,0.5vw)]" style={{ maxHeight: "45vh" }}>
+              <div className="w-full rounded-[1vw] bg-white p-[min(1vw,1.5vh)] aspect-square flex items-center justify-center" style={{ maxHeight: "45vh", maxWidth: "45vh" }}>
                 <QRCodeSVG
                   value={`${typeof window !== "undefined" ? window.location.origin : ""}/player?venueId=${venueId}`}
                   size={1000}
@@ -203,7 +196,7 @@ export default function TVDisplayPage() {
               </div>
             </div>
             {isWarmupMode && (
-              <p className="mb-[0.5vh] font-semibold text-amber-400 uppercase tracking-wider text-[clamp(0.5rem,1vw,0.875rem)]">Checked In</p>
+              <p className="mb-[0.5vh] font-semibold text-amber-400 uppercase tracking-wider" style={{ fontSize: "clamp(0.45rem, min(1vw, 1.5vh), 0.875rem)" }}>Checked In</p>
             )}
             <div className="flex-1 min-h-0 overflow-y-auto">
               <QueuePanel entries={state.queue} variant="tv" />

@@ -1,7 +1,15 @@
 import { prisma } from "./db";
 import { emitToPlayer, emitToVenue } from "./socket-server";
-import { getSkillIndex, QUEUE_LOOKAHEAD, MAX_SKILL_GAP } from "./constants";
+import { getSkillIndex, QUEUE_LOOKAHEAD, MAX_SKILL_GAP, WARMUP_DURATION_SECONDS, AUTO_START_DELAY_SECONDS } from "./constants";
 import type { SkillLevel, GameType, GamePreference } from "@prisma/client";
+
+async function emitCourtUpdate(venueId: string) {
+  const allCourts = await prisma.court.findMany({
+    where: { venueId, activeInSession: true },
+    include: { courtAssignments: { where: { endedAt: null }, take: 1 } },
+  });
+  emitToVenue(venueId, "court:updated", allCourts);
+}
 
 interface QueueCandidate {
   entryId: string;
@@ -15,26 +23,6 @@ interface QueueCandidate {
   totalPlayMinutesToday: number;
 }
 
-interface GroupCandidate {
-  groupId: string;
-  members: QueueCandidate[];
-  priority: number;
-}
-
-function computeSoloPriority(candidate: QueueCandidate): number {
-  const waitingMinutes = (Date.now() - candidate.joinedAt.getTime()) / 60000;
-  return waitingMinutes - candidate.totalPlayMinutesToday;
-}
-
-function computeGroupPriority(members: QueueCandidate[]): number {
-  const longestWait = Math.max(
-    ...members.map((m) => (Date.now() - m.joinedAt.getTime()) / 60000)
-  );
-  const avgPlayTime =
-    members.reduce((s, m) => s + m.totalPlayMinutesToday, 0) / members.length;
-  return longestWait - avgPlayTime;
-}
-
 function checkSkillBalance(players: QueueCandidate[]): boolean {
   for (let i = 0; i < players.length; i++) {
     for (let j = i + 1; j < players.length; j++) {
@@ -45,37 +33,6 @@ function checkSkillBalance(players: QueueCandidate[]): boolean {
       if (gap > MAX_SKILL_GAP) return false;
     }
   }
-  return true;
-}
-
-function checkPreferenceCompatibility(players: QueueCandidate[], isVoluntaryGroup = false): boolean {
-  if (isVoluntaryGroup) return true;
-
-  for (const player of players) {
-    if (player.gamePreference !== "same_gender") continue;
-    for (const other of players) {
-      if (other === player) continue;
-      if (other.gender !== player.gender) return false;
-    }
-  }
-  return true;
-}
-
-function checkGroupFillCompatibility(
-  groupMembers: QueueCandidate[],
-  soloCandidate: QueueCandidate
-): boolean {
-  if (soloCandidate.gamePreference === "same_gender") {
-    const allSameGender = groupMembers.every((m) => m.gender === soloCandidate.gender);
-    if (!allSameGender) return false;
-  }
-
-  for (const member of groupMembers) {
-    if (member.gamePreference === "same_gender" && soloCandidate.gender !== member.gender) {
-      return false;
-    }
-  }
-
   return true;
 }
 
@@ -99,12 +56,13 @@ export async function runRotation(
     where: { sessionId, status: "waiting" },
     include: { player: true },
     orderBy: { joinedAt: "asc" },
-    take: QUEUE_LOOKAHEAD * 2,
+    take: 4,
   });
 
   if (waitingEntries.length < 4) return false;
 
-  const candidates: QueueCandidate[] = waitingEntries.map((e) => ({
+  // Strict FIFO: take the first 4 waiting entries in queue order
+  const selectedPlayers: QueueCandidate[] = waitingEntries.slice(0, 4).map((e) => ({
     entryId: e.id,
     playerId: e.playerId,
     playerName: e.player.name,
@@ -115,83 +73,6 @@ export async function runRotation(
     joinedAt: e.joinedAt,
     totalPlayMinutesToday: e.totalPlayMinutesToday,
   }));
-
-  const groupMap = new Map<string, QueueCandidate[]>();
-  const solos: QueueCandidate[] = [];
-
-  for (const c of candidates) {
-    if (c.groupId) {
-      const arr = groupMap.get(c.groupId) || [];
-      arr.push(c);
-      groupMap.set(c.groupId, arr);
-    } else {
-      solos.push(c);
-    }
-  }
-
-  const groups: GroupCandidate[] = Array.from(groupMap.entries()).map(([groupId, members]) => ({
-    groupId,
-    members,
-    priority: computeGroupPriority(members),
-  }));
-
-  const soloWithPriority = solos.map((s) => ({ ...s, priority: computeSoloPriority(s) }));
-
-  groups.sort((a, b) => b.priority - a.priority);
-  soloWithPriority.sort((a, b) => b.priority - a.priority);
-
-  const selectedPlayers: QueueCandidate[] = [];
-
-  // Try group of 4 first (voluntary group — preference relaxed within group)
-  const group4 = groups.find(
-    (g) => g.members.length === 4 && checkSkillBalance(g.members)
-  );
-  if (group4) {
-    selectedPlayers.push(...group4.members);
-  }
-
-  // Try group of 2-3 + solo fill
-  if (selectedPlayers.length === 0) {
-    for (const group of groups) {
-      if (group.members.length >= 2 && group.members.length <= 3) {
-        const needed = 4 - group.members.length;
-        const fills: QueueCandidate[] = [];
-
-        for (const solo of soloWithPriority) {
-          if (fills.length >= needed) break;
-          const testSet = [...group.members, ...fills, solo];
-          if (
-            checkSkillBalance(testSet) &&
-            checkGroupFillCompatibility(group.members, solo) &&
-            checkPreferenceCompatibility([...fills, solo])
-          ) {
-            fills.push(solo);
-          }
-        }
-
-        if (fills.length === needed) {
-          selectedPlayers.push(...group.members, ...fills);
-          break;
-        }
-      }
-    }
-  }
-
-  // All solo
-  if (selectedPlayers.length === 0) {
-    for (let i = 0; i < Math.min(soloWithPriority.length, QUEUE_LOOKAHEAD); i++) {
-      const testSet = [...selectedPlayers, soloWithPriority[i]];
-      if (
-        (selectedPlayers.length === 0 || checkSkillBalance(testSet)) &&
-        checkPreferenceCompatibility(testSet)
-      ) {
-        selectedPlayers.push(soloWithPriority[i]);
-      }
-      if (selectedPlayers.length >= 4) break;
-    }
-  }
-
-  if (selectedPlayers.length < 4) return false;
 
   const playerIds = selectedPlayers.map((p) => p.playerId);
   const groupIds = [...new Set(selectedPlayers.filter((p) => p.groupId).map((p) => p.groupId!))];
@@ -253,9 +134,172 @@ export async function runRotation(
     } catch (err) {
       console.error("Auto-start error:", err);
     }
-  }, 180_000);
+  }, AUTO_START_DELAY_SECONDS * 1000);
 
   return true;
+}
+
+export async function assignToWarmup(
+  venueId: string,
+  sessionId: string,
+  playerId: string
+): Promise<boolean> {
+  const player = await prisma.player.findUnique({ where: { id: playerId } });
+  if (!player) return false;
+
+  const courts = await prisma.court.findMany({
+    where: { venueId, activeInSession: true },
+    include: { courtAssignments: { where: { endedAt: null }, take: 1, orderBy: { startedAt: "desc" } } },
+  });
+
+  // First: find a warmup court with < 4 players
+  let targetCourt = courts.find((c) => {
+    if (c.status !== "warmup") return false;
+    const assignment = c.courtAssignments[0];
+    return assignment && assignment.isWarmup && assignment.playerIds.length < 4;
+  });
+
+  // Second: find an idle court
+  if (!targetCourt) {
+    targetCourt = courts.find((c) => c.status === "idle");
+  }
+
+  if (!targetCourt) return false;
+
+  const existingAssignment = targetCourt.courtAssignments[0];
+
+  if (existingAssignment && existingAssignment.isWarmup) {
+    // Add player to existing warmup assignment
+    const updatedPlayerIds = [...existingAssignment.playerIds, playerId];
+
+    const updateData: { playerIds: string[]; startedAt?: Date } = { playerIds: updatedPlayerIds };
+    if (updatedPlayerIds.length >= 4) {
+      updateData.startedAt = new Date();
+    }
+    await prisma.courtAssignment.update({
+      where: { id: existingAssignment.id },
+      data: updateData,
+    });
+
+    await prisma.queueEntry.updateMany({
+      where: { playerId, sessionId, status: "waiting" },
+      data: { status: "assigned" },
+    });
+
+    const otherPlayers = await prisma.player.findMany({
+      where: { id: { in: existingAssignment.playerIds } },
+    });
+
+    emitToPlayer(playerId, "player:notification", {
+      type: "court_assigned",
+      message: `${targetCourt.label} — go warm up!`,
+      courtLabel: targetCourt.label,
+      courtId: targetCourt.id,
+      assignmentId: existingAssignment.id,
+      isWarmup: true,
+      teammates: otherPlayers.map((p) => ({
+        name: p.name,
+        skillLevel: p.skillLevel,
+        groupId: null,
+      })),
+      gameType: "mixed",
+    });
+
+    await emitCourtUpdate(venueId);
+
+    if (updatedPlayerIds.length >= 4) {
+      scheduleWarmupTransition(existingAssignment.id, venueId, sessionId, targetCourt.id);
+    }
+  } else {
+    // Create new warmup assignment on idle court
+    const assignment = await prisma.courtAssignment.create({
+      data: {
+        courtId: targetCourt.id,
+        sessionId,
+        playerIds: [playerId],
+        groupIds: [],
+        gameType: "mixed",
+        isWarmup: true,
+      },
+    });
+
+    await prisma.court.update({
+      where: { id: targetCourt.id },
+      data: { status: "warmup" },
+    });
+
+    await prisma.queueEntry.updateMany({
+      where: { playerId, sessionId, status: "waiting" },
+      data: { status: "assigned" },
+    });
+
+    emitToPlayer(playerId, "player:notification", {
+      type: "court_assigned",
+      message: `${targetCourt.label} — go warm up!`,
+      courtLabel: targetCourt.label,
+      courtId: targetCourt.id,
+      assignmentId: assignment.id,
+      isWarmup: true,
+      teammates: [],
+      gameType: "mixed",
+    });
+
+    await emitCourtUpdate(venueId);
+  }
+
+  return true;
+}
+
+function scheduleWarmupTransition(
+  assignmentId: string,
+  venueId: string,
+  sessionId: string,
+  courtId: string
+) {
+  setTimeout(async () => {
+    try {
+      const assignment = await prisma.courtAssignment.findUnique({
+        where: { id: assignmentId },
+      });
+      if (!assignment || assignment.endedAt || !assignment.isWarmup) return;
+
+      // Convert warmup to real game — backdate startedAt so it skips the "Starting" phase
+      const gameStart = new Date(Date.now() - AUTO_START_DELAY_SECONDS * 1000);
+      await prisma.courtAssignment.update({
+        where: { id: assignmentId },
+        data: { isWarmup: false, startedAt: gameStart },
+      });
+
+      await prisma.court.update({
+        where: { id: courtId },
+        data: { status: "active" },
+      });
+
+      await prisma.queueEntry.updateMany({
+        where: {
+          playerId: { in: assignment.playerIds },
+          sessionId,
+          status: "assigned",
+        },
+        data: { status: "playing" },
+      });
+
+      for (const pid of assignment.playerIds) {
+        emitToPlayer(pid, "player:notification", {
+          type: "warmup_ended",
+          message: "Warm up over — game started!",
+        });
+      }
+
+      const allCourts = await prisma.court.findMany({
+        where: { venueId, activeInSession: true },
+        include: { courtAssignments: { where: { endedAt: null }, take: 1 } },
+      });
+      emitToVenue(venueId, "court:updated", allCourts);
+    } catch (err) {
+      console.error("Warmup transition error:", err);
+    }
+  }, WARMUP_DURATION_SECONDS * 1000);
 }
 
 export async function findReplacement(

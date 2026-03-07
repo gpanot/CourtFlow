@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
                 startedAt: assignment.startedAt,
                 gameType: assignment.gameType,
                 groupIds: assignment.groupIds,
+                isWarmup: assignment.isWarmup,
               }
             : null,
           players,

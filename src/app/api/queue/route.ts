@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireAuth } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
+import { assignToWarmup } from "@/lib/algorithm";
 
 export async function GET(request: NextRequest) {
   const sessionId = request.nextUrl.searchParams.get("sessionId");
@@ -95,6 +96,18 @@ export async function POST(request: NextRequest) {
     });
 
     emitToVenue(venueId, "queue:updated", allEntries);
+
+    // Try to assign the player to a warmup court if any are available
+    const courts = await prisma.court.findMany({
+      where: { venueId, activeInSession: true },
+    });
+    const hasWarmupOrIdleCourt = courts.some(
+      (c) => c.status === "idle" || c.status === "warmup"
+    );
+    if (hasWarmupOrIdleCourt) {
+      await assignToWarmup(venueId, sessionId, auth.id);
+    }
+
     return json(entry, 201);
   } catch (e) {
     console.error("[Queue POST] Error:", e);

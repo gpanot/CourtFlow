@@ -13,18 +13,19 @@ export const COURT_STATUS_COLORS = {
   active: "bg-green-600",
   starting: "bg-blue-600",
   idle: "bg-neutral-700",
+  warmup: "bg-amber-500",
   maintenance: "bg-red-700",
 } as const;
 
-export const AUTO_START_DELAY_SECONDS = 180;
-export const WARMUP_PLAYER_THRESHOLD = 8;
+export const AUTO_START_DELAY_SECONDS = 60;
+export const WARMUP_DURATION_SECONDS = 300;
 export const POST_GAME_TIMEOUT_SECONDS = 180;
 export const BREAK_OPTIONS_MINUTES = [5, 10, 15, 20, 30];
 export const GPS_JOIN_RADIUS_METERS = 200;
 export const MAX_GROUP_SIZE = 4;
 export const MAX_SKILL_GAP = 1;
-export const QUEUE_LOOKAHEAD = 8;
-export const TV_QUEUE_DISPLAY_COUNT = 10;
+export const QUEUE_LOOKAHEAD = 30;
+export const TV_QUEUE_DISPLAY_COUNT = 12;
 
 export const SKILL_LEVELS = ["beginner", "intermediate", "advanced", "pro"] as const;
 export type SkillLevelType = (typeof SKILL_LEVELS)[number];
@@ -41,7 +42,7 @@ export type GamePreferenceType = (typeof GAME_PREFERENCES)[number];
 
 export const PREFERENCE_LABELS: Record<GamePreferenceType, string> = {
   no_preference: "No preference",
-  same_gender: "Same gender",
+  same_gender: "Same Gender Preferably",
 };
 
 export const PREFERENCE_DESCRIPTIONS: Record<GamePreferenceType, string> = {

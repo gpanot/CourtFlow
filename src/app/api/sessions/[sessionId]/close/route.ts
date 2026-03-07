@@ -16,19 +16,26 @@ export async function POST(
     if (!session) return error("Session not found", 404);
     if (session.status === "closed") return error("Session already closed", 400);
 
+    const now = new Date();
+
     const updated = await prisma.session.update({
       where: { id: sessionId },
-      data: { status: "closed", closedAt: new Date() },
+      data: { status: "closed", closedAt: now },
     });
 
     await prisma.queueEntry.updateMany({
-      where: { sessionId, status: { in: ["waiting", "on_break"] } },
+      where: { sessionId, status: { in: ["waiting", "assigned", "playing", "on_break"] } },
       data: { status: "left" },
+    });
+
+    await prisma.courtAssignment.updateMany({
+      where: { sessionId, endedAt: null },
+      data: { endedAt: now },
     });
 
     await prisma.court.updateMany({
       where: { venueId: session.venueId },
-      data: { activeInSession: false },
+      data: { activeInSession: false, status: "idle" },
     });
 
     await prisma.auditLog.create({
@@ -43,6 +50,7 @@ export async function POST(
     emitToVenue(session.venueId, "session:updated", { session: updated, courts: [] });
     emitToVenue(session.venueId, "player:notification", {
       type: "session_closing",
+      sessionId,
       message: "Today's session is ending — thanks for playing!",
     });
 

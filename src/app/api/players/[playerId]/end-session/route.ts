@@ -81,6 +81,7 @@ export async function POST(
 
     emitToPlayer(playerId, "player:notification", {
       type: "session_ended_by_staff",
+      sessionId: entry.sessionId,
       message: "Your session was ended by staff — hope to see you soon",
     });
 

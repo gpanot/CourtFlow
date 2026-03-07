@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/cn";
-import { Link as LinkIcon } from "lucide-react";
-import { formatTimer } from "@/lib/constants";
+import { Link as LinkIcon, Flame, Coffee } from "lucide-react";
+import { formatTimer, WARMUP_DURATION_SECONDS } from "@/lib/constants";
+import { api } from "@/lib/api-client";
 
 interface Teammate {
   name: string;
@@ -13,6 +14,8 @@ interface Teammate {
 
 interface CourtAssignedScreenProps {
   notification: Record<string, unknown> | null;
+  venueId?: string;
+  onRefresh?: () => void;
 }
 
 const skillBadgeColors: Record<string, string> = {
@@ -22,11 +25,13 @@ const skillBadgeColors: Record<string, string> = {
   pro: "bg-red-700 text-red-100",
 };
 
-export function CourtAssignedScreen({ notification }: CourtAssignedScreenProps) {
+export function CourtAssignedScreen({ notification, venueId, onRefresh }: CourtAssignedScreenProps) {
   const courtLabel = (notification?.courtLabel as string) || "Court";
   const teammates = (notification?.teammates as Teammate[]) || [];
   const gameType = (notification?.gameType as string) || "mixed";
-  const [countdown, setCountdown] = useState(180);
+  const isWarmup = (notification?.isWarmup as boolean) || false;
+  const [countdown, setCountdown] = useState(isWarmup ? WARMUP_DURATION_SECONDS : 180);
+  const [leaving, setLeaving] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -34,6 +39,59 @@ export function CourtAssignedScreen({ notification }: CourtAssignedScreenProps) 
     }, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  const leaveWarmup = async () => {
+    if (!confirm("Leave the session?\n\nDon't worry, you can join again at anytime.")) return;
+    setLeaving(true);
+    try {
+      await api.post("/api/queue/leave-warmup", { venueId });
+      onRefresh?.();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setLeaving(false);
+    }
+  };
+
+  if (isWarmup) {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center bg-amber-950/20 p-6 text-center">
+        <div className="mb-6 flex items-center gap-2 rounded-full bg-amber-500/20 px-4 py-1 text-sm font-medium text-amber-400">
+          <Flame className="h-4 w-4" />
+          Warm Up
+        </div>
+
+        <h1 className="text-7xl font-bold text-white">{courtLabel}</h1>
+
+        <p className="mt-2 text-lg text-amber-300">Go warm up freely!</p>
+
+        {teammates.length > 0 && (
+          <div className="mt-8 w-full max-w-xs space-y-2">
+            <p className="text-xs text-neutral-500 uppercase">On this court</p>
+            {teammates.map((t, i) => (
+              <div key={i} className="flex items-center justify-center gap-2">
+                <span className="text-lg font-medium">{t.name}</span>
+                <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", skillBadgeColors[t.skillLevel] || "bg-neutral-600")}>
+                  {t.skillLevel[0].toUpperCase()}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-auto w-full max-w-xs pt-12">
+          <button
+            onClick={leaveWarmup}
+            disabled={leaving}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-neutral-800 py-3 text-sm font-medium text-neutral-300 disabled:opacity-50"
+          >
+            <Coffee className="h-4 w-4" />
+            {leaving ? "Leaving..." : "I need a break"}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-blue-950/30 p-6 text-center">

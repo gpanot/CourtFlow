@@ -9,11 +9,10 @@ import { joinVenue, joinPlayer } from "@/lib/socket-client";
 import { QueueScreen } from "./queue-screen";
 import { CourtAssignedScreen } from "./court-assigned";
 import { InGameScreen } from "./in-game";
-import { PostGameScreen } from "./post-game";
 import { BreakScreen } from "./break-screen";
 import { ProfileScreen } from "./profile";
-import { cn } from "@/lib/cn";
-import { User, LogOut } from "lucide-react";
+import { SessionRecapScreen } from "./session-recap";
+import { LogOut, AlertTriangle } from "lucide-react";
 
 interface Venue {
   id: string;
@@ -31,14 +30,14 @@ interface QueueEntry {
   player?: { gender: string };
 }
 
-type PlayerView = "home" | "queue" | "assigned" | "playing" | "postgame" | "break" | "profile";
+type PlayerView = "home" | "queue" | "assigned" | "playing" | "break" | "profile" | "session_recap";
 
 export function PlayerHome() {
   const { playerId, playerName, venueId, setAuth, clearAuth } = useSessionStore();
   const searchParams = useSearchParams();
   const [venues, setVenues] = useState<Venue[]>([]);
   const [selectedVenue, setSelectedVenue] = useState<string | null>(venueId);
-  const [session, setSession] = useState<{ id: string } | null>(null);
+  const [session, setSession] = useState<{ id: string; status?: string } | null>(null);
   const [queueEntry, setQueueEntry] = useState<QueueEntry | null>(null);
   const [view, setView] = useState<PlayerView>("home");
   const [notification, setNotification] = useState<Record<string, unknown> | null>(null);
@@ -46,11 +45,20 @@ export function PlayerHome() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
   const [isWarmup, setIsWarmup] = useState(false);
+  const [avatar, setAvatar] = useState("🏓");
+  const [recapSessionId, setRecapSessionId] = useState<string | null>(null);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [showLeaveStep2, setShowLeaveStep2] = useState(false);
   const { on } = useSocket();
 
   useEffect(() => {
     api.get<Venue[]>("/api/venues").then(setVenues).catch(console.error);
-  }, []);
+    if (playerId) {
+      api.get<{ avatar: string }>(`/api/players/${playerId}`).then((p) => {
+        if (p.avatar) setAvatar(p.avatar);
+      }).catch(console.error);
+    }
+  }, [playerId]);
 
   useEffect(() => {
     if (selectedVenue) return;
@@ -74,10 +82,19 @@ export function PlayerHome() {
         return;
       }
 
-      // Detect warmup mode (session open + all courts idle)
-      const courtsState = await api.get<{ courts: { status: string }[] }>(`/api/courts/state?venueId=${selectedVenue}`);
+      interface CourtState {
+        id: string;
+        label: string;
+        status: string;
+        assignment: { id: string; gameType: string; isWarmup: boolean; groupIds: string[] } | null;
+        players: { id: string; name: string; skillLevel: string; groupId: string | null }[];
+      }
+
+      const courtsState = await api.get<{ courts: CourtState[] }>(`/api/courts/state?venueId=${selectedVenue}`);
+      const hasActive = courtsState.courts.some((c) => c.status === "active");
+      const hasWarmup = courtsState.courts.some((c) => c.status === "warmup");
       const allIdle = courtsState.courts.length > 0 && courtsState.courts.every((c) => c.status === "idle");
-      setIsWarmup(allIdle);
+      setIsWarmup(!hasActive && (hasWarmup || allIdle));
 
       if (playerId) {
         const entries = await api.get<QueueEntry[]>(`/api/queue?sessionId=${sess.id}`);
@@ -85,6 +102,23 @@ export function PlayerHome() {
         setQueueEntry(myEntry || null);
 
         if (myEntry) {
+          if (myEntry.status === "assigned" || myEntry.status === "playing") {
+            const myCourt = courtsState.courts.find((c) =>
+              c.players.some((p) => p.id === playerId)
+            );
+            if (myCourt) {
+              setNotification({
+                type: myEntry.status === "assigned" ? "court_assigned" : "game_started",
+                courtLabel: myCourt.label,
+                gameType: myCourt.assignment?.gameType || "mixed",
+                isWarmup: myCourt.assignment?.isWarmup || false,
+                teammates: myCourt.players
+                  .filter((p) => p.id !== playerId)
+                  .map((p) => ({ name: p.name, skillLevel: p.skillLevel, groupId: p.groupId })),
+              });
+            }
+          }
+
           switch (myEntry.status) {
             case "waiting":
               setView("queue");
@@ -122,8 +156,18 @@ export function PlayerHome() {
       setNotification(notif);
 
       if (notif.type === "court_assigned") setView("assigned");
-      else if (notif.type === "game_ended") setView("postgame");
-      else if (notif.type === "session_ended_by_staff" || notif.type === "session_closing" || notif.type === "removed_from_queue") {
+      else if (notif.type === "warmup_ended") setView("playing");
+      else if (notif.type === "requeued") fetchPlayerState();
+      else if (notif.type === "session_closing" || notif.type === "session_ended_by_staff") {
+        const sid = (notif.sessionId as string) || session?.id;
+        if (sid) {
+          setRecapSessionId(sid);
+          setView("session_recap");
+        } else {
+          setQueueEntry(null);
+          setView("home");
+        }
+      } else if (notif.type === "removed_from_queue") {
         setQueueEntry(null);
         setView("home");
       }
@@ -136,7 +180,18 @@ export function PlayerHome() {
   }, [selectedVenue, playerId, on, fetchPlayerState, setAuth]);
 
   if (showProfile) {
-    return <ProfileScreen onBack={() => setShowProfile(false)} />;
+    return (
+      <ProfileScreen
+        onBack={() => {
+          setShowProfile(false);
+          if (playerId) {
+            api.get<{ avatar: string }>(`/api/players/${playerId}`).then((p) => {
+              if (p.avatar) setAvatar(p.avatar);
+            }).catch(console.error);
+          }
+        }}
+      />
+    );
   }
 
   // Venue selection
@@ -144,18 +199,21 @@ export function PlayerHome() {
     return (
       <div className="flex min-h-dvh flex-col p-6">
         <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-green-500">CourtFlow</h1>
-            <p className="text-neutral-400">Hi {playerName}!</p>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={() => setShowProfile(true)} className="p-2 text-neutral-400">
-              <User className="h-5 w-5" />
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowProfile(true)}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-lg"
+            >
+              {avatar}
             </button>
-            <button onClick={clearAuth} className="p-2 text-neutral-400">
-              <LogOut className="h-5 w-5" />
-            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-green-500">CourtFlow</h1>
+              <p className="text-neutral-400">Hi {playerName}!</p>
+            </div>
           </div>
+          <button onClick={clearAuth} className="p-2 text-neutral-400">
+            <LogOut className="h-5 w-5" />
+          </button>
         </div>
         <p className="mb-4 text-lg text-neutral-300">Select a venue:</p>
         <div className="space-y-3">
@@ -180,18 +238,21 @@ export function PlayerHome() {
     return (
       <div className="flex min-h-dvh flex-col p-6">
         <div className="mb-auto flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-green-500">CourtFlow</h1>
-            <p className="text-neutral-400">{venueName}</p>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={() => setShowProfile(true)} className="p-2 text-neutral-400">
-              <User className="h-5 w-5" />
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowProfile(true)}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-lg"
+            >
+              {avatar}
             </button>
-            <button onClick={() => { setSelectedVenue(null); setAuth({ venueId: null }); }} className="p-2 text-neutral-400">
-              <LogOut className="h-5 w-5" />
-            </button>
+            <div>
+              <h1 className="text-2xl font-bold text-green-500">CourtFlow</h1>
+              <p className="text-neutral-400">{venueName}</p>
+            </div>
           </div>
+          <button onClick={() => { setSelectedVenue(null); setAuth({ venueId: null }); }} className="p-2 text-neutral-400">
+            <LogOut className="h-5 w-5" />
+          </button>
         </div>
 
         <div className="my-auto flex flex-col items-center gap-6">
@@ -233,49 +294,23 @@ export function PlayerHome() {
     );
   }
 
-  if (view === "queue" && queueEntry) {
+  if (view === "session_recap" && recapSessionId) {
     return (
-      <QueueScreen
-        entry={queueEntry}
-        venueId={selectedVenue}
-        venueName={venueName}
-        sessionId={session?.id || ""}
-        playerGender={queueEntry.player?.gender}
-        warmup={isWarmup}
-        onRefresh={fetchPlayerState}
-      />
-    );
-  }
-
-  if (view === "assigned" && notification) {
-    return <CourtAssignedScreen notification={notification} />;
-  }
-
-  if (view === "playing") {
-    return <InGameScreen notification={notification} />;
-  }
-
-  if (view === "postgame") {
-    return (
-      <PostGameScreen
-        venueId={selectedVenue}
-        notification={notification}
-        onChoice={async (choice) => {
-          if (choice === "requeue") {
-            await api.post("/api/queue/requeue");
+      <SessionRecapScreen
+        sessionId={recapSessionId}
+        sessionOpen={session?.status === "open" || false}
+        onRequeue={async () => {
+          if (!session) return;
+          try {
+            await api.post("/api/queue", { sessionId: session.id, venueId: selectedVenue });
+            setRecapSessionId(null);
             await fetchPlayerState();
-          } else if (choice === "break") {
-            // Will be handled in break duration selection
-          } else if (choice === "end") {
-            // Handled in end session flow
+          } catch (e) {
+            console.error(e);
           }
         }}
-        onBreak={async (minutes) => {
-          await api.post("/api/queue/break", { venueId: selectedVenue, minutes });
-          await fetchPlayerState();
-        }}
-        onEndSession={async () => {
-          await api.post("/api/queue/leave", { venueId: selectedVenue });
+        onClose={() => {
+          setRecapSessionId(null);
           setQueueEntry(null);
           setView("home");
         }}
@@ -283,16 +318,147 @@ export function PlayerHome() {
     );
   }
 
+  if (view === "queue" && queueEntry) {
+    return (
+      <>
+        <QueueScreen
+          entry={queueEntry}
+          venueId={selectedVenue}
+          venueName={venueName}
+          sessionId={session?.id || ""}
+          playerGender={queueEntry.player?.gender}
+          warmup={isWarmup}
+          avatar={avatar}
+          onShowProfile={() => setShowProfile(true)}
+          onRefresh={fetchPlayerState}
+          onLeaveVenue={() => setShowLeaveConfirm(true)}
+        />
+
+        {/* Double confirm leave venue */}
+        {showLeaveConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => { setShowLeaveConfirm(false); setShowLeaveStep2(false); }}>
+            <div
+              className="w-full max-w-sm mx-4 rounded-2xl border border-neutral-700 bg-neutral-900 p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {!showLeaveStep2 ? (
+                <>
+                  <div className="mb-4 flex flex-col items-center gap-3 text-center">
+                    <div className="rounded-full bg-amber-600/20 p-3">
+                      <AlertTriangle className="h-6 w-6 text-amber-400" />
+                    </div>
+                    <h3 className="text-lg font-bold">Leaving the venue?</h3>
+                    <p className="text-sm text-neutral-400">
+                      You&apos;ll be removed from the queue. You can always come back and re-join later!
+                    </p>
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setShowLeaveStep2(true)}
+                      className="flex-1 rounded-xl bg-amber-600 py-3 font-semibold text-white hover:bg-amber-500"
+                    >
+                      Yes, I&apos;m leaving
+                    </button>
+                    <button
+                      onClick={() => { setShowLeaveConfirm(false); setShowLeaveStep2(false); }}
+                      className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
+                    >
+                      Stay
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="mb-4 flex flex-col items-center gap-3 text-center">
+                    <div className="rounded-full bg-red-600/20 p-3">
+                      <AlertTriangle className="h-6 w-6 text-red-400" />
+                    </div>
+                    <h3 className="text-lg font-bold">Are you sure?</h3>
+                    <p className="text-sm text-neutral-400">
+                      Confirm you want to leave. Your session stats will be shown after.
+                    </p>
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={async () => {
+                        setShowLeaveConfirm(false);
+                        setShowLeaveStep2(false);
+                        const sid = session?.id || queueEntry?.sessionId;
+                        try {
+                          await api.post("/api/queue/leave", { venueId: selectedVenue });
+                          if (sid) {
+                            setRecapSessionId(sid);
+                            setView("session_recap");
+                          } else {
+                            setQueueEntry(null);
+                            setView("home");
+                          }
+                        } catch (e) {
+                          console.error(e);
+                          setQueueEntry(null);
+                          setView("home");
+                        }
+                      }}
+                      className="flex-1 rounded-xl bg-red-600 py-3 font-semibold text-white hover:bg-red-500"
+                    >
+                      Yes, leave venue
+                    </button>
+                    <button
+                      onClick={() => { setShowLeaveConfirm(false); setShowLeaveStep2(false); }}
+                      className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  const profileOverlay = (
+    <button
+      onClick={() => setShowProfile(true)}
+      className="absolute left-5 top-5 z-40 flex h-10 w-10 items-center justify-center rounded-full bg-neutral-800/80 text-lg backdrop-blur-sm"
+    >
+      {avatar}
+    </button>
+  );
+
+  if (view === "assigned") {
+    return (
+      <div className="relative">
+        {profileOverlay}
+        <CourtAssignedScreen notification={notification} venueId={selectedVenue} onRefresh={fetchPlayerState} />
+      </div>
+    );
+  }
+
+  if (view === "playing") {
+    return (
+      <div className="relative">
+        {profileOverlay}
+        <InGameScreen notification={notification} />
+      </div>
+    );
+  }
+
   if (view === "break" && queueEntry) {
     return (
-      <BreakScreen
-        breakUntil={queueEntry.breakUntil || ""}
-        venueId={selectedVenue}
-        onReturn={async () => {
-          await api.post("/api/queue/return", { venueId: selectedVenue });
-          await fetchPlayerState();
-        }}
-      />
+      <div className="relative">
+        {profileOverlay}
+        <BreakScreen
+          breakUntil={queueEntry.breakUntil || ""}
+          venueId={selectedVenue}
+          onReturn={async () => {
+            await api.post("/api/queue/return", { venueId: selectedVenue });
+            await fetchPlayerState();
+          }}
+        />
+      </div>
     );
   }
 

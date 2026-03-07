@@ -5,9 +5,18 @@ import { cn } from "@/lib/cn";
 import { Link, Coffee, MoreVertical, UserX, LogOut } from "lucide-react";
 import { TV_QUEUE_DISPLAY_COUNT } from "@/lib/constants";
 
+const skillDotColors: Record<string, string> = {
+  beginner: "bg-green-500",
+  intermediate: "bg-blue-500",
+  advanced: "bg-purple-500",
+  pro: "bg-red-500",
+};
+
 interface QueuePlayer {
   id: string;
   name: string;
+  avatar?: string;
+  skillLevel?: string;
 }
 
 interface QueueGroup {
@@ -39,10 +48,12 @@ interface QueuePanelProps {
 export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction }: QueuePanelProps) {
   const isTV = variant === "tv";
   const limit = maxDisplay ?? TV_QUEUE_DISPLAY_COUNT;
+  const waitingCount = entries.filter((e) => e.status === "waiting" || e.status === "on_break").length;
 
   const seen = new Set<string>();
-  const displayEntries: { key: string; entry: QueueEntryData; isGroup: boolean; groupSize: number; position: number; allPlayers: { id: string; name: string }[] }[] = [];
+  const displayEntries: { key: string; entry: QueueEntryData; isGroup: boolean; groupSize: number; position: number; allPlayers: { id: string; name: string; skillLevel?: string }[]; cumulativePlayersBefore: number }[] = [];
   let position = 0;
+  let cumulativePlayers = 0;
 
   for (const entry of entries) {
     if (entry.status !== "waiting" && entry.status !== "on_break") continue;
@@ -57,8 +68,10 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
     const groupSize = groupMembers.length;
 
     const allPlayers = entry.groupId && entry.group
-      ? groupMembers.map((e) => ({ id: e.player.id, name: e.player.name }))
-      : [{ id: entry.player.id, name: entry.player.name }];
+      ? groupMembers.map((e) => ({ id: e.player.id, name: e.player.name, skillLevel: e.player.skillLevel }))
+      : [{ id: entry.player.id, name: entry.player.name, skillLevel: entry.player.skillLevel }];
+
+    const playerCount = entry.groupId ? groupSize : 1;
 
     displayEntries.push({
       key: entry.groupId || entry.id,
@@ -67,7 +80,10 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
       groupSize,
       position,
       allPlayers,
+      cumulativePlayersBefore: cumulativePlayers,
     });
+
+    cumulativePlayers += playerCount;
 
     if (displayEntries.length >= limit) break;
   }
@@ -89,19 +105,46 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
         </p>
       )}
 
-      {displayEntries.map(({ key, entry, isGroup, groupSize, position: pos, allPlayers }) => (
-        <QueueRow
-          key={key}
-          entry={entry}
-          isGroup={isGroup}
-          groupSize={groupSize}
-          position={pos}
-          allPlayers={allPlayers}
-          isTV={isTV}
-          onPlayerAction={onPlayerAction}
-        />
-      ))}
+      {displayEntries.map(({ key, entry, isGroup, groupSize, position: pos, allPlayers, cumulativePlayersBefore }) => {
+        const showSeparator = isTV && cumulativePlayersBefore > 0 && cumulativePlayersBefore % 4 === 0;
+        return (
+          <div key={key}>
+            {showSeparator && (
+              <div className="my-[0.6vh] border-t border-dashed border-neutral-600/50" />
+            )}
+            <QueueRow
+              entry={entry}
+              isGroup={isGroup}
+              groupSize={groupSize}
+              position={pos}
+              allPlayers={allPlayers}
+              isTV={isTV}
+              isNextUp={cumulativePlayersBefore < 4}
+              onPlayerAction={onPlayerAction}
+            />
+          </div>
+        );
+      })}
+
+      {isTV && waitingCount > cumulativePlayers && displayEntries.length >= limit && (
+        <p className="text-center text-neutral-500 mt-[0.5vh] text-[clamp(0.6rem,1.1vw,1rem)]">
+          +{waitingCount - cumulativePlayers} players
+        </p>
+      )}
     </div>
+  );
+}
+
+function SkillDot({ level, isTV }: { level?: string; isTV: boolean }) {
+  const color = skillDotColors[level ?? ""] ?? "bg-neutral-500";
+  return (
+    <span
+      className={cn(
+        "shrink-0 rounded-full",
+        isTV ? "h-[clamp(0.35rem,0.7vw,0.6rem)] w-[clamp(0.35rem,0.7vw,0.6rem)]" : "h-2 w-2",
+        color,
+      )}
+    />
   );
 }
 
@@ -112,14 +155,16 @@ function QueueRow({
   position,
   allPlayers,
   isTV,
+  isNextUp,
   onPlayerAction,
 }: {
   entry: QueueEntryData;
   isGroup: boolean;
   groupSize: number;
   position: number;
-  allPlayers: { id: string; name: string }[];
+  allPlayers: { id: string; name: string; skillLevel?: string }[];
   isTV: boolean;
+  isNextUp: boolean;
   onPlayerAction?: (playerId: string, playerName: string, action: PlayerAction) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -171,15 +216,23 @@ function QueueRow({
                 </div>
               )}
               {(isTV || !onPlayerAction) && entry.group && (
-                <span className={cn("text-neutral-500 truncate", isTV ? "text-[clamp(0.6rem,1vw,1rem)]" : "ml-6 text-xs")}>
-                  {entry.group.queueEntries.map((e) => e.player.name).join(", ")}
-                </span>
+                <div className={cn("flex flex-wrap items-center gap-x-2 gap-y-0.5", isTV ? "text-[clamp(0.6rem,1vw,1rem)]" : "ml-6 text-xs")}>
+                  {entry.group.queueEntries.map((e, i) => (
+                    <span key={e.player.id} className="flex items-center gap-1 text-neutral-500">
+                      <SkillDot level={e.player.skillLevel} isTV={isTV} />
+                      {e.player.name}{i < entry.group!.queueEntries.length - 1 && ","}
+                    </span>
+                  ))}
+                </div>
               )}
             </div>
           ) : (
-            <span className={cn("font-medium truncate", isTV ? "text-[clamp(0.75rem,1.5vw,1.5rem)]" : "text-sm")}>
-              {entry.player.name}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <SkillDot level={entry.player.skillLevel} isTV={isTV} />
+              <span className={cn("font-medium", isTV ? "text-[clamp(0.75rem,1.5vw,1.5rem)] line-clamp-2 break-words" : "text-sm truncate")}>
+                {entry.player.name}
+              </span>
+            </div>
           )}
         </div>
 
@@ -190,6 +243,12 @@ function QueueRow({
               <BreakCountdown until={entry.breakUntil} isTV={isTV} />
             )}
           </div>
+        )}
+
+        {isTV && !isGroup && entry.player.avatar && (
+          <span className={cn("shrink-0 text-[clamp(1rem,2vw,2rem)] inline-block", isNextUp && "animate-spin-y")}>
+            {entry.player.avatar}
+          </span>
         )}
 
         {!isTV && onPlayerAction && !isGroup && (
