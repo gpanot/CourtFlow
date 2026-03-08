@@ -13,6 +13,7 @@ import { BreakScreen } from "./break-screen";
 import { ProfileScreen } from "./profile";
 import { SessionRecapScreen } from "./session-recap";
 import { LogOut, AlertTriangle } from "lucide-react";
+import { isPushSupported, subscribeToPush, getNotificationPermission } from "@/lib/push-client";
 
 interface Venue {
   id: string;
@@ -58,6 +59,10 @@ export function PlayerHome() {
       api.get<{ avatar: string }>(`/api/players/${playerId}`).then((p) => {
         if (p.avatar) setAvatar(p.avatar);
       }).catch(console.error);
+
+      if (isPushSupported() && getNotificationPermission() === "granted") {
+        subscribeToPush(playerId).catch(() => {});
+      }
     }
   }, [playerId]);
 

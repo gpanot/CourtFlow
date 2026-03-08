@@ -79,18 +79,33 @@ model Venue {
 }
 
 model Player {
-  id             String         @id @default(cuid())
-  name           String
-  phone          String         @unique
-  avatar         String         @default("🏓")
-  skillLevel     SkillLevel     @default(beginner) @map("skill_level")
-  gender         Gender
-  gamePreference GamePreference @default(no_preference) @map("game_preference")
-  createdAt      DateTime       @default(now()) @map("created_at")
+  id                    String         @id @default(cuid())
+  name                  String
+  phone                 String         @unique
+  avatar                String         @default("🏓")
+  skillLevel            SkillLevel     @default(beginner) @map("skill_level")
+  gender                Gender
+  gamePreference        GamePreference @default(no_preference) @map("game_preference")
+  notificationsEnabled  Boolean        @default(true) @map("notifications_enabled")
+  createdAt             DateTime       @default(now()) @map("created_at")
 
-  queueEntries QueueEntry[]
+  queueEntries      QueueEntry[]
+  pushSubscriptions PushSubscription[]
 
   @@map("players")
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  playerId  String   @map("player_id")
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@map("push_subscriptions")
 }
 
 model StaffMember {

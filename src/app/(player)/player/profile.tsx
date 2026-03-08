@@ -8,7 +8,8 @@ import {
   GAME_PREFERENCES, PREFERENCE_LABELS, PREFERENCE_DESCRIPTIONS, type GamePreferenceType,
 } from "@/lib/constants";
 import { cn } from "@/lib/cn";
-import { ArrowLeft, Trophy, Clock, Check, Pencil, ChevronRight } from "lucide-react";
+import { ArrowLeft, Trophy, Clock, Check, Pencil, ChevronRight, Bell, BellOff } from "lucide-react";
+import { isPushSupported, subscribeToPush, unsubscribeFromPush, getNotificationPermission } from "@/lib/push-client";
 
 const AVATAR_OPTIONS = [
   "🏓", "🎾", "⚡", "🔥", "🌟", "💪", "🦊", "🐻",
@@ -85,6 +86,10 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
   const [editSkill, setEditSkill] = useState(false);
   const [editPreference, setEditPreference] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [notifToggling, setNotifToggling] = useState(false);
+  const pushSupported = isPushSupported();
+  const browserPermission = getNotificationPermission();
 
   useEffect(() => {
     if (!playerId) return;
@@ -94,7 +99,36 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
     }).catch(console.error);
     api.get<MatchHistory>(`/api/players/${playerId}/history`).then(setHistory).catch(console.error);
     api.get<SessionHistory[]>(`/api/players/${playerId}/sessions`).then(setSessionHistory).catch(console.error);
+    api.get<{ notificationsEnabled: boolean }>(`/api/players/${playerId}/notifications`).then((r) => {
+      setNotificationsEnabled(r.notificationsEnabled);
+    }).catch(console.error);
   }, [playerId]);
+
+  const toggleNotifications = async () => {
+    if (!playerId) return;
+    setNotifToggling(true);
+    try {
+      const newValue = !notificationsEnabled;
+      if (newValue) {
+        const subscribed = await subscribeToPush(playerId);
+        if (!subscribed) {
+          setNotifToggling(false);
+          return;
+        }
+      } else {
+        await unsubscribeFromPush();
+      }
+      const res = await api.patch<{ notificationsEnabled: boolean }>(
+        `/api/players/${playerId}/notifications`,
+        { notificationsEnabled: newValue }
+      );
+      setNotificationsEnabled(res.notificationsEnabled);
+    } catch (e) {
+      console.error("Toggle notifications failed:", e);
+    } finally {
+      setNotifToggling(false);
+    }
+  };
 
   const saveField = async (updates: Partial<PlayerProfile>) => {
     if (!playerId) return;
@@ -213,6 +247,50 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
               <p className="text-xs text-neutral-400">Minutes played</p>
             </div>
           </div>
+
+          {/* Notifications */}
+          {pushSupported && (
+            <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {notificationsEnabled ? (
+                    <Bell className="h-5 w-5 text-green-400" />
+                  ) : (
+                    <BellOff className="h-5 w-5 text-neutral-500" />
+                  )}
+                  <div>
+                    <h3 className="font-semibold text-neutral-300">Push Notifications</h3>
+                    <p className="text-xs text-neutral-500">
+                      {notificationsEnabled
+                        ? "You'll be notified when it's your turn"
+                        : "Notifications are off"}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={toggleNotifications}
+                  disabled={notifToggling || browserPermission === "denied"}
+                  className={cn(
+                    "relative h-7 w-12 rounded-full transition-colors",
+                    notificationsEnabled ? "bg-green-600" : "bg-neutral-700",
+                    (notifToggling || browserPermission === "denied") && "opacity-50"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform",
+                      notificationsEnabled ? "translate-x-5" : "translate-x-0.5"
+                    )}
+                  />
+                </button>
+              </div>
+              {browserPermission === "denied" && (
+                <p className="mt-2 text-xs text-red-400">
+                  Notifications are blocked in your browser settings. Please enable them to receive alerts.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Skill Level */}
           <div>
