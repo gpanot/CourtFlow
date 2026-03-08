@@ -22,7 +22,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const auth = requireStaff(request.headers);
-    const { venueId, courtIds } = await parseBody<{ venueId: string; courtIds: string[] }>(request);
+    const { venueId, courtIds, gameTypeMix } = await parseBody<{
+      venueId: string;
+      courtIds: string[];
+      gameTypeMix?: { men: number; women: number; mixed: number };
+    }>(request);
 
     const existing = await prisma.session.findFirst({
       where: { venueId, status: "open" },
@@ -45,7 +49,10 @@ export async function POST(request: NextRequest) {
     }
 
     const session = await prisma.session.create({
-      data: { venueId },
+      data: {
+        venueId,
+        gameTypeMix: gameTypeMix ?? undefined,
+      },
     });
 
     if (courtIds?.length) {

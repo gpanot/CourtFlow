@@ -8,7 +8,7 @@ import { joinVenue } from "@/lib/socket-client";
 import { CourtCard, type CourtData } from "@/components/court-card";
 import { QueuePanel, type QueueEntryData } from "@/components/queue-panel";
 import { cn } from "@/lib/cn";
-import { Plus, X, LogOut, Users, LayoutGrid, AlertTriangle, User, Flame, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, History, Calendar, Loader2 } from "lucide-react";
+import { Plus, X, LogOut, Users, LayoutGrid, AlertTriangle, User, Flame, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, History, Calendar, Loader2, Target, Settings2 } from "lucide-react";
 import { WARMUP_DURATION_SECONDS } from "@/lib/constants";
 import { QRCodeSVG } from "qrcode.react";
 import { SessionSummary } from "./session-summary";
@@ -17,6 +17,13 @@ interface SessionData {
   id: string;
   status: string;
   venueId: string;
+  gameTypeMix?: { men: number; women: number; mixed: number } | null;
+}
+
+interface GameTypeMixStats {
+  target: { men: number; women: number; mixed: number } | null;
+  played: { men: number; women: number; mixed: number };
+  totalGames: number;
 }
 
 interface VenueData {
@@ -52,17 +59,23 @@ export function StaffDashboard() {
   const [closedSessionId, setClosedSessionId] = useState<string | null>(null);
   const [viewingSessionId, setViewingSessionId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [gameTypeMix, setGameTypeMix] = useState<GameTypeMixStats | null>(null);
+  const [showMixEditor, setShowMixEditor] = useState(false);
   const { on } = useSocket();
 
   const fetchState = useCallback(async () => {
     if (!venueId) return;
     try {
-      const data = await api.get<{ session: SessionData; courts: CourtData[]; queue: QueueEntryData[] }>(
-        `/api/courts/state?venueId=${venueId}`
-      );
+      const data = await api.get<{
+        session: SessionData;
+        courts: CourtData[];
+        queue: QueueEntryData[];
+        gameTypeMix: GameTypeMixStats | null;
+      }>(`/api/courts/state?venueId=${venueId}`);
       setSession(data.session);
       setCourts([...data.courts].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true })));
       setQueue(data.queue);
+      setGameTypeMix(data.gameTypeMix);
     } catch (e) {
       console.error(e);
     }
@@ -81,10 +94,14 @@ export function StaffDashboard() {
     return () => { offCourt(); offQueue(); offSession(); };
   }, [venueId, on, fetchState]);
 
-  const handleOpenSession = async (courtIds: string[]) => {
+  const handleOpenSession = async (courtIds: string[], mix?: { men: number; women: number; mixed: number } | null) => {
     if (!venueId) return;
     try {
-      await api.post("/api/sessions", { venueId, courtIds });
+      await api.post("/api/sessions", {
+        venueId,
+        courtIds,
+        gameTypeMix: mix ?? undefined,
+      });
       setShowOpenSession(false);
       await fetchState();
     } catch (e) {
@@ -281,7 +298,7 @@ export function StaffDashboard() {
         {showOpenSession && (
           <OpenSessionPanel
             courts={venue?.courts || []}
-            onOpen={handleOpenSession}
+            onOpen={(courtIds, mix) => handleOpenSession(courtIds, mix)}
             onCancel={() => setShowOpenSession(false)}
           />
         )}
@@ -301,6 +318,14 @@ export function StaffDashboard() {
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* Game type mix tracker */}
+            {gameTypeMix && gameTypeMix.totalGames > 0 && (
+              <GameTypeMixTracker
+                stats={gameTypeMix}
+                onEdit={() => setShowMixEditor(true)}
+              />
             )}
 
             <div className="grid gap-3 sm:grid-cols-2">
@@ -779,9 +804,34 @@ export function StaffDashboard() {
           />
         </div>
       )}
+
+      {/* Game Type Mix Editor */}
+      {showMixEditor && session && (
+        <GameTypeMixEditor
+          sessionId={session.id}
+          currentMix={gameTypeMix?.target ?? null}
+          onClose={() => setShowMixEditor(false)}
+          onSave={async (mix) => {
+            try {
+              await api.patch(`/api/sessions/${session.id}/game-type-mix`, { gameTypeMix: mix });
+              setShowMixEditor(false);
+              await fetchState();
+            } catch (e) {
+              alert((e as Error).message);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
+
+const MIX_PRESETS: { label: string; desc: string; mix: { men: number; women: number; mixed: number } | null }[] = [
+  { label: "No Target", desc: "FIFO order, no balancing", mix: null },
+  { label: "Balanced", desc: "Equal split across all types", mix: { men: 33, women: 33, mixed: 34 } },
+  { label: "Mixed Focus", desc: "More mixed doubles", mix: { men: 25, women: 25, mixed: 50 } },
+  { label: "Same Gender", desc: "Prioritise men/women games", mix: { men: 40, women: 40, mixed: 20 } },
+];
 
 function OpenSessionPanel({
   courts,
@@ -789,10 +839,14 @@ function OpenSessionPanel({
   onCancel,
 }: {
   courts: { id: string; label: string }[];
-  onOpen: (courtIds: string[]) => void;
+  onOpen: (courtIds: string[], mix?: { men: number; women: number; mixed: number } | null) => void;
   onCancel: () => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [mixPresetIdx, setMixPresetIdx] = useState(0);
+  const [showMixDetails, setShowMixDetails] = useState(false);
+  const [customMix, setCustomMix] = useState({ men: 33, women: 33, mixed: 34 });
+  const [isCustom, setIsCustom] = useState(false);
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -803,29 +857,136 @@ function OpenSessionPanel({
     });
   };
 
+  const activeMix = isCustom ? customMix : MIX_PRESETS[mixPresetIdx].mix;
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <h2 className="text-xl font-bold">Open Session</h2>
-      <p className="text-neutral-400">Select courts to activate:</p>
-      <div className="grid grid-cols-2 gap-2">
-        {courts.map((c) => (
-          <button
-            key={c.id}
-            onClick={() => toggle(c.id)}
-            className={cn(
-              "rounded-xl border-2 py-4 text-lg font-semibold transition-colors",
-              selected.has(c.id)
-                ? "border-green-500 bg-green-600/20 text-green-400"
-                : "border-neutral-700 bg-neutral-800 text-neutral-300 hover:border-neutral-500"
-            )}
-          >
-            {c.label}
-          </button>
-        ))}
+
+      <div>
+        <p className="text-sm text-neutral-400 mb-2">Select courts to activate:</p>
+        <div className="grid grid-cols-2 gap-2">
+          {courts.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => toggle(c.id)}
+              className={cn(
+                "rounded-xl border-2 py-4 text-lg font-semibold transition-colors",
+                selected.has(c.id)
+                  ? "border-green-500 bg-green-600/20 text-green-400"
+                  : "border-neutral-700 bg-neutral-800 text-neutral-300 hover:border-neutral-500"
+              )}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* Game type mix */}
+      <div>
+        <button
+          onClick={() => setShowMixDetails(!showMixDetails)}
+          className="flex w-full items-center justify-between rounded-xl border border-neutral-700 bg-neutral-800/50 px-4 py-3 hover:border-neutral-600 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <Target className="h-5 w-5 text-blue-400" />
+            <div className="text-left">
+              <p className="font-medium text-neutral-200 text-sm">
+                Game Mix: {isCustom ? "Custom" : MIX_PRESETS[mixPresetIdx].label}
+              </p>
+              <p className="text-xs text-neutral-500">
+                {activeMix ? `${activeMix.men}% M · ${activeMix.women}% W · ${activeMix.mixed}% X` : "No balancing"}
+              </p>
+            </div>
+          </div>
+          <Settings2 className={cn("h-4 w-4 text-neutral-500 transition-transform", showMixDetails && "rotate-90")} />
+        </button>
+
+        {showMixDetails && (
+          <div className="mt-3 space-y-3 rounded-xl border border-neutral-700 bg-neutral-900 p-4">
+            <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">Presets</p>
+            <div className="grid grid-cols-2 gap-2">
+              {MIX_PRESETS.map((preset, i) => (
+                <button
+                  key={i}
+                  onClick={() => { setMixPresetIdx(i); setIsCustom(false); }}
+                  className={cn(
+                    "rounded-lg border px-3 py-2.5 text-left transition-colors",
+                    !isCustom && mixPresetIdx === i
+                      ? "border-blue-500 bg-blue-600/15 text-blue-300"
+                      : "border-neutral-700 bg-neutral-800 text-neutral-400 hover:border-neutral-600"
+                  )}
+                >
+                  <p className="text-sm font-medium">{preset.label}</p>
+                  <p className="text-[10px] text-neutral-500 mt-0.5">{preset.desc}</p>
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-3 pt-1">
+              <div className="h-px flex-1 bg-neutral-800" />
+              <button
+                onClick={() => setIsCustom(true)}
+                className={cn(
+                  "text-xs font-medium px-2 py-1 rounded",
+                  isCustom ? "text-blue-400 bg-blue-600/15" : "text-neutral-500 hover:text-neutral-300"
+                )}
+              >
+                Custom
+              </button>
+              <div className="h-px flex-1 bg-neutral-800" />
+            </div>
+
+            {isCustom && (
+              <div className="space-y-2">
+                {(["men", "women", "mixed"] as const).map((type) => (
+                  <div key={type} className="flex items-center gap-3">
+                    <span className="w-16 text-xs font-medium text-neutral-400 capitalize">
+                      {type === "men" ? "Men" : type === "women" ? "Women" : "Mixed"}
+                    </span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      value={customMix[type]}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        setCustomMix((prev) => {
+                          const others = (["men", "women", "mixed"] as const).filter((t) => t !== type);
+                          const remaining = 100 - val;
+                          const otherTotal = prev[others[0]] + prev[others[1]];
+                          const ratio = otherTotal > 0 ? remaining / otherTotal : 0.5;
+                          return {
+                            ...prev,
+                            [type]: val,
+                            [others[0]]: otherTotal > 0 ? Math.round(prev[others[0]] * ratio) : Math.round(remaining / 2),
+                            [others[1]]: otherTotal > 0 ? remaining - Math.round(prev[others[0]] * ratio) : remaining - Math.round(remaining / 2),
+                          };
+                        });
+                      }}
+                      className="flex-1 accent-blue-500"
+                    />
+                    <span className="w-10 text-right text-sm font-mono text-neutral-300">{customMix[type]}%</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {activeMix && (
+              <div className="flex gap-1 h-2 rounded-full overflow-hidden bg-neutral-800">
+                <div className="bg-blue-500 transition-all" style={{ width: `${activeMix.men}%` }} />
+                <div className="bg-pink-500 transition-all" style={{ width: `${activeMix.women}%` }} />
+                <div className="bg-purple-500 transition-all" style={{ width: `${activeMix.mixed}%` }} />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="flex gap-3">
         <button
-          onClick={() => onOpen(Array.from(selected))}
+          onClick={() => onOpen(Array.from(selected), activeMix)}
           disabled={selected.size === 0}
           className="flex-1 rounded-xl bg-green-600 py-3 font-semibold text-white disabled:opacity-40"
         >
@@ -834,6 +995,186 @@ function OpenSessionPanel({
         <button onClick={onCancel} className="rounded-xl bg-neutral-800 px-6 py-3 text-neutral-300">
           Cancel
         </button>
+      </div>
+    </div>
+  );
+}
+
+function GameTypeMixTracker({
+  stats,
+  onEdit,
+}: {
+  stats: GameTypeMixStats;
+  onEdit: () => void;
+}) {
+  const { target, played, totalGames } = stats;
+  const types = [
+    { key: "men" as const, label: "Men", color: "bg-blue-500", textColor: "text-blue-400" },
+    { key: "women" as const, label: "Women", color: "bg-pink-500", textColor: "text-pink-400" },
+    { key: "mixed" as const, label: "Mixed", color: "bg-purple-500", textColor: "text-purple-400" },
+  ];
+
+  return (
+    <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-3">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <Target className="h-4 w-4 text-blue-400" />
+          <span className="text-xs font-medium text-neutral-400">
+            Game Mix ({totalGames} games)
+          </span>
+        </div>
+        <button
+          onClick={onEdit}
+          className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+        >
+          {target ? "Edit" : "Set Target"}
+        </button>
+      </div>
+
+      <div className="flex gap-1 h-2 rounded-full overflow-hidden bg-neutral-800 mb-2">
+        {types.map(({ key, color }) => (
+          <div
+            key={key}
+            className={cn(color, "transition-all duration-500")}
+            style={{ width: totalGames > 0 ? `${(played[key] / totalGames) * 100}%` : "0%" }}
+          />
+        ))}
+      </div>
+
+      <div className="flex justify-between">
+        {types.map(({ key, label, textColor }) => {
+          const actualPct = totalGames > 0 ? Math.round((played[key] / totalGames) * 100) : 0;
+          const targetPct = target ? Math.round((target[key] / (target.men + target.women + target.mixed)) * 100) : null;
+          return (
+            <div key={key} className="text-center">
+              <p className={cn("text-sm font-bold", textColor)}>{played[key]}</p>
+              <p className="text-[10px] text-neutral-500">
+                {label} {actualPct}%
+                {targetPct !== null && (
+                  <span className="text-neutral-600"> / {targetPct}%</span>
+                )}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function GameTypeMixEditor({
+  sessionId,
+  currentMix,
+  onClose,
+  onSave,
+}: {
+  sessionId: string;
+  currentMix: { men: number; women: number; mixed: number } | null;
+  onClose: () => void;
+  onSave: (mix: { men: number; women: number; mixed: number } | null) => void;
+}) {
+  const [mix, setMix] = useState(currentMix ?? { men: 33, women: 33, mixed: 34 });
+  const [enabled, setEnabled] = useState(currentMix !== null);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+      <div
+        className="w-full max-w-sm rounded-2xl border border-neutral-700 bg-neutral-900 p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-5 flex items-center justify-between">
+          <h3 className="text-lg font-bold">Game Type Target</h3>
+          <button onClick={onClose} className="rounded-full bg-neutral-800 p-1.5 text-neutral-400 hover:bg-neutral-700">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between mb-4 rounded-lg bg-neutral-800 px-3 py-2.5">
+          <span className="text-sm text-neutral-300">Enable mix target</span>
+          <button
+            onClick={() => setEnabled(!enabled)}
+            className={cn(
+              "relative h-6 w-11 rounded-full transition-colors",
+              enabled ? "bg-blue-600" : "bg-neutral-600"
+            )}
+          >
+            <span className={cn(
+              "absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform",
+              enabled ? "translate-x-5.5 left-0.5" : "left-0.5"
+            )} style={{ transform: enabled ? "translateX(22px)" : "translateX(2px)" }} />
+          </button>
+        </div>
+
+        {enabled && (
+          <div className="space-y-3 mb-5">
+            {(["men", "women", "mixed"] as const).map((type) => (
+              <div key={type} className="flex items-center gap-3">
+                <span className={cn(
+                  "w-16 text-xs font-medium capitalize",
+                  type === "men" ? "text-blue-400" : type === "women" ? "text-pink-400" : "text-purple-400"
+                )}>
+                  {type === "men" ? "Men" : type === "women" ? "Women" : "Mixed"}
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={mix[type]}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    setMix((prev) => {
+                      const others = (["men", "women", "mixed"] as const).filter((t) => t !== type);
+                      const remaining = 100 - val;
+                      const otherTotal = prev[others[0]] + prev[others[1]];
+                      const ratio = otherTotal > 0 ? remaining / otherTotal : 0.5;
+                      return {
+                        ...prev,
+                        [type]: val,
+                        [others[0]]: otherTotal > 0 ? Math.round(prev[others[0]] * ratio) : Math.round(remaining / 2),
+                        [others[1]]: otherTotal > 0 ? remaining - Math.round(prev[others[0]] * ratio) : remaining - Math.round(remaining / 2),
+                      };
+                    });
+                  }}
+                  className="flex-1 accent-blue-500"
+                />
+                <span className="w-10 text-right text-sm font-mono text-neutral-300">{mix[type]}%</span>
+              </div>
+            ))}
+
+            <div className="flex gap-1 h-2 rounded-full overflow-hidden bg-neutral-800">
+              <div className="bg-blue-500 transition-all" style={{ width: `${mix.men}%` }} />
+              <div className="bg-pink-500 transition-all" style={{ width: `${mix.women}%` }} />
+              <div className="bg-purple-500 transition-all" style={{ width: `${mix.mixed}%` }} />
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              {MIX_PRESETS.filter((p) => p.mix).map((preset, i) => (
+                <button
+                  key={i}
+                  onClick={() => setMix(preset.mix!)}
+                  className="rounded-md border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-[10px] font-medium text-neutral-400 hover:border-neutral-600 hover:text-neutral-300"
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <button
+            onClick={() => onSave(enabled ? mix : null)}
+            className="flex-1 rounded-xl bg-blue-600 py-3 font-semibold text-white hover:bg-blue-500"
+          >
+            Save
+          </button>
+          <button
+            onClick={onClose}
+            className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
+          >
+            Cancel
+          </button>
+        </div>
       </div>
     </div>
   );

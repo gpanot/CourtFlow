@@ -3,6 +3,12 @@ import { emitToPlayer, emitToVenue } from "./socket-server";
 import { getSkillIndex, QUEUE_LOOKAHEAD, MAX_SKILL_GAP, WARMUP_DURATION_SECONDS, AUTO_START_DELAY_SECONDS } from "./constants";
 import type { SkillLevel, GameType, GamePreference } from "@prisma/client";
 
+export interface GameTypeMix {
+  men: number;
+  women: number;
+  mixed: number;
+}
+
 async function emitCourtUpdate(venueId: string) {
   const allCourts = await prisma.court.findMany({
     where: { venueId, activeInSession: true },
@@ -44,6 +50,113 @@ function deriveGameType(players: QueueCandidate[]): GameType {
   return "mixed";
 }
 
+function checkPreferences(players: QueueCandidate[]): boolean {
+  for (const p of players) {
+    if (p.gamePreference === "same_gender") {
+      const allSame = players.every((o) => o.gender === p.gender);
+      if (!allSame) return false;
+    }
+  }
+  return true;
+}
+
+async function getSessionGameTypeCounts(sessionId: string): Promise<Record<GameType, number>> {
+  const assignments = await prisma.courtAssignment.findMany({
+    where: { sessionId, isWarmup: false },
+    select: { gameType: true },
+  });
+  const counts: Record<GameType, number> = { men: 0, women: 0, mixed: 0 };
+  for (const a of assignments) {
+    counts[a.gameType]++;
+  }
+  return counts;
+}
+
+/**
+ * Score how well a proposed game type moves toward the target mix.
+ * Lower score = better fit. Returns 0 if no target is set.
+ */
+function scoreMixDeviation(
+  proposed: GameType,
+  current: Record<GameType, number>,
+  target: GameTypeMix
+): number {
+  const totalAfter = current.men + current.women + current.mixed + 1;
+  const after = { ...current };
+  after[proposed]++;
+
+  const targetSum = target.men + target.women + target.mixed;
+  if (targetSum === 0) return 0;
+
+  let deviation = 0;
+  for (const gt of ["men", "women", "mixed"] as GameType[]) {
+    const actualPct = (after[gt] / totalAfter) * 100;
+    const targetPct = (target[gt] / targetSum) * 100;
+    deviation += Math.abs(actualPct - targetPct);
+  }
+  return deviation;
+}
+
+/**
+ * Select the best 4 players from the queue, considering:
+ * 1. Game type mix targets (if set)
+ * 2. Player preferences (same_gender)
+ * 3. FIFO fairness (penalise skipping too far)
+ */
+function selectBestFour(
+  candidates: QueueCandidate[],
+  currentCounts: Record<GameType, number>,
+  target: GameTypeMix | null
+): QueueCandidate[] | null {
+  if (candidates.length < 4) return null;
+
+  // No target: fall back to strict FIFO with preference respect
+  if (!target) {
+    const first4 = candidates.slice(0, 4);
+    if (checkPreferences(first4)) return first4;
+    // If preferences conflict in FIFO order, still take them (soft constraint)
+    return first4;
+  }
+
+  // With a target: evaluate combinations within the lookahead window.
+  // To keep it fast, we limit combinations (max 30 choose 4 = 27,405).
+  const pool = candidates.slice(0, QUEUE_LOOKAHEAD);
+  const n = pool.length;
+  if (n < 4) return null;
+
+  let bestCombo: QueueCandidate[] | null = null;
+  let bestScore = Infinity;
+
+  for (let a = 0; a < n - 3; a++) {
+    for (let b = a + 1; b < n - 2; b++) {
+      for (let c = b + 1; c < n - 1; c++) {
+        for (let d = c + 1; d < n; d++) {
+          const combo = [pool[a], pool[b], pool[c], pool[d]];
+
+          if (!checkPreferences(combo)) continue;
+
+          const gameType = deriveGameType(combo);
+          const mixScore = scoreMixDeviation(gameType, currentCounts, target);
+
+          // Penalise skipping: average index position (0-based).
+          // FIFO-perfect = indices 0,1,2,3 → avg 1.5 → penalty 0
+          const avgIdx = (a + b + c + d) / 4;
+          const skipPenalty = (avgIdx - 1.5) * 2;
+
+          const totalScore = mixScore + skipPenalty;
+
+          if (totalScore < bestScore) {
+            bestScore = totalScore;
+            bestCombo = combo;
+          }
+        }
+      }
+    }
+  }
+
+  return bestCombo;
+}
+
 export async function runRotation(
   venueId: string,
   sessionId: string,
@@ -52,17 +165,19 @@ export async function runRotation(
   const court = await prisma.court.findUnique({ where: { id: courtId } });
   if (!court || court.status !== "idle" || !court.activeInSession) return false;
 
+  const session = await prisma.session.findUnique({ where: { id: sessionId } });
+  const target = session?.gameTypeMix as GameTypeMix | null;
+
   const waitingEntries = await prisma.queueEntry.findMany({
     where: { sessionId, status: "waiting" },
     include: { player: true },
     orderBy: { joinedAt: "asc" },
-    take: 4,
+    take: QUEUE_LOOKAHEAD,
   });
 
   if (waitingEntries.length < 4) return false;
 
-  // Strict FIFO: take the first 4 waiting entries in queue order
-  const selectedPlayers: QueueCandidate[] = waitingEntries.slice(0, 4).map((e) => ({
+  const allCandidates: QueueCandidate[] = waitingEntries.map((e) => ({
     entryId: e.id,
     playerId: e.playerId,
     playerName: e.player.name,
@@ -73,6 +188,10 @@ export async function runRotation(
     joinedAt: e.joinedAt,
     totalPlayMinutesToday: e.totalPlayMinutesToday,
   }));
+
+  const currentCounts = target ? await getSessionGameTypeCounts(sessionId) : { men: 0, women: 0, mixed: 0 };
+  const selectedPlayers = selectBestFour(allCandidates, currentCounts, target);
+  if (!selectedPlayers) return false;
 
   const playerIds = selectedPlayers.map((p) => p.playerId);
   const groupIds = [...new Set(selectedPlayers.filter((p) => p.groupId).map((p) => p.groupId!))];

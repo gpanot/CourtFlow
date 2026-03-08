@@ -84,10 +84,29 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    let gameTypeMixStats = null;
+    if (session) {
+      const assignments = await prisma.courtAssignment.findMany({
+        where: { sessionId: session.id, isWarmup: false },
+        select: { gameType: true },
+      });
+      const played: Record<string, number> = { men: 0, women: 0, mixed: 0 };
+      for (const a of assignments) {
+        played[a.gameType] = (played[a.gameType] || 0) + 1;
+      }
+      const total = assignments.length;
+      gameTypeMixStats = {
+        target: session.gameTypeMix ?? null,
+        played,
+        totalGames: total,
+      };
+    }
+
     return json({
       session,
       courts: courtsWithPlayers,
       queue,
+      gameTypeMix: gameTypeMixStats,
     });
   } catch (e) {
     return error((e as Error).message, 500);

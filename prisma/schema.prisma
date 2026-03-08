@@ -136,12 +136,13 @@ model Court {
 }
 
 model Session {
-  id       String        @id @default(cuid())
-  venueId  String        @map("venue_id")
-  date     DateTime      @default(now())
-  openedAt DateTime      @default(now()) @map("opened_at")
-  closedAt DateTime?     @map("closed_at")
-  status   SessionStatus @default(open)
+  id           String        @id @default(cuid())
+  venueId      String        @map("venue_id")
+  date         DateTime      @default(now())
+  openedAt     DateTime      @default(now()) @map("opened_at")
+  closedAt     DateTime?     @map("closed_at")
+  status       SessionStatus @default(open)
+  gameTypeMix  Json?         @map("game_type_mix")
 
   venue            Venue              @relation(fields: [venueId], references: [id])
   queueEntries     QueueEntry[]
