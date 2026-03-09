@@ -16,7 +16,7 @@ interface PendingAuth {
 }
 
 export function OnboardingFlow() {
-  const { setAuth } = useSessionStore();
+  const { setAuth, clearAuth } = useSessionStore();
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
@@ -68,6 +68,7 @@ export function OnboardingFlow() {
 
   const finishBiometric = useCallback(() => {
     if (pendingAuth) {
+      clearAuth();
       setAuth({
         token: pendingAuth.token,
         playerId: pendingAuth.player.id,
@@ -77,7 +78,7 @@ export function OnboardingFlow() {
     } else {
       setStep("profile");
     }
-  }, [pendingAuth, setAuth]);
+  }, [pendingAuth, setAuth, clearAuth]);
 
   const handleBiometric = useCallback(async () => {
     setBiometricStatus("verifying");
@@ -120,6 +121,7 @@ export function OnboardingFlow() {
         gender,
         skillLevel: skill,
       });
+      clearAuth();
       setAuth({ token: res.token, playerId: res.player.id, role: "player", playerName: res.player.name });
     } catch (e) {
       setErr((e as Error).message);

@@ -5,18 +5,32 @@ import { requireSuperAdmin } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
-    requireSuperAdmin(request.headers);
+    const auth = requireSuperAdmin(request.headers);
+
+    const ownedVenues = await prisma.venue.findMany({
+      where: { staff: { some: { id: auth.id } } },
+      select: { id: true },
+    });
+    const ownedVenueIds = ownedVenues.map((v) => v.id);
 
     const venueId = request.nextUrl.searchParams.get("venueId");
-    const where = venueId ? { session: { venueId } } : {};
-    const venueWhere = venueId ? { venueId } : {};
+    const effectiveVenueIds = venueId
+      ? ownedVenueIds.filter((id) => id === venueId)
+      : ownedVenueIds;
 
-    const totalPlayers = await prisma.player.count();
-    const totalSessions = await prisma.session.count({ where: venueWhere });
-    const totalGames = await prisma.courtAssignment.count({ where });
+    const sessionWhere = { venueId: { in: effectiveVenueIds } };
+    const assignmentWhere = { session: { venueId: { in: effectiveVenueIds } } };
+
+    const totalPlayers = await prisma.queueEntry.findMany({
+      where: { session: { venueId: { in: effectiveVenueIds } } },
+      select: { playerId: true },
+      distinct: ["playerId"],
+    });
+    const totalSessions = await prisma.session.count({ where: sessionWhere });
+    const totalGames = await prisma.courtAssignment.count({ where: assignmentWhere });
 
     const recentSessions = await prisma.session.findMany({
-      where: venueWhere,
+      where: sessionWhere,
       orderBy: { openedAt: "desc" },
       take: 10,
       include: {
@@ -31,6 +45,7 @@ export async function GET(request: NextRequest) {
     });
 
     const venues = await prisma.venue.findMany({
+      where: { id: { in: ownedVenueIds } },
       include: {
         _count: {
           select: {
@@ -42,7 +57,7 @@ export async function GET(request: NextRequest) {
     });
 
     return json({
-      overview: { totalPlayers, totalSessions, totalGames },
+      overview: { totalPlayers: totalPlayers.length, totalSessions, totalGames },
       recentSessions: recentSessions.map((s) => ({
         id: s.id,
         venueName: s.venue.name,

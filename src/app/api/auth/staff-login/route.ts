@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
         role: staff.role,
         venues: staff.venues,
         venueId: firstVenueId || null,
+        onboardingCompleted: staff.onboardingCompleted,
       },
     });
   } catch (e) {

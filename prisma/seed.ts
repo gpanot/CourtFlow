@@ -43,13 +43,16 @@ async function main() {
   const adminPassword = bcrypt.hashSync("admin123", 10);
   await prisma.staffMember.upsert({
     where: { phone: "+10000000000" },
-    update: {},
+    update: { venues: { connect: [{ id: venue.id }] } },
     create: {
       id: "demo-superadmin",
       name: "Admin User",
       phone: "+10000000000",
+      email: "admin@courtflow.com",
       role: "superadmin",
       passwordHash: adminPassword,
+      onboardingCompleted: true,
+      venues: { connect: [{ id: venue.id }] },
     },
   });
 

@@ -41,6 +41,7 @@ export function PlayerHome() {
   const [session, setSession] = useState<{ id: string; status?: string } | null>(null);
   const [queueEntry, setQueueEntry] = useState<QueueEntry | null>(null);
   const [view, setView] = useState<PlayerView>("home");
+  const [initialLoading, setInitialLoading] = useState(true);
   const [notification, setNotification] = useState<Record<string, unknown> | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -74,6 +75,12 @@ export function PlayerHome() {
     }
   }, [searchParams, selectedVenue]);
 
+  const viewRef = useRef<PlayerView>("home");
+  const setViewTracked = useCallback((v: PlayerView) => {
+    viewRef.current = v;
+    setView(v);
+  }, []);
+
   const fetchPlayerState = useCallback(async () => {
     if (!selectedVenue) return;
     if (inRecapRef.current) return;
@@ -86,7 +93,7 @@ export function PlayerHome() {
 
       if (!sess) {
         setQueueEntry(null);
-        setView("home");
+        setViewTracked("home");
         return;
       }
 
@@ -129,28 +136,33 @@ export function PlayerHome() {
 
           switch (myEntry.status) {
             case "waiting":
-              setView("queue");
+              setViewTracked("queue");
               break;
             case "assigned":
-              setView("assigned");
+              setViewTracked("assigned");
               break;
             case "playing":
-              setView("playing");
+              setViewTracked("playing");
               break;
             case "on_break":
-              setView("break");
+              setViewTracked("break");
               break;
             default:
-              setView("home");
+              setViewTracked("home");
           }
+        } else if (viewRef.current === "home") {
+          setViewTracked("home");
         } else {
-          setView("home");
+          console.warn("[PlayerHome] Entry not found but view is", viewRef.current, "— retrying in 2s");
+          setTimeout(() => fetchPlayerState(), 2000);
         }
       }
     } catch (e) {
       console.error(e);
+    } finally {
+      setInitialLoading(false);
     }
-  }, [selectedVenue, playerId]);
+  }, [selectedVenue, playerId, setViewTracked]);
 
   useEffect(() => {
     if (!selectedVenue) return;
@@ -159,34 +171,40 @@ export function PlayerHome() {
     if (playerId) joinPlayer(playerId);
     fetchPlayerState();
 
+    const offConnect = on("connect", () => {
+      joinVenue(selectedVenue);
+      if (playerId) joinPlayer(playerId);
+      fetchPlayerState();
+    });
+
     const offNotif = on("player:notification", (data: unknown) => {
       const notif = data as Record<string, unknown>;
       setNotification(notif);
 
-      if (notif.type === "court_assigned") setView("assigned");
-      else if (notif.type === "warmup_ended") setView("playing");
+      if (notif.type === "court_assigned") setViewTracked("assigned");
+      else if (notif.type === "warmup_ended") setViewTracked("playing");
       else if (notif.type === "requeued") fetchPlayerState();
       else if (notif.type === "session_closing" || notif.type === "session_ended_by_staff") {
         const sid = (notif.sessionId as string) || session?.id;
         if (sid) {
           inRecapRef.current = true;
           setRecapSessionId(sid);
-          setView("session_recap");
+          setViewTracked("session_recap");
         } else {
           setQueueEntry(null);
-          setView("home");
+          setViewTracked("home");
         }
       } else if (notif.type === "removed_from_queue") {
         setQueueEntry(null);
-        setView("home");
+        setViewTracked("home");
       }
     });
 
     const offQueue = on("queue:updated", () => fetchPlayerState());
     const offSession = on("session:updated", () => fetchPlayerState());
 
-    return () => { offNotif(); offQueue(); offSession(); };
-  }, [selectedVenue, playerId, on, fetchPlayerState, setAuth]);
+    return () => { offConnect(); offNotif(); offQueue(); offSession(); };
+  }, [selectedVenue, playerId, on, fetchPlayerState, setAuth, setViewTracked]);
 
   if (showProfile) {
     return (
@@ -241,6 +259,14 @@ export function PlayerHome() {
   }
 
   const venueName = venues.find((v) => v.id === selectedVenue)?.name || "Venue";
+
+  if (initialLoading) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-700 border-t-green-500" />
+      </div>
+    );
+  }
 
   // Home - Join the Game
   if (view === "home") {
@@ -311,7 +337,7 @@ export function PlayerHome() {
           inRecapRef.current = false;
           setRecapSessionId(null);
           setQueueEntry(null);
-          setView("home");
+          setViewTracked("home");
         }}
       />
     );
@@ -387,15 +413,15 @@ export function PlayerHome() {
                           if (sid) {
                             inRecapRef.current = true;
                             setRecapSessionId(sid);
-                            setView("session_recap");
+                            setViewTracked("session_recap");
                           } else {
                             setQueueEntry(null);
-                            setView("home");
+                            setViewTracked("home");
                           }
                         } catch (e) {
                           console.error(e);
                           setQueueEntry(null);
-                          setView("home");
+                          setViewTracked("home");
                         }
                       }}
                       className="flex-1 rounded-xl bg-red-600 py-3 font-semibold text-white hover:bg-red-500"

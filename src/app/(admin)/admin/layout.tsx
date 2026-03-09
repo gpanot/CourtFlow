@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useSessionStore } from "@/stores/session-store";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { LayoutDashboard, MapPin, Users, UserCircle, BarChart3, LogOut, Menu, X } from "lucide-react";
+import { SetupWizardBanner } from "@/components/setup-wizard-banner";
 
 const navItems = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
@@ -16,9 +18,16 @@ const navItems = [
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { token, role, clearAuth } = useSessionStore();
+  const { token, role, onboardingCompleted, clearAuth } = useSessionStore();
   const pathname = usePathname();
+  const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (token && role === "superadmin" && onboardingCompleted === false) {
+      router.replace("/onboarding");
+    }
+  }, [token, role, onboardingCompleted, router]);
 
   if (!token || role !== "superadmin") {
     return (
@@ -33,6 +42,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </div>
     );
   }
+
+  if (onboardingCompleted === false) return null;
 
   return (
     <div className="flex min-h-dvh bg-neutral-950 text-white">
@@ -111,6 +122,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* Main content */}
       <main className="flex-1 overflow-y-auto p-4 pt-[73px] pb-20 md:p-6 md:pt-6 md:pb-6">
+        <SetupWizardBanner />
         {children}
       </main>
 

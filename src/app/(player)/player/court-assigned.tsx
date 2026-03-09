@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/cn";
 import { Link as LinkIcon, Flame, Coffee } from "lucide-react";
-import { formatTimer, WARMUP_DURATION_SECONDS } from "@/lib/constants";
+import { formatTimer, WARMUP_DURATION_SECONDS, AUTO_START_DELAY_SECONDS } from "@/lib/constants";
 import { api } from "@/lib/api-client";
 
 interface Teammate {
@@ -30,7 +30,7 @@ export function CourtAssignedScreen({ notification, venueId, onRefresh }: CourtA
   const teammates = (notification?.teammates as Teammate[]) || [];
   const gameType = (notification?.gameType as string) || "mixed";
   const isWarmup = (notification?.isWarmup as boolean) || false;
-  const [countdown, setCountdown] = useState(isWarmup ? WARMUP_DURATION_SECONDS : 180);
+  const [countdown, setCountdown] = useState(isWarmup ? WARMUP_DURATION_SECONDS : AUTO_START_DELAY_SECONDS);
   const [leaving, setLeaving] = useState(false);
 
   useEffect(() => {

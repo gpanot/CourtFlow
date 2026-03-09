@@ -7,8 +7,11 @@ let socket: Socket | null = null;
 export function getSocket(): Socket {
   if (!socket) {
     socket = io({
-      transports: ["websocket", "polling"],
+      transports: ["websocket"],
+      upgrade: false,
       autoConnect: true,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
     });
   }
   return socket;

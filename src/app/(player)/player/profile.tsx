@@ -109,20 +109,26 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
     setNotifToggling(true);
     try {
       const newValue = !notificationsEnabled;
-      if (newValue) {
-        const subscribed = await subscribeToPush(playerId);
-        if (!subscribed) {
+
+      if (newValue && isPushSupported() && Notification.permission !== "granted") {
+        const perm = await Notification.requestPermission();
+        if (perm !== "granted") {
           setNotifToggling(false);
           return;
         }
-      } else {
-        await unsubscribeFromPush();
       }
+
       const res = await api.patch<{ notificationsEnabled: boolean }>(
         `/api/players/${playerId}/notifications`,
         { notificationsEnabled: newValue }
       );
       setNotificationsEnabled(res.notificationsEnabled);
+
+      if (newValue) {
+        subscribeToPush(playerId).catch(() => {});
+      } else {
+        unsubscribeFromPush().catch(() => {});
+      }
     } catch (e) {
       console.error("Toggle notifications failed:", e);
     } finally {

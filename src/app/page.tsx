@@ -10,28 +10,33 @@ export default function LandingPage() {
 
       <div className="grid w-full max-w-sm gap-3">
         <Link
-          href="/player"
+          href="/signup"
           className="flex h-14 items-center justify-center rounded-xl bg-green-600 text-lg font-semibold text-white transition-colors hover:bg-green-500"
         >
-          Player
+          Sign Up
         </Link>
         <Link
           href="/staff"
           className="flex h-14 items-center justify-center rounded-xl bg-blue-600 text-lg font-semibold text-white transition-colors hover:bg-blue-500"
         >
-          Staff Dashboard
+          Login
+        </Link>
+      </div>
+
+      <div className="h-px w-full max-w-sm bg-neutral-800" />
+
+      <div className="grid w-full max-w-sm gap-3">
+        <Link
+          href="/player"
+          className="flex h-12 items-center justify-center rounded-xl bg-neutral-800 text-sm font-medium text-neutral-300 transition-colors hover:bg-neutral-700"
+        >
+          Player App
         </Link>
         <Link
           href="/tv"
-          className="flex h-14 items-center justify-center rounded-xl bg-neutral-700 text-lg font-semibold text-white transition-colors hover:bg-neutral-600"
+          className="flex h-12 items-center justify-center rounded-xl bg-neutral-800 text-sm font-medium text-neutral-300 transition-colors hover:bg-neutral-700"
         >
           TV Display
-        </Link>
-        <Link
-          href="/staff"
-          className="flex h-14 items-center justify-center rounded-xl bg-purple-700 text-lg font-semibold text-white transition-colors hover:bg-purple-600"
-        >
-          Super Admin
         </Link>
       </div>
 

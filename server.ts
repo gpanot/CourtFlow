@@ -19,7 +19,7 @@ app.prepare().then(() => {
       origin: "*",
       methods: ["GET", "POST"],
     },
-    transports: ["websocket", "polling"],
+    transports: ["websocket"],
   });
 
   // Make io available to API routes via global

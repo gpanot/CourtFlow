@@ -1,5 +1,7 @@
 "use client";
 
+import { useSessionStore } from "@/stores/session-store";
+
 function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -46,8 +48,7 @@ export async function subscribeToPush(playerId: string): Promise<boolean> {
     }
 
     const subJson = subscription.toJSON();
-    const token =
-      JSON.parse(localStorage.getItem("courtflow-session") || "{}")?.state?.token;
+    const token = useSessionStore.getState().token;
 
     await fetch("/api/push/subscribe", {
       method: "POST",
@@ -78,8 +79,7 @@ export async function unsubscribeFromPush(): Promise<boolean> {
     const subscription = await registration.pushManager.getSubscription();
     if (!subscription) return true;
 
-    const token =
-      JSON.parse(localStorage.getItem("courtflow-session") || "{}")?.state?.token;
+    const token = useSessionStore.getState().token;
 
     await fetch("/api/push/unsubscribe", {
       method: "POST",

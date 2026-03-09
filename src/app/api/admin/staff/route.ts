@@ -5,10 +5,28 @@ import { requireSuperAdmin, hashPassword } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
-    requireSuperAdmin(request.headers);
+    const auth = requireSuperAdmin(request.headers);
+
+    const ownedVenueIds = (
+      await prisma.venue.findMany({
+        where: { staff: { some: { id: auth.id } } },
+        select: { id: true },
+      })
+    ).map((v) => v.id);
 
     const staff = await prisma.staffMember.findMany({
-      include: { venues: { select: { id: true, name: true } } },
+      where: {
+        OR: [
+          { id: auth.id },
+          { venues: { some: { id: { in: ownedVenueIds } } } },
+        ],
+      },
+      include: {
+        venues: {
+          where: { id: { in: ownedVenueIds } },
+          select: { id: true, name: true },
+        },
+      },
       orderBy: { createdAt: "desc" },
     });
 

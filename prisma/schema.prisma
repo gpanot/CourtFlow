@@ -63,12 +63,16 @@ enum StaffRole {
 }
 
 model Venue {
-  id        String    @id @default(cuid())
-  name      String
-  location  String?
-  settings  Json      @default("{}")
-  active    Boolean   @default(true)
-  createdAt DateTime  @default(now()) @map("created_at")
+  id                 String    @id @default(cuid())
+  name               String
+  location           String?
+  settings           Json      @default("{}")
+  active             Boolean   @default(true)
+  expectedMaxPlayers Int?      @map("expected_max_players")
+  playFrequency      String?   @map("play_frequency")
+  playTypes          String[]  @default([]) @map("play_types")
+  painPoints         String[]  @default([]) @map("pain_points")
+  createdAt          DateTime  @default(now()) @map("created_at")
 
   courts       Court[]
   sessions     Session[]
@@ -109,12 +113,14 @@ model PushSubscription {
 }
 
 model StaffMember {
-  id           String    @id @default(cuid())
-  name         String
-  phone        String    @unique
-  role         StaffRole @default(staff)
-  passwordHash String    @map("password_hash")
-  createdAt    DateTime  @default(now()) @map("created_at")
+  id                  String    @id @default(cuid())
+  name                String
+  phone               String    @unique
+  email               String?   @unique
+  role                StaffRole @default(staff)
+  passwordHash        String    @map("password_hash")
+  onboardingCompleted Boolean   @default(false) @map("onboarding_completed")
+  createdAt           DateTime  @default(now()) @map("created_at")
 
   venues    Venue[]
   auditLogs AuditLog[]

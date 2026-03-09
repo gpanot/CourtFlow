@@ -5,9 +5,10 @@ import { requireSuperAdmin } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   try {
-    requireSuperAdmin(request.headers);
+    const auth = requireSuperAdmin(request.headers);
 
     const venues = await prisma.venue.findMany({
+      where: { staff: { some: { id: auth.id } } },
       include: {
         courts: true,
         sessions: {
@@ -27,13 +28,14 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    requireSuperAdmin(request.headers);
+    const auth = requireSuperAdmin(request.headers);
     const body = await parseBody<{ name: string; location?: string }>(request);
 
     const venue = await prisma.venue.create({
       data: {
         name: body.name,
         location: body.location || null,
+        staff: { connect: { id: auth.id } },
         settings: {
           autoStartDelay: 180,
           postGameTimeout: 180,

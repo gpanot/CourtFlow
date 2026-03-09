@@ -1,12 +1,13 @@
 "use client";
 
+import { useSessionStore } from "@/stores/session-store";
+
 const BASE = "";
 
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
-  const token =
-    typeof window !== "undefined"
-      ? JSON.parse(localStorage.getItem("courtflow-session") || "{}")?.state?.token
-      : null;
+  const token = typeof window !== "undefined"
+    ? useSessionStore.getState().token
+    : null;
 
   const res = await fetch(`${BASE}${url}`, {
     ...options,
