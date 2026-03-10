@@ -250,14 +250,12 @@ export default function OnboardingPage() {
       {/* Navigation */}
       <div className="border-t border-neutral-800 px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
         <div className="mx-auto flex max-w-lg gap-3">
-          {step > 0 && (
-            <button
-              onClick={back}
-              className="flex items-center gap-1 rounded-xl bg-neutral-800 px-5 py-3 text-sm font-medium text-neutral-300 hover:bg-neutral-700"
-            >
-              <ChevronLeft className="h-4 w-4" /> Back
-            </button>
-          )}
+          <button
+            onClick={step === 0 ? () => router.back() : back}
+            className="flex items-center gap-1 rounded-xl bg-neutral-800 px-5 py-3 text-sm font-medium text-neutral-300 hover:bg-neutral-700"
+          >
+            <ChevronLeft className="h-4 w-4" /> Back
+          </button>
           <button
             onClick={next}
             disabled={!canProceed() || saving}

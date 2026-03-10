@@ -26,17 +26,9 @@ export default function StaffPage() {
 
   useEffect(() => {
     if (token && staffId && role === "superadmin" && !showRoleChoice) {
-      if (!onboardingCompleted) {
-        router.replace("/onboarding");
-      } else {
-        router.replace("/admin");
-      }
+      setShowRoleChoice(true);
     }
-  }, [token, staffId, role, onboardingCompleted, showRoleChoice, router]);
-
-  if (token && staffId && role === "superadmin" && !showRoleChoice) {
-    return null;
-  }
+  }, [token, staffId, role, showRoleChoice]);
 
   if (token && staffId && venueId && !showRoleChoice) {
     return <StaffDashboard />;
@@ -56,7 +48,7 @@ export default function StaffPage() {
             <button
               onClick={() => {
                 setShowRoleChoice(false);
-                router.replace("/admin");
+                router.replace(onboardingCompleted ? "/admin" : "/onboarding");
               }}
               className="flex w-full items-center gap-4 rounded-xl border border-purple-500/30 bg-purple-600/10 p-4 text-left transition-colors hover:bg-purple-600/20"
             >
