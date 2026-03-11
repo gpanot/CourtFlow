@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (e) {
-    return error((e as Error).message, 500);
+    console.error("[staff-login]", e);
+    return error("Something went wrong. Please try again later.", 500);
   }
 }

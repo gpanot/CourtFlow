@@ -178,7 +178,12 @@ export default function StaffPage() {
         setErr("No venue assigned. Contact an admin.");
       }
     } catch (e) {
-      setErr((e as Error).message);
+      const msg = (e as Error).message;
+      if (msg.includes("prisma") || msg.includes("column") || msg.includes("database") || msg.includes("ECONNREFUSED")) {
+        setErr("Unable to connect right now. Please try again later.");
+      } else {
+        setErr(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -285,31 +290,54 @@ export default function StaffPage() {
             <ChevronDown className={`h-3 w-3 transition-transform ${showDemo ? "rotate-180" : ""}`} />
           </button>
           {showDemo && (
-            <div className="mt-2.5 flex justify-center gap-2">
-              <button
-                type="button"
-                onClick={() => { setPhone("+10000000001"); setPassword("staff123"); }}
-                className="rounded-md border border-neutral-800 bg-neutral-900/60 px-4 py-1.5 text-xs font-medium text-neutral-400 transition-colors hover:border-neutral-700 hover:text-white"
+            <div className="mt-3 space-y-3">
+              <div>
+                <p className="mb-1.5 text-center text-[10px] font-medium uppercase tracking-wider text-neutral-700">Local</p>
+                <div className="flex justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setPhone("+10000000001"); setPassword("staff123"); }}
+                    className="rounded-md border border-neutral-800 bg-neutral-900/60 px-4 py-1.5 text-xs font-medium text-neutral-400 transition-colors hover:border-neutral-700 hover:text-white"
+                  >
+                    Staff
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setPhone("+10000000000"); setPassword("admin123"); }}
+                    className="rounded-md border border-neutral-800 bg-neutral-900/60 px-4 py-1.5 text-xs font-medium text-neutral-400 transition-colors hover:border-neutral-700 hover:text-white"
+                  >
+                    Admin
+                  </button>
+                </div>
+              </div>
+              <div>
+                <p className="mb-1.5 text-center text-[10px] font-medium uppercase tracking-wider text-neutral-700">Railway Prod</p>
+                <div className="flex justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setPhone("+10000000001"); setPassword("staff123"); }}
+                    className="rounded-md border border-neutral-800 bg-neutral-900/60 px-4 py-1.5 text-xs font-medium text-neutral-400 transition-colors hover:border-neutral-700 hover:text-white"
+                  >
+                    Staff
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setPhone("+10000000000"); setPassword("admin123"); }}
+                    className="rounded-md border border-neutral-800 bg-neutral-900/60 px-4 py-1.5 text-xs font-medium text-neutral-400 transition-colors hover:border-neutral-700 hover:text-white"
+                  >
+                    Admin
+                  </button>
+                </div>
+              </div>
+              <Link
+                href="/"
+                className="block text-center text-xs text-neutral-600 transition-colors hover:text-neutral-400"
               >
-                Staff
-              </button>
-              <button
-                type="button"
-                onClick={() => { setPhone("+10000000000"); setPassword("admin123"); }}
-                className="rounded-md border border-neutral-800 bg-neutral-900/60 px-4 py-1.5 text-xs font-medium text-neutral-400 transition-colors hover:border-neutral-700 hover:text-white"
-              >
-                Admin
-              </button>
+                &larr; Back to home
+              </Link>
             </div>
           )}
         </div>
-
-        <Link
-          href="/"
-          className="mt-6 block text-center text-xs text-neutral-600 transition-colors hover:text-neutral-400"
-        >
-          &larr; Back to home
-        </Link>
       </div>
     </div>
   );

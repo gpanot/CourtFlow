@@ -38,9 +38,14 @@ const SETUP_STEPS = [
   },
 ];
 
+const DISMISSED_KEY = "courtflow:setup-banner-dismissed";
+
 export function SetupWizardBanner() {
   const [status, setStatus] = useState<SetupStatus | null>(null);
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, setDismissed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem(DISMISSED_KEY) === "true";
+  });
   const [collapsed, setCollapsed] = useState(false);
 
   const fetchStatus = useCallback(() => {
@@ -232,7 +237,12 @@ export function SetupWizardBanner() {
           {/* Dismiss */}
           <div className="mt-3 flex justify-end">
             <button
-              onClick={() => setDismissed(true)}
+              onClick={() => {
+                if (allSetupDone) {
+                  localStorage.setItem(DISMISSED_KEY, "true");
+                }
+                setDismissed(true);
+              }}
               className="text-[11px] text-neutral-600 hover:text-neutral-400"
             >
               Dismiss
