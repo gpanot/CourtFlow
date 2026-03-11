@@ -6,7 +6,15 @@ import { useSessionStore } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { SKILL_LEVELS, SKILL_DESCRIPTIONS, type SkillLevelType } from "@/lib/constants";
 import { cn } from "@/lib/cn";
-import { isBiometricSupported, requestBiometricVerification } from "@/lib/biometric";
+import {
+  isBiometricSupported,
+  requestBiometricVerification,
+  authenticateWithBiometric,
+  hasBiometricCredential,
+  getBiometricPlayer,
+  storeBiometricPlayer,
+  clearBiometricData,
+} from "@/lib/biometric";
 
 type Step = "phone" | "otp" | "biometric" | "profile";
 
@@ -29,7 +37,61 @@ export function OnboardingFlow() {
   const [pendingAuth, setPendingAuth] = useState<PendingAuth | null>(null);
   const [biometricAvailable, setBiometricAvailable] = useState<boolean | null>(null);
   const [biometricStatus, setBiometricStatus] = useState<"idle" | "verifying" | "success" | "failed">("idle");
+  const [canQuickLogin, setCanQuickLogin] = useState(false);
+  const [quickLoginName, setQuickLoginName] = useState("");
+  const [quickLoginStatus, setQuickLoginStatus] = useState<"idle" | "verifying" | "success" | "failed">("idle");
   const sendBtnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (hasBiometricCredential()) {
+      const player = getBiometricPlayer();
+      if (player) {
+        isBiometricSupported().then((supported) => {
+          if (supported) {
+            setCanQuickLogin(true);
+            setQuickLoginName(player.playerName);
+          }
+        });
+      }
+    }
+  }, []);
+
+  const handleQuickLogin = async () => {
+    setQuickLoginStatus("verifying");
+    setErr("");
+    const ok = await authenticateWithBiometric();
+    if (!ok) {
+      setQuickLoginStatus("failed");
+      setErr("Biometric verification failed. Try again or use your phone number.");
+      return;
+    }
+    setQuickLoginStatus("success");
+    const player = getBiometricPlayer();
+    if (!player) {
+      setQuickLoginStatus("failed");
+      setErr("Stored credentials not found. Please log in with your phone number.");
+      setCanQuickLogin(false);
+      return;
+    }
+    try {
+      const res = await api.post<{ token: string; player: { id: string; name: string } }>(
+        "/api/auth/biometric-login",
+        { playerId: player.playerId }
+      );
+      clearAuth();
+      setAuth({
+        token: res.token,
+        playerId: res.player.id,
+        role: "player",
+        playerName: res.player.name,
+      });
+    } catch {
+      setQuickLoginStatus("failed");
+      setErr("Login failed. Please log in with your phone number.");
+      clearBiometricData();
+      setCanQuickLogin(false);
+    }
+  };
 
   const sendOtp = async () => {
     setErr("");
@@ -69,6 +131,11 @@ export function OnboardingFlow() {
 
   const finishBiometric = useCallback(() => {
     if (pendingAuth) {
+      storeBiometricPlayer({
+        playerId: pendingAuth.player.id,
+        playerName: pendingAuth.player.name,
+        phone,
+      });
       clearAuth();
       setAuth({
         token: pendingAuth.token,
@@ -79,7 +146,7 @@ export function OnboardingFlow() {
     } else {
       setStep("profile");
     }
-  }, [pendingAuth, setAuth, clearAuth]);
+  }, [pendingAuth, phone, setAuth, clearAuth]);
 
   const handleBiometric = useCallback(async () => {
     setBiometricStatus("verifying");
@@ -122,6 +189,11 @@ export function OnboardingFlow() {
         gender,
         skillLevel: skill,
       });
+      storeBiometricPlayer({
+        playerId: res.player.id,
+        playerName: res.player.name,
+        phone,
+      });
       clearAuth();
       setAuth({ token: res.token, playerId: res.player.id, role: "player", playerName: res.player.name });
     } catch (e) {
@@ -142,6 +214,46 @@ export function OnboardingFlow() {
 
       {step === "phone" && (
         <div className="space-y-4">
+          {canQuickLogin && (
+            <div className="space-y-3">
+              {quickLoginStatus === "verifying" ? (
+                <div className="flex flex-col items-center gap-3 py-4">
+                  <div className="flex h-16 w-16 animate-pulse items-center justify-center rounded-full bg-green-600/20 ring-2 ring-green-500/50">
+                    <svg className="h-8 w-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M7.864 4.243A7.5 7.5 0 0 1 19.5 10.5c0 2.92-.556 5.709-1.568 8.268M5.742 6.364A7.465 7.465 0 0 0 4.5 10.5a48.667 48.667 0 0 0-1.26 7.584M12 10.5a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm-5.684 7.59a47.5 47.5 0 0 1-.192-3.59 5.25 5.25 0 0 1 10.5 0 48.22 48.22 0 0 1-.472 6.932M9.016 18.87a47.074 47.074 0 0 1-.397-4.37 3 3 0 0 1 6 0c0 1.528-.085 3.04-.248 4.525" />
+                    </svg>
+                  </div>
+                  <p className="text-neutral-400">Verifying...</p>
+                </div>
+              ) : quickLoginStatus === "success" ? (
+                <div className="flex flex-col items-center gap-3 py-4">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-green-600/20 ring-2 ring-green-500">
+                    <svg className="h-8 w-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                    </svg>
+                  </div>
+                  <p className="font-medium text-green-400">Welcome back!</p>
+                </div>
+              ) : (
+                <>
+                  <button
+                    onClick={handleQuickLogin}
+                    className="flex w-full items-center justify-center gap-3 rounded-xl bg-green-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-500"
+                  >
+                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M7.864 4.243A7.5 7.5 0 0 1 19.5 10.5c0 2.92-.556 5.709-1.568 8.268M5.742 6.364A7.465 7.465 0 0 0 4.5 10.5a48.667 48.667 0 0 0-1.26 7.584M12 10.5a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm-5.684 7.59a47.5 47.5 0 0 1-.192-3.59 5.25 5.25 0 0 1 10.5 0 48.22 48.22 0 0 1-.472 6.932M9.016 18.87a47.074 47.074 0 0 1-.397-4.37 3 3 0 0 1 6 0c0 1.528-.085 3.04-.248 4.525" />
+                    </svg>
+                    Log in as {quickLoginName}
+                  </button>
+                  <div className="flex items-center gap-3">
+                    <div className="h-px flex-1 bg-neutral-800" />
+                    <span className="text-xs text-neutral-500">or use phone number</span>
+                    <div className="h-px flex-1 bg-neutral-800" />
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           <input
             type="tel"
             placeholder="Phone number"
@@ -153,7 +265,7 @@ export function OnboardingFlow() {
               }, 350);
             }}
             className="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-4 py-4 text-lg text-white placeholder:text-neutral-500 focus:border-green-500 focus:outline-none"
-            autoFocus
+            autoFocus={!canQuickLogin}
           />
           <button
             ref={sendBtnRef}
