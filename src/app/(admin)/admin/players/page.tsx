@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { Search, X, SlidersHorizontal } from "lucide-react";
+import { Search, X, SlidersHorizontal, Users, UserPlus, Clock, Activity, Hourglass, Gauge } from "lucide-react";
 
 interface PlayerRecord {
   id: string;
@@ -20,6 +20,25 @@ interface PlayerRecord {
   isActiveToday: boolean;
 }
 
+interface PlayerStats {
+  totalPlayers: number;
+  activeToday: number;
+  newThisWeek: number;
+  newThisMonth: number;
+  totalPlayMinutes: number;
+  totalWaitMinutes: number;
+  waitPlayRatio: number;
+  skillDistribution: Record<string, number>;
+}
+
+function getExperienceLabel(ratio: number): { label: string; color: string; bgColor: string; borderColor: string } {
+  if (ratio < 25) return { label: "Excellent", color: "text-green-400", bgColor: "bg-green-500/15", borderColor: "border-green-500/30" };
+  if (ratio < 40) return { label: "Good Player Experience", color: "text-blue-400", bgColor: "bg-blue-500/15", borderColor: "border-blue-500/30" };
+  if (ratio < 50) return { label: "You may need to open more courts", color: "text-amber-400", bgColor: "bg-amber-500/15", borderColor: "border-amber-500/30" };
+  if (ratio === 50) return { label: "Players wait for too long!", color: "text-orange-400", bgColor: "bg-orange-500/15", borderColor: "border-orange-500/30" };
+  return { label: "Urgent: add more courts", color: "text-red-400", bgColor: "bg-red-500/15", borderColor: "border-red-500/30" };
+}
+
 interface Venue { id: string; name: string; }
 
 const SKILL_COLORS: Record<string, string> = {
@@ -32,6 +51,7 @@ const SKILL_COLORS: Record<string, string> = {
 export default function PlayersPage() {
   const [players, setPlayers] = useState<PlayerRecord[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
+  const [stats, setStats] = useState<PlayerStats | null>(null);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -52,11 +72,12 @@ export default function PlayersPage() {
       if (statusFilter) params.set("status", statusFilter);
       params.set("page", String(page));
 
-      const data = await api.get<{ players: PlayerRecord[]; total: number }>(
+      const data = await api.get<{ players: PlayerRecord[]; total: number; stats: PlayerStats }>(
         `/api/admin/players?${params.toString()}`
       );
       setPlayers(data.players);
       setTotal(data.total);
+      setStats(data.stats);
     } catch (e) {
       console.error(e);
     } finally {
@@ -84,12 +105,80 @@ export default function PlayersPage() {
     setSearch(""); setVenueFilter(""); setSkillFilter(""); setStatusFilter(""); setPage(1);
   };
 
+  const fmtPlayTime = (m: number) => {
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    return h >= 1000 ? `${(h / 1000).toFixed(1)}k h` : `${h}h`;
+  };
+
+  const skillOrder = ["beginner", "intermediate", "advanced", "pro"] as const;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold md:text-2xl">Player Directory</h2>
         <span className="text-sm text-neutral-500">{total} player{total !== 1 ? "s" : ""}</span>
       </div>
+
+      {/* Stats */}
+      {stats && (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-6 md:gap-3">
+            <StatCard icon={Users} label="Total Players" value={stats.totalPlayers} color="text-purple-400" />
+            <StatCard icon={Activity} label="Active Today" value={stats.activeToday} color="text-green-400" highlight={stats.activeToday > 0} />
+            <StatCard icon={UserPlus} label="New This Week" value={stats.newThisWeek} sub={`${stats.newThisMonth} this month`} color="text-blue-400" />
+            <StatCard icon={Clock} label="Total Play Time" value={fmtPlayTime(stats.totalPlayMinutes)} color="text-amber-400" />
+            <StatCard icon={Hourglass} label="Total Wait Time" value={fmtPlayTime(stats.totalWaitMinutes)} color="text-orange-400" />
+            <WaitRatioCard ratio={stats.waitPlayRatio} />
+          </div>
+
+          {/* Skill distribution bar */}
+          {stats.totalPlayers > 0 && (
+            <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 md:p-4">
+              <p className="mb-2.5 text-xs font-medium text-neutral-400">Skill Distribution</p>
+              <div className="flex h-2.5 overflow-hidden rounded-full">
+                {skillOrder.map((level) => {
+                  const count = stats.skillDistribution[level] ?? 0;
+                  const pct = (count / stats.totalPlayers) * 100;
+                  if (pct === 0) return null;
+                  const barColor: Record<string, string> = {
+                    beginner: "bg-green-500",
+                    intermediate: "bg-blue-500",
+                    advanced: "bg-amber-500",
+                    pro: "bg-red-500",
+                  };
+                  return (
+                    <div
+                      key={level}
+                      className={cn("transition-all", barColor[level])}
+                      style={{ width: `${pct}%` }}
+                      title={`${level}: ${count} (${Math.round(pct)}%)`}
+                    />
+                  );
+                })}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+                {skillOrder.map((level) => {
+                  const count = stats.skillDistribution[level] ?? 0;
+                  if (count === 0) return null;
+                  return (
+                    <div key={level} className="flex items-center gap-1.5">
+                      <span className={cn("h-2 w-2 rounded-full", {
+                        "bg-green-500": level === "beginner",
+                        "bg-blue-500": level === "intermediate",
+                        "bg-amber-500": level === "advanced",
+                        "bg-red-500": level === "pro",
+                      })} />
+                      <span className="text-[11px] text-neutral-400 capitalize">{level}</span>
+                      <span className="text-[11px] text-neutral-600">{count}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Search + filter toggle (mobile) / inline filters (desktop) */}
       <div className="space-y-2">
@@ -320,6 +409,58 @@ export default function PlayersPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  color,
+  highlight,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string | number;
+  sub?: string;
+  color: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div className={cn(
+      "rounded-xl border bg-neutral-900 p-3 md:p-4",
+      highlight ? "border-green-500/30" : "border-neutral-800"
+    )}>
+      <Icon className={cn("mb-1.5 h-4 w-4 md:h-5 md:w-5", color)} />
+      <p className="text-lg font-bold tabular-nums md:text-2xl">{value}</p>
+      <p className="text-[11px] text-neutral-500 md:text-xs">{label}</p>
+      {sub && <p className="mt-0.5 text-[10px] text-neutral-600">{sub}</p>}
+    </div>
+  );
+}
+
+function WaitRatioCard({ ratio }: { ratio: number }) {
+  const exp = getExperienceLabel(ratio);
+  const barPct = Math.min(ratio, 100);
+  const barColor =
+    ratio < 25 ? "bg-green-500" :
+    ratio < 40 ? "bg-blue-500" :
+    ratio < 50 ? "bg-amber-500" :
+    ratio === 50 ? "bg-orange-500" : "bg-red-500";
+
+  return (
+    <div className={cn("rounded-xl border bg-neutral-900 p-3 md:p-4", exp.borderColor)}>
+      <Gauge className={cn("mb-1.5 h-4 w-4 md:h-5 md:w-5", exp.color)} />
+      <p className="text-lg font-bold tabular-nums md:text-2xl">{ratio}%</p>
+      <p className="text-[11px] text-neutral-500 md:text-xs">Wait / Play Ratio</p>
+      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-neutral-800">
+        <div className={cn("h-full rounded-full transition-all", barColor)} style={{ width: `${barPct}%` }} />
+      </div>
+      <div className={cn("mt-2 inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium md:text-[11px]", exp.bgColor, exp.color)}>
+        {exp.label}
+      </div>
     </div>
   );
 }

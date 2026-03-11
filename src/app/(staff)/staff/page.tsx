@@ -271,14 +271,6 @@ export default function StaffPage() {
           </form>
         </div>
 
-        {/* Below card */}
-        <p className="mt-5 text-center text-sm text-neutral-500">
-          Don&apos;t have an account?{" "}
-          <Link href="/signup" className="font-medium text-green-400 transition-colors hover:text-green-300">
-            Sign up
-          </Link>
-        </p>
-
         {/* Demo shortcuts */}
         <div className="mt-6">
           <button

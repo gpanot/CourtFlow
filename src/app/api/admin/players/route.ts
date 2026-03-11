@@ -46,7 +46,12 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    const [players, total] = await Promise.all([
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const [players, total, totalPlayers, newThisWeek, newThisMonth, skillCounts, activeEntries, playTimeAgg, waitingEntries] = await Promise.all([
       prisma.player.findMany({
         where,
         orderBy: { createdAt: "desc" },
@@ -64,7 +69,59 @@ export async function GET(request: NextRequest) {
         },
       }),
       prisma.player.count({ where }),
+      prisma.player.count(),
+      prisma.player.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
+      prisma.player.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
+      prisma.player.groupBy({ by: ["skillLevel"], _count: true }),
+      prisma.queueEntry.findMany({
+        where: {
+          session: { status: "open" },
+          status: { in: ["waiting", "on_break", "playing", "assigned"] },
+        },
+        select: { playerId: true },
+        distinct: ["playerId"],
+      }),
+      prisma.queueEntry.aggregate({ _sum: { totalPlayMinutesToday: true } }),
+      prisma.queueEntry.findMany({
+        select: {
+          joinedAt: true,
+          totalPlayMinutesToday: true,
+          status: true,
+          session: { select: { status: true, closedAt: true } },
+        },
+      }),
     ]);
+
+    const now = new Date();
+    let globalPlayMinutes = 0;
+    let globalWaitMinutes = 0;
+    for (const entry of waitingEntries) {
+      const sessionEnd = entry.session.closedAt ?? now;
+      const presenceMin = Math.max(
+        0,
+        Math.round((sessionEnd.getTime() - entry.joinedAt.getTime()) / 60000)
+      );
+      const playMin = entry.totalPlayMinutesToday;
+      globalPlayMinutes += playMin;
+      globalWaitMinutes += Math.max(0, presenceMin - playMin);
+    }
+    const totalPresence = globalWaitMinutes + globalPlayMinutes;
+    const waitPlayRatio = totalPresence > 0
+      ? Math.round((globalWaitMinutes / totalPresence) * 100)
+      : 0;
+
+    const stats = {
+      totalPlayers,
+      activeToday: activeEntries.length,
+      newThisWeek,
+      newThisMonth,
+      totalPlayMinutes: playTimeAgg._sum.totalPlayMinutesToday ?? 0,
+      totalWaitMinutes: globalWaitMinutes,
+      waitPlayRatio,
+      skillDistribution: Object.fromEntries(
+        skillCounts.map((s) => [s.skillLevel, s._count])
+      ),
+    };
 
     const result = players.map((player) => {
       const sessions = new Set<string>();
@@ -110,10 +167,10 @@ export async function GET(request: NextRequest) {
     });
 
     if (status === "inactive") {
-      return json({ players: result.filter((p) => !p.isActiveToday), total, page, limit });
+      return json({ players: result.filter((p) => !p.isActiveToday), total, page, limit, stats });
     }
 
-    return json({ players: result, total, page, limit });
+    return json({ players: result, total, page, limit, stats });
   } catch (e) {
     return error((e as Error).message, 500);
   }

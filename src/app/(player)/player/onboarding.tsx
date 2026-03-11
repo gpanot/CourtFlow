@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useSessionStore } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
@@ -29,6 +29,7 @@ export function OnboardingFlow() {
   const [pendingAuth, setPendingAuth] = useState<PendingAuth | null>(null);
   const [biometricAvailable, setBiometricAvailable] = useState<boolean | null>(null);
   const [biometricStatus, setBiometricStatus] = useState<"idle" | "verifying" | "success" | "failed">("idle");
+  const sendBtnRef = useRef<HTMLButtonElement>(null);
 
   const sendOtp = async () => {
     setErr("");
@@ -146,10 +147,16 @@ export function OnboardingFlow() {
             placeholder="Phone number"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
+            onFocus={() => {
+              setTimeout(() => {
+                sendBtnRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+              }, 350);
+            }}
             className="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-4 py-4 text-lg text-white placeholder:text-neutral-500 focus:border-green-500 focus:outline-none"
             autoFocus
           />
           <button
+            ref={sendBtnRef}
             onClick={sendOtp}
             disabled={loading || !phone}
             className="w-full rounded-xl bg-green-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50"
@@ -353,7 +360,7 @@ export function OnboardingFlow() {
         </div>
       )}
 
-      <Link href="/" className="mt-6 block text-center text-sm text-neutral-500 hover:text-neutral-300">
+      <Link href="/" className="mt-6 block text-center text-sm text-black">
         ← Home
       </Link>
     </div>
