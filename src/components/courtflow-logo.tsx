@@ -6,6 +6,7 @@ interface CourtFlowLogoProps {
   linkTo?: string;
   size?: "small" | "default" | "large";
   dark?: boolean;
+  onTitleClick?: () => void;
 }
 
 const sizeMap = { small: 24, default: 32, large: 48 };
@@ -38,6 +39,7 @@ export function CourtFlowLogo({
   linkTo = "/",
   size = "default",
   dark = false,
+  onTitleClick,
 }: CourtFlowLogoProps) {
   const px = sizeMap[size];
   const textCls = `${textMap[size]} font-bold ${dark ? "text-white" : "text-gray-900"}`;
@@ -45,7 +47,7 @@ export function CourtFlowLogo({
   const content = (
     <>
       <CourtIcon px={px} />
-      <span className={textCls}>CourtFlow</span>
+      <span className={`${textCls} ${onTitleClick ? "cursor-pointer select-none" : ""}`} onClick={onTitleClick}>CourtFlow</span>
     </>
   );
 

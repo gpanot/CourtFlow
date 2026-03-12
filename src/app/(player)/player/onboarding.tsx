@@ -10,7 +10,6 @@ import {
   isBiometricSupported,
   requestBiometricVerification,
   authenticateWithBiometric,
-  hasBiometricCredential,
   getBiometricPlayer,
   storeBiometricPlayer,
   clearBiometricData,
@@ -43,41 +42,35 @@ export function OnboardingFlow() {
   const sendBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (hasBiometricCredential()) {
-      const player = getBiometricPlayer();
-      if (player) {
-        isBiometricSupported().then((supported) => {
-          if (supported) {
-            setCanQuickLogin(true);
-            setQuickLoginName(player.playerName);
-          }
-        });
-      }
-    }
+    setCanQuickLogin(true);
+    const player = getBiometricPlayer();
+    if (player) setQuickLoginName(player.playerName);
   }, []);
 
   const handleQuickLogin = async () => {
     setQuickLoginStatus("verifying");
     setErr("");
-    const ok = await authenticateWithBiometric();
-    if (!ok) {
+    const result = await authenticateWithBiometric();
+    if (!result.success) {
       setQuickLoginStatus("failed");
       setErr("Biometric verification failed. Try again or use your phone number.");
       return;
     }
-    setQuickLoginStatus("success");
-    const player = getBiometricPlayer();
-    if (!player) {
+
+    const playerId = result.userId ?? getBiometricPlayer()?.playerId;
+    if (!playerId) {
       setQuickLoginStatus("failed");
-      setErr("Stored credentials not found. Please log in with your phone number.");
-      setCanQuickLogin(false);
+      setErr("No account found for this passkey. Please log in with your phone number.");
       return;
     }
+
     try {
       const res = await api.post<{ token: string; player: { id: string; name: string } }>(
         "/api/auth/biometric-login",
-        { playerId: player.playerId }
+        { playerId }
       );
+      setQuickLoginStatus("success");
+      storeBiometricPlayer({ playerId: res.player.id, playerName: res.player.name, phone: "" });
       clearAuth();
       setAuth({
         token: res.token,
@@ -89,7 +82,6 @@ export function OnboardingFlow() {
       setQuickLoginStatus("failed");
       setErr("Login failed. Please log in with your phone number.");
       clearBiometricData();
-      setCanQuickLogin(false);
     }
   };
 
@@ -243,7 +235,7 @@ export function OnboardingFlow() {
                     <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M7.864 4.243A7.5 7.5 0 0 1 19.5 10.5c0 2.92-.556 5.709-1.568 8.268M5.742 6.364A7.465 7.465 0 0 0 4.5 10.5a48.667 48.667 0 0 0-1.26 7.584M12 10.5a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm-5.684 7.59a47.5 47.5 0 0 1-.192-3.59 5.25 5.25 0 0 1 10.5 0 48.22 48.22 0 0 1-.472 6.932M9.016 18.87a47.074 47.074 0 0 1-.397-4.37 3 3 0 0 1 6 0c0 1.528-.085 3.04-.248 4.525" />
                     </svg>
-                    Log in as {quickLoginName}
+                    {quickLoginName ? `Log in as ${quickLoginName}` : "Log in with Biometric"}
                   </button>
                   <div className="flex items-center gap-3">
                     <div className="h-px flex-1 bg-neutral-800" />

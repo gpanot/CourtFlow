@@ -1,12 +1,18 @@
 "use client";
 
-const CREDENTIAL_KEY = "courtflow-biometric-cred";
+const PLAYER_CRED_KEY = "courtflow-biometric-cred";
 const PLAYER_KEY = "courtflow-biometric-player";
+const STAFF_CRED_KEY = "courtflow-biometric-staff-cred";
+const STAFF_KEY = "courtflow-biometric-staff";
 
-interface StoredPlayer {
-  playerId: string;
-  playerName: string;
-  phone: string;
+interface StoredUser {
+  id: string;
+  name: string;
+}
+
+export interface BiometricAuthResult {
+  success: boolean;
+  userId: string | null;
 }
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
@@ -20,13 +26,9 @@ function base64ToArrayBuffer(base64: string): ArrayBuffer {
   return bytes.buffer;
 }
 
-export function storeBiometricPlayer(player: StoredPlayer): void {
-  localStorage.setItem(PLAYER_KEY, JSON.stringify(player));
-}
-
-export function getBiometricPlayer(): StoredPlayer | null {
+function getStored(key: string): StoredUser | null {
   if (typeof window === "undefined") return null;
-  const raw = localStorage.getItem(PLAYER_KEY);
+  const raw = localStorage.getItem(key);
   if (!raw) return null;
   try {
     return JSON.parse(raw);
@@ -35,15 +37,46 @@ export function getBiometricPlayer(): StoredPlayer | null {
   }
 }
 
-export function hasBiometricCredential(): boolean {
-  if (typeof window === "undefined") return false;
-  return !!localStorage.getItem(CREDENTIAL_KEY) && !!localStorage.getItem(PLAYER_KEY);
+// --- Player helpers ---
+
+export function storeBiometricPlayer(player: { playerId: string; playerName: string; phone?: string }): void {
+  localStorage.setItem(PLAYER_KEY, JSON.stringify({ id: player.playerId, name: player.playerName }));
 }
 
-export function clearBiometricData(): void {
-  localStorage.removeItem(CREDENTIAL_KEY);
+export function getBiometricPlayer(): { playerId: string; playerName: string } | null {
+  const s = getStored(PLAYER_KEY);
+  if (!s) return null;
+  return { playerId: s.id, playerName: s.name };
+}
+
+export function clearBiometricPlayer(): void {
+  localStorage.removeItem(PLAYER_CRED_KEY);
   localStorage.removeItem(PLAYER_KEY);
 }
+
+// --- Staff helpers ---
+
+export function storeBiometricStaff(staff: { staffId: string; staffName: string }): void {
+  localStorage.setItem(STAFF_KEY, JSON.stringify({ id: staff.staffId, name: staff.staffName }));
+}
+
+export function getBiometricStaff(): { staffId: string; staffName: string } | null {
+  const s = getStored(STAFF_KEY);
+  if (!s) return null;
+  return { staffId: s.id, staffName: s.name };
+}
+
+export function clearBiometricStaff(): void {
+  localStorage.removeItem(STAFF_CRED_KEY);
+  localStorage.removeItem(STAFF_KEY);
+}
+
+// Keep backward compat alias
+export function clearBiometricData(): void {
+  clearBiometricPlayer();
+}
+
+// --- Shared ---
 
 export async function isBiometricSupported(): Promise<boolean> {
   if (
@@ -61,8 +94,10 @@ export async function isBiometricSupported(): Promise<boolean> {
   }
 }
 
-export async function requestBiometricVerification(
-  userId: string
+export async function registerBiometric(
+  userId: string,
+  displayName: string,
+  credKey: string,
 ): Promise<boolean> {
   try {
     const challenge = new Uint8Array(32);
@@ -75,7 +110,7 @@ export async function requestBiometricVerification(
         user: {
           id: new TextEncoder().encode(userId),
           name: userId,
-          displayName: "CourtFlow Player",
+          displayName,
         },
         pubKeyCredParams: [
           { type: "public-key", alg: -7 },
@@ -84,6 +119,7 @@ export async function requestBiometricVerification(
         authenticatorSelection: {
           authenticatorAttachment: "platform",
           userVerification: "required",
+          residentKey: "preferred",
         },
         timeout: 60000,
       },
@@ -91,7 +127,7 @@ export async function requestBiometricVerification(
 
     if (credential) {
       const pkCred = credential as PublicKeyCredential;
-      localStorage.setItem(CREDENTIAL_KEY, arrayBufferToBase64(pkCred.rawId));
+      localStorage.setItem(credKey, arrayBufferToBase64(pkCred.rawId));
       return true;
     }
     return false;
@@ -100,31 +136,57 @@ export async function requestBiometricVerification(
   }
 }
 
-export async function authenticateWithBiometric(): Promise<boolean> {
-  const credBase64 = localStorage.getItem(CREDENTIAL_KEY);
-  if (!credBase64) return false;
+export async function requestBiometricVerification(userId: string): Promise<boolean> {
+  return registerBiometric(userId, "CourtFlow Player", PLAYER_CRED_KEY);
+}
+
+export async function registerStaffBiometric(userId: string, displayName: string): Promise<boolean> {
+  return registerBiometric(userId, displayName, STAFF_CRED_KEY);
+}
+
+async function authenticateGeneric(credKey: string, userKey: string): Promise<BiometricAuthResult> {
+  const fail: BiometricAuthResult = { success: false, userId: null };
 
   try {
     const challenge = new Uint8Array(32);
     crypto.getRandomValues(challenge);
 
+    const credBase64 = localStorage.getItem(credKey);
+    const allowCredentials: PublicKeyCredentialDescriptor[] = credBase64
+      ? [{ type: "public-key", id: base64ToArrayBuffer(credBase64), transports: ["internal"] as AuthenticatorTransport[] }]
+      : [];
+
     const credential = await navigator.credentials.get({
       publicKey: {
         challenge,
-        allowCredentials: [
-          {
-            type: "public-key",
-            id: base64ToArrayBuffer(credBase64),
-            transports: ["internal"],
-          },
-        ],
+        ...(allowCredentials.length > 0 ? { allowCredentials } : {}),
         userVerification: "required",
+        rpId: window.location.hostname,
         timeout: 60000,
       },
     });
 
-    return !!credential;
+    if (!credential) return fail;
+
+    const pkCred = credential as PublicKeyCredential;
+    const response = pkCred.response as AuthenticatorAssertionResponse;
+
+    if (response.userHandle && response.userHandle.byteLength > 0) {
+      const userId = new TextDecoder().decode(response.userHandle);
+      return { success: true, userId };
+    }
+
+    const stored = getStored(userKey);
+    return { success: true, userId: stored?.id ?? null };
   } catch {
-    return false;
+    return fail;
   }
+}
+
+export async function authenticateWithBiometric(): Promise<BiometricAuthResult> {
+  return authenticateGeneric(PLAYER_CRED_KEY, PLAYER_KEY);
+}
+
+export async function authenticateStaffBiometric(): Promise<BiometricAuthResult> {
+  return authenticateGeneric(STAFF_CRED_KEY, STAFF_KEY);
 }
