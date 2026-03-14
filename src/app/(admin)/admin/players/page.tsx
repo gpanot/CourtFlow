@@ -191,9 +191,12 @@ export default function PlayersPage() {
   };
 
   const updateSkillLevel = async (playerId: string, newLevel: string) => {
+    console.log(`[SkillEdit] 🎯 Selected level "${newLevel}" for player ${playerId}`);
     setSavingSkillId(playerId);
     try {
-      await api.patch(`/api/players/${playerId}`, { skillLevel: newLevel });
+      console.log(`[SkillEdit] 📡 PATCH /api/players/${playerId} { skillLevel: "${newLevel}" }`);
+      const result = await api.patch(`/api/players/${playerId}`, { skillLevel: newLevel });
+      console.log(`[SkillEdit] ✅ Saved successfully`, result);
       setPlayers((prev) =>
         prev.map((p) => (p.id === playerId ? { ...p, skillLevel: newLevel } : p))
       );
@@ -201,10 +204,11 @@ export default function PlayersPage() {
         setDetailPlayer((prev) => prev ? { ...prev, skillLevel: newLevel } : prev);
       }
     } catch (e) {
-      console.error(e);
+      console.error(`[SkillEdit] ❌ Failed to save:`, e);
     } finally {
       setSavingSkillId(null);
       setEditingSkillId(null);
+      console.log(`[SkillEdit] 🏁 Done`);
     }
   };
 
@@ -724,7 +728,7 @@ function SkillBadge({
   return (
     <div className="relative" ref={ref}>
       <button
-        onClick={(e) => { e.stopPropagation(); onToggle(); }}
+        onClick={(e) => { e.stopPropagation(); console.log(`[SkillEdit] 👆 Badge clicked for player ${playerId}, current: "${level}", editing: ${editing}`); onToggle(); }}
         disabled={saving}
         className={cn(
           "rounded-full px-2 py-0.5 text-xs font-medium capitalize transition-all",
@@ -740,7 +744,7 @@ function SkillBadge({
           {SKILL_LEVELS.map((l) => (
             <button
               key={l}
-              onClick={(e) => { e.stopPropagation(); onSelect(l); }}
+              onClick={(e) => { e.stopPropagation(); console.log(`[SkillEdit] 🔘 Option clicked: "${l}" for player ${playerId}`); onSelect(l); }}
               className={cn(
                 "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs capitalize hover:bg-neutral-700 transition-colors",
                 l === level ? "text-white font-medium" : "text-neutral-400"
