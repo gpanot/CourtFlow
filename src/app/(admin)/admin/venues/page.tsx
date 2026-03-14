@@ -25,6 +25,11 @@ interface Court {
   status: string;
 }
 
+interface VenueSettings {
+  logoSpin?: boolean;
+  [key: string]: unknown;
+}
+
 interface Venue {
   id: string;
   name: string;
@@ -32,6 +37,7 @@ interface Venue {
   active: boolean;
   logoUrl: string | null;
   tvText: string | null;
+  settings: VenueSettings;
   courts: Court[];
   sessions: { id: string; status: string }[];
   _count: { staff: number };
@@ -310,8 +316,10 @@ function VenueCard({
             />
             <TVDisplaySettings
               venueId={venue.id}
+              venueName={venue.name}
               logoUrl={venue.logoUrl}
               tvText={venue.tvText}
+              settings={venue.settings}
               onRefresh={onRefresh}
             />
           </div>

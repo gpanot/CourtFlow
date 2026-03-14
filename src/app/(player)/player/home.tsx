@@ -202,7 +202,8 @@ export function PlayerHome() {
 
     const offQueue = on("queue:updated", () => fetchPlayerState());
     const offSession = on("session:updated", () => fetchPlayerState());
-    const offVenue = on("venue:updated", (data: { id: string; logoUrl?: string | null; tvText?: string | null; name?: string }) => {
+    const offVenue = on("venue:updated", (...args: unknown[]) => {
+      const data = args[0] as { id: string; logoUrl?: string | null; tvText?: string | null; name?: string };
       setVenues((prev) => prev.map((v) =>
         v.id === data.id
           ? { ...v, ...(data.logoUrl !== undefined && { logoUrl: data.logoUrl }), ...(data.tvText !== undefined && { tvText: data.tvText }), ...(data.name && { name: data.name }) }
