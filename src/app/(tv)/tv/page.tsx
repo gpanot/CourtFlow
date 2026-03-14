@@ -19,7 +19,7 @@ interface VenueState {
 
 export default function TVDisplayPage() {
   const [venueId, setVenueId] = useState<string | null>(null);
-  const [venues, setVenues] = useState<{ id: string; name: string; logoUrl?: string | null; tvText?: string | null }[]>([]);
+  const [venues, setVenues] = useState<{ id: string; name: string; logoUrl?: string | null; tvText?: string | null; settings?: { logoSpin?: boolean } }[]>([]);
   const [state, setState] = useState<VenueState>({ session: null, courts: [], queue: [] });
   const [connected, setConnected] = useState(true);
   const [clock, setClock] = useState(new Date());
@@ -31,7 +31,7 @@ export default function TVDisplayPage() {
   }, []);
 
   useEffect(() => {
-    api.get<{ id: string; name: string; logoUrl?: string | null; tvText?: string | null }[]>("/api/venues").then(setVenues).catch(console.error);
+    api.get<{ id: string; name: string; logoUrl?: string | null; tvText?: string | null; settings?: { logoSpin?: boolean } }[]>("/api/venues").then(setVenues).catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -58,10 +58,11 @@ export default function TVDisplayPage() {
     const offCourt = on("court:updated", () => fetchState());
     const offQueue = on("queue:updated", () => fetchState());
     const offSession = on("session:updated", () => fetchState());
-    const offVenue = on("venue:updated", (data: { id: string; logoUrl?: string | null; tvText?: string | null; name?: string }) => {
+    const offVenue = on("venue:updated", (...args: unknown[]) => {
+      const data = args[0] as { id: string; logoUrl?: string | null; tvText?: string | null; name?: string; settings?: { logoSpin?: boolean } };
       setVenues((prev) => prev.map((v) =>
         v.id === data.id
-          ? { ...v, ...(data.logoUrl !== undefined && { logoUrl: data.logoUrl }), ...(data.tvText !== undefined && { tvText: data.tvText }), ...(data.name && { name: data.name }) }
+          ? { ...v, ...(data.logoUrl !== undefined && { logoUrl: data.logoUrl }), ...(data.tvText !== undefined && { tvText: data.tvText }), ...(data.name && { name: data.name }), ...(data.settings && { settings: data.settings }) }
           : v
       ));
     });
@@ -108,6 +109,7 @@ export default function TVDisplayPage() {
   const venueName = currentVenue?.name || "Court Display";
   const venueLogoUrl = currentVenue?.logoUrl || null;
   const venueTvText = currentVenue?.tvText || null;
+  const logoSpin = !!currentVenue?.settings?.logoSpin;
   const sortedCourts = [...state.courts].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
   const activeCourts = sortedCourts.filter((c) => c.status !== "maintenance");
   const courtCount = activeCourts.length;
@@ -173,7 +175,10 @@ export default function TVDisplayPage() {
           {!state.session ? (
             <div className="flex h-full flex-col items-center justify-center gap-[3vh]">
               {venueLogoUrl && (
-                <div className="h-[clamp(6rem,20vh,16rem)] w-[clamp(6rem,20vh,16rem)] shrink-0 rounded-full overflow-hidden border-2 border-neutral-800 bg-neutral-900">
+                <div className={cn(
+                  "h-[clamp(6rem,20vh,16rem)] w-[clamp(6rem,20vh,16rem)] shrink-0 rounded-full overflow-hidden border-2 border-neutral-800 bg-neutral-900",
+                  logoSpin && "animate-[spin_8s_linear_infinite]"
+                )}>
                   <img
                     src={venueLogoUrl}
                     alt={venueName}

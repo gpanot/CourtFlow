@@ -561,21 +561,29 @@ function CourtsManager({
 
 function TVDisplaySettings({
   venueId,
+  venueName,
   logoUrl,
   tvText,
+  settings,
   onRefresh,
 }: {
   venueId: string;
+  venueName: string;
   logoUrl: string | null;
   tvText: string | null;
+  settings: VenueSettings;
   onRefresh: () => void;
 }) {
   const [text, setText] = useState(tvText || "");
+  const [spin, setSpin] = useState(!!settings.logoSpin);
   const [savingText, setSavingText] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [removingLogo, setRemovingLogo] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textDirty = text !== (tvText || "");
+
+  useEffect(() => { setSpin(!!settings.logoSpin); }, [settings.logoSpin]);
+  useEffect(() => { setText(tvText || ""); }, [tvText]);
 
   const uploadLogo = async (file: File) => {
     setUploading(true);
@@ -632,82 +640,145 @@ function TVDisplaySettings({
     }
   };
 
+  const toggleSpin = async (checked: boolean) => {
+    setSpin(checked);
+    try {
+      await api.patch(`/api/venues/${venueId}`, {
+        settings: { ...settings, logoSpin: checked },
+      });
+      await onRefresh();
+    } catch (e) {
+      alert((e as Error).message);
+      setSpin(!checked);
+    }
+  };
+
+  const previewText = text || tvText || "";
+  const previewLines = previewText ? previewText.split("\n").slice(0, 4) : [];
+
   return (
     <div className="space-y-3">
-      <h4 className="flex items-center gap-2 text-sm font-medium text-neutral-400 uppercase tracking-wider">
-        <Monitor className="h-4 w-4" /> TV Display
-      </h4>
+      <div>
+        <h4 className="flex items-center gap-2 text-sm font-medium text-neutral-400 uppercase tracking-wider">
+          <Monitor className="h-4 w-4" /> TV Display
+        </h4>
+        <p className="text-xs text-neutral-600 mt-0.5 ml-6">Waiting Screen</p>
+      </div>
 
-      {/* Logo upload */}
-      <div className="space-y-2">
-        <label className="text-xs text-neutral-500">Venue Logo</label>
-        <div className="flex items-center gap-3">
-          {logoUrl ? (
-            <div className="relative h-14 w-14 shrink-0 rounded-lg border border-neutral-700 bg-neutral-800 flex items-center justify-center overflow-hidden">
-              <img
-                src={logoUrl}
-                alt="Venue logo"
-                className="h-full w-full object-contain"
+      <div className="flex gap-4">
+        {/* Left: Controls */}
+        <div className="flex-1 min-w-0 space-y-3">
+          {/* Logo upload */}
+          <div className="space-y-2">
+            <label className="text-xs text-neutral-500">Venue Logo</label>
+            <div className="flex items-center gap-3">
+              {logoUrl ? (
+                <div className="relative h-14 w-14 shrink-0 rounded-full border border-neutral-700 bg-neutral-800 flex items-center justify-center overflow-hidden">
+                  <img src={logoUrl} alt="Venue logo" className="h-full w-full object-cover" />
+                </div>
+              ) : (
+                <div className="h-14 w-14 shrink-0 rounded-full border border-dashed border-neutral-700 bg-neutral-800/50 flex items-center justify-center">
+                  <ImageIcon className="h-5 w-5 text-neutral-600" />
+                </div>
+              )}
+              <div className="flex flex-col gap-1.5">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) uploadLogo(file);
+                    e.target.value = "";
+                  }}
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="flex items-center gap-1.5 rounded-lg bg-neutral-800 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:bg-neutral-700 disabled:opacity-40"
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  {uploading ? "Uploading..." : logoUrl ? "Replace Logo" : "Upload Logo"}
+                </button>
+                {logoUrl && (
+                  <button
+                    onClick={removeLogo}
+                    disabled={removingLogo}
+                    className="text-xs text-neutral-500 hover:text-red-400 text-left disabled:opacity-40"
+                  >
+                    {removingLogo ? "Removing..." : "Remove logo"}
+                  </button>
+                )}
+              </div>
+            </div>
+            <p className="text-xs text-neutral-600">PNG, JPEG, WebP, or SVG. Max 5 MB.</p>
+          </div>
+
+          {/* Spin toggle */}
+          {logoUrl && (
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={spin}
+                onChange={(e) => toggleSpin(e.target.checked)}
+                className="h-4 w-4 rounded border-neutral-600 bg-neutral-800 text-purple-500 focus:ring-purple-500 focus:ring-offset-0 accent-purple-500"
               />
-            </div>
-          ) : (
-            <div className="h-14 w-14 shrink-0 rounded-lg border border-dashed border-neutral-700 bg-neutral-800/50 flex items-center justify-center">
-              <ImageIcon className="h-5 w-5 text-neutral-600" />
-            </div>
+              <span className="text-xs text-neutral-400">Rotate logo 360° on TV</span>
+            </label>
           )}
-          <div className="flex flex-col gap-1.5">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp,image/svg+xml"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) uploadLogo(file);
-                e.target.value = "";
-              }}
+
+          {/* TV Text */}
+          <div className="space-y-2">
+            <label className="text-xs text-neutral-500">Custom Text (1–4 lines)</label>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={4}
+              placeholder={"e.g.\nWelcome to ACE SQUAD\nThe Granary\nSessions every Wednesday 7pm"}
+              className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none resize-none"
             />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="flex items-center gap-1.5 rounded-lg bg-neutral-800 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:bg-neutral-700 disabled:opacity-40"
-            >
-              <Upload className="h-3.5 w-3.5" />
-              {uploading ? "Uploading..." : logoUrl ? "Replace Logo" : "Upload Logo"}
-            </button>
-            {logoUrl && (
+            {textDirty && (
               <button
-                onClick={removeLogo}
-                disabled={removingLogo}
-                className="text-xs text-neutral-500 hover:text-red-400 text-left disabled:opacity-40"
+                onClick={saveText}
+                disabled={savingText}
+                className="rounded-lg bg-purple-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-40"
               >
-                {removingLogo ? "Removing..." : "Remove logo"}
+                {savingText ? "Saving..." : "Save Text"}
               </button>
             )}
           </div>
         </div>
-        <p className="text-xs text-neutral-600">PNG, JPEG, WebP, or SVG. Max 2 MB. Shown in TV header.</p>
-      </div>
 
-      {/* TV Text */}
-      <div className="space-y-2">
-        <label className="text-xs text-neutral-500">Custom Text (shown on TV idle screen, 1–4 lines)</label>
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          rows={4}
-          placeholder={"e.g.\nWelcome to ACE SQUAD\nThe Granary\nSessions every Wednesday 7pm"}
-          className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none resize-none"
-        />
-        {textDirty && (
-          <button
-            onClick={saveText}
-            disabled={savingText}
-            className="rounded-lg bg-purple-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-40"
-          >
-            {savingText ? "Saving..." : "Save Text"}
-          </button>
-        )}
+        {/* Right: Live preview */}
+        <div className="shrink-0 w-56 md:w-64">
+          <p className="text-xs text-neutral-600 mb-1.5 text-center">Preview</p>
+          <div className="rounded-xl border border-neutral-800 bg-black aspect-video flex flex-col items-center justify-center gap-2.5 p-3 overflow-hidden">
+            {logoUrl ? (
+              <div className={cn(
+                "h-12 w-12 md:h-14 md:w-14 shrink-0 rounded-full overflow-hidden border border-neutral-700 bg-neutral-900",
+                spin && "animate-[spin_8s_linear_infinite]"
+              )}>
+                <img src={logoUrl} alt="Preview" className="h-full w-full object-cover" />
+              </div>
+            ) : (
+              <div className="h-12 w-12 md:h-14 md:w-14 shrink-0 rounded-full border border-dashed border-neutral-700 bg-neutral-900 flex items-center justify-center">
+                <ImageIcon className="h-4 w-4 text-neutral-700" />
+              </div>
+            )}
+            {previewLines.length > 0 && (
+              <div className="text-center space-y-0.5 max-w-full">
+                {previewLines.map((line, i) => (
+                  <p key={i} className={cn(
+                    "truncate text-neutral-500",
+                    i === 0 ? "text-[10px] font-semibold text-neutral-400" : "text-[8px]"
+                  )}>{line}</p>
+                ))}
+              </div>
+            )}
+            <p className="text-[8px] text-neutral-700 mt-0.5">Waiting for session to start...</p>
+          </div>
+        </div>
       </div>
     </div>
   );

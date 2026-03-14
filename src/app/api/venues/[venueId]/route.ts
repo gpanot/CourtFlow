@@ -41,8 +41,8 @@ export async function PATCH(
       data: body,
     });
 
-    if ("tvText" in body || "logoUrl" in body || "name" in body) {
-      emitToVenue(venueId, "venue:updated", { id: venueId, logoUrl: venue.logoUrl, tvText: venue.tvText, name: venue.name });
+    if ("tvText" in body || "logoUrl" in body || "name" in body || "settings" in body) {
+      emitToVenue(venueId, "venue:updated", { id: venueId, logoUrl: venue.logoUrl, tvText: venue.tvText, name: venue.name, settings: venue.settings });
     }
 
     return json(venue);

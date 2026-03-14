@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useSessionStore } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
+import { cn } from "@/lib/cn";
 import { useSocket } from "@/hooks/use-socket";
 import { joinVenue, joinPlayer } from "@/lib/socket-client";
 import { QueueScreen } from "./queue-screen";
@@ -20,6 +21,7 @@ interface Venue {
   name: string;
   logoUrl?: string | null;
   tvText?: string | null;
+  settings?: { logoSpin?: boolean };
 }
 
 interface QueueEntry {
@@ -203,10 +205,10 @@ export function PlayerHome() {
     const offQueue = on("queue:updated", () => fetchPlayerState());
     const offSession = on("session:updated", () => fetchPlayerState());
     const offVenue = on("venue:updated", (...args: unknown[]) => {
-      const data = args[0] as { id: string; logoUrl?: string | null; tvText?: string | null; name?: string };
+      const data = args[0] as { id: string; logoUrl?: string | null; tvText?: string | null; name?: string; settings?: { logoSpin?: boolean } };
       setVenues((prev) => prev.map((v) =>
         v.id === data.id
-          ? { ...v, ...(data.logoUrl !== undefined && { logoUrl: data.logoUrl }), ...(data.tvText !== undefined && { tvText: data.tvText }), ...(data.name && { name: data.name }) }
+          ? { ...v, ...(data.logoUrl !== undefined && { logoUrl: data.logoUrl }), ...(data.tvText !== undefined && { tvText: data.tvText }), ...(data.name && { name: data.name }), ...(data.settings && { settings: data.settings }) }
           : v
       ));
     });
@@ -270,6 +272,7 @@ export function PlayerHome() {
   const venueName = currentVenue?.name || "Venue";
   const venueLogoUrl = currentVenue?.logoUrl || null;
   const venueTvText = currentVenue?.tvText || null;
+  const logoSpin = !!currentVenue?.settings?.logoSpin;
 
   if (initialLoading) {
     return (
@@ -313,7 +316,10 @@ export function PlayerHome() {
           {!session ? (
             <div className="flex flex-col items-center gap-5">
               {venueLogoUrl && (
-                <div className="h-28 w-28 shrink-0 rounded-full overflow-hidden border-2 border-neutral-800 bg-neutral-900">
+                <div className={cn(
+                  "h-28 w-28 shrink-0 rounded-full overflow-hidden border-2 border-neutral-800 bg-neutral-900",
+                  logoSpin && "animate-[spin_8s_linear_infinite]"
+                )}>
                   <img src={venueLogoUrl} alt={venueName} className="h-full w-full object-cover" />
                 </div>
               )}
