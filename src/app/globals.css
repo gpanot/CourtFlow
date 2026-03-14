@@ -32,3 +32,13 @@
 @utility animate-spin-y {
   animation: spin-y 3s ease-in-out infinite;
 }
+
+@keyframes flip-y {
+  0%, 20% { transform: perspective(600px) rotateY(0deg); }
+  50% { transform: perspective(600px) rotateY(180deg); }
+  80%, 100% { transform: perspective(600px) rotateY(360deg); }
+}
+
+@utility animate-flip-y {
+  animation: flip-y 6s ease-in-out infinite;
+}

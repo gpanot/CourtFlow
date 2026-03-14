@@ -318,7 +318,7 @@ export function PlayerHome() {
               {venueLogoUrl && (
                 <div className={cn(
                   "h-28 w-28 shrink-0 rounded-full overflow-hidden border-2 border-neutral-800 bg-neutral-900",
-                  logoSpin && "animate-[spin_8s_linear_infinite]"
+                  logoSpin && "animate-flip-y"
                 )}>
                   <img src={venueLogoUrl} alt={venueName} className="h-full w-full object-cover" />
                 </div>

@@ -64,7 +64,6 @@ export async function POST(request: NextRequest) {
           joinedAt: new Date(),
           groupId: null,
           breakUntil: null,
-          gamePreference: resolvedPreference,
         },
         include: { player: true },
       });

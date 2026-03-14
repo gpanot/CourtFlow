@@ -177,7 +177,7 @@ export default function TVDisplayPage() {
               {venueLogoUrl && (
                 <div className={cn(
                   "h-[clamp(6rem,20vh,16rem)] w-[clamp(6rem,20vh,16rem)] shrink-0 rounded-full overflow-hidden border-2 border-neutral-800 bg-neutral-900",
-                  logoSpin && "animate-[spin_8s_linear_infinite]"
+                  logoSpin && "animate-flip-y"
                 )}>
                   <img
                     src={venueLogoUrl}

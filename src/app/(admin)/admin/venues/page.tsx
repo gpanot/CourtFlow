@@ -757,7 +757,7 @@ function TVDisplaySettings({
             {logoUrl ? (
               <div className={cn(
                 "h-12 w-12 md:h-14 md:w-14 shrink-0 rounded-full overflow-hidden border border-neutral-700 bg-neutral-900",
-                spin && "animate-[spin_8s_linear_infinite]"
+                spin && "animate-flip-y"
               )}>
                 <img src={logoUrl} alt="Preview" className="h-full w-full object-cover" />
               </div>
