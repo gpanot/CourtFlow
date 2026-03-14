@@ -40,6 +40,7 @@ export function OnboardingFlow() {
   const [quickLoginName, setQuickLoginName] = useState("");
   const [quickLoginStatus, setQuickLoginStatus] = useState<"idle" | "verifying" | "success" | "failed">("idle");
   const sendBtnRef = useRef<HTMLButtonElement>(null);
+  const [titleTaps, setTitleTaps] = useState(0);
 
   useEffect(() => {
     setCanQuickLogin(true);
@@ -198,7 +199,12 @@ export function OnboardingFlow() {
   return (
     <div className="flex min-h-dvh flex-col justify-center p-6">
       <div className="mb-8 text-center">
-        <h1 className="text-4xl font-bold text-green-500">CourtFlow</h1>
+        <h1
+          className="text-4xl font-bold text-green-500 select-none cursor-default"
+          onClick={() => setTitleTaps((t) => t + 1)}
+        >
+          CourtFlow
+        </h1>
         <p className="mt-1 text-neutral-400">Get on the court</p>
       </div>
 
@@ -464,9 +470,11 @@ export function OnboardingFlow() {
         </div>
       )}
 
-      <Link href="/" className="mt-6 block text-center text-sm text-black">
-        ← Home
-      </Link>
+      {titleTaps >= 5 && (
+        <Link href="/" className="mt-6 block text-center text-sm text-neutral-400">
+          ← Home
+        </Link>
+      )}
     </div>
   );
 }
