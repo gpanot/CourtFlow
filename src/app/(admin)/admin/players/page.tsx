@@ -1,9 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { Search, X, SlidersHorizontal, Users, UserPlus, Clock, Activity, Hourglass, Gauge } from "lucide-react";
+import { Search, X, SlidersHorizontal, Users, UserPlus, Clock, Activity, Hourglass, Gauge, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Gamepad2, Star, MapPin, CalendarDays, Timer } from "lucide-react";
+
+type SortKey = "name" | "gender" | "skillLevel" | "totalSessions" | "totalGames" | "totalPlayMinutes" | "venues";
+type SortDir = "asc" | "desc";
+const SKILL_ORDER: Record<string, number> = { beginner: 0, intermediate: 1, advanced: 2, pro: 3 };
 
 interface PlayerRecord {
   id: string;
@@ -14,10 +18,25 @@ interface PlayerRecord {
   skillLevel: string;
   createdAt: string;
   totalSessions: number;
+  totalGames: number;
   totalPlayMinutes: number;
   venues: { id: string; name: string }[];
   lastSeen: { date: string; venue: string } | null;
   isActiveToday: boolean;
+}
+
+interface PlayerSession {
+  sessionId: string;
+  date: string;
+  openedAt: string;
+  closedAt: string | null;
+  status: string;
+  venue: { id: string; name: string };
+  gamesPlayed: number;
+  totalPlayMinutes: number;
+  partnersCount: number;
+  gamesByType: { men: number; women: number; mixed: number };
+  feedback: { experience: number; matchQuality: string; wouldReturn: string } | null;
 }
 
 interface PlayerStats {
@@ -62,6 +81,58 @@ export default function PlayersPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [page, setPage] = useState(1);
 
+  const [detailPlayer, setDetailPlayer] = useState<PlayerRecord | null>(null);
+  const [detailSessions, setDetailSessions] = useState<PlayerSession[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  const [editingSkillId, setEditingSkillId] = useState<string | null>(null);
+  const [savingSkillId, setSavingSkillId] = useState<string | null>(null);
+
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      if (sortDir === "asc") setSortDir("desc");
+      else { setSortKey(null); setSortDir("asc"); }
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  };
+
+  const sortedPlayers = useMemo(() => {
+    if (!sortKey) return players;
+    const sorted = [...players].sort((a, b) => {
+      let cmp = 0;
+      switch (sortKey) {
+        case "name":
+          cmp = a.name.localeCompare(b.name);
+          break;
+        case "gender":
+          cmp = a.gender.localeCompare(b.gender);
+          break;
+        case "skillLevel":
+          cmp = (SKILL_ORDER[a.skillLevel] ?? 0) - (SKILL_ORDER[b.skillLevel] ?? 0);
+          break;
+        case "totalSessions":
+          cmp = a.totalSessions - b.totalSessions;
+          break;
+        case "totalGames":
+          cmp = a.totalGames - b.totalGames;
+          break;
+        case "totalPlayMinutes":
+          cmp = a.totalPlayMinutes - b.totalPlayMinutes;
+          break;
+        case "venues":
+          cmp = a.venues.length - b.venues.length;
+          break;
+      }
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    return sorted;
+  }, [players, sortKey, sortDir]);
+
   const fetchPlayers = useCallback(async () => {
     setLoading(true);
     try {
@@ -103,6 +174,38 @@ export default function PlayersPage() {
 
   const clearAllFilters = () => {
     setSearch(""); setVenueFilter(""); setSkillFilter(""); setStatusFilter(""); setPage(1);
+  };
+
+  const openPlayerDetail = async (player: PlayerRecord) => {
+    setDetailPlayer(player);
+    setDetailLoading(true);
+    try {
+      const sessions = await api.get<PlayerSession[]>(`/api/players/${player.id}/sessions`);
+      setDetailSessions(sessions);
+    } catch (e) {
+      console.error(e);
+      setDetailSessions([]);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const updateSkillLevel = async (playerId: string, newLevel: string) => {
+    setSavingSkillId(playerId);
+    try {
+      await api.patch(`/api/players/${playerId}`, { skillLevel: newLevel });
+      setPlayers((prev) =>
+        prev.map((p) => (p.id === playerId ? { ...p, skillLevel: newLevel } : p))
+      );
+      if (detailPlayer?.id === playerId) {
+        setDetailPlayer((prev) => prev ? { ...prev, skillLevel: newLevel } : prev);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSavingSkillId(null);
+      setEditingSkillId(null);
+    }
   };
 
   const fmtPlayTime = (m: number) => {
@@ -263,19 +366,21 @@ export default function PlayersPage() {
         <table className="w-full text-left text-sm">
           <thead className="border-b border-neutral-800 text-neutral-400">
             <tr>
-              <th className="px-4 py-2.5">Player</th>
+              <SortableHeader label="Player" sortKey="name" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
               <th className="px-4 py-2.5">Phone</th>
-              <th className="px-4 py-2.5">Skill</th>
-              <th className="px-4 py-2.5">Gender</th>
-              <th className="px-4 py-2.5 text-right">Sessions</th>
-              <th className="px-4 py-2.5 text-right">Play Time</th>
-              <th className="px-4 py-2.5">Venues</th>
+              <SortableHeader label="Skill" sortKey="skillLevel" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
+              <SortableHeader label="Gender" sortKey="gender" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
+              <SortableHeader label="Sessions" sortKey="totalSessions" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
+              <SortableHeader label="Games" sortKey="totalGames" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
+              <SortableHeader label="Play Time" sortKey="totalPlayMinutes" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
+              <SortableHeader label="Venues" sortKey="venues" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
               <th className="px-4 py-2.5">Last Seen</th>
               <th className="px-4 py-2.5">Registered</th>
+              <th className="px-4 py-2.5"></th>
             </tr>
           </thead>
           <tbody>
-            {players.map((p) => (
+            {sortedPlayers.map((p) => (
               <tr key={p.id} className="border-b border-neutral-800 last:border-0 hover:bg-neutral-900/50">
                 <td className="px-4 py-2">
                   <div className="flex items-center gap-2">
@@ -288,12 +393,19 @@ export default function PlayersPage() {
                 </td>
                 <td className="px-4 py-2 text-neutral-400 tabular-nums">{p.phone}</td>
                 <td className="px-4 py-2">
-                  <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium capitalize", SKILL_COLORS[p.skillLevel])}>
-                    {p.skillLevel}
-                  </span>
+                  <SkillBadge
+                    playerId={p.id}
+                    level={p.skillLevel}
+                    editing={editingSkillId === p.id}
+                    saving={savingSkillId === p.id}
+                    onToggle={() => setEditingSkillId(editingSkillId === p.id ? null : p.id)}
+                    onSelect={(level) => updateSkillLevel(p.id, level)}
+                    onClose={() => setEditingSkillId(null)}
+                  />
                 </td>
                 <td className="px-4 py-2 text-neutral-400 capitalize">{p.gender}</td>
                 <td className="px-4 py-2 text-right tabular-nums">{p.totalSessions}</td>
+                <td className="px-4 py-2 text-right tabular-nums">{p.totalGames}</td>
                 <td className="px-4 py-2 text-right tabular-nums text-neutral-400">{fmtMin(p.totalPlayMinutes)}</td>
                 <td className="px-4 py-2">
                   <div className="flex gap-1 max-w-[160px] overflow-hidden">
@@ -311,11 +423,20 @@ export default function PlayersPage() {
                   {p.lastSeen ? `${p.lastSeen.venue} · ${fmtDate(p.lastSeen.date)}` : "—"}
                 </td>
                 <td className="px-4 py-2 text-neutral-500 text-xs whitespace-nowrap">{fmtDate(p.createdAt)}</td>
+                <td className="px-4 py-2">
+                  <button
+                    onClick={() => openPlayerDetail(p)}
+                    className="rounded-lg p-1 text-neutral-500 hover:bg-neutral-800 hover:text-white transition-colors"
+                    title="View details"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </td>
               </tr>
             ))}
             {!loading && players.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-8 text-center text-neutral-500">No players found</td>
+                <td colSpan={11} className="px-4 py-8 text-center text-neutral-500">No players found</td>
               </tr>
             )}
           </tbody>
@@ -324,8 +445,8 @@ export default function PlayersPage() {
 
       {/* Mobile card list */}
       <div className="space-y-2 md:hidden">
-        {players.map((p) => (
-          <div key={p.id} className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
+        {sortedPlayers.map((p) => (
+          <div key={p.id} className="rounded-xl border border-neutral-800 bg-neutral-900 p-3" onClick={() => openPlayerDetail(p)}>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-base shrink-0">{p.avatar}</span>
@@ -334,14 +455,24 @@ export default function PlayersPage() {
                   <span className="h-2 w-2 rounded-full bg-green-500 shrink-0" />
                 )}
               </div>
-              <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium capitalize shrink-0", SKILL_COLORS[p.skillLevel])}>
-                {p.skillLevel}
-              </span>
+              <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                <SkillBadge
+                  playerId={p.id}
+                  level={p.skillLevel}
+                  editing={editingSkillId === p.id}
+                  saving={savingSkillId === p.id}
+                  onToggle={() => setEditingSkillId(editingSkillId === p.id ? null : p.id)}
+                  onSelect={(level) => updateSkillLevel(p.id, level)}
+                  onClose={() => setEditingSkillId(null)}
+                />
+                <ChevronRight className="h-4 w-4 text-neutral-600" />
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-400">
               <span className="tabular-nums">{p.phone}</span>
               <span className="capitalize">{p.gender}</span>
               <span>{p.totalSessions} sessions</span>
+              <span>{p.totalGames} games</span>
               <span>{fmtMin(p.totalPlayMinutes)}</span>
             </div>
             {(p.venues.length > 0 || p.lastSeen) && (
@@ -409,6 +540,23 @@ export default function PlayersPage() {
           </div>
         </div>
       )}
+
+      {/* Player detail drawer */}
+      {detailPlayer && (
+        <PlayerDetailPanel
+          player={detailPlayer}
+          sessions={detailSessions}
+          loading={detailLoading}
+          editingSkill={editingSkillId === detailPlayer.id}
+          savingSkill={savingSkillId === detailPlayer.id}
+          onToggleSkill={() => setEditingSkillId(editingSkillId === detailPlayer.id ? null : detailPlayer.id)}
+          onSelectSkill={(level) => updateSkillLevel(detailPlayer.id, level)}
+          onCloseSkill={() => setEditingSkillId(null)}
+          onClose={() => { setDetailPlayer(null); setDetailSessions([]); setEditingSkillId(null); }}
+          fmtDate={fmtDate}
+          fmtMin={fmtMin}
+        />
+      )}
     </div>
   );
 }
@@ -465,6 +613,39 @@ function WaitRatioCard({ ratio }: { ratio: number }) {
   );
 }
 
+function SortableHeader({
+  label,
+  sortKey: key,
+  currentKey,
+  currentDir,
+  onToggle,
+  align,
+}: {
+  label: string;
+  sortKey: SortKey;
+  currentKey: SortKey | null;
+  currentDir: SortDir;
+  onToggle: (key: SortKey) => void;
+  align?: "right";
+}) {
+  const active = currentKey === key;
+  const Icon = active ? (currentDir === "asc" ? ChevronUp : ChevronDown) : ChevronsUpDown;
+  return (
+    <th className={cn("px-4 py-2.5", align === "right" && "text-right")}>
+      <button
+        onClick={() => onToggle(key)}
+        className={cn(
+          "inline-flex items-center gap-1 text-xs font-medium transition-colors",
+          active ? "text-white" : "text-neutral-400 hover:text-neutral-200"
+        )}
+      >
+        {label}
+        <Icon className={cn("h-3 w-3 shrink-0", active ? "text-purple-400" : "text-neutral-600")} />
+      </button>
+    </th>
+  );
+}
+
 function FilterSelects({
   venues,
   venueFilter,
@@ -507,5 +688,272 @@ function FilterSelects({
         <option value="inactive">Inactive</option>
       </select>
     </>
+  );
+}
+
+const SKILL_LEVELS = ["beginner", "intermediate", "advanced", "pro"] as const;
+
+function SkillBadge({
+  playerId,
+  level,
+  editing,
+  saving,
+  onToggle,
+  onSelect,
+  onClose,
+}: {
+  playerId: string;
+  level: string;
+  editing: boolean;
+  saving: boolean;
+  onToggle: () => void;
+  onSelect: (level: string) => void;
+  onClose: () => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!editing) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [editing, onClose]);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={(e) => { e.stopPropagation(); onToggle(); }}
+        disabled={saving}
+        className={cn(
+          "rounded-full px-2 py-0.5 text-xs font-medium capitalize transition-all",
+          SKILL_COLORS[level],
+          saving ? "opacity-50" : "hover:ring-1 hover:ring-white/20 cursor-pointer"
+        )}
+      >
+        {saving ? <Loader2 className="h-3 w-3 animate-spin inline mr-1" /> : null}
+        {level}
+      </button>
+      {editing && (
+        <div className="absolute left-0 top-full z-50 mt-1 w-36 rounded-lg border border-neutral-700 bg-neutral-800 py-1 shadow-xl">
+          {SKILL_LEVELS.map((l) => (
+            <button
+              key={l}
+              onClick={(e) => { e.stopPropagation(); onSelect(l); }}
+              className={cn(
+                "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs capitalize hover:bg-neutral-700 transition-colors",
+                l === level ? "text-white font-medium" : "text-neutral-400"
+              )}
+            >
+              <span className={cn("h-2 w-2 rounded-full shrink-0", {
+                "bg-green-500": l === "beginner",
+                "bg-blue-500": l === "intermediate",
+                "bg-amber-500": l === "advanced",
+                "bg-red-500": l === "pro",
+              })} />
+              {l}
+              {l === level && <span className="ml-auto text-[10px] text-neutral-500">current</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlayerDetailPanel({
+  player,
+  sessions,
+  loading,
+  editingSkill,
+  savingSkill,
+  onToggleSkill,
+  onSelectSkill,
+  onCloseSkill,
+  onClose,
+  fmtDate,
+  fmtMin,
+}: {
+  player: PlayerRecord;
+  sessions: PlayerSession[];
+  loading: boolean;
+  editingSkill: boolean;
+  savingSkill: boolean;
+  onToggleSkill: () => void;
+  onSelectSkill: (level: string) => void;
+  onCloseSkill: () => void;
+  onClose: () => void;
+  fmtDate: (d: string) => string;
+  fmtMin: (m: number) => string;
+}) {
+  const totalGamesFromSessions = sessions.reduce((sum, s) => sum + s.gamesPlayed, 0);
+  const totalPlayFromSessions = sessions.reduce((sum, s) => sum + s.totalPlayMinutes, 0);
+  const avgFeedback = sessions.filter((s) => s.feedback).length > 0
+    ? (sessions.reduce((sum, s) => sum + (s.feedback?.experience ?? 0), 0) / sessions.filter((s) => s.feedback).length).toFixed(1)
+    : null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="relative w-full max-w-md animate-in slide-in-from-right overflow-y-auto bg-neutral-950 border-l border-neutral-800 shadow-2xl">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-800 bg-neutral-950 px-4 py-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="text-2xl">{player.avatar}</span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold truncate">{player.name}</h3>
+                {player.isActiveToday && (
+                  <span className="h-2 w-2 rounded-full bg-green-500 shrink-0" />
+                )}
+              </div>
+              <p className="text-xs text-neutral-500 tabular-nums">{player.phone}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-white">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-4">
+          {/* Player info */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+              <p className="text-[11px] text-neutral-500 mb-1">Skill Level</p>
+              <SkillBadge
+                playerId={player.id}
+                level={player.skillLevel}
+                editing={editingSkill}
+                saving={savingSkill}
+                onToggle={onToggleSkill}
+                onSelect={onSelectSkill}
+                onClose={onCloseSkill}
+              />
+            </div>
+            <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+              <p className="text-[11px] text-neutral-500 mb-1">Gender</p>
+              <p className="text-sm font-medium capitalize">{player.gender}</p>
+            </div>
+            <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+              <p className="text-[11px] text-neutral-500 mb-1">Registered</p>
+              <p className="text-sm font-medium">{fmtDate(player.createdAt)}</p>
+            </div>
+            <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+              <p className="text-[11px] text-neutral-500 mb-1">Last Seen</p>
+              <p className="text-sm font-medium">{player.lastSeen ? fmtDate(player.lastSeen.date) : "—"}</p>
+              {player.lastSeen && <p className="text-[10px] text-neutral-500">{player.lastSeen.venue}</p>}
+            </div>
+          </div>
+
+          {/* Aggregate stats */}
+          <div className="grid grid-cols-4 gap-2">
+            <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-2.5 text-center">
+              <Gamepad2 className="h-4 w-4 mx-auto mb-1 text-purple-400" />
+              <p className="text-sm font-bold tabular-nums">{player.totalGames}</p>
+              <p className="text-[10px] text-neutral-500">Games</p>
+            </div>
+            <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-2.5 text-center">
+              <CalendarDays className="h-4 w-4 mx-auto mb-1 text-blue-400" />
+              <p className="text-sm font-bold tabular-nums">{player.totalSessions}</p>
+              <p className="text-[10px] text-neutral-500">Sessions</p>
+            </div>
+            <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-2.5 text-center">
+              <Timer className="h-4 w-4 mx-auto mb-1 text-amber-400" />
+              <p className="text-sm font-bold tabular-nums">{fmtMin(player.totalPlayMinutes)}</p>
+              <p className="text-[10px] text-neutral-500">Play Time</p>
+            </div>
+            <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-2.5 text-center">
+              <Star className="h-4 w-4 mx-auto mb-1 text-yellow-400" />
+              <p className="text-sm font-bold tabular-nums">{avgFeedback ?? "—"}</p>
+              <p className="text-[10px] text-neutral-500">Avg Rating</p>
+            </div>
+          </div>
+
+          {/* Venues */}
+          {player.venues.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-neutral-400 mb-2">Venues</p>
+              <div className="flex flex-wrap gap-1.5">
+                {player.venues.map((v) => (
+                  <span key={v.id} className="inline-flex items-center gap-1 rounded-lg bg-neutral-900 border border-neutral-800 px-2 py-1 text-xs text-neutral-300">
+                    <MapPin className="h-3 w-3 text-neutral-500" />
+                    {v.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Session history */}
+          <div>
+            <p className="text-xs font-medium text-neutral-400 mb-2">Session History</p>
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-neutral-500" />
+              </div>
+            ) : sessions.length === 0 ? (
+              <p className="text-center py-6 text-sm text-neutral-500">No sessions yet</p>
+            ) : (
+              <div className="space-y-2">
+                {sessions.map((s) => (
+                  <div key={s.sessionId} className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className={cn(
+                          "h-1.5 w-1.5 rounded-full",
+                          s.status === "open" ? "bg-green-500" : "bg-neutral-600"
+                        )} />
+                        <span className="text-sm font-medium">
+                          {new Date(s.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                        </span>
+                      </div>
+                      <span className="text-xs text-neutral-500">{s.venue.name}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div>
+                        <p className="text-sm font-bold tabular-nums">{s.gamesPlayed}</p>
+                        <p className="text-[10px] text-neutral-500">Games</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold tabular-nums">{fmtMin(s.totalPlayMinutes)}</p>
+                        <p className="text-[10px] text-neutral-500">Play Time</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold tabular-nums">{s.partnersCount}</p>
+                        <p className="text-[10px] text-neutral-500">Partners</p>
+                      </div>
+                    </div>
+                    {(s.gamesByType.men > 0 || s.gamesByType.women > 0 || s.gamesByType.mixed > 0) && (
+                      <div className="mt-2 flex gap-1.5">
+                        {s.gamesByType.mixed > 0 && (
+                          <span className="rounded bg-purple-600/15 px-1.5 py-0.5 text-[10px] text-purple-400">{s.gamesByType.mixed} mixed</span>
+                        )}
+                        {s.gamesByType.men > 0 && (
+                          <span className="rounded bg-blue-600/15 px-1.5 py-0.5 text-[10px] text-blue-400">{s.gamesByType.men} men</span>
+                        )}
+                        {s.gamesByType.women > 0 && (
+                          <span className="rounded bg-pink-600/15 px-1.5 py-0.5 text-[10px] text-pink-400">{s.gamesByType.women} women</span>
+                        )}
+                      </div>
+                    )}
+                    {s.feedback && (
+                      <div className="mt-2 flex items-center gap-2 rounded bg-neutral-800 px-2 py-1.5">
+                        <Star className="h-3 w-3 text-yellow-400 shrink-0" />
+                        <span className="text-[11px] text-neutral-300">{s.feedback.experience}/5</span>
+                        <span className="text-[10px] text-neutral-500">·</span>
+                        <span className="text-[10px] text-neutral-400 capitalize">{s.feedback.matchQuality} matches</span>
+                        {s.feedback.wouldReturn === "yes" && (
+                          <span className="ml-auto text-[10px] text-green-400">Would return</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

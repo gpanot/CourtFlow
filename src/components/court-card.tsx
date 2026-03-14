@@ -31,6 +31,7 @@ interface CourtCardProps {
   court: CourtData;
   variant?: "tv" | "staff";
   warmup?: boolean;
+  queueWaiting?: number;
   onClick?: () => void;
 }
 
@@ -55,7 +56,7 @@ function isStartingPhase(assignment: Assignment | null): boolean {
   return elapsed < AUTO_START_DELAY_SECONDS;
 }
 
-export function CourtCard({ court, variant = "tv", warmup = false, onClick }: CourtCardProps) {
+export function CourtCard({ court, variant = "tv", warmup = false, queueWaiting = 0, onClick }: CourtCardProps) {
   const isWarmupCourt = court.status === "warmup";
   const isIdleWarmup = warmup && court.status === "idle";
   const starting = court.status === "active" && isStartingPhase(court.assignment);
@@ -121,16 +122,16 @@ export function CourtCard({ court, variant = "tv", warmup = false, onClick }: Co
                   <Link className={cn("shrink-0 text-blue-400", isTV ? "h-[min(1.5vw,2vh)] w-[min(1.5vw,2vh)] min-h-3 min-w-3" : "h-4 w-4")} />
                 )}
                 <span className="font-medium truncate">{player.name}</span>
-                <span
-                  className={cn(
-                    "shrink-0 rounded-full px-2 py-0.5 font-medium",
-                    isTV ? "" : "text-xs",
-                    skillBadgeColors[player.skillLevel] || "bg-neutral-600"
-                  )}
-                  style={isTV ? { fontSize: "clamp(0.5rem, min(0.9vw,1.3vh), 0.8rem)" } : undefined}
-                >
-                  {player.skillLevel[0].toUpperCase()}
-                </span>
+                {!isTV && (
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-full px-2 py-0.5 font-medium text-xs",
+                      skillBadgeColors[player.skillLevel] || "bg-neutral-600"
+                    )}
+                  >
+                    {player.skillLevel[0].toUpperCase()}
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -151,16 +152,16 @@ export function CourtCard({ court, variant = "tv", warmup = false, onClick }: Co
             {court.players.map((player) => (
               <div key={player.id} className="flex items-center gap-2">
                 <span className="font-medium truncate text-amber-200">{player.name}</span>
-                <span
-                  className={cn(
-                    "shrink-0 rounded-full px-2 py-0.5 font-medium",
-                    isTV ? "" : "text-xs",
-                    skillBadgeColors[player.skillLevel] || "bg-neutral-600"
-                  )}
-                  style={isTV ? { fontSize: "clamp(0.5rem, min(0.9vw,1.3vh), 0.8rem)" } : undefined}
-                >
-                  {player.skillLevel[0].toUpperCase()}
-                </span>
+                {!isTV && (
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-full px-2 py-0.5 font-medium text-xs",
+                      skillBadgeColors[player.skillLevel] || "bg-neutral-600"
+                    )}
+                  >
+                    {player.skillLevel[0].toUpperCase()}
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -183,16 +184,16 @@ export function CourtCard({ court, variant = "tv", warmup = false, onClick }: Co
             {court.players.map((player) => (
               <div key={player.id} className="flex items-center gap-2">
                 <span className="font-medium truncate text-amber-200">{player.name}</span>
-                <span
-                  className={cn(
-                    "shrink-0 rounded-full px-2 py-0.5 font-medium",
-                    isTV ? "" : "text-xs",
-                    skillBadgeColors[player.skillLevel] || "bg-neutral-600"
-                  )}
-                  style={isTV ? { fontSize: "clamp(0.5rem, min(0.9vw,1.3vh), 0.8rem)" } : undefined}
-                >
-                  {player.skillLevel[0].toUpperCase()}
-                </span>
+                {!isTV && (
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-full px-2 py-0.5 font-medium text-xs",
+                      skillBadgeColors[player.skillLevel] || "bg-neutral-600"
+                    )}
+                  >
+                    {player.skillLevel[0].toUpperCase()}
+                  </span>
+                )}
               </div>
             ))}
           </div>
@@ -201,12 +202,19 @@ export function CourtCard({ court, variant = "tv", warmup = false, onClick }: Co
 
       {/* Idle — available (no warmup context) */}
       {court.status === "idle" && !warmup && (
-        <p
-          className={cn("text-neutral-400", isTV ? "mt-[min(1vh,0.5vw)]" : "mt-4 text-lg")}
-          style={isTV ? { fontSize: "clamp(0.75rem, min(2.5vw,4vh), 3rem)" } : undefined}
-        >
-          Available
-        </p>
+        <div className={isTV ? "mt-[min(1vh,0.5vw)]" : "mt-4"}>
+          <p
+            className={cn("text-neutral-400", isTV ? "" : "text-lg")}
+            style={isTV ? { fontSize: "clamp(0.75rem, min(2.5vw,4vh), 3rem)" } : undefined}
+          >
+            Available
+          </p>
+          {!isTV && queueWaiting >= 4 && (
+            <p className="mt-2 text-sm font-medium text-green-400">
+              Tap to start a new game &rarr;
+            </p>
+          )}
+        </div>
       )}
 
       {/* Idle — waiting for warmup players */}

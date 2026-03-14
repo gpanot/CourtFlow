@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/cn";
-import { Link, Coffee, MoreVertical, UserX, LogOut } from "lucide-react";
-import { TV_QUEUE_DISPLAY_COUNT } from "@/lib/constants";
+import { Link, Coffee, MoreVertical, UserX, LogOut, ArrowUpDown, ChevronLeft, Users, Unlink } from "lucide-react";
+import { TV_QUEUE_DISPLAY_COUNT, SKILL_LEVELS, type SkillLevelType } from "@/lib/constants";
 
 const skillDotColors: Record<string, string> = {
   beginner: "bg-green-500",
@@ -32,28 +32,35 @@ export interface QueueEntryData {
   breakUntil: string | null;
   joinedAt: string;
   groupId: string | null;
+  totalPlayMinutesToday: number;
+  gamesPlayed: number;
   player: QueuePlayer;
   group: QueueGroup | null;
 }
 
-type PlayerAction = "remove_from_queue" | "end_session";
+type PlayerAction = "remove_from_queue" | "end_session" | "change_level";
 
 interface QueuePanelProps {
   entries: QueueEntryData[];
   variant?: "tv" | "staff";
   maxDisplay?: number;
-  onPlayerAction?: (playerId: string, playerName: string, action: PlayerAction) => void;
+  onPlayerAction?: (playerId: string, playerName: string, action: PlayerAction, data?: Record<string, unknown>) => void;
+  onCreateGroup?: () => void;
+  onDissolveGroup?: (groupId: string) => void;
 }
 
-export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction }: QueuePanelProps) {
+export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction, onCreateGroup, onDissolveGroup }: QueuePanelProps) {
   const isTV = variant === "tv";
   const limit = maxDisplay ?? TV_QUEUE_DISPLAY_COUNT;
   const waitingCount = entries.filter((e) => e.status === "waiting" || e.status === "on_break").length;
 
   const seen = new Set<string>();
-  const displayEntries: { key: string; entry: QueueEntryData; isGroup: boolean; groupSize: number; position: number; allPlayers: { id: string; name: string; skillLevel?: string }[]; cumulativePlayersBefore: number }[] = [];
+  const displayEntries: { key: string; entry: QueueEntryData; isGroup: boolean; groupSize: number; position: number; allPlayers: { id: string; name: string; skillLevel?: string; gamesPlayed?: number; totalPlayMinutesToday?: number }[]; cumulativePlayersBefore: number }[] = [];
   let position = 0;
   let cumulativePlayers = 0;
+
+  const entryByPlayerId = new Map<string, QueueEntryData>();
+  for (const e of entries) entryByPlayerId.set(e.playerId, e);
 
   for (const entry of entries) {
     if (entry.status !== "waiting" && entry.status !== "on_break") continue;
@@ -68,8 +75,11 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
     const groupSize = groupMembers.length;
 
     const allPlayers = entry.groupId && entry.group
-      ? groupMembers.map((e) => ({ id: e.player.id, name: e.player.name, skillLevel: e.player.skillLevel }))
-      : [{ id: entry.player.id, name: entry.player.name, skillLevel: entry.player.skillLevel }];
+      ? groupMembers.map((e) => {
+          const qe = entryByPlayerId.get(e.player.id);
+          return { id: e.player.id, name: e.player.name, skillLevel: e.player.skillLevel, gamesPlayed: qe?.gamesPlayed ?? 0, totalPlayMinutesToday: qe?.totalPlayMinutesToday ?? 0 };
+        })
+      : [{ id: entry.player.id, name: entry.player.name, skillLevel: entry.player.skillLevel, gamesPlayed: entry.gamesPlayed ?? 0, totalPlayMinutesToday: entry.totalPlayMinutesToday ?? 0 }];
 
     const playerCount = entry.groupId ? groupSize : 1;
 
@@ -88,16 +98,66 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
     if (displayEntries.length >= limit) break;
   }
 
+  const courtBatches: { label: string; items: typeof displayEntries }[] = [];
+  if (isTV && displayEntries.length > 0) {
+    let currentBatch: typeof displayEntries = [];
+    let batchPlayerCount = 0;
+    let batchIndex = 0;
+
+    for (const item of displayEntries) {
+      const playerCount = item.isGroup ? item.groupSize : 1;
+      if (batchPlayerCount > 0 && batchPlayerCount + playerCount > 4) {
+        courtBatches.push({
+          label: batchIndex === 0 ? "Next" : `+${batchIndex}`,
+          items: currentBatch,
+        });
+        currentBatch = [];
+        batchPlayerCount = 0;
+        batchIndex++;
+      }
+      currentBatch.push(item);
+      batchPlayerCount += playerCount;
+      if (batchPlayerCount >= 4) {
+        courtBatches.push({
+          label: batchIndex === 0 ? "Next" : `+${batchIndex}`,
+          items: currentBatch,
+        });
+        currentBatch = [];
+        batchPlayerCount = 0;
+        batchIndex++;
+      }
+    }
+    if (currentBatch.length > 0) {
+      courtBatches.push({
+        label: batchIndex === 0 ? "Next" : `+${batchIndex}`,
+        items: currentBatch,
+      });
+    }
+  }
+
+  const soloWaitingCount = entries.filter((e) => e.status === "waiting" && !e.groupId).length;
+
   return (
-    <div className={cn("flex flex-col", isTV ? "gap-[0.5vh]" : "gap-1")}>
-      <h4
-        className={cn(
-          "font-semibold text-neutral-400 uppercase tracking-wider",
-          isTV ? "text-[clamp(0.65rem,1.2vw,1.25rem)] mb-[0.5vh]" : "text-sm mb-1"
+    <div className={cn("flex flex-col", isTV ? "gap-[0.8vh]" : "gap-1")}>
+      <div className={cn("flex items-center justify-between", isTV ? "mb-[0.5vh]" : "mb-1")}>
+        <h4
+          className={cn(
+            "font-semibold text-neutral-400 uppercase tracking-wider",
+            isTV ? "text-[clamp(0.65rem,1.2vw,1.25rem)]" : "text-sm"
+          )}
+        >
+          Queue ({entries.filter((e) => e.status === "waiting").length} waiting)
+        </h4>
+        {!isTV && onCreateGroup && soloWaitingCount >= 4 && (
+          <button
+            onClick={onCreateGroup}
+            className="flex items-center gap-1.5 rounded-lg bg-blue-600/15 px-3 py-1.5 text-xs font-medium text-blue-400 hover:bg-blue-600/25 transition-colors"
+          >
+            <Users className="h-3.5 w-3.5" />
+            Create Group
+          </button>
         )}
-      >
-        Queue ({entries.filter((e) => e.status === "waiting").length} waiting)
-      </h4>
+      </div>
 
       {displayEntries.length === 0 && (
         <p className={cn("text-neutral-500", isTV ? "text-[clamp(0.75rem,1.5vw,1.5rem)]" : "text-sm")}>
@@ -105,26 +165,56 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
         </p>
       )}
 
-      {displayEntries.map(({ key, entry, isGroup, groupSize, position: pos, allPlayers, cumulativePlayersBefore }) => {
-        const showSeparator = isTV && cumulativePlayersBefore > 0 && cumulativePlayersBefore % 4 === 0;
-        return (
-          <div key={key}>
-            {showSeparator && (
-              <div className="my-[0.6vh] border-t border-dashed border-neutral-600/50" />
+      {isTV ? (
+        courtBatches.map((batch, batchIdx) => (
+          <div
+            key={batchIdx}
+            className={cn(
+              "rounded-lg border px-[0.6vw] py-[0.4vh]",
+              batchIdx === 0
+                ? "border-green-500/30 bg-green-500/5"
+                : "border-neutral-700/50 bg-neutral-800/30"
             )}
-            <QueueRow
-              entry={entry}
-              isGroup={isGroup}
-              groupSize={groupSize}
-              position={pos}
-              allPlayers={allPlayers}
-              isTV={isTV}
-              isNextUp={cumulativePlayersBefore < 4}
-              onPlayerAction={onPlayerAction}
-            />
+          >
+            <p className={cn(
+              "uppercase tracking-wider font-semibold mb-[0.3vh]",
+              batchIdx === 0 ? "text-green-500" : "text-neutral-600",
+            )} style={{ fontSize: "clamp(0.4rem, 0.8vw, 0.65rem)" }}>
+              {batch.label}
+            </p>
+            <div className="flex flex-col gap-[0.3vh]">
+              {batch.items.map(({ key, entry, isGroup, groupSize, position: pos, allPlayers, cumulativePlayersBefore }) => (
+                <QueueRow
+                  key={key}
+                  entry={entry}
+                  isGroup={isGroup}
+                  groupSize={groupSize}
+                  position={pos}
+                  allPlayers={allPlayers}
+                  isTV={isTV}
+                  isNextUp={cumulativePlayersBefore < 4}
+                  onPlayerAction={onPlayerAction}
+                />
+              ))}
+            </div>
           </div>
-        );
-      })}
+        ))
+      ) : (
+        displayEntries.map(({ key, entry, isGroup, groupSize, position: pos, allPlayers, cumulativePlayersBefore }) => (
+          <QueueRow
+            key={key}
+            entry={entry}
+            isGroup={isGroup}
+            groupSize={groupSize}
+            position={pos}
+            allPlayers={allPlayers}
+            isTV={isTV}
+            isNextUp={cumulativePlayersBefore < 4}
+            onPlayerAction={onPlayerAction}
+            onDissolveGroup={onDissolveGroup}
+          />
+        ))
+      )}
 
       {isTV && waitingCount > cumulativePlayers && displayEntries.length >= limit && (
         <p className="text-center text-neutral-500 mt-[0.5vh] text-[clamp(0.6rem,1.1vw,1rem)]">
@@ -148,6 +238,15 @@ function SkillDot({ level, isTV }: { level?: string; isTV: boolean }) {
   );
 }
 
+function PlayerStats({ gamesPlayed, playMinutes, className }: { gamesPlayed: number; playMinutes: number; className?: string }) {
+  if (gamesPlayed === 0 && playMinutes === 0) return null;
+  return (
+    <span className={cn("text-neutral-500 whitespace-nowrap", className)}>
+      ({gamesPlayed} {gamesPlayed === 1 ? "game" : "games"} - {playMinutes}min)
+    </span>
+  );
+}
+
 function QueueRow({
   entry,
   isGroup,
@@ -157,20 +256,22 @@ function QueueRow({
   isTV,
   isNextUp,
   onPlayerAction,
+  onDissolveGroup,
 }: {
   entry: QueueEntryData;
   isGroup: boolean;
   groupSize: number;
   position: number;
-  allPlayers: { id: string; name: string; skillLevel?: string }[];
+  allPlayers: { id: string; name: string; skillLevel?: string; gamesPlayed?: number; totalPlayMinutesToday?: number }[];
   isTV: boolean;
   isNextUp: boolean;
-  onPlayerAction?: (playerId: string, playerName: string, action: PlayerAction) => void;
+  onPlayerAction?: (playerId: string, playerName: string, action: PlayerAction, data?: Record<string, unknown>) => void;
+  onDissolveGroup?: (groupId: string) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [selectedPlayer, setSelectedPlayer] = useState<{ id: string; name: string } | null>(null);
+  const [selectedPlayer, setSelectedPlayer] = useState<{ id: string; name: string; skillLevel?: string } | null>(null);
 
-  const openMenuFor = (player: { id: string; name: string }) => {
+  const openMenuFor = (player: { id: string; name: string; skillLevel?: string }) => {
     setSelectedPlayer(player);
     setMenuOpen(true);
   };
@@ -203,23 +304,33 @@ function QueueRow({
                 </span>
               </div>
               {!isTV && onPlayerAction && entry.group && (
-                <div className="flex flex-wrap gap-1 ml-6">
+                <div className="flex flex-wrap items-center gap-1 ml-6">
                   {allPlayers.map((p) => (
                     <button
                       key={p.id}
-                      onClick={() => openMenuFor(p)}
-                      className="rounded bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300 hover:bg-neutral-700 hover:text-white transition-colors"
+                      onClick={() => openMenuFor({ id: p.id, name: p.name, skillLevel: p.skillLevel })}
+                      className="flex items-center gap-1 rounded bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300 hover:bg-neutral-700 hover:text-white transition-colors"
                     >
                       {p.name}
+                      <PlayerStats gamesPlayed={p.gamesPlayed ?? 0} playMinutes={p.totalPlayMinutesToday ?? 0} className="text-xs" />
                     </button>
                   ))}
+                  {onDissolveGroup && entry.groupId && (
+                    <button
+                      onClick={() => onDissolveGroup(entry.groupId!)}
+                      className="flex items-center gap-1 rounded bg-red-600/15 px-2 py-0.5 text-xs text-red-400 hover:bg-red-600/25 transition-colors"
+                    >
+                      <Unlink className="h-3 w-3" />
+                      Dissolve
+                    </button>
+                  )}
                 </div>
               )}
               {(isTV || !onPlayerAction) && entry.group && (
                 <div className={cn("flex flex-wrap items-center gap-x-2 gap-y-0.5", isTV ? "text-[clamp(0.6rem,1vw,1rem)]" : "ml-6 text-xs")}>
                   {entry.group.queueEntries.map((e, i) => (
                     <span key={e.player.id} className="flex items-center gap-1 text-neutral-500">
-                      <SkillDot level={e.player.skillLevel} isTV={isTV} />
+                      {!isTV && <SkillDot level={e.player.skillLevel} isTV={isTV} />}
                       {e.player.name}{i < entry.group!.queueEntries.length - 1 && ","}
                     </span>
                   ))}
@@ -228,10 +339,13 @@ function QueueRow({
             </div>
           ) : (
             <div className="flex items-center gap-1.5">
-              <SkillDot level={entry.player.skillLevel} isTV={isTV} />
+              {!isTV && <SkillDot level={entry.player.skillLevel} isTV={isTV} />}
               <span className={cn("font-medium", isTV ? "text-[clamp(0.75rem,1.5vw,1.5rem)] line-clamp-2 break-words" : "text-sm truncate")}>
                 {entry.player.name}
               </span>
+              {!isTV && (
+                <PlayerStats gamesPlayed={entry.gamesPlayed ?? 0} playMinutes={entry.totalPlayMinutesToday ?? 0} className="text-sm" />
+              )}
             </div>
           )}
         </div>
@@ -253,7 +367,7 @@ function QueueRow({
 
         {!isTV && onPlayerAction && !isGroup && (
           <button
-            onClick={() => openMenuFor({ id: entry.playerId, name: entry.player.name })}
+            onClick={() => openMenuFor({ id: entry.playerId, name: entry.player.name, skillLevel: entry.player.skillLevel })}
             className="rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-white"
           >
             <MoreVertical className="h-4 w-4" />
@@ -265,10 +379,16 @@ function QueueRow({
       {menuOpen && selectedPlayer && onPlayerAction && (
         <PlayerActionMenu
           playerName={selectedPlayer.name}
-          onAction={(action) => {
-            onPlayerAction(selectedPlayer.id, selectedPlayer.name, action);
-            setMenuOpen(false);
-            setSelectedPlayer(null);
+          currentLevel={selectedPlayer.skillLevel}
+          onAction={(action, data) => {
+            onPlayerAction(selectedPlayer.id, selectedPlayer.name, action, data);
+            if (action !== "change_level") {
+              setMenuOpen(false);
+              setSelectedPlayer(null);
+            }
+          }}
+          onLevelChanged={(newLevel) => {
+            setSelectedPlayer((prev) => prev ? { ...prev, skillLevel: newLevel } : prev);
           }}
           onClose={() => { setMenuOpen(false); setSelectedPlayer(null); }}
         />
@@ -277,16 +397,29 @@ function QueueRow({
   );
 }
 
+const skillLevelMeta: Record<string, { color: string; label: string }> = {
+  beginner: { color: "bg-green-500", label: "Beginner" },
+  intermediate: { color: "bg-blue-500", label: "Intermediate" },
+  advanced: { color: "bg-purple-500", label: "Advanced" },
+  pro: { color: "bg-red-500", label: "Pro" },
+};
+
 function PlayerActionMenu({
   playerName,
+  currentLevel,
   onAction,
+  onLevelChanged,
   onClose,
 }: {
   playerName: string;
-  onAction: (action: PlayerAction) => void;
+  currentLevel?: string;
+  onAction: (action: PlayerAction, data?: Record<string, unknown>) => void;
+  onLevelChanged?: (newLevel: string) => void;
   onClose: () => void;
 }) {
   const [confirmAction, setConfirmAction] = useState<PlayerAction | null>(null);
+  const [view, setView] = useState<"main" | "level">("main");
+  const [savingLevel, setSavingLevel] = useState(false);
 
   if (confirmAction) {
     const label = confirmAction === "remove_from_queue" ? "Remove from Queue" : "End Player Session";
@@ -325,6 +458,59 @@ function PlayerActionMenu({
     );
   }
 
+  if (view === "level") {
+    return (
+      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={onClose}>
+        <div
+          className="w-full max-w-lg rounded-t-2xl border-t border-neutral-700 bg-neutral-900 p-5 pb-8"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <button
+              onClick={() => setView("main")}
+              className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-white"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <h3 className="text-lg font-bold">Change Level — {playerName}</h3>
+          </div>
+          <div className="space-y-2">
+            {SKILL_LEVELS.map((level) => {
+              const meta = skillLevelMeta[level];
+              const isCurrent = level === currentLevel;
+              return (
+                <button
+                  key={level}
+                  disabled={isCurrent || savingLevel}
+                  onClick={() => {
+                    setSavingLevel(true);
+                    onAction("change_level", { skillLevel: level });
+                    onLevelChanged?.(level);
+                    setSavingLevel(false);
+                    setView("main");
+                  }}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-xl px-4 py-3.5 text-left font-medium transition-colors",
+                    isCurrent
+                      ? "bg-neutral-700 text-white ring-1 ring-neutral-500"
+                      : "bg-neutral-800 text-white hover:bg-neutral-700",
+                    savingLevel && "opacity-50 pointer-events-none"
+                  )}
+                >
+                  <span className={cn("h-3 w-3 rounded-full shrink-0", meta.color)} />
+                  <span className="flex-1">{meta.label}</span>
+                  {isCurrent && (
+                    <span className="text-xs text-neutral-400 font-normal">Current</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={onClose}>
       <div
@@ -333,6 +519,19 @@ function PlayerActionMenu({
       >
         <h3 className="text-lg font-bold mb-4">{playerName}</h3>
         <div className="space-y-2">
+          <button
+            onClick={() => setView("level")}
+            className="flex w-full items-center gap-3 rounded-xl bg-neutral-800 px-4 py-3.5 text-left font-medium text-white hover:bg-neutral-700 transition-colors"
+          >
+            <ArrowUpDown className="h-5 w-5 text-blue-400 shrink-0" />
+            <div className="flex-1">
+              <span>Change Level</span>
+              <p className="text-xs text-neutral-400 font-normal">Override player's self-reported skill level</p>
+            </div>
+            {currentLevel && (
+              <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", skillLevelMeta[currentLevel]?.color ?? "bg-neutral-500")} />
+            )}
+          </button>
           <button
             onClick={() => setConfirmAction("remove_from_queue")}
             className="flex w-full items-center gap-3 rounded-xl bg-neutral-800 px-4 py-3.5 text-left font-medium text-white hover:bg-neutral-700 transition-colors"

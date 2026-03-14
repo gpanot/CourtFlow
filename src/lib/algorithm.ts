@@ -139,6 +139,34 @@ function selectBestFour(
   return bestCombo;
 }
 
+/**
+ * Find the earliest full group of 4 waiting players (FIFO by oldest member).
+ * Returns null if no complete group exists.
+ */
+function findFullGroup(candidates: QueueCandidate[]): QueueCandidate[] | null {
+  const groups = new Map<string, QueueCandidate[]>();
+  for (const c of candidates) {
+    if (!c.groupId) continue;
+    const members = groups.get(c.groupId) ?? [];
+    members.push(c);
+    groups.set(c.groupId, members);
+  }
+
+  let earliest: QueueCandidate[] | null = null;
+  let earliestJoin = Infinity;
+
+  for (const members of groups.values()) {
+    if (members.length !== 4) continue;
+    const oldestJoin = Math.min(...members.map((m) => m.joinedAt.getTime()));
+    if (oldestJoin < earliestJoin) {
+      earliestJoin = oldestJoin;
+      earliest = members;
+    }
+  }
+
+  return earliest;
+}
+
 export async function runRotation(
   venueId: string,
   sessionId: string,
@@ -170,8 +198,14 @@ export async function runRotation(
     totalPlayMinutesToday: e.totalPlayMinutesToday,
   }));
 
+  // Priority 1: assign a complete group of 4 as an atomic unit
+  const fullGroup = findFullGroup(allCandidates);
+
+  // Priority 2: pick 4 solo (ungrouped) players — grouped players wait for their group
+  const soloCandidates = allCandidates.filter((c) => !c.groupId);
   const currentCounts = target ? await getSessionGameTypeCounts(sessionId) : { men: 0, women: 0, mixed: 0 };
-  const selectedPlayers = selectBestFour(allCandidates, currentCounts, target);
+
+  const selectedPlayers = fullGroup ?? selectBestFour(soloCandidates, currentCounts, target);
   if (!selectedPlayers) return false;
 
   const playerIds = selectedPlayers.map((p) => p.playerId);

@@ -8,7 +8,7 @@ import { joinVenue } from "@/lib/socket-client";
 import { CourtCard, type CourtData } from "@/components/court-card";
 import { QueuePanel, type QueueEntryData } from "@/components/queue-panel";
 import { cn } from "@/lib/cn";
-import { Plus, X, LogOut, Users, LayoutGrid, AlertTriangle, User, Flame, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, History, Calendar, Loader2, Target, Settings2 } from "lucide-react";
+import { Plus, X, LogOut, Users, LayoutGrid, AlertTriangle, User, Flame, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, History, Calendar, Loader2, Target, Settings2, Play, Check } from "lucide-react";
 import { WARMUP_DURATION_SECONDS } from "@/lib/constants";
 import { QRCodeSVG } from "qrcode.react";
 import { SessionSummary } from "./session-summary";
@@ -61,6 +61,7 @@ export function StaffDashboard() {
   const [showHistory, setShowHistory] = useState(false);
   const [gameTypeMix, setGameTypeMix] = useState<GameTypeMixStats | null>(null);
   const [showMixEditor, setShowMixEditor] = useState(false);
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
   const { on } = useSocket();
 
   const fetchState = useCallback(async () => {
@@ -174,13 +175,45 @@ export function StaffDashboard() {
     }
   };
 
-  const handlePlayerAction = async (playerId: string, _playerName: string, action: "remove_from_queue" | "end_session") => {
+  const handleStartGameOnIdle = async (courtId: string) => {
+    try {
+      await api.post(`/api/courts/${courtId}/start-game`);
+      setSelectedCourt(null);
+      await fetchState();
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  };
+
+  const handlePlayerAction = async (playerId: string, _playerName: string, action: "remove_from_queue" | "end_session" | "change_level", data?: Record<string, unknown>) => {
     try {
       if (action === "remove_from_queue") {
         await api.post("/api/queue/staff-remove", { playerId, venueId });
-      } else {
+      } else if (action === "end_session") {
         await api.post(`/api/players/${playerId}/end-session`, { venueId, reason: "staff_action" });
+      } else if (action === "change_level" && data?.skillLevel) {
+        await api.patch(`/api/players/${playerId}`, { skillLevel: data.skillLevel });
       }
+      await fetchState();
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  };
+
+  const handleCreateGroup = async (playerIds: string[]) => {
+    try {
+      await api.post("/api/queue/group/staff-create", { playerIds, venueId });
+      setShowCreateGroup(false);
+      await fetchState();
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  };
+
+  const handleDissolveGroup = async (groupId: string) => {
+    if (!confirm("Dissolve this group? Players will become solo in the queue.")) return;
+    try {
+      await api.post("/api/queue/group/dissolve", { groupId, venueId });
       await fetchState();
     } catch (e) {
       alert((e as Error).message);
@@ -335,6 +368,7 @@ export function StaffDashboard() {
                   court={court}
                   variant="staff"
                   warmup={isWarmupMode}
+                  queueWaiting={waitingCount}
                   onClick={() => setSelectedCourt(court)}
                 />
               ))}
@@ -359,7 +393,14 @@ export function StaffDashboard() {
         )}
 
         {session && tab === "queue" && (
-          <QueuePanel entries={queue} variant="staff" maxDisplay={50} onPlayerAction={handlePlayerAction} />
+          <QueuePanel
+            entries={queue}
+            variant="staff"
+            maxDisplay={50}
+            onPlayerAction={handlePlayerAction}
+            onCreateGroup={() => setShowCreateGroup(true)}
+            onDissolveGroup={handleDissolveGroup}
+          />
         )}
 
         {tab === "qr" && (
@@ -437,6 +478,19 @@ export function StaffDashboard() {
                   >
                     <RotateCcw className="h-5 w-5" />
                     Start New Game
+                  </button>
+                )}
+
+                {selectedCourt.status === "idle" && !isWarmupMode && (
+                  <button
+                    onClick={() => handleStartGameOnIdle(selectedCourt.id)}
+                    disabled={waitingCount < 4}
+                    className="w-full rounded-xl bg-green-600 py-5 text-lg font-bold text-white transition-colors hover:bg-green-500 disabled:opacity-40 disabled:hover:bg-green-600 flex items-center justify-center gap-2"
+                  >
+                    <Play className="h-5 w-5" />
+                    {waitingCount >= 4
+                      ? "Start New Game"
+                      : `Need ${4 - waitingCount} more player${4 - waitingCount !== 1 ? "s" : ""}`}
                   </button>
                 )}
 
@@ -763,6 +817,15 @@ export function StaffDashboard() {
             )}
           </div>
         </div>
+      )}
+
+      {/* Create Group Modal */}
+      {showCreateGroup && (
+        <CreateGroupModal
+          entries={queue}
+          onConfirm={handleCreateGroup}
+          onClose={() => setShowCreateGroup(false)}
+        />
       )}
 
       {/* Session Summary (after close) */}
@@ -1157,6 +1220,117 @@ function GameTypeMixEditor({
             Cancel
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function CreateGroupModal({
+  entries,
+  onConfirm,
+  onClose,
+}: {
+  entries: QueueEntryData[];
+  onConfirm: (playerIds: string[]) => void;
+  onClose: () => void;
+}) {
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const soloWaiting = entries.filter((e) => e.status === "waiting" && !e.groupId);
+
+  const toggle = (playerId: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(playerId)) {
+        next.delete(playerId);
+      } else if (next.size < 4) {
+        next.add(playerId);
+      }
+      return next;
+    });
+  };
+
+  const skillDotColors: Record<string, string> = {
+    beginner: "bg-green-500",
+    intermediate: "bg-blue-500",
+    advanced: "bg-purple-500",
+    pro: "bg-red-500",
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950 text-white">
+      <header className="flex items-center gap-3 border-b border-neutral-800 px-4 py-3">
+        <button
+          onClick={onClose}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-neutral-400 hover:bg-neutral-700 transition-colors"
+        >
+          <X className="h-5 w-5" />
+        </button>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-lg font-bold leading-tight">Create Group</h1>
+          <p className="text-sm text-neutral-400">
+            Select 4 players · {selected.size}/4 selected
+          </p>
+        </div>
+      </header>
+
+      <main className="flex-1 overflow-y-auto p-4">
+        {soloWaiting.length === 0 ? (
+          <div className="flex h-48 flex-col items-center justify-center gap-2 text-center">
+            <Users className="h-10 w-10 text-neutral-700" />
+            <p className="text-neutral-500">No solo players available</p>
+            <p className="text-sm text-neutral-600">Players must be waiting and not already in a group.</p>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            {soloWaiting.map((entry) => {
+              const isSelected = selected.has(entry.playerId);
+              const isFull = selected.size >= 4 && !isSelected;
+              return (
+                <button
+                  key={entry.playerId}
+                  onClick={() => toggle(entry.playerId)}
+                  disabled={isFull}
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-xl border px-4 py-3.5 text-left transition-all",
+                    isSelected
+                      ? "border-blue-500 bg-blue-600/15"
+                      : isFull
+                        ? "border-neutral-800 bg-neutral-900 opacity-40"
+                        : "border-neutral-800 bg-neutral-900 hover:border-neutral-700 hover:bg-neutral-800"
+                  )}
+                >
+                  <div className={cn(
+                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+                    isSelected ? "border-blue-500 bg-blue-500" : "border-neutral-600"
+                  )}>
+                    {isSelected && <Check className="h-3.5 w-3.5 text-white" />}
+                  </div>
+                  <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", skillDotColors[entry.player.skillLevel ?? ""] ?? "bg-neutral-500")} />
+                  <span className="flex-1 font-medium text-neutral-200 truncate">
+                    {entry.player.name}
+                  </span>
+                  <span className="text-xs text-neutral-500 capitalize">
+                    {entry.player.skillLevel}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </main>
+
+      <div className="border-t border-neutral-800 px-4 py-4 pb-8">
+        <button
+          onClick={() => onConfirm(Array.from(selected))}
+          disabled={selected.size !== 4}
+          className="w-full rounded-xl bg-blue-600 py-4 text-lg font-bold text-white transition-colors hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 flex items-center justify-center gap-2"
+        >
+          <Users className="h-5 w-5" />
+          {selected.size === 4
+            ? "Create Group"
+            : `Select ${4 - selected.size} more player${4 - selected.size !== 1 ? "s" : ""}`}
+        </button>
       </div>
     </div>
   );

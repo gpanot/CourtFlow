@@ -123,6 +123,21 @@ export async function GET(request: NextRequest) {
       ),
     };
 
+    const playerIds = players.map((p) => p.id);
+    const gameAssignments = playerIds.length > 0
+      ? await prisma.courtAssignment.findMany({
+          where: { playerIds: { hasSome: playerIds }, isWarmup: false },
+          select: { playerIds: true },
+        })
+      : [];
+    const gameCounts: Record<string, number> = {};
+    const pidSet = new Set(playerIds);
+    for (const a of gameAssignments) {
+      for (const pid of a.playerIds) {
+        if (pidSet.has(pid)) gameCounts[pid] = (gameCounts[pid] || 0) + 1;
+      }
+    }
+
     const result = players.map((player) => {
       const sessions = new Set<string>();
       const venueMap = new Map<string, { id: string; name: string; lastSeen: Date }>();
@@ -159,6 +174,7 @@ export async function GET(request: NextRequest) {
         skillLevel: player.skillLevel,
         createdAt: player.createdAt,
         totalSessions: sessions.size,
+        totalGames: gameCounts[player.id] || 0,
         totalPlayMinutes,
         venues: Array.from(venueMap.values()),
         lastSeen: lastSeenDate ? { date: lastSeenDate, venue: lastSeenVenue } : null,

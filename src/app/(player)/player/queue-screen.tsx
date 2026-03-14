@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api-client";
 import { useSessionStore } from "@/stores/session-store";
 import { cn } from "@/lib/cn";
-import { Link, Copy, Check, Users, Coffee } from "lucide-react";
+import { Link, Coffee } from "lucide-react";
 
 interface QueueScreenProps {
   entry: { id: string; groupId: string | null; sessionId: string };
@@ -27,12 +27,6 @@ interface QueueInfo {
 export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onShowProfile, onRefresh, onLeaveVenue }: QueueScreenProps) {
   const { playerId } = useSessionStore();
   const [info, setInfo] = useState<QueueInfo | null>(null);
-  const [showGroupCreate, setShowGroupCreate] = useState(false);
-  const [showGroupJoin, setShowGroupJoin] = useState(false);
-  const [showFriendsMenu, setShowFriendsMenu] = useState(false);
-  const [groupCode, setGroupCode] = useState("");
-  const [joinCode, setJoinCode] = useState("");
-  const [copied, setCopied] = useState(false);
 
   const fetchQueueInfo = useCallback(async () => {
     try {
@@ -87,40 +81,6 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
     return () => clearInterval(interval);
   }, [fetchQueueInfo]);
 
-  const createGroup = async () => {
-    try {
-      const res = await api.post<{ code: string }>("/api/queue/group/create");
-      setGroupCode(res.code);
-      setShowGroupCreate(true);
-      onRefresh();
-    } catch (e) {
-      alert((e as Error).message);
-    }
-  };
-
-  const joinGroup = async () => {
-    try {
-      await api.post("/api/queue/group/join", { code: joinCode.toUpperCase(), venueId });
-      setShowGroupJoin(false);
-      setJoinCode("");
-      onRefresh();
-      fetchQueueInfo();
-    } catch (e) {
-      alert((e as Error).message);
-    }
-  };
-
-  const leaveGroup = async () => {
-    if (!confirm("Leave your group? You'll stay in the queue as a solo player.")) return;
-    try {
-      await api.post("/api/queue/group/leave", { venueId });
-      onRefresh();
-      fetchQueueInfo();
-    } catch (e) {
-      alert((e as Error).message);
-    }
-  };
-
   const leaveQueue = async () => {
     if (!confirm("Leave the queue?\n\nDon't worry, you can join again at anytime.")) return;
     try {
@@ -150,21 +110,12 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
               <div className="flex items-center gap-1 text-blue-400">
                 <Link className="h-4 w-4" />
                 <span className="text-sm font-medium">
-                  Group of {info.group.members.length} &middot; {info.group.code}
+                  Group of {info.group.members.length}
                 </span>
               </div>
             )}
           </div>
         </div>
-        {!info?.group && (
-          <button
-            onClick={() => setShowFriendsMenu(true)}
-            className="flex items-center gap-1.5 rounded-full bg-blue-600/15 px-4 py-2 text-sm font-medium text-blue-400 hover:bg-blue-600/25 transition-colors"
-          >
-            <Users className="h-4 w-4" />
-            Friends
-          </button>
-        )}
       </div>
 
       {/* Center content */}
@@ -181,7 +132,7 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
 
         {info?.group && (
           <div className="mt-2 rounded-xl border border-neutral-800 p-3 text-center">
-            <p className="text-sm text-neutral-400">Group members</p>
+            <p className="text-sm text-neutral-400">Your group</p>
             <p className="font-medium">{info.group.members.map((m) => m.name).join(", ")}</p>
           </div>
         )}
@@ -201,14 +152,6 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
 
       {/* Bottom actions */}
       <div className="mt-auto space-y-3">
-        {info?.group && (
-          <button
-            onClick={leaveGroup}
-            className="w-full rounded-xl border border-blue-600 py-3 text-sm font-medium text-blue-400"
-          >
-            Leave Group
-          </button>
-        )}
         <button
           onClick={leaveQueue}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-neutral-800 py-3 text-sm font-medium text-neutral-300"
@@ -225,87 +168,6 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
           </button>
         )}
       </div>
-
-      {/* Friends menu (bottom sheet) */}
-      {showFriendsMenu && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={() => setShowFriendsMenu(false)}>
-          <div
-            className="w-full max-w-lg rounded-t-2xl border-t border-neutral-700 bg-neutral-900 p-5 pb-8"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-bold mb-4">Play with Friends</h3>
-            <div className="space-y-2">
-              <button
-                onClick={() => { setShowFriendsMenu(false); createGroup(); }}
-                className="flex w-full items-center gap-3 rounded-xl bg-neutral-800 px-4 py-3.5 text-left font-medium text-white hover:bg-neutral-700 transition-colors"
-              >
-                <Users className="h-5 w-5 text-blue-400 shrink-0" />
-                <div>
-                  <span>Create a Group</span>
-                  <p className="text-xs text-neutral-400 font-normal">Get a code to share with your friends</p>
-                </div>
-              </button>
-              <button
-                onClick={() => { setShowFriendsMenu(false); setShowGroupJoin(true); }}
-                className="flex w-full items-center gap-3 rounded-xl bg-neutral-800 px-4 py-3.5 text-left font-medium text-white hover:bg-neutral-700 transition-colors"
-              >
-                <Link className="h-5 w-5 text-green-400 shrink-0" />
-                <div>
-                  <span>Join a Group</span>
-                  <p className="text-xs text-neutral-400 font-normal">Enter a code from a friend</p>
-                </div>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Group code display modal */}
-      {showGroupCreate && groupCode && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" onClick={() => setShowGroupCreate(false)}>
-          <div className="w-full max-w-sm rounded-2xl bg-neutral-900 p-6 text-center" onClick={(e) => e.stopPropagation()}>
-            <h3 className="mb-4 text-lg font-semibold">Your Group Code</h3>
-            <p className="mb-2 text-5xl font-bold tracking-[0.3em] text-blue-400">{groupCode}</p>
-            <p className="mb-6 text-sm text-neutral-400">Share this code with your friends</p>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(groupCode);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 2000);
-              }}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3 font-medium text-white"
-            >
-              {copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
-              {copied ? "Copied!" : "Copy Code"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Join group modal */}
-      {showGroupJoin && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" onClick={() => setShowGroupJoin(false)}>
-          <div className="w-full max-w-sm rounded-2xl bg-neutral-900 p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="mb-4 text-lg font-semibold text-center">Join a Group</h3>
-            <input
-              type="text"
-              placeholder="Enter code"
-              maxLength={4}
-              value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-              className="mb-4 w-full rounded-xl border border-neutral-700 bg-neutral-800 px-4 py-4 text-center text-2xl tracking-[0.3em] text-white placeholder:text-neutral-500 focus:border-blue-500 focus:outline-none"
-              autoFocus
-            />
-            <button
-              onClick={joinGroup}
-              disabled={joinCode.length !== 4}
-              className="w-full rounded-xl bg-blue-600 py-3 font-medium text-white disabled:opacity-40"
-            >
-              Join Group
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

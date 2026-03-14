@@ -71,7 +71,7 @@ export async function GET(request: NextRequest) {
 
     let queue: unknown[] = [];
     if (session) {
-      queue = await prisma.queueEntry.findMany({
+      const rawQueue = await prisma.queueEntry.findMany({
         where: {
           sessionId: session.id,
           status: { in: ["waiting", "on_break"] },
@@ -82,6 +82,29 @@ export async function GET(request: NextRequest) {
         },
         orderBy: { joinedAt: "asc" },
       });
+
+      const waitingPlayerIds = rawQueue.map((e) => e.playerId);
+      const completedAssignments = await prisma.courtAssignment.findMany({
+        where: {
+          sessionId: session.id,
+          isWarmup: false,
+          endedAt: { not: null },
+          playerIds: { hasSome: waitingPlayerIds },
+        },
+        select: { playerIds: true },
+      });
+
+      const gamesCountMap = new Map<string, number>();
+      for (const a of completedAssignments) {
+        for (const pid of a.playerIds) {
+          gamesCountMap.set(pid, (gamesCountMap.get(pid) || 0) + 1);
+        }
+      }
+
+      queue = rawQueue.map((entry) => ({
+        ...entry,
+        gamesPlayed: gamesCountMap.get(entry.playerId) || 0,
+      }));
     }
 
     let gameTypeMixStats = null;
