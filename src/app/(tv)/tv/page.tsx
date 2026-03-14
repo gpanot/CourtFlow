@@ -1,13 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { CourtCard, type CourtData } from "@/components/court-card";
 import { QueuePanel, type QueueEntryData } from "@/components/queue-panel";
 import { useSocket } from "@/hooks/use-socket";
 import { joinVenue } from "@/lib/socket-client";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { Wifi, WifiOff, Flame, RectangleHorizontal, RectangleVertical } from "lucide-react";
+import { Wifi, WifiOff, Flame, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 
@@ -23,12 +23,11 @@ export default function TVDisplayPage() {
   const [state, setState] = useState<VenueState>({ session: null, courts: [], queue: [] });
   const [connected, setConnected] = useState(true);
   const [clock, setClock] = useState(new Date());
-  const [landscape, setLandscape] = useState(true);
+  const [rotated, setRotated] = useState(false);
   const { on } = useSocket();
 
   useEffect(() => {
-    const saved = localStorage.getItem("tv-orientation");
-    if (saved === "portrait") setLandscape(false);
+    if (localStorage.getItem("tv-orientation") === "rotated") setRotated(true);
   }, []);
 
   useEffect(() => {
@@ -125,183 +124,168 @@ export default function TVDisplayPage() {
   const isWarmupMode = !!state.session && state.courts.length > 0 && !hasActiveCourts && (hasWarmupCourts || state.courts.every((c) => c.status === "idle"));
 
   const toggleOrientation = () => {
-    setLandscape((prev) => {
+    setRotated((prev) => {
       const next = !prev;
-      localStorage.setItem("tv-orientation", next ? "landscape" : "portrait");
+      localStorage.setItem("tv-orientation", next ? "rotated" : "normal");
       return next;
     });
   };
 
-  const gridCols = landscape
-    ? courtCount <= 3 ? "grid-cols-1 lg:grid-cols-3"
-      : courtCount <= 6 ? "grid-cols-2 lg:grid-cols-3"
-      : courtCount <= 9 ? "grid-cols-3"
-      : "grid-cols-3 lg:grid-cols-4"
-    : courtCount <= 2 ? "grid-cols-1"
-      : courtCount <= 4 ? "grid-cols-2"
-      : "grid-cols-2 lg:grid-cols-3";
+  const gridCols =
+    courtCount <= 3 ? "grid-cols-1 lg:grid-cols-3"
+    : courtCount <= 6 ? "grid-cols-2 lg:grid-cols-3"
+    : courtCount <= 9 ? "grid-cols-3"
+    : "grid-cols-3 lg:grid-cols-4";
+
+  const outerStyle: React.CSSProperties = rotated
+    ? {
+        position: "fixed",
+        width: "100dvh",
+        height: "100dvw",
+        top: "50%",
+        left: "50%",
+        transform: "translate(-50%, -50%) rotate(90deg)",
+      }
+    : {};
 
   return (
-    <div className="flex h-dvh w-screen flex-col overflow-hidden bg-black text-white">
-      {/* Top bar */}
-      <header className="shrink-0 flex items-center justify-between border-b border-neutral-800 px-[2vw] py-[min(1vh,0.5vw)]">
-        <div className="flex items-center gap-[1.5vw]">
-          {venueLogoUrl ? (
-            <img
-              src={venueLogoUrl}
-              alt={venueName}
-              className="h-[clamp(1.5rem,3vw,3rem)] w-auto object-contain"
-            />
-          ) : (
-            <h1 className="font-bold text-green-500 text-[clamp(1rem,2vw,2rem)]">CourtFlow</h1>
-          )}
-          <span className="text-neutral-300 text-[clamp(0.875rem,1.8vw,1.75rem)]">{venueName}</span>
-        </div>
-        <div className="flex items-center gap-[1.5vw]">
-          {isWarmupMode ? (
-            <span className="flex items-center gap-2 rounded-full bg-amber-500/20 px-3 py-1 font-medium text-amber-400 text-[clamp(0.65rem,1.2vw,1rem)]">
-              <Flame className="h-[1.2vw] w-[1.2vw] min-h-3 min-w-3" /> Warm Up · {waitingCount} players checked in
-            </span>
-          ) : state.session ? (
-            <span className="rounded-full bg-green-600/20 px-3 py-1 font-medium text-green-400 text-[clamp(0.65rem,1.2vw,1rem)]">
-              Session Active &middot; {courtCount} courts
-            </span>
-          ) : (
-            <span className="rounded-full bg-neutral-700 px-3 py-1 font-medium text-neutral-400 text-[clamp(0.65rem,1.2vw,1rem)]">
-              No Active Session
-            </span>
-          )}
-          <span className="tabular-nums text-neutral-400 text-[clamp(0.875rem,1.8vw,1.75rem)]">
-            {clock.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-          </span>
-          <button
-            onClick={toggleOrientation}
-            className="rounded-md p-1 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300 transition-colors"
-            title={landscape ? "Switch to portrait" : "Switch to landscape"}
-          >
-            {landscape ? (
-              <RectangleHorizontal className="h-[1.6vw] w-[1.6vw] min-h-3.5 min-w-3.5" />
+    <div className="overflow-hidden bg-black" style={outerStyle}>
+      <div className="flex h-dvh w-screen flex-col overflow-hidden bg-black text-white"
+        style={rotated ? { width: "100dvh", height: "100dvw" } : undefined}
+      >
+        {/* Top bar */}
+        <header className="shrink-0 flex items-center justify-between border-b border-neutral-800 px-[2vw] py-[min(1vh,0.5vw)]">
+          <div className="flex items-center gap-[1.5vw]">
+            {venueLogoUrl ? (
+              <img
+                src={venueLogoUrl}
+                alt={venueName}
+                className="h-[clamp(1.5rem,3vw,3rem)] w-auto object-contain"
+              />
             ) : (
-              <RectangleVertical className="h-[1.6vw] w-[1.6vw] min-h-3.5 min-w-3.5" />
+              <h1 className="font-bold text-green-500 text-[clamp(1rem,2vw,2rem)]">CourtFlow</h1>
             )}
-          </button>
-          {connected ? (
-            <Wifi className="h-[1.8vw] w-[1.8vw] min-h-4 min-w-4 text-green-500" />
-          ) : (
-            <div className="flex items-center gap-1 text-amber-400">
-              <WifiOff className="h-[1.8vw] w-[1.8vw] min-h-4 min-w-4" />
-              <span className="text-[clamp(0.65rem,1.1vw,0.875rem)]">Reconnecting...</span>
-            </div>
-          )}
-        </div>
-      </header>
-
-      {/* Main content */}
-      <div className={cn("flex flex-1 min-h-0 overflow-hidden", landscape ? "flex-row" : "flex-col")}>
-        {/* Court grid */}
-        <main className={cn("flex-1 min-w-0 min-h-0 overflow-hidden p-[min(1.5vw,2vh)]", !landscape && "min-h-0")}>
-          {!state.session ? (
-            <div className="flex h-full flex-col items-center justify-center gap-[3vh]">
-              {venueLogoUrl && (
-                <div className={cn(
-                  "h-[clamp(6rem,20vh,16rem)] w-[clamp(6rem,20vh,16rem)] shrink-0 rounded-full overflow-hidden border-2 border-neutral-800 bg-neutral-900",
-                  logoSpin && "animate-flip-y"
-                )}>
-                  <img
-                    src={venueLogoUrl}
-                    alt={venueName}
-                    className="h-full w-full object-cover"
-                  />
-                </div>
+            <span className="text-neutral-300 text-[clamp(0.875rem,1.8vw,1.75rem)]">{venueName}</span>
+          </div>
+          <div className="flex items-center gap-[1.5vw]">
+            {isWarmupMode ? (
+              <span className="flex items-center gap-2 rounded-full bg-amber-500/20 px-3 py-1 font-medium text-amber-400 text-[clamp(0.65rem,1.2vw,1rem)]">
+                <Flame className="h-[1.2vw] w-[1.2vw] min-h-3 min-w-3" /> Warm Up · {waitingCount} players checked in
+              </span>
+            ) : state.session ? (
+              <span className="rounded-full bg-green-600/20 px-3 py-1 font-medium text-green-400 text-[clamp(0.65rem,1.2vw,1rem)]">
+                Session Active &middot; {courtCount} courts
+              </span>
+            ) : (
+              <span className="rounded-full bg-neutral-700 px-3 py-1 font-medium text-neutral-400 text-[clamp(0.65rem,1.2vw,1rem)]">
+                No Active Session
+              </span>
+            )}
+            <span className="tabular-nums text-neutral-400 text-[clamp(0.875rem,1.8vw,1.75rem)]">
+              {clock.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </span>
+            <button
+              onClick={toggleOrientation}
+              className={cn(
+                "rounded-md p-1 transition-colors",
+                rotated
+                  ? "text-green-400 bg-green-900/40 hover:bg-green-900/60"
+                  : "text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300"
               )}
-              {venueTvText && (
-                <div className="text-center space-y-[0.5vh]">
-                  {venueTvText.split("\n").slice(0, 4).map((line, i) => (
-                    <p key={i} className={cn(
-                      "text-neutral-400",
-                      i === 0 ? "text-[clamp(1.25rem,3vw,3rem)] font-semibold text-neutral-300" : "text-[clamp(1rem,2vw,2rem)]"
-                    )}>{line}</p>
+              title={rotated ? "Back to portrait" : "Rotate for TV (landscape)"}
+            >
+              <RotateCcw className="h-[1.6vw] w-[1.6vw] min-h-3.5 min-w-3.5" />
+            </button>
+            {connected ? (
+              <Wifi className="h-[1.8vw] w-[1.8vw] min-h-4 min-w-4 text-green-500" />
+            ) : (
+              <div className="flex items-center gap-1 text-amber-400">
+                <WifiOff className="h-[1.8vw] w-[1.8vw] min-h-4 min-w-4" />
+                <span className="text-[clamp(0.65rem,1.1vw,0.875rem)]">Reconnecting...</span>
+              </div>
+            )}
+          </div>
+        </header>
+
+        {/* Main content */}
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+          {/* Court grid */}
+          <main className="flex-1 min-w-0 min-h-0 overflow-hidden p-[min(1.5vw,2vh)]">
+            {!state.session ? (
+              <div className="flex h-full flex-col items-center justify-center gap-[3vh]">
+                {venueLogoUrl && (
+                  <div className={cn(
+                    "h-[clamp(6rem,20vh,16rem)] w-[clamp(6rem,20vh,16rem)] shrink-0 rounded-full overflow-hidden border-2 border-neutral-800 bg-neutral-900",
+                    logoSpin && "animate-flip-y"
+                  )}>
+                    <img
+                      src={venueLogoUrl}
+                      alt={venueName}
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                )}
+                {venueTvText && (
+                  <div className="text-center space-y-[0.5vh]">
+                    {venueTvText.split("\n").slice(0, 4).map((line, i) => (
+                      <p key={i} className={cn(
+                        "text-neutral-400",
+                        i === 0 ? "text-[clamp(1.25rem,3vw,3rem)] font-semibold text-neutral-300" : "text-[clamp(1rem,2vw,2rem)]"
+                      )}>{line}</p>
+                    ))}
+                  </div>
+                )}
+                <p className="text-neutral-600 text-[clamp(1rem,2.5vw,2.5rem)] mt-[2vh]">Waiting for session to start...</p>
+              </div>
+            ) : isWarmupMode ? (
+              <div className="flex h-full flex-col gap-[min(1.5vh,0.8vw)]">
+                {/* Warmup hero */}
+                <div className="shrink-0 flex flex-col items-center justify-center gap-[min(1vh,0.5vw)] text-center py-[min(1.5vh,0.8vw)]">
+                  <Flame className="text-amber-400 opacity-80" style={{ width: "clamp(1.25rem, min(5vw,8vh), 6rem)", height: "clamp(1.25rem, min(5vw,8vh), 6rem)" }} />
+                  <p className="font-bold text-amber-300" style={{ fontSize: "clamp(1rem, min(5vw,7vh), 6rem)" }}>Warm Up Time</p>
+                  <p className="text-amber-400/70" style={{ fontSize: "clamp(0.65rem, min(2.2vw,3vh), 2.5rem)" }}>
+                    Go to your assigned court and warm up freely
+                  </p>
+                </div>
+                {/* Court cards in warmup state */}
+                <div className={cn("grid flex-1 min-h-0 overflow-y-auto gap-[min(1vw,1vh)] auto-rows-fr", gridCols)}>
+                  {sortedCourts.map((court) => (
+                    <CourtCard key={court.id} court={court} variant="tv" warmup={true} />
                   ))}
                 </div>
-              )}
-              <p className="text-neutral-600 text-[clamp(1rem,2.5vw,2.5rem)] mt-[2vh]">Waiting for session to start...</p>
-            </div>
-          ) : isWarmupMode ? (
-            <div className="flex h-full flex-col gap-[min(1.5vh,0.8vw)]">
-              {/* Warmup hero */}
-              <div className="shrink-0 flex flex-col items-center justify-center gap-[min(1vh,0.5vw)] text-center py-[min(1.5vh,0.8vw)]">
-                <Flame className="text-amber-400 opacity-80" style={{ width: "clamp(1.25rem, min(5vw,8vh), 6rem)", height: "clamp(1.25rem, min(5vw,8vh), 6rem)" }} />
-                <p className="font-bold text-amber-300" style={{ fontSize: "clamp(1rem, min(5vw,7vh), 6rem)" }}>Warm Up Time</p>
-                <p className="text-amber-400/70" style={{ fontSize: "clamp(0.65rem, min(2.2vw,3vh), 2.5rem)" }}>
-                  Go to your assigned court and warm up freely
-                </p>
               </div>
-              {/* Court cards in warmup state */}
-              <div className={cn("grid flex-1 min-h-0 overflow-y-auto gap-[min(1vw,1vh)] auto-rows-fr", gridCols)}>
+            ) : (
+              <div className={cn("grid h-full overflow-y-auto gap-[min(1vw,1vh)] auto-rows-fr", gridCols)}>
                 {sortedCourts.map((court) => (
-                  <CourtCard key={court.id} court={court} variant="tv" warmup={true} />
+                  <CourtCard key={court.id} court={court} variant="tv" />
                 ))}
               </div>
-            </div>
-          ) : (
-            <div className={cn("grid h-full overflow-y-auto gap-[min(1vw,1vh)] auto-rows-fr", gridCols)}>
-              {sortedCourts.map((court) => (
-                <CourtCard key={court.id} court={court} variant="tv" />
-              ))}
-            </div>
-          )}
-        </main>
+            )}
+          </main>
 
-        {/* Queue sidebar (landscape) / bottom panel (portrait) */}
-        {state.session && (
-          <aside
-            className={cn(
-              "shrink-0 flex overflow-hidden",
-              landscape
-                ? "border-l border-neutral-800 flex-col"
-                : "border-t border-neutral-800 flex-row items-stretch"
-            )}
-            style={landscape
-              ? { width: "clamp(8rem, min(22vw, 40vh), 26rem)", padding: "clamp(0.4rem, min(1.5vw, 2vh), 1.5rem)" }
-              : { height: "clamp(5rem, 28vh, 14rem)", padding: "clamp(0.4rem, min(1.5vw, 2vh), 1.5rem)" }
-            }
-          >
-            <div
-              className={cn(
-                "shrink-0",
-                landscape ? "w-full mb-[min(1vh,0.5vw)]" : "h-full mr-[min(1vw,0.5vh)]"
-              )}
-              style={landscape ? { maxHeight: "45vh" } : { maxWidth: "28vh" }}
-            >
-              <div
-                className="rounded-[1vw] bg-white p-[min(1vw,1.5vh)] aspect-square flex items-center justify-center h-full"
-                style={landscape ? { maxHeight: "45vh", maxWidth: "45vh" } : { maxHeight: "100%" }}
-              >
-                <QRCodeSVG
-                  value={`${typeof window !== "undefined" ? window.location.origin : ""}/player?venueId=${venueId}`}
-                  size={1000}
-                  level="H"
-                  includeMargin={false}
-                  className="w-full h-full"
-                />
+          {/* Queue sidebar */}
+          {state.session && (
+            <aside className="shrink-0 border-l border-neutral-800 flex flex-col overflow-hidden" style={{ width: "clamp(8rem, min(22vw, 40vh), 26rem)", padding: "clamp(0.4rem, min(1.5vw, 2vh), 1.5rem)" }}>
+              <div className="shrink-0 w-full mb-[min(1vh,0.5vw)]" style={{ maxHeight: "45vh" }}>
+                <div className="w-full rounded-[1vw] bg-white p-[min(1vw,1.5vh)] aspect-square flex items-center justify-center" style={{ maxHeight: "45vh", maxWidth: "45vh" }}>
+                  <QRCodeSVG
+                    value={`${typeof window !== "undefined" ? window.location.origin : ""}/player?venueId=${venueId}`}
+                    size={1000}
+                    level="H"
+                    includeMargin={false}
+                    className="w-full h-full"
+                  />
+                </div>
               </div>
-            </div>
-            {isWarmupMode && (
-              <p
-                className={cn(
-                  "font-semibold text-amber-400 uppercase tracking-wider",
-                  landscape ? "mb-[0.5vh]" : "hidden"
-                )}
-                style={{ fontSize: "clamp(0.45rem, min(1vw, 1.5vh), 0.875rem)" }}
-              >
-                Checked In
-              </p>
-            )}
-            <div className={cn("flex-1 min-h-0 overflow-y-auto", !landscape && "min-w-0 overflow-x-hidden")}>
-              <QueuePanel entries={state.queue} variant="tv" />
-            </div>
-          </aside>
-        )}
+              {isWarmupMode && (
+                <p className="mb-[0.5vh] font-semibold text-amber-400 uppercase tracking-wider" style={{ fontSize: "clamp(0.45rem, min(1vw, 1.5vh), 0.875rem)" }}>Checked In</p>
+              )}
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <QueuePanel entries={state.queue} variant="tv" />
+              </div>
+            </aside>
+          )}
+        </div>
       </div>
     </div>
   );
