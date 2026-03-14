@@ -35,6 +35,9 @@ export async function GET(request: NextRequest) {
       take: 10,
       include: {
         venue: { select: { name: true } },
+        queueEntries: {
+          select: { joinedAt: true, totalPlayMinutesToday: true },
+        },
         _count: {
           select: {
             queueEntries: true,
@@ -43,6 +46,8 @@ export async function GET(request: NextRequest) {
         },
       },
     });
+
+    const now = new Date();
 
     const venues = await prisma.venue.findMany({
       where: { id: { in: ownedVenueIds } },
@@ -58,14 +63,35 @@ export async function GET(request: NextRequest) {
 
     return json({
       overview: { totalPlayers: totalPlayers.length, totalSessions, totalGames },
-      recentSessions: recentSessions.map((s) => ({
-        id: s.id,
-        venueName: s.venue.name,
-        date: s.openedAt,
-        status: s.status,
-        players: s._count.queueEntries,
-        games: s._count.courtAssignments,
-      })),
+      recentSessions: recentSessions.map((s) => {
+        let sessionPlayMin = 0;
+        let sessionWaitMin = 0;
+        const sessionEnd = s.closedAt ?? now;
+        for (const entry of s.queueEntries) {
+          const presenceMin = Math.max(
+            0,
+            Math.round((sessionEnd.getTime() - entry.joinedAt.getTime()) / 60000)
+          );
+          sessionPlayMin += entry.totalPlayMinutesToday;
+          sessionWaitMin += Math.max(0, presenceMin - entry.totalPlayMinutesToday);
+        }
+        const totalPresence = sessionPlayMin + sessionWaitMin;
+        const waitPlayRatio = totalPresence > 0
+          ? Math.round((sessionWaitMin / totalPresence) * 100)
+          : 0;
+
+        return {
+          id: s.id,
+          venueName: s.venue.name,
+          date: s.openedAt,
+          status: s.status,
+          players: s._count.queueEntries,
+          games: s._count.courtAssignments,
+          totalPlayMinutes: sessionPlayMin,
+          totalWaitMinutes: sessionWaitMin,
+          waitPlayRatio,
+        };
+      }),
       venues: venues.map((v) => ({
         id: v.id,
         name: v.name,

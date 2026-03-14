@@ -142,12 +142,20 @@ export async function GET(request: NextRequest) {
       const sessions = new Set<string>();
       const venueMap = new Map<string, { id: string; name: string; lastSeen: Date }>();
       let totalPlayMinutes = 0;
+      let totalWaitMinutes = 0;
       let lastSeenDate: Date | null = null;
       let lastSeenVenue: string | null = null;
 
       for (const entry of player.queueEntries) {
         sessions.add(entry.sessionId);
         totalPlayMinutes += entry.totalPlayMinutesToday;
+
+        const sessionEnd = entry.session.closedAt ?? now;
+        const presenceMin = Math.max(
+          0,
+          Math.round((sessionEnd.getTime() - entry.joinedAt.getTime()) / 60000)
+        );
+        totalWaitMinutes += Math.max(0, presenceMin - entry.totalPlayMinutesToday);
 
         const v = entry.session.venue;
         const existing = venueMap.get(v.id);
@@ -160,6 +168,11 @@ export async function GET(request: NextRequest) {
           lastSeenVenue = v.name;
         }
       }
+
+      const totalPresencePlayer = totalPlayMinutes + totalWaitMinutes;
+      const playerWaitPlayRatio = totalPresencePlayer > 0
+        ? Math.round((totalWaitMinutes / totalPresencePlayer) * 100)
+        : 0;
 
       const isActiveToday = player.queueEntries.some(
         (e) => e.session.status === "open" && ["waiting", "on_break", "playing", "assigned"].includes(e.status)
@@ -176,6 +189,8 @@ export async function GET(request: NextRequest) {
         totalSessions: sessions.size,
         totalGames: gameCounts[player.id] || 0,
         totalPlayMinutes,
+        totalWaitMinutes,
+        waitPlayRatio: playerWaitPlayRatio,
         venues: Array.from(venueMap.values()),
         lastSeen: lastSeenDate ? { date: lastSeenDate, venue: lastSeenVenue } : null,
         isActiveToday,

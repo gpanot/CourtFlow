@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api-client";
 import { BarChart3, Users, Trophy, MapPin } from "lucide-react";
+import { cn } from "@/lib/cn";
 
 interface Analytics {
   overview: { totalPlayers: number; totalSessions: number; totalGames: number };
@@ -13,6 +14,9 @@ interface Analytics {
     status: string;
     players: number;
     games: number;
+    totalPlayMinutes: number;
+    totalWaitMinutes: number;
+    waitPlayRatio: number;
   }[];
   venues: { id: string; name: string; courts: number; sessions: number }[];
 }
@@ -25,6 +29,8 @@ export default function AnalyticsPage() {
     const params = selectedVenue ? `?venueId=${selectedVenue}` : "";
     api.get<Analytics>(`/api/admin/analytics${params}`).then(setData).catch(console.error);
   }, [selectedVenue]);
+
+  const fmtMin = (m: number) => m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ""}`;
 
   if (!data) return <p className="text-neutral-500">Loading analytics...</p>;
 
@@ -79,8 +85,11 @@ export default function AnalyticsPage() {
                 <th className="px-4 py-3">Venue</th>
                 <th className="px-4 py-3">Date</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Players</th>
-                <th className="px-4 py-3">Games</th>
+                <th className="px-4 py-3 text-right">Players</th>
+                <th className="px-4 py-3 text-right">Games</th>
+                <th className="px-4 py-3 text-right">Play Time</th>
+                <th className="px-4 py-3 text-right">Wait Time</th>
+                <th className="px-4 py-3 text-right">Wait/Play</th>
               </tr>
             </thead>
             <tbody>
@@ -91,13 +100,18 @@ export default function AnalyticsPage() {
                   <td className="px-4 py-3">
                     <StatusBadge status={s.status} />
                   </td>
-                  <td className="px-4 py-3">{s.players}</td>
-                  <td className="px-4 py-3">{s.games}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{s.players}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">{s.games}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-neutral-400">{fmtMin(s.totalPlayMinutes)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-neutral-400">{fmtMin(s.totalWaitMinutes)}</td>
+                  <td className="px-4 py-3 text-right">
+                    <RatioBadge ratio={s.waitPlayRatio} />
+                  </td>
                 </tr>
               ))}
               {data.recentSessions.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-neutral-500">
+                  <td colSpan={8} className="px-4 py-6 text-center text-neutral-500">
                     No sessions yet
                   </td>
                 </tr>
@@ -114,10 +128,13 @@ export default function AnalyticsPage() {
                 <span className="font-medium text-sm">{s.venueName}</span>
                 <StatusBadge status={s.status} />
               </div>
-              <div className="flex items-center gap-3 text-xs text-neutral-400">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-400">
                 <span>{new Date(s.date).toLocaleDateString()}</span>
                 <span>{s.players} players</span>
                 <span>{s.games} games</span>
+                <span>{fmtMin(s.totalPlayMinutes)} play</span>
+                <span>{fmtMin(s.totalWaitMinutes)} wait</span>
+                <RatioBadge ratio={s.waitPlayRatio} />
               </div>
             </div>
           ))}
@@ -127,6 +144,20 @@ export default function AnalyticsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function RatioBadge({ ratio }: { ratio: number }) {
+  const color =
+    ratio < 25 ? "text-green-400 bg-green-500/15" :
+    ratio < 40 ? "text-blue-400 bg-blue-500/15" :
+    ratio < 50 ? "text-amber-400 bg-amber-500/15" :
+    ratio <= 50 ? "text-orange-400 bg-orange-500/15" :
+    "text-red-400 bg-red-500/15";
+  return (
+    <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium tabular-nums", color)}>
+      {ratio}%
+    </span>
   );
 }
 

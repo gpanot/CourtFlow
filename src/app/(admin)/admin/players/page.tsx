@@ -5,7 +5,7 @@ import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { Search, X, SlidersHorizontal, Users, UserPlus, Clock, Activity, Hourglass, Gauge, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Gamepad2, Star, MapPin, CalendarDays, Timer } from "lucide-react";
 
-type SortKey = "name" | "gender" | "skillLevel" | "totalSessions" | "totalGames" | "totalPlayMinutes" | "venues";
+type SortKey = "name" | "gender" | "skillLevel" | "totalSessions" | "totalGames" | "totalPlayMinutes" | "totalWaitMinutes" | "waitPlayRatio" | "venues";
 type SortDir = "asc" | "desc";
 const SKILL_ORDER: Record<string, number> = { beginner: 0, intermediate: 1, advanced: 2, pro: 3 };
 
@@ -20,6 +20,8 @@ interface PlayerRecord {
   totalSessions: number;
   totalGames: number;
   totalPlayMinutes: number;
+  totalWaitMinutes: number;
+  waitPlayRatio: number;
   venues: { id: string; name: string }[];
   lastSeen: { date: string; venue: string } | null;
   isActiveToday: boolean;
@@ -123,6 +125,12 @@ export default function PlayersPage() {
           break;
         case "totalPlayMinutes":
           cmp = a.totalPlayMinutes - b.totalPlayMinutes;
+          break;
+        case "totalWaitMinutes":
+          cmp = a.totalWaitMinutes - b.totalWaitMinutes;
+          break;
+        case "waitPlayRatio":
+          cmp = a.waitPlayRatio - b.waitPlayRatio;
           break;
         case "venues":
           cmp = a.venues.length - b.venues.length;
@@ -377,6 +385,8 @@ export default function PlayersPage() {
               <SortableHeader label="Sessions" sortKey="totalSessions" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
               <SortableHeader label="Games" sortKey="totalGames" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
               <SortableHeader label="Play Time" sortKey="totalPlayMinutes" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
+              <SortableHeader label="Wait Time" sortKey="totalWaitMinutes" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
+              <SortableHeader label="Wait/Play" sortKey="waitPlayRatio" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
               <SortableHeader label="Venues" sortKey="venues" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
               <th className="px-4 py-2.5">Last Seen</th>
               <th className="px-4 py-2.5">Registered</th>
@@ -411,6 +421,10 @@ export default function PlayersPage() {
                 <td className="px-4 py-2 text-right tabular-nums">{p.totalSessions}</td>
                 <td className="px-4 py-2 text-right tabular-nums">{p.totalGames}</td>
                 <td className="px-4 py-2 text-right tabular-nums text-neutral-400">{fmtMin(p.totalPlayMinutes)}</td>
+                <td className="px-4 py-2 text-right tabular-nums text-neutral-400">{fmtMin(p.totalWaitMinutes)}</td>
+                <td className="px-4 py-2 text-right tabular-nums">
+                  <RatioBadge ratio={p.waitPlayRatio} />
+                </td>
                 <td className="px-4 py-2">
                   <div className="flex gap-1 max-w-[160px] overflow-hidden">
                     {p.venues.slice(0, 2).map((v) => (
@@ -440,7 +454,7 @@ export default function PlayersPage() {
             ))}
             {!loading && players.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-4 py-8 text-center text-neutral-500">No players found</td>
+                <td colSpan={13} className="px-4 py-8 text-center text-neutral-500">No players found</td>
               </tr>
             )}
           </tbody>
@@ -477,7 +491,9 @@ export default function PlayersPage() {
               <span className="capitalize">{p.gender}</span>
               <span>{p.totalSessions} sessions</span>
               <span>{p.totalGames} games</span>
-              <span>{fmtMin(p.totalPlayMinutes)}</span>
+              <span>{fmtMin(p.totalPlayMinutes)} play</span>
+              <span>{fmtMin(p.totalWaitMinutes)} wait</span>
+              <RatioBadge ratio={p.waitPlayRatio} />
             </div>
             {(p.venues.length > 0 || p.lastSeen) && (
               <div className="mt-2 flex flex-wrap items-center gap-1.5">
@@ -614,6 +630,20 @@ function WaitRatioCard({ ratio }: { ratio: number }) {
         {exp.label}
       </div>
     </div>
+  );
+}
+
+function RatioBadge({ ratio }: { ratio: number }) {
+  const color =
+    ratio < 25 ? "text-green-400 bg-green-500/15" :
+    ratio < 40 ? "text-blue-400 bg-blue-500/15" :
+    ratio < 50 ? "text-amber-400 bg-amber-500/15" :
+    ratio <= 50 ? "text-orange-400 bg-orange-500/15" :
+    "text-red-400 bg-red-500/15";
+  return (
+    <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium tabular-nums", color)}>
+      {ratio}%
+    </span>
   );
 }
 
