@@ -19,7 +19,7 @@ interface VenueState {
 
 export default function TVDisplayPage() {
   const [venueId, setVenueId] = useState<string | null>(null);
-  const [venues, setVenues] = useState<{ id: string; name: string }[]>([]);
+  const [venues, setVenues] = useState<{ id: string; name: string; logoUrl?: string | null; tvText?: string | null }[]>([]);
   const [state, setState] = useState<VenueState>({ session: null, courts: [], queue: [] });
   const [connected, setConnected] = useState(true);
   const [clock, setClock] = useState(new Date());
@@ -31,7 +31,7 @@ export default function TVDisplayPage() {
   }, []);
 
   useEffect(() => {
-    api.get<{ id: string; name: string }[]>("/api/venues").then(setVenues).catch(console.error);
+    api.get<{ id: string; name: string; logoUrl?: string | null; tvText?: string | null }[]>("/api/venues").then(setVenues).catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -58,6 +58,13 @@ export default function TVDisplayPage() {
     const offCourt = on("court:updated", () => fetchState());
     const offQueue = on("queue:updated", () => fetchState());
     const offSession = on("session:updated", () => fetchState());
+    const offVenue = on("venue:updated", (data: { id: string; logoUrl?: string | null; tvText?: string | null; name?: string }) => {
+      setVenues((prev) => prev.map((v) =>
+        v.id === data.id
+          ? { ...v, ...(data.logoUrl !== undefined && { logoUrl: data.logoUrl }), ...(data.tvText !== undefined && { tvText: data.tvText }), ...(data.name && { name: data.name }) }
+          : v
+      ));
+    });
     const offConnect = on("connect", () => { setConnected(true); fetchState(); });
     const offDisconnect = on("disconnect", () => setConnected(false));
 
@@ -65,6 +72,7 @@ export default function TVDisplayPage() {
       offCourt();
       offQueue();
       offSession();
+      offVenue();
       offConnect();
       offDisconnect();
     };
@@ -96,7 +104,10 @@ export default function TVDisplayPage() {
     );
   }
 
-  const venueName = venues.find((v) => v.id === venueId)?.name || "Court Display";
+  const currentVenue = venues.find((v) => v.id === venueId);
+  const venueName = currentVenue?.name || "Court Display";
+  const venueLogoUrl = currentVenue?.logoUrl || null;
+  const venueTvText = currentVenue?.tvText || null;
   const sortedCourts = [...state.courts].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
   const activeCourts = sortedCourts.filter((c) => c.status !== "maintenance");
   const courtCount = activeCourts.length;
@@ -116,7 +127,15 @@ export default function TVDisplayPage() {
       {/* Top bar */}
       <header className="shrink-0 flex items-center justify-between border-b border-neutral-800 px-[2vw] py-[min(1vh,0.5vw)]">
         <div className="flex items-center gap-[1.5vw]">
-          <h1 className="font-bold text-green-500 text-[clamp(1rem,2vw,2rem)]">CourtFlow</h1>
+          {venueLogoUrl ? (
+            <img
+              src={venueLogoUrl}
+              alt={venueName}
+              className="h-[clamp(1.5rem,3vw,3rem)] w-auto object-contain"
+            />
+          ) : (
+            <h1 className="font-bold text-green-500 text-[clamp(1rem,2vw,2rem)]">CourtFlow</h1>
+          )}
           <span className="text-neutral-300 text-[clamp(0.875rem,1.8vw,1.75rem)]">{venueName}</span>
         </div>
         <div className="flex items-center gap-[1.5vw]">
@@ -152,8 +171,27 @@ export default function TVDisplayPage() {
         {/* Court grid */}
         <main className="flex-1 min-w-0 min-h-0 overflow-hidden p-[min(1.5vw,2vh)]">
           {!state.session ? (
-            <div className="flex h-full items-center justify-center">
-              <p className="text-neutral-600 text-[clamp(1.5rem,4vw,4rem)]">Waiting for session to start...</p>
+            <div className="flex h-full flex-col items-center justify-center gap-[3vh]">
+              {venueLogoUrl && (
+                <div className="h-[clamp(6rem,20vh,16rem)] w-[clamp(6rem,20vh,16rem)] shrink-0 rounded-full overflow-hidden border-2 border-neutral-800 bg-neutral-900">
+                  <img
+                    src={venueLogoUrl}
+                    alt={venueName}
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+              )}
+              {venueTvText && (
+                <div className="text-center space-y-[0.5vh]">
+                  {venueTvText.split("\n").slice(0, 4).map((line, i) => (
+                    <p key={i} className={cn(
+                      "text-neutral-400",
+                      i === 0 ? "text-[clamp(1.25rem,3vw,3rem)] font-semibold text-neutral-300" : "text-[clamp(1rem,2vw,2rem)]"
+                    )}>{line}</p>
+                  ))}
+                </div>
+              )}
+              <p className="text-neutral-600 text-[clamp(1rem,2.5vw,2.5rem)] mt-[2vh]">Waiting for session to start...</p>
             </div>
           ) : isWarmupMode ? (
             <div className="flex h-full flex-col gap-[min(1.5vh,0.8vw)]">

@@ -72,6 +72,8 @@ model Venue {
   playFrequency      String?   @map("play_frequency")
   playTypes          String[]  @default([]) @map("play_types")
   painPoints         String[]  @default([]) @map("pain_points")
+  logoUrl            String?   @map("logo_url")
+  tvText             String?   @map("tv_text")
   createdAt          DateTime  @default(now()) @map("created_at")
 
   courts       Court[]

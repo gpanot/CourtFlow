@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, notFound, parseBody } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
+import { emitToVenue } from "@/lib/socket-server";
 import { Prisma } from "@prisma/client";
 
 export async function GET(
@@ -39,6 +40,11 @@ export async function PATCH(
       where: { id: venueId },
       data: body,
     });
+
+    if ("tvText" in body || "logoUrl" in body || "name" in body) {
+      emitToVenue(venueId, "venue:updated", { id: venueId, logoUrl: venue.logoUrl, tvText: venue.tvText, name: venue.name });
+    }
+
     return json(venue);
   } catch (e) {
     return error((e as Error).message, 500);

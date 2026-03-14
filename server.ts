@@ -1,6 +1,7 @@
 import express from "express";
 import { createServer } from "http";
 import next from "next";
+import path from "path";
 import { Server as SocketIOServer } from "socket.io";
 
 const dev = process.env.NODE_ENV !== "production";
@@ -45,6 +46,8 @@ app.prepare().then(() => {
       console.log(`[Socket.io] Client disconnected: ${socket.id}`);
     });
   });
+
+  expressApp.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
   expressApp.all("/{*path}", (req, res) => {
     return handle(req, res);

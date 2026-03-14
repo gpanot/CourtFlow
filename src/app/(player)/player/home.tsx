@@ -18,6 +18,8 @@ import { isPushSupported, subscribeToPush, getNotificationPermission } from "@/l
 interface Venue {
   id: string;
   name: string;
+  logoUrl?: string | null;
+  tvText?: string | null;
 }
 
 interface QueueEntry {
@@ -27,8 +29,6 @@ interface QueueEntry {
   groupId: string | null;
   breakUntil: string | null;
   sessionId: string;
-  gamePreference?: string;
-  player?: { gender: string };
 }
 
 type PlayerView = "home" | "queue" | "assigned" | "playing" | "break" | "profile" | "session_recap";
@@ -202,8 +202,15 @@ export function PlayerHome() {
 
     const offQueue = on("queue:updated", () => fetchPlayerState());
     const offSession = on("session:updated", () => fetchPlayerState());
+    const offVenue = on("venue:updated", (data: { id: string; logoUrl?: string | null; tvText?: string | null; name?: string }) => {
+      setVenues((prev) => prev.map((v) =>
+        v.id === data.id
+          ? { ...v, ...(data.logoUrl !== undefined && { logoUrl: data.logoUrl }), ...(data.tvText !== undefined && { tvText: data.tvText }), ...(data.name && { name: data.name }) }
+          : v
+      ));
+    });
 
-    return () => { offConnect(); offNotif(); offQueue(); offSession(); };
+    return () => { offConnect(); offNotif(); offQueue(); offSession(); offVenue(); };
   }, [selectedVenue, playerId, on, fetchPlayerState, setAuth, setViewTracked]);
 
   if (showProfile) {
@@ -258,7 +265,10 @@ export function PlayerHome() {
     );
   }
 
-  const venueName = venues.find((v) => v.id === selectedVenue)?.name || "Venue";
+  const currentVenue = venues.find((v) => v.id === selectedVenue);
+  const venueName = currentVenue?.name || "Venue";
+  const venueLogoUrl = currentVenue?.logoUrl || null;
+  const venueTvText = currentVenue?.tvText || null;
 
   if (initialLoading) {
     return (
@@ -300,7 +310,21 @@ export function PlayerHome() {
             </div>
           )}
           {!session ? (
-            <p className="text-xl text-neutral-500">No active session at this venue</p>
+            <div className="flex flex-col items-center gap-5">
+              {venueLogoUrl && (
+                <div className="h-28 w-28 shrink-0 rounded-full overflow-hidden border-2 border-neutral-800 bg-neutral-900">
+                  <img src={venueLogoUrl} alt={venueName} className="h-full w-full object-cover" />
+                </div>
+              )}
+              {venueTvText && (
+                <div className="text-center space-y-1">
+                  {venueTvText.split("\n").slice(0, 4).map((line, i) => (
+                    <p key={i} className={i === 0 ? "text-lg font-semibold text-neutral-300" : "text-sm text-neutral-400"}>{line}</p>
+                  ))}
+                </div>
+              )}
+              <p className="text-neutral-600 text-sm mt-2">Waiting for session to start...</p>
+            </div>
           ) : (
             <button
               disabled={joining}
@@ -351,7 +375,6 @@ export function PlayerHome() {
           venueId={selectedVenue}
           venueName={venueName}
           sessionId={session?.id || ""}
-          playerGender={queueEntry.player?.gender}
           avatar={avatar}
           onShowProfile={() => setShowProfile(true)}
           onRefresh={fetchPlayerState}

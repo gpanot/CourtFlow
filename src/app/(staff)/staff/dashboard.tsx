@@ -827,10 +827,10 @@ export function StaffDashboard() {
 }
 
 const MIX_PRESETS: { label: string; desc: string; mix: { men: number; women: number; mixed: number } | null }[] = [
-  { label: "No Target", desc: "FIFO order, no balancing", mix: null },
-  { label: "Balanced", desc: "Equal split across all types", mix: { men: 33, women: 33, mixed: 34 } },
+  { label: "Balanced (Auto)", desc: "Equal split across all types", mix: { men: 33, women: 33, mixed: 34 } },
   { label: "Mixed Focus", desc: "More mixed doubles", mix: { men: 25, women: 25, mixed: 50 } },
   { label: "Same Gender", desc: "Prioritise men/women games", mix: { men: 40, women: 40, mixed: 20 } },
+  { label: "No Target", desc: "FIFO order, no balancing", mix: null },
 ];
 
 function OpenSessionPanel({
@@ -1073,8 +1073,15 @@ function GameTypeMixEditor({
   onClose: () => void;
   onSave: (mix: { men: number; women: number; mixed: number } | null) => void;
 }) {
-  const [mix, setMix] = useState(currentMix ?? { men: 33, women: 33, mixed: 34 });
-  const [enabled, setEnabled] = useState(currentMix !== null);
+  const findMatchingPreset = (mix: { men: number; women: number; mixed: number } | null) => {
+    if (!mix) return 0; // default to Balanced (Auto)
+    const idx = MIX_PRESETS.findIndex(
+      (p) => p.mix && p.mix.men === mix.men && p.mix.women === mix.women && p.mix.mixed === mix.mixed
+    );
+    return idx >= 0 ? idx : 0;
+  };
+
+  const [selectedIdx, setSelectedIdx] = useState(() => findMatchingPreset(currentMix));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
@@ -1089,81 +1096,56 @@ function GameTypeMixEditor({
           </button>
         </div>
 
-        <div className="flex items-center justify-between mb-4 rounded-lg bg-neutral-800 px-3 py-2.5">
-          <span className="text-sm text-neutral-300">Enable mix target</span>
-          <button
-            onClick={() => setEnabled(!enabled)}
-            className={cn(
-              "relative h-6 w-11 rounded-full transition-colors",
-              enabled ? "bg-blue-600" : "bg-neutral-600"
-            )}
-          >
-            <span className={cn(
-              "absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform",
-              enabled ? "translate-x-5.5 left-0.5" : "left-0.5"
-            )} style={{ transform: enabled ? "translateX(22px)" : "translateX(2px)" }} />
-          </button>
+        <div className="space-y-2 mb-5">
+          {MIX_PRESETS.map((preset, i) => {
+            const isSelected = selectedIdx === i;
+            return (
+              <button
+                key={i}
+                onClick={() => setSelectedIdx(i)}
+                className={cn(
+                  "w-full rounded-xl border px-4 py-3 text-left transition-all",
+                  isSelected
+                    ? "border-blue-500 bg-blue-600/15"
+                    : "border-neutral-700 bg-neutral-800/60 hover:border-neutral-600"
+                )}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className={cn("text-sm font-semibold", isSelected ? "text-blue-400" : "text-neutral-200")}>
+                      {preset.label}
+                    </span>
+                    <p className="text-[11px] text-neutral-500 mt-0.5">{preset.desc}</p>
+                  </div>
+                  <div className={cn(
+                    "h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors",
+                    isSelected ? "border-blue-500 bg-blue-500" : "border-neutral-600"
+                  )}>
+                    {isSelected && <div className="h-2 w-2 rounded-full bg-white" />}
+                  </div>
+                </div>
+                {preset.mix && (
+                  <div className="mt-3 space-y-1.5">
+                    <div className="flex gap-1 h-1.5 rounded-full overflow-hidden bg-neutral-800">
+                      <div className={cn("transition-all", isSelected ? "bg-blue-500" : "bg-blue-500/40")} style={{ width: `${preset.mix.men}%` }} />
+                      <div className={cn("transition-all", isSelected ? "bg-pink-500" : "bg-pink-500/40")} style={{ width: `${preset.mix.women}%` }} />
+                      <div className={cn("transition-all", isSelected ? "bg-purple-500" : "bg-purple-500/40")} style={{ width: `${preset.mix.mixed}%` }} />
+                    </div>
+                    <div className="flex justify-between text-[10px] font-mono">
+                      <span className={isSelected ? "text-blue-400" : "text-neutral-600"}>Men {preset.mix.men}%</span>
+                      <span className={isSelected ? "text-pink-400" : "text-neutral-600"}>Women {preset.mix.women}%</span>
+                      <span className={isSelected ? "text-purple-400" : "text-neutral-600"}>Mixed {preset.mix.mixed}%</span>
+                    </div>
+                  </div>
+                )}
+              </button>
+            );
+          })}
         </div>
-
-        {enabled && (
-          <div className="space-y-3 mb-5">
-            {(["men", "women", "mixed"] as const).map((type) => (
-              <div key={type} className="flex items-center gap-3">
-                <span className={cn(
-                  "w-16 text-xs font-medium capitalize",
-                  type === "men" ? "text-blue-400" : type === "women" ? "text-pink-400" : "text-purple-400"
-                )}>
-                  {type === "men" ? "Men" : type === "women" ? "Women" : "Mixed"}
-                </span>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={mix[type]}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value);
-                    setMix((prev) => {
-                      const others = (["men", "women", "mixed"] as const).filter((t) => t !== type);
-                      const remaining = 100 - val;
-                      const otherTotal = prev[others[0]] + prev[others[1]];
-                      const ratio = otherTotal > 0 ? remaining / otherTotal : 0.5;
-                      return {
-                        ...prev,
-                        [type]: val,
-                        [others[0]]: otherTotal > 0 ? Math.round(prev[others[0]] * ratio) : Math.round(remaining / 2),
-                        [others[1]]: otherTotal > 0 ? remaining - Math.round(prev[others[0]] * ratio) : remaining - Math.round(remaining / 2),
-                      };
-                    });
-                  }}
-                  className="flex-1 accent-blue-500"
-                />
-                <span className="w-10 text-right text-sm font-mono text-neutral-300">{mix[type]}%</span>
-              </div>
-            ))}
-
-            <div className="flex gap-1 h-2 rounded-full overflow-hidden bg-neutral-800">
-              <div className="bg-blue-500 transition-all" style={{ width: `${mix.men}%` }} />
-              <div className="bg-pink-500 transition-all" style={{ width: `${mix.women}%` }} />
-              <div className="bg-purple-500 transition-all" style={{ width: `${mix.mixed}%` }} />
-            </div>
-
-            <div className="flex flex-wrap gap-1.5">
-              {MIX_PRESETS.filter((p) => p.mix).map((preset, i) => (
-                <button
-                  key={i}
-                  onClick={() => setMix(preset.mix!)}
-                  className="rounded-md border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-[10px] font-medium text-neutral-400 hover:border-neutral-600 hover:text-neutral-300"
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         <div className="flex gap-3">
           <button
-            onClick={() => onSave(enabled ? mix : null)}
+            onClick={() => onSave(selectedIdx >= 0 ? MIX_PRESETS[selectedIdx].mix : null)}
             className="flex-1 rounded-xl bg-blue-600 py-3 font-semibold text-white hover:bg-blue-500"
           >
             Save

@@ -1,7 +1,7 @@
 import { prisma } from "./db";
 import { emitToPlayer, emitToVenue } from "./socket-server";
 import { getSkillIndex, QUEUE_LOOKAHEAD, MAX_SKILL_GAP, WARMUP_DURATION_SECONDS, AUTO_START_DELAY_SECONDS } from "./constants";
-import type { SkillLevel, GameType, GamePreference } from "@prisma/client";
+import type { SkillLevel, GameType } from "@prisma/client";
 
 export interface GameTypeMix {
   men: number;
@@ -23,7 +23,6 @@ interface QueueCandidate {
   playerName: string;
   skillLevel: SkillLevel;
   gender: string;
-  gamePreference: GamePreference;
   groupId: string | null;
   joinedAt: Date;
   totalPlayMinutesToday: number;
@@ -48,16 +47,6 @@ function deriveGameType(players: QueueCandidate[]): GameType {
   if (allMale) return "men";
   if (allFemale) return "women";
   return "mixed";
-}
-
-function checkPreferences(players: QueueCandidate[]): boolean {
-  for (const p of players) {
-    if (p.gamePreference === "same_gender") {
-      const allSame = players.every((o) => o.gender === p.gender);
-      if (!allSame) return false;
-    }
-  }
-  return true;
 }
 
 async function getSessionGameTypeCounts(sessionId: string): Promise<Record<GameType, number>> {
@@ -100,8 +89,7 @@ function scoreMixDeviation(
 /**
  * Select the best 4 players from the queue, considering:
  * 1. Game type mix targets (if set)
- * 2. Player preferences (same_gender)
- * 3. FIFO fairness (penalise skipping too far)
+ * 2. FIFO fairness (penalise skipping too far)
  */
 function selectBestFour(
   candidates: QueueCandidate[],
@@ -110,12 +98,8 @@ function selectBestFour(
 ): QueueCandidate[] | null {
   if (candidates.length < 4) return null;
 
-  // No target: fall back to strict FIFO with preference respect
   if (!target) {
-    const first4 = candidates.slice(0, 4);
-    if (checkPreferences(first4)) return first4;
-    // If preferences conflict in FIFO order, still take them (soft constraint)
-    return first4;
+    return candidates.slice(0, 4);
   }
 
   // With a target: evaluate combinations within the lookahead window.
@@ -132,8 +116,6 @@ function selectBestFour(
       for (let c = b + 1; c < n - 1; c++) {
         for (let d = c + 1; d < n; d++) {
           const combo = [pool[a], pool[b], pool[c], pool[d]];
-
-          if (!checkPreferences(combo)) continue;
 
           const gameType = deriveGameType(combo);
           const mixScore = scoreMixDeviation(gameType, currentCounts, target);
@@ -183,7 +165,6 @@ export async function runRotation(
     playerName: e.player.name,
     skillLevel: e.player.skillLevel,
     gender: e.player.gender,
-    gamePreference: e.gamePreference,
     groupId: e.groupId,
     joinedAt: e.joinedAt,
     totalPlayMinutesToday: e.totalPlayMinutesToday,
@@ -453,16 +434,10 @@ export async function findReplacement(
       playerName: entry.player.name,
       skillLevel: entry.player.skillLevel,
       gender: entry.player.gender,
-      gamePreference: entry.gamePreference,
       groupId: null,
       joinedAt: entry.joinedAt,
       totalPlayMinutesToday: entry.totalPlayMinutesToday,
     };
-
-    if (candidate.gamePreference === "same_gender") {
-      const allSameGender = currentPlayers.every((p) => p.gender === candidate.gender);
-      if (!allSameGender) continue;
-    }
 
     const allOnCourt: QueueCandidate[] = [
       ...currentPlayers.map((p) => ({
@@ -471,7 +446,6 @@ export async function findReplacement(
         playerName: p.name,
         skillLevel: p.skillLevel,
         gender: p.gender,
-        gamePreference: "no_preference" as GamePreference,
         groupId: null,
         joinedAt: new Date(),
         totalPlayMinutesToday: 0,

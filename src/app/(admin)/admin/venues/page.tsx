@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api-client";
+import { useSessionStore } from "@/stores/session-store";
 import { cn } from "@/lib/cn";
 import {
   Plus,
@@ -13,6 +14,9 @@ import {
   ChevronDown,
   ChevronUp,
   AlertTriangle,
+  Monitor,
+  Upload,
+  ImageIcon,
 } from "lucide-react";
 
 interface Court {
@@ -26,6 +30,8 @@ interface Venue {
   name: string;
   location: string | null;
   active: boolean;
+  logoUrl: string | null;
+  tvText: string | null;
   courts: Court[];
   sessions: { id: string; status: string }[];
   _count: { staff: number };
@@ -296,10 +302,16 @@ function VenueCard({
         </div>
 
         {expanded && (
-          <div className="border-t border-neutral-800 p-3 md:p-4">
+          <div className="border-t border-neutral-800 p-3 md:p-4 space-y-6">
             <CourtsManager
               venueId={venue.id}
               courts={venue.courts}
+              onRefresh={onRefresh}
+            />
+            <TVDisplaySettings
+              venueId={venue.id}
+              logoUrl={venue.logoUrl}
+              tvText={venue.tvText}
               onRefresh={onRefresh}
             />
           </div>
@@ -534,6 +546,160 @@ function CourtsManager({
         >
           <Plus className="h-4 w-4" /> Add
         </button>
+      </div>
+    </div>
+  );
+}
+
+function TVDisplaySettings({
+  venueId,
+  logoUrl,
+  tvText,
+  onRefresh,
+}: {
+  venueId: string;
+  logoUrl: string | null;
+  tvText: string | null;
+  onRefresh: () => void;
+}) {
+  const [text, setText] = useState(tvText || "");
+  const [savingText, setSavingText] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [removingLogo, setRemovingLogo] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const textDirty = text !== (tvText || "");
+
+  const uploadLogo = async (file: File) => {
+    setUploading(true);
+    try {
+      const token = useSessionStore.getState().token;
+      const form = new FormData();
+      form.append("logo", file);
+      const res = await fetch(`/api/venues/${venueId}/logo`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      await onRefresh();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeLogo = async () => {
+    setRemovingLogo(true);
+    try {
+      const token = useSessionStore.getState().token;
+      const res = await fetch(`/api/venues/${venueId}/logo`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Delete failed");
+      }
+      await onRefresh();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setRemovingLogo(false);
+    }
+  };
+
+  const saveText = async () => {
+    setSavingText(true);
+    try {
+      await api.patch(`/api/venues/${venueId}`, {
+        tvText: text.trim() || null,
+      });
+      await onRefresh();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setSavingText(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <h4 className="flex items-center gap-2 text-sm font-medium text-neutral-400 uppercase tracking-wider">
+        <Monitor className="h-4 w-4" /> TV Display
+      </h4>
+
+      {/* Logo upload */}
+      <div className="space-y-2">
+        <label className="text-xs text-neutral-500">Venue Logo</label>
+        <div className="flex items-center gap-3">
+          {logoUrl ? (
+            <div className="relative h-14 w-14 shrink-0 rounded-lg border border-neutral-700 bg-neutral-800 flex items-center justify-center overflow-hidden">
+              <img
+                src={logoUrl}
+                alt="Venue logo"
+                className="h-full w-full object-contain"
+              />
+            </div>
+          ) : (
+            <div className="h-14 w-14 shrink-0 rounded-lg border border-dashed border-neutral-700 bg-neutral-800/50 flex items-center justify-center">
+              <ImageIcon className="h-5 w-5 text-neutral-600" />
+            </div>
+          )}
+          <div className="flex flex-col gap-1.5">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/svg+xml"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) uploadLogo(file);
+                e.target.value = "";
+              }}
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="flex items-center gap-1.5 rounded-lg bg-neutral-800 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:bg-neutral-700 disabled:opacity-40"
+            >
+              <Upload className="h-3.5 w-3.5" />
+              {uploading ? "Uploading..." : logoUrl ? "Replace Logo" : "Upload Logo"}
+            </button>
+            {logoUrl && (
+              <button
+                onClick={removeLogo}
+                disabled={removingLogo}
+                className="text-xs text-neutral-500 hover:text-red-400 text-left disabled:opacity-40"
+              >
+                {removingLogo ? "Removing..." : "Remove logo"}
+              </button>
+            )}
+          </div>
+        </div>
+        <p className="text-xs text-neutral-600">PNG, JPEG, WebP, or SVG. Max 2 MB. Shown in TV header.</p>
+      </div>
+
+      {/* TV Text */}
+      <div className="space-y-2">
+        <label className="text-xs text-neutral-500">Custom Text (shown on TV idle screen, 1–4 lines)</label>
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          rows={4}
+          placeholder={"e.g.\nWelcome to ACE SQUAD\nThe Granary\nSessions every Wednesday 7pm"}
+          className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none resize-none"
+        />
+        {textDirty && (
+          <button
+            onClick={saveText}
+            disabled={savingText}
+            className="rounded-lg bg-purple-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-40"
+          >
+            {savingText ? "Saving..." : "Save Text"}
+          </button>
+        )}
       </div>
     </div>
   );

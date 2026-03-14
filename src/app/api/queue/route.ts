@@ -25,10 +25,9 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const auth = requireAuth(request.headers);
-    const { sessionId, venueId, gamePreference } = await parseBody<{
+    const { sessionId, venueId } = await parseBody<{
       sessionId: string;
       venueId: string;
-      gamePreference?: string;
     }>(request);
 
     if (!sessionId || !venueId) return error("sessionId and venueId are required");
@@ -51,12 +50,6 @@ export async function POST(request: NextRequest) {
 
     const player = await prisma.player.findUnique({ where: { id: auth.id } });
     if (!player) return error("Player not found", 404);
-
-    const validPreferences = ["no_preference", "same_gender"] as const;
-    const resolvedPreference =
-      gamePreference && validPreferences.includes(gamePreference as typeof validPreferences[number])
-        ? (gamePreference as typeof validPreferences[number])
-        : player.gamePreference;
 
     const previousEntry = await prisma.queueEntry.findUnique({
       where: { sessionId_playerId: { sessionId, playerId: auth.id } },
@@ -82,7 +75,6 @@ export async function POST(request: NextRequest) {
           sessionId,
           playerId: auth.id,
           status: "waiting",
-          gamePreference: resolvedPreference,
         },
         include: { player: true },
       });

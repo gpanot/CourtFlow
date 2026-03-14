@@ -44,6 +44,9 @@ yarn-error.log*
 # prisma
 /prisma/migrations/
 
+# uploads
+/uploads
+
 # dist
 /dist
 
