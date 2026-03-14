@@ -151,6 +151,7 @@ model Session {
   closedAt     DateTime?     @map("closed_at")
   status       SessionStatus @default(open)
   gameTypeMix  Json?         @map("game_type_mix")
+  warmupMode   String        @default("manual") @map("warmup_mode")
 
   venue            Venue              @relation(fields: [venueId], references: [id])
   queueEntries     QueueEntry[]

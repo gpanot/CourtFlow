@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/cn";
-import { Link, Coffee, MoreVertical, UserX, LogOut, ArrowUpDown, ChevronLeft, Users, Unlink } from "lucide-react";
+import { Link, Coffee, MoreVertical, UserX, LogOut, ArrowUpDown, ChevronLeft, Users, Unlink, MapPin } from "lucide-react";
 import { TV_QUEUE_DISPLAY_COUNT, SKILL_LEVELS, type SkillLevelType } from "@/lib/constants";
 
 const skillDotColors: Record<string, string> = {
@@ -38,7 +38,15 @@ export interface QueueEntryData {
   group: QueueGroup | null;
 }
 
-type PlayerAction = "remove_from_queue" | "end_session" | "change_level";
+type PlayerAction = "remove_from_queue" | "end_session" | "change_level" | "assign_to_court";
+
+export interface CourtInfo {
+  id: string;
+  label: string;
+  status: string;
+  playerCount: number;
+  players: { name: string; skillLevel: string }[];
+}
 
 interface QueuePanelProps {
   entries: QueueEntryData[];
@@ -47,9 +55,11 @@ interface QueuePanelProps {
   onPlayerAction?: (playerId: string, playerName: string, action: PlayerAction, data?: Record<string, unknown>) => void;
   onCreateGroup?: () => void;
   onDissolveGroup?: (groupId: string) => void;
+  isWarmupManual?: boolean;
+  courts?: CourtInfo[];
 }
 
-export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction, onCreateGroup, onDissolveGroup }: QueuePanelProps) {
+export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction, onCreateGroup, onDissolveGroup, isWarmupManual, courts }: QueuePanelProps) {
   const isTV = variant === "tv";
   const limit = maxDisplay ?? TV_QUEUE_DISPLAY_COUNT;
   const waitingCount = entries.filter((e) => e.status === "waiting" || e.status === "on_break").length;
@@ -212,6 +222,8 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
             isNextUp={cumulativePlayersBefore < 4}
             onPlayerAction={onPlayerAction}
             onDissolveGroup={onDissolveGroup}
+            isWarmupManual={isWarmupManual}
+            courts={courts}
           />
         ))
       )}
@@ -257,6 +269,8 @@ function QueueRow({
   isNextUp,
   onPlayerAction,
   onDissolveGroup,
+  isWarmupManual,
+  courts,
 }: {
   entry: QueueEntryData;
   isGroup: boolean;
@@ -267,6 +281,8 @@ function QueueRow({
   isNextUp: boolean;
   onPlayerAction?: (playerId: string, playerName: string, action: PlayerAction, data?: Record<string, unknown>) => void;
   onDissolveGroup?: (groupId: string) => void;
+  isWarmupManual?: boolean;
+  courts?: CourtInfo[];
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<{ id: string; name: string; skillLevel?: string } | null>(null);
@@ -391,6 +407,8 @@ function QueueRow({
             setSelectedPlayer((prev) => prev ? { ...prev, skillLevel: newLevel } : prev);
           }}
           onClose={() => { setMenuOpen(false); setSelectedPlayer(null); }}
+          isWarmupManual={isWarmupManual}
+          courts={courts}
         />
       )}
     </div>
@@ -410,15 +428,19 @@ function PlayerActionMenu({
   onAction,
   onLevelChanged,
   onClose,
+  isWarmupManual,
+  courts,
 }: {
   playerName: string;
   currentLevel?: string;
   onAction: (action: PlayerAction, data?: Record<string, unknown>) => void;
   onLevelChanged?: (newLevel: string) => void;
   onClose: () => void;
+  isWarmupManual?: boolean;
+  courts?: CourtInfo[];
 }) {
   const [confirmAction, setConfirmAction] = useState<PlayerAction | null>(null);
-  const [view, setView] = useState<"main" | "level">("main");
+  const [view, setView] = useState<"main" | "level" | "court_picker">("main");
   const [savingLevel, setSavingLevel] = useState(false);
 
   if (confirmAction) {
@@ -511,6 +533,76 @@ function PlayerActionMenu({
     );
   }
 
+  if (view === "court_picker" && courts) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={onClose}>
+        <div
+          className="w-full max-w-lg rounded-t-2xl border-t border-neutral-700 bg-neutral-900 p-5 pb-8 max-h-[80vh] flex flex-col"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center gap-2 mb-4">
+            <button
+              onClick={() => setView("main")}
+              className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-white"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <h3 className="text-lg font-bold">Assign {playerName} to...</h3>
+          </div>
+          <div className="space-y-2 overflow-y-auto">
+            {courts.map((court) => {
+              const isFull = court.playerCount >= 4;
+              const isAvailable = court.status === "idle" || court.status === "warmup";
+              const disabled = isFull || !isAvailable;
+              return (
+                <button
+                  key={court.id}
+                  disabled={disabled}
+                  onClick={() => {
+                    onAction("assign_to_court", { courtId: court.id });
+                    onClose();
+                  }}
+                  className={cn(
+                    "flex w-full items-start gap-3 rounded-xl px-4 py-3.5 text-left transition-colors",
+                    disabled
+                      ? "bg-neutral-800/50 opacity-40 cursor-not-allowed"
+                      : "bg-neutral-800 hover:bg-neutral-700"
+                  )}
+                >
+                  <MapPin className={cn("h-5 w-5 shrink-0 mt-0.5", disabled ? "text-neutral-600" : "text-green-400")} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-white">{court.label}</span>
+                      <span className={cn(
+                        "text-sm tabular-nums",
+                        isFull ? "text-neutral-500" : "text-neutral-400"
+                      )}>
+                        {court.playerCount}/4
+                        {isFull && " · full"}
+                      </span>
+                    </div>
+                    {court.players.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 mt-1.5">
+                        {court.players.map((p, i) => (
+                          <span key={i} className="flex items-center gap-1 text-xs text-neutral-400">
+                            <span className={cn("h-1.5 w-1.5 rounded-full shrink-0", skillDotColors[p.skillLevel] ?? "bg-neutral-500")} />
+                            {p.name}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-neutral-500 mt-0.5">empty</p>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={onClose}>
       <div
@@ -519,6 +611,18 @@ function PlayerActionMenu({
       >
         <h3 className="text-lg font-bold mb-4">{playerName}</h3>
         <div className="space-y-2">
+          {isWarmupManual && courts && (
+            <button
+              onClick={() => setView("court_picker")}
+              className="flex w-full items-center gap-3 rounded-xl bg-green-600/15 px-4 py-3.5 text-left font-medium text-white hover:bg-green-600/25 transition-colors"
+            >
+              <MapPin className="h-5 w-5 text-green-400 shrink-0" />
+              <div className="flex-1">
+                <span>Assign to Court</span>
+                <p className="text-xs text-green-400/70 font-normal">Place this player on a warm-up court</p>
+              </div>
+            </button>
+          )}
           <button
             onClick={() => setView("level")}
             className="flex w-full items-center gap-3 rounded-xl bg-neutral-800 px-4 py-3.5 text-left font-medium text-white hover:bg-neutral-700 transition-colors"
@@ -526,7 +630,7 @@ function PlayerActionMenu({
             <ArrowUpDown className="h-5 w-5 text-blue-400 shrink-0" />
             <div className="flex-1">
               <span>Change Level</span>
-              <p className="text-xs text-neutral-400 font-normal">Override player's self-reported skill level</p>
+              <p className="text-xs text-neutral-400 font-normal">Override player&apos;s self-reported skill level</p>
             </div>
             {currentLevel && (
               <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", skillLevelMeta[currentLevel]?.color ?? "bg-neutral-500")} />

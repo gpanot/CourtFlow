@@ -384,6 +384,15 @@ export async function assignToWarmup(
   return true;
 }
 
+export function scheduleWarmupTransitionPublic(
+  assignmentId: string,
+  venueId: string,
+  sessionId: string,
+  courtId: string
+) {
+  scheduleWarmupTransition(assignmentId, venueId, sessionId, courtId);
+}
+
 function scheduleWarmupTransition(
   assignmentId: string,
   venueId: string,

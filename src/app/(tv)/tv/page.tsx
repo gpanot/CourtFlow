@@ -7,7 +7,7 @@ import { useSocket } from "@/hooks/use-socket";
 import { joinVenue } from "@/lib/socket-client";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { Wifi, WifiOff, Flame } from "lucide-react";
+import { Wifi, WifiOff, Flame, RectangleHorizontal, RectangleVertical } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 
@@ -23,7 +23,13 @@ export default function TVDisplayPage() {
   const [state, setState] = useState<VenueState>({ session: null, courts: [], queue: [] });
   const [connected, setConnected] = useState(true);
   const [clock, setClock] = useState(new Date());
+  const [landscape, setLandscape] = useState(true);
   const { on } = useSocket();
+
+  useEffect(() => {
+    const saved = localStorage.getItem("tv-orientation");
+    if (saved === "portrait") setLandscape(false);
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => setClock(new Date()), 1000);
@@ -118,11 +124,22 @@ export default function TVDisplayPage() {
   const hasActiveCourts = state.courts.some((c) => c.status === "active");
   const isWarmupMode = !!state.session && state.courts.length > 0 && !hasActiveCourts && (hasWarmupCourts || state.courts.every((c) => c.status === "idle"));
 
-  const gridCols =
-    courtCount <= 3 ? "grid-cols-1 lg:grid-cols-3"
-    : courtCount <= 6 ? "grid-cols-2 lg:grid-cols-3"
-    : courtCount <= 9 ? "grid-cols-3"
-    : "grid-cols-3 lg:grid-cols-4";
+  const toggleOrientation = () => {
+    setLandscape((prev) => {
+      const next = !prev;
+      localStorage.setItem("tv-orientation", next ? "landscape" : "portrait");
+      return next;
+    });
+  };
+
+  const gridCols = landscape
+    ? courtCount <= 3 ? "grid-cols-1 lg:grid-cols-3"
+      : courtCount <= 6 ? "grid-cols-2 lg:grid-cols-3"
+      : courtCount <= 9 ? "grid-cols-3"
+      : "grid-cols-3 lg:grid-cols-4"
+    : courtCount <= 2 ? "grid-cols-1"
+      : courtCount <= 4 ? "grid-cols-2"
+      : "grid-cols-2 lg:grid-cols-3";
 
   return (
     <div className="flex h-dvh w-screen flex-col overflow-hidden bg-black text-white">
@@ -157,6 +174,17 @@ export default function TVDisplayPage() {
           <span className="tabular-nums text-neutral-400 text-[clamp(0.875rem,1.8vw,1.75rem)]">
             {clock.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
           </span>
+          <button
+            onClick={toggleOrientation}
+            className="rounded-md p-1 text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300 transition-colors"
+            title={landscape ? "Switch to portrait" : "Switch to landscape"}
+          >
+            {landscape ? (
+              <RectangleHorizontal className="h-[1.6vw] w-[1.6vw] min-h-3.5 min-w-3.5" />
+            ) : (
+              <RectangleVertical className="h-[1.6vw] w-[1.6vw] min-h-3.5 min-w-3.5" />
+            )}
+          </button>
           {connected ? (
             <Wifi className="h-[1.8vw] w-[1.8vw] min-h-4 min-w-4 text-green-500" />
           ) : (
@@ -169,9 +197,9 @@ export default function TVDisplayPage() {
       </header>
 
       {/* Main content */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div className={cn("flex flex-1 min-h-0 overflow-hidden", landscape ? "flex-row" : "flex-col")}>
         {/* Court grid */}
-        <main className="flex-1 min-w-0 min-h-0 overflow-hidden p-[min(1.5vw,2vh)]">
+        <main className={cn("flex-1 min-w-0 min-h-0 overflow-hidden p-[min(1.5vw,2vh)]", !landscape && "min-h-0")}>
           {!state.session ? (
             <div className="flex h-full flex-col items-center justify-center gap-[3vh]">
               {venueLogoUrl && (
@@ -224,11 +252,31 @@ export default function TVDisplayPage() {
           )}
         </main>
 
-        {/* Queue sidebar — show during warmup and rotation */}
+        {/* Queue sidebar (landscape) / bottom panel (portrait) */}
         {state.session && (
-          <aside className="shrink-0 border-l border-neutral-800 flex flex-col overflow-hidden" style={{ width: "clamp(8rem, min(22vw, 40vh), 26rem)", padding: "clamp(0.4rem, min(1.5vw, 2vh), 1.5rem)" }}>
-            <div className="shrink-0 w-full mb-[min(1vh,0.5vw)]" style={{ maxHeight: "45vh" }}>
-              <div className="w-full rounded-[1vw] bg-white p-[min(1vw,1.5vh)] aspect-square flex items-center justify-center" style={{ maxHeight: "45vh", maxWidth: "45vh" }}>
+          <aside
+            className={cn(
+              "shrink-0 flex overflow-hidden",
+              landscape
+                ? "border-l border-neutral-800 flex-col"
+                : "border-t border-neutral-800 flex-row items-stretch"
+            )}
+            style={landscape
+              ? { width: "clamp(8rem, min(22vw, 40vh), 26rem)", padding: "clamp(0.4rem, min(1.5vw, 2vh), 1.5rem)" }
+              : { height: "clamp(5rem, 28vh, 14rem)", padding: "clamp(0.4rem, min(1.5vw, 2vh), 1.5rem)" }
+            }
+          >
+            <div
+              className={cn(
+                "shrink-0",
+                landscape ? "w-full mb-[min(1vh,0.5vw)]" : "h-full mr-[min(1vw,0.5vh)]"
+              )}
+              style={landscape ? { maxHeight: "45vh" } : { maxWidth: "28vh" }}
+            >
+              <div
+                className="rounded-[1vw] bg-white p-[min(1vw,1.5vh)] aspect-square flex items-center justify-center h-full"
+                style={landscape ? { maxHeight: "45vh", maxWidth: "45vh" } : { maxHeight: "100%" }}
+              >
                 <QRCodeSVG
                   value={`${typeof window !== "undefined" ? window.location.origin : ""}/player?venueId=${venueId}`}
                   size={1000}
@@ -239,9 +287,17 @@ export default function TVDisplayPage() {
               </div>
             </div>
             {isWarmupMode && (
-              <p className="mb-[0.5vh] font-semibold text-amber-400 uppercase tracking-wider" style={{ fontSize: "clamp(0.45rem, min(1vw, 1.5vh), 0.875rem)" }}>Checked In</p>
+              <p
+                className={cn(
+                  "font-semibold text-amber-400 uppercase tracking-wider",
+                  landscape ? "mb-[0.5vh]" : "hidden"
+                )}
+                style={{ fontSize: "clamp(0.45rem, min(1vw, 1.5vh), 0.875rem)" }}
+              >
+                Checked In
+              </p>
             )}
-            <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className={cn("flex-1 min-h-0 overflow-y-auto", !landscape && "min-w-0 overflow-x-hidden")}>
               <QueuePanel entries={state.queue} variant="tv" />
             </div>
           </aside>

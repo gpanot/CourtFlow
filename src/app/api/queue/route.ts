@@ -88,15 +88,18 @@ export async function POST(request: NextRequest) {
 
     emitToVenue(venueId, "queue:updated", allEntries);
 
-    // Try to assign the player to a warmup court if any are available
-    const courts = await prisma.court.findMany({
-      where: { venueId, activeInSession: true },
-    });
-    const hasWarmupOrIdleCourt = courts.some(
-      (c) => c.status === "idle" || c.status === "warmup"
-    );
-    if (hasWarmupOrIdleCourt) {
-      await assignToWarmup(venueId, sessionId, auth.id);
+    // In auto mode, try to assign the player to a warmup court if any are available
+    // In manual mode, player stays in queue for host to assign
+    if (session.warmupMode !== "manual") {
+      const courts = await prisma.court.findMany({
+        where: { venueId, activeInSession: true },
+      });
+      const hasWarmupOrIdleCourt = courts.some(
+        (c) => c.status === "idle" || c.status === "warmup"
+      );
+      if (hasWarmupOrIdleCourt) {
+        await assignToWarmup(venueId, sessionId, auth.id);
+      }
     }
 
     return json(entry, 201);

@@ -126,7 +126,7 @@ export async function GET(request: NextRequest) {
     }
 
     return json({
-      session,
+      session: session ? { ...session, warmupMode: session.warmupMode } : null,
       courts: courtsWithPlayers,
       queue,
       gameTypeMix: gameTypeMixStats,

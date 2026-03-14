@@ -22,10 +22,11 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const auth = requireStaff(request.headers);
-    const { venueId, courtIds, gameTypeMix } = await parseBody<{
+    const { venueId, courtIds, gameTypeMix, warmupMode } = await parseBody<{
       venueId: string;
       courtIds: string[];
       gameTypeMix?: { men: number; women: number; mixed: number };
+      warmupMode?: "manual" | "auto";
     }>(request);
 
     const existing = await prisma.session.findFirst({
@@ -52,6 +53,7 @@ export async function POST(request: NextRequest) {
       data: {
         venueId,
         gameTypeMix: gameTypeMix ?? undefined,
+        warmupMode: warmupMode ?? "manual",
       },
     });
 

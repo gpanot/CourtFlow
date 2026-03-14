@@ -18,6 +18,7 @@ interface SessionData {
   status: string;
   venueId: string;
   gameTypeMix?: { men: number; women: number; mixed: number } | null;
+  warmupMode?: "manual" | "auto";
 }
 
 interface GameTypeMixStats {
@@ -95,13 +96,14 @@ export function StaffDashboard() {
     return () => { offCourt(); offQueue(); offSession(); };
   }, [venueId, on, fetchState]);
 
-  const handleOpenSession = async (courtIds: string[], mix?: { men: number; women: number; mixed: number } | null) => {
+  const handleOpenSession = async (courtIds: string[], mix?: { men: number; women: number; mixed: number } | null, warmupMode?: "manual" | "auto") => {
     if (!venueId) return;
     try {
       await api.post("/api/sessions", {
         venueId,
         courtIds,
         gameTypeMix: mix ?? undefined,
+        warmupMode: warmupMode ?? "manual",
       });
       setShowOpenSession(false);
       await fetchState();
@@ -185,9 +187,21 @@ export function StaffDashboard() {
     }
   };
 
-  const handlePlayerAction = async (playerId: string, _playerName: string, action: "remove_from_queue" | "end_session" | "change_level", data?: Record<string, unknown>) => {
+  const handleAutofill = async (courtId: string) => {
     try {
-      if (action === "remove_from_queue") {
+      await api.post(`/api/courts/${courtId}/warmup-autofill`);
+      setSelectedCourt(null);
+      await fetchState();
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  };
+
+  const handlePlayerAction = async (playerId: string, _playerName: string, action: "remove_from_queue" | "end_session" | "change_level" | "assign_to_court", data?: Record<string, unknown>) => {
+    try {
+      if (action === "assign_to_court" && data?.courtId) {
+        await api.post(`/api/courts/${data.courtId}/warmup-assign`, { playerId });
+      } else if (action === "remove_from_queue") {
         await api.post("/api/queue/staff-remove", { playerId, venueId });
       } else if (action === "end_session") {
         await api.post(`/api/players/${playerId}/end-session`, { venueId, reason: "staff_action" });
@@ -344,9 +358,14 @@ export function StaffDashboard() {
                 <div className="flex items-center gap-3">
                   <Flame className="h-5 w-5 shrink-0 text-amber-400" />
                   <div>
-                    <p className="font-semibold text-amber-300">Warm Up in Progress</p>
+                    <p className="font-semibold text-amber-300">
+                      Warm Up — {session.warmupMode === "manual" ? "Manual" : "Auto"}
+                    </p>
                     <p className="text-xs text-amber-400/70">
-                      Players are being assigned to courts as they arrive. Games start automatically after {WARMUP_DURATION_SECONDS / 60} min warmup.
+                      {session.warmupMode === "manual"
+                        ? "Go to Queue tab to assign players to courts."
+                        : "Players are being assigned to courts as they arrive."}{" "}
+                      Games start after {WARMUP_DURATION_SECONDS / 60} min warmup.
                     </p>
                   </div>
                 </div>
@@ -400,6 +419,14 @@ export function StaffDashboard() {
             onPlayerAction={handlePlayerAction}
             onCreateGroup={() => setShowCreateGroup(true)}
             onDissolveGroup={handleDissolveGroup}
+            isWarmupManual={isWarmupMode && session.warmupMode === "manual"}
+            courts={isWarmupMode && session.warmupMode === "manual" ? courts.map((c) => ({
+              id: c.id,
+              label: c.label,
+              status: c.status,
+              playerCount: c.players.length,
+              players: c.players.map((p) => ({ name: p.name, skillLevel: p.skillLevel })),
+            })) : undefined}
           />
         )}
 
@@ -467,6 +494,20 @@ export function StaffDashboard() {
 
               {/* Actions */}
               <div className="space-y-4">
+                {/* Auto-fill button for warmup courts with < 4 players */}
+                {(selectedCourt.status === "warmup" || (selectedCourt.status === "idle" && isWarmupMode)) &&
+                  selectedCourt.players.length > 0 &&
+                  selectedCourt.players.length < 4 &&
+                  waitingCount > 0 && (
+                  <button
+                    onClick={() => handleAutofill(selectedCourt.id)}
+                    className="w-full rounded-xl bg-green-600 py-5 text-lg font-bold text-white transition-colors hover:bg-green-500 flex items-center justify-center gap-2"
+                  >
+                    <Users className="h-5 w-5" />
+                    Auto-fill from Queue
+                  </button>
+                )}
+
                 {selectedCourt.status === "active" && selectedCourt.assignment && (
                   <button
                     onClick={() => setConfirmStartGame({
@@ -902,7 +943,7 @@ function OpenSessionPanel({
   onCancel,
 }: {
   courts: { id: string; label: string }[];
-  onOpen: (courtIds: string[], mix?: { men: number; women: number; mixed: number } | null) => void;
+  onOpen: (courtIds: string[], mix?: { men: number; women: number; mixed: number } | null, warmupMode?: "manual" | "auto") => void;
   onCancel: () => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -910,6 +951,7 @@ function OpenSessionPanel({
   const [showMixDetails, setShowMixDetails] = useState(false);
   const [customMix, setCustomMix] = useState({ men: 33, women: 33, mixed: 34 });
   const [isCustom, setIsCustom] = useState(false);
+  const [warmupMode, setWarmupMode] = useState<"manual" | "auto">("manual");
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -1047,9 +1089,43 @@ function OpenSessionPanel({
         )}
       </div>
 
+      {/* Warm-up mode */}
+      <div>
+        <p className="text-sm text-neutral-400 mb-2">Warm-Up Mode</p>
+        <div className="flex rounded-xl border border-neutral-700 bg-neutral-800/50 p-1">
+          <button
+            onClick={() => setWarmupMode("manual")}
+            className={cn(
+              "flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors",
+              warmupMode === "manual"
+                ? "bg-blue-600 text-white"
+                : "text-neutral-400 hover:text-neutral-200"
+            )}
+          >
+            Manual
+          </button>
+          <button
+            onClick={() => setWarmupMode("auto")}
+            className={cn(
+              "flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors",
+              warmupMode === "auto"
+                ? "bg-blue-600 text-white"
+                : "text-neutral-400 hover:text-neutral-200"
+            )}
+          >
+            Auto
+          </button>
+        </div>
+        <p className="text-xs text-neutral-500 mt-1.5">
+          {warmupMode === "manual"
+            ? "You assign players to courts as they arrive."
+            : "Players are assigned to courts automatically."}
+        </p>
+      </div>
+
       <div className="flex gap-3">
         <button
-          onClick={() => onOpen(Array.from(selected), activeMix)}
+          onClick={() => onOpen(Array.from(selected), activeMix, warmupMode)}
           disabled={selected.size === 0}
           className="flex-1 rounded-xl bg-green-600 py-3 font-semibold text-white disabled:opacity-40"
         >
