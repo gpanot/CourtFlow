@@ -374,39 +374,36 @@ export default function PlayersPage() {
       </div>
 
       {/* Desktop table */}
-      <div className="hidden md:block rounded-xl border border-neutral-800">
-        <table className="w-full text-left text-sm">
+      <div className="hidden md:block rounded-xl border border-neutral-800 overflow-x-auto">
+        <table className="w-full text-left text-xs">
           <thead className="border-b border-neutral-800 text-neutral-400">
             <tr>
               <SortableHeader label="Player" sortKey="name" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
-              <th className="px-4 py-2.5">Phone</th>
               <SortableHeader label="Skill" sortKey="skillLevel" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
               <SortableHeader label="Gender" sortKey="gender" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
-              <SortableHeader label="Sessions" sortKey="totalSessions" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
+              <SortableHeader label="Sess." sortKey="totalSessions" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
               <SortableHeader label="Games" sortKey="totalGames" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
-              <SortableHeader label="Play Time" sortKey="totalPlayMinutes" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
-              <SortableHeader label="Wait Time" sortKey="totalWaitMinutes" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
-              <SortableHeader label="Wait/Play" sortKey="waitPlayRatio" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
+              <SortableHeader label="Play" sortKey="totalPlayMinutes" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
+              <SortableHeader label="Wait" sortKey="totalWaitMinutes" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
+              <SortableHeader label="W/P" sortKey="waitPlayRatio" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
               <SortableHeader label="Venues" sortKey="venues" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
-              <th className="px-4 py-2.5">Last Seen</th>
-              <th className="px-4 py-2.5">Registered</th>
-              <th className="px-4 py-2.5"></th>
+              <th className="px-2.5 py-2.5">Last Seen</th>
+              <th className="px-2.5 py-2.5 w-8"></th>
             </tr>
           </thead>
           <tbody>
             {sortedPlayers.map((p) => (
               <tr key={p.id} className="border-b border-neutral-800 last:border-0 hover:bg-neutral-900/50">
-                <td className="px-4 py-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">{p.avatar}</span>
-                    <span className="font-medium truncate max-w-[140px]">{p.name}</span>
+                <td className="px-2.5 py-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm">{p.avatar}</span>
+                    <span className="font-medium truncate max-w-[120px]">{p.name}</span>
                     {p.isActiveToday && (
-                      <span className="h-2 w-2 rounded-full bg-green-500 shrink-0" title="Active today" />
+                      <span className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" title="Active today" />
                     )}
                   </div>
                 </td>
-                <td className="px-4 py-2 text-neutral-400 tabular-nums">{p.phone}</td>
-                <td className="px-4 py-2">
+                <td className="px-2.5 py-2">
                   <SkillBadge
                     playerId={p.id}
                     level={p.skillLevel}
@@ -417,44 +414,43 @@ export default function PlayersPage() {
                     onClose={() => setEditingSkillId(null)}
                   />
                 </td>
-                <td className="px-4 py-2 text-neutral-400 capitalize">{p.gender}</td>
-                <td className="px-4 py-2 text-right tabular-nums">{p.totalSessions}</td>
-                <td className="px-4 py-2 text-right tabular-nums">{p.totalGames}</td>
-                <td className="px-4 py-2 text-right tabular-nums text-neutral-400">{fmtMin(p.totalPlayMinutes)}</td>
-                <td className="px-4 py-2 text-right tabular-nums text-neutral-400">{fmtMin(p.totalWaitMinutes)}</td>
-                <td className="px-4 py-2 text-right tabular-nums">
+                <td className="px-2.5 py-2 text-neutral-400 capitalize">{p.gender === "female" ? "F" : p.gender === "male" ? "M" : p.gender}</td>
+                <td className="px-2.5 py-2 text-right tabular-nums">{p.totalSessions}</td>
+                <td className="px-2.5 py-2 text-right tabular-nums">{p.totalGames}</td>
+                <td className="px-2.5 py-2 text-right tabular-nums text-neutral-400">{fmtMin(p.totalPlayMinutes)}</td>
+                <td className="px-2.5 py-2 text-right tabular-nums text-neutral-400">{fmtMin(p.totalWaitMinutes)}</td>
+                <td className="px-2.5 py-2 text-right tabular-nums">
                   <RatioBadge ratio={p.waitPlayRatio} />
                 </td>
-                <td className="px-4 py-2">
-                  <div className="flex gap-1 max-w-[160px] overflow-hidden">
-                    {p.venues.slice(0, 2).map((v) => (
-                      <span key={v.id} className="rounded bg-neutral-800 px-1.5 py-0.5 text-[11px] text-neutral-400 truncate">
+                <td className="px-2.5 py-2">
+                  <div className="flex gap-1 max-w-[120px] overflow-hidden">
+                    {p.venues.slice(0, 1).map((v) => (
+                      <span key={v.id} className="rounded bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-400 truncate max-w-[100px]">
                         {v.name}
                       </span>
                     ))}
-                    {p.venues.length > 2 && (
-                      <span className="text-[11px] text-neutral-500">+{p.venues.length - 2}</span>
+                    {p.venues.length > 1 && (
+                      <span className="text-[10px] text-neutral-500">+{p.venues.length - 1}</span>
                     )}
                   </div>
                 </td>
-                <td className="px-4 py-2 text-neutral-500 text-xs whitespace-nowrap">
-                  {p.lastSeen ? `${p.lastSeen.venue} · ${fmtDate(p.lastSeen.date)}` : "—"}
+                <td className="px-2.5 py-2 text-neutral-500 text-[11px] whitespace-nowrap">
+                  {p.lastSeen ? fmtDate(p.lastSeen.date) : "—"}
                 </td>
-                <td className="px-4 py-2 text-neutral-500 text-xs whitespace-nowrap">{fmtDate(p.createdAt)}</td>
-                <td className="px-4 py-2">
+                <td className="px-1 py-2">
                   <button
                     onClick={() => openPlayerDetail(p)}
                     className="rounded-lg p-1 text-neutral-500 hover:bg-neutral-800 hover:text-white transition-colors"
                     title="View details"
                   >
-                    <ChevronRight className="h-4 w-4" />
+                    <ChevronRight className="h-3.5 w-3.5" />
                   </button>
                 </td>
               </tr>
             ))}
             {!loading && players.length === 0 && (
               <tr>
-                <td colSpan={13} className="px-4 py-8 text-center text-neutral-500">No players found</td>
+                <td colSpan={11} className="px-4 py-8 text-center text-neutral-500">No players found</td>
               </tr>
             )}
           </tbody>
@@ -641,7 +637,7 @@ function RatioBadge({ ratio }: { ratio: number }) {
     ratio <= 50 ? "text-orange-400 bg-orange-500/15" :
     "text-red-400 bg-red-500/15";
   return (
-    <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium tabular-nums", color)}>
+    <span className={cn("rounded-full px-1.5 py-0.5 text-[11px] font-medium tabular-nums", color)}>
       {ratio}%
     </span>
   );
@@ -665,11 +661,11 @@ function SortableHeader({
   const active = currentKey === key;
   const Icon = active ? (currentDir === "asc" ? ChevronUp : ChevronDown) : ChevronsUpDown;
   return (
-    <th className={cn("px-4 py-2.5", align === "right" && "text-right")}>
+    <th className={cn("px-2.5 py-2.5", align === "right" && "text-right")}>
       <button
         onClick={() => onToggle(key)}
         className={cn(
-          "inline-flex items-center gap-1 text-xs font-medium transition-colors",
+          "inline-flex items-center gap-0.5 text-[11px] font-medium transition-colors whitespace-nowrap",
           active ? "text-white" : "text-neutral-400 hover:text-neutral-200"
         )}
       >
