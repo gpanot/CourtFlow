@@ -13,7 +13,7 @@ import { InGameScreen } from "./in-game";
 import { BreakScreen } from "./break-screen";
 import { ProfileScreen } from "./profile";
 import { SessionRecapScreen } from "./session-recap";
-import { LogOut, AlertTriangle } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { isPushSupported, subscribeToPush, getNotificationPermission } from "@/lib/push-client";
 
 interface Venue {
@@ -51,8 +51,6 @@ export function PlayerHome() {
   const [isWarmup, setIsWarmup] = useState(false);
   const [avatar, setAvatar] = useState("🏓");
   const [recapSessionId, setRecapSessionId] = useState<string | null>(null);
-  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
-  const [showLeaveStep2, setShowLeaveStep2] = useState(false);
   const inRecapRef = useRef(false);
   const manuallyLeftRef = useRef(false);
   const { on } = useSocket();
@@ -154,11 +152,9 @@ export function PlayerHome() {
             default:
               setViewTracked("home");
           }
-        } else if (viewRef.current === "home") {
-          setViewTracked("home");
         } else {
-          console.warn("[PlayerHome] Entry not found but view is", viewRef.current, "— retrying in 2s");
-          setTimeout(() => fetchPlayerState(), 2000);
+          setQueueEntry(null);
+          setViewTracked("home");
         }
       }
     } catch (e) {
@@ -383,101 +379,15 @@ export function PlayerHome() {
 
   if (view === "queue" && queueEntry) {
     return (
-      <>
-        <QueueScreen
-          entry={queueEntry}
-          venueId={selectedVenue}
-          venueName={venueName}
-          sessionId={session?.id || ""}
-          avatar={avatar}
-          onShowProfile={() => setShowProfile(true)}
-          onRefresh={fetchPlayerState}
-          onLeaveVenue={() => setShowLeaveConfirm(true)}
-        />
-
-        {/* Double confirm leave venue */}
-        {showLeaveConfirm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => { setShowLeaveConfirm(false); setShowLeaveStep2(false); }}>
-            <div
-              className="w-full max-w-sm mx-4 rounded-2xl border border-neutral-700 bg-neutral-900 p-6"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {!showLeaveStep2 ? (
-                <>
-                  <div className="mb-4 flex flex-col items-center gap-3 text-center">
-                    <div className="rounded-full bg-amber-600/20 p-3">
-                      <AlertTriangle className="h-6 w-6 text-amber-400" />
-                    </div>
-                    <h3 className="text-lg font-bold">Leaving the venue?</h3>
-                    <p className="text-sm text-neutral-400">
-                      You&apos;ll be removed from the queue. You can always come back and re-join later!
-                    </p>
-                  </div>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setShowLeaveStep2(true)}
-                      className="flex-1 rounded-xl bg-amber-600 py-3 font-semibold text-white hover:bg-amber-500"
-                    >
-                      Yes, I&apos;m leaving
-                    </button>
-                    <button
-                      onClick={() => { setShowLeaveConfirm(false); setShowLeaveStep2(false); }}
-                      className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
-                    >
-                      Stay
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="mb-4 flex flex-col items-center gap-3 text-center">
-                    <div className="rounded-full bg-red-600/20 p-3">
-                      <AlertTriangle className="h-6 w-6 text-red-400" />
-                    </div>
-                    <h3 className="text-lg font-bold">Are you sure?</h3>
-                    <p className="text-sm text-neutral-400">
-                      Confirm you want to leave. Your session stats will be shown after.
-                    </p>
-                  </div>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={async () => {
-                        setShowLeaveConfirm(false);
-                        setShowLeaveStep2(false);
-                        const sid = session?.id || queueEntry?.sessionId;
-                        try {
-                          await api.post("/api/queue/leave", { venueId: selectedVenue });
-                          if (sid) {
-                            inRecapRef.current = true;
-                            setRecapSessionId(sid);
-                            setViewTracked("session_recap");
-                          } else {
-                            setQueueEntry(null);
-                            setViewTracked("home");
-                          }
-                        } catch (e) {
-                          console.error(e);
-                          setQueueEntry(null);
-                          setViewTracked("home");
-                        }
-                      }}
-                      className="flex-1 rounded-xl bg-red-600 py-3 font-semibold text-white hover:bg-red-500"
-                    >
-                      Yes, leave venue
-                    </button>
-                    <button
-                      onClick={() => { setShowLeaveConfirm(false); setShowLeaveStep2(false); }}
-                      className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        )}
-      </>
+      <QueueScreen
+        entry={queueEntry}
+        venueId={selectedVenue}
+        venueName={venueName}
+        sessionId={session?.id || ""}
+        avatar={avatar}
+        onShowProfile={() => setShowProfile(true)}
+        onRefresh={fetchPlayerState}
+      />
     );
   }
 

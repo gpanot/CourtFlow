@@ -15,7 +15,6 @@ interface QueueScreenProps {
   avatar?: string;
   onShowProfile?: () => void;
   onRefresh: () => void;
-  onLeaveVenue?: () => void;
 }
 
 interface QueueInfo {
@@ -25,9 +24,11 @@ interface QueueInfo {
   group: { id: string; code: string; members: { name: string }[] } | null;
 }
 
-export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onShowProfile, onRefresh, onLeaveVenue }: QueueScreenProps) {
+export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onShowProfile, onRefresh }: QueueScreenProps) {
   const { playerId } = useSessionStore();
   const [info, setInfo] = useState<QueueInfo | null>(null);
+  const [showBreakConfirm, setShowBreakConfirm] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const { showBanner, isIos, promptInstall, canPrompt } = usePwaInstall();
 
   const fetchQueueInfo = useCallback(async () => {
@@ -84,12 +85,15 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
   }, [fetchQueueInfo]);
 
   const leaveQueue = async () => {
-    if (!confirm("Leave the queue?\n\nDon't worry, you can join again at anytime.")) return;
+    setLeaving(true);
     try {
       await api.post("/api/queue/leave", { venueId });
       onRefresh();
     } catch (e) {
       alert((e as Error).message);
+    } finally {
+      setLeaving(false);
+      setShowBreakConfirm(false);
     }
   };
 
@@ -186,23 +190,49 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
       </div>
 
       {/* Bottom actions */}
-      <div className="mt-auto space-y-3">
+      <div className="mt-auto">
         <button
-          onClick={leaveQueue}
+          onClick={() => setShowBreakConfirm(true)}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-neutral-800 py-3 text-sm font-medium text-neutral-300"
         >
           <Coffee className="h-4 w-4" />
           I need a break
         </button>
-        {onLeaveVenue && (
-          <button
-            onClick={onLeaveVenue}
-            className="w-full rounded-xl py-2.5 text-sm font-medium text-neutral-500 hover:text-neutral-300 transition-colors"
-          >
-            Leave Venue
-          </button>
-        )}
       </div>
+
+      {showBreakConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowBreakConfirm(false)}>
+          <div
+            className="w-full max-w-sm mx-4 rounded-2xl border border-neutral-700 bg-neutral-900 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex flex-col items-center gap-3 text-center">
+              <div className="rounded-full bg-amber-600/20 p-3">
+                <Coffee className="h-6 w-6 text-amber-400" />
+              </div>
+              <h3 className="text-lg font-bold">Need a break?</h3>
+              <p className="text-sm text-neutral-400">
+                You&apos;ll be removed from the queue. Don&apos;t worry, you can join again anytime!
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={leaveQueue}
+                disabled={leaving}
+                className="flex-1 rounded-xl bg-amber-600 py-3 font-semibold text-white hover:bg-amber-500 disabled:opacity-60"
+              >
+                {leaving ? "Leaving..." : "Yes, take a break"}
+              </button>
+              <button
+                onClick={() => setShowBreakConfirm(false)}
+                className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
+              >
+                Stay
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
