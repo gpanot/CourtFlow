@@ -12,6 +12,13 @@ const skillDotColors: Record<string, string> = {
   pro: "bg-red-500",
 };
 
+const skillLevelMeta: Record<string, { color: string; label: string }> = {
+  beginner: { color: "bg-green-500", label: "Beginner" },
+  intermediate: { color: "bg-blue-500", label: "Intermediate" },
+  advanced: { color: "bg-purple-500", label: "Advanced" },
+  pro: { color: "bg-red-500", label: "Pro" },
+};
+
 interface QueuePlayer {
   id: string;
   name: string;
@@ -250,6 +257,24 @@ function SkillDot({ level, isTV }: { level?: string; isTV: boolean }) {
   );
 }
 
+const skillTagStyles: Record<string, string> = {
+  beginner: "bg-green-700/60 text-green-200",
+  intermediate: "bg-blue-700/60 text-blue-200",
+  advanced: "bg-purple-700/60 text-purple-200",
+  pro: "bg-red-700/60 text-red-200",
+};
+
+function SkillTag({ level }: { level?: string }) {
+  const style = skillTagStyles[level ?? ""] ?? "bg-neutral-700 text-neutral-300";
+  const full = skillLevelMeta[level ?? ""]?.label ?? level ?? "—";
+  const label = full.slice(0, 3).toUpperCase();
+  return (
+    <span className={cn("shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide", style)}>
+      {label}
+    </span>
+  );
+}
+
 function PlayerStats({ gamesPlayed, playMinutes, className }: { gamesPlayed: number; playMinutes: number; className?: string }) {
   if (gamesPlayed === 0 && playMinutes === 0) return null;
   return (
@@ -328,6 +353,7 @@ function QueueRow({
                       className="flex items-center gap-1 rounded bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300 hover:bg-neutral-700 hover:text-white transition-colors"
                     >
                       {p.name}
+                      <SkillTag level={p.skillLevel} />
                       <PlayerStats gamesPlayed={p.gamesPlayed ?? 0} playMinutes={p.totalPlayMinutesToday ?? 0} className="text-xs" />
                     </button>
                   ))}
@@ -346,7 +372,7 @@ function QueueRow({
                 <div className={cn("flex flex-wrap items-center gap-x-2 gap-y-0.5", isTV ? "text-[clamp(0.6rem,var(--tw,1vw),1rem)]" : "ml-6 text-xs")}>
                   {entry.group.queueEntries.map((e, i) => (
                     <span key={e.player.id} className="flex items-center gap-1 text-neutral-500">
-                      {!isTV && <SkillDot level={e.player.skillLevel} isTV={isTV} />}
+                      {!isTV && <SkillTag level={e.player.skillLevel} />}
                       {e.player.name}{i < entry.group!.queueEntries.length - 1 && ","}
                     </span>
                   ))}
@@ -355,10 +381,10 @@ function QueueRow({
             </div>
           ) : (
             <div className="flex items-center gap-1.5">
-              {!isTV && <SkillDot level={entry.player.skillLevel} isTV={isTV} />}
               <span className={cn("font-medium", isTV ? "text-[clamp(0.75rem,calc(1.5*var(--tw,1vw)),1.5rem)] line-clamp-2 break-words" : "text-sm truncate")}>
                 {entry.player.name}
               </span>
+              {!isTV && <SkillTag level={entry.player.skillLevel} />}
               {!isTV && (
                 <PlayerStats gamesPlayed={entry.gamesPlayed ?? 0} playMinutes={entry.totalPlayMinutesToday ?? 0} className="text-sm" />
               )}
@@ -414,13 +440,6 @@ function QueueRow({
     </div>
   );
 }
-
-const skillLevelMeta: Record<string, { color: string; label: string }> = {
-  beginner: { color: "bg-green-500", label: "Beginner" },
-  intermediate: { color: "bg-blue-500", label: "Intermediate" },
-  advanced: { color: "bg-purple-500", label: "Advanced" },
-  pro: { color: "bg-red-500", label: "Pro" },
-};
 
 function PlayerActionMenu({
   playerName,
@@ -547,7 +566,7 @@ function PlayerActionMenu({
             >
               <ChevronLeft className="h-5 w-5" />
             </button>
-            <h3 className="text-lg font-bold">Assign {playerName} to...</h3>
+            <h3 className="text-lg font-bold flex items-center gap-2">Assign {playerName} <SkillTag level={currentLevel} /> to...</h3>
           </div>
           <div className="space-y-2 overflow-y-auto">
             {courts.map((court) => {
@@ -633,7 +652,7 @@ function PlayerActionMenu({
               <p className="text-xs text-neutral-400 font-normal">Override player&apos;s self-reported skill level</p>
             </div>
             {currentLevel && (
-              <span className={cn("h-2.5 w-2.5 rounded-full shrink-0", skillLevelMeta[currentLevel]?.color ?? "bg-neutral-500")} />
+              <SkillTag level={currentLevel} />
             )}
           </button>
           <button

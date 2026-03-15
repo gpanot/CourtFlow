@@ -745,7 +745,9 @@ function SkillBadge({
   useEffect(() => {
     if (!editing) return;
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+      if (!ref.current) return;
+      if (ref.current.offsetParent === null) return;
+      if (!ref.current.contains(e.target as Node)) onClose();
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
