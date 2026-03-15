@@ -43,9 +43,11 @@ export function OnboardingFlow() {
   const [titleTaps, setTitleTaps] = useState(0);
 
   useEffect(() => {
-    setCanQuickLogin(true);
     const player = getBiometricPlayer();
-    if (player) setQuickLoginName(player.playerName);
+    if (player) {
+      setCanQuickLogin(true);
+      setQuickLoginName(player.playerName);
+    }
   }, []);
 
   const handleQuickLogin = async () => {

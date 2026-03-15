@@ -260,6 +260,7 @@ export function StaffDashboard() {
   const hasWarmupCourts = courts.some((c) => c.status === "warmup");
   const hasActiveCourts = courts.some((c) => c.status === "active");
   const isWarmupMode = !!session && courts.length > 0 && !hasActiveCourts && (hasWarmupCourts || courts.every((c) => c.status === "idle"));
+  const hasWarmupOrIdleCourts = !!session && courts.some((c) => c.status === "warmup" || c.status === "idle");
 
   if (!venueId) {
     return (
@@ -419,14 +420,16 @@ export function StaffDashboard() {
             onPlayerAction={handlePlayerAction}
             onCreateGroup={() => setShowCreateGroup(true)}
             onDissolveGroup={handleDissolveGroup}
-            isWarmupManual={isWarmupMode && session.warmupMode === "manual"}
-            courts={isWarmupMode && session.warmupMode === "manual" ? courts.map((c) => ({
-              id: c.id,
-              label: c.label,
-              status: c.status,
-              playerCount: c.players.length,
-              players: c.players.map((p) => ({ name: p.name, skillLevel: p.skillLevel })),
-            })) : undefined}
+            isWarmupManual={hasWarmupOrIdleCourts && session.warmupMode === "manual"}
+            courts={hasWarmupOrIdleCourts && session.warmupMode === "manual" ? courts
+              .filter((c) => c.status === "warmup" || c.status === "idle")
+              .map((c) => ({
+                id: c.id,
+                label: c.label,
+                status: c.status,
+                playerCount: c.players.length,
+                players: c.players.map((p) => ({ name: p.name, skillLevel: p.skillLevel })),
+              })) : undefined}
           />
         )}
 
@@ -494,9 +497,8 @@ export function StaffDashboard() {
 
               {/* Actions */}
               <div className="space-y-4">
-                {/* Auto-fill button for warmup courts with < 4 players */}
-                {(selectedCourt.status === "warmup" || (selectedCourt.status === "idle" && isWarmupMode)) &&
-                  selectedCourt.players.length > 0 &&
+                {/* Auto-fill button for warmup/idle courts with < 4 players */}
+                {(selectedCourt.status === "warmup" || (selectedCourt.status === "idle" && hasWarmupOrIdleCourts)) &&
                   selectedCourt.players.length < 4 &&
                   waitingCount > 0 && (
                   <button
@@ -522,7 +524,7 @@ export function StaffDashboard() {
                   </button>
                 )}
 
-                {selectedCourt.status === "idle" && !isWarmupMode && (
+                {selectedCourt.status === "idle" && (
                   <button
                     onClick={() => handleStartGameOnIdle(selectedCourt.id)}
                     disabled={waitingCount < 4}
@@ -947,10 +949,6 @@ function OpenSessionPanel({
   onCancel: () => void;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [mixPresetIdx, setMixPresetIdx] = useState(0);
-  const [showMixDetails, setShowMixDetails] = useState(false);
-  const [customMix, setCustomMix] = useState({ men: 33, women: 33, mixed: 34 });
-  const [isCustom, setIsCustom] = useState(false);
   const [warmupMode, setWarmupMode] = useState<"manual" | "auto">("manual");
 
   const toggle = (id: string) => {
@@ -961,8 +959,6 @@ function OpenSessionPanel({
       return next;
     });
   };
-
-  const activeMix = isCustom ? customMix : MIX_PRESETS[mixPresetIdx].mix;
 
   return (
     <div className="space-y-5">
@@ -986,107 +982,6 @@ function OpenSessionPanel({
             </button>
           ))}
         </div>
-      </div>
-
-      {/* Game type mix */}
-      <div>
-        <button
-          onClick={() => setShowMixDetails(!showMixDetails)}
-          className="flex w-full items-center justify-between rounded-xl border border-neutral-700 bg-neutral-800/50 px-4 py-3 hover:border-neutral-600 transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <Target className="h-5 w-5 text-blue-400" />
-            <div className="text-left">
-              <p className="font-medium text-neutral-200 text-sm">
-                Game Mix: {isCustom ? "Custom" : MIX_PRESETS[mixPresetIdx].label}
-              </p>
-              <p className="text-xs text-neutral-500">
-                {activeMix ? `${activeMix.men}% M · ${activeMix.women}% W · ${activeMix.mixed}% X` : "No balancing"}
-              </p>
-            </div>
-          </div>
-          <Settings2 className={cn("h-4 w-4 text-neutral-500 transition-transform", showMixDetails && "rotate-90")} />
-        </button>
-
-        {showMixDetails && (
-          <div className="mt-3 space-y-3 rounded-xl border border-neutral-700 bg-neutral-900 p-4">
-            <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">Presets</p>
-            <div className="grid grid-cols-2 gap-2">
-              {MIX_PRESETS.map((preset, i) => (
-                <button
-                  key={i}
-                  onClick={() => { setMixPresetIdx(i); setIsCustom(false); }}
-                  className={cn(
-                    "rounded-lg border px-3 py-2.5 text-left transition-colors",
-                    !isCustom && mixPresetIdx === i
-                      ? "border-blue-500 bg-blue-600/15 text-blue-300"
-                      : "border-neutral-700 bg-neutral-800 text-neutral-400 hover:border-neutral-600"
-                  )}
-                >
-                  <p className="text-sm font-medium">{preset.label}</p>
-                  <p className="text-[10px] text-neutral-500 mt-0.5">{preset.desc}</p>
-                </button>
-              ))}
-            </div>
-
-            <div className="flex items-center gap-3 pt-1">
-              <div className="h-px flex-1 bg-neutral-800" />
-              <button
-                onClick={() => setIsCustom(true)}
-                className={cn(
-                  "text-xs font-medium px-2 py-1 rounded",
-                  isCustom ? "text-blue-400 bg-blue-600/15" : "text-neutral-500 hover:text-neutral-300"
-                )}
-              >
-                Custom
-              </button>
-              <div className="h-px flex-1 bg-neutral-800" />
-            </div>
-
-            {isCustom && (
-              <div className="space-y-2">
-                {(["men", "women", "mixed"] as const).map((type) => (
-                  <div key={type} className="flex items-center gap-3">
-                    <span className="w-16 text-xs font-medium text-neutral-400 capitalize">
-                      {type === "men" ? "Men" : type === "women" ? "Women" : "Mixed"}
-                    </span>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={customMix[type]}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value);
-                        setCustomMix((prev) => {
-                          const others = (["men", "women", "mixed"] as const).filter((t) => t !== type);
-                          const remaining = 100 - val;
-                          const otherTotal = prev[others[0]] + prev[others[1]];
-                          const ratio = otherTotal > 0 ? remaining / otherTotal : 0.5;
-                          return {
-                            ...prev,
-                            [type]: val,
-                            [others[0]]: otherTotal > 0 ? Math.round(prev[others[0]] * ratio) : Math.round(remaining / 2),
-                            [others[1]]: otherTotal > 0 ? remaining - Math.round(prev[others[0]] * ratio) : remaining - Math.round(remaining / 2),
-                          };
-                        });
-                      }}
-                      className="flex-1 accent-blue-500"
-                    />
-                    <span className="w-10 text-right text-sm font-mono text-neutral-300">{customMix[type]}%</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {activeMix && (
-              <div className="flex gap-1 h-2 rounded-full overflow-hidden bg-neutral-800">
-                <div className="bg-blue-500 transition-all" style={{ width: `${activeMix.men}%` }} />
-                <div className="bg-pink-500 transition-all" style={{ width: `${activeMix.women}%` }} />
-                <div className="bg-purple-500 transition-all" style={{ width: `${activeMix.mixed}%` }} />
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Warm-up mode */}
@@ -1125,7 +1020,7 @@ function OpenSessionPanel({
 
       <div className="flex gap-3">
         <button
-          onClick={() => onOpen(Array.from(selected), activeMix, warmupMode)}
+          onClick={() => onOpen(Array.from(selected), null, warmupMode)}
           disabled={selected.size === 0}
           className="flex-1 rounded-xl bg-green-600 py-3 font-semibold text-white disabled:opacity-40"
         >

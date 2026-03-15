@@ -172,7 +172,7 @@ export function CourtCard({ court, variant = "tv", warmup = false, queueWaiting 
       {isWarmupCourt && court.assignment && court.players.length < 4 && (
         <div className={isTV ? "mt-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]" : "mt-3"}>
           <p
-            className={cn("font-semibold text-amber-400", isTV ? "" : "text-lg")}
+            className={cn("font-semibold text-amber-400 animate-blink-sharp", isTV ? "" : "text-lg")}
             style={isTV ? { fontSize: "clamp(0.75rem, min(calc(2 * var(--tw, 1vw)), calc(3 * var(--th, 1vh))), 2.5rem)" } : undefined}
           >
             Warm Up · {court.players.length}/4
