@@ -73,7 +73,7 @@ export function CourtCard({ court, variant = "tv", warmup = false, queueWaiting 
     <div
       className={cn(
         "flex flex-col rounded-2xl border-2 transition-all duration-300 overflow-hidden",
-        isTV ? "p-[min(1.5vw,2vh)]" : "p-4",
+        isTV ? "p-[min(calc(1.5*var(--tw,1vw)),calc(2*var(--th,1vh)))]" : "p-4",
         isTV ? "h-full min-h-0" : "",
         config.bg,
         tvStarting && "animate-border-blink",
@@ -84,17 +84,17 @@ export function CourtCard({ court, variant = "tv", warmup = false, queueWaiting 
       <div className="flex items-center justify-between">
         <h3
           className="font-bold tracking-tight"
-          style={isTV ? { fontSize: "clamp(1.25rem, min(4vw,7vh), 5rem)" } : undefined}
+          style={isTV ? { fontSize: "clamp(1.25rem, min(calc(4 * var(--tw, 1vw)), calc(7 * var(--th, 1vh))), 5rem)" } : undefined}
         >
           {!isTV && <span className="text-3xl">{court.label}</span>}
           {isTV && court.label}
         </h3>
         <div className={cn("flex items-center gap-2", tvStarting && "animate-blink-sharp")}>
-          <div className={cn("rounded-full", isTV ? "h-[min(1vw,1.5vh)] w-[min(1vw,1.5vh)] min-h-1.5 min-w-1.5" : "h-3 w-3", config.dot)} />
+          <div className={cn("rounded-full", isTV ? "h-[min(var(--tw,1vw),calc(1.5*var(--th,1vh)))] w-[min(var(--tw,1vw),calc(1.5*var(--th,1vh)))] min-h-1.5 min-w-1.5" : "h-3 w-3", config.dot)} />
           {court.status === "active" && court.assignment && (
             <span
               className={cn("rounded-md bg-neutral-700 px-2 py-0.5 font-medium uppercase", isTV ? "" : "text-xs")}
-              style={isTV ? { fontSize: "clamp(0.5rem, min(1vw,1.5vh), 0.875rem)" } : undefined}
+              style={isTV ? { fontSize: "clamp(0.5rem, min(var(--tw, 1vw), calc(1.5 * var(--th, 1vh))), 0.875rem)" } : undefined}
             >
               {court.assignment.gameType === "mixed" ? "mix" : court.assignment.gameType}
             </span>
@@ -105,7 +105,7 @@ export function CourtCard({ court, variant = "tv", warmup = false, queueWaiting 
       {/* Active game — shows Starting (blue) or Playing (green) phase */}
       {court.status === "active" && court.assignment && (
         <>
-          <div className={isTV ? "mt-[min(1vh,0.5vw)]" : "mt-3"}>
+          <div className={isTV ? "mt-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]" : "mt-3"}>
             <GamePhaseTimer
               startedAt={court.assignment.startedAt}
               size={isTV ? "tv" : "lg"}
@@ -113,13 +113,13 @@ export function CourtCard({ court, variant = "tv", warmup = false, queueWaiting 
           </div>
 
           <div
-            className={cn(isTV ? "mt-[min(1vh,0.5vw)] space-y-[0.5vh]" : "mt-3 space-y-1 text-base")}
-            style={isTV ? { fontSize: "clamp(0.7rem, min(2vw,3vh), 2.25rem)" } : undefined}
+            className={cn(isTV ? "mt-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))] space-y-[calc(0.5*var(--th,1vh))]" : "mt-3 space-y-1 text-base")}
+            style={isTV ? { fontSize: "clamp(0.7rem, min(calc(2 * var(--tw, 1vw)), calc(3 * var(--th, 1vh))), 2.25rem)" } : undefined}
           >
             {court.players.map((player) => (
               <div key={player.id} className="flex items-center gap-2">
                 {player.groupId && (
-                  <Link className={cn("shrink-0 text-blue-400", isTV ? "h-[min(1.5vw,2vh)] w-[min(1.5vw,2vh)] min-h-3 min-w-3" : "h-4 w-4")} />
+                  <Link className={cn("shrink-0 text-blue-400", isTV ? "h-[min(calc(1.5*var(--tw,1vw)),calc(2*var(--th,1vh)))] w-[min(calc(1.5*var(--tw,1vw)),calc(2*var(--th,1vh)))] min-h-3 min-w-3" : "h-4 w-4")} />
                 )}
                 <span className="font-medium truncate">{player.name}</span>
                 {!isTV && (
@@ -140,14 +140,14 @@ export function CourtCard({ court, variant = "tv", warmup = false, queueWaiting 
 
       {/* Warmup court with 4 players — show countdown */}
       {isWarmupCourt && court.assignment && court.players.length >= 4 && (
-        <div className={isTV ? "mt-[min(1vh,0.5vw)]" : "mt-3"}>
+        <div className={isTV ? "mt-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]" : "mt-3"}>
           <WarmupCountdownTimer
             startedAt={court.assignment.startedAt}
             size={isTV ? "tv" : "lg"}
           />
           <div
-            className={cn(isTV ? "mt-[min(0.5vh,0.25vw)] space-y-[0.3vh]" : "mt-2 space-y-1")}
-            style={isTV ? { fontSize: "clamp(0.7rem, min(2vw,3vh), 2.25rem)" } : undefined}
+            className={cn(isTV ? "mt-[min(calc(0.5*var(--th,1vh)),calc(0.25*var(--tw,1vw)))] space-y-[calc(0.3*var(--th,1vh))]" : "mt-2 space-y-1")}
+            style={isTV ? { fontSize: "clamp(0.7rem, min(calc(2 * var(--tw, 1vw)), calc(3 * var(--th, 1vh))), 2.25rem)" } : undefined}
           >
             {court.players.map((player) => (
               <div key={player.id} className="flex items-center gap-2">
@@ -170,16 +170,16 @@ export function CourtCard({ court, variant = "tv", warmup = false, queueWaiting 
 
       {/* Warmup court filling up (< 4 players) */}
       {isWarmupCourt && court.assignment && court.players.length < 4 && (
-        <div className={isTV ? "mt-[min(1vh,0.5vw)]" : "mt-3"}>
+        <div className={isTV ? "mt-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]" : "mt-3"}>
           <p
             className={cn("font-semibold text-amber-400", isTV ? "" : "text-lg")}
-            style={isTV ? { fontSize: "clamp(0.75rem, min(2vw,3vh), 2.5rem)" } : undefined}
+            style={isTV ? { fontSize: "clamp(0.75rem, min(calc(2 * var(--tw, 1vw)), calc(3 * var(--th, 1vh))), 2.5rem)" } : undefined}
           >
             Warm Up · {court.players.length}/4
           </p>
           <div
-            className={cn(isTV ? "mt-[min(0.5vh,0.25vw)] space-y-[0.3vh]" : "mt-2 space-y-1")}
-            style={isTV ? { fontSize: "clamp(0.7rem, min(2vw,3vh), 2.25rem)" } : undefined}
+            className={cn(isTV ? "mt-[min(calc(0.5*var(--th,1vh)),calc(0.25*var(--tw,1vw)))] space-y-[calc(0.3*var(--th,1vh))]" : "mt-2 space-y-1")}
+            style={isTV ? { fontSize: "clamp(0.7rem, min(calc(2 * var(--tw, 1vw)), calc(3 * var(--th, 1vh))), 2.25rem)" } : undefined}
           >
             {court.players.map((player) => (
               <div key={player.id} className="flex items-center gap-2">
@@ -202,10 +202,10 @@ export function CourtCard({ court, variant = "tv", warmup = false, queueWaiting 
 
       {/* Idle — available (no warmup context) */}
       {court.status === "idle" && !warmup && (
-        <div className={isTV ? "mt-[min(1vh,0.5vw)]" : "mt-4"}>
+        <div className={isTV ? "mt-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]" : "mt-4"}>
           <p
             className={cn("text-neutral-400", isTV ? "" : "text-lg")}
-            style={isTV ? { fontSize: "clamp(0.75rem, min(2.5vw,4vh), 3rem)" } : undefined}
+            style={isTV ? { fontSize: "clamp(0.75rem, min(calc(2.5 * var(--tw, 1vw)), calc(4 * var(--th, 1vh))), 3rem)" } : undefined}
           >
             Available
           </p>
@@ -219,16 +219,16 @@ export function CourtCard({ court, variant = "tv", warmup = false, queueWaiting 
 
       {/* Idle — waiting for warmup players */}
       {isIdleWarmup && (
-        <div className={isTV ? "mt-[min(1vh,0.5vw)]" : "mt-3"}>
+        <div className={isTV ? "mt-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]" : "mt-3"}>
           <p
             className={cn("font-semibold text-amber-400", isTV ? "" : "text-lg")}
-            style={isTV ? { fontSize: "clamp(0.75rem, min(2.5vw,4vh), 3rem)" } : undefined}
+            style={isTV ? { fontSize: "clamp(0.75rem, min(calc(2.5 * var(--tw, 1vw)), calc(4 * var(--th, 1vh))), 3rem)" } : undefined}
           >
             Warm Up
           </p>
           <p
-            className={cn("text-amber-300/60", isTV ? "mt-[0.25vh]" : "mt-0.5 text-sm")}
-            style={isTV ? { fontSize: "clamp(0.6rem, min(1.8vw,2.5vh), 2rem)" } : undefined}
+            className={cn("text-amber-300/60", isTV ? "mt-[calc(0.25*var(--th,1vh))]" : "mt-0.5 text-sm")}
+            style={isTV ? { fontSize: "clamp(0.6rem, min(calc(1.8 * var(--tw, 1vw)), calc(2.5 * var(--th, 1vh))), 2rem)" } : undefined}
           >
             Waiting for players
           </p>
@@ -237,8 +237,8 @@ export function CourtCard({ court, variant = "tv", warmup = false, queueWaiting 
 
       {court.status === "maintenance" && (
         <p
-          className={cn("text-red-400", isTV ? "mt-[min(1vh,0.5vw)]" : "mt-4 text-lg")}
-          style={isTV ? { fontSize: "clamp(0.75rem, min(2.5vw,4vh), 3rem)" } : undefined}
+          className={cn("text-red-400", isTV ? "mt-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]" : "mt-4 text-lg")}
+          style={isTV ? { fontSize: "clamp(0.75rem, min(calc(2.5 * var(--tw, 1vw)), calc(4 * var(--th, 1vh))), 3rem)" } : undefined}
         >
           Out of Service
         </p>

@@ -137,51 +137,56 @@ export default function TVDisplayPage() {
     : courtCount <= 9 ? "grid-cols-3"
     : "grid-cols-3 lg:grid-cols-4";
 
-  const outerStyle: React.CSSProperties = rotated
-    ? {
-        position: "fixed",
-        width: "100dvh",
-        height: "100dvw",
-        top: "50%",
-        left: "50%",
-        transform: "translate(-50%, -50%) rotate(90deg)",
-      }
-    : {};
+  // --tw = 1% of effective visual width, --th = 1% of effective visual height.
+  // When CSS-rotated for landscape TV, swap vw↔vh so sizing stays correct.
+  const outerStyle = {
+    "--tw": rotated ? "1vh" : "1vw",
+    "--th": rotated ? "1vw" : "1vh",
+    ...(rotated && {
+      position: "fixed",
+      width: "100dvh",
+      height: "100dvw",
+      top: "50%",
+      left: "50%",
+      transform: "translate(-50%, -50%) rotate(90deg)",
+    }),
+  } as React.CSSProperties;
 
   return (
     <div className="overflow-hidden bg-black" style={outerStyle}>
-      <div className="flex h-dvh w-screen flex-col overflow-hidden bg-black text-white"
+      <div
+        className="flex h-dvh w-screen flex-col overflow-hidden bg-black text-white"
         style={rotated ? { width: "100dvh", height: "100dvw" } : undefined}
       >
         {/* Top bar */}
-        <header className="shrink-0 flex items-center justify-between border-b border-neutral-800 px-[2vw] py-[min(1vh,0.5vw)]">
-          <div className="flex items-center gap-[1.5vw]">
+        <header className="shrink-0 flex items-center justify-between border-b border-neutral-800 px-[calc(2*var(--tw,1vw))] py-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]">
+          <div className="flex items-center gap-[calc(1.5*var(--tw,1vw))]">
             {venueLogoUrl ? (
               <img
                 src={venueLogoUrl}
                 alt={venueName}
-                className="h-[clamp(1.5rem,3vw,3rem)] w-auto object-contain"
+                className="h-[clamp(1.5rem,calc(3*var(--tw,1vw)),3rem)] w-auto object-contain"
               />
             ) : (
-              <h1 className="font-bold text-green-500 text-[clamp(1rem,2vw,2rem)]">CourtFlow</h1>
+              <h1 className="font-bold text-green-500 text-[clamp(1rem,calc(2*var(--tw,1vw)),2rem)]">CourtFlow</h1>
             )}
-            <span className="text-neutral-300 text-[clamp(0.875rem,1.8vw,1.75rem)]">{venueName}</span>
+            <span className="text-neutral-300 text-[clamp(0.875rem,calc(1.8*var(--tw,1vw)),1.75rem)]">{venueName}</span>
           </div>
-          <div className="flex items-center gap-[1.5vw]">
+          <div className="flex items-center gap-[calc(1.5*var(--tw,1vw))]">
             {isWarmupMode ? (
-              <span className="flex items-center gap-2 rounded-full bg-amber-500/20 px-3 py-1 font-medium text-amber-400 text-[clamp(0.65rem,1.2vw,1rem)]">
-                <Flame className="h-[1.2vw] w-[1.2vw] min-h-3 min-w-3" /> Warm Up · {waitingCount} players checked in
+              <span className="flex items-center gap-2 rounded-full bg-amber-500/20 px-3 py-1 font-medium text-amber-400 text-[clamp(0.65rem,calc(1.2*var(--tw,1vw)),1rem)]">
+                <Flame className="h-[calc(1.2*var(--tw,1vw))] w-[calc(1.2*var(--tw,1vw))] min-h-3 min-w-3" /> Warm Up · {waitingCount} players checked in
               </span>
             ) : state.session ? (
-              <span className="rounded-full bg-green-600/20 px-3 py-1 font-medium text-green-400 text-[clamp(0.65rem,1.2vw,1rem)]">
+              <span className="rounded-full bg-green-600/20 px-3 py-1 font-medium text-green-400 text-[clamp(0.65rem,calc(1.2*var(--tw,1vw)),1rem)]">
                 Session Active &middot; {courtCount} courts
               </span>
             ) : (
-              <span className="rounded-full bg-neutral-700 px-3 py-1 font-medium text-neutral-400 text-[clamp(0.65rem,1.2vw,1rem)]">
+              <span className="rounded-full bg-neutral-700 px-3 py-1 font-medium text-neutral-400 text-[clamp(0.65rem,calc(1.2*var(--tw,1vw)),1rem)]">
                 No Active Session
               </span>
             )}
-            <span className="tabular-nums text-neutral-400 text-[clamp(0.875rem,1.8vw,1.75rem)]">
+            <span className="tabular-nums text-neutral-400 text-[clamp(0.875rem,calc(1.8*var(--tw,1vw)),1.75rem)]">
               {clock.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
             </span>
             <button
@@ -194,14 +199,14 @@ export default function TVDisplayPage() {
               )}
               title={rotated ? "Back to portrait" : "Rotate for TV (landscape)"}
             >
-              <RotateCcw className="h-[1.6vw] w-[1.6vw] min-h-3.5 min-w-3.5" />
+              <RotateCcw className="h-[calc(1.6*var(--tw,1vw))] w-[calc(1.6*var(--tw,1vw))] min-h-3.5 min-w-3.5" />
             </button>
             {connected ? (
-              <Wifi className="h-[1.8vw] w-[1.8vw] min-h-4 min-w-4 text-green-500" />
+              <Wifi className="h-[calc(1.8*var(--tw,1vw))] w-[calc(1.8*var(--tw,1vw))] min-h-4 min-w-4 text-green-500" />
             ) : (
               <div className="flex items-center gap-1 text-amber-400">
-                <WifiOff className="h-[1.8vw] w-[1.8vw] min-h-4 min-w-4" />
-                <span className="text-[clamp(0.65rem,1.1vw,0.875rem)]">Reconnecting...</span>
+                <WifiOff className="h-[calc(1.8*var(--tw,1vw))] w-[calc(1.8*var(--tw,1vw))] min-h-4 min-w-4" />
+                <span className="text-[clamp(0.65rem,calc(1.1*var(--tw,1vw)),0.875rem)]">Reconnecting...</span>
               </div>
             )}
           </div>
@@ -210,12 +215,12 @@ export default function TVDisplayPage() {
         {/* Main content */}
         <div className="flex flex-1 min-h-0 overflow-hidden">
           {/* Court grid */}
-          <main className="flex-1 min-w-0 min-h-0 overflow-hidden p-[min(1.5vw,2vh)]">
+          <main className="flex-1 min-w-0 min-h-0 overflow-hidden p-[min(calc(1.5*var(--tw,1vw)),calc(2*var(--th,1vh)))]">
             {!state.session ? (
-              <div className="flex h-full flex-col items-center justify-center gap-[3vh]">
+              <div className="flex h-full flex-col items-center justify-center gap-[calc(3*var(--th,1vh))]">
                 {venueLogoUrl && (
                   <div className={cn(
-                    "h-[clamp(6rem,20vh,16rem)] w-[clamp(6rem,20vh,16rem)] shrink-0 rounded-full overflow-hidden border-2 border-neutral-800 bg-neutral-900",
+                    "h-[clamp(6rem,calc(20*var(--th,1vh)),16rem)] w-[clamp(6rem,calc(20*var(--th,1vh)),16rem)] shrink-0 rounded-full overflow-hidden border-2 border-neutral-800 bg-neutral-900",
                     logoSpin && "animate-flip-y"
                   )}>
                     <img
@@ -226,36 +231,36 @@ export default function TVDisplayPage() {
                   </div>
                 )}
                 {venueTvText && (
-                  <div className="text-center space-y-[0.5vh]">
+                  <div className="text-center space-y-[calc(0.5*var(--th,1vh))]">
                     {venueTvText.split("\n").slice(0, 4).map((line, i) => (
                       <p key={i} className={cn(
                         "text-neutral-400",
-                        i === 0 ? "text-[clamp(1.25rem,3vw,3rem)] font-semibold text-neutral-300" : "text-[clamp(1rem,2vw,2rem)]"
+                        i === 0 ? "text-[clamp(1.25rem,calc(3*var(--tw,1vw)),3rem)] font-semibold text-neutral-300" : "text-[clamp(1rem,calc(2*var(--tw,1vw)),2rem)]"
                       )}>{line}</p>
                     ))}
                   </div>
                 )}
-                <p className="text-neutral-600 text-[clamp(1rem,2.5vw,2.5rem)] mt-[2vh]">Waiting for session to start...</p>
+                <p className="text-neutral-600 text-[clamp(1rem,calc(2.5*var(--tw,1vw)),2.5rem)] mt-[calc(2*var(--th,1vh))]">Waiting for session to start...</p>
               </div>
             ) : isWarmupMode ? (
-              <div className="flex h-full flex-col gap-[min(1.5vh,0.8vw)]">
+              <div className="flex h-full flex-col gap-[min(calc(1.5*var(--th,1vh)),calc(0.8*var(--tw,1vw)))]">
                 {/* Warmup hero */}
-                <div className="shrink-0 flex flex-col items-center justify-center gap-[min(1vh,0.5vw)] text-center py-[min(1.5vh,0.8vw)]">
-                  <Flame className="text-amber-400 opacity-80" style={{ width: "clamp(1.25rem, min(5vw,8vh), 6rem)", height: "clamp(1.25rem, min(5vw,8vh), 6rem)" }} />
-                  <p className="font-bold text-amber-300" style={{ fontSize: "clamp(1rem, min(5vw,7vh), 6rem)" }}>Warm Up Time</p>
-                  <p className="text-amber-400/70" style={{ fontSize: "clamp(0.65rem, min(2.2vw,3vh), 2.5rem)" }}>
+                <div className="shrink-0 flex flex-col items-center justify-center gap-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))] text-center py-[min(calc(1.5*var(--th,1vh)),calc(0.8*var(--tw,1vw)))]">
+                  <Flame className="text-amber-400 opacity-80" style={{ width: "clamp(1.25rem, min(calc(5 * var(--tw, 1vw)), calc(8 * var(--th, 1vh))), 6rem)", height: "clamp(1.25rem, min(calc(5 * var(--tw, 1vw)), calc(8 * var(--th, 1vh))), 6rem)" }} />
+                  <p className="font-bold text-amber-300" style={{ fontSize: "clamp(1rem, min(calc(5 * var(--tw, 1vw)), calc(7 * var(--th, 1vh))), 6rem)" }}>Warm Up Time</p>
+                  <p className="text-amber-400/70" style={{ fontSize: "clamp(0.65rem, min(calc(2.2 * var(--tw, 1vw)), calc(3 * var(--th, 1vh))), 2.5rem)" }}>
                     Go to your assigned court and warm up freely
                   </p>
                 </div>
                 {/* Court cards in warmup state */}
-                <div className={cn("grid flex-1 min-h-0 overflow-y-auto gap-[min(1vw,1vh)] auto-rows-fr", gridCols)}>
+                <div className={cn("grid flex-1 min-h-0 overflow-y-auto gap-[min(var(--tw,1vw),var(--th,1vh))] auto-rows-fr", gridCols)}>
                   {sortedCourts.map((court) => (
                     <CourtCard key={court.id} court={court} variant="tv" warmup={true} />
                   ))}
                 </div>
               </div>
             ) : (
-              <div className={cn("grid h-full overflow-y-auto gap-[min(1vw,1vh)] auto-rows-fr", gridCols)}>
+              <div className={cn("grid h-full overflow-y-auto gap-[min(var(--tw,1vw),var(--th,1vh))] auto-rows-fr", gridCols)}>
                 {sortedCourts.map((court) => (
                   <CourtCard key={court.id} court={court} variant="tv" />
                 ))}
@@ -265,9 +270,18 @@ export default function TVDisplayPage() {
 
           {/* Queue sidebar */}
           {state.session && (
-            <aside className="shrink-0 border-l border-neutral-800 flex flex-col overflow-hidden" style={{ width: "clamp(8rem, min(22vw, 40vh), 26rem)", padding: "clamp(0.4rem, min(1.5vw, 2vh), 1.5rem)" }}>
-              <div className="shrink-0 w-full mb-[min(1vh,0.5vw)]" style={{ maxHeight: "45vh" }}>
-                <div className="w-full rounded-[1vw] bg-white p-[min(1vw,1.5vh)] aspect-square flex items-center justify-center" style={{ maxHeight: "45vh", maxWidth: "45vh" }}>
+            <aside
+              className="shrink-0 border-l border-neutral-800 flex flex-col overflow-hidden"
+              style={{
+                width: "clamp(8rem, min(calc(22 * var(--tw, 1vw)), calc(40 * var(--th, 1vh))), 26rem)",
+                padding: "clamp(0.4rem, min(calc(1.5 * var(--tw, 1vw)), calc(2 * var(--th, 1vh))), 1.5rem)",
+              }}
+            >
+              <div className="shrink-0 w-full mb-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]" style={{ maxHeight: "calc(45 * var(--th, 1vh))" }}>
+                <div
+                  className="w-full rounded-[var(--tw,1vw)] bg-white p-[min(var(--tw,1vw),calc(1.5*var(--th,1vh)))] aspect-square flex items-center justify-center"
+                  style={{ maxHeight: "calc(45 * var(--th, 1vh))", maxWidth: "calc(45 * var(--th, 1vh))" }}
+                >
                   <QRCodeSVG
                     value={`${typeof window !== "undefined" ? window.location.origin : ""}/player?venueId=${venueId}`}
                     size={1000}
@@ -278,7 +292,12 @@ export default function TVDisplayPage() {
                 </div>
               </div>
               {isWarmupMode && (
-                <p className="mb-[0.5vh] font-semibold text-amber-400 uppercase tracking-wider" style={{ fontSize: "clamp(0.45rem, min(1vw, 1.5vh), 0.875rem)" }}>Checked In</p>
+                <p
+                  className="mb-[calc(0.5*var(--th,1vh))] font-semibold text-amber-400 uppercase tracking-wider"
+                  style={{ fontSize: "clamp(0.45rem, min(var(--tw, 1vw), calc(1.5 * var(--th, 1vh))), 0.875rem)" }}
+                >
+                  Checked In
+                </p>
               )}
               <div className="flex-1 min-h-0 overflow-y-auto">
                 <QueuePanel entries={state.queue} variant="tv" />

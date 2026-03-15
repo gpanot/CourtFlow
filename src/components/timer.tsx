@@ -17,8 +17,8 @@ const sizeClasses = {
   tv: "",
 };
 
-const tvTimerStyle = { fontSize: "clamp(1rem, min(4vw,6vh), 5rem)" };
-const tvLabelStyle = { fontSize: "clamp(0.6rem, min(1.5vw,2vh), 1.5rem)" };
+const tvTimerStyle = { fontSize: "clamp(1rem, min(calc(4 * var(--tw, 1vw)), calc(6 * var(--th, 1vh))), 5rem)" };
+const tvLabelStyle = { fontSize: "clamp(0.6rem, min(calc(1.5 * var(--tw, 1vw)), calc(2 * var(--th, 1vh))), 1.5rem)" };
 
 export function ElapsedTimer({ startedAt, size = "md" }: TimerProps) {
   const [elapsed, setElapsed] = useState(0);
