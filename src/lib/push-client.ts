@@ -27,24 +27,49 @@ export function getNotificationPermission(): NotificationPermission | "unsupport
   return Notification.permission;
 }
 
-export async function subscribeToPush(playerId: string): Promise<boolean> {
-  if (!isPushSupported()) return false;
+export type PushSubscribeResult =
+  | { ok: true }
+  | { ok: false; reason: "unsupported" | "denied" | "dismissed" | "no-vapid" | "sw-timeout" | "subscribe-failed" | "server-error" };
 
-  const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  if (!vapidKey) return false;
+export async function subscribeToPush(playerId: string): Promise<PushSubscribeResult> {
+  if (!isPushSupported()) return { ok: false, reason: "unsupported" };
 
   try {
     const permission = await Notification.requestPermission();
-    if (permission !== "granted") return false;
+    if (permission === "denied") return { ok: false, reason: "denied" };
+    if (permission !== "granted") return { ok: false, reason: "dismissed" };
 
-    const registration = await navigator.serviceWorker.ready;
+    const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    if (!vapidKey) {
+      console.error("[Push] NEXT_PUBLIC_VAPID_PUBLIC_KEY is not set");
+      return { ok: false, reason: "no-vapid" };
+    }
+
+    const swPromise = navigator.serviceWorker.ready;
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("SW timeout")), 5000)
+    );
+
+    let registration: ServiceWorkerRegistration;
+    try {
+      registration = await Promise.race([swPromise, timeout]);
+    } catch {
+      console.error("[Push] Service worker not ready within 5s");
+      return { ok: false, reason: "sw-timeout" };
+    }
+
     let subscription = await registration.pushManager.getSubscription();
 
     if (!subscription) {
-      subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidKey),
-      });
+      try {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        });
+      } catch (err) {
+        console.error("[Push] pushManager.subscribe failed:", err);
+        return { ok: false, reason: "subscribe-failed" };
+      }
     }
 
     const subJson = subscription.toJSON();
@@ -55,7 +80,7 @@ export async function subscribeToPush(playerId: string): Promise<boolean> {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
 
-    await fetch("/api/push/subscribe", {
+    const res = await fetch("/api/push/subscribe", {
       method: "POST",
       headers,
       body: JSON.stringify({
@@ -66,16 +91,21 @@ export async function subscribeToPush(playerId: string): Promise<boolean> {
       }),
     });
 
+    if (!res.ok) {
+      console.error("[Push] Server subscribe failed:", res.status);
+      return { ok: false, reason: "server-error" };
+    }
+
     await fetch(`/api/players/${playerId}/notifications`, {
       method: "PATCH",
       headers,
       body: JSON.stringify({ notificationsEnabled: true }),
     });
 
-    return true;
+    return { ok: true };
   } catch (err) {
     console.error("[Push] Subscribe failed:", err);
-    return false;
+    return { ok: false, reason: "subscribe-failed" };
   }
 }
 

@@ -7,7 +7,8 @@ import {
   SKILL_LEVELS, SKILL_DESCRIPTIONS, type SkillLevelType,
 } from "@/lib/constants";
 import { cn } from "@/lib/cn";
-import { ArrowLeft, Trophy, Clock, Check, Pencil, ChevronRight } from "lucide-react";
+import { ArrowLeft, Trophy, Clock, Check, Pencil, ChevronRight, Bell, BellOff } from "lucide-react";
+import { isPushSupported, subscribeToPush, unsubscribeFromPush, getNotificationPermission } from "@/lib/push-client";
 import { NotificationCard } from "./notification-card";
 
 const AVATAR_OPTIONS = [
@@ -83,6 +84,10 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
   const [editingAvatar, setEditingAvatar] = useState(false);
   const [editSkill, setEditSkill] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [notifToggling, setNotifToggling] = useState(false);
+  const pushSupported = isPushSupported();
+  const permissionGranted = getNotificationPermission() === "granted";
 
   useEffect(() => {
     if (!playerId) return;
@@ -92,7 +97,27 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
     }).catch(console.error);
     api.get<MatchHistory>(`/api/players/${playerId}/history`).then(setHistory).catch(console.error);
     api.get<SessionHistory[]>(`/api/players/${playerId}/sessions`).then(setSessionHistory).catch(console.error);
+    api.get<{ notificationsEnabled: boolean }>(`/api/players/${playerId}/notifications`).then((r) => {
+      setNotificationsEnabled(r.notificationsEnabled);
+    }).catch(console.error);
   }, [playerId]);
+
+  const disableNotifications = async () => {
+    if (!playerId) return;
+    setNotifToggling(true);
+    try {
+      const res = await api.patch<{ notificationsEnabled: boolean }>(
+        `/api/players/${playerId}/notifications`,
+        { notificationsEnabled: false }
+      );
+      setNotificationsEnabled(res.notificationsEnabled);
+      unsubscribeFromPush().catch(() => {});
+    } catch (e) {
+      console.error("Disable notifications failed:", e);
+    } finally {
+      setNotifToggling(false);
+    }
+  };
 
   const saveField = async (updates: Partial<PlayerProfile>) => {
     if (!playerId) return;
@@ -206,7 +231,31 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
           </div>
 
           {/* Notifications */}
-          <NotificationCard />
+          {pushSupported && notificationsEnabled && permissionGranted ? (
+            <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Bell className="h-5 w-5 text-green-400" />
+                  <div>
+                    <h3 className="font-semibold text-neutral-300">Push Notifications</h3>
+                    <p className="text-xs text-neutral-500">You&apos;ll be notified when it&apos;s your turn</p>
+                  </div>
+                </div>
+                <button
+                  onClick={disableNotifications}
+                  disabled={notifToggling}
+                  className={cn(
+                    "relative h-7 w-12 shrink-0 rounded-full bg-green-600 transition-colors",
+                    notifToggling && "opacity-50"
+                  )}
+                >
+                  <span className="absolute left-0 top-0.5 h-6 w-6 translate-x-5 rounded-full bg-white shadow transition-transform" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <NotificationCard onEnabled={() => setNotificationsEnabled(true)} />
+          )}
 
           {/* Skill Level */}
           <div>

@@ -5,22 +5,39 @@ import { Bell } from "lucide-react";
 import { useSessionStore } from "@/stores/session-store";
 import { isPushSupported, subscribeToPush, getNotificationPermission } from "@/lib/push-client";
 
-export function NotificationCard() {
+interface NotificationCardProps {
+  onEnabled?: () => void;
+}
+
+export function NotificationCard({ onEnabled }: NotificationCardProps = {}) {
   const { playerId } = useSessionStore();
   const [enabled, setEnabled] = useState(() => getNotificationPermission() === "granted");
   const [requesting, setRequesting] = useState(false);
-  const [denied, setDenied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!isPushSupported() || enabled || !playerId) return null;
 
   const handleEnable = async () => {
     setRequesting(true);
-    setDenied(false);
-    const ok = await subscribeToPush(playerId);
-    if (ok) {
+    setError(null);
+    const result = await subscribeToPush(playerId);
+    if (result.ok) {
       setEnabled(true);
-    } else if (typeof Notification !== "undefined" && Notification.permission === "denied") {
-      setDenied(true);
+      onEnabled?.();
+    } else {
+      switch (result.reason) {
+        case "denied":
+          setError("Notifications are blocked. Open your browser or device settings to allow them for this app.");
+          break;
+        case "dismissed":
+          break;
+        case "no-vapid":
+        case "sw-timeout":
+        case "subscribe-failed":
+        case "server-error":
+          setError("Something went wrong setting up notifications. Please try again.");
+          break;
+      }
     }
     setRequesting(false);
   };
@@ -32,10 +49,16 @@ export function NotificationCard() {
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-amber-400">Enable Notifications</p>
-        {denied ? (
-          <p className="mt-0.5 text-xs text-neutral-400">
-            Notifications are blocked by your browser. Open your browser settings to allow them.
-          </p>
+        {error ? (
+          <>
+            <p className="mt-0.5 text-xs text-red-400">{error}</p>
+            <button
+              onClick={handleEnable}
+              className="mt-2 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-500 transition-colors"
+            >
+              Try Again
+            </button>
+          </>
         ) : (
           <>
             <p className="mt-0.5 text-xs text-neutral-400">
