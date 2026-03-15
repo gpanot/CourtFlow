@@ -273,14 +273,14 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
                   onClick={toggleNotifications}
                   disabled={notifToggling}
                   className={cn(
-                    "relative h-7 w-12 rounded-full transition-colors",
+                    "relative h-7 w-12 shrink-0 rounded-full transition-colors",
                     notificationsEnabled ? "bg-green-600" : "bg-neutral-700",
                     notifToggling && "opacity-50"
                   )}
                 >
                   <span
                     className={cn(
-                      "absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform",
+                      "absolute left-0 top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform",
                       notificationsEnabled ? "translate-x-5" : "translate-x-0.5"
                     )}
                   />
