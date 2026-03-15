@@ -50,18 +50,26 @@ export async function subscribeToPush(playerId: string): Promise<boolean> {
     const subJson = subscription.toJSON();
     const token = useSessionStore.getState().token;
 
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+
     await fetch("/api/push/subscribe", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
+      headers,
       body: JSON.stringify({
         playerId,
         endpoint: subJson.endpoint,
         p256dh: subJson.keys?.p256dh,
         auth: subJson.keys?.auth,
       }),
+    });
+
+    await fetch(`/api/players/${playerId}/notifications`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ notificationsEnabled: true }),
     });
 
     return true;

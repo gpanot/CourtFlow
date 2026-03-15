@@ -8,7 +8,7 @@ import {
 } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 import { ArrowLeft, Trophy, Clock, Check, Pencil, ChevronRight, Bell, BellOff } from "lucide-react";
-import { isPushSupported, subscribeToPush, unsubscribeFromPush, getNotificationPermission } from "@/lib/push-client";
+import { isPushSupported, subscribeToPush, unsubscribeFromPush } from "@/lib/push-client";
 
 const AVATAR_OPTIONS = [
   "🏓", "🎾", "⚡", "🔥", "🌟", "💪", "🦊", "🐻",
@@ -83,10 +83,10 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
   const [editingAvatar, setEditingAvatar] = useState(false);
   const [editSkill, setEditSkill] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notifToggling, setNotifToggling] = useState(false);
+  const [browserDenied, setBrowserDenied] = useState(false);
   const pushSupported = isPushSupported();
-  const browserPermission = getNotificationPermission();
 
   useEffect(() => {
     if (!playerId) return;
@@ -103,12 +103,18 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
 
   const toggleNotifications = async () => {
     if (!playerId) return;
+    setBrowserDenied(false);
     setNotifToggling(true);
     try {
       const newValue = !notificationsEnabled;
 
-      if (newValue && isPushSupported() && Notification.permission !== "granted") {
+      if (newValue && isPushSupported()) {
         const perm = await Notification.requestPermission();
+        if (perm === "denied") {
+          setBrowserDenied(true);
+          setNotifToggling(false);
+          return;
+        }
         if (perm !== "granted") {
           setNotifToggling(false);
           return;
@@ -259,17 +265,17 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
                     <p className="text-xs text-neutral-500">
                       {notificationsEnabled
                         ? "You'll be notified when it's your turn"
-                        : "Notifications are off"}
+                        : "Enable to know when it's your turn"}
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={toggleNotifications}
-                  disabled={notifToggling || browserPermission === "denied"}
+                  disabled={notifToggling}
                   className={cn(
                     "relative h-7 w-12 rounded-full transition-colors",
                     notificationsEnabled ? "bg-green-600" : "bg-neutral-700",
-                    (notifToggling || browserPermission === "denied") && "opacity-50"
+                    notifToggling && "opacity-50"
                   )}
                 >
                   <span
@@ -280,9 +286,9 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
                   />
                 </button>
               </div>
-              {browserPermission === "denied" && (
-                <p className="mt-2 text-xs text-red-400">
-                  Notifications are blocked in your browser settings. Please enable them to receive alerts.
+              {browserDenied && (
+                <p className="mt-2 text-xs text-amber-400">
+                  Notifications are blocked by your browser. Open your browser settings to allow them for this site.
                 </p>
               )}
             </div>
