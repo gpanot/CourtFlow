@@ -102,18 +102,23 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
     }).catch(console.error);
   }, [playerId]);
 
-  const disableNotifications = async () => {
+  const toggleNotifications = async () => {
     if (!playerId) return;
     setNotifToggling(true);
     try {
+      const newValue = !notificationsEnabled;
       const res = await api.patch<{ notificationsEnabled: boolean }>(
         `/api/players/${playerId}/notifications`,
-        { notificationsEnabled: false }
+        { notificationsEnabled: newValue }
       );
       setNotificationsEnabled(res.notificationsEnabled);
-      unsubscribeFromPush().catch(() => {});
+      if (newValue) {
+        subscribeToPush(playerId).catch(() => {});
+      } else {
+        unsubscribeFromPush().catch(() => {});
+      }
     } catch (e) {
-      console.error("Disable notifications failed:", e);
+      console.error("Toggle notifications failed:", e);
     } finally {
       setNotifToggling(false);
     }
@@ -231,25 +236,39 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
           </div>
 
           {/* Notifications */}
-          {pushSupported && notificationsEnabled && permissionGranted ? (
+          {pushSupported && permissionGranted ? (
             <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <Bell className="h-5 w-5 text-green-400" />
+                  {notificationsEnabled ? (
+                    <Bell className="h-5 w-5 text-green-400" />
+                  ) : (
+                    <BellOff className="h-5 w-5 text-neutral-500" />
+                  )}
                   <div>
                     <h3 className="font-semibold text-neutral-300">Push Notifications</h3>
-                    <p className="text-xs text-neutral-500">You&apos;ll be notified when it&apos;s your turn</p>
+                    <p className="text-xs text-neutral-500">
+                      {notificationsEnabled
+                        ? "You'll be notified when it's your turn"
+                        : "Enable to know when it's your turn"}
+                    </p>
                   </div>
                 </div>
                 <button
-                  onClick={disableNotifications}
+                  onClick={toggleNotifications}
                   disabled={notifToggling}
                   className={cn(
-                    "relative h-7 w-12 shrink-0 rounded-full bg-green-600 transition-colors",
+                    "relative h-7 w-12 shrink-0 rounded-full transition-colors",
+                    notificationsEnabled ? "bg-green-600" : "bg-neutral-700",
                     notifToggling && "opacity-50"
                   )}
                 >
-                  <span className="absolute left-0 top-0.5 h-6 w-6 translate-x-5 rounded-full bg-white shadow transition-transform" />
+                  <span
+                    className={cn(
+                      "absolute left-0 top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform",
+                      notificationsEnabled ? "translate-x-5" : "translate-x-0.5"
+                    )}
+                  />
                 </button>
               </div>
             </div>
