@@ -47,7 +47,7 @@ function subscribe(cb: () => void) {
   return () => { listeners.delete(cb); };
 }
 
-let cachedSnapshot = { prompt: globalPrompt, installed: globalInstalled };
+let cachedSnapshot: { prompt: BeforeInstallPromptEvent | null; installed: boolean } = { prompt: globalPrompt, installed: globalInstalled };
 
 function getSnapshot() {
   if (cachedSnapshot.prompt !== globalPrompt || cachedSnapshot.installed !== globalInstalled) {

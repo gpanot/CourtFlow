@@ -87,10 +87,30 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
       seen.add(entry.groupId);
     }
 
-    position++;
     const groupMembers = entry.group?.queueEntries ?? [];
     const groupSize = groupMembers.length;
 
+    if (isTV && entry.groupId && entry.group && groupSize > 0) {
+      for (const member of groupMembers) {
+        position++;
+        const memberEntry = entryByPlayerId.get(member.player.id);
+        displayEntries.push({
+          key: member.player.id,
+          entry: memberEntry ?? entry,
+          isGroup: false,
+          groupSize: 1,
+          position,
+          allPlayers: [{ id: member.player.id, name: member.player.name, skillLevel: member.player.skillLevel, gamesPlayed: memberEntry?.gamesPlayed ?? 0, totalPlayMinutesToday: memberEntry?.totalPlayMinutesToday ?? 0 }],
+          cumulativePlayersBefore: cumulativePlayers,
+        });
+        cumulativePlayers += 1;
+        if (displayEntries.length >= limit) break;
+      }
+      if (displayEntries.length >= limit) break;
+      continue;
+    }
+
+    position++;
     const allPlayers = entry.groupId && entry.group
       ? groupMembers.map((e) => {
           const qe = entryByPlayerId.get(e.player.id);
