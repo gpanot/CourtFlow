@@ -347,10 +347,15 @@ export function PlayerHome() {
               onClick={async () => {
                 setErrorMsg(null);
                 setJoining(true);
+
+                if (isPushSupported() && getNotificationPermission() === "default") {
+                  Notification.requestPermission().catch(() => {});
+                }
+
                 try {
                   await api.post("/api/queue", { sessionId: session.id, venueId: selectedVenue });
 
-                  if (playerId && isPushSupported() && getNotificationPermission() !== "granted") {
+                  if (playerId && isPushSupported() && getNotificationPermission() === "granted") {
                     subscribeToPush(playerId).catch(() => {});
                   }
 
