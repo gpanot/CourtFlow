@@ -6,7 +6,7 @@ import { useSessionStore } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { useSocket } from "@/hooks/use-socket";
-import { joinVenue, joinPlayer } from "@/lib/socket-client";
+import { joinVenue, joinPlayer, leaveVenue } from "@/lib/socket-client";
 import { QueueScreen } from "./queue-screen";
 import { CourtAssignedScreen } from "./court-assigned";
 import { InGameScreen } from "./in-game";
@@ -54,6 +54,7 @@ export function PlayerHome() {
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [showLeaveStep2, setShowLeaveStep2] = useState(false);
   const inRecapRef = useRef(false);
+  const manuallyLeftRef = useRef(false);
   const { on } = useSocket();
 
   useEffect(() => {
@@ -71,6 +72,7 @@ export function PlayerHome() {
 
   useEffect(() => {
     if (selectedVenue) return;
+    if (manuallyLeftRef.current) return;
     const urlVenueId = searchParams.get("venueId");
     if (urlVenueId) {
       setSelectedVenue(urlVenueId);
@@ -257,7 +259,7 @@ export function PlayerHome() {
           {venues.map((v) => (
             <button
               key={v.id}
-              onClick={() => setSelectedVenue(v.id)}
+              onClick={() => { manuallyLeftRef.current = false; setSelectedVenue(v.id); }}
               className="w-full rounded-xl bg-neutral-800 px-6 py-4 text-left text-lg font-medium text-white hover:bg-neutral-700"
             >
               {v.name}
@@ -299,7 +301,7 @@ export function PlayerHome() {
               <p className="text-neutral-400">{venueName}</p>
             </div>
           </div>
-          <button onClick={() => { setSelectedVenue(null); setAuth({ venueId: null }); }} className="p-2 text-neutral-400">
+          <button onClick={() => { manuallyLeftRef.current = true; leaveVenue(selectedVenue); setSelectedVenue(null); setAuth({ venueId: null }); }} className="p-2 text-neutral-400">
             <LogOut className="h-5 w-5" />
           </button>
         </div>

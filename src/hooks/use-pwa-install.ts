@@ -7,8 +7,6 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
-const DISMISSED_KEY = "pwa-install-dismissed";
-
 function isStandalone(): boolean {
   if (typeof window === "undefined") return false;
   return (
@@ -17,20 +15,21 @@ function isStandalone(): boolean {
   );
 }
 
+function isMobile(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
 export function usePwaInstall() {
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
     if (isStandalone()) {
       setInstalled(true);
       return;
     }
-
-    const wasDismissed = sessionStorage.getItem(DISMISSED_KEY) === "1";
-    if (wasDismissed) setDismissed(true);
 
     const handler = (e: Event) => {
       e.preventDefault();
@@ -61,16 +60,12 @@ export function usePwaInstall() {
     setDeferredPrompt(null);
   }, [deferredPrompt]);
 
-  const dismiss = useCallback(() => {
-    setDismissed(true);
-    sessionStorage.setItem(DISMISSED_KEY, "1");
-  }, []);
-
-  const showBanner = !installed && !dismissed && deferredPrompt !== null;
+  const mobile = isMobile();
   const isIos =
     typeof navigator !== "undefined" &&
-    /iPad|iPhone|iPod/.test(navigator.userAgent) &&
-    !installed;
+    /iPad|iPhone|iPod/.test(navigator.userAgent);
 
-  return { showBanner, isIos, installed, promptInstall, dismiss };
+  const showBanner = !installed && (deferredPrompt !== null || (mobile && !isStandalone()));
+
+  return { showBanner, isIos, installed, promptInstall, canPrompt: deferredPrompt !== null };
 }
