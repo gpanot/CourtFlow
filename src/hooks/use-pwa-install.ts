@@ -47,11 +47,16 @@ function subscribe(cb: () => void) {
   return () => { listeners.delete(cb); };
 }
 
+let cachedSnapshot = { prompt: globalPrompt, installed: globalInstalled };
+
 function getSnapshot() {
-  return { prompt: globalPrompt, installed: globalInstalled };
+  if (cachedSnapshot.prompt !== globalPrompt || cachedSnapshot.installed !== globalInstalled) {
+    cachedSnapshot = { prompt: globalPrompt, installed: globalInstalled };
+  }
+  return cachedSnapshot;
 }
 
-const serverSnapshot = { prompt: null, installed: false };
+const serverSnapshot = { prompt: null as BeforeInstallPromptEvent | null, installed: false };
 function getServerSnapshot() {
   return serverSnapshot;
 }
