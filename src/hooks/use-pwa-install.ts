@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useSyncExternalStore } from "react";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -20,52 +20,69 @@ function isMobile(): boolean {
   return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 }
 
+let globalPrompt: BeforeInstallPromptEvent | null = null;
+let globalInstalled = typeof window !== "undefined" && isStandalone();
+const listeners = new Set<() => void>();
+
+function notify() {
+  listeners.forEach((l) => l());
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    globalPrompt = e as BeforeInstallPromptEvent;
+    notify();
+  });
+
+  window.addEventListener("appinstalled", () => {
+    globalInstalled = true;
+    globalPrompt = null;
+    notify();
+  });
+}
+
+function subscribe(cb: () => void) {
+  listeners.add(cb);
+  return () => { listeners.delete(cb); };
+}
+
+function getSnapshot() {
+  return { prompt: globalPrompt, installed: globalInstalled };
+}
+
+const serverSnapshot = { prompt: null, installed: false };
+function getServerSnapshot() {
+  return serverSnapshot;
+}
+
 export function usePwaInstall() {
-  const [deferredPrompt, setDeferredPrompt] =
-    useState<BeforeInstallPromptEvent | null>(null);
-  const [installed, setInstalled] = useState(false);
+  const store = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const [installed, setInstalled] = useState(store.installed);
 
   useEffect(() => {
-    if (isStandalone()) {
-      setInstalled(true);
-      return;
-    }
-
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
-    };
-
-    const appInstalledHandler = () => {
-      setInstalled(true);
-      setDeferredPrompt(null);
-    };
-
-    window.addEventListener("beforeinstallprompt", handler);
-    window.addEventListener("appinstalled", appInstalledHandler);
-
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handler);
-      window.removeEventListener("appinstalled", appInstalledHandler);
-    };
-  }, []);
+    if (store.installed) setInstalled(true);
+  }, [store.installed]);
 
   const promptInstall = useCallback(async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
+    if (!globalPrompt) return;
+    globalPrompt.prompt();
+    const { outcome } = await globalPrompt.userChoice;
     if (outcome === "accepted") {
+      globalInstalled = true;
       setInstalled(true);
     }
-    setDeferredPrompt(null);
-  }, [deferredPrompt]);
+    globalPrompt = null;
+    notify();
+  }, []);
 
   const mobile = isMobile();
   const isIos =
     typeof navigator !== "undefined" &&
     /iPad|iPhone|iPod/.test(navigator.userAgent);
 
-  const showBanner = !installed && (deferredPrompt !== null || (mobile && !isStandalone()));
+  const canPrompt = store.prompt !== null;
+  const showBanner = !installed && (canPrompt || (mobile && !isStandalone()));
 
-  return { showBanner, isIos, installed, promptInstall, canPrompt: deferredPrompt !== null };
+  return { showBanner, isIos, installed, promptInstall, canPrompt };
 }

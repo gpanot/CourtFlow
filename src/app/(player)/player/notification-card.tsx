@@ -37,7 +37,16 @@ export function NotificationCard({ onEnabled }: NotificationCardProps = {}) {
       setEnabled(true);
       onEnabled?.();
     } else {
-      setError("Something went wrong setting up notifications. Please try again.");
+      const messages: Record<string, string> = {
+        "no-vapid": "Push notification keys are not configured on the server. Please contact the venue.",
+        "sw-timeout": "Service worker is not ready. Try refreshing the page.",
+        "subscribe-failed": "Browser rejected the push subscription. Try refreshing or reinstalling the app.",
+        "server-error": "Could not save your subscription to the server. Please try again.",
+        "unsupported": "Push notifications are not supported in this browser.",
+        "denied": "Notifications are blocked. Open your browser settings to allow them.",
+        "dismissed": "Permission prompt was dismissed. Tap Turn On to try again.",
+      };
+      setError(messages[result.reason] || `Setup failed (${result.reason}). Please try again.`);
     }
     setRequesting(false);
   };
