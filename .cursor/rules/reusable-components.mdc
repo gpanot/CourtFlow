@@ -1,0 +1,34 @@
+---
+description: Prioritize creating reusable components over inline/duplicated UI code
+globs: "**/*.tsx"
+alwaysApply: false
+---
+
+# Reusable Components First
+
+When building or modifying UI, always extract shared patterns into standalone components before duplicating markup.
+
+## Rules
+
+- **Before writing inline UI**, check if a similar pattern already exists elsewhere in the codebase. If it does, extract it into a shared component and reuse it.
+- **Never duplicate UI blocks** across files. If the same markup appears (or would appear) in two or more places, create a component immediately.
+- **Self-contained components**: Each reusable component should own its own hooks, state, and conditional rendering logic (e.g. an install banner that internally calls `usePwaInstall()` and returns `null` when not needed).
+- **Colocation**: Place player-facing shared components in `src/app/(player)/player/` alongside their consumers. Place app-wide shared components in `src/components/`.
+
+## Example
+
+```tsx
+// BAD — duplicated install banner in home.tsx and queue-screen.tsx
+{showBanner && (
+  <div className="...">
+    <Download />
+    <p>Install CourtFlow</p>
+    {/* 20 lines of conditional rendering */}
+  </div>
+)}
+
+// GOOD — extracted into <InstallCard /> used everywhere
+import { InstallCard } from "./install-card";
+
+<InstallCard />
+```

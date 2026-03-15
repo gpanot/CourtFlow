@@ -10,6 +10,7 @@ import { cn } from "@/lib/cn";
 import { ArrowLeft, Trophy, Clock, Check, Pencil, ChevronRight, Bell, BellOff } from "lucide-react";
 import { isPushSupported, subscribeToPush, unsubscribeFromPush, getNotificationPermission } from "@/lib/push-client";
 import { NotificationCard } from "./notification-card";
+import { InstallCard } from "./install-card";
 
 const AVATAR_OPTIONS = [
   "🏓", "🎾", "⚡", "🔥", "🌟", "💪", "🦊", "🐻",
@@ -275,6 +276,9 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
           ) : (
             <NotificationCard onEnabled={() => setNotificationsEnabled(true)} />
           )}
+
+          {/* Install App */}
+          <InstallCard />
 
           {/* Skill Level */}
           <div>

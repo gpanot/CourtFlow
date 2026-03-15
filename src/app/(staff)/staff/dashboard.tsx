@@ -1318,6 +1318,8 @@ function QRCodeTab({
 }) {
   const [origin, setOrigin] = useState("");
   const [showTvSetup, setShowTvSetup] = useState(false);
+  const [testPushStatus, setTestPushStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [testPushResult, setTestPushResult] = useState<string | null>(null);
 
   useEffect(() => {
     setOrigin(window.location.origin);
@@ -1440,6 +1442,47 @@ function QRCodeTab({
           <p className="break-all text-sm text-neutral-300 font-mono">{playerUrl}</p>
         </div>
       </div>
+
+      {hasSession && (
+        <div className="w-full max-w-sm">
+          <div className="h-px bg-neutral-800 my-2" />
+          <button
+            onClick={async () => {
+              setTestPushStatus("sending");
+              setTestPushResult(null);
+              try {
+                const res = await api.post<{ sent: number; total: number }>("/api/push/test", { venueId });
+                setTestPushStatus("sent");
+                setTestPushResult(`Sent to ${res.total} player${res.total !== 1 ? "s" : ""}`);
+                setTimeout(() => setTestPushStatus("idle"), 4000);
+              } catch {
+                setTestPushStatus("error");
+                setTestPushResult("Failed to send test notification");
+                setTimeout(() => setTestPushStatus("idle"), 4000);
+              }
+            }}
+            disabled={testPushStatus === "sending"}
+            className={cn(
+              "w-full flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-medium transition-colors",
+              testPushStatus === "sent"
+                ? "bg-green-600/20 text-green-400"
+                : testPushStatus === "error"
+                  ? "bg-red-600/20 text-red-400"
+                  : "bg-neutral-800 text-neutral-300 hover:bg-neutral-700"
+            )}
+          >
+            {testPushStatus === "sending" ? (
+              <><Loader2 className="h-4 w-4 animate-spin" /> Sending...</>
+            ) : testPushStatus === "sent" ? (
+              <><Check className="h-4 w-4" /> {testPushResult}</>
+            ) : testPushStatus === "error" ? (
+              <>{testPushResult}</>
+            ) : (
+              <>🔔 Send Test Notification to All Players</>
+            )}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
