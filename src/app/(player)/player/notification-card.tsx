@@ -20,24 +20,24 @@ export function NotificationCard({ onEnabled }: NotificationCardProps = {}) {
   const handleEnable = async () => {
     setRequesting(true);
     setError(null);
+
+    const permission = await Notification.requestPermission();
+    if (permission === "denied") {
+      setError("Notifications are blocked. Open your browser or device settings to allow them for this app.");
+      setRequesting(false);
+      return;
+    }
+    if (permission !== "granted") {
+      setRequesting(false);
+      return;
+    }
+
     const result = await subscribeToPush(playerId);
     if (result.ok) {
       setEnabled(true);
       onEnabled?.();
     } else {
-      switch (result.reason) {
-        case "denied":
-          setError("Notifications are blocked. Open your browser or device settings to allow them for this app.");
-          break;
-        case "dismissed":
-          break;
-        case "no-vapid":
-        case "sw-timeout":
-        case "subscribe-failed":
-        case "server-error":
-          setError("Something went wrong setting up notifications. Please try again.");
-          break;
-      }
+      setError("Something went wrong setting up notifications. Please try again.");
     }
     setRequesting(false);
   };
