@@ -16,6 +16,7 @@ import { SessionRecapScreen } from "./session-recap";
 import { LogOut, Download, Share } from "lucide-react";
 import { isPushSupported, subscribeToPush, getNotificationPermission } from "@/lib/push-client";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
+import { NotificationCard } from "./notification-card";
 
 interface Venue {
   id: string;
@@ -37,7 +38,7 @@ interface QueueEntry {
 type PlayerView = "home" | "queue" | "assigned" | "playing" | "break" | "profile" | "session_recap";
 
 export function PlayerHome() {
-  const { playerId, playerName, venueId, setAuth, clearAuth } = useSessionStore();
+  const { playerId, playerName, venueId, token, setAuth, clearAuth } = useSessionStore();
   const searchParams = useSearchParams();
   const [venues, setVenues] = useState<Venue[]>([]);
   const [selectedVenue, setSelectedVenue] = useState<string | null>(venueId);
@@ -69,6 +70,14 @@ export function PlayerHome() {
       }
     }
   }, [playerId]);
+
+  useEffect(() => {
+    if (!token) return;
+    const link = document.querySelector('link[rel="manifest"]');
+    if (link) {
+      link.setAttribute("href", `/api/manifest/player?token=${encodeURIComponent(token)}`);
+    }
+  }, [token]);
 
   useEffect(() => {
     if (selectedVenue) return;
@@ -360,9 +369,11 @@ export function PlayerHome() {
           )}
         </div>
 
-        {/* PWA install banner */}
-        {showBanner && (
-          <div className="mt-auto flex items-start gap-3 rounded-xl border border-green-800/50 bg-green-950/40 p-3">
+        {/* Notification + Install banners */}
+        <div className="mt-auto space-y-3">
+          <NotificationCard />
+          {showBanner && (
+          <div className="flex items-start gap-3 rounded-xl border border-green-800/50 bg-green-950/40 p-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green-600/20 text-green-400">
               <Download className="h-5 w-5" />
             </div>
@@ -392,7 +403,7 @@ export function PlayerHome() {
             </div>
           </div>
         )}
-        {!showBanner && <div className="mt-auto" />}
+        </div>
       </div>
     );
   }

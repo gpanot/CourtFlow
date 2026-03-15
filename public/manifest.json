@@ -2,7 +2,7 @@
   "name": "CourtFlow",
   "short_name": "CourtFlow",
   "description": "Pickleball Court Management System",
-  "start_url": "/",
+  "start_url": "/player",
   "display": "standalone",
   "background_color": "#0a0a0a",
   "theme_color": "#16a34a",

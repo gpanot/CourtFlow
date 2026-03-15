@@ -6,6 +6,7 @@ import { useSessionStore } from "@/stores/session-store";
 import { cn } from "@/lib/cn";
 import { Link, Coffee, Download, Share } from "lucide-react";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
+import { NotificationCard } from "./notification-card";
 
 interface QueueScreenProps {
   entry: { id: string; groupId: string | null; sessionId: string };
@@ -124,38 +125,43 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
         </div>
       </div>
 
-      {/* PWA install banner — permanent until app is installed */}
-      {showBanner && (
-        <div className="mb-3 flex items-start gap-3 rounded-xl border border-green-800/50 bg-green-950/40 p-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green-600/20 text-green-400">
-            <Download className="h-5 w-5" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-green-400">Install CourtFlow</p>
-            {isIos && !canPrompt ? (
-              <p className="mt-0.5 text-xs text-neutral-400">
-                Tap <Share className="inline h-3 w-3 -mt-0.5" /> then &quot;Add to Home Screen&quot; to get instant alerts.
-              </p>
-            ) : canPrompt ? (
-              <>
+      {/* Notification + Install banners */}
+      <div className="space-y-3">
+        <NotificationCard />
+
+        {/* PWA install banner — permanent until app is installed */}
+        {showBanner && (
+          <div className="flex items-start gap-3 rounded-xl border border-green-800/50 bg-green-950/40 p-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green-600/20 text-green-400">
+              <Download className="h-5 w-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-green-400">Install CourtFlow</p>
+              {isIos && !canPrompt ? (
                 <p className="mt-0.5 text-xs text-neutral-400">
-                  Get instant alerts when it&apos;s your turn. No app store needed.
+                  Tap <Share className="inline h-3 w-3 -mt-0.5" /> then &quot;Add to Home Screen&quot; to get instant alerts.
                 </p>
-                <button
-                  onClick={promptInstall}
-                  className="mt-2 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-500 transition-colors"
-                >
-                  Install App
-                </button>
-              </>
-            ) : (
-              <p className="mt-0.5 text-xs text-neutral-400">
-                Add this app to your home screen for the best experience.
-              </p>
-            )}
+              ) : canPrompt ? (
+                <>
+                  <p className="mt-0.5 text-xs text-neutral-400">
+                    Get instant alerts when it&apos;s your turn. No app store needed.
+                  </p>
+                  <button
+                    onClick={promptInstall}
+                    className="mt-2 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-500 transition-colors"
+                  >
+                    Install App
+                  </button>
+                </>
+              ) : (
+                <p className="mt-0.5 text-xs text-neutral-400">
+                  Add this app to your home screen for the best experience.
+                </p>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Center content */}
       <div className="my-auto flex flex-col items-center gap-3">
