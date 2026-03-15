@@ -1,7 +1,5 @@
 "use client";
 
-const PLAYER_CRED_KEY = "courtflow-biometric-cred";
-const PLAYER_KEY = "courtflow-biometric-player";
 const STAFF_CRED_KEY = "courtflow-biometric-staff-cred";
 const STAFF_KEY = "courtflow-biometric-staff";
 
@@ -37,23 +35,6 @@ function getStored(key: string): StoredUser | null {
   }
 }
 
-// --- Player helpers ---
-
-export function storeBiometricPlayer(player: { playerId: string; playerName: string; phone?: string }): void {
-  localStorage.setItem(PLAYER_KEY, JSON.stringify({ id: player.playerId, name: player.playerName }));
-}
-
-export function getBiometricPlayer(): { playerId: string; playerName: string } | null {
-  const s = getStored(PLAYER_KEY);
-  if (!s) return null;
-  return { playerId: s.id, playerName: s.name };
-}
-
-export function clearBiometricPlayer(): void {
-  localStorage.removeItem(PLAYER_CRED_KEY);
-  localStorage.removeItem(PLAYER_KEY);
-}
-
 // --- Staff helpers ---
 
 export function storeBiometricStaff(staff: { staffId: string; staffName: string }): void {
@@ -69,11 +50,6 @@ export function getBiometricStaff(): { staffId: string; staffName: string } | nu
 export function clearBiometricStaff(): void {
   localStorage.removeItem(STAFF_CRED_KEY);
   localStorage.removeItem(STAFF_KEY);
-}
-
-// Keep backward compat alias
-export function clearBiometricData(): void {
-  clearBiometricPlayer();
 }
 
 // --- Shared ---
@@ -136,10 +112,6 @@ export async function registerBiometric(
   }
 }
 
-export async function requestBiometricVerification(userId: string): Promise<boolean> {
-  return registerBiometric(userId, "CourtFlow Player", PLAYER_CRED_KEY);
-}
-
 export async function registerStaffBiometric(userId: string, displayName: string): Promise<boolean> {
   return registerBiometric(userId, displayName, STAFF_CRED_KEY);
 }
@@ -181,10 +153,6 @@ async function authenticateGeneric(credKey: string, userKey: string): Promise<Bi
   } catch {
     return fail;
   }
-}
-
-export async function authenticateWithBiometric(): Promise<BiometricAuthResult> {
-  return authenticateGeneric(PLAYER_CRED_KEY, PLAYER_KEY);
 }
 
 export async function authenticateStaffBiometric(): Promise<BiometricAuthResult> {

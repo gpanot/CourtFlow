@@ -340,6 +340,11 @@ export function PlayerHome() {
                 setJoining(true);
                 try {
                   await api.post("/api/queue", { sessionId: session.id, venueId: selectedVenue });
+
+                  if (playerId && isPushSupported() && getNotificationPermission() !== "granted") {
+                    subscribeToPush(playerId).catch(() => {});
+                  }
+
                   await fetchPlayerState();
                 } catch (e) {
                   console.error("Join queue error:", e);

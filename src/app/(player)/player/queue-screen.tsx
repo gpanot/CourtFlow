@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api-client";
 import { useSessionStore } from "@/stores/session-store";
 import { cn } from "@/lib/cn";
-import { Link, Coffee } from "lucide-react";
+import { Link, Coffee, Download, X, Share } from "lucide-react";
+import { usePwaInstall } from "@/hooks/use-pwa-install";
 
 interface QueueScreenProps {
   entry: { id: string; groupId: string | null; sessionId: string };
@@ -27,6 +28,7 @@ interface QueueInfo {
 export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onShowProfile, onRefresh, onLeaveVenue }: QueueScreenProps) {
   const { playerId } = useSessionStore();
   const [info, setInfo] = useState<QueueInfo | null>(null);
+  const { showBanner, isIos, promptInstall, dismiss } = usePwaInstall();
 
   const fetchQueueInfo = useCallback(async () => {
     try {
@@ -117,6 +119,38 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
           </div>
         </div>
       </div>
+
+      {/* PWA install banner */}
+      {(showBanner || isIos) && (
+        <div className="mb-3 flex items-start gap-3 rounded-xl border border-green-800/50 bg-green-950/40 p-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green-600/20 text-green-400">
+            <Download className="h-5 w-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-green-400">Install CourtFlow</p>
+            {isIos && !showBanner ? (
+              <p className="mt-0.5 text-xs text-neutral-400">
+                Tap <Share className="inline h-3 w-3 -mt-0.5" /> then &quot;Add to Home Screen&quot; to get instant alerts.
+              </p>
+            ) : (
+              <>
+                <p className="mt-0.5 text-xs text-neutral-400">
+                  Get instant alerts when it&apos;s your turn. No app store needed.
+                </p>
+                <button
+                  onClick={promptInstall}
+                  className="mt-2 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-500 transition-colors"
+                >
+                  Install App
+                </button>
+              </>
+            )}
+          </div>
+          <button onClick={dismiss} className="shrink-0 p-0.5 text-neutral-500 hover:text-neutral-300">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* Center content */}
       <div className="my-auto flex flex-col items-center gap-3">
