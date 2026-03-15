@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
 import { useSessionStore, useHasHydrated } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { OnboardingFlow } from "./onboarding";
@@ -10,14 +9,13 @@ import { PlayerHome } from "./home";
 export default function PlayerPage() {
   const { token, playerId, setAuth, clearAuth } = useSessionStore();
   const hydrated = useHasHydrated();
-  const searchParams = useSearchParams();
-  const router = useRouter();
   const [validated, setValidated] = useState(false);
 
   useEffect(() => {
     if (!hydrated) return;
 
-    const reauthToken = searchParams.get("reauth");
+    const params = new URLSearchParams(window.location.search);
+    const reauthToken = params.get("reauth");
 
     if (reauthToken && !token) {
       fetch("/api/auth/validate-token", {
@@ -39,17 +37,17 @@ export default function PlayerPage() {
             role: "player",
             playerName: data.player.name,
           });
-          router.replace("/player");
+          window.history.replaceState({}, "", "/player");
         })
         .catch(() => {
-          router.replace("/player");
+          window.history.replaceState({}, "", "/player");
           setValidated(true);
         });
       return;
     }
 
     if (reauthToken && token) {
-      router.replace("/player");
+      window.history.replaceState({}, "", "/player");
     }
 
     if (!token) {
@@ -63,7 +61,7 @@ export default function PlayerPage() {
         clearAuth();
         setValidated(true);
       });
-  }, [hydrated, token, searchParams, clearAuth, setAuth, router]);
+  }, [hydrated, token, clearAuth, setAuth]);
 
   if (!hydrated || !validated) return null;
 
