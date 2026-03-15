@@ -198,14 +198,22 @@ export async function runRotation(
     totalPlayMinutesToday: e.totalPlayMinutesToday,
   }));
 
-  // Priority 1: assign a complete group of 4 as an atomic unit
   const fullGroup = findFullGroup(allCandidates);
 
-  // Priority 2: pick 4 solo (ungrouped) players — grouped players wait for their group
   const soloCandidates = allCandidates.filter((c) => !c.groupId);
   const currentCounts = target ? await getSessionGameTypeCounts(sessionId) : { men: 0, women: 0, mixed: 0 };
+  const soloSelection = selectBestFour(soloCandidates, currentCounts, target);
 
-  const selectedPlayers = fullGroup ?? selectBestFour(soloCandidates, currentCounts, target);
+  // FIFO-fair: compare the effective queue position of the group vs solos.
+  // A group's position is its oldest member's joinedAt.
+  let selectedPlayers: QueueCandidate[] | null = null;
+  if (fullGroup && soloSelection) {
+    const groupPosition = Math.min(...fullGroup.map((p) => p.joinedAt.getTime()));
+    const soloPosition = Math.min(...soloSelection.map((p) => p.joinedAt.getTime()));
+    selectedPlayers = groupPosition <= soloPosition ? fullGroup : soloSelection;
+  } else {
+    selectedPlayers = fullGroup ?? soloSelection;
+  }
   if (!selectedPlayers) return false;
 
   const playerIds = selectedPlayers.map((p) => p.playerId);
