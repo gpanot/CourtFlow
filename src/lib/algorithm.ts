@@ -1,6 +1,6 @@
 import { prisma } from "./db";
 import { emitToPlayer, emitToVenue } from "./socket-server";
-import { getSkillIndex, QUEUE_LOOKAHEAD, MAX_SKILL_GAP, WARMUP_DURATION_SECONDS, AUTO_START_DELAY_SECONDS } from "./constants";
+import { getSkillIndex, QUEUE_LOOKAHEAD, MAX_SKILL_GAP, WARMUP_DURATION_SECONDS, AUTO_START_DELAY_SECONDS, MIN_GROUP_SIZE, COURT_PLAYER_COUNT } from "./constants";
 import type { SkillLevel, GameType } from "@prisma/client";
 
 export interface GameTypeMix {
@@ -96,17 +96,17 @@ function selectBestFour(
   currentCounts: Record<GameType, number>,
   target: GameTypeMix | null
 ): QueueCandidate[] | null {
-  if (candidates.length < 4) return null;
+  if (candidates.length < COURT_PLAYER_COUNT) return null;
 
   if (!target) {
-    return candidates.slice(0, 4);
+    return candidates.slice(0, COURT_PLAYER_COUNT);
   }
 
   // With a target: evaluate combinations within the lookahead window.
   // To keep it fast, we limit combinations (max 30 choose 4 = 27,405).
   const pool = candidates.slice(0, QUEUE_LOOKAHEAD);
   const n = pool.length;
-  if (n < 4) return null;
+  if (n < COURT_PLAYER_COUNT) return null;
 
   let bestCombo: QueueCandidate[] | null = null;
   let bestScore = Infinity;
@@ -140,10 +140,11 @@ function selectBestFour(
 }
 
 /**
- * Find the earliest full group of 4 waiting players (FIFO by oldest member).
- * Returns null if no complete group exists.
+ * Find the earliest group (2-4 members) and fill remaining slots with solo
+ * players from the queue so the total is always COURT_PLAYER_COUNT (4).
+ * Returns null if no group with enough solos to fill exists.
  */
-function findFullGroup(candidates: QueueCandidate[]): QueueCandidate[] | null {
+function findGroupWithFill(candidates: QueueCandidate[]): QueueCandidate[] | null {
   const groups = new Map<string, QueueCandidate[]>();
   for (const c of candidates) {
     if (!c.groupId) continue;
@@ -152,19 +153,25 @@ function findFullGroup(candidates: QueueCandidate[]): QueueCandidate[] | null {
     groups.set(c.groupId, members);
   }
 
-  let earliest: QueueCandidate[] | null = null;
-  let earliestJoin = Infinity;
+  const solos = candidates.filter((c) => !c.groupId);
 
-  for (const members of groups.values()) {
-    if (members.length !== 4) continue;
-    const oldestJoin = Math.min(...members.map((m) => m.joinedAt.getTime()));
-    if (oldestJoin < earliestJoin) {
-      earliestJoin = oldestJoin;
-      earliest = members;
+  const sortedGroups = [...groups.entries()]
+    .filter(([, members]) => members.length >= MIN_GROUP_SIZE && members.length <= COURT_PLAYER_COUNT)
+    .sort(([, a], [, b]) => {
+      const aJoin = Math.min(...a.map((m) => m.joinedAt.getTime()));
+      const bJoin = Math.min(...b.map((m) => m.joinedAt.getTime()));
+      return aJoin - bJoin;
+    });
+
+  for (const [, members] of sortedGroups) {
+    const slotsNeeded = COURT_PLAYER_COUNT - members.length;
+    if (slotsNeeded === 0) return members;
+    if (solos.length >= slotsNeeded) {
+      return [...members, ...solos.slice(0, slotsNeeded)];
     }
   }
 
-  return earliest;
+  return null;
 }
 
 export async function runRotation(
@@ -185,7 +192,7 @@ export async function runRotation(
     take: QUEUE_LOOKAHEAD,
   });
 
-  if (waitingEntries.length < 4) return false;
+  if (waitingEntries.length < COURT_PLAYER_COUNT) return false;
 
   const allCandidates: QueueCandidate[] = waitingEntries.map((e) => ({
     entryId: e.id,
@@ -198,7 +205,7 @@ export async function runRotation(
     totalPlayMinutesToday: e.totalPlayMinutesToday,
   }));
 
-  const fullGroup = findFullGroup(allCandidates);
+  const fullGroup = findGroupWithFill(allCandidates);
 
   const soloCandidates = allCandidates.filter((c) => !c.groupId);
   const currentCounts = target ? await getSessionGameTypeCounts(sessionId) : { men: 0, women: 0, mixed: 0 };

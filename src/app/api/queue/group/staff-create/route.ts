@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
+import { MIN_GROUP_SIZE, MAX_GROUP_SIZE } from "@/lib/constants";
 
 function generateGroupCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -22,8 +23,8 @@ export async function POST(request: NextRequest) {
       venueId: string;
     }>(request);
 
-    if (!playerIds || playerIds.length !== 4) {
-      return error("Exactly 4 player IDs are required");
+    if (!playerIds || playerIds.length < MIN_GROUP_SIZE || playerIds.length > MAX_GROUP_SIZE) {
+      return error(`${MIN_GROUP_SIZE}–${MAX_GROUP_SIZE} player IDs are required`);
     }
     if (!venueId) return error("venueId is required");
 
@@ -41,9 +42,9 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    if (entries.length !== 4) {
+    if (entries.length !== playerIds.length) {
       return error(
-        `Only ${entries.length} of the 4 players are available (must be waiting and not already in a group)`
+        `Only ${entries.length} of the ${playerIds.length} players are available (must be waiting and not already in a group)`
       );
     }
 
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Move all 4 entries to the group and re-stamp joinedAt so the group lands at the end of the queue
+    // Move entries to the group and re-stamp joinedAt so the group lands at the end of the queue
     const now = new Date();
     await prisma.queueEntry.updateMany({
       where: { id: { in: entries.map((e) => e.id) } },

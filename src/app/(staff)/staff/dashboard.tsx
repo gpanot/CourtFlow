@@ -9,7 +9,7 @@ import { CourtCard, type CourtData } from "@/components/court-card";
 import { QueuePanel, type QueueEntryData } from "@/components/queue-panel";
 import { cn } from "@/lib/cn";
 import { Plus, X, LogOut, Users, LayoutGrid, AlertTriangle, User, Flame, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, History, Calendar, Loader2, Target, Settings2, Play, Check } from "lucide-react";
-import { WARMUP_DURATION_SECONDS } from "@/lib/constants";
+import { WARMUP_DURATION_SECONDS, MIN_GROUP_SIZE, MAX_GROUP_SIZE } from "@/lib/constants";
 import { QRCodeSVG } from "qrcode.react";
 import { SessionSummary } from "./session-summary";
 
@@ -475,7 +475,7 @@ export function StaffDashboard() {
                           {player.skillLevel[0].toUpperCase()}
                         </span>
                       </div>
-                      {selectedCourt.status === "active" && (
+                      {(selectedCourt.status === "active" || selectedCourt.status === "warmup") && (
                         <button
                           onClick={() => setConfirmReplace({
                             courtId: selectedCourt.id,
@@ -1214,7 +1214,7 @@ function CreateGroupModal({
       const next = new Set(prev);
       if (next.has(playerId)) {
         next.delete(playerId);
-      } else if (next.size < 4) {
+      } else if (next.size < MAX_GROUP_SIZE) {
         next.add(playerId);
       }
       return next;
@@ -1240,7 +1240,7 @@ function CreateGroupModal({
         <div className="flex-1 min-w-0">
           <h1 className="text-lg font-bold leading-tight">Create Group</h1>
           <p className="text-sm text-neutral-400">
-            Select 4 players · {selected.size}/4 selected
+            Select {MIN_GROUP_SIZE}–{MAX_GROUP_SIZE} players · {selected.size} selected
           </p>
         </div>
       </header>
@@ -1256,7 +1256,7 @@ function CreateGroupModal({
           <div className="space-y-1.5">
             {soloWaiting.map((entry) => {
               const isSelected = selected.has(entry.playerId);
-              const isFull = selected.size >= 4 && !isSelected;
+              const isFull = selected.size >= MAX_GROUP_SIZE && !isSelected;
               return (
                 <button
                   key={entry.playerId}
@@ -1294,13 +1294,13 @@ function CreateGroupModal({
       <div className="border-t border-neutral-800 px-4 py-4 pb-8">
         <button
           onClick={() => onConfirm(Array.from(selected))}
-          disabled={selected.size !== 4}
+          disabled={selected.size < MIN_GROUP_SIZE}
           className="w-full rounded-xl bg-blue-600 py-4 text-lg font-bold text-white transition-colors hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 flex items-center justify-center gap-2"
         >
           <Users className="h-5 w-5" />
-          {selected.size === 4
-            ? "Create Group"
-            : `Select ${4 - selected.size} more player${4 - selected.size !== 1 ? "s" : ""}`}
+          {selected.size >= MIN_GROUP_SIZE
+            ? `Create Group of ${selected.size}`
+            : `Select at least ${MIN_GROUP_SIZE - selected.size} more player${MIN_GROUP_SIZE - selected.size !== 1 ? "s" : ""}`}
         </button>
       </div>
     </div>

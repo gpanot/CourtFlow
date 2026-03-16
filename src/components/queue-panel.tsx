@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { Link, Coffee, MoreVertical, UserX, LogOut, ArrowUpDown, ChevronLeft, Users, Unlink, MapPin } from "lucide-react";
-import { TV_QUEUE_DISPLAY_COUNT, SKILL_LEVELS, type SkillLevelType } from "@/lib/constants";
+import { TV_QUEUE_DISPLAY_COUNT, SKILL_LEVELS, type SkillLevelType, MIN_GROUP_SIZE } from "@/lib/constants";
 
 const skillDotColors: Record<string, string> = {
   beginner: "bg-green-500",
@@ -185,7 +185,7 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
         >
           Queue ({entries.filter((e) => e.status === "waiting").length} waiting)
         </h4>
-        {!isTV && onCreateGroup && soloWaitingCount >= 4 && (
+        {!isTV && onCreateGroup && soloWaitingCount >= MIN_GROUP_SIZE && (
           <button
             onClick={onCreateGroup}
             className="flex items-center gap-1.5 rounded-lg bg-blue-600/15 px-3 py-1.5 text-xs font-medium text-blue-400 hover:bg-blue-600/25 transition-colors"
