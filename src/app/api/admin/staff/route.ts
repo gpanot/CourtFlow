@@ -19,11 +19,11 @@ export async function GET(request: NextRequest) {
         OR: [
           { id: auth.id },
           { venues: { some: { id: { in: ownedVenueIds } } } },
+          { venues: { none: {} } },
         ],
       },
       include: {
         venues: {
-          where: { id: { in: ownedVenueIds } },
           select: { id: true, name: true },
         },
       },
@@ -36,6 +36,9 @@ export async function GET(request: NextRequest) {
         name: s.name,
         phone: s.phone,
         role: s.role,
+        isCoach: s.isCoach,
+        coachBio: s.coachBio,
+        coachPhoto: s.coachPhoto,
         venues: s.venues,
         createdAt: s.createdAt,
       }))

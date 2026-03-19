@@ -14,6 +14,9 @@ export async function PATCH(
       name?: string;
       role?: "staff" | "superadmin";
       venueIds?: string[];
+      isCoach?: boolean;
+      coachBio?: string | null;
+      coachPhoto?: string | null;
     }>(request);
 
     const existing = await prisma.staffMember.findUnique({ where: { id: staffId } });
@@ -24,6 +27,9 @@ export async function PATCH(
       data: {
         ...(body.name !== undefined && { name: body.name }),
         ...(body.role !== undefined && { role: body.role }),
+        ...(body.isCoach !== undefined && { isCoach: body.isCoach }),
+        ...(body.coachBio !== undefined && { coachBio: body.coachBio }),
+        ...(body.coachPhoto !== undefined && { coachPhoto: body.coachPhoto }),
         ...(body.venueIds !== undefined && {
           venues: { set: body.venueIds.map((id) => ({ id })) },
         }),
@@ -36,6 +42,9 @@ export async function PATCH(
       name: staff.name,
       phone: staff.phone,
       role: staff.role,
+      isCoach: staff.isCoach,
+      coachBio: staff.coachBio,
+      coachPhoto: staff.coachPhoto,
       venues: staff.venues,
     });
   } catch (e) {

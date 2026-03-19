@@ -22,7 +22,9 @@ import {
   CalendarDays,
   Save,
   ChevronUp,
+  GraduationCap,
 } from "lucide-react";
+import { CourtsManager } from "@/components/admin/CourtsManager";
 
 interface VenueSettings {
   [key: string]: unknown;
@@ -70,6 +72,14 @@ interface SlotScheduleInfo {
   title: string;
 }
 
+interface SlotLessonInfo {
+  lessonId: string;
+  coachName: string;
+  playerName: string;
+  lessonType: string;
+  packageName: string;
+}
+
 interface SlotInfo {
   startTime: string;
   endTime: string;
@@ -78,6 +88,7 @@ interface SlotInfo {
   available: boolean;
   block?: SlotBlockInfo;
   schedule?: SlotScheduleInfo;
+  lesson?: SlotLessonInfo;
 }
 
 interface CourtSlotData {
@@ -153,8 +164,7 @@ export default function BookingsPage() {
   const [editSlotTime, setEditSlotTime] = useState("");
   const [saving, setSaving] = useState(false);
 
-  // Settings panel state
-  const [showSettings, setShowSettings] = useState(false);
+  const [activeTab, setActiveTab] = useState<"bookings" | "settings">("bookings");
   const [venueDetails, setVenueDetails] = useState<Venue | null>(null);
 
   // Court block state
@@ -513,52 +523,69 @@ export default function BookingsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-xl font-bold md:text-2xl">Court Bookings</h2>
-        <div className="flex items-center gap-2">
-          <select
-            value={selectedVenueId}
-            onChange={(e) => setSelectedVenueId(e.target.value)}
-            className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
-          >
-            {venues.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-          </select>
-          <button
-            onClick={() => setShowSettings(!showSettings)}
-            className={cn(
-              "flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
-              showSettings
-                ? "border-purple-500 bg-purple-600/20 text-purple-300"
-                : "border-neutral-700 bg-neutral-800 text-neutral-400 hover:text-white"
-            )}
-          >
-            <Settings className="h-4 w-4" /> Settings
-          </button>
-          {availability.length > 0 && (
-            <>
-              <button
-                onClick={() => openBlockModal("open_play")}
-                className="flex items-center gap-1.5 rounded-lg border border-emerald-700/50 bg-emerald-900/20 px-3 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-900/40"
-              >
-                <Users className="h-4 w-4" /> Open Play
-              </button>
-              <button
-                onClick={() => openBlockModal()}
-                className="flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm font-medium text-neutral-300 hover:bg-neutral-700 hover:text-white"
-              >
-                <Ban className="h-4 w-4" /> Block Time
-              </button>
-              <button
-                onClick={openCreateFresh}
-                className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-500"
-              >
-                <Plus className="h-4 w-4" /> New Booking
-              </button>
-            </>
-          )}
-        </div>
+        <select
+          value={selectedVenueId}
+          onChange={(e) => setSelectedVenueId(e.target.value)}
+          className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
+        >
+          {venues.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+        </select>
       </div>
 
-      {showSettings && venueDetails?.settings && (
+      <div className="flex items-center justify-between border-b border-neutral-800">
+        <div className="flex gap-1">
+        {([
+          { key: "bookings" as const, label: "Court Bookings", icon: Calendar },
+          { key: "settings" as const, label: "Settings", icon: Settings },
+        ]).map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px",
+              activeTab === tab.key
+                ? "border-purple-500 text-white"
+                : "border-transparent text-neutral-500 hover:text-neutral-300"
+            )}
+          >
+            <tab.icon className="h-4 w-4" />
+            {tab.label}
+          </button>
+        ))}
+        </div>
+        {activeTab === "bookings" && availability.length > 0 && (
+          <div className="flex items-center gap-2 pb-2">
+            <button
+              onClick={() => openBlockModal("open_play")}
+              className="flex items-center gap-1.5 rounded-lg border border-emerald-700/50 bg-emerald-900/20 px-3 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-900/40"
+            >
+              <Users className="h-4 w-4" /> Open Play
+            </button>
+            <button
+              onClick={() => openBlockModal()}
+              className="flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm font-medium text-neutral-300 hover:bg-neutral-700 hover:text-white"
+            >
+              <Ban className="h-4 w-4" /> Block Time
+            </button>
+            <button
+              onClick={openCreateFresh}
+              className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-500"
+            >
+              <Plus className="h-4 w-4" /> New Booking
+            </button>
+          </div>
+        )}
+      </div>
+
+      {activeTab === "settings" && venueDetails?.settings && (
         <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 space-y-6">
+          <CourtsManager
+            venueId={selectedVenueId}
+            courts={venueDetails.courts || []}
+            onRefresh={fetchVenueDetails}
+            showBookable
+            readOnly
+          />
           <BookingConfigSection
             venueId={selectedVenueId}
             settings={venueDetails.settings}
@@ -573,6 +600,7 @@ export default function BookingsPage() {
         </div>
       )}
 
+      {activeTab === "bookings" && <>
       {/* Date Navigation */}
       <div className="flex items-center gap-3">
         <button onClick={() => shiftDate(-1)} className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white">
@@ -664,9 +692,20 @@ export default function BookingsPage() {
                         }
                       }
 
+                      const lessonInfo = courtSlot?.lesson;
+                      const isLessonStart = lessonInfo && (rowIdx === 0 || !court.slots[rowIdx - 1]?.lesson || court.slots[rowIdx - 1]?.lesson?.lessonId !== lessonInfo.lessonId);
+                      const isLessonContinuation = lessonInfo && !isLessonStart;
+                      let lessonSpan = 1;
+                      if (isLessonStart && lessonInfo) {
+                        for (let k = rowIdx + 1; k < court.slots.length; k++) {
+                          if (court.slots[k]?.lesson?.lessonId === lessonInfo.lessonId) lessonSpan++;
+                          else break;
+                        }
+                      }
+
                       return (
                         <div key={`${court.courtId}-${slot.startTime}`}
-                          className={cn("relative border-l border-neutral-800/40", !isLastRow && !isContinuationSlot && !isBlockContinuation && !isSchedContinuation && "border-b border-b-neutral-800/30")}
+                          className={cn("relative border-l border-neutral-800/40", !isLastRow && !isContinuationSlot && !isBlockContinuation && !isSchedContinuation && !isLessonContinuation && "border-b border-b-neutral-800/30")}
                           style={{ height: ROW_H }}>
                           {isFirstSlotOfBooking ? (
                             <div
@@ -776,7 +815,25 @@ export default function BookingsPage() {
                                 </p>
                               )}
                             </div>
-                          ) : isSchedContinuation ? null : courtSlot?.available ? (
+                          ) : isSchedContinuation ? null : isLessonStart && lessonInfo ? (
+                            <div
+                              className="group absolute inset-x-1 top-1 rounded-lg border bg-teal-600/20 border-teal-500/30 px-2 py-1.5 overflow-hidden flex flex-col justify-center z-[5]"
+                              style={{ height: ROW_H * lessonSpan - 8 }}
+                            >
+                              <div className="flex items-center gap-1">
+                                <GraduationCap className="h-3 w-3 text-teal-400 shrink-0" />
+                                <p className="text-xs font-semibold text-teal-200 truncate">
+                                  {lessonInfo.coachName}
+                                </p>
+                              </div>
+                              <p className="text-[10px] text-teal-400/70 truncate">
+                                {lessonInfo.playerName} — {lessonInfo.lessonType === "private" ? "Private" : "Group"}
+                              </p>
+                              {lessonSpan > 1 && (
+                                <p className="text-[10px] text-teal-400/50 truncate">{lessonInfo.packageName}</p>
+                              )}
+                            </div>
+                          ) : isLessonContinuation ? null : courtSlot?.available ? (
                             <button
                               onClick={() => toggleSlotSelection(court, courtSlot)}
                               className={cn(
@@ -903,6 +960,8 @@ export default function BookingsPage() {
           </div>
         )}
       </section>
+
+      </>}
 
       {/* Create Booking Modal */}
       {showCreateModal && (

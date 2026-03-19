@@ -90,10 +90,18 @@ export interface SlotScheduleInfo {
   title: string;
 }
 
+export interface SlotLessonInfo {
+  lessonId: string;
+  coachName: string;
+  playerName: string;
+  lessonType: string;
+  packageName: string;
+}
+
 export interface CourtSlot {
   courtId: string;
   courtLabel: string;
-  slots: (TimeSlot & { available: boolean; block?: SlotBlockInfo; schedule?: SlotScheduleInfo })[];
+  slots: (TimeSlot & { available: boolean; block?: SlotBlockInfo; schedule?: SlotScheduleInfo; lesson?: SlotLessonInfo })[];
 }
 
 export function getBookingConfig(venueSettings: Record<string, unknown>): BookingConfig {
@@ -189,6 +197,24 @@ export async function getAvailableSlots(
     select: { id: true, type: true, title: true, courtIds: true, startTime: true, endTime: true },
   });
 
+  const coachLessons = await prisma.coachLesson.findMany({
+    where: {
+      venueId,
+      date: dateOnly,
+      status: { in: ["confirmed", "completed"] },
+      courtId: { not: null },
+    },
+    select: {
+      id: true,
+      courtId: true,
+      startTime: true,
+      endTime: true,
+      coach: { select: { name: true } },
+      player: { select: { name: true } },
+      package: { select: { name: true, lessonType: true } },
+    },
+  });
+
   const timeSlots = generateTimeSlots(dateOnly, config);
   const dayOfWeek = dateOnly.getDay();
   const daySchedule = schedule.entries.filter((e) => e.daysOfWeek.includes(dayOfWeek));
@@ -218,14 +244,32 @@ export async function getAvailableSlots(
           slot.hour < entry.endHour
       );
 
+      const matchingLesson = coachLessons.find(
+        (l) =>
+          l.courtId === court.id &&
+          slotStart < l.endTime.getTime() &&
+          slotEnd > l.startTime.getTime()
+      );
+
       return {
         ...slot,
-        available: !isBooked && !matchingBlock && !matchingSchedule,
+        available: !isBooked && !matchingBlock && !matchingSchedule && !matchingLesson,
         ...(matchingBlock
           ? { block: { blockId: matchingBlock.id, type: matchingBlock.type, title: matchingBlock.title } }
           : {}),
         ...(matchingSchedule && !matchingBlock
           ? { schedule: { entryId: matchingSchedule.id, type: matchingSchedule.type, title: matchingSchedule.title } }
+          : {}),
+        ...(matchingLesson
+          ? {
+              lesson: {
+                lessonId: matchingLesson.id,
+                coachName: matchingLesson.coach.name,
+                playerName: matchingLesson.player.name,
+                lessonType: matchingLesson.package.lessonType,
+                packageName: matchingLesson.package.name,
+              },
+            }
           : {}),
       };
     }),

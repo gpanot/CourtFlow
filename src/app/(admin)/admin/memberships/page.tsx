@@ -2,9 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api-client";
-import { useSessionStore } from "@/stores/session-store";
 import { cn } from "@/lib/cn";
-import { useRef } from "react";
+import { PaymentConfirmModal, type PaymentModalData, type PaymentConfirmResult } from "@/components/admin/PaymentConfirmModal";
 import {
   Plus,
   Pencil,
@@ -23,8 +22,6 @@ import {
   FileText,
   ArrowRightLeft,
   Undo2,
-  Upload,
-  Image as ImageIcon,
   Settings,
   Save,
 } from "lucide-react";
@@ -116,17 +113,7 @@ export default function MembershipsPage() {
   const [activateTierId, setActivateTierId] = useState("");
   const [searching, setSearching] = useState(false);
 
-  const [showRecordPayment, setShowRecordPayment] = useState(false);
-  const [paymentTarget, setPaymentTarget] = useState<{
-    paymentId: string; memberName: string; amountInCents: number;
-    currentStatus: string; existingProofUrl: string | null;
-  } | null>(null);
-  const [paymentForm, setPaymentForm] = useState({ amount: "", method: "cash", date: "", note: "" });
-  const [proofFile, setProofFile] = useState<File | null>(null);
-  const [proofPreview, setProofPreview] = useState<string | null>(null);
-  const [uploadingProof, setUploadingProof] = useState(false);
-  const [savingPayment, setSavingPayment] = useState(false);
-  const proofInputRef = useRef<HTMLInputElement>(null);
+  const [paymentModalData, setPaymentModalData] = useState<PaymentModalData | null>(null);
 
   const [showPaymentHistory, setShowPaymentHistory] = useState(false);
   const [historyMembership, setHistoryMembership] = useState<MembershipRecord | null>(null);
@@ -138,7 +125,7 @@ export default function MembershipsPage() {
   const [showChangeTier, setShowChangeTier] = useState<string | null>(null);
   const [changeTierValue, setChangeTierValue] = useState("");
 
-  const [showSettings, setShowSettings] = useState(false);
+  const [activeTab, setActiveTab] = useState<"memberships" | "settings">("memberships");
 
   const fetchVenues = useCallback(async () => {
     try {
@@ -259,65 +246,29 @@ export default function MembershipsPage() {
   const openRecordPayment = (m: MembershipRecord) => {
     if (!m.latestPayment) return;
     const p = m.latestPayment;
-    setPaymentTarget({
-      paymentId: p.id,
-      memberName: m.player.name,
+    setPaymentModalData({
+      entityId: p.id,
+      label: m.player.name,
       amountInCents: p.amountInCents,
-      currentStatus: m.currentPaymentStatus ?? "UNPAID",
+      currentStatus: (m.currentPaymentStatus === "PAID" ? "PAID" : m.currentPaymentStatus === "OVERDUE" ? "OVERDUE" : "UNPAID") as "PAID" | "UNPAID" | "OVERDUE",
       existingProofUrl: p.proofUrl,
+      paymentMethod: p.paymentMethod,
+      paidAt: p.paidAt,
+      note: p.note,
     });
-    setPaymentForm({
-      amount: String(p.amountInCents / 100),
-      method: p.paymentMethod || "cash",
-      date: p.paidAt ? new Date(p.paidAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
-      note: p.note || "",
-    });
-    setProofFile(null);
-    setProofPreview(p.proofUrl || null);
-    setShowRecordPayment(true);
   };
 
-  const uploadProof = async (): Promise<string | null> => {
-    if (!proofFile) return proofPreview;
-    setUploadingProof(true);
-    try {
-      const fd = new FormData();
-      fd.append("file", proofFile);
-      const token = useSessionStore.getState().token;
-      const res = await fetch("/api/admin/upload", {
-        method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: fd,
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => null);
-        throw new Error(err?.error || "Upload failed");
-      }
-      const data = await res.json();
-      return data.url as string;
-    } finally { setUploadingProof(false); }
-  };
-
-  const recordPayment = async () => {
-    if (!paymentTarget) return;
-    setSavingPayment(true);
-    try {
-      const proofUrl = await uploadProof();
-      await api.patch(`/api/admin/membership-payments/${paymentTarget.paymentId}`, {
-        status: "PAID",
-        amountInCents: Math.round((Number(paymentForm.amount) || 0) * 100),
-        paymentMethod: paymentForm.method,
-        paidAt: paymentForm.date || undefined,
-        note: paymentForm.note || undefined,
-        proofUrl: proofUrl || undefined,
-      });
-      setShowRecordPayment(false);
-      setPaymentTarget(null);
-      setProofFile(null);
-      setProofPreview(null);
-      await fetchMemberships();
-    } catch (e) { alert((e as Error).message); }
-    finally { setSavingPayment(false); }
+  const handleMemberPaymentConfirm = async (entityId: string, result: PaymentConfirmResult) => {
+    await api.patch(`/api/admin/membership-payments/${entityId}`, {
+      status: result.status,
+      amountInCents: result.amountInCents,
+      paymentMethod: result.paymentMethod,
+      paidAt: result.paidAt,
+      note: result.note,
+      proofUrl: result.proofUrl,
+    });
+    setPaymentModalData(null);
+    await fetchMemberships();
   };
 
   const openPaymentHistory = async (m: MembershipRecord) => {
@@ -366,6 +317,16 @@ export default function MembershipsPage() {
     } catch (e) { alert((e as Error).message); }
   };
 
+  const handleMemberPaymentRevert = async (entityId: string) => {
+    await api.patch(`/api/admin/membership-payments/${entityId}`, { status: "UNPAID" });
+    if (historyMembership) {
+      const data = await api.get<PaymentRecord[]>(`/api/admin/membership-payments?membershipId=${historyMembership.id}`);
+      setPaymentHistory(data);
+    }
+    setPaymentModalData(null);
+    await fetchMemberships();
+  };
+
   const revertPaymentToUnpaid = async (paymentId: string) => {
     if (!confirm("Revert this payment to Unpaid?")) return;
     try {
@@ -374,25 +335,8 @@ export default function MembershipsPage() {
         const data = await api.get<PaymentRecord[]>(`/api/admin/membership-payments?membershipId=${historyMembership.id}`);
         setPaymentHistory(data);
       }
-      setShowRecordPayment(false);
-      setPaymentTarget(null);
       await fetchMemberships();
     } catch (e) { alert((e as Error).message); }
-  };
-
-  const handleProofSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setProofFile(file);
-    const reader = new FileReader();
-    reader.onload = () => setProofPreview(reader.result as string);
-    reader.readAsDataURL(file);
-  };
-
-  const removeProof = () => {
-    setProofFile(null);
-    setProofPreview(null);
-    if (proofInputRef.current) proofInputRef.current.value = "";
   };
 
   const activeTiers = tiers.filter((t) => t.isActive);
@@ -405,31 +349,39 @@ export default function MembershipsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-xl font-bold md:text-2xl">Memberships</h2>
-        <div className="flex items-center gap-2">
-          <select
-            value={selectedVenueId}
-            onChange={(e) => setSelectedVenueId(e.target.value)}
-            className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
-          >
-            {venues.map((v) => (
-              <option key={v.id} value={v.id}>{v.name}</option>
-            ))}
-          </select>
-          <button
-            onClick={() => setShowSettings(!showSettings)}
-            className={cn(
-              "flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
-              showSettings
-                ? "border-purple-500 bg-purple-600/20 text-purple-300"
-                : "border-neutral-700 bg-neutral-800 text-neutral-400 hover:text-white"
-            )}
-          >
-            <Settings className="h-4 w-4" /> Settings
-          </button>
-        </div>
+        <select
+          value={selectedVenueId}
+          onChange={(e) => setSelectedVenueId(e.target.value)}
+          className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
+        >
+          {venues.map((v) => (
+            <option key={v.id} value={v.id}>{v.name}</option>
+          ))}
+        </select>
       </div>
 
-      {showSettings && selectedVenueSettings && (
+      <div className="flex gap-1 border-b border-neutral-800">
+        {([
+          { key: "memberships" as const, label: "Memberships", icon: Crown },
+          { key: "settings" as const, label: "Settings", icon: Settings },
+        ]).map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px",
+              activeTab === tab.key
+                ? "border-purple-500 text-white"
+                : "border-transparent text-neutral-500 hover:text-neutral-300"
+            )}
+          >
+            <tab.icon className="h-4 w-4" />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "settings" && selectedVenueSettings && (
         <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
           <MembershipContactSection
             venueId={selectedVenueId}
@@ -439,6 +391,7 @@ export default function MembershipsPage() {
         </div>
       )}
 
+      {activeTab === "memberships" && <>
       {/* Payment Summary */}
       {paymentSummary && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -752,6 +705,8 @@ export default function MembershipsPage() {
         </div>
       </section>
 
+      </>}
+
       {/* Change Tier Modal */}
       {showChangeTier && (() => {
         const m = memberships.find((x) => x.id === showChangeTier);
@@ -799,115 +754,14 @@ export default function MembershipsPage() {
         );
       })()}
 
-      {/* Record Payment Modal */}
-      {showRecordPayment && paymentTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => { setShowRecordPayment(false); removeProof(); }}>
-          <div className="w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto rounded-2xl border border-neutral-700 bg-neutral-900 p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-lg font-bold">
-                  {paymentTarget.currentStatus === "PAID" ? "Payment Details" : "Record Payment"}
-                </h3>
-                <p className="text-sm text-neutral-400">
-                  For <span className="text-white font-medium">{paymentTarget.memberName}</span>
-                </p>
-              </div>
-              {paymentTarget.currentStatus === "PAID" && (
-                <span className="rounded-full bg-green-600/20 px-2.5 py-1 text-xs font-medium text-green-400">Paid</span>
-              )}
-            </div>
-
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-neutral-400">Amount ($)</label>
-                  <input type="text" inputMode="decimal" value={paymentForm.amount}
-                    onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
-                    className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="text-xs text-neutral-400">Method</label>
-                  <select value={paymentForm.method} onChange={(e) => setPaymentForm({ ...paymentForm, method: e.target.value })}
-                    className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none">
-                    <option value="cash">Cash</option>
-                    <option value="bank_transfer">Bank Transfer</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-neutral-400">Date</label>
-                <input type="date" value={paymentForm.date}
-                  onChange={(e) => setPaymentForm({ ...paymentForm, date: e.target.value })}
-                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none" />
-              </div>
-
-              {/* Proof Upload */}
-              <div>
-                <label className="text-xs text-neutral-400">Proof (QR screenshot, receipt...)</label>
-                <input ref={proofInputRef} type="file" accept="image/*" onChange={handleProofSelect} className="hidden" />
-                {proofPreview ? (
-                  <div className="mt-1.5 relative group/proof">
-                    <div className="relative w-full overflow-hidden rounded-xl border border-neutral-700 bg-neutral-800">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={proofPreview} alt="Payment proof" className="w-full max-h-48 object-contain" />
-                    </div>
-                    <div className="mt-1.5 flex gap-2">
-                      <button onClick={() => proofInputRef.current?.click()}
-                        className="flex items-center gap-1.5 rounded-lg bg-neutral-800 px-3 py-1.5 text-xs text-neutral-400 hover:text-white transition-colors">
-                        <Upload className="h-3 w-3" /> Replace
-                      </button>
-                      <button onClick={removeProof}
-                        className="flex items-center gap-1.5 rounded-lg bg-neutral-800 px-3 py-1.5 text-xs text-red-400 hover:text-red-300 transition-colors">
-                        <Trash2 className="h-3 w-3" /> Remove
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button onClick={() => proofInputRef.current?.click()}
-                    className="mt-1.5 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-neutral-700 bg-neutral-800/50 py-6 text-sm text-neutral-500 hover:border-neutral-600 hover:text-neutral-400 transition-colors">
-                    <ImageIcon className="h-5 w-5" />
-                    Upload proof image
-                  </button>
-                )}
-              </div>
-
-              <div>
-                <label className="text-xs text-neutral-400">Notes (optional)</label>
-                <textarea value={paymentForm.note} placeholder="e.g. Discount applied, paid via QR..."
-                  onChange={(e) => setPaymentForm({ ...paymentForm, note: e.target.value })}
-                  rows={2}
-                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none resize-none" />
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-2">
-              {paymentTarget.currentStatus === "PAID" ? (
-                <>
-                  <button onClick={recordPayment} disabled={savingPayment || uploadingProof}
-                    className="w-full rounded-xl bg-green-600 py-3 font-semibold text-white hover:bg-green-500 disabled:opacity-40">
-                    {savingPayment || uploadingProof ? "Saving..." : "Update Payment"}
-                  </button>
-                  <button onClick={() => revertPaymentToUnpaid(paymentTarget.paymentId)}
-                    className="w-full rounded-xl bg-amber-600/15 py-2.5 text-sm font-medium text-amber-400 hover:bg-amber-600/25 flex items-center justify-center gap-2 transition-colors">
-                    <Undo2 className="h-3.5 w-3.5" /> Revert to Unpaid
-                  </button>
-                  <button onClick={() => { setShowRecordPayment(false); removeProof(); }}
-                    className="w-full rounded-xl bg-neutral-800 py-2.5 text-sm font-medium text-neutral-400 hover:text-white transition-colors">Cancel</button>
-                </>
-              ) : (
-                <>
-                  <button onClick={recordPayment} disabled={savingPayment || uploadingProof || !paymentForm.amount}
-                    className="w-full rounded-xl bg-green-600 py-3 font-semibold text-white hover:bg-green-500 disabled:opacity-40">
-                    {savingPayment || uploadingProof ? "Saving..." : "Confirm Payment"}
-                  </button>
-                  <button onClick={() => { setShowRecordPayment(false); removeProof(); }}
-                    className="w-full rounded-xl bg-neutral-800 py-2.5 text-sm font-medium text-neutral-400 hover:text-white transition-colors">Cancel</button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
+      {/* Record Payment Modal (shared component) */}
+      {paymentModalData && (
+        <PaymentConfirmModal
+          data={paymentModalData}
+          onConfirm={handleMemberPaymentConfirm}
+          onRevert={paymentModalData.currentStatus === "PAID" ? handleMemberPaymentRevert : undefined}
+          onClose={() => setPaymentModalData(null)}
+        />
       )}
 
       {/* Payment History Drawer */}

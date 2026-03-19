@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { Plus, Shield, User, Pencil, Trash2, KeyRound, X, Check } from "lucide-react";
+import { Plus, Shield, User, Pencil, Trash2, KeyRound, X, Check, GraduationCap } from "lucide-react";
 
 interface StaffVenue {
   id: string;
@@ -15,6 +15,9 @@ interface Staff {
   name: string;
   phone: string;
   role: string;
+  isCoach: boolean;
+  coachBio: string | null;
+  coachPhoto: string | null;
   venues: StaffVenue[];
   createdAt: string;
 }
@@ -33,6 +36,8 @@ export default function StaffPage() {
     password: "",
     role: "staff" as "staff" | "superadmin",
     venueIds: [] as string[],
+    isCoach: false,
+    coachBio: "",
   });
   const [newPassword, setNewPassword] = useState("");
   const [saving, setSaving] = useState(false);
@@ -52,7 +57,7 @@ export default function StaffPage() {
   }, []);
 
   const openCreate = () => {
-    setForm({ name: "", phone: "", password: "", role: "staff", venueIds: [] });
+    setForm({ name: "", phone: "", password: "", role: "staff", venueIds: [], isCoach: false, coachBio: "" });
     setErr("");
     setModalMode("create");
   };
@@ -65,6 +70,8 @@ export default function StaffPage() {
       password: "",
       role: s.role as "staff" | "superadmin",
       venueIds: s.venues.map((v) => v.id),
+      isCoach: s.isCoach,
+      coachBio: s.coachBio || "",
     });
     setErr("");
     setModalMode("edit");
@@ -128,6 +135,8 @@ export default function StaffPage() {
         name: form.name,
         role: form.role,
         venueIds: form.venueIds,
+        isCoach: form.isCoach,
+        coachBio: form.coachBio || null,
       });
       await fetchAll();
       closeModal();
@@ -196,6 +205,11 @@ export default function StaffPage() {
                   )}
                   <span className="font-semibold truncate">{s.name}</span>
                   <span className="rounded bg-neutral-800 px-2 py-0.5 text-xs text-neutral-400 capitalize">{s.role}</span>
+                  {s.isCoach && (
+                    <span className="flex items-center gap-1 rounded bg-teal-600/20 px-2 py-0.5 text-xs text-teal-400">
+                      <GraduationCap className="h-3 w-3" /> Coach
+                    </span>
+                  )}
                 </div>
                 <p className="text-sm text-neutral-500 mb-2">{s.phone}</p>
                 <div className="flex flex-wrap gap-1">
@@ -320,6 +334,43 @@ export default function StaffPage() {
                     <p className="text-sm text-neutral-500">No venues available</p>
                   )}
                 </div>
+              </div>
+
+              <div className="border-t border-neutral-800 pt-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <GraduationCap className="h-4 w-4 text-teal-400" />
+                    <label className="text-sm text-neutral-300">Coach</label>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, isCoach: !form.isCoach })}
+                    className={cn(
+                      "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
+                      form.isCoach ? "bg-teal-600" : "bg-neutral-700"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transition-transform",
+                        form.isCoach ? "translate-x-5" : "translate-x-0"
+                      )}
+                    />
+                  </button>
+                </div>
+
+                {form.isCoach && (
+                  <div className="mt-3">
+                    <label className="mb-1.5 block text-sm text-neutral-400">Coach Bio</label>
+                    <textarea
+                      placeholder="Short bio for this coach..."
+                      value={form.coachBio}
+                      onChange={(e) => setForm({ ...form, coachBio: e.target.value })}
+                      rows={3}
+                      className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-white placeholder:text-neutral-500 focus:border-teal-500 focus:outline-none resize-none"
+                    />
+                  </div>
+                )}
               </div>
             </div>
 

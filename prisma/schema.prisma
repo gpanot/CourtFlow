@@ -122,6 +122,8 @@ model Venue {
   memberships     Membership[]
   bookings        Booking[]
   courtBlocks     CourtBlock[]
+  coachPackages   CoachPackage[]
+  coachLessons    CoachLesson[]
 
   @@map("venues")
 }
@@ -141,6 +143,7 @@ model Player {
   pushSubscriptions PushSubscription[]
   memberships       Membership[]
   bookings          Booking[]
+  coachLessons      CoachLesson[]
 
   @@map("players")
 }
@@ -166,13 +169,18 @@ model StaffMember {
   role                StaffRole @default(staff)
   passwordHash        String    @map("password_hash")
   onboardingCompleted Boolean   @default(false) @map("onboarding_completed")
+  isCoach             Boolean   @default(false) @map("is_coach")
+  coachBio            String?   @map("coach_bio")
+  coachPhoto          String?   @map("coach_photo")
   createdAt           DateTime  @default(now()) @map("created_at")
 
-  venues       Venue[]
-  auditLogs    AuditLog[]
-  sessions     Session[]
-  payments     StaffPayment[]  @relation("StaffPayments")
-  paidPayments StaffPayment[]  @relation("PaidByStaff")
+  venues        Venue[]
+  auditLogs     AuditLog[]
+  sessions      Session[]
+  payments      StaffPayment[]  @relation("StaffPayments")
+  paidPayments  StaffPayment[]  @relation("PaidByStaff")
+  coachPackages CoachPackage[]
+  coachLessons  CoachLesson[]
 
   @@map("staff_members")
 }
@@ -188,6 +196,7 @@ model Court {
   venue            Venue              @relation(fields: [venueId], references: [id])
   courtAssignments CourtAssignment[]
   bookings         Booking[]
+  coachLessons     CoachLesson[]
 
   @@map("courts")
 }
@@ -421,4 +430,72 @@ model OtpCode {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("otp_codes")
+}
+
+enum LessonType {
+  private
+  group
+}
+
+enum CoachLessonStatus {
+  confirmed
+  completed
+  cancelled
+  no_show
+}
+
+model CoachPackage {
+  id               String     @id @default(cuid())
+  coachId          String     @map("coach_id")
+  venueId          String     @map("venue_id")
+  name             String
+  description      String?
+  lessonType       LessonType @map("lesson_type")
+  durationMin      Int        @map("duration_min")
+  priceInCents     Int        @map("price_in_cents")
+  sessionsIncluded Int        @default(1) @map("sessions_included")
+  active           Boolean    @default(true)
+  sortOrder        Int        @default(0) @map("sort_order")
+  createdAt        DateTime   @default(now()) @map("created_at")
+
+  coach   StaffMember   @relation(fields: [coachId], references: [id])
+  venue   Venue         @relation(fields: [venueId], references: [id])
+  lessons CoachLesson[]
+
+  @@index([coachId])
+  @@index([venueId])
+  @@map("coach_packages")
+}
+
+model CoachLesson {
+  id            String            @id @default(cuid())
+  venueId       String            @map("venue_id")
+  coachId       String            @map("coach_id")
+  playerId      String            @map("player_id")
+  courtId       String?           @map("court_id")
+  packageId     String            @map("package_id")
+  date          DateTime          @db.Date
+  startTime     DateTime          @map("start_time")
+  endTime       DateTime          @map("end_time")
+  status        CoachLessonStatus @default(confirmed)
+  priceInCents  Int               @map("price_in_cents")
+  note          String?
+  paymentStatus String            @default("UNPAID") @map("payment_status")
+  paidAt        DateTime?         @map("paid_at")
+  paymentMethod String?           @map("payment_method")
+  proofUrl      String?           @map("proof_url")
+  paymentNote   String?           @map("payment_note")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  cancelledAt   DateTime?         @map("cancelled_at")
+
+  venue   Venue        @relation(fields: [venueId], references: [id])
+  coach   StaffMember  @relation(fields: [coachId], references: [id])
+  player  Player       @relation(fields: [playerId], references: [id])
+  court   Court?       @relation(fields: [courtId], references: [id])
+  package CoachPackage @relation(fields: [packageId], references: [id])
+
+  @@index([venueId, date])
+  @@index([coachId, date])
+  @@index([playerId])
+  @@map("coach_lessons")
 }
