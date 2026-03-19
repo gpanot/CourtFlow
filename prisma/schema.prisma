@@ -38,6 +38,19 @@ enum SessionStatus {
   closed
 }
 
+enum SessionType {
+  open_play
+  competition
+}
+
+enum CourtBlockType {
+  private_competition
+  private_event
+  maintenance
+  open_play
+  competition
+}
+
 enum QueueStatus {
   waiting
   assigned
@@ -62,6 +75,31 @@ enum StaffRole {
   superadmin
 }
 
+enum PaymentStatus {
+  UNPAID
+  PAID
+}
+
+enum MembershipStatus {
+  active
+  suspended
+  expired
+  cancelled
+}
+
+enum MembershipPaymentStatus {
+  UNPAID
+  PAID
+  OVERDUE
+}
+
+enum BookingStatus {
+  confirmed
+  cancelled
+  completed
+  no_show
+}
+
 model Venue {
   id                 String    @id @default(cuid())
   name               String
@@ -76,10 +114,14 @@ model Venue {
   tvText             String?   @map("tv_text")
   createdAt          DateTime  @default(now()) @map("created_at")
 
-  courts       Court[]
-  sessions     Session[]
-  staff        StaffMember[]
-  auditLogs    AuditLog[]
+  courts          Court[]
+  sessions        Session[]
+  staff           StaffMember[]
+  auditLogs       AuditLog[]
+  membershipTiers MembershipTier[]
+  memberships     Membership[]
+  bookings        Booking[]
+  courtBlocks     CourtBlock[]
 
   @@map("venues")
 }
@@ -97,6 +139,8 @@ model Player {
 
   queueEntries      QueueEntry[]
   pushSubscriptions PushSubscription[]
+  memberships       Membership[]
+  bookings          Booking[]
 
   @@map("players")
 }
@@ -124,8 +168,11 @@ model StaffMember {
   onboardingCompleted Boolean   @default(false) @map("onboarding_completed")
   createdAt           DateTime  @default(now()) @map("created_at")
 
-  venues    Venue[]
-  auditLogs AuditLog[]
+  venues       Venue[]
+  auditLogs    AuditLog[]
+  sessions     Session[]
+  payments     StaffPayment[]  @relation("StaffPayments")
+  paidPayments StaffPayment[]  @relation("PaidByStaff")
 
   @@map("staff_members")
 }
@@ -136,9 +183,11 @@ model Court {
   label           String
   status          CourtStatus @default(idle)
   activeInSession Boolean     @default(false) @map("active_in_session")
+  isBookable      Boolean     @default(false) @map("is_bookable")
 
   venue            Venue              @relation(fields: [venueId], references: [id])
   courtAssignments CourtAssignment[]
+  bookings         Booking[]
 
   @@map("courts")
 }
@@ -146,14 +195,19 @@ model Court {
 model Session {
   id           String        @id @default(cuid())
   venueId      String        @map("venue_id")
+  staffId      String?       @map("staff_id")
   date         DateTime      @default(now())
   openedAt     DateTime      @default(now()) @map("opened_at")
   closedAt     DateTime?     @map("closed_at")
   status       SessionStatus @default(open)
+  type         SessionType   @default(open_play)
+  title        String?
   gameTypeMix  Json?         @map("game_type_mix")
   warmupMode   String        @default("manual") @map("warmup_mode")
+  maxPlayers   Int?          @map("max_players")
 
   venue            Venue              @relation(fields: [venueId], references: [id])
+  staff            StaffMember?       @relation(fields: [staffId], references: [id])
   queueEntries     QueueEntry[]
   playerGroups     PlayerGroup[]
   courtAssignments CourtAssignment[]
@@ -226,6 +280,135 @@ model AuditLog {
   staff StaffMember? @relation(fields: [staffId], references: [id])
 
   @@map("audit_logs")
+}
+
+model StaffPayment {
+  id        String        @id @default(cuid())
+  staffId   String        @map("staff_id")
+  weekStart DateTime      @map("week_start")
+  totalHours Decimal      @db.Decimal(6, 1) @map("total_hours")
+  amount        Decimal?      @db.Decimal(10, 0)
+  paymentMethod String?       @map("payment_method")
+  status        PaymentStatus @default(UNPAID)
+  paidAt    DateTime?     @map("paid_at")
+  paidDate  DateTime?     @map("paid_date")
+  paidById  String?       @map("paid_by_id")
+  note      String?
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  staff  StaffMember  @relation("StaffPayments", fields: [staffId], references: [id])
+  paidBy StaffMember? @relation("PaidByStaff", fields: [paidById], references: [id])
+
+  @@unique([staffId, weekStart])
+  @@index([weekStart])
+  @@index([staffId])
+  @@map("staff_payments")
+}
+
+model MembershipTier {
+  id               String   @id @default(cuid())
+  venueId          String   @map("venue_id")
+  sortOrder        Int      @map("sort_order")
+  name             String
+  priceInCents     Int      @map("price_in_cents")
+  sessionsIncluded Int?     @map("sessions_included")
+  showBadge        Boolean  @default(false) @map("show_badge")
+  perks            Json     @default("[]")
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  venue       Venue        @relation(fields: [venueId], references: [id])
+  memberships Membership[]
+
+  @@unique([venueId, sortOrder])
+  @@map("membership_tiers")
+}
+
+model Membership {
+  id           String           @id @default(cuid())
+  playerId     String           @map("player_id")
+  venueId      String           @map("venue_id")
+  tierId       String           @map("tier_id")
+  status       MembershipStatus @default(active)
+  activatedAt  DateTime         @default(now()) @map("activated_at")
+  renewalDate  DateTime         @map("renewal_date")
+  sessionsUsed Int              @default(0) @map("sessions_used")
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+
+  player   Player              @relation(fields: [playerId], references: [id])
+  venue    Venue               @relation(fields: [venueId], references: [id])
+  tier     MembershipTier      @relation(fields: [tierId], references: [id])
+  payments MembershipPayment[]
+
+  @@unique([playerId, venueId])
+  @@index([venueId])
+  @@index([tierId])
+  @@map("memberships")
+}
+
+model MembershipPayment {
+  id            String                  @id @default(cuid())
+  membershipId  String                  @map("membership_id")
+  periodStart   DateTime                @map("period_start")
+  periodEnd     DateTime                @map("period_end")
+  amountInCents Int                     @map("amount_in_cents")
+  status        MembershipPaymentStatus @default(UNPAID)
+  paidAt        DateTime?               @map("paid_at")
+  paymentMethod String?                 @map("payment_method")
+  proofUrl      String?                 @map("proof_url")
+  note          String?
+  createdAt     DateTime                @default(now()) @map("created_at")
+
+  membership Membership @relation(fields: [membershipId], references: [id])
+
+  @@index([membershipId])
+  @@index([status])
+  @@map("membership_payments")
+}
+
+model CourtBlock {
+  id        String         @id @default(cuid())
+  venueId   String         @map("venue_id")
+  type      CourtBlockType
+  title     String?
+  note      String?
+  courtIds  String[]       @map("court_ids")
+  date      DateTime       @db.Date
+  startTime DateTime       @map("start_time")
+  endTime   DateTime       @map("end_time")
+  createdBy String?        @map("created_by")
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  venue Venue @relation(fields: [venueId], references: [id])
+
+  @@index([venueId, date])
+  @@map("court_blocks")
+}
+
+model Booking {
+  id           String        @id @default(cuid())
+  courtId      String        @map("court_id")
+  venueId      String        @map("venue_id")
+  playerId     String        @map("player_id")
+  date         DateTime      @db.Date
+  startTime    DateTime      @map("start_time")
+  endTime      DateTime      @map("end_time")
+  status       BookingStatus @default(confirmed)
+  priceInCents Int           @map("price_in_cents")
+  coPlayerIds  String[]      @map("co_player_ids")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  cancelledAt  DateTime?     @map("cancelled_at")
+
+  court  Court  @relation(fields: [courtId], references: [id])
+  venue  Venue  @relation(fields: [venueId], references: [id])
+  player Player @relation(fields: [playerId], references: [id])
+
+  @@unique([courtId, date, startTime])
+  @@index([venueId, date])
+  @@index([playerId])
+  @@map("bookings")
 }
 
 model OtpCode {

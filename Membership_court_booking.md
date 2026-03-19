@@ -251,7 +251,7 @@ Additional policy options deferred to V2:
   — No cancellation allowed
   — Admin-configurable per venue
 
-2.7 Staff / Admin View
+2.7 Admin View
 Court Overview gets timeline layer:
 
 Court A  [░░████░░░░████░░░░░░]

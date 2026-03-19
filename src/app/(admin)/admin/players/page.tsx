@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { Search, X, SlidersHorizontal, Users, UserPlus, Clock, Activity, Hourglass, Gauge, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Gamepad2, Star, MapPin, CalendarDays, Timer } from "lucide-react";
+import { Search, X, SlidersHorizontal, Users, UserPlus, Clock, Activity, Hourglass, Gauge, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Gamepad2, Star, MapPin, CalendarDays, Timer, Plus, Pencil, Trash2 } from "lucide-react";
 
 type SortKey = "name" | "gender" | "skillLevel" | "totalSessions" | "totalGames" | "totalPlayMinutes" | "totalWaitMinutes" | "waitPlayRatio" | "venues";
 type SortDir = "asc" | "desc";
@@ -89,6 +89,14 @@ export default function PlayersPage() {
 
   const [editingSkillId, setEditingSkillId] = useState<string | null>(null);
   const [savingSkillId, setSavingSkillId] = useState<string | null>(null);
+
+  const [showCreatePlayer, setShowCreatePlayer] = useState(false);
+  const [createForm, setCreateForm] = useState({ name: "", phone: "", gender: "male", skillLevel: "beginner", avatar: "🏓" });
+  const [creating, setCreating] = useState(false);
+
+  const [editMode, setEditMode] = useState(false);
+  const [editForm, setEditForm] = useState({ name: "", phone: "", gender: "", skillLevel: "", avatar: "" });
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -220,6 +228,56 @@ export default function PlayersPage() {
     }
   };
 
+  const createPlayer = async () => {
+    if (!createForm.name.trim() || !createForm.phone.trim()) return;
+    setCreating(true);
+    try {
+      await api.post("/api/admin/players", createForm);
+      setShowCreatePlayer(false);
+      setCreateForm({ name: "", phone: "", gender: "male", skillLevel: "beginner", avatar: "🏓" });
+      await fetchPlayers();
+    } catch (e) { alert((e as Error).message); }
+    finally { setCreating(false); }
+  };
+
+  const startEditPlayer = () => {
+    if (!detailPlayer) return;
+    setEditForm({
+      name: detailPlayer.name,
+      phone: detailPlayer.phone,
+      gender: detailPlayer.gender,
+      skillLevel: detailPlayer.skillLevel,
+      avatar: detailPlayer.avatar,
+    });
+    setEditMode(true);
+  };
+
+  const saveEditPlayer = async () => {
+    if (!detailPlayer) return;
+    setSavingEdit(true);
+    try {
+      await api.patch(`/api/admin/players/${detailPlayer.id}`, editForm);
+      setEditMode(false);
+      setPlayers((prev) =>
+        prev.map((p) => p.id === detailPlayer.id ? { ...p, ...editForm } : p)
+      );
+      setDetailPlayer((prev) => prev ? { ...prev, ...editForm } : prev);
+      await fetchPlayers();
+    } catch (e) { alert((e as Error).message); }
+    finally { setSavingEdit(false); }
+  };
+
+  const deletePlayer = async () => {
+    if (!detailPlayer) return;
+    if (!confirm(`Delete "${detailPlayer.name}"? This action cannot be undone.`)) return;
+    try {
+      await api.delete(`/api/admin/players/${detailPlayer.id}`);
+      setDetailPlayer(null);
+      setDetailSessions([]);
+      await fetchPlayers();
+    } catch (e) { alert((e as Error).message); }
+  };
+
   const fmtPlayTime = (m: number) => {
     if (m < 60) return `${m}m`;
     const h = Math.floor(m / 60);
@@ -232,7 +290,15 @@ export default function PlayersPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold md:text-2xl">Player Directory</h2>
-        <span className="text-sm text-neutral-500">{total} player{total !== 1 ? "s" : ""}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-neutral-500">{total} player{total !== 1 ? "s" : ""}</span>
+          <button
+            onClick={() => setShowCreatePlayer(true)}
+            className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-500"
+          >
+            <Plus className="h-4 w-4" /> Add Player
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -557,6 +623,76 @@ export default function PlayersPage() {
         </div>
       )}
 
+      {/* Create Player Modal */}
+      {showCreatePlayer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowCreatePlayer(false)}>
+          <div className="w-full max-w-md mx-4 rounded-2xl border border-neutral-700 bg-neutral-900 p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-bold">Add Player</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-neutral-400">Name</label>
+                <input
+                  type="text"
+                  value={createForm.name}
+                  onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                  placeholder="Player name"
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="text-xs text-neutral-400">Phone</label>
+                <input
+                  type="tel"
+                  value={createForm.phone}
+                  onChange={(e) => setCreateForm({ ...createForm, phone: e.target.value })}
+                  placeholder="+1234567890"
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-neutral-400">Gender</label>
+                  <select
+                    value={createForm.gender}
+                    onChange={(e) => setCreateForm({ ...createForm, gender: e.target.value })}
+                    className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
+                  >
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-neutral-400">Skill Level</label>
+                  <select
+                    value={createForm.skillLevel}
+                    onChange={(e) => setCreateForm({ ...createForm, skillLevel: e.target.value })}
+                    className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
+                  >
+                    <option value="beginner">Beginner</option>
+                    <option value="intermediate">Intermediate</option>
+                    <option value="advanced">Advanced</option>
+                    <option value="pro">Pro</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={createPlayer}
+                disabled={!createForm.name.trim() || !createForm.phone.trim() || creating}
+                className="flex-1 rounded-xl bg-purple-600 py-3 font-semibold text-white hover:bg-purple-500 disabled:opacity-40"
+              >{creating ? "Creating..." : "Add Player"}</button>
+              <button
+                onClick={() => setShowCreatePlayer(false)}
+                className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
+              >Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Player detail drawer */}
       {detailPlayer && (
         <PlayerDetailPanel
@@ -568,9 +704,17 @@ export default function PlayersPage() {
           onToggleSkill={() => setEditingSkillId(editingSkillId === detailPlayer.id ? null : detailPlayer.id)}
           onSelectSkill={(level) => updateSkillLevel(detailPlayer.id, level)}
           onCloseSkill={() => setEditingSkillId(null)}
-          onClose={() => { setDetailPlayer(null); setDetailSessions([]); setEditingSkillId(null); }}
+          onClose={() => { setDetailPlayer(null); setDetailSessions([]); setEditingSkillId(null); setEditMode(false); }}
           fmtDate={fmtDate}
           fmtMin={fmtMin}
+          editMode={editMode}
+          editForm={editForm}
+          setEditForm={setEditForm}
+          savingEdit={savingEdit}
+          onStartEdit={startEditPlayer}
+          onSaveEdit={saveEditPlayer}
+          onCancelEdit={() => setEditMode(false)}
+          onDelete={deletePlayer}
         />
       )}
     </div>
@@ -806,6 +950,14 @@ function PlayerDetailPanel({
   onClose,
   fmtDate,
   fmtMin,
+  editMode,
+  editForm,
+  setEditForm,
+  savingEdit,
+  onStartEdit,
+  onSaveEdit,
+  onCancelEdit,
+  onDelete,
 }: {
   player: PlayerRecord;
   sessions: PlayerSession[];
@@ -818,12 +970,20 @@ function PlayerDetailPanel({
   onClose: () => void;
   fmtDate: (d: string) => string;
   fmtMin: (m: number) => string;
+  editMode: boolean;
+  editForm: { name: string; phone: string; gender: string; skillLevel: string; avatar: string };
+  setEditForm: (f: typeof editForm) => void;
+  savingEdit: boolean;
+  onStartEdit: () => void;
+  onSaveEdit: () => void;
+  onCancelEdit: () => void;
+  onDelete: () => void;
 }) {
-  const totalGamesFromSessions = sessions.reduce((sum, s) => sum + s.gamesPlayed, 0);
-  const totalPlayFromSessions = sessions.reduce((sum, s) => sum + s.totalPlayMinutes, 0);
   const avgFeedback = sessions.filter((s) => s.feedback).length > 0
     ? (sessions.reduce((sum, s) => sum + (s.feedback?.experience ?? 0), 0) / sessions.filter((s) => s.feedback).length).toFixed(1)
     : null;
+
+  const inputCls = "w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none";
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -842,40 +1002,101 @@ function PlayerDetailPanel({
               <p className="text-xs text-neutral-500 tabular-nums">{player.phone}</p>
             </div>
           </div>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-white">
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-1">
+            {!editMode && (
+              <>
+                <button onClick={onStartEdit} className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-white" title="Edit player">
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button onClick={onDelete} className="rounded-lg p-1.5 text-neutral-400 hover:bg-red-900/40 hover:text-red-400" title="Delete player">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </>
+            )}
+            <button onClick={onClose} className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-white">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         <div className="p-4 space-y-4">
-          {/* Player info */}
-          <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-              <p className="text-[11px] text-neutral-500 mb-1">Skill Level</p>
-              <SkillBadge
-                playerId={player.id}
-                level={player.skillLevel}
-                editing={editingSkill}
-                saving={savingSkill}
-                onToggle={onToggleSkill}
-                onSelect={onSelectSkill}
-                onClose={onCloseSkill}
-              />
+          {/* Edit form */}
+          {editMode ? (
+            <div className="space-y-3 rounded-xl border border-purple-600/30 bg-purple-600/5 p-4">
+              <h4 className="text-sm font-semibold text-purple-300">Edit Player</h4>
+              <div>
+                <label className="text-xs text-neutral-400">Name</label>
+                <input type="text" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className={inputCls} />
+              </div>
+              <div>
+                <label className="text-xs text-neutral-400">Phone</label>
+                <input type="tel" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} className={inputCls} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-neutral-400">Gender</label>
+                  <select value={editForm.gender} onChange={(e) => setEditForm({ ...editForm, gender: e.target.value })} className={inputCls}>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-neutral-400">Skill Level</label>
+                  <select value={editForm.skillLevel} onChange={(e) => setEditForm({ ...editForm, skillLevel: e.target.value })} className={inputCls}>
+                    <option value="beginner">Beginner</option>
+                    <option value="intermediate">Intermediate</option>
+                    <option value="advanced">Advanced</option>
+                    <option value="pro">Pro</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-neutral-400">Avatar Emoji</label>
+                <input type="text" value={editForm.avatar} onChange={(e) => setEditForm({ ...editForm, avatar: e.target.value })} className={inputCls} />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={onSaveEdit}
+                  disabled={!editForm.name.trim() || !editForm.phone.trim() || savingEdit}
+                  className="flex-1 rounded-lg bg-purple-600 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-40"
+                >{savingEdit ? "Saving..." : "Save"}</button>
+                <button
+                  onClick={onCancelEdit}
+                  className="flex-1 rounded-lg bg-neutral-800 py-2 text-sm text-neutral-400 hover:text-white"
+                >Cancel</button>
+              </div>
             </div>
-            <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-              <p className="text-[11px] text-neutral-500 mb-1">Gender</p>
-              <p className="text-sm font-medium capitalize">{player.gender}</p>
+          ) : (
+            /* Player info */
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+                <p className="text-[11px] text-neutral-500 mb-1">Skill Level</p>
+                <SkillBadge
+                  playerId={player.id}
+                  level={player.skillLevel}
+                  editing={editingSkill}
+                  saving={savingSkill}
+                  onToggle={onToggleSkill}
+                  onSelect={onSelectSkill}
+                  onClose={onCloseSkill}
+                />
+              </div>
+              <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+                <p className="text-[11px] text-neutral-500 mb-1">Gender</p>
+                <p className="text-sm font-medium capitalize">{player.gender}</p>
+              </div>
+              <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+                <p className="text-[11px] text-neutral-500 mb-1">Registered</p>
+                <p className="text-sm font-medium">{fmtDate(player.createdAt)}</p>
+              </div>
+              <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+                <p className="text-[11px] text-neutral-500 mb-1">Last Seen</p>
+                <p className="text-sm font-medium">{player.lastSeen ? fmtDate(player.lastSeen.date) : "—"}</p>
+                {player.lastSeen && <p className="text-[10px] text-neutral-500">{player.lastSeen.venue}</p>}
+              </div>
             </div>
-            <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-              <p className="text-[11px] text-neutral-500 mb-1">Registered</p>
-              <p className="text-sm font-medium">{fmtDate(player.createdAt)}</p>
-            </div>
-            <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-              <p className="text-[11px] text-neutral-500 mb-1">Last Seen</p>
-              <p className="text-sm font-medium">{player.lastSeen ? fmtDate(player.lastSeen.date) : "—"}</p>
-              {player.lastSeen && <p className="text-[10px] text-neutral-500">{player.lastSeen.venue}</p>}
-            </div>
-          </div>
+          )}
 
           {/* Aggregate stats */}
           <div className="grid grid-cols-4 gap-2">

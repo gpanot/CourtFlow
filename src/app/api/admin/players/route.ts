@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
-import { json, error } from "@/lib/api-helpers";
+import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
@@ -203,6 +203,40 @@ export async function GET(request: NextRequest) {
 
     return json({ players: result, total, page, limit, stats });
   } catch (e) {
+    return error((e as Error).message, 500);
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    requireSuperAdmin(request.headers);
+    const body = await parseBody<{
+      name: string;
+      phone: string;
+      gender: string;
+      skillLevel?: string;
+      avatar?: string;
+    }>(request);
+
+    if (!body.name?.trim()) return error("Name is required", 400);
+    if (!body.phone?.trim()) return error("Phone is required", 400);
+    if (!body.gender) return error("Gender is required", 400);
+
+    const player = await prisma.player.create({
+      data: {
+        name: body.name.trim(),
+        phone: body.phone.trim(),
+        gender: body.gender as never,
+        skillLevel: (body.skillLevel as never) ?? "beginner",
+        avatar: body.avatar || "🏓",
+      },
+    });
+
+    return json(player, 201);
+  } catch (e) {
+    if ((e as { code?: string }).code === "P2002") {
+      return error("A player with this phone number already exists", 409);
+    }
     return error((e as Error).message, 500);
   }
 }

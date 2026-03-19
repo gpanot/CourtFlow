@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     const venues = await prisma.venue.findMany({
       where: { staff: { some: { id: auth.id } } },
       include: {
-        courts: true,
+        courts: { orderBy: { label: "asc" } },
         sessions: {
           where: { status: "open" },
           take: 1,
@@ -44,6 +44,18 @@ export async function POST(request: NextRequest) {
           maxGroupSize: 4,
           maxSkillGap: 1,
           defaultCourtType: "mixed",
+          bookingConfig: {
+            slotDurationMinutes: 60,
+            bookingStartHour: 8,
+            bookingEndHour: 22,
+            defaultPriceInCents: 0,
+            pricingRules: [],
+            cancellationHours: 24,
+          },
+          membershipConfig: {
+            contactWhatsApp: null,
+            contactEmail: null,
+          },
         },
       },
     });

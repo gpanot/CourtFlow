@@ -6,14 +6,17 @@ import { useSessionStore } from "@/stores/session-store";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
-import { LayoutDashboard, MapPin, Users, UserCircle, BarChart3, Monitor, LogOut, Menu, X } from "lucide-react";
+import { LayoutDashboard, MapPin, Users, UserCircle, BarChart3, Monitor, Banknote, Crown, CalendarDays, LogOut, Menu, X } from "lucide-react";
 import { SetupWizardBanner } from "@/components/setup-wizard-banner";
 
 const navItems = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
   { href: "/admin/live", label: "Live Sessions", icon: Monitor },
   { href: "/admin/venues", label: "Venues", icon: MapPin },
+  { href: "/admin/memberships", label: "Memberships", icon: Crown },
+  { href: "/admin/bookings", label: "Bookings", icon: CalendarDays },
   { href: "/admin/staff", label: "Staff", icon: Users },
+  { href: "/admin/payroll", label: "Payroll", icon: Banknote },
   { href: "/admin/players", label: "Players", icon: UserCircle },
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
 ];
