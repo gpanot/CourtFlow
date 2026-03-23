@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { useSessionStore } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { StaffDashboard } from "./dashboard";
-import { Shield, Clipboard, Phone, Lock, Eye, EyeOff, ChevronDown } from "lucide-react";
+import { Shield, Clipboard, Phone, Lock, Eye, EyeOff } from "lucide-react";
 import { CourtFlowLogo } from "@/components/courtflow-logo";
 import {
   isBiometricSupported,
@@ -29,28 +28,13 @@ export default function StaffPage() {
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [showDemo, setShowDemo] = useState(false);
   const [pendingVenues, setPendingVenues] = useState<StaffVenue[] | null>(null);
   const [showRoleChoice, setShowRoleChoice] = useState(false);
   const [loginVenues, setLoginVenues] = useState<StaffVenue[]>([]);
   const [canBioLogin, setCanBioLogin] = useState(false);
   const [bioLoginName, setBioLoginName] = useState("");
   const [bioStatus, setBioStatus] = useState<"idle" | "verifying" | "success" | "failed">("idle");
-  const [demoUnlocked, setDemoUnlocked] = useState(false);
-  const titleTapCount = useRef(0);
-  const titleTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
-
-  const handleTitleTap = () => {
-    titleTapCount.current += 1;
-    if (titleTapTimer.current) clearTimeout(titleTapTimer.current);
-    if (titleTapCount.current >= 5) {
-      setDemoUnlocked(true);
-      titleTapCount.current = 0;
-      return;
-    }
-    titleTapTimer.current = setTimeout(() => { titleTapCount.current = 0; }, 2000);
-  };
 
   useEffect(() => {
     if (token && staffId && role === "superadmin") {
@@ -292,7 +276,7 @@ export default function StaffPage() {
       <div className="relative w-full max-w-[360px]">
         {/* Logo */}
         <div className="mb-8 flex justify-center">
-          <CourtFlowLogo size="large" dark asLink={false} onTitleClick={handleTitleTap} />
+          <CourtFlowLogo size="large" dark asLink={false} />
         </div>
 
         {/* Card */}
@@ -405,67 +389,6 @@ export default function StaffPage() {
           </form>
         </div>
 
-        {/* Demo shortcuts — hidden until title tapped 5× */}
-        {demoUnlocked && (
-        <div className="mt-6">
-          <button
-            type="button"
-            onClick={() => setShowDemo((v) => !v)}
-            className="mx-auto flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-neutral-600 transition-colors hover:text-neutral-400"
-          >
-            Demo accounts
-            <ChevronDown className={`h-3 w-3 transition-transform ${showDemo ? "rotate-180" : ""}`} />
-          </button>
-          {showDemo && (
-            <div className="mt-3 space-y-3">
-              <div>
-                <p className="mb-1.5 text-center text-[10px] font-medium uppercase tracking-wider text-neutral-700">Local</p>
-                <div className="flex justify-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => { setPhone("+10000000001"); setPassword("staff123"); }}
-                    className="rounded-md border border-neutral-800 bg-neutral-900/60 px-4 py-1.5 text-xs font-medium text-neutral-400 transition-colors hover:border-neutral-700 hover:text-white"
-                  >
-                    Staff
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setPhone("+10000000000"); setPassword("admin123"); }}
-                    className="rounded-md border border-neutral-800 bg-neutral-900/60 px-4 py-1.5 text-xs font-medium text-neutral-400 transition-colors hover:border-neutral-700 hover:text-white"
-                  >
-                    Admin
-                  </button>
-                </div>
-              </div>
-              <div>
-                <p className="mb-1.5 text-center text-[10px] font-medium uppercase tracking-wider text-neutral-700">Railway Prod</p>
-                <div className="flex justify-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => { setPhone("+10000000001"); setPassword("staff123"); }}
-                    className="rounded-md border border-neutral-800 bg-neutral-900/60 px-4 py-1.5 text-xs font-medium text-neutral-400 transition-colors hover:border-neutral-700 hover:text-white"
-                  >
-                    Staff
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setPhone("+10000000000"); setPassword("admin123"); }}
-                    className="rounded-md border border-neutral-800 bg-neutral-900/60 px-4 py-1.5 text-xs font-medium text-neutral-400 transition-colors hover:border-neutral-700 hover:text-white"
-                  >
-                    Admin
-                  </button>
-                </div>
-              </div>
-              <Link
-                href="/"
-                className="block text-center text-xs text-neutral-600 transition-colors hover:text-neutral-400"
-              >
-                &larr; Back to home
-              </Link>
-            </div>
-          )}
-        </div>
-        )}
       </div>
     </div>
   );

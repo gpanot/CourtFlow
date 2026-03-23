@@ -35,6 +35,9 @@ yarn-error.log*
 .env.local
 .env.production
 
+# credentials
+CREDENTIALS.md
+
 # keep example
 !.env.example
 

@@ -40,7 +40,7 @@ async function main() {
     });
   }
 
-  const adminPassword = bcrypt.hashSync("admin123", 10);
+  const adminPassword = bcrypt.hashSync("Cf!Adm1n#2026xQ9", 10);
   await prisma.staffMember.upsert({
     where: { phone: "+10000000000" },
     update: { venues: { connect: [{ id: venue.id }] } },
@@ -64,7 +64,7 @@ async function main() {
       name: "Staff Member",
       phone: "+10000000001",
       role: "staff",
-      passwordHash: bcrypt.hashSync("staff123", 10),
+      passwordHash: bcrypt.hashSync("Cf!Staff#2026mR7", 10),
       venues: { connect: [{ id: venue.id }] },
     },
   });
@@ -72,8 +72,8 @@ async function main() {
   console.log("Seed complete:");
   console.log(`  Venue: ${venue.name}`);
   console.log(`  Courts: ${courtLabels.join(", ")}`);
-  console.log(`  Super Admin: +10000000000 / admin123`);
-  console.log(`  Staff: +10000000001 / staff123`);
+  console.log(`  Super Admin: +10000000000 / Cf!Adm1n#2026xQ9`);
+  console.log(`  Staff: +10000000001 / Cf!Staff#2026mR7`);
 }
 
 main()

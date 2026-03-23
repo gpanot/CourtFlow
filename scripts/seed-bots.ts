@@ -1,5 +1,5 @@
 const BASE_URL = "http://localhost:3000";
-const VENUE_ID = "cmmipc6n50001t52zvovqpmly";
+const VENUE_ID = "demo-venue-1";
 const BOT_COUNT = 62;
 const DELAY_BETWEEN_JOINS_MS = 3000;
 
