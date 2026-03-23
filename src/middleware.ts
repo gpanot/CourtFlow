@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const SITE_PASSWORD = process.env.SITE_PASSWORD || "CourtFlow2026!";
 const COOKIE_NAME = "cf-site-access";
 const TOKEN_VALUE = "granted";
 
@@ -11,7 +10,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (pathname === "/api/gate/verify") {
+  if (pathname.startsWith("/api/gate/")) {
     return NextResponse.next();
   }
 
