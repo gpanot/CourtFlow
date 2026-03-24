@@ -97,7 +97,7 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
   };
 
   return (
-    <div className="flex min-h-dvh flex-col p-6">
+    <div className="flex min-h-dvh flex-col p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,24px))]">
       {/* Header */}
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-3">

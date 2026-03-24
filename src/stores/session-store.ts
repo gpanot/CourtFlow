@@ -58,7 +58,9 @@ export const useSessionStore = create<SessionStore>()(
 
 function expireTemporarySession() {
   const state = useSessionStore.getState();
-  if (!state.token || state.rememberMe) return;
+  // Only clear when the user explicitly opted out of "remember me" (staff).
+  // `rememberMe === undefined` from older persisted state must mean "remember" (default true).
+  if (!state.token || state.rememberMe !== false) return;
   if (!sessionStorage.getItem(SESSION_ALIVE_KEY)) {
     state.clearAuth();
   }

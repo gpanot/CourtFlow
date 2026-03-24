@@ -57,7 +57,7 @@ export function CourtAssignedScreen({ notification, venueId, onRefresh }: CourtA
 
   if (isWarmup) {
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center bg-amber-950/20 p-6 text-center">
+      <div className="flex min-h-dvh flex-col items-center justify-center bg-amber-950/20 p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,24px))] text-center">
         <div className="mb-6 flex items-center gap-2 rounded-full bg-amber-500/20 px-4 py-1 text-sm font-medium text-amber-400">
           <Flame className="h-4 w-4" />
           Warm Up
