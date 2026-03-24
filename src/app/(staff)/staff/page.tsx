@@ -7,13 +7,6 @@ import { api } from "@/lib/api-client";
 import { StaffDashboard } from "./dashboard";
 import { Shield, Clipboard, Phone, Lock, Eye, EyeOff } from "lucide-react";
 import { CourtFlowLogo } from "@/components/courtflow-logo";
-import {
-  isBiometricSupported,
-  authenticateStaffBiometric,
-  getBiometricStaff,
-  storeBiometricStaff,
-  clearBiometricStaff,
-} from "@/lib/biometric";
 
 interface StaffVenue {
   id: string;
@@ -31,9 +24,6 @@ export default function StaffPage() {
   const [pendingVenues, setPendingVenues] = useState<StaffVenue[] | null>(null);
   const [showRoleChoice, setShowRoleChoice] = useState(false);
   const [loginVenues, setLoginVenues] = useState<StaffVenue[]>([]);
-  const [canBioLogin, setCanBioLogin] = useState(false);
-  const [bioLoginName, setBioLoginName] = useState("");
-  const [bioStatus, setBioStatus] = useState<"idle" | "verifying" | "success" | "failed">("idle");
   const router = useRouter();
 
   useEffect(() => {
@@ -43,74 +33,10 @@ export default function StaffPage() {
   }, [token, staffId, role]);
 
   useEffect(() => {
-    if (token && staffId) return;
-    setCanBioLogin(true);
-    const staff = getBiometricStaff();
-    if (staff) setBioLoginName(staff.staffName);
-  }, [token, staffId]);
-
-  const handleBioLogin = async () => {
-    setBioStatus("verifying");
-    setErr("");
-    const result = await authenticateStaffBiometric();
-    if (!result.success) {
-      setBioStatus("failed");
-      setErr("Biometric verification failed. Try again or use your credentials.");
-      return;
+    if (token && staffId && role === "superadmin") {
+      setShowRoleChoice(true);
     }
-
-    const sid = result.userId ?? getBiometricStaff()?.staffId;
-    if (!sid) {
-      setBioStatus("failed");
-      setErr("No account found for this passkey. Please sign in with your credentials.");
-      return;
-    }
-
-    try {
-      const data = await api.post<{
-        token: string;
-        staff: {
-          id: string;
-          name: string;
-          role: string;
-          venues: StaffVenue[];
-          venueId: string | null;
-          onboardingCompleted: boolean;
-        };
-      }>("/api/auth/staff-biometric-login", { staffId: sid });
-
-      setBioStatus("success");
-      storeBiometricStaff({ staffId: data.staff.id, staffName: data.staff.name });
-      clearAuth();
-      setAuth({
-        token: data.token,
-        staffId: data.staff.id,
-        staffName: data.staff.name,
-        role: data.staff.role as "staff" | "superadmin",
-        venueId: data.staff.venueId,
-        onboardingCompleted: data.staff.onboardingCompleted,
-        rememberMe,
-      });
-
-      if (data.staff.role === "superadmin") {
-        if (!data.staff.onboardingCompleted) {
-          router.replace("/onboarding");
-          return;
-        }
-        setLoginVenues(data.staff.venues);
-        setShowRoleChoice(true);
-        return;
-      }
-
-      if (!data.staff.venueId && data.staff.venues.length > 1) {
-        setPendingVenues(data.staff.venues);
-      }
-    } catch {
-      setBioStatus("failed");
-      setErr("Login failed. Please sign in with your credentials.");
-      clearBiometricStaff();
-    }
-  };
+  }, [token, staffId, role]);
 
   if (token && staffId && venueId && !showRoleChoice) {
     return <StaffDashboard />;
@@ -229,7 +155,6 @@ export default function StaffPage() {
         };
       }>("/api/auth/staff-login", { phone, password });
 
-      storeBiometricStaff({ staffId: data.staff.id, staffName: data.staff.name });
       clearAuth();
       setAuth({
         token: data.token,
@@ -281,45 +206,6 @@ export default function StaffPage() {
 
         {/* Card */}
         <div className="rounded-2xl border border-neutral-800/70 bg-neutral-900/50 p-6 backdrop-blur-sm">
-          {canBioLogin && (
-            <div className="mb-5 space-y-4">
-              {bioStatus === "verifying" ? (
-                <div className="flex flex-col items-center gap-3 py-3">
-                  <div className="flex h-14 w-14 animate-pulse items-center justify-center rounded-full bg-green-600/20 ring-2 ring-green-500/50">
-                    <svg className="h-7 w-7 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M7.864 4.243A7.5 7.5 0 0 1 19.5 10.5c0 2.92-.556 5.709-1.568 8.268M5.742 6.364A7.465 7.465 0 0 0 4.5 10.5a48.667 48.667 0 0 0-1.26 7.584M12 10.5a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm-5.684 7.59a47.5 47.5 0 0 1-.192-3.59 5.25 5.25 0 0 1 10.5 0 48.22 48.22 0 0 1-.472 6.932M9.016 18.87a47.074 47.074 0 0 1-.397-4.37 3 3 0 0 1 6 0c0 1.528-.085 3.04-.248 4.525" />
-                    </svg>
-                  </div>
-                  <p className="text-sm text-neutral-400">Verifying...</p>
-                </div>
-              ) : bioStatus === "success" ? (
-                <div className="flex flex-col items-center gap-3 py-3">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-green-600/20 ring-2 ring-green-500">
-                    <svg className="h-7 w-7 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                    </svg>
-                  </div>
-                  <p className="text-sm font-medium text-green-400">Welcome back!</p>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleBioLogin}
-                  className="flex w-full items-center justify-center gap-2.5 rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-all hover:bg-green-500"
-                >
-                  <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M7.864 4.243A7.5 7.5 0 0 1 19.5 10.5c0 2.92-.556 5.709-1.568 8.268M5.742 6.364A7.465 7.465 0 0 0 4.5 10.5a48.667 48.667 0 0 0-1.26 7.584M12 10.5a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm-5.684 7.59a47.5 47.5 0 0 1-.192-3.59 5.25 5.25 0 0 1 10.5 0 48.22 48.22 0 0 1-.472 6.932M9.016 18.87a47.074 47.074 0 0 1-.397-4.37 3 3 0 0 1 6 0c0 1.528-.085 3.04-.248 4.525" />
-                  </svg>
-                  {bioLoginName ? `Sign in as ${bioLoginName}` : "Sign in with Biometric"}
-                </button>
-              )}
-              <div className="flex items-center gap-3">
-                <div className="h-px flex-1 bg-neutral-800" />
-                <span className="text-[11px] text-neutral-600">or use credentials</span>
-                <div className="h-px flex-1 bg-neutral-800" />
-              </div>
-            </div>
-          )}
           <form onSubmit={handleLogin} className="space-y-5">
             <div className="text-center">
               <h1 className="text-xl font-semibold text-white">Welcome back</h1>

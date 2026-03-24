@@ -39,9 +39,22 @@ export async function subscribeToPush(playerId: string): Promise<PushSubscribeRe
     if (permission === "denied") return { ok: false, reason: "denied" };
     if (permission !== "granted") return { ok: false, reason: "dismissed" };
 
-    const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    let vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+
     if (!vapidKey) {
-      console.error("[Push] NEXT_PUBLIC_VAPID_PUBLIC_KEY is not set");
+      try {
+        const res = await fetch("/api/push/vapid-public-key");
+        if (res.ok) {
+          const data = await res.json();
+          vapidKey = data.vapidKey;
+        }
+      } catch (err) {
+        console.error("Failed to fetch dynamic VAPID key:", err);
+      }
+    }
+
+    if (!vapidKey) {
+      console.error("[Push] VAPID public key is not set globally or via API");
       return { ok: false, reason: "no-vapid" };
     }
 
