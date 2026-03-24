@@ -1,8 +1,9 @@
 "use client";
 
-import { Download, Share } from "lucide-react";
+import { Download } from "lucide-react";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 import { cn } from "@/lib/cn";
+import { IOSInstallBanner } from "./ios-install-banner";
 
 const cardClassName =
   "flex w-full items-start gap-3 rounded-xl border border-green-800/50 bg-green-950/40 p-3 text-left select-none touch-manipulation [-webkit-touch-callout:none]";
@@ -12,6 +13,10 @@ export function InstallCard() {
 
   if (!showBanner) return null;
 
+  if (isIos && !canPrompt) {
+    return <IOSInstallBanner />;
+  }
+
   const body = (
     <>
       <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green-600/20 text-green-400">
@@ -19,11 +24,7 @@ export function InstallCard() {
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-green-400">Install CourtFlow</p>
-        {isIos && !canPrompt ? (
-          <p className="mt-0.5 text-xs text-neutral-400">
-            Tap <Share className="inline h-3 w-3 -mt-0.5" /> then &quot;Add to Home Screen&quot; for the best experience.
-          </p>
-        ) : canPrompt ? (
+        {canPrompt ? (
           <>
             <p className="mt-0.5 text-xs text-neutral-400">
               Get instant alerts when it&apos;s your turn. No app store needed.

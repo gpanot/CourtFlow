@@ -1,0 +1,63 @@
+"use client";
+
+import { useState } from "react";
+import { usePwaInstall } from "@/hooks/use-pwa-install";
+
+const steps = [
+  <>
+    Tap the <strong className="text-white">share icon</strong> at the top right of your browser
+  </>,
+  <>
+    Select <strong className="text-white">&quot;Add to Home Screen&quot;</strong> from the menu
+  </>,
+];
+
+export function IOSInstallBanner() {
+  const { showBanner, isIos, canPrompt } = usePwaInstall();
+  const [dismissed, setDismissed] = useState(false);
+
+  if (!showBanner || !isIos || canPrompt || dismissed) return null;
+
+  return (
+    <div
+      role="region"
+      aria-label="Add CourtFlow to your home screen"
+      className="fixed bottom-0 left-0 right-0 z-[100] border-t border-[#1a5c38] bg-[#0f3320] px-4 pb-5 pt-3"
+    >
+      <div
+        className="pointer-events-none absolute right-5 top-[-80px] flex flex-col items-center"
+        aria-hidden
+      >
+        <div
+          className="h-0 w-0 border-x-[5px] border-x-transparent border-b-[8px] border-b-green-500"
+        />
+        <div className="h-[68px] w-px bg-gradient-to-b from-green-500 to-transparent" />
+      </div>
+
+      <div className="mb-2.5 flex items-center justify-between">
+        <span className="text-[13px] font-medium text-green-500">Add to your home screen</span>
+        <button
+          type="button"
+          onClick={() => setDismissed(true)}
+          className="cursor-pointer border-0 bg-transparent p-0 text-base text-neutral-500"
+          aria-label="Dismiss"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {steps.map((text, i) => (
+          <div key={i} className="flex items-start gap-2.5">
+            <div
+              className="mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border border-green-500/30 bg-green-500/10 text-[10px] font-medium text-green-500"
+            >
+              {i + 1}
+            </div>
+            <span className="text-[13px] leading-snug text-neutral-300">{text}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
