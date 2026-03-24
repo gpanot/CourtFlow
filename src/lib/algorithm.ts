@@ -49,6 +49,66 @@ function deriveGameType(players: QueueCandidate[]): GameType {
   return "mixed";
 }
 
+/** Counts binary genders only; `other` is tracked separately. */
+function countMaleFemaleOther(players: QueueCandidate[]): {
+  male: number;
+  female: number;
+  other: number;
+} {
+  let male = 0;
+  let female = 0;
+  let other = 0;
+  for (const p of players) {
+    if (p.gender === "male") male++;
+    else if (p.gender === "female") female++;
+    else other++;
+  }
+  return { male, female, other };
+}
+
+/**
+ * Pickleball rotation: allow men's (4M), women's (4F), or true mixed (2M+2F).
+ * Disallow 3–1 splits; those players are skipped in favor of a valid foursome
+ * deeper in the queue when possible (minority waits).
+ * If `gender` is `other`, we do not block the queue — treat as pass-through.
+ */
+function isValidPickleballGenderFoursome(players: QueueCandidate[]): boolean {
+  if (players.length !== COURT_PLAYER_COUNT) return false;
+  const { male, female, other } = countMaleFemaleOther(players);
+  if (other > 0) return true;
+  return (
+    (male === 4 && female === 0) ||
+    (female === 4 && male === 0) ||
+    (male === 2 && female === 2)
+  );
+}
+
+function queueIndexOf(candidate: QueueCandidate, orderedQueue: QueueCandidate[]): number {
+  return orderedQueue.findIndex((x) => x.entryId === candidate.entryId);
+}
+
+/** Every k-combination of indices from [0..n-1], for small k only. */
+function forEachCombinationIndices(n: number, k: number, cb: (indices: number[]) => void): void {
+  if (k === 0) {
+    cb([]);
+    return;
+  }
+  if (k > n) return;
+  const chosen: number[] = [];
+  function dfs(start: number, depth: number) {
+    if (depth === k) {
+      cb([...chosen]);
+      return;
+    }
+    for (let i = start; i <= n - (k - depth); i++) {
+      chosen.push(i);
+      dfs(i + 1, depth + 1);
+      chosen.pop();
+    }
+  }
+  dfs(0, 0);
+}
+
 async function getSessionGameTypeCounts(sessionId: string): Promise<Record<GameType, number>> {
   const assignments = await prisma.courtAssignment.findMany({
     where: { sessionId, isWarmup: false },
@@ -88,8 +148,9 @@ function scoreMixDeviation(
 
 /**
  * Select the best 4 players from the queue, considering:
- * 1. Game type mix targets (if set)
- * 2. FIFO fairness (penalise skipping too far)
+ * 1. Valid pickleball gender mix (4M, 4F, or 2M+2F — never 3–1)
+ * 2. Game type mix targets (if set)
+ * 3. FIFO fairness (penalise skipping too far)
  */
 function selectBestFour(
   candidates: QueueCandidate[],
@@ -98,12 +159,6 @@ function selectBestFour(
 ): QueueCandidate[] | null {
   if (candidates.length < COURT_PLAYER_COUNT) return null;
 
-  if (!target) {
-    return candidates.slice(0, COURT_PLAYER_COUNT);
-  }
-
-  // With a target: evaluate combinations within the lookahead window.
-  // To keep it fast, we limit combinations (max 30 choose 4 = 27,405).
   const pool = candidates.slice(0, QUEUE_LOOKAHEAD);
   const n = pool.length;
   if (n < COURT_PLAYER_COUNT) return null;
@@ -116,9 +171,10 @@ function selectBestFour(
       for (let c = b + 1; c < n - 1; c++) {
         for (let d = c + 1; d < n; d++) {
           const combo = [pool[a], pool[b], pool[c], pool[d]];
+          if (!isValidPickleballGenderFoursome(combo)) continue;
 
           const gameType = deriveGameType(combo);
-          const mixScore = scoreMixDeviation(gameType, currentCounts, target);
+          const mixScore = target ? scoreMixDeviation(gameType, currentCounts, target) : 0;
 
           // Penalise skipping: average index position (0-based).
           // FIFO-perfect = indices 0,1,2,3 → avg 1.5 → penalty 0
@@ -135,6 +191,41 @@ function selectBestFour(
       }
     }
   }
+
+  return bestCombo;
+}
+
+/**
+ * Pick solos from the pool to complete the group; minimises the same FIFO skip
+ * penalty as selectBestFour (average queue index among all four).
+ */
+function findBestFillForGroup(
+  members: QueueCandidate[],
+  solos: QueueCandidate[],
+  slotsNeeded: number,
+  orderedQueue: QueueCandidate[]
+): QueueCandidate[] | null {
+  const pool = solos.slice(0, QUEUE_LOOKAHEAD);
+  if (pool.length < slotsNeeded) return null;
+
+  const n = pool.length;
+  let bestCombo: QueueCandidate[] | null = null;
+  let bestScore = Infinity;
+
+  forEachCombinationIndices(n, slotsNeeded, (ix) => {
+    const fill = ix.map((i) => pool[i]);
+    const combo = [...members, ...fill];
+    if (!isValidPickleballGenderFoursome(combo)) return;
+
+    const indices = combo.map((p) => queueIndexOf(p, orderedQueue));
+    if (indices.some((i) => i < 0)) return;
+    const avgIdx = indices.reduce((a, b) => a + b, 0) / COURT_PLAYER_COUNT;
+    const skipPenalty = (avgIdx - 1.5) * 2;
+    if (skipPenalty < bestScore) {
+      bestScore = skipPenalty;
+      bestCombo = combo;
+    }
+  });
 
   return bestCombo;
 }
@@ -165,10 +256,14 @@ function findGroupWithFill(candidates: QueueCandidate[]): QueueCandidate[] | nul
 
   for (const [, members] of sortedGroups) {
     const slotsNeeded = COURT_PLAYER_COUNT - members.length;
-    if (slotsNeeded === 0) return members;
-    if (solos.length >= slotsNeeded) {
-      return [...members, ...solos.slice(0, slotsNeeded)];
+    if (slotsNeeded === 0) {
+      if (isValidPickleballGenderFoursome(members)) return members;
+      continue;
     }
+    if (solos.length < slotsNeeded) continue;
+
+    const filled = findBestFillForGroup(members, solos, slotsNeeded, candidates);
+    if (filled) return filled;
   }
 
   return null;
@@ -506,7 +601,7 @@ export async function findReplacement(
       candidate,
     ];
 
-    if (checkSkillBalance(allOnCourt)) {
+    if (checkSkillBalance(allOnCourt) && isValidPickleballGenderFoursome(allOnCourt)) {
       await prisma.queueEntry.update({
         where: { id: entry.id },
         data: { status: "playing" },
