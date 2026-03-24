@@ -258,7 +258,7 @@ export function PlayerHome() {
   // Venue selection
   if (!selectedVenue) {
     return (
-      <div className="flex min-h-dvh flex-col p-6">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,24px))]">
         <div className="mb-8 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
@@ -300,7 +300,7 @@ export function PlayerHome() {
 
   if (initialLoading) {
     return (
-      <div className="flex min-h-dvh items-center justify-center">
+      <div className="flex min-h-0 flex-1 items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-700 border-t-green-500" />
       </div>
     );
@@ -309,8 +309,8 @@ export function PlayerHome() {
   // Home - Join the Game
   if (view === "home") {
     return (
-      <div className="flex min-h-dvh flex-col p-6">
-        <div className="mb-auto flex items-center justify-between">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,24px))]">
+        <div className="shrink-0 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setShowProfile(true)}
@@ -328,7 +328,7 @@ export function PlayerHome() {
           </button>
         </div>
 
-        <div className="my-auto flex flex-col items-center gap-6">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 overflow-hidden">
           {errorMsg && (
             <div className="w-full rounded-xl bg-red-900/30 border border-red-800 p-3 text-center">
               <p className="text-sm text-red-400">{errorMsg}</p>
@@ -389,7 +389,7 @@ export function PlayerHome() {
           )}
         </div>
 
-        <div className="mt-auto space-y-3">
+        <div className="shrink-0 space-y-3">
           <NotificationCard />
           <InstallCard />
         </div>
@@ -436,7 +436,7 @@ export function PlayerHome() {
 
   if (view === "assigned") {
     return (
-      <div className="relative">
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         {profileOverlay}
         <CourtAssignedScreen notification={notification} venueId={selectedVenue} onRefresh={fetchPlayerState} />
       </div>
@@ -445,7 +445,7 @@ export function PlayerHome() {
 
   if (view === "playing") {
     return (
-      <div className="relative">
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         {profileOverlay}
         <InGameScreen notification={notification} />
       </div>
@@ -454,7 +454,7 @@ export function PlayerHome() {
 
   if (view === "break" && queueEntry) {
     return (
-      <div className="relative">
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         {profileOverlay}
         <BreakScreen
           breakUntil={queueEntry.breakUntil || ""}

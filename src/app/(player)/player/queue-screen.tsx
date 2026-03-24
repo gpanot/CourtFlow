@@ -97,9 +97,9 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
   };
 
   return (
-    <div className="flex min-h-dvh flex-col p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,24px))]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-6 pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,24px))]">
       {/* Header */}
-      <div className="mb-2 flex items-center justify-between">
+      <div className="mb-2 shrink-0 flex items-center justify-between">
         <div className="flex items-center gap-3">
           {onShowProfile && (
             <button
@@ -123,13 +123,13 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
         </div>
       </div>
 
-      <div className="space-y-3">
+      <div className="shrink-0 space-y-3">
         <NotificationCard />
         <InstallCard />
       </div>
 
       {/* Center content */}
-      <div className="my-auto flex flex-col items-center gap-3">
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-hidden">
         <p className={cn(
           "font-bold text-green-500",
           info?.group ? "text-6xl" : "text-8xl"
@@ -161,7 +161,7 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
       </div>
 
       {/* Bottom actions */}
-      <div className="mt-auto">
+      <div className="shrink-0">
         <button
           onClick={() => setShowBreakConfirm(true)}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-neutral-800 py-3 text-sm font-medium text-neutral-300"

@@ -57,31 +57,33 @@ export function CourtAssignedScreen({ notification, venueId, onRefresh }: CourtA
 
   if (isWarmup) {
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center bg-amber-950/20 p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,24px))] text-center">
-        <div className="mb-6 flex items-center gap-2 rounded-full bg-amber-500/20 px-4 py-1 text-sm font-medium text-amber-400">
-          <Flame className="h-4 w-4" />
-          Warm Up
+      <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-amber-950/20 px-6 pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,24px))] text-center">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 overflow-hidden">
+          <div className="mb-4 flex shrink-0 items-center gap-2 rounded-full bg-amber-500/20 px-4 py-1 text-sm font-medium text-amber-400">
+            <Flame className="h-4 w-4" />
+            Warm Up
+          </div>
+
+          <h1 className="text-7xl font-bold text-white">{courtLabel}</h1>
+
+          <p className="mt-2 text-lg text-amber-300">Go warm up freely!</p>
+
+          {teammates.length > 0 && (
+            <div className="mt-6 w-full max-w-xs space-y-2">
+              <p className="text-xs text-neutral-500 uppercase">On this court</p>
+              {teammates.map((t, i) => (
+                <div key={i} className="flex items-center justify-center gap-2">
+                  <span className="text-lg font-medium">{t.name}</span>
+                  <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", skillBadgeColors[t.skillLevel] || "bg-neutral-600")}>
+                    {t.skillLevel[0].toUpperCase()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        <h1 className="text-7xl font-bold text-white">{courtLabel}</h1>
-
-        <p className="mt-2 text-lg text-amber-300">Go warm up freely!</p>
-
-        {teammates.length > 0 && (
-          <div className="mt-8 w-full max-w-xs space-y-2">
-            <p className="text-xs text-neutral-500 uppercase">On this court</p>
-            {teammates.map((t, i) => (
-              <div key={i} className="flex items-center justify-center gap-2">
-                <span className="text-lg font-medium">{t.name}</span>
-                <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", skillBadgeColors[t.skillLevel] || "bg-neutral-600")}>
-                  {t.skillLevel[0].toUpperCase()}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="mt-auto w-full max-w-xs pt-12">
+        <div className="shrink-0 w-full max-w-xs self-center">
           <button
             onClick={() => setShowBreakConfirm(true)}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-neutral-800 py-3 text-sm font-medium text-neutral-300"
