@@ -133,7 +133,10 @@ export function PlayerHome() {
         players: { id: string; name: string; skillLevel: string; groupId: string | null }[];
       }
 
-      const courtsState = await api.get<{ courts: CourtState[] }>(`/api/courts/state?venueId=${selectedVenue}`);
+      const courtsState = await api.get<{
+        courts: CourtState[];
+        warmupDurationSeconds?: number;
+      }>(`/api/courts/state?venueId=${selectedVenue}`);
       const hasActive = courtsState.courts.some((c) => c.status === "active");
       const hasWarmup = courtsState.courts.some((c) => c.status === "warmup");
       const allIdle = courtsState.courts.length > 0 && courtsState.courts.every((c) => c.status === "idle");
@@ -155,6 +158,9 @@ export function PlayerHome() {
                 courtLabel: myCourt.label,
                 gameType: myCourt.assignment?.gameType || "mixed",
                 isWarmup: myCourt.assignment?.isWarmup || false,
+                ...(typeof courtsState.warmupDurationSeconds === "number"
+                  ? { warmupDurationSeconds: courtsState.warmupDurationSeconds }
+                  : {}),
                 teammates: myCourt.players
                   .filter((p) => p.id !== playerId)
                   .map((p) => ({ name: p.name, skillLevel: p.skillLevel, groupId: p.groupId })),

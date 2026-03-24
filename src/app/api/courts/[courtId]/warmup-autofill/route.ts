@@ -10,6 +10,7 @@ import {
 } from "@/lib/algorithm";
 import { getSkillIndex, MAX_SKILL_GAP } from "@/lib/constants";
 import type { GameType, SkillLevel } from "@prisma/client";
+import { getVenueWarmupDurationSeconds } from "@/lib/warmup-settings";
 
 function isSkillCompatible(candidateLevel: SkillLevel, courtPlayerLevels: SkillLevel[]): boolean {
   const candidateIdx = getSkillIndex(candidateLevel as SkillLevel);
@@ -49,6 +50,8 @@ export async function POST(
       where: { venueId: court.venueId, status: "open" },
     });
     if (!session) return error("No active session", 400);
+
+    const warmupDurationSeconds = await getVenueWarmupDurationSeconds(court.venueId);
 
     const existingAssignment = court.courtAssignments[0];
     const currentPlayerIds = existingAssignment?.playerIds ?? [];
@@ -148,13 +151,20 @@ export async function POST(
           courtId: court.id,
           assignmentId: existingAssignment.id,
           isWarmup: true,
+          warmupDurationSeconds,
           teammates: [],
           gameType: gameTypeForCourt,
         });
       }
 
       if (updatedPlayerIds.length >= 4) {
-        scheduleWarmupTransitionPublic(existingAssignment.id, court.venueId, session.id, court.id);
+        await scheduleWarmupTransitionPublic(
+          existingAssignment.id,
+          court.venueId,
+          session.id,
+          court.id,
+          warmupDurationSeconds
+        );
       }
     } else {
       const assignment = await prisma.courtAssignment.create({
@@ -187,13 +197,20 @@ export async function POST(
           courtId: court.id,
           assignmentId: assignment.id,
           isWarmup: true,
+          warmupDurationSeconds,
           teammates: [],
           gameType: gameTypeForCourt,
         });
       }
 
       if (newPlayerIds.length >= 4) {
-        scheduleWarmupTransitionPublic(assignment.id, court.venueId, session.id, court.id);
+        await scheduleWarmupTransitionPublic(
+          assignment.id,
+          court.venueId,
+          session.id,
+          court.id,
+          warmupDurationSeconds
+        );
       }
     }
 

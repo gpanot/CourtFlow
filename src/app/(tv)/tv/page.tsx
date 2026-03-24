@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { CourtCard, type CourtData } from "@/components/court-card";
 import { QueuePanel, type QueueEntryData } from "@/components/queue-panel";
 import { useSocket } from "@/hooks/use-socket";
@@ -11,16 +12,23 @@ import { Wifi, WifiOff, Flame, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import { TvReactionOverlay } from "@/components/tv-reaction-overlay";
+import { resolveTvLocale, tvI18n } from "@/i18n/tv-i18n";
+
+type VenueTvSettings = { logoSpin?: boolean; tvLocale?: string };
 
 interface VenueState {
   session: { id: string; status: string } | null;
   courts: CourtData[];
   queue: QueueEntryData[];
+  warmupDurationSeconds?: number;
 }
 
 export default function TVDisplayPage() {
+  const { t } = useTranslation("translation", { i18n: tvI18n });
   const [venueId, setVenueId] = useState<string | null>(null);
-  const [venues, setVenues] = useState<{ id: string; name: string; logoUrl?: string | null; tvText?: string | null; settings?: { logoSpin?: boolean } }[]>([]);
+  const [venues, setVenues] = useState<
+    { id: string; name: string; logoUrl?: string | null; tvText?: string | null; settings?: VenueTvSettings }[]
+  >([]);
   const [state, setState] = useState<VenueState>({ session: null, courts: [], queue: [] });
   const [connected, setConnected] = useState(true);
   const [clock, setClock] = useState(new Date());
@@ -38,7 +46,9 @@ export default function TVDisplayPage() {
   }, []);
 
   useEffect(() => {
-    api.get<{ id: string; name: string; logoUrl?: string | null; tvText?: string | null; settings?: { logoSpin?: boolean } }[]>("/api/venues").then(setVenues).catch(console.error);
+    api.get<
+      { id: string; name: string; logoUrl?: string | null; tvText?: string | null; settings?: VenueTvSettings }[]
+    >("/api/venues").then(setVenues).catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -66,10 +76,22 @@ export default function TVDisplayPage() {
     const offQueue = on("queue:updated", () => fetchState());
     const offSession = on("session:updated", () => fetchState());
     const offVenue = on("venue:updated", (...args: unknown[]) => {
-      const data = args[0] as { id: string; logoUrl?: string | null; tvText?: string | null; name?: string; settings?: { logoSpin?: boolean } };
+      const data = args[0] as {
+        id: string;
+        logoUrl?: string | null;
+        tvText?: string | null;
+        name?: string;
+        settings?: VenueTvSettings;
+      };
       setVenues((prev) => prev.map((v) =>
         v.id === data.id
-          ? { ...v, ...(data.logoUrl !== undefined && { logoUrl: data.logoUrl }), ...(data.tvText !== undefined && { tvText: data.tvText }), ...(data.name && { name: data.name }), ...(data.settings && { settings: data.settings }) }
+          ? {
+              ...v,
+              ...(data.logoUrl !== undefined && { logoUrl: data.logoUrl }),
+              ...(data.tvText !== undefined && { tvText: data.tvText }),
+              ...(data.name && { name: data.name }),
+              ...(data.settings && { settings: { ...v.settings, ...data.settings } }),
+            }
           : v
       ));
     });
@@ -86,11 +108,19 @@ export default function TVDisplayPage() {
     };
   }, [venueId, on, fetchState]);
 
+  const currentVenue = venues.find((v) => v.id === venueId);
+  const tvLocale = resolveTvLocale(currentVenue?.settings?.tvLocale);
+
+  useEffect(() => {
+    const lng = venueId ? tvLocale : "en";
+    void tvI18n.changeLanguage(lng);
+  }, [venueId, tvLocale]);
+
   if (!venueId) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-black p-8">
-        <h1 className="text-4xl font-bold text-green-500">CourtFlow TV</h1>
-        <p className="text-xl text-neutral-400">Select a venue</p>
+        <h1 className="text-4xl font-bold text-green-500">{t("title")}</h1>
+        <p className="text-xl text-neutral-400">{t("selectVenue")}</p>
         <div className="grid gap-3">
           {venues.map((v) => (
             <button
@@ -106,14 +136,13 @@ export default function TVDisplayPage() {
           ))}
         </div>
         <Link href="/" className="text-sm text-neutral-500 hover:text-neutral-300">
-          ← Home
+          {t("homeLink")}
         </Link>
       </div>
     );
   }
 
-  const currentVenue = venues.find((v) => v.id === venueId);
-  const venueName = currentVenue?.name || "Court Display";
+  const venueName = currentVenue?.name || t("defaultVenueName");
   const venueLogoUrl = currentVenue?.logoUrl || null;
   const venueTvText = currentVenue?.tvText || null;
   const logoSpin = !!currentVenue?.settings?.logoSpin;
@@ -163,30 +192,49 @@ export default function TVDisplayPage() {
       >
         {/* Top bar */}
         <header className="shrink-0 flex items-center justify-between border-b border-neutral-800 px-[calc(2*var(--tw,1vw))] py-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]">
-          <div className="flex items-center gap-[calc(1.5*var(--tw,1vw))]">
-            {venueLogoUrl ? (
+          <div className="flex min-w-0 items-center gap-[calc(1.25*var(--tw,1vw))]">
+            <div className="flex shrink-0 items-center gap-[calc(0.75*var(--tw,1vw))]">
               <img
-                src={venueLogoUrl}
-                alt={venueName}
-                className="h-[clamp(1.5rem,calc(3*var(--tw,1vw)),3rem)] w-auto object-contain"
+                src="/apple-touch-icon.png"
+                alt=""
+                width={180}
+                height={180}
+                className="h-[clamp(1.25rem,calc(2.5*var(--tw,1vw)),2.25rem)] w-[clamp(1.25rem,calc(2.5*var(--tw,1vw)),2.25rem)] rounded-lg object-cover"
               />
-            ) : (
-              <h1 className="font-bold text-green-500 text-[clamp(1rem,calc(2*var(--tw,1vw)),2rem)]">CourtFlow</h1>
-            )}
-            <span className="text-neutral-300 text-[clamp(0.875rem,calc(1.8*var(--tw,1vw)),1.75rem)]">{venueName}</span>
+              <span className="font-bold text-green-500 text-[clamp(0.9rem,calc(1.75*var(--tw,1vw)),1.75rem)] whitespace-nowrap">
+                CourtFlow
+              </span>
+            </div>
+            <div
+              className="h-[clamp(1.25rem,calc(2*var(--tw,1vw)),2rem)] w-px shrink-0 bg-neutral-700"
+              aria-hidden
+            />
+            <div className="flex min-w-0 items-center gap-[calc(1*var(--tw,1vw))]">
+              {venueLogoUrl && (
+                <img
+                  src={venueLogoUrl}
+                  alt={venueName}
+                  className="h-[clamp(1.5rem,calc(3*var(--tw,1vw)),3rem)] w-auto max-w-[min(40vw,12rem)] shrink-0 object-contain"
+                />
+              )}
+              <span className="truncate text-neutral-300 text-[clamp(0.875rem,calc(1.8*var(--tw,1vw)),1.75rem)]">
+                {venueName}
+              </span>
+            </div>
           </div>
           <div className="flex items-center gap-[calc(1.5*var(--tw,1vw))]">
             {isWarmupMode ? (
               <span className="flex items-center gap-2 rounded-full bg-amber-500/20 px-3 py-1 font-medium text-amber-400 text-[clamp(0.65rem,calc(1.2*var(--tw,1vw)),1rem)]">
-                <Flame className="h-[calc(1.2*var(--tw,1vw))] w-[calc(1.2*var(--tw,1vw))] min-h-3 min-w-3" /> Warm Up · {waitingCount} players checked in
+                <Flame className="h-[calc(1.2*var(--tw,1vw))] w-[calc(1.2*var(--tw,1vw))] min-h-3 min-w-3" />{" "}
+                {t("warmupCheckedIn", { count: waitingCount })}
               </span>
             ) : state.session ? (
               <span className="rounded-full bg-green-600/20 px-3 py-1 font-medium text-green-400 text-[clamp(0.65rem,calc(1.2*var(--tw,1vw)),1rem)]">
-                Session Active &middot; {courtCount} courts
+                {t("sessionActiveCourts", { count: courtCount })}
               </span>
             ) : (
               <span className="rounded-full bg-neutral-700 px-3 py-1 font-medium text-neutral-400 text-[clamp(0.65rem,calc(1.2*var(--tw,1vw)),1rem)]">
-                No Active Session
+                {t("noActiveSession")}
               </span>
             )}
             <span className="tabular-nums text-neutral-400 text-[clamp(0.875rem,calc(1.8*var(--tw,1vw)),1.75rem)]">
@@ -200,7 +248,7 @@ export default function TVDisplayPage() {
                   ? "text-green-400 bg-green-900/40 hover:bg-green-900/60"
                   : "text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300"
               )}
-              title={rotated ? "Back to portrait" : "Rotate for TV (landscape)"}
+              title={rotated ? t("rotatePortrait") : t("rotateLandscape")}
             >
               <RotateCcw className="h-[calc(1.6*var(--tw,1vw))] w-[calc(1.6*var(--tw,1vw))] min-h-3.5 min-w-3.5" />
             </button>
@@ -209,7 +257,7 @@ export default function TVDisplayPage() {
             ) : (
               <div className="flex items-center gap-1 text-amber-400">
                 <WifiOff className="h-[calc(1.8*var(--tw,1vw))] w-[calc(1.8*var(--tw,1vw))] min-h-4 min-w-4" />
-                <span className="text-[clamp(0.65rem,calc(1.1*var(--tw,1vw)),0.875rem)]">Reconnecting...</span>
+                <span className="text-[clamp(0.65rem,calc(1.1*var(--tw,1vw)),0.875rem)]">{t("reconnecting")}</span>
               </div>
             )}
           </div>
@@ -243,7 +291,9 @@ export default function TVDisplayPage() {
                     ))}
                   </div>
                 )}
-                <p className="text-neutral-600 text-[clamp(1rem,calc(2.5*var(--tw,1vw)),2.5rem)] mt-[calc(2*var(--th,1vh))]">Waiting for session to start...</p>
+                <p className="text-neutral-600 text-[clamp(1rem,calc(2.5*var(--tw,1vw)),2.5rem)] mt-[calc(2*var(--th,1vh))]">
+                  {t("waitingSessionStart")}
+                </p>
               </div>
             ) : isWarmupMode ? (
               <div className="flex h-full min-h-0 flex-col gap-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]">
@@ -260,26 +310,37 @@ export default function TVDisplayPage() {
                     className="font-bold text-amber-300 leading-tight"
                     style={{ fontSize: "clamp(1rem, min(calc(3 * var(--tw, 1vw)), calc(4 * var(--th, 1vh))), min(2.75rem, calc(8 * var(--th, 1vh))))" }}
                   >
-                    Warm Up Time
+                    {t("warmupTime")}
                   </p>
                   <p
                     className="text-amber-400/70 leading-snug"
                     style={{ fontSize: "clamp(0.65rem, min(calc(1.5 * var(--tw, 1vw)), calc(2 * var(--th, 1vh))), min(1.35rem, calc(4 * var(--th, 1vh))))" }}
                   >
-                    Go to your assigned court and warm up freely
+                    {t("warmupHeroHint")}
                   </p>
                 </div>
                 {/* Court cards in warmup state */}
                 <div className={cn("grid min-h-0 flex-1 overflow-hidden gap-[min(var(--tw,1vw),var(--th,1vh))] auto-rows-fr", gridCols)}>
                   {sortedCourts.map((court) => (
-                    <CourtCard key={court.id} court={court} variant="tv" warmup={true} />
+                    <CourtCard
+                      key={court.id}
+                      court={court}
+                      variant="tv"
+                      warmup={true}
+                      warmupDurationSeconds={state.warmupDurationSeconds}
+                    />
                   ))}
                 </div>
               </div>
             ) : (
               <div className={cn("grid h-full min-h-0 overflow-hidden gap-[min(var(--tw,1vw),var(--th,1vh))] auto-rows-fr", gridCols)}>
                 {sortedCourts.map((court) => (
-                  <CourtCard key={court.id} court={court} variant="tv" />
+                  <CourtCard
+                    key={court.id}
+                    court={court}
+                    variant="tv"
+                    warmupDurationSeconds={state.warmupDurationSeconds}
+                  />
                 ))}
               </div>
             )}
@@ -313,7 +374,7 @@ export default function TVDisplayPage() {
                   className="mb-[calc(0.4*var(--th,1vh))] font-semibold text-amber-400 uppercase tracking-wider"
                   style={{ fontSize: "clamp(0.36rem, min(calc(0.8 * var(--tw, 1vw)), calc(1.2 * var(--th, 1vh))), 0.7rem)" }}
                 >
-                  Checked In
+                  {t("checkedIn")}
                 </p>
               )}
               <div className="flex-1 min-h-0 overflow-y-auto">

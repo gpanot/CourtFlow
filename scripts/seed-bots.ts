@@ -33,16 +33,37 @@ function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+/** When set, first `round(count * pct / 100)` bots are male, rest female. */
+function genderForMix(index: number, count: number, menPercent: number): string {
+  const menCount = Math.round((count * menPercent) / 100);
+  return index < menCount ? "male" : "female";
+}
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function getOrCreateBot(index: number): Promise<{ token: string; playerId: string } | null> {
+async function getOrCreateBot(
+  index: number,
+  count: number,
+  menPercent: number | null,
+): Promise<{ token: string; playerId: string } | null> {
   const phone = `+1900${String(index).padStart(4, "0")}`;
   const name = NAMES[index] || `Bot ${index + 1}`;
-  const gender = pick(GENDERS);
+  const gender =
+    menPercent != null ? genderForMix(index, count, menPercent) : pick(GENDERS);
   const skill = pick(SKILLS);
   const avatar = pick(AVATARS);
+
+  async function syncProfile(token: string, playerId: string) {
+    await fetch(`${BASE_URL}/api/players/${playerId}`, {
+      method: "PATCH",
+      headers: jsonHeaders({ Authorization: `Bearer ${token}` }),
+      body: JSON.stringify(
+        menPercent != null ? { avatar, gender } : { avatar },
+      ),
+    });
+  }
 
   // Try to register
   const regRes = await fetch(`${BASE_URL}/api/auth/register`, {
@@ -53,12 +74,7 @@ async function getOrCreateBot(index: number): Promise<{ token: string; playerId:
 
   if (regRes.ok) {
     const data = await regRes.json();
-    // Set avatar
-    await fetch(`${BASE_URL}/api/players/${data.player.id}`, {
-      method: "PATCH",
-      headers: jsonHeaders({ Authorization: `Bearer ${data.token}` }),
-      body: JSON.stringify({ avatar }),
-    });
+    await syncProfile(data.token, data.player.id);
     return { token: data.token, playerId: data.player.id };
   }
 
@@ -76,16 +92,26 @@ async function getOrCreateBot(index: number): Promise<{ token: string; playerId:
       body: JSON.stringify({ phone, code: otpData.code }),
     });
     const verifyData = await verifyRes.json();
+    await syncProfile(verifyData.token, verifyData.player.id);
     return { token: verifyData.token, playerId: verifyData.player.id };
   }
 
   return null;
 }
 
+function parseMenPercent(): number | null {
+  const raw = process.argv[5] ?? process.env.COURTFLOW_BOT_MEN_PERCENT;
+  if (raw === undefined || raw === "") return null;
+  const n = parseFloat(String(raw));
+  if (!Number.isFinite(n)) return null;
+  return Math.min(100, Math.max(0, n));
+}
+
 async function main() {
   const mode = process.argv[2] || "staggered";
   const count = parseInt(process.argv[3] || String(BOT_COUNT), 10);
   const delay = parseInt(process.argv[4] || String(DELAY_BETWEEN_JOINS_MS), 10);
+  const menPercent = parseMenPercent();
 
   // Get active session
   const sessRes = await fetch(`${BASE_URL}/api/sessions?venueId=${VENUE_ID}`, {
@@ -98,12 +124,16 @@ async function main() {
   }
   const sessionId = session.id;
   console.log(`Session: ${sessionId}`);
+  if (menPercent != null) {
+    const men = Math.round((count * menPercent) / 100);
+    console.log(`Gender mix: ~${menPercent}% men → ${men} male, ${count - men} female\n`);
+  }
 
   if (mode === "staggered") {
     console.log(`Queueing ${count} bots with ${delay}ms delay between each...\n`);
     let queued = 0;
     for (let i = 0; i < count; i++) {
-      const bot = await getOrCreateBot(i);
+      const bot = await getOrCreateBot(i, count, menPercent);
       if (!bot) { console.log(`  ✗ Bot ${i} — failed to create`); continue; }
 
       const queueRes = await fetch(`${BASE_URL}/api/queue`, {
@@ -129,7 +159,7 @@ async function main() {
     console.log(`Queueing ${count} bots all at once...\n`);
     let queued = 0;
     for (let i = 0; i < count; i++) {
-      const bot = await getOrCreateBot(i);
+      const bot = await getOrCreateBot(i, count, menPercent);
       if (!bot) continue;
       const queueRes = await fetch(`${BASE_URL}/api/queue`, {
         method: "POST",
@@ -144,7 +174,7 @@ async function main() {
     console.log(`Re-queueing all bots...\n`);
     let requeued = 0;
     for (let i = 0; i < count; i++) {
-      const bot = await getOrCreateBot(i);
+      const bot = await getOrCreateBot(i, count, menPercent);
       if (!bot) continue;
       const res = await fetch(`${BASE_URL}/api/queue/requeue`, {
         method: "POST",

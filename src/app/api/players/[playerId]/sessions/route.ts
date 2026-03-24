@@ -30,7 +30,6 @@ export async function GET(
       where: {
         sessionId: { in: sessionIds },
         playerIds: { has: playerId },
-        isWarmup: false,
       },
     });
 
@@ -59,9 +58,12 @@ export async function GET(
       const partnerSet = new Set<string>();
       let gamesByType = { men: 0, women: 0, mixed: 0 };
 
+      let gamesPlayed = 0;
       for (const a of sessAssignments) {
         const end = a.endedAt ?? new Date();
         totalPlayMinutes += Math.round((end.getTime() - a.startedAt.getTime()) / 60000);
+        if (a.isWarmup) continue;
+        gamesPlayed++;
         for (const pid of a.playerIds) {
           if (pid !== playerId) partnerSet.add(pid);
         }
@@ -79,7 +81,7 @@ export async function GET(
         closedAt: sess.closedAt?.toISOString() || null,
         status: sess.status,
         venue: sess.venue,
-        gamesPlayed: sessAssignments.length,
+        gamesPlayed,
         totalPlayMinutes,
         partnersCount: partnerSet.size,
         gamesByType,

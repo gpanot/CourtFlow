@@ -1,12 +1,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { formatTimer, getTimerColor, TIMER_COLORS, AUTO_START_DELAY_SECONDS, WARMUP_DURATION_SECONDS } from "@/lib/constants";
 import { cn } from "@/lib/cn";
+import { tvI18n } from "@/i18n/tv-i18n";
 
 interface TimerProps {
   startedAt: string;
   size?: "sm" | "md" | "lg" | "xl" | "tv";
+  /** Warmup countdown length; defaults to global fallback when omitted. */
+  durationSeconds?: number;
 }
 
 const sizeClasses = {
@@ -52,6 +56,7 @@ export function ElapsedTimer({ startedAt, size = "md" }: TimerProps) {
 }
 
 export function GamePhaseTimer({ startedAt, size = "md" }: TimerProps) {
+  const { t } = useTranslation("translation", { i18n: tvI18n });
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -80,7 +85,7 @@ export function GamePhaseTimer({ startedAt, size = "md" }: TimerProps) {
           className={cn("font-semibold text-blue-400", size === "tv" ? "" : "text-sm")}
           style={size === "tv" ? tvLabelStyle : undefined}
         >
-          Go to court
+          {size === "tv" ? t("timer.goToCourt") : "Go to court"}
         </span>
       </div>
     );
@@ -101,13 +106,15 @@ export function GamePhaseTimer({ startedAt, size = "md" }: TimerProps) {
         className={cn("font-semibold text-green-400", size === "tv" ? "" : "text-sm")}
         style={size === "tv" ? tvLabelStyle : undefined}
       >
-        Playing
+        {size === "tv" ? t("timer.playing") : "Playing"}
       </span>
     </div>
   );
 }
 
-export function WarmupCountdownTimer({ startedAt, size = "md" }: TimerProps) {
+export function WarmupCountdownTimer({ startedAt, size = "md", durationSeconds }: TimerProps) {
+  const { t } = useTranslation("translation", { i18n: tvI18n });
+  const total = durationSeconds ?? WARMUP_DURATION_SECONDS;
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -120,7 +127,7 @@ export function WarmupCountdownTimer({ startedAt, size = "md" }: TimerProps) {
     return () => clearInterval(interval);
   }, [startedAt]);
 
-  const remaining = Math.max(0, WARMUP_DURATION_SECONDS - elapsed);
+  const remaining = Math.max(0, total - elapsed);
 
   return (
     <div className="flex items-baseline gap-2">
@@ -134,7 +141,7 @@ export function WarmupCountdownTimer({ startedAt, size = "md" }: TimerProps) {
         className={cn("font-semibold text-amber-400/70", size === "tv" ? "" : "text-sm")}
         style={size === "tv" ? tvLabelStyle : undefined}
       >
-        Warm Up
+        {size === "tv" ? t("timer.warmUp") : "Warm Up"}
       </span>
     </div>
   );

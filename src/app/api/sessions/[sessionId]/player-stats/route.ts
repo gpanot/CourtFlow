@@ -25,7 +25,7 @@ export async function GET(
     if (!queueEntry) return error("Player was not in this session", 404);
 
     const assignments = await prisma.courtAssignment.findMany({
-      where: { sessionId, playerIds: { has: playerId }, isWarmup: false },
+      where: { sessionId, playerIds: { has: playerId } },
       orderBy: { startedAt: "asc" },
     });
 
@@ -34,12 +34,16 @@ export async function GET(
     const partnerNames: Record<string, string> = {};
     let gamesByType = { men: 0, women: 0, mixed: 0 };
     let longestGameMinutes = 0;
+    let gamesPlayed = 0;
 
     for (const a of assignments) {
       const end = a.endedAt ?? new Date();
       const durationMin = Math.round((end.getTime() - a.startedAt.getTime()) / 60000);
       totalPlayMinutes += durationMin;
 
+      if (a.isWarmup) continue;
+
+      gamesPlayed++;
       if (durationMin > longestGameMinutes) longestGameMinutes = durationMin;
 
       if (a.gameType === "men") gamesByType.men++;
@@ -75,7 +79,7 @@ export async function GET(
     const uniquePlayerIds = [...new Set(allEntries.map((e) => e.playerId))];
 
     const allAssignments = await prisma.courtAssignment.findMany({
-      where: { sessionId, isWarmup: false },
+      where: { sessionId },
     });
     const playTimeByPlayer: Record<string, number> = {};
     for (const a of allAssignments) {
@@ -101,7 +105,6 @@ export async function GET(
       where: {
         sessionId: { in: uniqueSessions },
         playerIds: { has: playerId },
-        isWarmup: false,
       },
     });
     let allTimeMinutes = 0;
@@ -109,6 +112,7 @@ export async function GET(
     for (const a of allTimeAssignments) {
       const end = a.endedAt ?? new Date();
       allTimeMinutes += Math.round((end.getTime() - a.startedAt.getTime()) / 60000);
+      if (a.isWarmup) continue;
       for (const pid of a.playerIds) {
         if (pid !== playerId) allTimePartners.add(pid);
       }
@@ -169,7 +173,7 @@ export async function GET(
         playPercentage: sessionDurationMin > 0
           ? Math.round((totalPlayMinutes / sessionDurationMin) * 100)
           : 0,
-        gamesPlayed: assignments.length,
+        gamesPlayed,
         gamesByType,
         partners: partnersForDisplay.sort((a, b) => b.gamesPlayed - a.gamesPlayed),
         longestGameMinutes,

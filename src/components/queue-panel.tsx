@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/cn";
+import { tvI18n } from "@/i18n/tv-i18n";
 import { Link, Coffee, MoreVertical, UserX, LogOut, ArrowUpDown, ChevronLeft, Users, Unlink, MapPin } from "lucide-react";
 import { GenderIcon } from "@/components/gender-icon";
 import { TV_QUEUE_DISPLAY_COUNT, SKILL_LEVELS, type SkillLevelType, MIN_GROUP_SIZE } from "@/lib/constants";
@@ -70,6 +72,7 @@ interface QueuePanelProps {
 }
 
 export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction, onCreateGroup, onDissolveGroup, isWarmupManual, courts }: QueuePanelProps) {
+  const { t } = useTranslation("translation", { i18n: tvI18n });
   const isTV = variant === "tv";
   const limit = maxDisplay ?? TV_QUEUE_DISPLAY_COUNT;
   const waitingCount = entries.filter((e) => e.status === "waiting" || e.status === "on_break").length;
@@ -147,6 +150,7 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
   }
 
   const soloWaitingCount = entries.filter((e) => e.status === "waiting" && !e.groupId).length;
+  const waitingOnlyCount = entries.filter((e) => e.status === "waiting").length;
 
   return (
     <div className={cn("flex flex-col", isTV ? "gap-[calc(0.64*var(--th,1vh))]" : "gap-1")}>
@@ -157,7 +161,9 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
             isTV ? "text-[clamp(0.52rem,calc(0.96*var(--tw,1vw)),1rem)]" : "text-sm"
           )}
         >
-          Queue ({entries.filter((e) => e.status === "waiting").length} waiting)
+          {isTV
+            ? t("queue.header", { waiting: waitingOnlyCount })
+            : `Queue (${waitingOnlyCount} waiting)`}
         </h4>
         {!isTV && onCreateGroup && soloWaitingCount >= MIN_GROUP_SIZE && (
           <button
@@ -172,7 +178,7 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
 
       {displayEntries.length === 0 && (
         <p className={cn("text-neutral-500", isTV ? "text-[clamp(0.6rem,calc(1.2*var(--tw,1vw)),1.2rem)]" : "text-sm")}>
-          No players in queue
+          {isTV ? t("queue.empty") : "No players in queue"}
         </p>
       )}
 
@@ -229,11 +235,17 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
 
       {isTV && waitingCount > cumulativePlayers && displayEntries.length >= limit && (
         <p className="text-center text-neutral-500 mt-[calc(0.4*var(--th,1vh))] text-[clamp(0.48rem,calc(0.88*var(--tw,1vw)),0.8rem)]">
-          +{waitingCount - cumulativePlayers} players
+          {t("queue.morePlayers", { count: waitingCount - cumulativePlayers })}
         </p>
       )}
     </div>
   );
+}
+
+function GroupOfLabel({ isTV, groupSize }: { isTV: boolean; groupSize: number }) {
+  const { t } = useTranslation("translation", { i18n: tvI18n });
+  if (isTV) return <>{t("queue.groupOf", { count: groupSize })}</>;
+  return <>Group of {groupSize}</>;
 }
 
 function SkillDot({ level, isTV }: { level?: string; isTV: boolean }) {
@@ -333,7 +345,7 @@ function QueueRow({
               <div className="flex items-center gap-2">
                 <Link className={cn("text-blue-400 shrink-0", isTV ? "h-[calc(0.96*var(--tw,1vw))] w-[calc(0.96*var(--tw,1vw))] min-h-2.5 min-w-2.5" : "h-4 w-4")} />
                 <span className={cn("font-medium", isTV ? "text-[clamp(0.6rem,calc(1.2*var(--tw,1vw)),1.2rem)]" : "text-sm")}>
-                  Group of {groupSize}
+                  <GroupOfLabel isTV={isTV} groupSize={groupSize} />
                 </span>
               </div>
               {!isTV && onPlayerAction && entry.group && (

@@ -1,7 +1,8 @@
 import { prisma } from "./db";
 import { emitToPlayer, emitToVenue } from "./socket-server";
 import { isValidPickleballGenderMixForFour } from "./pickleball-gender";
-import { getSkillIndex, QUEUE_LOOKAHEAD, MAX_SKILL_GAP, WARMUP_DURATION_SECONDS, AUTO_START_DELAY_SECONDS, MIN_GROUP_SIZE, COURT_PLAYER_COUNT } from "./constants";
+import { getSkillIndex, QUEUE_LOOKAHEAD, MAX_SKILL_GAP, AUTO_START_DELAY_SECONDS, MIN_GROUP_SIZE, COURT_PLAYER_COUNT } from "./constants";
+import { getVenueWarmupDurationSeconds } from "./warmup-settings";
 import type { SkillLevel, GameType } from "@prisma/client";
 
 export interface GameTypeMix {
@@ -475,6 +476,8 @@ export async function assignToWarmup(
 
   if (!targetCourt) return false;
 
+  const warmupDurationSeconds = await getVenueWarmupDurationSeconds(venueId);
+
   const existingAssignment = targetCourt.courtAssignments[0];
 
   if (existingAssignment && existingAssignment.isWarmup) {
@@ -522,6 +525,7 @@ export async function assignToWarmup(
       courtId: targetCourt.id,
       assignmentId: existingAssignment.id,
       isWarmup: true,
+      warmupDurationSeconds,
       teammates: otherPlayers.map((p) => ({
         name: p.name,
         skillLevel: p.skillLevel,
@@ -533,7 +537,13 @@ export async function assignToWarmup(
     await emitCourtUpdate(venueId);
 
     if (updatedPlayerIds.length >= 4) {
-      scheduleWarmupTransition(existingAssignment.id, venueId, sessionId, targetCourt.id);
+      scheduleWarmupTransition(
+        existingAssignment.id,
+        venueId,
+        sessionId,
+        targetCourt.id,
+        warmupDurationSeconds
+      );
     }
   } else {
     // Create new warmup assignment on idle court
@@ -565,6 +575,7 @@ export async function assignToWarmup(
       courtId: targetCourt.id,
       assignmentId: assignment.id,
       isWarmup: true,
+      warmupDurationSeconds,
       teammates: [],
       gameType: "mixed",
     });
@@ -575,20 +586,23 @@ export async function assignToWarmup(
   return true;
 }
 
-export function scheduleWarmupTransitionPublic(
+export async function scheduleWarmupTransitionPublic(
   assignmentId: string,
   venueId: string,
   sessionId: string,
-  courtId: string
+  courtId: string,
+  durationSeconds?: number
 ) {
-  scheduleWarmupTransition(assignmentId, venueId, sessionId, courtId);
+  const secs = durationSeconds ?? (await getVenueWarmupDurationSeconds(venueId));
+  scheduleWarmupTransition(assignmentId, venueId, sessionId, courtId, secs);
 }
 
 function scheduleWarmupTransition(
   assignmentId: string,
   venueId: string,
   sessionId: string,
-  courtId: string
+  courtId: string,
+  durationSeconds: number
 ) {
   setTimeout(async () => {
     try {
@@ -628,7 +642,7 @@ function scheduleWarmupTransition(
     } catch (err) {
       console.error("Warmup transition error:", err);
     }
-  }, WARMUP_DURATION_SECONDS * 1000);
+  }, durationSeconds * 1000);
 }
 
 export async function findReplacement(

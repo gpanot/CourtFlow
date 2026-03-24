@@ -62,6 +62,7 @@ export function StaffDashboard() {
   const [viewingSessionId, setViewingSessionId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [gameTypeMix, setGameTypeMix] = useState<GameTypeMixStats | null>(null);
+  const [warmupDurationSeconds, setWarmupDurationSeconds] = useState(WARMUP_DURATION_SECONDS);
   const [showMixEditor, setShowMixEditor] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const { on } = useSocket();
@@ -74,11 +75,15 @@ export function StaffDashboard() {
         courts: CourtData[];
         queue: QueueEntryData[];
         gameTypeMix: GameTypeMixStats | null;
+        warmupDurationSeconds?: number;
       }>(`/api/courts/state?venueId=${venueId}`);
       setSession(data.session);
       setCourts([...data.courts].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true })));
       setQueue(data.queue);
       setGameTypeMix(data.gameTypeMix);
+      if (typeof data.warmupDurationSeconds === "number") {
+        setWarmupDurationSeconds(data.warmupDurationSeconds);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -367,7 +372,7 @@ export function StaffDashboard() {
                       {session.warmupMode === "manual"
                         ? "Go to Queue tab to assign players to courts."
                         : "Players are being assigned to courts as they arrive."}{" "}
-                      Games start after {WARMUP_DURATION_SECONDS / 60} min warmup.
+                      Games start after {warmupDurationSeconds / 60} min warmup.
                     </p>
                   </div>
                 </div>
@@ -390,6 +395,7 @@ export function StaffDashboard() {
                   variant="staff"
                   warmup={isWarmupMode}
                   queueWaiting={waitingCount}
+                  warmupDurationSeconds={warmupDurationSeconds}
                   onClick={() => setSelectedCourt(court)}
                 />
               ))}

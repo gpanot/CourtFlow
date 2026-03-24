@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { CourtCard, type CourtData } from "@/components/court-card";
 import { QueuePanel, type QueueEntryData } from "@/components/queue-panel";
 import { useSocket } from "@/hooks/use-socket";
@@ -8,20 +9,24 @@ import { joinVenue, leaveVenue } from "@/lib/socket-client";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { Wifi, WifiOff, Flame, Monitor, ChevronLeft } from "lucide-react";
+import { resolveTvLocale, tvI18n } from "@/i18n/tv-i18n";
 
 interface VenueState {
   session: { id: string; status: string } | null;
   courts: CourtData[];
   queue: QueueEntryData[];
+  warmupDurationSeconds?: number;
 }
 
 interface VenueMeta {
   id: string;
   name: string;
   hasActiveSession?: boolean;
+  settings?: { tvLocale?: string; [key: string]: unknown } | null;
 }
 
 export default function LiveSessionsPage() {
+  const { t } = useTranslation("translation", { i18n: tvI18n });
   const [venues, setVenues] = useState<VenueMeta[]>([]);
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
   const [venueStates, setVenueStates] = useState<Record<string, VenueState>>({});
@@ -49,7 +54,7 @@ export default function LiveSessionsPage() {
   useEffect(() => {
     async function loadVenues() {
       try {
-        const venueList = await api.get<{ id: string; name: string }[]>("/api/venues");
+        const venueList = await api.get<VenueMeta[]>("/api/venues");
         const statesMap: Record<string, VenueState> = {};
         const enriched: VenueMeta[] = [];
 
@@ -58,9 +63,19 @@ export default function LiveSessionsPage() {
             try {
               const data = await api.get<VenueState>(`/api/courts/state?venueId=${v.id}`);
               statesMap[v.id] = data;
-              enriched.push({ ...v, hasActiveSession: !!data.session });
+              enriched.push({
+                id: v.id,
+                name: v.name,
+                settings: v.settings,
+                hasActiveSession: !!data.session,
+              });
             } catch {
-              enriched.push({ ...v, hasActiveSession: false });
+              enriched.push({
+                id: v.id,
+                name: v.name,
+                settings: v.settings,
+                hasActiveSession: false,
+              });
             }
           })
         );
@@ -109,6 +124,15 @@ export default function LiveSessionsPage() {
       leaveVenue(selectedVenueId);
     };
   }, [selectedVenueId, on, fetchVenueState]);
+
+  useEffect(() => {
+    if (!selectedVenueId) {
+      void tvI18n.changeLanguage("en");
+      return;
+    }
+    const v = venues.find((x) => x.id === selectedVenueId);
+    void tvI18n.changeLanguage(resolveTvLocale(v?.settings?.tvLocale));
+  }, [selectedVenueId, venues]);
 
   if (loading) {
     return <p className="text-neutral-500">Loading venues...</p>;
@@ -219,15 +243,15 @@ export default function LiveSessionsPage() {
         <div className="flex items-center gap-3">
           {isWarmupMode ? (
             <span className="flex items-center gap-1.5 rounded-full bg-amber-500/20 px-2.5 py-1 text-xs font-medium text-amber-400">
-              <Flame className="h-3 w-3" /> Warm Up · {waitingCount} checked in
+              <Flame className="h-3 w-3" /> {t("warmupCheckedIn", { count: waitingCount })}
             </span>
           ) : state.session ? (
             <span className="rounded-full bg-green-600/20 px-2.5 py-1 text-xs font-medium text-green-400">
-              Session Active · {courtCount} courts
+              {t("sessionActiveCourts", { count: courtCount })}
             </span>
           ) : (
             <span className="rounded-full bg-neutral-700 px-2.5 py-1 text-xs font-medium text-neutral-400">
-              No Active Session
+              {t("noActiveSession")}
             </span>
           )}
           <span className="hidden tabular-nums text-sm text-neutral-500 sm:inline">
@@ -238,7 +262,7 @@ export default function LiveSessionsPage() {
           ) : (
             <div className="flex items-center gap-1 text-amber-400">
               <WifiOff className="h-4 w-4" />
-              <span className="text-xs">Reconnecting...</span>
+              <span className="text-xs">{t("reconnecting")}</span>
             </div>
           )}
         </div>
@@ -248,7 +272,7 @@ export default function LiveSessionsPage() {
       <div className="overflow-hidden rounded-xl border border-neutral-800 bg-black">
         {!state.session ? (
           <div className="flex items-center justify-center py-24">
-            <p className="text-lg text-neutral-600">Waiting for session to start...</p>
+            <p className="text-lg text-neutral-600">{t("waitingSessionStart")}</p>
           </div>
         ) : (
           <div className="flex min-h-[60vh] flex-col lg:flex-row">
@@ -257,10 +281,8 @@ export default function LiveSessionsPage() {
               {isWarmupMode && (
                 <div className="mb-4 flex flex-col items-center gap-1 text-center">
                   <Flame className="h-8 w-8 text-amber-400 opacity-80" />
-                  <p className="text-xl font-bold text-amber-300">Warm Up Time</p>
-                  <p className="text-sm text-amber-400/70">
-                    Go to your assigned court and warm up freely
-                  </p>
+                  <p className="text-xl font-bold text-amber-300">{t("warmupTime")}</p>
+                  <p className="text-sm text-amber-400/70">{t("warmupHeroHint")}</p>
                 </div>
               )}
               <div className={cn("grid gap-3 auto-rows-fr", gridCols)}>
@@ -270,6 +292,7 @@ export default function LiveSessionsPage() {
                     court={court}
                     variant="tv"
                     warmup={isWarmupMode}
+                    warmupDurationSeconds={state.warmupDurationSeconds}
                   />
                 ))}
               </div>
@@ -279,7 +302,7 @@ export default function LiveSessionsPage() {
             <div className="shrink-0 border-t border-neutral-800 p-3 md:w-64 md:border-l md:border-t-0 md:p-4 lg:w-72">
               {isWarmupMode && (
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-amber-400">
-                  Checked In
+                  {t("checkedIn")}
                 </p>
               )}
               <QueuePanel entries={state.queue} variant="tv" />

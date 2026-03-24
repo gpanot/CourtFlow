@@ -32,8 +32,15 @@ export function CourtAssignedScreen({ notification, venueId, onRefresh }: CourtA
   const teammates = (notification?.teammates as Teammate[]) || [];
   const gameType = (notification?.gameType as string) || "mixed";
   const isWarmup = (notification?.isWarmup as boolean) || false;
-  const [countdown, setCountdown] = useState(isWarmup ? WARMUP_DURATION_SECONDS : AUTO_START_DELAY_SECONDS);
+  const warmupSecsRaw = notification?.warmupDurationSeconds;
+  const warmupSecs =
+    typeof warmupSecsRaw === "number" && warmupSecsRaw > 0 ? warmupSecsRaw : WARMUP_DURATION_SECONDS;
+  const [countdown, setCountdown] = useState(isWarmup ? warmupSecs : AUTO_START_DELAY_SECONDS);
   const [leaving, setLeaving] = useState(false);
+
+  useEffect(() => {
+    setCountdown(isWarmup ? warmupSecs : AUTO_START_DELAY_SECONDS);
+  }, [isWarmup, warmupSecs]);
 
   useEffect(() => {
     const interval = setInterval(() => {

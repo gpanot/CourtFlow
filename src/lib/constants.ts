@@ -18,7 +18,8 @@ export const COURT_STATUS_COLORS = {
 } as const;
 
 export const AUTO_START_DELAY_SECONDS = 60;
-export const WARMUP_DURATION_SECONDS = 150;
+/** Default warmup length (3 min) when venue settings are missing; prefer venue `warmupMinutes` / API `warmupDurationSeconds`. */
+export const WARMUP_DURATION_SECONDS = 3 * 60;
 export const POST_GAME_TIMEOUT_SECONDS = 180;
 export const BREAK_OPTIONS_MINUTES = [5, 10, 15, 20, 30];
 export const GPS_JOIN_RADIUS_METERS = 200;

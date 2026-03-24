@@ -1,0 +1,37 @@
+{
+  "title": "CourtFlow TV",
+  "selectVenue": "Select a venue",
+  "homeLink": "← Home",
+  "defaultVenueName": "Court Display",
+  "warmupCheckedIn": "Warm Up · {{count}} players checked in",
+  "sessionActiveCourts": "Session Active · {{count}} courts",
+  "noActiveSession": "No Active Session",
+  "rotatePortrait": "Back to portrait",
+  "rotateLandscape": "Rotate for TV (landscape)",
+  "reconnecting": "Reconnecting...",
+  "waitingSessionStart": "Waiting for session to start...",
+  "warmupTime": "Warm Up Time",
+  "warmupHeroHint": "Go to your assigned court and warm up freely",
+  "checkedIn": "Checked In",
+  "court": {
+    "warmupProgress": "Warm Up · {{current}}/4",
+    "available": "Available",
+    "warmup": "Warm Up",
+    "waitingPlayers": "Waiting for players",
+    "outOfService": "Out of Service",
+    "gameMen": "men",
+    "gameWomen": "women",
+    "gameMixed": "mix"
+  },
+  "timer": {
+    "goToCourt": "Go to court",
+    "playing": "Playing",
+    "warmUp": "Warm Up"
+  },
+  "queue": {
+    "header": "Queue ({{waiting}} waiting)",
+    "empty": "No players in queue",
+    "groupOf": "Group of {{count}}",
+    "morePlayers": "+{{count}} players"
+  }
+}

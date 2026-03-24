@@ -1,0 +1,37 @@
+{
+  "title": "CourtFlow TV",
+  "selectVenue": "Chọn địa điểm",
+  "homeLink": "← Trang chủ",
+  "defaultVenueName": "Màn hình sân",
+  "warmupCheckedIn": "Khởi động · {{count}} người chơi đã check-in",
+  "sessionActiveCourts": "Phiên đang diễn ra · {{count}} sân",
+  "noActiveSession": "Chưa có phiên",
+  "rotatePortrait": "Xoay dọc",
+  "rotateLandscape": "Xoay ngang (TV)",
+  "reconnecting": "Đang kết nối lại...",
+  "waitingSessionStart": "Đang chờ phiên bắt đầu...",
+  "warmupTime": "Thời gian khởi động",
+  "warmupHeroHint": "Hãy ra sân được phân và khởi động thoải mái",
+  "checkedIn": "Đã check-in",
+  "court": {
+    "warmupProgress": "Khởi động · {{current}}/4",
+    "available": "Trống",
+    "warmup": "Khởi động",
+    "waitingPlayers": "Đang chờ người chơi",
+    "outOfService": "Ngưng sử dụng",
+    "gameMen": "nam",
+    "gameWomen": "nữ",
+    "gameMixed": "hỗn hợp"
+  },
+  "timer": {
+    "goToCourt": "Vào sân",
+    "playing": "Đang chơi",
+    "warmUp": "Khởi động"
+  },
+  "queue": {
+    "header": "Hàng chờ ({{waiting}} đang chờ)",
+    "empty": "Chưa có ai trong hàng chờ",
+    "groupOf": "Nhóm {{count}} người",
+    "morePlayers": "+{{count}} người chơi"
+  }
+}

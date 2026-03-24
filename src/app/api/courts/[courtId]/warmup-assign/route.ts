@@ -4,6 +4,7 @@ import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { emitToVenue, emitToPlayer } from "@/lib/socket-server";
 import { scheduleWarmupTransitionPublic } from "@/lib/algorithm";
+import { getVenueWarmupDurationSeconds } from "@/lib/warmup-settings";
 
 export async function POST(
   request: NextRequest,
@@ -45,6 +46,8 @@ export async function POST(
     const player = await prisma.player.findUnique({ where: { id: playerId } });
     if (!player) return error("Player not found", 404);
 
+    const warmupDurationSeconds = await getVenueWarmupDurationSeconds(court.venueId);
+
     const existingAssignment = court.courtAssignments[0];
 
     if (existingAssignment && existingAssignment.isWarmup) {
@@ -79,6 +82,7 @@ export async function POST(
         courtId: court.id,
         assignmentId: existingAssignment.id,
         isWarmup: true,
+        warmupDurationSeconds,
         teammates: otherPlayers.map((p) => ({
           name: p.name,
           skillLevel: p.skillLevel,
@@ -88,7 +92,13 @@ export async function POST(
       });
 
       if (updatedPlayerIds.length >= 4) {
-        scheduleWarmupTransitionPublic(existingAssignment.id, court.venueId, session.id, court.id);
+        await scheduleWarmupTransitionPublic(
+          existingAssignment.id,
+          court.venueId,
+          session.id,
+          court.id,
+          warmupDurationSeconds
+        );
       }
     } else {
       const assignment = await prisma.courtAssignment.create({
@@ -119,6 +129,7 @@ export async function POST(
         courtId: court.id,
         assignmentId: assignment.id,
         isWarmup: true,
+        warmupDurationSeconds,
         teammates: [],
         gameType: "mixed",
       });
