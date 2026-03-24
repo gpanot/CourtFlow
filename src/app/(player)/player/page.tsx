@@ -75,5 +75,9 @@ export default function PlayerPage() {
     return <OnboardingFlow />;
   }
 
-  return <PlayerHome />;
+  return (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <PlayerHome />
+    </div>
+  );
 }

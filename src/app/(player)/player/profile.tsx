@@ -171,8 +171,8 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <div className="min-h-dvh p-6">
-      <button onClick={onBack} className="mb-6 flex items-center gap-2 text-neutral-400 hover:text-white">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,24px))]">
+      <button onClick={onBack} className="mb-6 flex shrink-0 items-center gap-2 text-neutral-400 hover:text-white">
         <ArrowLeft className="h-5 w-5" /> Back
       </button>
 
@@ -445,7 +445,7 @@ function SessionDetailScreen({
 
   if (loading) {
     return (
-      <div className="flex min-h-dvh items-center justify-center">
+      <div className="flex min-h-0 flex-1 items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-green-500 border-t-transparent" />
       </div>
     );
@@ -453,7 +453,7 @@ function SessionDetailScreen({
 
   if (!data) {
     return (
-      <div className="min-h-dvh p-6">
+      <div className="flex min-h-0 flex-1 flex-col p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,24px))]">
         <button onClick={onBack} className="mb-6 flex items-center gap-2 text-neutral-400 hover:text-white">
           <ArrowLeft className="h-5 w-5" /> Back
         </button>
@@ -470,9 +470,9 @@ function SessionDetailScreen({
   });
 
   return (
-    <div className="min-h-dvh pb-8">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pb-[calc(1.5rem+env(safe-area-inset-bottom,24px))]">
       {/* Header */}
-      <div className="bg-gradient-to-b from-green-950/60 to-transparent px-6 pb-5 pt-6">
+      <div className="bg-gradient-to-b from-green-950/60 to-transparent px-6 pb-5 pt-2">
         <button onClick={onBack} className="mb-4 flex items-center gap-2 text-neutral-400 hover:text-white">
           <ArrowLeft className="h-5 w-5" /> Back
         </button>

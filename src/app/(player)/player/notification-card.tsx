@@ -5,6 +5,17 @@ import { Bell } from "lucide-react";
 import { useSessionStore } from "@/stores/session-store";
 import { isPushSupported, subscribeToPush, getNotificationPermission } from "@/lib/push-client";
 
+/** If permission is granted and SW already has a push subscription, setup succeeded despite a failed result (e.g. transient server error). */
+async function hasActivePushSubscription(): Promise<boolean> {
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    return !!sub;
+  } catch {
+    return false;
+  }
+}
+
 interface NotificationCardProps {
   onEnabled?: () => void;
 }
@@ -34,6 +45,9 @@ export function NotificationCard({ onEnabled }: NotificationCardProps = {}) {
 
     const result = await subscribeToPush(playerId);
     if (result.ok) {
+      setEnabled(true);
+      onEnabled?.();
+    } else if (getNotificationPermission() === "granted" && (await hasActivePushSubscription())) {
       setEnabled(true);
       onEnabled?.();
     } else {

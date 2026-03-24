@@ -35,7 +35,12 @@ export async function subscribeToPush(playerId: string): Promise<PushSubscribeRe
   if (!isPushSupported()) return { ok: false, reason: "unsupported" };
 
   try {
-    const permission = await Notification.requestPermission();
+    // Only prompt when needed. A second requestPermission() right after the user taps Allow
+    // can resolve incorrectly on iOS Safari / installed PWA (false "denied" while push still works).
+    let permission: NotificationPermission = Notification.permission;
+    if (permission !== "granted") {
+      permission = await Notification.requestPermission();
+    }
     if (permission === "denied") return { ok: false, reason: "denied" };
     if (permission !== "granted") return { ok: false, reason: "dismissed" };
 
