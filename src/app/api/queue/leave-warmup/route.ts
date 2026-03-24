@@ -4,6 +4,7 @@ import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireAuth } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
 import { assignToWarmup } from "@/lib/algorithm";
+import { QUEUE_LOOKAHEAD } from "@/lib/constants";
 
 export async function POST(request: NextRequest) {
   try {
@@ -49,13 +50,19 @@ export async function POST(request: NextRequest) {
       data: { status: "left", groupId: null },
     });
 
-    // Immediately find a replacement from the waiting queue
-    const nextWaiting = await prisma.queueEntry.findFirst({
+    // Backfill warmup from the waiting queue (auto mode tries several positions for valid 4th)
+    const waiting = await prisma.queueEntry.findMany({
       where: { sessionId: entry.sessionId, status: "waiting" },
       orderBy: { joinedAt: "asc" },
+      take: QUEUE_LOOKAHEAD,
     });
-    if (nextWaiting) {
-      await assignToWarmup(venueId, entry.sessionId, nextWaiting.playerId);
+    const session = await prisma.session.findUnique({ where: { id: entry.sessionId } });
+    if (session?.warmupMode === "auto") {
+      for (const w of waiting) {
+        if (await assignToWarmup(venueId, entry.sessionId, w.playerId)) break;
+      }
+    } else if (waiting[0]) {
+      await assignToWarmup(venueId, entry.sessionId, waiting[0].playerId);
     }
 
     const allEntries = await prisma.queueEntry.findMany({

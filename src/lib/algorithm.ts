@@ -41,7 +41,7 @@ function checkSkillBalance(players: QueueCandidate[]): boolean {
   return true;
 }
 
-function deriveGameType(players: QueueCandidate[]): GameType {
+export function deriveGameType(players: readonly { gender: string }[]): GameType {
   const allMale = players.every((p) => p.gender === "male");
   const allFemale = players.every((p) => p.gender === "female");
   if (allMale) return "men";
@@ -83,12 +83,28 @@ function isValidPickleballGenderFoursome(players: QueueCandidate[]): boolean {
   );
 }
 
+/** For API routes (warmup): validate exactly four gender values. */
+export function isValidPickleballGenderMixForFour(genders: readonly string[]): boolean {
+  if (genders.length !== 4) return false;
+  const players: QueueCandidate[] = genders.map((gender) => ({
+    entryId: "",
+    playerId: "",
+    playerName: "",
+    skillLevel: "beginner" as SkillLevel,
+    gender,
+    groupId: null,
+    joinedAt: new Date(),
+    totalPlayMinutesToday: 0,
+  }));
+  return isValidPickleballGenderFoursome(players);
+}
+
 function queueIndexOf(candidate: QueueCandidate, orderedQueue: QueueCandidate[]): number {
   return orderedQueue.findIndex((x) => x.entryId === candidate.entryId);
 }
 
 /** Every k-combination of indices from [0..n-1], for small k only. */
-function forEachCombinationIndices(n: number, k: number, cb: (indices: number[]) => void): void {
+export function forEachCombinationIndices(n: number, k: number, cb: (indices: number[]) => void): void {
   if (k === 0) {
     cb([]);
     return;
@@ -383,11 +399,73 @@ export async function runRotation(
   return true;
 }
 
+function toQueueCandidateStub(
+  p: { gender: string; skillLevel: SkillLevel },
+  playerId: string,
+  playerName: string
+): QueueCandidate {
+  return {
+    entryId: "",
+    playerId,
+    playerName,
+    skillLevel: p.skillLevel,
+    gender: p.gender,
+    groupId: null,
+    joinedAt: new Date(),
+    totalPlayMinutesToday: 0,
+  };
+}
+
+/**
+ * Staff "autofill" warmup in **auto** session mode: pick waiting players so the
+ * full court is 4M, 4F, or 2M+2F and skill-compatible (same rule as rotation).
+ */
+export function selectPlayersForWarmupAutofill(
+  currentPlayers: { id: string; gender: string; skillLevel: SkillLevel }[],
+  waitingEntries: Array<{
+    playerId: string;
+    player: { name: string; gender: string; skillLevel: SkillLevel };
+  }>,
+): { playerId: string; playerName: string }[] | null {
+  const slotsToFill = 4 - currentPlayers.length;
+  if (slotsToFill <= 0) return [];
+  if (slotsToFill > 4) return null;
+
+  const pool = waitingEntries.slice(0, QUEUE_LOOKAHEAD);
+  if (pool.length < slotsToFill) return null;
+
+  let bestCombo: { playerId: string; playerName: string }[] | null = null;
+  let bestScore = Infinity;
+
+  forEachCombinationIndices(pool.length, slotsToFill, (ix) => {
+    const chosen = ix.map((i) => pool[i]);
+    const combo: QueueCandidate[] = [
+      ...currentPlayers.map((p) => toQueueCandidateStub(p, p.id, "")),
+      ...chosen.map((e) => toQueueCandidateStub(e.player, e.playerId, e.player.name)),
+    ];
+    if (!isValidPickleballGenderFoursome(combo)) return;
+    if (!checkSkillBalance(combo)) return;
+
+    const avgIdx = ix.reduce((a, b) => a + b, 0) / slotsToFill;
+    const idealAvg = (slotsToFill - 1) / 2;
+    const skipPenalty = (avgIdx - idealAvg) * 2;
+    if (skipPenalty < bestScore) {
+      bestScore = skipPenalty;
+      bestCombo = chosen.map((e) => ({ playerId: e.playerId, playerName: e.player.name }));
+    }
+  });
+
+  return bestCombo;
+}
+
 export async function assignToWarmup(
   venueId: string,
   sessionId: string,
   playerId: string
 ): Promise<boolean> {
+  const session = await prisma.session.findUnique({ where: { id: sessionId } });
+  const enforceWarmupGender = session?.warmupMode === "auto";
+
   const player = await prisma.player.findUnique({ where: { id: playerId } });
   if (!player) return false;
 
@@ -413,12 +491,25 @@ export async function assignToWarmup(
   const existingAssignment = targetCourt.courtAssignments[0];
 
   if (existingAssignment && existingAssignment.isWarmup) {
-    // Add player to existing warmup assignment
-    const updatedPlayerIds = [...existingAssignment.playerIds, playerId];
+    const existingIds = existingAssignment.playerIds;
+    if (enforceWarmupGender && existingIds.length === 3) {
+      const existingPlayers = await prisma.player.findMany({ where: { id: { in: existingIds } } });
+      const genders = [...existingPlayers.map((p) => p.gender), player.gender];
+      if (!isValidPickleballGenderMixForFour(genders)) {
+        return false;
+      }
+    }
 
-    const updateData: { playerIds: string[]; startedAt?: Date } = { playerIds: updatedPlayerIds };
+    const updatedPlayerIds = [...existingIds, playerId];
+
+    const allRoster = await prisma.player.findMany({ where: { id: { in: updatedPlayerIds } } });
+
+    const updateData: { playerIds: string[]; startedAt?: Date; gameType?: GameType } = {
+      playerIds: updatedPlayerIds,
+    };
     if (updatedPlayerIds.length >= 4) {
       updateData.startedAt = new Date();
+      updateData.gameType = deriveGameType(allRoster);
     }
     await prisma.courtAssignment.update({
       where: { id: existingAssignment.id },
@@ -431,8 +522,11 @@ export async function assignToWarmup(
     });
 
     const otherPlayers = await prisma.player.findMany({
-      where: { id: { in: existingAssignment.playerIds } },
+      where: { id: { in: existingIds } },
     });
+
+    const gameType: GameType =
+      updatedPlayerIds.length >= 4 ? deriveGameType(allRoster) : "mixed";
 
     emitToPlayer(playerId, "player:notification", {
       type: "court_assigned",
@@ -446,7 +540,7 @@ export async function assignToWarmup(
         skillLevel: p.skillLevel,
         groupId: null,
       })),
-      gameType: "mixed",
+      gameType,
     });
 
     await emitCourtUpdate(venueId);

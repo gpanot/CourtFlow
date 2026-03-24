@@ -150,9 +150,14 @@ Game-type mix targets are **not** applied in this path—only skill and gender c
 
 ---
 
-## 10. Warmup flow (not competitive balance)
+## 10. Warmup
 
-`assignToWarmup` places players on warmup courts; assignments use `gameType: "mixed"` and `isWarmup: true`. Warmup transitions are time-driven (`WARMUP_DURATION_SECONDS`, `AUTO_START_DELAY_SECONDS`). This path is about **court utilization and flow**, not the same “balance” scoring as rotation.
+Warmup uses `isWarmup: true` on assignments; transition to a real game is time-driven (`WARMUP_DURATION_SECONDS`, `AUTO_START_DELAY_SECONDS`). **`gameType`** is derived from the roster when four players are present (`deriveGameType`); otherwise it stays `mixed`.
+
+| Session `warmupMode` | Gender §4.1 + skill (`MAX_SKILL_GAP`) | Where |
+|---------------------|----------------------------------------|--------|
+| **auto** | **Yes** — same as rotation: 4M, 4F, or 2M+2F, and pairwise skill gap ≤ 1 | `assignToWarmup` when adding the **4th** player (otherwise any); queue join after join; **leave-warmup** backfill scans up to `QUEUE_LOOKAHEAD` waiting players for the first valid assignment; staff **warmup-autofill** uses `selectPlayersForWarmupAutofill` |
+| **manual** | **No** — staff picks freely | `warmup-assign` and manual **warmup-autofill** (greedy skill, then fill with anyone). Queue join does **not** call `assignToWarmup` in manual mode. **leave-warmup** still calls `assignToWarmup` for the next waiter without gender enforcement |
 
 ---
 
@@ -163,6 +168,8 @@ Game-type mix targets are **not** applied in this path—only skill and gender c
 | New game from queue (`runRotation`) | Not applied | Yes | Yes, when session has targets | Yes, with skip penalty |
 | Group + fill | Not applied | Yes | N/A | Same skip penalty for fill |
 | Mid-game replacement | Yes (`MAX_SKILL_GAP`) | Yes | No | Yes (scan solos in order) |
+| Warmup **auto** | Yes (autofill / 4th player) | Yes | N/A | Yes (skip penalty in autofill; leave-warmup scans queue) |
+| Warmup **manual** | Only where autofill uses skill heuristic | No | N/A | Staff-driven |
 
 ---
 

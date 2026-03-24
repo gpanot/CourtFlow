@@ -3,9 +3,13 @@ import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { emitToVenue, emitToPlayer } from "@/lib/socket-server";
-import { scheduleWarmupTransitionPublic } from "@/lib/algorithm";
+import {
+  deriveGameType,
+  scheduleWarmupTransitionPublic,
+  selectPlayersForWarmupAutofill,
+} from "@/lib/algorithm";
 import { getSkillIndex, MAX_SKILL_GAP } from "@/lib/constants";
-import type { SkillLevel } from "@prisma/client";
+import type { GameType, SkillLevel } from "@prisma/client";
 
 function isSkillCompatible(candidateLevel: SkillLevel, courtPlayerLevels: SkillLevel[]): boolean {
   const candidateIdx = getSkillIndex(candidateLevel as SkillLevel);
@@ -64,40 +68,66 @@ export async function POST(
     });
 
     const slotsToFill = 4 - currentPlayerIds.length;
-    const toAssign: { playerId: string; playerName: string }[] = [];
+    let toAssign: { playerId: string; playerName: string }[] = [];
 
-    // First pass: compatible players
-    const remainingLevels = [...currentLevels];
-    for (const entry of waitingEntries) {
-      if (toAssign.length >= slotsToFill) break;
-      if (isSkillCompatible(entry.player.skillLevel as SkillLevel, remainingLevels)) {
-        toAssign.push({ playerId: entry.playerId, playerName: entry.player.name });
-        remainingLevels.push(entry.player.skillLevel as SkillLevel);
+    if (session.warmupMode === "auto") {
+      const picked = selectPlayersForWarmupAutofill(
+        currentPlayers.map((p) => ({
+          id: p.id,
+          gender: p.gender,
+          skillLevel: p.skillLevel as SkillLevel,
+        })),
+        waitingEntries
+      );
+      if (!picked || picked.length < slotsToFill) {
+        return error(
+          "No players available that match auto warmup rules (skill balance and 4M / 4F / 2M+2F)",
+          400
+        );
       }
-    }
-
-    // Second pass: if not enough compatible, fill with anyone (host chose auto-fill)
-    if (toAssign.length < slotsToFill) {
-      const assignedIds = new Set(toAssign.map((a) => a.playerId));
+      toAssign = picked;
+    } else {
+      // Manual session: skill-first greedy, then fill with anyone (staff-triggered autofill)
+      const remainingLevels = [...currentLevels];
       for (const entry of waitingEntries) {
         if (toAssign.length >= slotsToFill) break;
-        if (!assignedIds.has(entry.playerId)) {
+        if (isSkillCompatible(entry.player.skillLevel as SkillLevel, remainingLevels)) {
           toAssign.push({ playerId: entry.playerId, playerName: entry.player.name });
+          remainingLevels.push(entry.player.skillLevel as SkillLevel);
         }
       }
-    }
 
-    if (toAssign.length === 0) {
-      return error("No players available in the queue", 400);
+      if (toAssign.length < slotsToFill) {
+        const assignedIds = new Set(toAssign.map((a) => a.playerId));
+        for (const entry of waitingEntries) {
+          if (toAssign.length >= slotsToFill) break;
+          if (!assignedIds.has(entry.playerId)) {
+            toAssign.push({ playerId: entry.playerId, playerName: entry.player.name });
+          }
+        }
+      }
+
+      if (toAssign.length === 0) {
+        return error("No players available in the queue", 400);
+      }
     }
 
     const newPlayerIds = toAssign.map((a) => a.playerId);
+    const mergedPlayerIds = [...currentPlayerIds, ...newPlayerIds];
+    const allPlayersForType = await prisma.player.findMany({
+      where: { id: { in: mergedPlayerIds } },
+    });
+    const gameTypeForCourt: GameType =
+      allPlayersForType.length >= 4 ? deriveGameType(allPlayersForType) : "mixed";
 
     if (existingAssignment && existingAssignment.isWarmup) {
-      const updatedPlayerIds = [...currentPlayerIds, ...newPlayerIds];
-      const updateData: { playerIds: string[]; startedAt?: Date } = { playerIds: updatedPlayerIds };
+      const updatedPlayerIds = mergedPlayerIds;
+      const updateData: { playerIds: string[]; startedAt?: Date; gameType?: GameType } = {
+        playerIds: updatedPlayerIds,
+      };
       if (updatedPlayerIds.length >= 4) {
         updateData.startedAt = new Date();
+        updateData.gameType = gameTypeForCourt;
       }
 
       await prisma.courtAssignment.update({
@@ -119,7 +149,7 @@ export async function POST(
           assignmentId: existingAssignment.id,
           isWarmup: true,
           teammates: [],
-          gameType: "mixed",
+          gameType: gameTypeForCourt,
         });
       }
 
@@ -133,7 +163,7 @@ export async function POST(
           sessionId: session.id,
           playerIds: newPlayerIds,
           groupIds: [],
-          gameType: "mixed",
+          gameType: gameTypeForCourt,
           isWarmup: true,
           ...(newPlayerIds.length >= 4 ? { startedAt: new Date() } : {}),
         },
@@ -158,7 +188,7 @@ export async function POST(
           assignmentId: assignment.id,
           isWarmup: true,
           teammates: [],
-          gameType: "mixed",
+          gameType: gameTypeForCourt,
         });
       }
 
