@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSessionStore, useHasHydrated } from "@/stores/session-store";
+import { useSessionStore, useHasHydrated, BLOCK_COOKIE_RESTORE_KEY } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { OnboardingFlow } from "./onboarding";
 import { PlayerHome } from "./home";
@@ -52,6 +52,10 @@ export default function PlayerPage() {
     }
 
     if (!token) {
+      if (typeof window !== "undefined" && sessionStorage.getItem(BLOCK_COOKIE_RESTORE_KEY)) {
+        setValidated(true);
+        return;
+      }
       fetch("/api/auth/validate-token", {
         method: "POST",
         credentials: "include",

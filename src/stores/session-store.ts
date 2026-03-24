@@ -22,6 +22,10 @@ interface SessionStore extends AuthState {
 }
 
 const SESSION_ALIVE_KEY = "courtflow-alive";
+const PERSIST_KEY = "courtflow-session";
+
+/** While set, /player must not restore session from httpOnly cookie (avoids re-login race after logout). Cleared when setAuth receives a token. */
+export const BLOCK_COOKIE_RESTORE_KEY = "courtflow-block-cookie-restore";
 
 export const useSessionStore = create<SessionStore>()(
   persist(
@@ -37,18 +41,29 @@ export const useSessionStore = create<SessionStore>()(
       rememberMe: true,
       setAuth: (data) => {
         set((state) => ({ ...state, ...data }));
-        if (typeof window !== "undefined" && data.token) {
-          sessionStorage.setItem(SESSION_ALIVE_KEY, "1");
+        if (typeof window !== "undefined") {
+          if (data.token) {
+            sessionStorage.setItem(SESSION_ALIVE_KEY, "1");
+            sessionStorage.removeItem(BLOCK_COOKIE_RESTORE_KEY);
+          }
         }
       },
       clearAuth: () => {
+        if (typeof window !== "undefined") {
+          sessionStorage.setItem(BLOCK_COOKIE_RESTORE_KEY, "1");
+          sessionStorage.removeItem(SESSION_ALIVE_KEY);
+          try {
+            localStorage.removeItem(PERSIST_KEY);
+          } catch {
+            /* ignore */
+          }
+        }
         set({
           token: null, role: null, playerId: null, staffId: null,
           staffName: null, venueId: null, playerName: null,
           onboardingCompleted: null, rememberMe: true,
         });
         if (typeof window !== "undefined") {
-          sessionStorage.removeItem(SESSION_ALIVE_KEY);
           void fetch("/api/auth/player-logout", {
             method: "POST",
             credentials: "include",
@@ -56,7 +71,7 @@ export const useSessionStore = create<SessionStore>()(
         }
       },
     }),
-    { name: "courtflow-session" }
+    { name: PERSIST_KEY }
   )
 );
 
