@@ -2,9 +2,8 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireAuth } from "@/lib/auth";
-
-const VALID_RATINGS = ["fire", "thumbs_up", "neutral", "frustrated"] as const;
-type Rating = (typeof VALID_RATINGS)[number];
+import { emitToVenue } from "@/lib/socket-server";
+import { isValidLastGameRating, ratingToEmoji } from "@/lib/last-game-reaction";
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,7 +13,7 @@ export async function POST(request: NextRequest) {
     if (!body.sessionId || !body.venueId) {
       return error("sessionId and venueId are required", 400);
     }
-    if (!VALID_RATINGS.includes(body.rating as Rating)) {
+    if (!isValidLastGameRating(body.rating)) {
       return error("Invalid rating", 400);
     }
 
@@ -47,6 +46,11 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+
+    const emoji = ratingToEmoji(body.rating);
+    if (emoji) {
+      emitToVenue(entry.session.venueId, "tv:reaction", { emoji });
+    }
 
     return json({ success: true });
   } catch (e) {

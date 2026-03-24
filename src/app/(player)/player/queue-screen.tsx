@@ -8,13 +8,7 @@ import { cn } from "@/lib/cn";
 import { Link, Coffee } from "lucide-react";
 import { NotificationCard } from "./notification-card";
 import { InstallCard } from "./install-card";
-
-const LAST_GAME_OPTIONS = [
-  { rating: "fire" as const, emoji: "🔥" },
-  { rating: "thumbs_up" as const, emoji: "👍" },
-  { rating: "neutral" as const, emoji: "😐" },
-  { rating: "frustrated" as const, emoji: "😤" },
-];
+import { LAST_GAME_OPTIONS } from "@/lib/last-game-reaction";
 
 interface QueueScreenProps {
   entry: { id: string; groupId: string | null; sessionId: string };
@@ -210,7 +204,7 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
       {showLastGamePrompt && !lastGameFeedbackDone && (
         <div className="mb-4 shrink-0 rounded-2xl border border-neutral-800 bg-neutral-900/80 px-4 py-4">
           <p className="mb-3 text-center text-sm font-medium text-neutral-200">{t("queue.lastGameQuestion")}</p>
-          <div className="flex justify-center gap-2 sm:gap-3">
+          <div className="flex flex-wrap justify-center gap-2 sm:gap-2.5">
             {LAST_GAME_OPTIONS.map((opt) => (
               <button
                 key={opt.rating}
@@ -219,7 +213,7 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
                 onClick={() => void submitLastGameFeedback(opt.rating)}
                 aria-label={t(`queue.lastGameAria.${opt.rating}`)}
                 className={cn(
-                  "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-neutral-800 text-2xl transition-transform",
+                  "flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-neutral-800 text-xl transition-transform sm:h-12 sm:w-12 sm:text-2xl",
                   "hover:bg-neutral-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
                 )}
               >

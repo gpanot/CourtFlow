@@ -81,9 +81,10 @@
     "yesTakeBreak": "Yes, take a break",
     "lastGameQuestion": "Last game?",
     "lastGameAria": {
+      "love": "Loved it",
       "fire": "Amazing",
-      "thumbs_up": "Good",
       "neutral": "Okay",
+      "thumbs_up": "Good",
       "frustrated": "Frustrating"
     }
   },

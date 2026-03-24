@@ -81,9 +81,10 @@
     "yesTakeBreak": "Vâng, nghỉ",
     "lastGameQuestion": "Trận vừa rồi thế nào?",
     "lastGameAria": {
+      "love": "Rất thích",
       "fire": "Tuyệt vời",
-      "thumbs_up": "Tốt",
       "neutral": "Bình thường",
+      "thumbs_up": "Tốt",
       "frustrated": "Khó chịu"
     }
   },

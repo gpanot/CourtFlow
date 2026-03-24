@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { CourtCard, type CourtData } from "@/components/court-card";
 import { QueuePanel, type QueueEntryData } from "@/components/queue-panel";
 import { useSocket } from "@/hooks/use-socket";
@@ -10,6 +10,7 @@ import { cn } from "@/lib/cn";
 import { Wifi, WifiOff, Flame, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
+import { TvReactionOverlay } from "@/components/tv-reaction-overlay";
 
 interface VenueState {
   session: { id: string; status: string } | null;
@@ -24,6 +25,7 @@ export default function TVDisplayPage() {
   const [connected, setConnected] = useState(true);
   const [clock, setClock] = useState(new Date());
   const [rotated, setRotated] = useState(false);
+  const tvRootRef = useRef<HTMLDivElement>(null);
   const { on } = useSocket();
 
   useEffect(() => {
@@ -153,7 +155,8 @@ export default function TVDisplayPage() {
   } as React.CSSProperties;
 
   return (
-    <div className="overflow-hidden bg-black" style={outerStyle}>
+    <div ref={tvRootRef} className="relative overflow-hidden bg-black" style={outerStyle}>
+      <TvReactionOverlay enabled={!!venueId} mountRef={tvRootRef} />
       <div
         className="flex h-dvh w-screen flex-col overflow-hidden bg-black text-white"
         style={rotated ? { width: "100dvh", height: "100dvw" } : undefined}
