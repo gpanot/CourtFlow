@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireAuth } from "@/lib/auth";
-import { emitToVenue, emitToPlayer } from "@/lib/socket-server";
+import { emitToVenue } from "@/lib/socket-server";
 
 export async function POST(request: NextRequest) {
   try {
@@ -42,19 +42,7 @@ export async function POST(request: NextRequest) {
           where: { groupId: entry.group.id },
           data: { groupId: null },
         });
-        for (const member of remainingMembers) {
-          emitToPlayer(member.playerId, "player:notification", {
-            type: "group_dissolved",
-            message: "Your group has been dissolved — you're now solo in queue",
-          });
-        }
-      } else {
-        for (const member of remainingMembers) {
-          emitToPlayer(member.playerId, "player:notification", {
-            type: "group_member_left",
-            message: "A group member has left — your group continues",
-          });
-        }
+
       }
     }
 

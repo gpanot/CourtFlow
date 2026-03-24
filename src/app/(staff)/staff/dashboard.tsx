@@ -346,7 +346,7 @@ export function StaffDashboard() {
         {showOpenSession && (
           <OpenSessionPanel
             courts={venue?.courts || []}
-            onOpen={(courtIds, mix) => handleOpenSession(courtIds, mix)}
+            onOpen={(courtIds, mix, warmupMode) => handleOpenSession(courtIds, mix, warmupMode)}
             onCancel={() => setShowOpenSession(false)}
           />
         )}
@@ -933,9 +933,9 @@ export function StaffDashboard() {
 }
 
 const MIX_PRESETS: { label: string; desc: string; mix: { men: number; women: number; mixed: number } | null }[] = [
+  { label: "Same Gender (Auto)", desc: "Prioritise men/women games", mix: { men: 40, women: 40, mixed: 20 } },
   { label: "Balanced (Auto)", desc: "Equal split across all types", mix: { men: 33, women: 33, mixed: 34 } },
   { label: "Mixed Focus", desc: "More mixed doubles", mix: { men: 25, women: 25, mixed: 50 } },
-  { label: "Same Gender", desc: "Prioritise men/women games", mix: { men: 40, women: 40, mixed: 20 } },
   { label: "No Target", desc: "FIFO order, no balancing", mix: null },
 ];
 
@@ -1020,7 +1020,7 @@ function OpenSessionPanel({
 
       <div className="flex gap-3">
         <button
-          onClick={() => onOpen(Array.from(selected), null, warmupMode)}
+          onClick={() => onOpen(Array.from(selected), MIX_PRESETS[0].mix, warmupMode)}
           disabled={selected.size === 0}
           className="flex-1 rounded-xl bg-green-600 py-3 font-semibold text-white disabled:opacity-40"
         >
@@ -1108,7 +1108,10 @@ function GameTypeMixEditor({
   onSave: (mix: { men: number; women: number; mixed: number } | null) => void;
 }) {
   const findMatchingPreset = (mix: { men: number; women: number; mixed: number } | null) => {
-    if (!mix) return 0; // default to Balanced (Auto)
+    if (!mix) {
+      const idx = MIX_PRESETS.findIndex((p) => p.mix === null);
+      return idx >= 0 ? idx : 0;
+    }
     const idx = MIX_PRESETS.findIndex(
       (p) => p.mix && p.mix.men === mix.men && p.mix.women === mix.women && p.mix.mixed === mix.mixed
     );

@@ -21,6 +21,7 @@ app.prepare().then(() => {
       methods: ["GET", "POST"],
     },
     transports: ["websocket"],
+    pingTimeout: 60000,
   });
 
   // Make io available to API routes via global

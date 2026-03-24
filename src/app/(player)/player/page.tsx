@@ -63,7 +63,13 @@ export default function PlayerPage() {
       });
   }, [hydrated, token, clearAuth, setAuth]);
 
-  if (!hydrated || !validated) return null;
+  if (!hydrated || !validated) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-black">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-700 border-t-green-500" aria-label="Loading" />
+      </div>
+    );
+  }
 
   if (!token || !playerId) {
     return <OnboardingFlow />;

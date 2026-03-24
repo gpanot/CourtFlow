@@ -5,12 +5,18 @@ import { json, error, parseBody } from "@/lib/api-helpers";
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, email, phone, password } = await parseBody<{
+    const { name, email, phone, password, signupGatePassword } = await parseBody<{
       name: string;
       email: string;
       phone: string;
       password: string;
+      signupGatePassword?: string;
     }>(request);
+
+    const sitePassword = process.env.SITE_PASSWORD || "CourtFlow2026!";
+    if (!signupGatePassword || signupGatePassword !== sitePassword) {
+      return error("Signup is protected. Enter the correct access password.", 403);
+    }
 
     if (!name || !email || !phone || !password) {
       return error("All fields are required");

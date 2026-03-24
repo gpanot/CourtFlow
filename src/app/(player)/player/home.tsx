@@ -54,8 +54,12 @@ export function PlayerHome() {
   const [avatar, setAvatar] = useState("🏓");
   const [recapSessionId, setRecapSessionId] = useState<string | null>(null);
   const inRecapRef = useRef(false);
+  /** When true, sync queue/session data but do not change `view` (user is on Profile). */
+  const suppressAutoViewRef = useRef(false);
   const manuallyLeftRef = useRef(false);
   const { on } = useSocket();
+
+  suppressAutoViewRef.current = showProfile;
   useEffect(() => {
     api.get<Venue[]>("/api/venues").then(setVenues).catch(console.error);
     if (playerId) {
@@ -92,9 +96,11 @@ export function PlayerHome() {
     setView(v);
   }, []);
 
-  const fetchPlayerState = useCallback(async () => {
+  const fetchPlayerState = useCallback(async (opts?: { updateView?: boolean }) => {
     if (!selectedVenue) return;
     if (inRecapRef.current) return;
+    const shouldUpdateView = opts?.updateView ?? true;
+    const applyView = () => shouldUpdateView && !inRecapRef.current && !suppressAutoViewRef.current;
     try {
       const sess = await api.get<{ id: string; status: string } | null>(
         `/api/sessions?venueId=${selectedVenue}`
@@ -104,7 +110,7 @@ export function PlayerHome() {
 
       if (!sess) {
         setQueueEntry(null);
-        setViewTracked("home");
+        if (applyView()) setViewTracked("home");
         return;
       }
 
@@ -145,25 +151,27 @@ export function PlayerHome() {
             }
           }
 
-          switch (myEntry.status) {
-            case "waiting":
-              setViewTracked("queue");
-              break;
-            case "assigned":
-              setViewTracked("assigned");
-              break;
-            case "playing":
-              setViewTracked("playing");
-              break;
-            case "on_break":
-              setViewTracked("break");
-              break;
-            default:
-              setViewTracked("home");
+          if (applyView()) {
+            switch (myEntry.status) {
+              case "waiting":
+                setViewTracked("queue");
+                break;
+              case "assigned":
+                setViewTracked("assigned");
+                break;
+              case "playing":
+                setViewTracked("playing");
+                break;
+              case "on_break":
+                setViewTracked("break");
+                break;
+              default:
+                setViewTracked("home");
+            }
           }
         } else {
           setQueueEntry(null);
-          setViewTracked("home");
+          if (applyView()) setViewTracked("home");
         }
       }
     } catch (e) {
@@ -183,17 +191,18 @@ export function PlayerHome() {
     const offConnect = on("connect", () => {
       joinVenue(selectedVenue);
       if (playerId) joinPlayer(playerId);
-      fetchPlayerState();
+      fetchPlayerState({ updateView: false });
     });
 
     const offNotif = on("player:notification", (data: unknown) => {
       const notif = data as Record<string, unknown>;
       setNotification(notif);
 
-      if (notif.type === "court_assigned") setViewTracked("assigned");
-      else if (notif.type === "warmup_ended") setViewTracked("playing");
-      else if (notif.type === "requeued") fetchPlayerState();
-      else if (notif.type === "session_closing" || notif.type === "session_ended_by_staff") {
+      const suppressed = suppressAutoViewRef.current;
+
+      // Session teardown / removal: always leave profile so the user sees recap or home.
+      if (notif.type === "session_closing" || notif.type === "session_ended_by_staff") {
+        setShowProfile(false);
         const sid = (notif.sessionId as string) || session?.id;
         if (sid) {
           inRecapRef.current = true;
@@ -203,14 +212,21 @@ export function PlayerHome() {
           setQueueEntry(null);
           setViewTracked("home");
         }
-      } else if (notif.type === "removed_from_queue") {
-        setQueueEntry(null);
-        setViewTracked("home");
+        return;
       }
+
+
+      if (suppressed) {
+        if (notif.type === "requeued") fetchPlayerState();
+        return;
+      }
+
+      if (notif.type === "court_assigned") setViewTracked("assigned");
+      else if (notif.type === "requeued") fetchPlayerState();
     });
 
-    const offQueue = on("queue:updated", () => fetchPlayerState());
-    const offSession = on("session:updated", () => fetchPlayerState());
+    const offQueue = on("queue:updated", () => fetchPlayerState({ updateView: false }));
+    const offSession = on("session:updated", () => fetchPlayerState({ updateView: false }));
     const offVenue = on("venue:updated", (...args: unknown[]) => {
       const data = args[0] as { id: string; logoUrl?: string | null; tvText?: string | null; name?: string; settings?: { logoSpin?: boolean } };
       setVenues((prev) => prev.map((v) =>
@@ -233,6 +249,7 @@ export function PlayerHome() {
               if (p.avatar) setAvatar(p.avatar);
             }).catch(console.error);
           }
+          void fetchPlayerState();
         }}
       />
     );

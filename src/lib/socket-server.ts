@@ -18,16 +18,9 @@ export function emitToVenue(venueId: string, event: string, data: unknown) {
 
 const PUSH_TITLES: Record<string, string> = {
   court_assigned: "Court Ready!",
-  warmup_ended: "Game Started!",
   requeued: "Back in Queue",
   session_closing: "Session Ending",
   session_ended_by_staff: "Session Ended",
-  removed_from_queue: "Removed from Queue",
-  group_dissolved: "Group Dissolved",
-  group_member_left: "Group Update",
-  group_member_joined: "Group Update",
-  player_left_court: "Player Left",
-  replacement_needed: "Replacement Needed",
 };
 
 export function emitToPlayer(playerId: string, event: string, data: unknown) {

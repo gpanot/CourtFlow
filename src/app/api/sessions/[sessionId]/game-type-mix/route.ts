@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
@@ -64,7 +65,7 @@ export async function PATCH(
 
     await prisma.session.update({
       where: { id: sessionId },
-      data: { gameTypeMix: gameTypeMix ?? undefined },
+      data: { gameTypeMix: gameTypeMix === null ? Prisma.DbNull : gameTypeMix },
     });
 
     await prisma.auditLog.create({

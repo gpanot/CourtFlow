@@ -442,12 +442,7 @@ function scheduleWarmupTransition(
         data: { status: "playing" },
       });
 
-      for (const pid of assignment.playerIds) {
-        emitToPlayer(pid, "player:notification", {
-          type: "warmup_ended",
-          message: "Warm up over — game started!",
-        });
-      }
+
 
       const allCourts = await prisma.court.findMany({
         where: { venueId, activeInSession: true },

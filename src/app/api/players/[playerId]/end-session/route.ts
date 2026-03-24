@@ -40,12 +40,7 @@ export async function POST(
           data: { playerIds: remainingIds },
         });
 
-        for (const pid of remainingIds) {
-          emitToPlayer(pid, "player:notification", {
-            type: "player_left_court",
-            message: "A player has left — a replacement is coming",
-          });
-        }
+
 
         const session = await prisma.session.findFirst({
           where: { venueId, status: "open" },

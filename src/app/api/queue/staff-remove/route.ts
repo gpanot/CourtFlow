@@ -40,19 +40,10 @@ export async function POST(request: NextRequest) {
           where: { groupId: entry.group.id },
           data: { groupId: null },
         });
-        for (const member of remaining) {
-          emitToPlayer(member.playerId, "player:notification", {
-            type: "group_dissolved",
-            message: "Your group has been dissolved — you're now solo in queue",
-          });
-        }
+
       }
     }
 
-    emitToPlayer(playerId, "player:notification", {
-      type: "removed_from_queue",
-      message: "You were removed from the queue by staff",
-    });
 
     await prisma.auditLog.create({
       data: {

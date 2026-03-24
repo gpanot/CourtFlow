@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireAuth } from "@/lib/auth";
-import { emitToVenue, emitToPlayer } from "@/lib/socket-server";
+import { emitToVenue } from "@/lib/socket-server";
 import { MAX_GROUP_SIZE } from "@/lib/constants";
 
 export async function POST(request: NextRequest) {
@@ -46,13 +46,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const player = await prisma.player.findUnique({ where: { id: auth.id } });
-    for (const member of group.queueEntries) {
-      emitToPlayer(member.playerId, "player:notification", {
-        type: "group_member_joined",
-        message: `${player?.name} joined the group`,
-      });
-    }
+
 
     const allEntries = await prisma.queueEntry.findMany({
       where: { sessionId: entry.sessionId, status: { in: ["waiting", "on_break"] } },
