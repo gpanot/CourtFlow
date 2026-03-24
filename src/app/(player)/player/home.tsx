@@ -53,6 +53,7 @@ export function PlayerHome() {
   const [isWarmup, setIsWarmup] = useState(false);
   const [avatar, setAvatar] = useState("🏓");
   const [recapSessionId, setRecapSessionId] = useState<string | null>(null);
+  const [venueLogoutConfirmOpen, setVenueLogoutConfirmOpen] = useState(false);
   const inRecapRef = useRef(false);
   /** When true, sync queue/session data but do not change `view` (user is on Profile). */
   const suppressAutoViewRef = useRef(false);
@@ -95,6 +96,14 @@ export function PlayerHome() {
     viewRef.current = v;
     setView(v);
   }, []);
+
+  const handleLeaveSession = useCallback(() => {
+    if (!selectedVenue) return;
+    manuallyLeftRef.current = true;
+    leaveVenue(selectedVenue);
+    setSelectedVenue(null);
+    setAuth({ venueId: null });
+  }, [selectedVenue, setAuth]);
 
   const fetchPlayerState = useCallback(async (opts?: { updateView?: boolean }) => {
     if (!selectedVenue) return;
@@ -258,37 +267,82 @@ export function PlayerHome() {
   // Venue selection
   if (!selectedVenue) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,24px))]">
-        <div className="mb-8 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+      <>
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,24px))]">
+          <div className="mb-8 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowProfile(true)}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-lg"
+              >
+                {avatar}
+              </button>
+              <div>
+                <h1 className="text-2xl font-bold text-green-500">CourtFlow</h1>
+                <p className="text-neutral-400">Hi {playerName}!</p>
+              </div>
+            </div>
             <button
-              onClick={() => setShowProfile(true)}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-lg"
+              type="button"
+              onClick={() => setVenueLogoutConfirmOpen(true)}
+              className="p-2 text-neutral-400"
+              aria-label="Log out"
             >
-              {avatar}
+              <LogOut className="h-5 w-5" />
             </button>
-            <div>
-              <h1 className="text-2xl font-bold text-green-500">CourtFlow</h1>
-              <p className="text-neutral-400">Hi {playerName}!</p>
+          </div>
+          <p className="mb-4 text-lg text-neutral-300">Select a venue:</p>
+          <div className="space-y-3">
+            {venues.map((v) => (
+              <button
+                key={v.id}
+                onClick={() => { manuallyLeftRef.current = false; setSelectedVenue(v.id); }}
+                className="w-full rounded-xl bg-neutral-800 px-6 py-4 text-left text-lg font-medium text-white hover:bg-neutral-700"
+              >
+                {v.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {venueLogoutConfirmOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="venue-logout-confirm-title"
+            onClick={() => setVenueLogoutConfirmOpen(false)}
+          >
+            <div
+              className="w-full max-w-sm rounded-xl border border-neutral-700 bg-neutral-900 p-5 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 id="venue-logout-confirm-title" className="text-lg font-semibold text-white">
+                Are you sure you want to log out?
+              </h2>
+              <div className="mt-6 flex gap-3 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setVenueLogoutConfirmOpen(false)}
+                  className="rounded-lg border border-neutral-600 px-4 py-2 text-sm font-medium text-neutral-200 transition-colors hover:bg-neutral-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setVenueLogoutConfirmOpen(false);
+                    clearAuth();
+                  }}
+                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-500"
+                >
+                  Log out
+                </button>
+              </div>
             </div>
           </div>
-          <button onClick={clearAuth} className="p-2 text-neutral-400">
-            <LogOut className="h-5 w-5" />
-          </button>
-        </div>
-        <p className="mb-4 text-lg text-neutral-300">Select a venue:</p>
-        <div className="space-y-3">
-          {venues.map((v) => (
-            <button
-              key={v.id}
-              onClick={() => { manuallyLeftRef.current = false; setSelectedVenue(v.id); }}
-              className="w-full rounded-xl bg-neutral-800 px-6 py-4 text-left text-lg font-medium text-white hover:bg-neutral-700"
-            >
-              {v.name}
-            </button>
-          ))}
-        </div>
-      </div>
+        )}
+      </>
     );
   }
 
@@ -310,22 +364,17 @@ export function PlayerHome() {
   if (view === "home") {
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,24px))]">
-        <div className="shrink-0 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setShowProfile(true)}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-lg"
-            >
-              {avatar}
-            </button>
-            <div>
-              <h1 className="text-2xl font-bold text-green-500">CourtFlow</h1>
-              <p className="text-neutral-400">{venueName}</p>
-            </div>
-          </div>
-          <button onClick={() => { manuallyLeftRef.current = true; leaveVenue(selectedVenue); setSelectedVenue(null); setAuth({ venueId: null }); }} className="p-2 text-neutral-400">
-            <LogOut className="h-5 w-5" />
+        <div className="shrink-0 flex items-center gap-3">
+          <button
+            onClick={() => setShowProfile(true)}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-lg"
+          >
+            {avatar}
           </button>
+          <div>
+            <h1 className="text-2xl font-bold text-green-500">CourtFlow</h1>
+            <p className="text-neutral-400">{venueName}</p>
+          </div>
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 overflow-hidden">
@@ -387,6 +436,16 @@ export function PlayerHome() {
               {joining ? "Joining..." : <>Join the<br />Game</>}
             </button>
           )}
+        </div>
+
+        <div className="shrink-0 flex justify-center pt-2">
+          <button
+            type="button"
+            onClick={handleLeaveSession}
+            className="cursor-pointer border-0 bg-transparent py-2 text-[13px] text-neutral-500 hover:text-neutral-400"
+          >
+            Leave session
+          </button>
         </div>
 
         <div className="shrink-0 space-y-3">
