@@ -41,9 +41,13 @@ async function main() {
   }
 
   const adminPassword = bcrypt.hashSync("Cf!Adm1n#2026xQ9", 10);
+  const staffPassword = bcrypt.hashSync("Cf!Staff#2026mR7", 10);
   await prisma.staffMember.upsert({
     where: { phone: "+10000000000" },
-    update: { venues: { connect: [{ id: venue.id }] } },
+    update: {
+      venues: { connect: [{ id: venue.id }] },
+      passwordHash: adminPassword,
+    },
     create: {
       id: "demo-superadmin",
       name: "Admin User",
@@ -58,13 +62,16 @@ async function main() {
 
   await prisma.staffMember.upsert({
     where: { phone: "+10000000001" },
-    update: { venues: { connect: [{ id: venue.id }] } },
+    update: {
+      venues: { connect: [{ id: venue.id }] },
+      passwordHash: staffPassword,
+    },
     create: {
       id: "demo-staff-1",
       name: "Staff Member",
       phone: "+10000000001",
       role: "staff",
-      passwordHash: bcrypt.hashSync("Cf!Staff#2026mR7", 10),
+      passwordHash: staffPassword,
       venues: { connect: [{ id: venue.id }] },
     },
   });

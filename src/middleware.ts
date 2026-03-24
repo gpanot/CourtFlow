@@ -3,7 +3,16 @@ import { NextRequest, NextResponse } from "next/server";
 const COOKIE_NAME = "cf-site-access";
 const TOKEN_VALUE = "granted";
 
+function isSiteGateEnabled(): boolean {
+  const v = process.env.SITE_GATE_ENABLED;
+  return v === "true" || v === "1";
+}
+
 export function middleware(request: NextRequest) {
+  if (!isSiteGateEnabled()) {
+    return NextResponse.next();
+  }
+
   const { pathname } = request.nextUrl;
 
   if (pathname === "/gate") {

@@ -1,7 +1,18 @@
-const BASE_URL = "http://localhost:3000";
-const VENUE_ID = "demo-venue-1";
+import { config as loadEnv } from "dotenv";
+loadEnv({ path: ".env" });
+
+const BASE_URL = process.env.COURTFLOW_BASE_URL || "http://localhost:3000";
+/** Set when site gate is enabled: e.g. cf-site-access=granted */
+const GATE_COOKIE = process.env.COURTFLOW_GATE_COOKIE || "";
+const VENUE_ID = process.env.COURTFLOW_VENUE_ID || "demo-venue-1";
 const BOT_COUNT = 62;
 const DELAY_BETWEEN_JOINS_MS = 3000;
+
+function jsonHeaders(extra?: Record<string, string>): Record<string, string> {
+  const h: Record<string, string> = { "Content-Type": "application/json", ...extra };
+  if (GATE_COOKIE) h.Cookie = GATE_COOKIE;
+  return h;
+}
 
 const NAMES = [
   "Alex", "Jordan", "Taylor", "Morgan", "Casey", "Riley", "Jamie", "Quinn",
@@ -36,7 +47,7 @@ async function getOrCreateBot(index: number): Promise<{ token: string; playerId:
   // Try to register
   const regRes = await fetch(`${BASE_URL}/api/auth/register`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: jsonHeaders(),
     body: JSON.stringify({ phone, name, gender, skillLevel: skill }),
   });
 
@@ -45,7 +56,7 @@ async function getOrCreateBot(index: number): Promise<{ token: string; playerId:
     // Set avatar
     await fetch(`${BASE_URL}/api/players/${data.player.id}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${data.token}` },
+      headers: jsonHeaders({ Authorization: `Bearer ${data.token}` }),
       body: JSON.stringify({ avatar }),
     });
     return { token: data.token, playerId: data.player.id };
@@ -55,13 +66,13 @@ async function getOrCreateBot(index: number): Promise<{ token: string; playerId:
     // Already exists — OTP flow
     const otpRes = await fetch(`${BASE_URL}/api/auth/send-otp`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: jsonHeaders(),
       body: JSON.stringify({ phone }),
     });
     const otpData = await otpRes.json();
     const verifyRes = await fetch(`${BASE_URL}/api/auth/verify-otp`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: jsonHeaders(),
       body: JSON.stringify({ phone, code: otpData.code }),
     });
     const verifyData = await verifyRes.json();
@@ -77,7 +88,9 @@ async function main() {
   const delay = parseInt(process.argv[4] || String(DELAY_BETWEEN_JOINS_MS), 10);
 
   // Get active session
-  const sessRes = await fetch(`${BASE_URL}/api/sessions?venueId=${VENUE_ID}`);
+  const sessRes = await fetch(`${BASE_URL}/api/sessions?venueId=${VENUE_ID}`, {
+    headers: jsonHeaders(),
+  });
   const session = await sessRes.json();
   if (!session?.id) {
     console.error("No active session at venue. Open one first.");
@@ -95,7 +108,7 @@ async function main() {
 
       const queueRes = await fetch(`${BASE_URL}/api/queue`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${bot.token}` },
+        headers: jsonHeaders({ Authorization: `Bearer ${bot.token}` }),
         body: JSON.stringify({ sessionId, venueId: VENUE_ID }),
       });
 
@@ -120,7 +133,7 @@ async function main() {
       if (!bot) continue;
       const queueRes = await fetch(`${BASE_URL}/api/queue`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${bot.token}` },
+        headers: jsonHeaders({ Authorization: `Bearer ${bot.token}` }),
         body: JSON.stringify({ sessionId, venueId: VENUE_ID }),
       });
       if (queueRes.ok) queued++;
@@ -135,7 +148,7 @@ async function main() {
       if (!bot) continue;
       const res = await fetch(`${BASE_URL}/api/queue/requeue`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${bot.token}` },
+        headers: jsonHeaders({ Authorization: `Bearer ${bot.token}` }),
       });
       if (res.ok) requeued++;
     }

@@ -243,24 +243,38 @@ export default function TVDisplayPage() {
                 <p className="text-neutral-600 text-[clamp(1rem,calc(2.5*var(--tw,1vw)),2.5rem)] mt-[calc(2*var(--th,1vh))]">Waiting for session to start...</p>
               </div>
             ) : isWarmupMode ? (
-              <div className="flex h-full flex-col gap-[min(calc(1.5*var(--th,1vh)),calc(0.8*var(--tw,1vw)))]">
-                {/* Warmup hero */}
-                <div className="shrink-0 flex flex-col items-center justify-center gap-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))] text-center py-[min(calc(1.5*var(--th,1vh)),calc(0.8*var(--tw,1vw)))]">
-                  <Flame className="text-amber-400 opacity-80" style={{ width: "clamp(1.25rem, min(calc(5 * var(--tw, 1vw)), calc(8 * var(--th, 1vh))), 6rem)", height: "clamp(1.25rem, min(calc(5 * var(--tw, 1vw)), calc(8 * var(--th, 1vh))), 6rem)" }} />
-                  <p className="font-bold text-amber-300" style={{ fontSize: "clamp(1rem, min(calc(5 * var(--tw, 1vw)), calc(7 * var(--th, 1vh))), 6rem)" }}>Warm Up Time</p>
-                  <p className="text-amber-400/70" style={{ fontSize: "clamp(0.65rem, min(calc(2.2 * var(--tw, 1vw)), calc(3 * var(--th, 1vh))), 2.5rem)" }}>
+              <div className="flex h-full min-h-0 flex-col gap-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]">
+                {/* Warmup hero — capped by vh so the court grid always fits on one TV screen (no scroll) */}
+                <div className="shrink-0 flex flex-col items-center justify-center gap-[min(calc(0.5*var(--th,1vh)),calc(0.35*var(--tw,1vw)))] text-center py-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]">
+                  <Flame
+                    className="text-amber-400 opacity-80 shrink-0"
+                    style={{
+                      width: "clamp(1.25rem, min(calc(3 * var(--tw, 1vw)), calc(5 * var(--th, 1vh))), min(3.5rem, calc(10 * var(--th, 1vh))))",
+                      height: "clamp(1.25rem, min(calc(3 * var(--tw, 1vw)), calc(5 * var(--th, 1vh))), min(3.5rem, calc(10 * var(--th, 1vh))))",
+                    }}
+                  />
+                  <p
+                    className="font-bold text-amber-300 leading-tight"
+                    style={{ fontSize: "clamp(1rem, min(calc(3 * var(--tw, 1vw)), calc(4 * var(--th, 1vh))), min(2.75rem, calc(8 * var(--th, 1vh))))" }}
+                  >
+                    Warm Up Time
+                  </p>
+                  <p
+                    className="text-amber-400/70 leading-snug"
+                    style={{ fontSize: "clamp(0.65rem, min(calc(1.5 * var(--tw, 1vw)), calc(2 * var(--th, 1vh))), min(1.35rem, calc(4 * var(--th, 1vh))))" }}
+                  >
                     Go to your assigned court and warm up freely
                   </p>
                 </div>
                 {/* Court cards in warmup state */}
-                <div className={cn("grid flex-1 min-h-0 overflow-y-auto gap-[min(var(--tw,1vw),var(--th,1vh))] auto-rows-fr", gridCols)}>
+                <div className={cn("grid min-h-0 flex-1 overflow-hidden gap-[min(var(--tw,1vw),var(--th,1vh))] auto-rows-fr", gridCols)}>
                   {sortedCourts.map((court) => (
                     <CourtCard key={court.id} court={court} variant="tv" warmup={true} />
                   ))}
                 </div>
               </div>
             ) : (
-              <div className={cn("grid h-full overflow-y-auto gap-[min(var(--tw,1vw),var(--th,1vh))] auto-rows-fr", gridCols)}>
+              <div className={cn("grid h-full min-h-0 overflow-hidden gap-[min(var(--tw,1vw),var(--th,1vh))] auto-rows-fr", gridCols)}>
                 {sortedCourts.map((court) => (
                   <CourtCard key={court.id} court={court} variant="tv" />
                 ))}
@@ -273,14 +287,14 @@ export default function TVDisplayPage() {
             <aside
               className="shrink-0 border-l border-neutral-800 flex flex-col overflow-hidden"
               style={{
-                width: "clamp(8rem, min(calc(22 * var(--tw, 1vw)), calc(40 * var(--th, 1vh))), 26rem)",
-                padding: "clamp(0.4rem, min(calc(1.5 * var(--tw, 1vw)), calc(2 * var(--th, 1vh))), 1.5rem)",
+                width: "clamp(6.4rem, min(calc(17.6 * var(--tw, 1vw)), calc(32 * var(--th, 1vh))), 20.8rem)",
+                padding: "clamp(0.32rem, min(calc(1.2 * var(--tw, 1vw)), calc(1.6 * var(--th, 1vh))), 1.2rem)",
               }}
             >
-              <div className="shrink-0 w-full mb-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]" style={{ maxHeight: "calc(45 * var(--th, 1vh))" }}>
+              <div className="shrink-0 w-full mb-[min(calc(0.8*var(--th,1vh)),calc(0.4*var(--tw,1vw)))]" style={{ maxHeight: "calc(36 * var(--th, 1vh))" }}>
                 <div
-                  className="w-full rounded-[var(--tw,1vw)] bg-white p-[min(var(--tw,1vw),calc(1.5*var(--th,1vh)))] aspect-square flex items-center justify-center"
-                  style={{ maxHeight: "calc(45 * var(--th, 1vh))", maxWidth: "calc(45 * var(--th, 1vh))" }}
+                  className="w-full rounded-[var(--tw,1vw)] bg-white p-[min(calc(0.8*var(--tw,1vw)),calc(1.2*var(--th,1vh)))] aspect-square flex items-center justify-center"
+                  style={{ maxHeight: "calc(36 * var(--th, 1vh))", maxWidth: "calc(36 * var(--th, 1vh))" }}
                 >
                   <QRCodeSVG
                     value={`${typeof window !== "undefined" ? window.location.origin : ""}/player?venueId=${venueId}`}
@@ -293,8 +307,8 @@ export default function TVDisplayPage() {
               </div>
               {isWarmupMode && (
                 <p
-                  className="mb-[calc(0.5*var(--th,1vh))] font-semibold text-amber-400 uppercase tracking-wider"
-                  style={{ fontSize: "clamp(0.45rem, min(var(--tw, 1vw), calc(1.5 * var(--th, 1vh))), 0.875rem)" }}
+                  className="mb-[calc(0.4*var(--th,1vh))] font-semibold text-amber-400 uppercase tracking-wider"
+                  style={{ fontSize: "clamp(0.36rem, min(calc(0.8 * var(--tw, 1vw)), calc(1.2 * var(--th, 1vh))), 0.7rem)" }}
                 >
                   Checked In
                 </p>

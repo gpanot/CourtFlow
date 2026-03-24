@@ -135,52 +135,40 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
     if (displayEntries.length >= limit) break;
   }
 
-  const courtBatches: { label: string; items: typeof displayEntries }[] = [];
+  const courtBatches: { items: typeof displayEntries }[] = [];
   if (isTV && displayEntries.length > 0) {
     let currentBatch: typeof displayEntries = [];
     let batchPlayerCount = 0;
-    let batchIndex = 0;
 
     for (const item of displayEntries) {
       const playerCount = item.isGroup ? item.groupSize : 1;
       if (batchPlayerCount > 0 && batchPlayerCount + playerCount > 4) {
-        courtBatches.push({
-          label: batchIndex === 0 ? "Next" : `+${batchIndex}`,
-          items: currentBatch,
-        });
+        courtBatches.push({ items: currentBatch });
         currentBatch = [];
         batchPlayerCount = 0;
-        batchIndex++;
       }
       currentBatch.push(item);
       batchPlayerCount += playerCount;
       if (batchPlayerCount >= 4) {
-        courtBatches.push({
-          label: batchIndex === 0 ? "Next" : `+${batchIndex}`,
-          items: currentBatch,
-        });
+        courtBatches.push({ items: currentBatch });
         currentBatch = [];
         batchPlayerCount = 0;
-        batchIndex++;
       }
     }
     if (currentBatch.length > 0) {
-      courtBatches.push({
-        label: batchIndex === 0 ? "Next" : `+${batchIndex}`,
-        items: currentBatch,
-      });
+      courtBatches.push({ items: currentBatch });
     }
   }
 
   const soloWaitingCount = entries.filter((e) => e.status === "waiting" && !e.groupId).length;
 
   return (
-    <div className={cn("flex flex-col", isTV ? "gap-[calc(0.8*var(--th,1vh))]" : "gap-1")}>
-      <div className={cn("flex items-center justify-between", isTV ? "mb-[calc(0.5*var(--th,1vh))]" : "mb-1")}>
+    <div className={cn("flex flex-col", isTV ? "gap-[calc(0.64*var(--th,1vh))]" : "gap-1")}>
+      <div className={cn("flex items-center justify-between", isTV ? "mb-[calc(0.4*var(--th,1vh))]" : "mb-1")}>
         <h4
           className={cn(
             "font-semibold text-neutral-400 uppercase tracking-wider",
-            isTV ? "text-[clamp(0.65rem,calc(1.2*var(--tw,1vw)),1.25rem)]" : "text-sm"
+            isTV ? "text-[clamp(0.52rem,calc(0.96*var(--tw,1vw)),1rem)]" : "text-sm"
           )}
         >
           Queue ({entries.filter((e) => e.status === "waiting").length} waiting)
@@ -197,7 +185,7 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
       </div>
 
       {displayEntries.length === 0 && (
-        <p className={cn("text-neutral-500", isTV ? "text-[clamp(0.75rem,calc(1.5*var(--tw,1vw)),1.5rem)]" : "text-sm")}>
+        <p className={cn("text-neutral-500", isTV ? "text-[clamp(0.6rem,calc(1.2*var(--tw,1vw)),1.2rem)]" : "text-sm")}>
           No players in queue
         </p>
       )}
@@ -207,19 +195,13 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
           <div
             key={batchIdx}
             className={cn(
-              "rounded-lg border px-[calc(0.6*var(--tw,1vw))] py-[calc(0.4*var(--th,1vh))]",
+              "rounded-lg border px-[calc(0.48*var(--tw,1vw))] py-[calc(0.32*var(--th,1vh))]",
               batchIdx === 0
                 ? "border-green-500/30 bg-green-500/5"
                 : "border-neutral-700/50 bg-neutral-800/30"
             )}
           >
-            <p className={cn(
-              "uppercase tracking-wider font-semibold mb-[calc(0.3*var(--th,1vh))]",
-              batchIdx === 0 ? "text-green-500" : "text-neutral-600",
-            )} style={{ fontSize: "clamp(0.4rem, calc(0.8 * var(--tw, 1vw)), 0.65rem)" }}>
-              {batch.label}
-            </p>
-            <div className="flex flex-col gap-[calc(0.3*var(--th,1vh))]">
+            <div className="flex flex-col gap-[calc(0.24*var(--th,1vh))]">
               {batch.items.map(({ key, entry, isGroup, groupSize, position: pos, allPlayers, cumulativePlayersBefore }) => (
                 <QueueRow
                   key={key}
@@ -256,7 +238,7 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
       )}
 
       {isTV && waitingCount > cumulativePlayers && displayEntries.length >= limit && (
-        <p className="text-center text-neutral-500 mt-[calc(0.5*var(--th,1vh))] text-[clamp(0.6rem,calc(1.1*var(--tw,1vw)),1rem)]">
+        <p className="text-center text-neutral-500 mt-[calc(0.4*var(--th,1vh))] text-[clamp(0.48rem,calc(0.88*var(--tw,1vw)),0.8rem)]">
           +{waitingCount - cumulativePlayers} players
         </p>
       )}
@@ -270,7 +252,7 @@ function SkillDot({ level, isTV }: { level?: string; isTV: boolean }) {
     <span
       className={cn(
         "shrink-0 rounded-full",
-        isTV ? "h-[clamp(0.35rem,calc(0.7*var(--tw,1vw)),0.6rem)] w-[clamp(0.35rem,calc(0.7*var(--tw,1vw)),0.6rem)]" : "h-2 w-2",
+        isTV ? "h-[clamp(0.28rem,calc(0.56*var(--tw,1vw)),0.48rem)] w-[clamp(0.28rem,calc(0.56*var(--tw,1vw)),0.48rem)]" : "h-2 w-2",
         color,
       )}
     />
@@ -342,14 +324,14 @@ function QueueRow({
       <div
         className={cn(
           "flex items-center rounded-xl border border-neutral-800",
-          isTV ? "gap-[calc(0.5*var(--tw,1vw))] px-[calc(0.8*var(--tw,1vw))] py-[calc(0.6*var(--th,1vh))]" : "gap-3 px-4 py-2",
+          isTV ? "gap-[calc(0.4*var(--tw,1vw))] px-[calc(0.64*var(--tw,1vw))] py-[calc(0.48*var(--th,1vh))] leading-tight" : "gap-3 px-4 py-2",
           entry.status === "on_break" && "opacity-60"
         )}
       >
         <span
           className={cn(
             "font-bold text-neutral-500 tabular-nums shrink-0",
-            isTV ? "text-[clamp(0.75rem,calc(1.5*var(--tw,1vw)),1.5rem)] w-[calc(2.5*var(--tw,1vw))] min-w-6" : "text-base w-6"
+            isTV ? "text-[clamp(0.6rem,calc(1.2*var(--tw,1vw)),1.2rem)] w-[calc(2*var(--tw,1vw))] min-w-5" : "text-base w-6"
           )}
         >
           #{position}
@@ -359,8 +341,8 @@ function QueueRow({
           {isGroup ? (
             <div className="flex flex-col gap-0.5">
               <div className="flex items-center gap-2">
-                <Link className={cn("text-blue-400 shrink-0", isTV ? "h-[calc(1.2*var(--tw,1vw))] w-[calc(1.2*var(--tw,1vw))] min-h-3 min-w-3" : "h-4 w-4")} />
-                <span className={cn("font-medium", isTV ? "text-[clamp(0.75rem,calc(1.5*var(--tw,1vw)),1.5rem)]" : "text-sm")}>
+                <Link className={cn("text-blue-400 shrink-0", isTV ? "h-[calc(0.96*var(--tw,1vw))] w-[calc(0.96*var(--tw,1vw))] min-h-2.5 min-w-2.5" : "h-4 w-4")} />
+                <span className={cn("font-medium", isTV ? "text-[clamp(0.6rem,calc(1.2*var(--tw,1vw)),1.2rem)]" : "text-sm")}>
                   Group of {groupSize}
                 </span>
               </div>
@@ -389,7 +371,7 @@ function QueueRow({
                 </div>
               )}
               {(isTV || !onPlayerAction) && entry.group && (
-                <div className={cn("flex flex-wrap items-center gap-x-2 gap-y-0.5", isTV ? "text-[clamp(0.6rem,var(--tw,1vw),1rem)]" : "ml-6 text-xs")}>
+                <div className={cn("flex flex-wrap items-center gap-x-2 gap-y-0.5", isTV ? "text-[clamp(0.48rem,calc(0.8*var(--tw,1vw)),0.8rem)]" : "ml-6 text-xs")}>
                   {entry.group.queueEntries.map((e, i) => (
                     <span key={e.player.id} className="flex items-center gap-1 text-neutral-500">
                       {!isTV && <SkillTag level={e.player.skillLevel} />}
@@ -401,7 +383,7 @@ function QueueRow({
             </div>
           ) : (
             <div className="flex items-center gap-1.5">
-              <span className={cn("font-medium", isTV ? "text-[clamp(0.75rem,calc(1.5*var(--tw,1vw)),1.5rem)] line-clamp-2 break-words" : "text-sm truncate")}>
+              <span className={cn("font-medium", isTV ? "text-[clamp(0.6rem,calc(1.2*var(--tw,1vw)),1.2rem)] line-clamp-2 break-words" : "text-sm truncate")}>
                 {entry.player.name}
               </span>
               {!isTV && <SkillTag level={entry.player.skillLevel} />}
@@ -414,7 +396,7 @@ function QueueRow({
 
         {entry.status === "on_break" && (
           <div className="flex items-center gap-1 text-amber-400">
-            <Coffee className={cn(isTV ? "h-[calc(1.2*var(--tw,1vw))] w-[calc(1.2*var(--tw,1vw))] min-h-3 min-w-3" : "h-4 w-4")} />
+            <Coffee className={cn(isTV ? "h-[calc(0.96*var(--tw,1vw))] w-[calc(0.96*var(--tw,1vw))] min-h-2.5 min-w-2.5" : "h-4 w-4")} />
             {entry.breakUntil && (
               <BreakCountdown until={entry.breakUntil} isTV={isTV} />
             )}
@@ -422,7 +404,7 @@ function QueueRow({
         )}
 
         {isTV && !isGroup && entry.player.avatar && (
-          <span className={cn("shrink-0 text-[clamp(1rem,calc(2*var(--tw,1vw)),2rem)] inline-block", isNextUp && "animate-spin-y")}>
+          <span className={cn("shrink-0 text-[clamp(0.8rem,calc(1.6*var(--tw,1vw)),1.6rem)] inline-block", isNextUp && "animate-spin-y")}>
             {entry.player.avatar}
           </span>
         )}
@@ -707,7 +689,7 @@ function BreakCountdown({ until, isTV }: { until: string; isTV: boolean }) {
   const remaining = Math.max(0, Math.floor((end - now) / 60000));
 
   return (
-    <span className={cn("tabular-nums", isTV ? "text-[clamp(0.6rem,calc(1.1*var(--tw,1vw)),1.125rem)]" : "text-xs")}>
+    <span className={cn("tabular-nums", isTV ? "text-[clamp(0.48rem,calc(0.88*var(--tw,1vw)),0.9rem)]" : "text-xs")}>
       {remaining}m
     </span>
   );
