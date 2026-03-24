@@ -97,6 +97,7 @@ export default function PlayersPage() {
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState({ name: "", phone: "", gender: "", skillLevel: "", avatar: "" });
   const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -267,15 +268,22 @@ export default function PlayersPage() {
     finally { setSavingEdit(false); }
   };
 
-  const deletePlayer = async () => {
-    if (!detailPlayer) return;
-    if (!confirm(`Delete "${detailPlayer.name}"? This action cannot be undone.`)) return;
+  const deletePlayer = async (player?: PlayerRecord) => {
+    const target = player ?? detailPlayer;
+    if (!target) return;
+    if (!confirm(`Delete "${target.name}"? This action cannot be undone.`)) return;
+    setDeletingId(target.id);
     try {
-      await api.delete(`/api/admin/players/${detailPlayer.id}`);
-      setDetailPlayer(null);
-      setDetailSessions([]);
+      await api.delete(`/api/admin/players/${target.id}`);
+      if (detailPlayer?.id === target.id) {
+        setDetailPlayer(null);
+        setDetailSessions([]);
+        setEditingSkillId(null);
+        setEditMode(false);
+      }
       await fetchPlayers();
     } catch (e) { alert((e as Error).message); }
+    finally { setDeletingId(null); }
   };
 
   const fmtPlayTime = (m: number) => {
@@ -504,13 +512,29 @@ export default function PlayersPage() {
                   {p.lastSeen ? fmtDate(p.lastSeen.date) : "—"}
                 </td>
                 <td className="px-1 py-2">
-                  <button
-                    onClick={() => openPlayerDetail(p)}
-                    className="rounded-lg p-1 text-neutral-500 hover:bg-neutral-800 hover:text-white transition-colors"
-                    title="View details"
-                  >
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </button>
+                  <div className="flex items-center justify-end gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => deletePlayer(p)}
+                      disabled={deletingId === p.id}
+                      className="rounded-lg p-1 text-neutral-500 hover:bg-red-900/40 hover:text-red-400 transition-colors disabled:opacity-40"
+                      title="Delete player"
+                    >
+                      {deletingId === p.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openPlayerDetail(p)}
+                      className="rounded-lg p-1 text-neutral-500 hover:bg-neutral-800 hover:text-white transition-colors"
+                      title="View details"
+                    >
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -536,6 +560,19 @@ export default function PlayersPage() {
                 )}
               </div>
               <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
+                <button
+                  type="button"
+                  onClick={() => deletePlayer(p)}
+                  disabled={deletingId === p.id}
+                  className="rounded-lg p-1.5 text-neutral-500 hover:bg-red-900/40 hover:text-red-400 disabled:opacity-40"
+                  title="Delete player"
+                >
+                  {deletingId === p.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                </button>
                 <SkillBadge
                   playerId={p.id}
                   level={p.skillLevel}
@@ -715,6 +752,7 @@ export default function PlayersPage() {
           onSaveEdit={saveEditPlayer}
           onCancelEdit={() => setEditMode(false)}
           onDelete={deletePlayer}
+          deleteBusy={deletingId === detailPlayer.id}
         />
       )}
     </div>
@@ -958,6 +996,7 @@ function PlayerDetailPanel({
   onSaveEdit,
   onCancelEdit,
   onDelete,
+  deleteBusy,
 }: {
   player: PlayerRecord;
   sessions: PlayerSession[];
@@ -978,6 +1017,7 @@ function PlayerDetailPanel({
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   onDelete: () => void;
+  deleteBusy: boolean;
 }) {
   const avgFeedback = sessions.filter((s) => s.feedback).length > 0
     ? (sessions.reduce((sum, s) => sum + (s.feedback?.experience ?? 0), 0) / sessions.filter((s) => s.feedback).length).toFixed(1)
@@ -1008,8 +1048,14 @@ function PlayerDetailPanel({
                 <button onClick={onStartEdit} className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-white" title="Edit player">
                   <Pencil className="h-4 w-4" />
                 </button>
-                <button onClick={onDelete} className="rounded-lg p-1.5 text-neutral-400 hover:bg-red-900/40 hover:text-red-400" title="Delete player">
-                  <Trash2 className="h-4 w-4" />
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  disabled={deleteBusy}
+                  className="rounded-lg p-1.5 text-neutral-400 hover:bg-red-900/40 hover:text-red-400 disabled:opacity-40"
+                  title="Delete player"
+                >
+                  {deleteBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                 </button>
               </>
             )}
@@ -1065,6 +1111,16 @@ function PlayerDetailPanel({
                   onClick={onCancelEdit}
                   className="flex-1 rounded-lg bg-neutral-800 py-2 text-sm text-neutral-400 hover:text-white"
                 >Cancel</button>
+              </div>
+              <div className="border-t border-neutral-800 pt-3">
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  disabled={deleteBusy || savingEdit}
+                  className="text-sm font-medium text-red-400/90 hover:text-red-400 disabled:opacity-40"
+                >
+                  {deleteBusy ? "Deleting…" : "Delete player"}
+                </button>
               </div>
             </div>
           ) : (

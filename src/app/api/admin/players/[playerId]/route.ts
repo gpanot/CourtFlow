@@ -69,8 +69,18 @@ export async function DELETE(
       return error("Cannot delete player with confirmed bookings. Cancel them first.", 400);
     }
 
+    const membershipIds = (
+      await prisma.membership.findMany({ where: { playerId }, select: { id: true } })
+    ).map((m) => m.id);
+    if (membershipIds.length > 0) {
+      await prisma.membershipPayment.deleteMany({
+        where: { membershipId: { in: membershipIds } },
+      });
+    }
+
     await prisma.pushSubscription.deleteMany({ where: { playerId } });
     await prisma.queueEntry.deleteMany({ where: { playerId } });
+    await prisma.coachLesson.deleteMany({ where: { playerId } });
     await prisma.booking.deleteMany({ where: { playerId } });
     await prisma.membership.deleteMany({ where: { playerId } });
     await prisma.player.delete({ where: { id: playerId } });
