@@ -1,7 +1,8 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { verifyOtp, signToken } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
+import { setPlayerAuthCookieOnResponse } from "@/lib/player-auth-cookie";
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,11 +16,13 @@ export async function POST(request: NextRequest) {
 
     if (existingPlayer) {
       const token = signToken({ id: existingPlayer.id, role: "player" });
-      return json({
+      const res = NextResponse.json({
         token,
         player: existingPlayer,
         isNew: false,
       });
+      setPlayerAuthCookieOnResponse(res, token);
+      return res;
     }
 
     return json({ verified: true, phone, isNew: true });

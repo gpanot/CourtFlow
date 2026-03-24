@@ -49,6 +49,10 @@ export const useSessionStore = create<SessionStore>()(
         });
         if (typeof window !== "undefined") {
           sessionStorage.removeItem(SESSION_ALIVE_KEY);
+          void fetch("/api/auth/player-logout", {
+            method: "POST",
+            credentials: "include",
+          }).catch(() => {});
         }
       },
     }),

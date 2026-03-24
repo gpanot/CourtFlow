@@ -20,6 +20,7 @@ export default function PlayerPage() {
     if (reauthToken && !token) {
       fetch("/api/auth/validate-token", {
         method: "POST",
+        credentials: "include",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${reauthToken}`,
@@ -51,11 +52,36 @@ export default function PlayerPage() {
     }
 
     if (!token) {
-      setValidated(true);
+      fetch("/api/auth/validate-token", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      })
+        .then(async (r) => {
+          const data = (await r.json()) as {
+            valid?: boolean;
+            player?: { id: string; name: string };
+            token?: string;
+            error?: string;
+          };
+          if (r.ok && data.valid && data.player && data.token) {
+            setAuth({
+              token: data.token,
+              playerId: data.player.id,
+              role: "player",
+              playerName: data.player.name,
+            });
+          }
+          setValidated(true);
+        })
+        .catch(() => setValidated(true));
       return;
     }
 
-    api.post<{ valid: boolean }>("/api/auth/validate-token", {})
+    api.post<{ valid: boolean; player?: { id: string; name: string }; token?: string }>(
+      "/api/auth/validate-token",
+      {}
+    )
       .then(() => setValidated(true))
       .catch(() => {
         clearAuth();

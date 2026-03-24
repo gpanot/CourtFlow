@@ -1,7 +1,8 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { signToken } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { json, error, parseBody } from "@/lib/api-helpers";
+import { error, parseBody } from "@/lib/api-helpers";
+import { setPlayerAuthCookieOnResponse } from "@/lib/player-auth-cookie";
 import type { SkillLevel, Gender } from "@prisma/client";
 
 interface RegisterBody {
@@ -31,7 +32,9 @@ export async function POST(request: NextRequest) {
     });
 
     const token = signToken({ id: player.id, role: "player" });
-    return json({ token, player }, 201);
+    const res = NextResponse.json({ token, player }, { status: 201 });
+    setPlayerAuthCookieOnResponse(res, token);
+    return res;
   } catch (e) {
     return error((e as Error).message, 500);
   }
