@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api-client";
 import { Share2, Hand, ChevronDown } from "lucide-react";
 
@@ -36,18 +37,20 @@ const EXPERIENCE_OPTIONS = [
 ];
 
 const MATCH_OPTIONS = [
-  { value: "too_easy", emoji: "😤", label: "Too easy" },
-  { value: "perfect", emoji: "👌", label: "Perfect" },
-  { value: "too_hard", emoji: "💪", label: "Too hard" },
+  { value: "too_easy" as const, emoji: "😤" },
+  { value: "perfect" as const, emoji: "👌" },
+  { value: "too_hard" as const, emoji: "💪" },
 ];
 
 const RETURN_OPTIONS = [
-  { value: "no", emoji: "👎", label: "No" },
-  { value: "maybe", emoji: "🤷", label: "Maybe" },
-  { value: "yes", emoji: "👍", label: "Yes" },
+  { value: "no" as const, emoji: "👎" },
+  { value: "maybe" as const, emoji: "🤷" },
+  { value: "yes" as const, emoji: "👍" },
 ];
 
 export function SessionRecapScreen({ sessionId, onClose }: SessionRecapProps) {
+  const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language?.toLowerCase().startsWith("vi") ? "vi-VN" : "en-US";
   const [data, setData] = useState<PlayerStats | null>(null);
   const [loading, setLoading] = useState(true);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -56,6 +59,8 @@ export function SessionRecapScreen({ sessionId, onClose }: SessionRecapProps) {
   const [experience, setExperience] = useState<number | null>(null);
   const [matchQuality, setMatchQuality] = useState<string | null>(null);
   const [wouldReturn, setWouldReturn] = useState<string | null>(null);
+  /** 0–2 = which question is shown; 3 = all answered, show CTA */
+  const [surveyStep, setSurveyStep] = useState(0);
   const [feedbackSent, setFeedbackSent] = useState(false);
 
   const allAnswered = experience !== null && matchQuality !== null && wouldReturn !== null;
@@ -111,11 +116,11 @@ export function SessionRecapScreen({ sessionId, onClose }: SessionRecapProps) {
 
     ctx.fillStyle = "#ffffff";
     ctx.font = "bold 32px system-ui";
-    ctx.fillText(`${data.player.name}'s session`, 40, 120);
+    ctx.fillText(t("sessionRecap.shareCardPreviewTitle", { name: data.player.name }), 40, 120);
 
     ctx.fillStyle = "#a3a3a3";
     ctx.font = "18px system-ui";
-    const shareDateStr = new Date(data.session.date).toLocaleDateString("en-US", {
+    const shareDateStr = new Date(data.session.date).toLocaleDateString(dateLocale, {
       weekday: "long",
       month: "long",
       day: "numeric",
@@ -130,9 +135,9 @@ export function SessionRecapScreen({ sessionId, onClose }: SessionRecapProps) {
     ctx.stroke();
 
     const statLines = [
-      { icon: "⏱", label: `${data.stats.totalPlayMinutes} min on court`, y: 250 },
-      { icon: "🎮", label: `${data.stats.gamesPlayed} games played`, y: 320 },
-      { icon: "👥", label: `${data.stats.partners.length} players met`, y: 390 },
+      { icon: "⏱", label: t("sessionRecap.minOnCourt", { mins: data.stats.totalPlayMinutes }), y: 250 },
+      { icon: "🎮", label: t("sessionRecap.gamesPlayedCount", { count: data.stats.gamesPlayed }), y: 320 },
+      { icon: "👥", label: t("sessionRecap.playersMetCount", { count: data.stats.partners.length }), y: 390 },
     ];
 
     for (const s of statLines) {
@@ -178,7 +183,7 @@ export function SessionRecapScreen({ sessionId, onClose }: SessionRecapProps) {
 
       if (navigator.share && navigator.canShare?.({ files: [new File([blob], "courtflow-stats.png")] })) {
         await navigator.share({
-          title: "My CourtFlow Session",
+          title: t("sessionRecap.shareTitle"),
           files: [new File([blob], "courtflow-stats.png", { type: "image/png" })],
         });
       } else {
@@ -192,7 +197,7 @@ export function SessionRecapScreen({ sessionId, onClose }: SessionRecapProps) {
     } catch {
       // user cancelled share
     }
-  }, [data]);
+  }, [data, t, dateLocale]);
 
   if (loading) {
     return (
@@ -205,19 +210,19 @@ export function SessionRecapScreen({ sessionId, onClose }: SessionRecapProps) {
   if (!data) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center p-6 text-center">
-        <p className="text-xl text-neutral-400">No session data available</p>
+        <p className="text-xl text-neutral-400">{t("sessionRecap.noData")}</p>
         <button
           onClick={onClose}
           className="mt-6 rounded-xl bg-neutral-800 px-8 py-3 font-medium text-white"
         >
-          Close
+          {t("common.close")}
         </button>
       </div>
     );
   }
 
   const { player, venue, session, stats, career } = data;
-  const dateStr = new Date(session.date).toLocaleDateString("en-US", {
+  const dateStr = new Date(session.date).toLocaleDateString(dateLocale, {
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -235,95 +240,98 @@ export function SessionRecapScreen({ sessionId, onClose }: SessionRecapProps) {
             onClick={scrollToStats}
             className="text-sm font-medium text-neutral-500 hover:text-neutral-300 transition-colors"
           >
-            Skip
+            {t("sessionRecap.skip")}
           </button>
         </div>
 
         {/* Survey header */}
         <div className="mt-4 text-center">
-          <h1 className="text-3xl font-bold text-white">How was today? 👋</h1>
-          <p className="mt-2 text-sm text-neutral-500">3 quick taps — that&apos;s it</p>
+          <h1 className="text-3xl font-bold text-white">{t("sessionRecap.surveyTitle")}</h1>
+          <p className="mt-2 text-sm text-neutral-500">{t("sessionRecap.surveySubtitle")}</p>
+          {surveyStep < 3 && (
+            <p className="mt-1 text-xs text-neutral-600">
+              {t("sessionRecap.surveyProgress", { current: surveyStep + 1, total: 3 })}
+            </p>
+          )}
         </div>
 
-        {/* Survey cards */}
-        <div className="mt-8 flex-1 space-y-5">
-          {/* Card 1 — Overall Experience */}
-          <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
-            <p className="mb-4 text-center text-sm font-medium text-neutral-400">Your session</p>
-            <div className="flex justify-center gap-3">
-              {EXPERIENCE_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => setExperience(opt.value)}
-                  className={`flex h-14 w-14 items-center justify-center rounded-2xl text-2xl transition-all ${
-                    experience === opt.value
-                      ? "bg-green-600/25 ring-2 ring-green-500 scale-110"
-                      : "bg-neutral-800 hover:bg-neutral-700"
-                  }`}
-                >
-                  {opt.emoji}
-                </button>
-              ))}
+        {/* One question at a time; after Q3, CTA only */}
+        <div className="mt-8 flex min-h-0 flex-1 flex-col justify-center">
+          {surveyStep === 0 && (
+            <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
+              <p className="mb-4 text-center text-sm font-medium text-neutral-400">{t("sessionRecap.yourSession")}</p>
+              <div className="flex justify-center gap-3">
+                {EXPERIENCE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => {
+                      setExperience(opt.value);
+                      setSurveyStep(1);
+                    }}
+                    className="flex h-14 w-14 items-center justify-center rounded-2xl bg-neutral-800 text-2xl transition-all hover:bg-neutral-700 active:scale-95"
+                  >
+                    {opt.emoji}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Card 2 — Match Quality */}
-          <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
-            <p className="mb-4 text-center text-sm font-medium text-neutral-400">Your matches</p>
-            <div className="flex justify-center gap-3">
-              {MATCH_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => setMatchQuality(opt.value)}
-                  className={`flex flex-col items-center gap-1 rounded-2xl px-4 py-3 transition-all ${
-                    matchQuality === opt.value
-                      ? "bg-green-600/25 ring-2 ring-green-500 scale-105"
-                      : "bg-neutral-800 hover:bg-neutral-700"
-                  }`}
-                >
-                  <span className="text-2xl">{opt.emoji}</span>
-                  <span className="text-xs font-medium text-neutral-300">{opt.label}</span>
-                </button>
-              ))}
+          {surveyStep === 1 && (
+            <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
+              <p className="mb-4 text-center text-sm font-medium text-neutral-400">{t("sessionRecap.yourMatches")}</p>
+              <div className="flex justify-center gap-3">
+                {MATCH_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => {
+                      setMatchQuality(opt.value);
+                      setSurveyStep(2);
+                    }}
+                    className="flex flex-col items-center gap-1 rounded-2xl bg-neutral-800 px-4 py-3 transition-all hover:bg-neutral-700 active:scale-[0.98]"
+                  >
+                    <span className="text-2xl">{opt.emoji}</span>
+                    <span className="text-xs font-medium text-neutral-300">{t(`sessionRecap.matchLabels.${opt.value}`)}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Card 3 — Would You Return */}
-          <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
-            <p className="mb-4 text-center text-sm font-medium text-neutral-400">This venue</p>
-            <div className="flex justify-center gap-3">
-              {RETURN_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => setWouldReturn(opt.value)}
-                  className={`flex flex-col items-center gap-1 rounded-2xl px-5 py-3 transition-all ${
-                    wouldReturn === opt.value
-                      ? "bg-green-600/25 ring-2 ring-green-500 scale-105"
-                      : "bg-neutral-800 hover:bg-neutral-700"
-                  }`}
-                >
-                  <span className="text-2xl">{opt.emoji}</span>
-                  <span className="text-xs font-medium text-neutral-300">{opt.label}</span>
-                </button>
-              ))}
+          {surveyStep === 2 && (
+            <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
+              <p className="mb-4 text-center text-sm font-medium text-neutral-400">{t("sessionRecap.thisVenue")}</p>
+              <div className="flex justify-center gap-3">
+                {RETURN_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => {
+                      setWouldReturn(opt.value);
+                      setSurveyStep(3);
+                    }}
+                    className="flex flex-col items-center gap-1 rounded-2xl bg-neutral-800 px-5 py-3 transition-all hover:bg-neutral-700 active:scale-[0.98]"
+                  >
+                    <span className="text-2xl">{opt.emoji}</span>
+                    <span className="text-xs font-medium text-neutral-300">{t(`sessionRecap.returnLabels.${opt.value}`)}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-        </div>
+          )}
 
-        {/* CTA */}
-        <div className="mt-6">
-          <button
-            onClick={submitFeedbackAndScroll}
-            disabled={!allAnswered}
-            className={`flex w-full items-center justify-center gap-2 rounded-xl py-4 text-lg font-bold transition-all ${
-              allAnswered
-                ? "bg-green-600 text-white hover:bg-green-500 active:scale-[0.98]"
-                : "bg-neutral-800 text-neutral-600 cursor-not-allowed"
-            }`}
-          >
-            See My Stats
-            <ChevronDown className="h-5 w-5" />
-          </button>
+          {surveyStep === 3 && (
+            <button
+              type="button"
+              onClick={submitFeedbackAndScroll}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-4 text-lg font-bold text-white transition-all hover:bg-green-500 active:scale-[0.98]"
+            >
+              {t("sessionRecap.seeStats")}
+              <ChevronDown className="h-5 w-5" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -333,7 +341,7 @@ export function SessionRecapScreen({ sessionId, onClose }: SessionRecapProps) {
         <div className="bg-gradient-to-b from-green-950/60 to-transparent px-6 pb-6 pt-10 text-center">
           <p className="text-5xl">{player.avatar}</p>
           <h1 className="mt-3 text-2xl font-bold text-white">
-            Great session, {player.name}! 🎾
+            {t("sessionRecap.greatSession", { name: player.name })}
           </h1>
           <p className="mt-1 text-sm text-neutral-400">
             {venue.name} · {dateStr}
@@ -344,13 +352,13 @@ export function SessionRecapScreen({ sessionId, onClose }: SessionRecapProps) {
           {/* Block 1 — Time */}
           <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
             <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-neutral-400">
-              <span>⏱</span> Time on Court
+              <span>⏱</span> {t("sessionRecap.timeOnCourt")}
             </h3>
             <p className="text-3xl font-bold text-white">
-              {stats.totalPlayMinutes} <span className="text-lg font-normal text-neutral-400">min played</span>
+              {stats.totalPlayMinutes} <span className="text-lg font-normal text-neutral-400">{t("sessionRecap.minPlayed")}</span>
             </p>
             <p className="mt-1 text-sm text-neutral-500">
-              out of {stats.sessionDurationMin} min session
+              {t("sessionRecap.outOfSession", { mins: stats.sessionDurationMin })}
             </p>
 
             <div className="mt-4">
@@ -361,7 +369,7 @@ export function SessionRecapScreen({ sessionId, onClose }: SessionRecapProps) {
                 />
               </div>
               <p className="mt-2 text-sm text-green-400">
-                You played {stats.playPercentage}% of today&apos;s session
+                {t("sessionRecap.youPlayedPercent", { pct: stats.playPercentage })}
               </p>
             </div>
           </div>
@@ -369,27 +377,27 @@ export function SessionRecapScreen({ sessionId, onClose }: SessionRecapProps) {
           {/* Block 2 — Games */}
           <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
             <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-neutral-400">
-              <span>🎮</span> Games Played
+              <span>🎮</span> {t("sessionRecap.gamesPlayed")}
             </h3>
             <p className="text-3xl font-bold text-white">
-              {stats.gamesPlayed} <span className="text-lg font-normal text-neutral-400">games total</span>
+              {stats.gamesPlayed} <span className="text-lg font-normal text-neutral-400">{t("sessionRecap.gamesTotal")}</span>
             </p>
 
             {stats.gamesPlayed > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
                 {stats.gamesByType.mixed > 0 && (
                   <span className="rounded-full bg-purple-600/20 px-3 py-1 text-xs font-medium text-purple-300">
-                    Mixed: {stats.gamesByType.mixed}
+                    {t("sessionRecap.mixed")}: {stats.gamesByType.mixed}
                   </span>
                 )}
                 {stats.gamesByType.men > 0 && (
                   <span className="rounded-full bg-blue-600/20 px-3 py-1 text-xs font-medium text-blue-300">
-                    Men: {stats.gamesByType.men}
+                    {t("sessionRecap.men")}: {stats.gamesByType.men}
                   </span>
                 )}
                 {stats.gamesByType.women > 0 && (
                   <span className="rounded-full bg-pink-600/20 px-3 py-1 text-xs font-medium text-pink-300">
-                    Women: {stats.gamesByType.women}
+                    {t("sessionRecap.women")}: {stats.gamesByType.women}
                   </span>
                 )}
               </div>
@@ -399,12 +407,12 @@ export function SessionRecapScreen({ sessionId, onClose }: SessionRecapProps) {
           {/* Block 3 — Partners */}
           <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
             <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-neutral-400">
-              <span>👥</span> You Played With
+              <span>👥</span> {t("sessionRecap.youPlayedWith")}
             </h3>
             <p className="text-3xl font-bold text-white">
               {stats.partners.length}{" "}
               <span className="text-lg font-normal text-neutral-400">
-                different player{stats.partners.length !== 1 ? "s" : ""} today
+                {t("sessionRecap.differentPlayersSuffix", { count: stats.partners.length })}
               </span>
             </p>
 
@@ -423,7 +431,7 @@ export function SessionRecapScreen({ sessionId, onClose }: SessionRecapProps) {
                 ))}
                 {stats.partners.length > 8 && (
                   <div className="flex items-center rounded-full bg-neutral-800 px-3 py-1.5 text-xs font-medium text-neutral-400">
-                    +{stats.partners.length - 8} more
+                    {t("sessionRecap.more", { count: stats.partners.length - 8 })}
                   </div>
                 )}
               </div>
@@ -441,22 +449,22 @@ export function SessionRecapScreen({ sessionId, onClose }: SessionRecapProps) {
           {/* Block 5 — Career Stats */}
           <div className="rounded-2xl border border-neutral-800/60 bg-neutral-900/50 p-5">
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">
-              All Time at {venue.name}
+              {t("sessionRecap.allTimeAt", { venue: venue.name })}
             </h3>
             <div className="flex justify-between text-center">
               <div>
                 <p className="text-xl font-bold text-neutral-300">{career.totalSessions}</p>
-                <p className="text-xs text-neutral-500">sessions</p>
+                <p className="text-xs text-neutral-500">{t("sessionRecap.sessions")}</p>
               </div>
               <div className="h-8 w-px bg-neutral-800" />
               <div>
                 <p className="text-xl font-bold text-neutral-300">{career.totalHoursPlayed}h</p>
-                <p className="text-xs text-neutral-500">played</p>
+                <p className="text-xs text-neutral-500">{t("sessionRecap.played")}</p>
               </div>
               <div className="h-8 w-px bg-neutral-800" />
               <div>
                 <p className="text-xl font-bold text-neutral-300">{career.totalPlayersMet}</p>
-                <p className="text-xs text-neutral-500">players met</p>
+                <p className="text-xs text-neutral-500">{t("sessionRecap.playersMet")}</p>
               </div>
             </div>
           </div>
@@ -464,12 +472,12 @@ export function SessionRecapScreen({ sessionId, onClose }: SessionRecapProps) {
           {/* Share Card Preview */}
           <div className="pt-2">
             <p className="mb-3 text-center text-xs font-semibold uppercase tracking-wider text-neutral-500">
-              Your share card
+              {t("sessionRecap.shareCard")}
             </p>
             <div className="overflow-hidden rounded-2xl border border-neutral-800 bg-gradient-to-b from-neutral-900 to-green-950/30">
               <div className="px-5 pt-5 pb-4">
                 <p className="text-sm font-bold text-green-500">🎾 CourtFlow</p>
-                <p className="mt-3 text-lg font-bold text-white">{player.name}&apos;s session</p>
+                <p className="mt-3 text-lg font-bold text-white">{t("sessionRecap.shareCardPreviewTitle", { name: player.name })}</p>
                 <p className="mt-0.5 text-xs text-neutral-400">
                   {venue.name} · {dateStr}
                 </p>
@@ -477,15 +485,15 @@ export function SessionRecapScreen({ sessionId, onClose }: SessionRecapProps) {
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
                     <span className="text-lg">⏱</span>
-                    <span className="font-semibold text-white">{stats.totalPlayMinutes} min on court</span>
+                    <span className="font-semibold text-white">{t("sessionRecap.minOnCourt", { mins: stats.totalPlayMinutes })}</span>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-lg">🎮</span>
-                    <span className="font-semibold text-white">{stats.gamesPlayed} games played</span>
+                    <span className="font-semibold text-white">{t("sessionRecap.gamesPlayedCount", { count: stats.gamesPlayed })}</span>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-lg">👥</span>
-                    <span className="font-semibold text-white">{stats.partners.length} players met</span>
+                    <span className="font-semibold text-white">{t("sessionRecap.playersMetCount", { count: stats.partners.length })}</span>
                   </div>
                 </div>
                 <div className="my-4 h-px bg-neutral-800" />
@@ -506,7 +514,7 @@ export function SessionRecapScreen({ sessionId, onClose }: SessionRecapProps) {
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-4 font-semibold text-white transition-colors hover:bg-green-500"
             >
               <Share2 className="h-5 w-5" />
-              Share Stats
+              {t("sessionRecap.shareStats")}
             </button>
 
             <button
@@ -514,7 +522,7 @@ export function SessionRecapScreen({ sessionId, onClose }: SessionRecapProps) {
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-neutral-800 py-3.5 font-medium text-neutral-300 transition-colors hover:bg-neutral-700"
             >
               <Hand className="h-5 w-5" />
-              See you next time 👋
+              {t("sessionRecap.seeYouNext")}
             </button>
           </div>
         </div>

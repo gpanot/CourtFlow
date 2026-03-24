@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
+import { useTranslation } from "react-i18next";
 import { useSessionStore } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
@@ -38,6 +39,7 @@ interface QueueEntry {
 type PlayerView = "home" | "queue" | "assigned" | "playing" | "break" | "profile" | "session_recap";
 
 export function PlayerHome() {
+  const { t } = useTranslation();
   const { playerId, playerName, venueId, token, setAuth, clearAuth } = useSessionStore();
   const searchParams = useSearchParams();
   const [venues, setVenues] = useState<Venue[]>([]);
@@ -248,6 +250,18 @@ export function PlayerHome() {
     return () => { offConnect(); offNotif(); offQueue(); offSession(); offVenue(); };
   }, [selectedVenue, playerId, on, fetchPlayerState, setAuth, setViewTracked]);
 
+  /** When the player is assigned or on court, mark session so queue can show "last game?" after they rejoin the line. */
+  useEffect(() => {
+    if (!session?.id) return;
+    if (view === "assigned" || view === "playing") {
+      try {
+        sessionStorage.setItem(`courtflow:lastGameFeedbackPending:${session.id}`, "1");
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [view, session?.id]);
+
   if (showProfile) {
     return (
       <ProfileScreen
@@ -279,19 +293,19 @@ export function PlayerHome() {
               </button>
               <div>
                 <h1 className="text-2xl font-bold text-green-500">CourtFlow</h1>
-                <p className="text-neutral-400">Hi {playerName}!</p>
+                <p className="text-neutral-400">{t("home.hi", { name: playerName })}</p>
               </div>
             </div>
             <button
               type="button"
               onClick={() => setVenueLogoutConfirmOpen(true)}
               className="p-2 text-neutral-400"
-              aria-label="Log out"
+              aria-label={t("home.logOutAria")}
             >
               <LogOut className="h-5 w-5" />
             </button>
           </div>
-          <p className="mb-4 text-lg text-neutral-300">Select a venue:</p>
+          <p className="mb-4 text-lg text-neutral-300">{t("home.selectVenue")}</p>
           <div className="space-y-3">
             {venues.map((v) => (
               <button
@@ -318,7 +332,7 @@ export function PlayerHome() {
               onClick={(e) => e.stopPropagation()}
             >
               <h2 id="venue-logout-confirm-title" className="text-lg font-semibold text-white">
-                Are you sure you want to log out?
+                {t("home.logoutConfirmTitle")}
               </h2>
               <div className="mt-6 flex gap-3 justify-end">
                 <button
@@ -326,7 +340,7 @@ export function PlayerHome() {
                   onClick={() => setVenueLogoutConfirmOpen(false)}
                   className="rounded-lg border border-neutral-600 px-4 py-2 text-sm font-medium text-neutral-200 transition-colors hover:bg-neutral-800"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
                 <button
                   type="button"
@@ -336,7 +350,7 @@ export function PlayerHome() {
                   }}
                   className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-500"
                 >
-                  Log out
+                  {t("home.logout")}
                 </button>
               </div>
             </div>
@@ -347,7 +361,7 @@ export function PlayerHome() {
   }
 
   const currentVenue = venues.find((v) => v.id === selectedVenue);
-  const venueName = currentVenue?.name || "Venue";
+  const venueName = currentVenue?.name || t("home.venueFallback");
   const venueLogoUrl = currentVenue?.logoUrl || null;
   const venueTvText = currentVenue?.tvText || null;
   const logoSpin = !!currentVenue?.settings?.logoSpin;
@@ -382,7 +396,7 @@ export function PlayerHome() {
             <div className="w-full rounded-xl bg-red-900/30 border border-red-800 p-3 text-center">
               <p className="text-sm text-red-400">{errorMsg}</p>
               <button onClick={() => setErrorMsg(null)} className="mt-1 text-xs text-red-500 underline">
-                Dismiss
+                {t("common.dismiss")}
               </button>
             </div>
           )}
@@ -403,7 +417,7 @@ export function PlayerHome() {
                   ))}
                 </div>
               )}
-              <p className="text-neutral-600 text-sm mt-2">Waiting for session to start...</p>
+              <p className="text-neutral-600 text-sm mt-2">{t("home.waitingSession")}</p>
             </div>
           ) : (
             <button
@@ -433,7 +447,7 @@ export function PlayerHome() {
               }}
               className="flex h-40 w-40 items-center justify-center rounded-full bg-green-600 text-xl font-bold text-white shadow-lg shadow-green-600/30 transition-transform hover:scale-105 active:scale-95 disabled:opacity-60 disabled:scale-100"
             >
-              {joining ? "Joining..." : <>Join the<br />Game</>}
+              {joining ? t("home.joining") : <>{t("home.joinTheGameLine1")}<br />{t("home.joinTheGameLine2")}</>}
             </button>
           )}
         </div>
@@ -444,7 +458,7 @@ export function PlayerHome() {
             onClick={handleLeaveSession}
             className="cursor-pointer border-0 bg-transparent py-2 text-[13px] text-neutral-500 hover:text-neutral-400"
           >
-            Leave session
+            {t("home.leaveSession")}
           </button>
         </div>
 
@@ -458,15 +472,17 @@ export function PlayerHome() {
 
   if (view === "session_recap" && recapSessionId) {
     return (
-      <SessionRecapScreen
-        sessionId={recapSessionId}
-        onClose={() => {
-          inRecapRef.current = false;
-          setRecapSessionId(null);
-          setQueueEntry(null);
-          setViewTracked("home");
-        }}
-      />
+      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain pb-[calc(1.5rem+env(safe-area-inset-bottom,24px))]">
+        <SessionRecapScreen
+          sessionId={recapSessionId}
+          onClose={() => {
+            inRecapRef.current = false;
+            setRecapSessionId(null);
+            setQueueEntry(null);
+            setViewTracked("home");
+          }}
+        />
+      </div>
     );
   }
 

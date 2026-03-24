@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useLayoutEffect } from "react";
+import { Trans, useTranslation } from "react-i18next";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 
 /** True for Mobile Safari. Chrome on iOS injects CriOS; third-party browsers often add FxiOS, EdgiOS, etc. */
@@ -12,6 +13,7 @@ function isSafariOnIOS(): boolean {
 }
 
 export function IOSInstallBanner() {
+  const { t } = useTranslation();
   const { showBanner, isIos, canPrompt } = usePwaInstall();
   const [dismissed, setDismissed] = useState(false);
   const [safari, setSafari] = useState(false);
@@ -25,26 +27,18 @@ export function IOSInstallBanner() {
 
   const steps = safari
     ? [
-        <>
-          Tap the <strong className="text-white">share icon</strong> at the bottom of your screen
-        </>,
-        <>
-          Select <strong className="text-white">&quot;Add to Home Screen&quot;</strong> from the menu
-        </>,
+        <Trans key="s1" i18nKey="iosInstall.step1Safari" components={{ bold: <strong className="text-white" /> }} />,
+        <Trans key="s2" i18nKey="iosInstall.step2" components={{ bold: <strong className="text-white" /> }} />,
       ]
     : [
-        <>
-          Tap the <strong className="text-white">share icon</strong> at the top right of your browser
-        </>,
-        <>
-          Select <strong className="text-white">&quot;Add to Home Screen&quot;</strong> from the menu
-        </>,
+        <Trans key="o1" i18nKey="iosInstall.step1Other" components={{ bold: <strong className="text-white" /> }} />,
+        <Trans key="s2" i18nKey="iosInstall.step2" components={{ bold: <strong className="text-white" /> }} />,
       ];
 
   return (
     <div
       role="region"
-      aria-label="Add CourtFlow to your home screen"
+      aria-label={t("iosInstall.regionAria")}
       className="fixed bottom-0 left-0 right-0 z-[100] border-t border-[#1a5c38] bg-[#0f3320] px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3"
     >
       {safari ? (
@@ -66,12 +60,12 @@ export function IOSInstallBanner() {
       )}
 
       <div className="mb-2.5 flex items-center justify-between">
-        <span className="text-[13px] font-medium text-green-500">Add to your home screen</span>
+        <span className="text-[13px] font-medium text-green-500">{t("iosInstall.addTitle")}</span>
         <button
           type="button"
           onClick={() => setDismissed(true)}
           className="cursor-pointer border-0 bg-transparent p-0 text-base text-neutral-500 hover:text-neutral-400"
-          aria-label="Dismiss"
+          aria-label={t("iosInstall.dismissAria")}
         >
           ✕
         </button>

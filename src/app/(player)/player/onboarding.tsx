@@ -2,14 +2,17 @@
 
 import { useState, useRef } from "react";
 import Link from "next/link";
+import { useTranslation } from "react-i18next";
 import { useSessionStore } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
-import { SKILL_LEVELS, SKILL_DESCRIPTIONS, type SkillLevelType } from "@/lib/constants";
+import { SKILL_LEVELS, type SkillLevelType } from "@/lib/constants";
 import { cn } from "@/lib/cn";
+import { PlayerLanguageToggle } from "./player-language-toggle";
 
 type Step = "phone" | "otp" | "profile";
 
 export function OnboardingFlow() {
+  const { t } = useTranslation();
   const { setAuth, clearAuth } = useSessionStore();
   const [step, setStep] = useState<Step>("phone");
   const [phone, setPhone] = useState("");
@@ -68,7 +71,7 @@ export function OnboardingFlow() {
 
   const register = async () => {
     if (!name || !gender || !skill) {
-      setErr("All fields are required");
+      setErr(t("onboarding.allFieldsRequired"));
       return;
     }
     setErr("");
@@ -90,7 +93,15 @@ export function OnboardingFlow() {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto overscroll-contain p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))]">
+    <div className="relative flex min-h-0 flex-1 flex-col justify-center overflow-y-auto overscroll-contain p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))]">
+      {step === "phone" && (
+        <div className="pointer-events-none absolute right-5 top-5 z-10">
+          <div className="pointer-events-auto">
+            <PlayerLanguageToggle />
+          </div>
+        </div>
+      )}
+
       <div className="mb-8 text-center">
         <h1
           className="text-4xl font-bold text-green-500 select-none cursor-default"
@@ -98,7 +109,7 @@ export function OnboardingFlow() {
         >
           CourtFlow
         </h1>
-        <p className="mt-1 text-neutral-400">Get on the court</p>
+        <p className="mt-1 text-neutral-400">{t("onboarding.tagline")}</p>
       </div>
 
       {err && <p className="mb-4 rounded-lg bg-red-900/30 p-3 text-sm text-red-400">{err}</p>}
@@ -107,7 +118,7 @@ export function OnboardingFlow() {
         <div className="space-y-4">
           <input
             type="tel"
-            placeholder="Phone number"
+            placeholder={t("onboarding.phonePlaceholder")}
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             onFocus={() => {
@@ -124,7 +135,7 @@ export function OnboardingFlow() {
             disabled={loading || !phone}
             className="w-full rounded-xl bg-green-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50"
           >
-            {loading ? "Sending..." : "Send Code"}
+            {loading ? t("onboarding.sending") : t("onboarding.sendCode")}
           </button>
         </div>
       )}
@@ -132,11 +143,11 @@ export function OnboardingFlow() {
       {step === "otp" && (
         <div className="space-y-4">
           <p className="text-center text-neutral-400">
-            Enter the 6-digit code sent to {phone}
+            {t("onboarding.otpIntro", { phone })}
           </p>
           {devCode && (
             <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-center">
-              <p className="text-xs text-amber-400/70 mb-1">Demo mode — no SMS sent</p>
+              <p className="text-xs text-amber-400/70 mb-1">{t("onboarding.demoMode")}</p>
               <p className="text-amber-300 font-mono text-2xl font-bold tracking-widest">{devCode}</p>
             </div>
           )}
@@ -155,24 +166,24 @@ export function OnboardingFlow() {
             disabled={loading || otp.length !== 6}
             className="w-full rounded-xl bg-green-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50"
           >
-            {loading ? "Verifying..." : "Verify"}
+            {loading ? t("onboarding.verifying") : t("onboarding.verify")}
           </button>
           <button
             onClick={() => { setStep("phone"); setOtp(""); }}
             className="w-full py-2 text-sm text-neutral-400 hover:text-white"
           >
-            Change number
+            {t("onboarding.changeNumber")}
           </button>
         </div>
       )}
 
       {step === "profile" && (
         <div className="space-y-4">
-          <h2 className="text-xl font-semibold">Set up your profile</h2>
+          <h2 className="text-xl font-semibold">{t("onboarding.profileTitle")}</h2>
 
           <input
             type="text"
-            placeholder="Your name"
+            placeholder={t("onboarding.namePlaceholder")}
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-4 py-3 text-white placeholder:text-neutral-500 focus:border-green-500 focus:outline-none"
@@ -180,7 +191,7 @@ export function OnboardingFlow() {
           />
 
           <div>
-            <p className="mb-2 text-sm text-neutral-400">Gender</p>
+            <p className="mb-2 text-sm text-neutral-400">{t("onboarding.gender")}</p>
             <div className="grid grid-cols-2 gap-2">
               {(["male", "female"] as const).map((g) => (
                 <button
@@ -193,14 +204,14 @@ export function OnboardingFlow() {
                       : "border-neutral-700 text-neutral-300 hover:border-neutral-500"
                   )}
                 >
-                  {g}
+                  {t(`gender.${g}`)}
                 </button>
               ))}
             </div>
           </div>
 
           <div>
-            <p className="mb-2 text-sm text-neutral-400">Skill level</p>
+            <p className="mb-2 text-sm text-neutral-400">{t("onboarding.skillLevel")}</p>
             <div className="space-y-2">
               {SKILL_LEVELS.map((level) => (
                 <button
@@ -213,8 +224,8 @@ export function OnboardingFlow() {
                       : "border-neutral-700 hover:border-neutral-500"
                   )}
                 >
-                  <span className="font-medium capitalize text-white">{level}</span>
-                  <p className="text-sm text-neutral-400">{SKILL_DESCRIPTIONS[level]}</p>
+                  <span className="font-medium capitalize text-white">{t(`skillLevels.${level}`)}</span>
+                  <p className="text-sm text-neutral-400">{t(`skillLevels.${level}Desc`)}</p>
                 </button>
               ))}
             </div>
@@ -225,14 +236,14 @@ export function OnboardingFlow() {
             disabled={loading || !name || !gender || !skill}
             className="w-full rounded-xl bg-green-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50"
           >
-            {loading ? "Creating profile..." : "Let's Play"}
+            {loading ? t("onboarding.creatingProfile") : t("onboarding.letsPlay")}
           </button>
         </div>
       )}
 
       {titleTaps >= 5 && (
         <Link href="/" className="mt-6 block text-center text-sm text-neutral-400">
-          ← Home
+          {t("onboarding.homeLink")}
         </Link>
       )}
     </div>

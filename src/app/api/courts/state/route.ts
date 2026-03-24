@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     const courtsWithPlayers = await Promise.all(
       courts.map(async (court) => {
         const assignment = court.courtAssignments[0] || null;
-        let players: { id: string; name: string; skillLevel: string; groupId: string | null }[] = [];
+        let players: { id: string; name: string; skillLevel: string; gender: string; groupId: string | null }[] = [];
 
         if (assignment) {
           const playerRecords = await prisma.player.findMany({
@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
               id: p.id,
               name: p.name,
               skillLevel: p.skillLevel,
+              gender: p.gender,
               groupId: qe?.groupId || null,
             };
           });

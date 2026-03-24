@@ -3,7 +3,9 @@
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { Link, Coffee, MoreVertical, UserX, LogOut, ArrowUpDown, ChevronLeft, Users, Unlink, MapPin } from "lucide-react";
+import { GenderIcon } from "@/components/gender-icon";
 import { TV_QUEUE_DISPLAY_COUNT, SKILL_LEVELS, type SkillLevelType, MIN_GROUP_SIZE } from "@/lib/constants";
+import { partitionDisplayRowsIntoBalancedBatches } from "@/lib/queue-display-batches";
 
 const skillDotColors: Record<string, string> = {
   beginner: "bg-green-500",
@@ -24,6 +26,7 @@ interface QueuePlayer {
   name: string;
   avatar?: string;
   skillLevel?: string;
+  gender?: string;
 }
 
 interface QueueGroup {
@@ -72,7 +75,7 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
   const waitingCount = entries.filter((e) => e.status === "waiting" || e.status === "on_break").length;
 
   const seen = new Set<string>();
-  const displayEntries: { key: string; entry: QueueEntryData; isGroup: boolean; groupSize: number; position: number; allPlayers: { id: string; name: string; skillLevel?: string; gamesPlayed?: number; totalPlayMinutesToday?: number }[]; cumulativePlayersBefore: number }[] = [];
+  const displayEntries: { key: string; entry: QueueEntryData; isGroup: boolean; groupSize: number; position: number; allPlayers: { id: string; name: string; skillLevel?: string; gender?: string; gamesPlayed?: number; totalPlayMinutesToday?: number }[]; cumulativePlayersBefore: number }[] = [];
   let position = 0;
   let cumulativePlayers = 0;
 
@@ -100,7 +103,7 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
           isGroup: false,
           groupSize: 1,
           position,
-          allPlayers: [{ id: member.player.id, name: member.player.name, skillLevel: member.player.skillLevel, gamesPlayed: memberEntry?.gamesPlayed ?? 0, totalPlayMinutesToday: memberEntry?.totalPlayMinutesToday ?? 0 }],
+          allPlayers: [{ id: member.player.id, name: member.player.name, skillLevel: member.player.skillLevel, gender: member.player.gender, gamesPlayed: memberEntry?.gamesPlayed ?? 0, totalPlayMinutesToday: memberEntry?.totalPlayMinutesToday ?? 0 }],
           cumulativePlayersBefore: cumulativePlayers,
         });
         cumulativePlayers += 1;
@@ -114,9 +117,9 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
     const allPlayers = entry.groupId && entry.group
       ? groupMembers.map((e) => {
           const qe = entryByPlayerId.get(e.player.id);
-          return { id: e.player.id, name: e.player.name, skillLevel: e.player.skillLevel, gamesPlayed: qe?.gamesPlayed ?? 0, totalPlayMinutesToday: qe?.totalPlayMinutesToday ?? 0 };
+          return { id: e.player.id, name: e.player.name, skillLevel: e.player.skillLevel, gender: e.player.gender, gamesPlayed: qe?.gamesPlayed ?? 0, totalPlayMinutesToday: qe?.totalPlayMinutesToday ?? 0 };
         })
-      : [{ id: entry.player.id, name: entry.player.name, skillLevel: entry.player.skillLevel, gamesPlayed: entry.gamesPlayed ?? 0, totalPlayMinutesToday: entry.totalPlayMinutesToday ?? 0 }];
+      : [{ id: entry.player.id, name: entry.player.name, skillLevel: entry.player.skillLevel, gender: entry.player.gender, gamesPlayed: entry.gamesPlayed ?? 0, totalPlayMinutesToday: entry.totalPlayMinutesToday ?? 0 }];
 
     const playerCount = entry.groupId ? groupSize : 1;
 
@@ -135,28 +138,11 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
     if (displayEntries.length >= limit) break;
   }
 
-  const courtBatches: { items: typeof displayEntries }[] = [];
+  /** TV only: batches of 4 with valid gender mix (4M / 4F / 2×2), aligned with rotation rules — not guaranteed to match the next server-side court. */
+  const queueBatches: { items: typeof displayEntries }[] = [];
   if (isTV && displayEntries.length > 0) {
-    let currentBatch: typeof displayEntries = [];
-    let batchPlayerCount = 0;
-
-    for (const item of displayEntries) {
-      const playerCount = item.isGroup ? item.groupSize : 1;
-      if (batchPlayerCount > 0 && batchPlayerCount + playerCount > 4) {
-        courtBatches.push({ items: currentBatch });
-        currentBatch = [];
-        batchPlayerCount = 0;
-      }
-      currentBatch.push(item);
-      batchPlayerCount += playerCount;
-      if (batchPlayerCount >= 4) {
-        courtBatches.push({ items: currentBatch });
-        currentBatch = [];
-        batchPlayerCount = 0;
-      }
-    }
-    if (currentBatch.length > 0) {
-      courtBatches.push({ items: currentBatch });
+    for (const items of partitionDisplayRowsIntoBalancedBatches(displayEntries)) {
+      queueBatches.push({ items });
     }
   }
 
@@ -191,50 +177,54 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
       )}
 
       {isTV ? (
-        courtBatches.map((batch, batchIdx) => (
-          <div
-            key={batchIdx}
-            className={cn(
-              "rounded-lg border px-[calc(0.48*var(--tw,1vw))] py-[calc(0.32*var(--th,1vh))]",
-              batchIdx === 0
-                ? "border-green-500/30 bg-green-500/5"
-                : "border-neutral-700/50 bg-neutral-800/30"
-            )}
-          >
-            <div className="flex flex-col gap-[calc(0.24*var(--th,1vh))]">
-              {batch.items.map(({ key, entry, isGroup, groupSize, position: pos, allPlayers, cumulativePlayersBefore }) => (
-                <QueueRow
-                  key={key}
-                  entry={entry}
-                  isGroup={isGroup}
-                  groupSize={groupSize}
-                  position={pos}
-                  allPlayers={allPlayers}
-                  isTV={isTV}
-                  isNextUp={cumulativePlayersBefore < 4}
-                  onPlayerAction={onPlayerAction}
-                />
-              ))}
+        <div className="flex flex-col gap-[calc(0.24*var(--th,1vh))]">
+          {queueBatches.map((batch, batchIdx) => (
+            <div
+              key={batchIdx}
+              className={cn(
+                "rounded-lg border px-[calc(0.48*var(--tw,1vw))] py-[calc(0.32*var(--th,1vh))]",
+                batchIdx === 0
+                  ? "border-green-500/35 bg-green-500/8"
+                  : "border-neutral-500/30 bg-neutral-800/25"
+              )}
+            >
+              <div className="flex flex-col gap-[calc(0.24*var(--th,1vh))]">
+                {batch.items.map(({ key, entry, isGroup, groupSize, position: pos, allPlayers, cumulativePlayersBefore }) => (
+                  <QueueRow
+                    key={key}
+                    entry={entry}
+                    isGroup={isGroup}
+                    groupSize={groupSize}
+                    position={pos}
+                    allPlayers={allPlayers}
+                    isTV={isTV}
+                    isNextUp={cumulativePlayersBefore < 4}
+                    onPlayerAction={onPlayerAction}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
-        ))
+          ))}
+        </div>
       ) : (
-        displayEntries.map(({ key, entry, isGroup, groupSize, position: pos, allPlayers, cumulativePlayersBefore }) => (
-          <QueueRow
-            key={key}
-            entry={entry}
-            isGroup={isGroup}
-            groupSize={groupSize}
-            position={pos}
-            allPlayers={allPlayers}
-            isTV={isTV}
-            isNextUp={cumulativePlayersBefore < 4}
-            onPlayerAction={onPlayerAction}
-            onDissolveGroup={onDissolveGroup}
-            isWarmupManual={isWarmupManual}
-            courts={courts}
-          />
-        ))
+        <div className="flex flex-col gap-1">
+          {displayEntries.map(({ key, entry, isGroup, groupSize, position: pos, allPlayers }) => (
+            <QueueRow
+              key={key}
+              entry={entry}
+              isGroup={isGroup}
+              groupSize={groupSize}
+              position={pos}
+              allPlayers={allPlayers}
+              isTV={isTV}
+              isNextUp={pos <= 4}
+              onPlayerAction={onPlayerAction}
+              onDissolveGroup={onDissolveGroup}
+              isWarmupManual={isWarmupManual}
+              courts={courts}
+            />
+          ))}
+        </div>
       )}
 
       {isTV && waitingCount > cumulativePlayers && displayEntries.length >= limit && (
@@ -303,7 +293,7 @@ function QueueRow({
   isGroup: boolean;
   groupSize: number;
   position: number;
-  allPlayers: { id: string; name: string; skillLevel?: string; gamesPlayed?: number; totalPlayMinutesToday?: number }[];
+  allPlayers: { id: string; name: string; skillLevel?: string; gender?: string; gamesPlayed?: number; totalPlayMinutesToday?: number }[];
   isTV: boolean;
   isNextUp: boolean;
   onPlayerAction?: (playerId: string, playerName: string, action: PlayerAction, data?: Record<string, unknown>) => void;
@@ -354,6 +344,7 @@ function QueueRow({
                       onClick={() => openMenuFor({ id: p.id, name: p.name, skillLevel: p.skillLevel })}
                       className="flex items-center gap-1 rounded bg-neutral-800 px-2 py-0.5 text-xs text-neutral-300 hover:bg-neutral-700 hover:text-white transition-colors"
                     >
+                      <GenderIcon gender={p.gender} className="h-3.5 w-3.5" />
                       {p.name}
                       <SkillTag level={p.skillLevel} />
                       <PlayerStats gamesPlayed={p.gamesPlayed ?? 0} playMinutes={p.totalPlayMinutesToday ?? 0} className="text-xs" />
@@ -374,6 +365,7 @@ function QueueRow({
                 <div className={cn("flex flex-wrap items-center gap-x-2 gap-y-0.5", isTV ? "text-[clamp(0.48rem,calc(0.8*var(--tw,1vw)),0.8rem)]" : "ml-6 text-xs")}>
                   {entry.group.queueEntries.map((e, i) => (
                     <span key={e.player.id} className="flex items-center gap-1 text-neutral-500">
+                      {!isTV && <GenderIcon gender={e.player.gender} className="h-3.5 w-3.5" />}
                       {!isTV && <SkillTag level={e.player.skillLevel} />}
                       {e.player.name}{i < entry.group!.queueEntries.length - 1 && ","}
                     </span>
@@ -382,7 +374,8 @@ function QueueRow({
               )}
             </div>
           ) : (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 min-w-0">
+              {!isTV && <GenderIcon gender={entry.player.gender} className="h-4 w-4" />}
               <span className={cn("font-medium", isTV ? "text-[clamp(0.6rem,calc(1.2*var(--tw,1vw)),1.2rem)] line-clamp-2 break-words" : "text-sm truncate")}>
                 {entry.player.name}
               </span>

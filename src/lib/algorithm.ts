@@ -1,5 +1,6 @@
 import { prisma } from "./db";
 import { emitToPlayer, emitToVenue } from "./socket-server";
+import { isValidPickleballGenderMixForFour } from "./pickleball-gender";
 import { getSkillIndex, QUEUE_LOOKAHEAD, MAX_SKILL_GAP, WARMUP_DURATION_SECONDS, AUTO_START_DELAY_SECONDS, MIN_GROUP_SIZE, COURT_PLAYER_COUNT } from "./constants";
 import type { SkillLevel, GameType } from "@prisma/client";
 
@@ -83,21 +84,7 @@ function isValidPickleballGenderFoursome(players: QueueCandidate[]): boolean {
   );
 }
 
-/** For API routes (warmup): validate exactly four gender values. */
-export function isValidPickleballGenderMixForFour(genders: readonly string[]): boolean {
-  if (genders.length !== 4) return false;
-  const players: QueueCandidate[] = genders.map((gender) => ({
-    entryId: "",
-    playerId: "",
-    playerName: "",
-    skillLevel: "beginner" as SkillLevel,
-    gender,
-    groupId: null,
-    joinedAt: new Date(),
-    totalPlayMinutesToday: 0,
-  }));
-  return isValidPickleballGenderFoursome(players);
-}
+export { isValidPickleballGenderMixForFour };
 
 function queueIndexOf(candidate: QueueCandidate, orderedQueue: QueueCandidate[]): number {
   return orderedQueue.findIndex((x) => x.entryId === candidate.entryId);

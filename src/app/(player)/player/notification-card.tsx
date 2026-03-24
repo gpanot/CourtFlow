@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Bell } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { useSessionStore } from "@/stores/session-store";
 import { isPushSupported, subscribeToPush, getNotificationPermission } from "@/lib/push-client";
 
@@ -21,6 +22,7 @@ interface NotificationCardProps {
 }
 
 export function NotificationCard({ onEnabled }: NotificationCardProps = {}) {
+  const { t, i18n } = useTranslation();
   const { playerId } = useSessionStore();
   const [enabled, setEnabled] = useState(() => getNotificationPermission() === "granted");
   const [requesting, setRequesting] = useState(false);
@@ -34,7 +36,7 @@ export function NotificationCard({ onEnabled }: NotificationCardProps = {}) {
 
     const permission = await Notification.requestPermission();
     if (permission === "denied") {
-      setError("Notifications are blocked. Open your browser or device settings to allow them for this app.");
+      setError(t("notificationCard.blocked"));
       setRequesting(false);
       return;
     }
@@ -51,16 +53,12 @@ export function NotificationCard({ onEnabled }: NotificationCardProps = {}) {
       setEnabled(true);
       onEnabled?.();
     } else {
-      const messages: Record<string, string> = {
-        "no-vapid": "Push notification keys are not configured on the server. Please contact the venue.",
-        "sw-timeout": "Service worker is not ready. Try refreshing the page.",
-        "subscribe-failed": "Browser rejected the push subscription. Try refreshing or reinstalling the app.",
-        "server-error": "Could not save your subscription to the server. Please try again.",
-        "unsupported": "Push notifications are not supported in this browser.",
-        "denied": "Notifications are blocked. Open your browser settings to allow them.",
-        "dismissed": "Permission prompt was dismissed. Tap Turn On to try again.",
-      };
-      setError(messages[result.reason] || `Setup failed (${result.reason}). Please try again.`);
+      const reason = result.reason;
+      const errKey = `notificationCard.errors.${reason}`;
+      const msg = i18n.exists(errKey)
+        ? t(errKey)
+        : t("notificationCard.errors.fallback", { reason });
+      setError(msg);
     }
     setRequesting(false);
   };
@@ -71,7 +69,7 @@ export function NotificationCard({ onEnabled }: NotificationCardProps = {}) {
         <Bell className="h-5 w-5" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-amber-400">Enable Notifications</p>
+        <p className="text-sm font-medium text-amber-400">{t("notificationCard.title")}</p>
         {error ? (
           <>
             <p className="mt-0.5 text-xs text-red-400">{error}</p>
@@ -79,20 +77,20 @@ export function NotificationCard({ onEnabled }: NotificationCardProps = {}) {
               onClick={handleEnable}
               className="mt-2 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-500 transition-colors"
             >
-              Try Again
+              {t("notificationCard.tryAgain")}
             </button>
           </>
         ) : (
           <>
             <p className="mt-0.5 text-xs text-neutral-400">
-              Get alerted when it&apos;s your turn to play.
+              {t("notificationCard.body")}
             </p>
             <button
               onClick={handleEnable}
               disabled={requesting}
               className="mt-2 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-500 transition-colors disabled:opacity-60"
             >
-              {requesting ? "Enabling..." : "Turn On"}
+              {requesting ? t("notificationCard.enabling") : t("notificationCard.turnOn")}
             </button>
           </>
         )}

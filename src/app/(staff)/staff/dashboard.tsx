@@ -6,6 +6,7 @@ import { api } from "@/lib/api-client";
 import { useSocket } from "@/hooks/use-socket";
 import { joinVenue } from "@/lib/socket-client";
 import { CourtCard, type CourtData } from "@/components/court-card";
+import { GenderIcon } from "@/components/gender-icon";
 import { QueuePanel, type QueueEntryData } from "@/components/queue-panel";
 import { cn } from "@/lib/cn";
 import { Plus, X, LogOut, Users, LayoutGrid, AlertTriangle, User, Flame, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, History, Calendar, Loader2, Target, Settings2, Play, Check } from "lucide-react";
@@ -464,6 +465,7 @@ export function StaffDashboard() {
                       className="flex items-center justify-between rounded-xl bg-neutral-800/70 px-4 py-4"
                     >
                       <div className="flex items-center gap-3 min-w-0">
+                        <GenderIcon gender={player.gender} className="h-4 w-4 shrink-0" />
                         <span className="text-base font-medium truncate">{player.name}</span>
                         <span className={cn(
                           "shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium",

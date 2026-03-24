@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSessionStore, useHasHydrated, BLOCK_COOKIE_RESTORE_KEY } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { OnboardingFlow } from "./onboarding";
 import { PlayerHome } from "./home";
 
 export default function PlayerPage() {
+  const { t } = useTranslation();
   const { token, playerId, setAuth, clearAuth } = useSessionStore();
   const hydrated = useHasHydrated();
   const [validated, setValidated] = useState(false);
@@ -96,7 +98,7 @@ export default function PlayerPage() {
   if (!hydrated || !validated) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center bg-black">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-700 border-t-green-500" aria-label="Loading" />
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-700 border-t-green-500" aria-label={t("common.loading")} />
       </div>
     );
   }

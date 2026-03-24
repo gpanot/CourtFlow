@@ -1,12 +1,20 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api-client";
 import { useSessionStore } from "@/stores/session-store";
 import { cn } from "@/lib/cn";
 import { Link, Coffee } from "lucide-react";
 import { NotificationCard } from "./notification-card";
 import { InstallCard } from "./install-card";
+
+const LAST_GAME_OPTIONS = [
+  { rating: "fire" as const, emoji: "🔥" },
+  { rating: "thumbs_up" as const, emoji: "👍" },
+  { rating: "neutral" as const, emoji: "😐" },
+  { rating: "frustrated" as const, emoji: "😤" },
+];
 
 interface QueueScreenProps {
   entry: { id: string; groupId: string | null; sessionId: string };
@@ -18,6 +26,10 @@ interface QueueScreenProps {
   onRefresh: () => void;
 }
 
+function lastGamePendingKey(sessionId: string) {
+  return `courtflow:lastGameFeedbackPending:${sessionId}`;
+}
+
 interface QueueInfo {
   position: number;
   total: number;
@@ -26,10 +38,26 @@ interface QueueInfo {
 }
 
 export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onShowProfile, onRefresh }: QueueScreenProps) {
+  const { t } = useTranslation();
   const { playerId } = useSessionStore();
   const [info, setInfo] = useState<QueueInfo | null>(null);
   const [showBreakConfirm, setShowBreakConfirm] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [lastGameFeedbackDone, setLastGameFeedbackDone] = useState(false);
+  const [lastGameSubmitting, setLastGameSubmitting] = useState(false);
+  const [showLastGamePrompt, setShowLastGamePrompt] = useState(false);
+
+  useEffect(() => {
+    if (!sessionId) {
+      setShowLastGamePrompt(false);
+      return;
+    }
+    try {
+      setShowLastGamePrompt(sessionStorage.getItem(lastGamePendingKey(sessionId)) === "1");
+    } catch {
+      setShowLastGamePrompt(false);
+    }
+  }, [sessionId]);
   const fetchQueueInfo = useCallback(async () => {
     try {
       const entries = await api.get<
@@ -96,6 +124,25 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
     }
   };
 
+  const submitLastGameFeedback = async (rating: (typeof LAST_GAME_OPTIONS)[number]["rating"]) => {
+    if (!sessionId || lastGameSubmitting) return;
+    setLastGameSubmitting(true);
+    try {
+      await api.post("/api/queue/last-game-feedback", { sessionId, venueId, rating });
+      try {
+        sessionStorage.removeItem(lastGamePendingKey(sessionId));
+      } catch {
+        /* ignore */
+      }
+      setLastGameFeedbackDone(true);
+    } catch (e) {
+      console.error(e);
+      alert((e as Error).message);
+    } finally {
+      setLastGameSubmitting(false);
+    }
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-6 pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,24px))]">
       {/* Header */}
@@ -115,7 +162,7 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
               <div className="flex items-center gap-1 text-blue-400">
                 <Link className="h-4 w-4" />
                 <span className="text-sm font-medium">
-                  Group of {info.group.members.length}
+                  {t("queue.groupOf", { count: info.group.members.length })}
                 </span>
               </div>
             )}
@@ -137,28 +184,51 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
           #{info?.position || "—"}
         </p>
         <p className="text-xl font-medium text-neutral-300">
-          In line &mdash; Get ready to play!
+          {t("queue.inLine")}
         </p>
 
         {info?.group && (
           <div className="mt-2 rounded-xl border border-neutral-800 p-3 text-center">
-            <p className="text-sm text-neutral-400">Your group</p>
+            <p className="text-sm text-neutral-400">{t("queue.yourGroup")}</p>
             <p className="font-medium">{info.group.members.map((m) => m.name).join(", ")}</p>
           </div>
         )}
 
         {info && info.ahead.length > 0 && (
           <div className="w-full max-w-xs space-y-1 rounded-xl border border-neutral-800 p-3">
-            <p className="text-xs text-neutral-500 uppercase">Ahead of you</p>
+            <p className="text-xs text-neutral-500 uppercase">{t("queue.aheadOfYou")}</p>
             {info.ahead.map((a, i) => (
               <div key={i} className="flex items-center gap-2 text-sm text-neutral-300">
                 {a.isGroup && <Link className="h-3 w-3 text-blue-400" />}
-                <span>{a.isGroup ? `Group of ${a.groupSize}` : a.name}</span>
+                <span>{a.isGroup ? t("queue.groupOfShort", { count: a.groupSize ?? 0 }) : a.name}</span>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {showLastGamePrompt && !lastGameFeedbackDone && (
+        <div className="mb-4 shrink-0 rounded-2xl border border-neutral-800 bg-neutral-900/80 px-4 py-4">
+          <p className="mb-3 text-center text-sm font-medium text-neutral-200">{t("queue.lastGameQuestion")}</p>
+          <div className="flex justify-center gap-2 sm:gap-3">
+            {LAST_GAME_OPTIONS.map((opt) => (
+              <button
+                key={opt.rating}
+                type="button"
+                disabled={lastGameSubmitting}
+                onClick={() => void submitLastGameFeedback(opt.rating)}
+                aria-label={t(`queue.lastGameAria.${opt.rating}`)}
+                className={cn(
+                  "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-neutral-800 text-2xl transition-transform",
+                  "hover:bg-neutral-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                )}
+              >
+                {opt.emoji}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Bottom actions */}
       <div className="shrink-0">
@@ -167,7 +237,7 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-neutral-800 py-3 text-sm font-medium text-neutral-300"
         >
           <Coffee className="h-4 w-4" />
-          I need a break
+          {t("queue.needBreak")}
         </button>
       </div>
 
@@ -181,9 +251,9 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
               <div className="rounded-full bg-amber-600/20 p-3">
                 <Coffee className="h-6 w-6 text-amber-400" />
               </div>
-              <h3 className="text-lg font-bold">Need a break?</h3>
+              <h3 className="text-lg font-bold">{t("queue.breakTitle")}</h3>
               <p className="text-sm text-neutral-400">
-                You&apos;ll be removed from the queue. Don&apos;t worry, you can join again anytime!
+                {t("queue.breakBody")}
               </p>
             </div>
             <div className="flex gap-3">
@@ -192,13 +262,13 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
                 disabled={leaving}
                 className="flex-1 rounded-xl bg-amber-600 py-3 font-semibold text-white hover:bg-amber-500 disabled:opacity-60"
               >
-                {leaving ? "Leaving..." : "Yes, take a break"}
+                {leaving ? t("queue.leaving") : t("queue.yesTakeBreak")}
               </button>
               <button
                 onClick={() => setShowBreakConfirm(false)}
                 className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
               >
-                Stay
+                {t("common.stay")}
               </button>
             </div>
           </div>

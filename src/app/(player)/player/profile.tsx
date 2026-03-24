@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useSessionStore } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
-import {
-  SKILL_LEVELS, SKILL_DESCRIPTIONS, type SkillLevelType,
-} from "@/lib/constants";
+import { SKILL_LEVELS, type SkillLevelType } from "@/lib/constants";
 import { cn } from "@/lib/cn";
+import { PlayerLanguageToggle } from "./player-language-toggle";
 import { ArrowLeft, Trophy, Clock, Check, Pencil, ChevronRight, Bell, BellOff } from "lucide-react";
 import { isPushSupported, subscribeToPush, unsubscribeFromPush, getNotificationPermission } from "@/lib/push-client";
 import { NotificationCard } from "./notification-card";
@@ -53,8 +53,6 @@ interface SessionHistory {
 }
 
 const EXPERIENCE_EMOJIS: Record<number, string> = { 1: "😞", 2: "😐", 3: "🙂", 4: "😄", 5: "🤩" };
-const MATCH_QUALITY_LABELS: Record<string, string> = { too_easy: "😤 Too easy", perfect: "👌 Perfect", too_hard: "💪 Too hard" };
-const RETURN_LABELS: Record<string, string> = { no: "👎 No", maybe: "🤷 Maybe", yes: "👍 Yes" };
 
 interface PlayerSessionStats {
   player: { id: string; name: string; avatar: string };
@@ -75,6 +73,8 @@ interface PlayerSessionStats {
 }
 
 export function ProfileScreen({ onBack }: { onBack: () => void }) {
+  const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language?.toLowerCase().startsWith("vi") ? "vi-VN" : "en-US";
   const { playerId, setAuth } = useSessionStore();
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
   const [history, setHistory] = useState<MatchHistory | null>(null);
@@ -172,9 +172,12 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,24px))]">
-      <button onClick={onBack} className="mb-6 flex shrink-0 items-center gap-2 text-neutral-400 hover:text-white">
-        <ArrowLeft className="h-5 w-5" /> Back
-      </button>
+      <div className="mb-6 flex shrink-0 items-center justify-between gap-2">
+        <button onClick={onBack} className="flex shrink-0 items-center gap-2 text-neutral-400 hover:text-white">
+          <ArrowLeft className="h-5 w-5" /> {t("common.back")}
+        </button>
+        <PlayerLanguageToggle />
+      </div>
 
       {profile && (
         <div className="space-y-6">
@@ -227,12 +230,12 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
             <div className="flex-1 rounded-xl bg-neutral-900 p-4 text-center">
               <Trophy className="mx-auto mb-2 h-6 w-6 text-green-500" />
               <p className="text-2xl font-bold">{history?.totalGames || 0}</p>
-              <p className="text-xs text-neutral-400">Games</p>
+              <p className="text-xs text-neutral-400">{t("profile.games")}</p>
             </div>
             <div className="flex-1 rounded-xl bg-neutral-900 p-4 text-center">
               <Clock className="mx-auto mb-2 h-6 w-6 text-blue-500" />
               <p className="text-2xl font-bold">{history?.totalMinutes || 0}</p>
-              <p className="text-xs text-neutral-400">Minutes played</p>
+              <p className="text-xs text-neutral-400">{t("profile.minutesPlayed")}</p>
             </div>
           </div>
 
@@ -247,11 +250,11 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
                     <BellOff className="h-5 w-5 text-neutral-500" />
                   )}
                   <div>
-                    <h3 className="font-semibold text-neutral-300">Push Notifications</h3>
+                    <h3 className="font-semibold text-neutral-300">{t("profile.pushTitle")}</h3>
                     <p className="text-xs text-neutral-500">
                       {notificationsEnabled
-                        ? "You'll be notified when it's your turn"
-                        : "Enable to know when it's your turn"}
+                        ? t("profile.pushOn")
+                        : t("profile.pushOff")}
                     </p>
                   </div>
                 </div>
@@ -283,9 +286,9 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
           {/* Skill Level */}
           <div>
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-neutral-300">Skill Level</h3>
+              <h3 className="font-semibold text-neutral-300">{t("profile.skillLevel")}</h3>
               <button onClick={() => setEditSkill(!editSkill)} className="text-sm text-blue-400">
-                {editSkill ? "Cancel" : "Change"}
+                {editSkill ? t("profile.cancelEdit") : t("profile.change")}
               </button>
             </div>
             {editSkill ? (
@@ -302,25 +305,25 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
                         : "border-neutral-700 hover:border-neutral-500"
                     )}
                   >
-                    <span className="font-medium capitalize">{level}</span>
-                    <p className="text-sm text-neutral-400">{SKILL_DESCRIPTIONS[level]}</p>
+                    <span className="font-medium capitalize">{t(`skillLevels.${level}`)}</span>
+                    <p className="text-sm text-neutral-400">{t(`skillLevels.${level}Desc`)}</p>
                   </button>
                 ))}
               </div>
             ) : (
-              <p className="mt-1 capitalize text-green-400">{profile.skillLevel}</p>
+              <p className="mt-1 capitalize text-green-400">{t(`skillLevels.${profile.skillLevel as SkillLevelType}`)}</p>
             )}
           </div>
 
           {/* Session History */}
           <div>
-            <h3 className="mb-3 font-semibold text-neutral-300">Session History</h3>
+            <h3 className="mb-3 font-semibold text-neutral-300">{t("profile.sessionHistory")}</h3>
             {sessionHistory.length === 0 && (
-              <p className="text-neutral-500">No sessions yet. Join a game!</p>
+              <p className="text-neutral-500">{t("profile.noSessions")}</p>
             )}
             <div className="space-y-3">
               {sessionHistory.slice(0, 20).map((s) => {
-                const dateStr = new Date(s.date).toLocaleDateString("en-US", {
+                const dateStr = new Date(s.date).toLocaleDateString(dateLocale, {
                   weekday: "short",
                   month: "short",
                   day: "numeric",
@@ -350,17 +353,17 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
                       <div className="flex items-center gap-1.5 text-neutral-300">
                         <span className="text-xs">🎮</span>
                         <span className="font-medium">{s.gamesPlayed}</span>
-                        <span className="text-neutral-500">games</span>
+                        <span className="text-neutral-500">{t("common.games")}</span>
                       </div>
                       <div className="flex items-center gap-1.5 text-neutral-300">
                         <span className="text-xs">⏱</span>
                         <span className="font-medium">{s.totalPlayMinutes}</span>
-                        <span className="text-neutral-500">min</span>
+                        <span className="text-neutral-500">{t("common.min")}</span>
                       </div>
                       <div className="flex items-center gap-1.5 text-neutral-300">
                         <span className="text-xs">👥</span>
                         <span className="font-medium">{s.partnersCount}</span>
-                        <span className="text-neutral-500">players</span>
+                        <span className="text-neutral-500">{t("common.players")}</span>
                       </div>
                     </div>
 
@@ -368,17 +371,17 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {s.gamesByType.mixed > 0 && (
                           <span className="rounded-full bg-purple-600/15 px-2 py-0.5 text-[10px] font-medium text-purple-300">
-                            Mixed {s.gamesByType.mixed}
+                            {t("profile.mixed")} {s.gamesByType.mixed}
                           </span>
                         )}
                         {s.gamesByType.men > 0 && (
                           <span className="rounded-full bg-blue-600/15 px-2 py-0.5 text-[10px] font-medium text-blue-300">
-                            Men {s.gamesByType.men}
+                            {t("profile.men")} {s.gamesByType.men}
                           </span>
                         )}
                         {s.gamesByType.women > 0 && (
                           <span className="rounded-full bg-pink-600/15 px-2 py-0.5 text-[10px] font-medium text-pink-300">
-                            Women {s.gamesByType.women}
+                            {t("profile.women")} {s.gamesByType.women}
                           </span>
                         )}
                       </div>
@@ -398,7 +401,7 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
             className="w-full max-w-lg rounded-t-2xl border-t border-neutral-700 bg-neutral-900 p-5 pb-8"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-lg font-bold mb-4">Choose your avatar</h3>
+            <h3 className="text-lg font-bold mb-4">{t("profile.chooseAvatar")}</h3>
             <div className="grid grid-cols-4 gap-3">
               {AVATAR_OPTIONS.map((emoji) => (
                 <button
@@ -432,6 +435,8 @@ function SessionDetailScreen({
   feedback: { experience: number; matchQuality: string; wouldReturn: string } | null;
   onBack: () => void;
 }) {
+  const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language?.toLowerCase().startsWith("vi") ? "vi-VN" : "en-US";
   const [data, setData] = useState<PlayerSessionStats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -455,15 +460,15 @@ function SessionDetailScreen({
     return (
       <div className="flex min-h-0 flex-1 flex-col p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,24px))]">
         <button onClick={onBack} className="mb-6 flex items-center gap-2 text-neutral-400 hover:text-white">
-          <ArrowLeft className="h-5 w-5" /> Back
+          <ArrowLeft className="h-5 w-5" /> {t("common.back")}
         </button>
-        <p className="text-center text-neutral-400">Could not load session details</p>
+        <p className="text-center text-neutral-400">{t("profile.sessionDetail.loadError")}</p>
       </div>
     );
   }
 
   const { venue, session, stats, career } = data;
-  const dateStr = new Date(session.date).toLocaleDateString("en-US", {
+  const dateStr = new Date(session.date).toLocaleDateString(dateLocale, {
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -474,7 +479,7 @@ function SessionDetailScreen({
       {/* Header */}
       <div className="bg-gradient-to-b from-green-950/60 to-transparent px-6 pb-5 pt-2">
         <button onClick={onBack} className="mb-4 flex items-center gap-2 text-neutral-400 hover:text-white">
-          <ArrowLeft className="h-5 w-5" /> Back
+          <ArrowLeft className="h-5 w-5" /> {t("common.back")}
         </button>
         <h1 className="text-xl font-bold text-white">{venue.name}</h1>
         <p className="mt-0.5 text-sm text-neutral-400">{dateStr}</p>
@@ -484,21 +489,25 @@ function SessionDetailScreen({
         {/* Rating */}
         {feedback && (
           <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4">
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">Your Rating</h3>
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">{t("profile.sessionDetail.yourRating")}</h3>
             <div className="flex items-center gap-4">
               <div className="flex flex-col items-center gap-1">
                 <span className="text-3xl">{EXPERIENCE_EMOJIS[feedback.experience] || "🙂"}</span>
-                <span className="text-[10px] text-neutral-500">Session</span>
+                <span className="text-[10px] text-neutral-500">{t("profile.sessionDetail.sessionLabel")}</span>
               </div>
               <div className="h-8 w-px bg-neutral-800" />
               <div className="flex flex-col items-center gap-1">
-                <span className="text-sm font-medium text-neutral-300">{MATCH_QUALITY_LABELS[feedback.matchQuality] || feedback.matchQuality}</span>
-                <span className="text-[10px] text-neutral-500">Matches</span>
+                <span className="text-sm font-medium text-neutral-300">
+                  {t(`profile.matchQuality.${feedback.matchQuality}`)}
+                </span>
+                <span className="text-[10px] text-neutral-500">{t("profile.sessionDetail.matchesLabel")}</span>
               </div>
               <div className="h-8 w-px bg-neutral-800" />
               <div className="flex flex-col items-center gap-1">
-                <span className="text-sm font-medium text-neutral-300">{RETURN_LABELS[feedback.wouldReturn] || feedback.wouldReturn}</span>
-                <span className="text-[10px] text-neutral-500">Return</span>
+                <span className="text-sm font-medium text-neutral-300">
+                  {t(`profile.return.${feedback.wouldReturn}`)}
+                </span>
+                <span className="text-[10px] text-neutral-500">{t("profile.sessionDetail.returnLabel")}</span>
               </div>
             </div>
           </div>
@@ -507,13 +516,13 @@ function SessionDetailScreen({
         {/* Time */}
         <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
           <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-neutral-400">
-            <span>⏱</span> Time on Court
+            <span>⏱</span> {t("profile.sessionDetail.timeOnCourt")}
           </h3>
           <p className="text-3xl font-bold text-white">
-            {stats.totalPlayMinutes} <span className="text-lg font-normal text-neutral-400">min played</span>
+            {stats.totalPlayMinutes} <span className="text-lg font-normal text-neutral-400">{t("profile.sessionDetail.minPlayed")}</span>
           </p>
           <p className="mt-1 text-sm text-neutral-500">
-            out of {stats.sessionDurationMin} min session
+            {t("profile.sessionDetail.outOfSession", { mins: stats.sessionDurationMin })}
           </p>
           <div className="mt-4">
             <div className="h-3 overflow-hidden rounded-full bg-neutral-800">
@@ -523,7 +532,7 @@ function SessionDetailScreen({
               />
             </div>
             <p className="mt-2 text-sm text-green-400">
-              {stats.playPercentage}% of session
+              {t("profile.sessionDetail.percentOfSession", { pct: stats.playPercentage })}
             </p>
           </div>
         </div>
@@ -531,33 +540,33 @@ function SessionDetailScreen({
         {/* Games */}
         <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
           <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-neutral-400">
-            <span>🎮</span> Games Played
+            <span>🎮</span> {t("profile.sessionDetail.gamesPlayed")}
           </h3>
           <p className="text-3xl font-bold text-white">
-            {stats.gamesPlayed} <span className="text-lg font-normal text-neutral-400">games</span>
+            {stats.gamesPlayed} <span className="text-lg font-normal text-neutral-400">{t("profile.sessionDetail.games")}</span>
           </p>
           {stats.gamesPlayed > 0 && (
             <div className="mt-3 flex flex-wrap gap-2">
               {stats.gamesByType.mixed > 0 && (
                 <span className="rounded-full bg-purple-600/20 px-3 py-1 text-xs font-medium text-purple-300">
-                  Mixed: {stats.gamesByType.mixed}
+                  {t("profile.mixed")}: {stats.gamesByType.mixed}
                 </span>
               )}
               {stats.gamesByType.men > 0 && (
                 <span className="rounded-full bg-blue-600/20 px-3 py-1 text-xs font-medium text-blue-300">
-                  Men: {stats.gamesByType.men}
+                  {t("profile.men")}: {stats.gamesByType.men}
                 </span>
               )}
               {stats.gamesByType.women > 0 && (
                 <span className="rounded-full bg-pink-600/20 px-3 py-1 text-xs font-medium text-pink-300">
-                  Women: {stats.gamesByType.women}
+                  {t("profile.women")}: {stats.gamesByType.women}
                 </span>
               )}
             </div>
           )}
           {stats.longestGameMinutes > 0 && (
             <p className="mt-3 text-sm text-neutral-500">
-              Longest game: {stats.longestGameMinutes} min
+              {t("profile.sessionDetail.longestGame", { mins: stats.longestGameMinutes })}
             </p>
           )}
         </div>
@@ -565,12 +574,12 @@ function SessionDetailScreen({
         {/* Partners */}
         <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
           <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-neutral-400">
-            <span>👥</span> Played With
+            <span>👥</span> {t("profile.sessionDetail.playedWith")}
           </h3>
           <p className="mb-4 text-3xl font-bold text-white">
             {stats.partners.length}{" "}
             <span className="text-lg font-normal text-neutral-400">
-              player{stats.partners.length !== 1 ? "s" : ""}
+              {t("profile.sessionDetail.partnersWord", { count: stats.partners.length })}
             </span>
           </p>
           {stats.partners.length > 0 && (
@@ -582,7 +591,7 @@ function SessionDetailScreen({
                     <p className="font-medium text-white truncate">{p.name}</p>
                   </div>
                   <span className="shrink-0 text-xs text-neutral-500">
-                    {p.gamesPlayed} game{p.gamesPlayed !== 1 ? "s" : ""} together
+                    {t("profile.sessionDetail.together", { count: p.gamesPlayed })}
                   </span>
                 </div>
               ))}
@@ -601,22 +610,22 @@ function SessionDetailScreen({
         {/* Career */}
         <div className="rounded-2xl border border-neutral-800/60 bg-neutral-900/50 p-5">
           <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-neutral-500">
-            All Time at {venue.name}
+            {t("profile.sessionDetail.funStatVenue", { venue: venue.name })}
           </h3>
           <div className="flex justify-between text-center">
             <div>
               <p className="text-xl font-bold text-neutral-300">{career.totalSessions}</p>
-              <p className="text-xs text-neutral-500">sessions</p>
+              <p className="text-xs text-neutral-500">{t("profile.sessionDetail.sessions")}</p>
             </div>
             <div className="h-8 w-px bg-neutral-800" />
             <div>
               <p className="text-xl font-bold text-neutral-300">{career.totalHoursPlayed}h</p>
-              <p className="text-xs text-neutral-500">played</p>
+              <p className="text-xs text-neutral-500">{t("profile.sessionDetail.played")}</p>
             </div>
             <div className="h-8 w-px bg-neutral-800" />
             <div>
               <p className="text-xl font-bold text-neutral-300">{career.totalPlayersMet}</p>
-              <p className="text-xs text-neutral-500">players met</p>
+              <p className="text-xs text-neutral-500">{t("profile.sessionDetail.playersMet")}</p>
             </div>
           </div>
         </div>

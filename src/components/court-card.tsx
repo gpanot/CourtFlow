@@ -3,12 +3,14 @@
 import { cn } from "@/lib/cn";
 import { GamePhaseTimer, WarmupCountdownTimer } from "./timer";
 import { Link } from "lucide-react";
+import { GenderIcon } from "@/components/gender-icon";
 import { AUTO_START_DELAY_SECONDS } from "@/lib/constants";
 
 interface Player {
   id: string;
   name: string;
   skillLevel: string;
+  gender?: string;
   groupId: string | null;
 }
 
@@ -121,6 +123,7 @@ export function CourtCard({ court, variant = "tv", warmup = false, queueWaiting 
                 {player.groupId && (
                   <Link className={cn("shrink-0 text-blue-400", isTV ? "h-[min(calc(1.5*var(--tw,1vw)),calc(2*var(--th,1vh)))] w-[min(calc(1.5*var(--tw,1vw)),calc(2*var(--th,1vh)))] min-h-3 min-w-3" : "h-4 w-4")} />
                 )}
+                {!isTV && <GenderIcon gender={player.gender} className="h-4 w-4" />}
                 <span className="font-medium truncate">{player.name}</span>
                 {!isTV && (
                   <span
@@ -151,6 +154,7 @@ export function CourtCard({ court, variant = "tv", warmup = false, queueWaiting 
           >
             {court.players.map((player) => (
               <div key={player.id} className="flex items-center gap-2">
+                {!isTV && <GenderIcon gender={player.gender} className="h-4 w-4" />}
                 <span className="font-medium truncate text-amber-200">{player.name}</span>
                 {!isTV && (
                   <span
@@ -183,6 +187,7 @@ export function CourtCard({ court, variant = "tv", warmup = false, queueWaiting 
           >
             {court.players.map((player) => (
               <div key={player.id} className="flex items-center gap-2">
+                {!isTV && <GenderIcon gender={player.gender} className="h-4 w-4" />}
                 <span className="font-medium truncate text-amber-200">{player.name}</span>
                 {!isTV && (
                   <span

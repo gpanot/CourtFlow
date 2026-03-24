@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/cn";
 import { Link as LinkIcon, Flame, Coffee } from "lucide-react";
 import { formatTimer, WARMUP_DURATION_SECONDS, AUTO_START_DELAY_SECONDS } from "@/lib/constants";
@@ -26,7 +27,8 @@ const skillBadgeColors: Record<string, string> = {
 };
 
 export function CourtAssignedScreen({ notification, venueId, onRefresh }: CourtAssignedScreenProps) {
-  const courtLabel = (notification?.courtLabel as string) || "Court";
+  const { t } = useTranslation();
+  const courtLabel = (notification?.courtLabel as string) || t("common.court");
   const teammates = (notification?.teammates as Teammate[]) || [];
   const gameType = (notification?.gameType as string) || "mixed";
   const isWarmup = (notification?.isWarmup as boolean) || false;
@@ -61,21 +63,21 @@ export function CourtAssignedScreen({ notification, venueId, onRefresh }: CourtA
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 overflow-hidden">
           <div className="mb-4 flex shrink-0 items-center gap-2 rounded-full bg-amber-500/20 px-4 py-1 text-sm font-medium text-amber-400">
             <Flame className="h-4 w-4" />
-            Warm Up
+            {t("courtAssigned.warmUp")}
           </div>
 
           <h1 className="text-7xl font-bold text-white">{courtLabel}</h1>
 
-          <p className="mt-2 text-lg text-amber-300">Go warm up freely!</p>
+          <p className="mt-2 text-lg text-amber-300">{t("courtAssigned.goWarmUp")}</p>
 
           {teammates.length > 0 && (
             <div className="mt-6 w-full max-w-xs space-y-2">
-              <p className="text-xs text-neutral-500 uppercase">On this court</p>
-              {teammates.map((t, i) => (
+              <p className="text-xs text-neutral-500 uppercase">{t("courtAssigned.onThisCourt")}</p>
+              {teammates.map((mate, i) => (
                 <div key={i} className="flex items-center justify-center gap-2">
-                  <span className="text-lg font-medium">{t.name}</span>
-                  <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", skillBadgeColors[t.skillLevel] || "bg-neutral-600")}>
-                    {t.skillLevel[0].toUpperCase()}
+                  <span className="text-lg font-medium">{mate.name}</span>
+                  <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", skillBadgeColors[mate.skillLevel] || "bg-neutral-600")}>
+                    {mate.skillLevel[0].toUpperCase()}
                   </span>
                 </div>
               ))}
@@ -89,7 +91,7 @@ export function CourtAssignedScreen({ notification, venueId, onRefresh }: CourtA
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-neutral-800 py-3 text-sm font-medium text-neutral-300"
           >
             <Coffee className="h-4 w-4" />
-            I need a break
+            {t("courtAssigned.needBreak")}
           </button>
         </div>
 
@@ -103,9 +105,9 @@ export function CourtAssignedScreen({ notification, venueId, onRefresh }: CourtA
                 <div className="rounded-full bg-amber-600/20 p-3">
                   <Coffee className="h-6 w-6 text-amber-400" />
                 </div>
-                <h3 className="text-lg font-bold">Need a break?</h3>
+                <h3 className="text-lg font-bold">{t("courtAssigned.breakTitle")}</h3>
                 <p className="text-sm text-neutral-400">
-                  You&apos;ll be removed from the queue. Don&apos;t worry, you can join again anytime!
+                  {t("courtAssigned.breakBody")}
                 </p>
               </div>
               <div className="flex gap-3">
@@ -114,13 +116,13 @@ export function CourtAssignedScreen({ notification, venueId, onRefresh }: CourtA
                   disabled={leaving}
                   className="flex-1 rounded-xl bg-amber-600 py-3 font-semibold text-white hover:bg-amber-500 disabled:opacity-60"
                 >
-                  {leaving ? "Leaving..." : "Yes, take a break"}
+                  {leaving ? t("courtAssigned.leaving") : t("courtAssigned.yesTakeBreak")}
                 </button>
                 <button
                   onClick={() => setShowBreakConfirm(false)}
                   className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
                 >
-                  Stay
+                  {t("common.stay")}
                 </button>
               </div>
             </div>
@@ -133,32 +135,38 @@ export function CourtAssignedScreen({ notification, venueId, onRefresh }: CourtA
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-blue-950/30 p-6 text-center">
       <div className="mb-6 rounded-full bg-blue-600/20 px-4 py-1 text-sm font-medium text-blue-400">
-        You&apos;re assigned!
+        {t("courtAssigned.assigned")}
       </div>
 
       <h1 className="text-7xl font-bold text-white">{courtLabel}</h1>
 
-      <p className="mt-2 text-lg text-blue-300">Go play!</p>
+      <p className="mt-2 text-lg text-blue-300">{t("courtAssigned.goPlay")}</p>
 
       <div className="mt-6 text-3xl font-bold text-blue-400 tabular-nums">
-        Starting in {formatTimer(countdown)}
+        {t("courtAssigned.startingIn", { time: formatTimer(countdown) })}
       </div>
 
       <div className="mt-8 w-full max-w-xs space-y-2">
-        <p className="text-xs text-neutral-500 uppercase">Your teammates</p>
-        {teammates.map((t, i) => (
+        <p className="text-xs text-neutral-500 uppercase">{t("courtAssigned.yourTeammates")}</p>
+        {teammates.map((mate, i) => (
           <div key={i} className="flex items-center justify-center gap-2">
-            {t.groupId && <LinkIcon className="h-4 w-4 text-blue-400" />}
-            <span className="text-lg font-medium">{t.name}</span>
-            <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", skillBadgeColors[t.skillLevel] || "bg-neutral-600")}>
-              {t.skillLevel[0].toUpperCase()}
+            {mate.groupId && <LinkIcon className="h-4 w-4 text-blue-400" />}
+            <span className="text-lg font-medium">{mate.name}</span>
+            <span className={cn("rounded-full px-2 py-0.5 text-xs font-medium", skillBadgeColors[mate.skillLevel] || "bg-neutral-600")}>
+              {mate.skillLevel[0].toUpperCase()}
             </span>
           </div>
         ))}
       </div>
 
       <span className="mt-4 rounded-lg bg-neutral-800 px-3 py-1 text-sm capitalize text-neutral-300">
-        {gameType === "mixed" ? "Mix" : gameType}
+        {gameType === "mixed"
+          ? t("courtAssigned.gameTypeMixed")
+          : gameType === "men"
+            ? t("courtAssigned.gameTypeMen")
+            : gameType === "women"
+              ? t("courtAssigned.gameTypeWomen")
+              : gameType}
       </span>
     </div>
   );
