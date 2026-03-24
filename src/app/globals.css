@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/* Lock document scroll in standalone / PWA; player shell is position:fixed (see player/layout.tsx). */
+html:has(#player-app-shell),
+body:has(#player-app-shell) {
+  overflow: hidden;
+  height: 100%;
+  overscroll-behavior: none;
+}
+
 @keyframes blink-sharp {
   0%, 49% { opacity: 1; }
   50%, 100% { opacity: 0.12; }
