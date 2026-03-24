@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api-client";
-import { BarChart3, Users, Trophy, MapPin } from "lucide-react";
+import { BarChart3, Users, Trophy, MapPin, X, MessageSquareHeart } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 interface Analytics {
@@ -21,14 +21,90 @@ interface Analytics {
   venues: { id: string; name: string; courts: number; sessions: number }[];
 }
 
+interface SessionDetail {
+  session: {
+    id: string;
+    venueName: string;
+    openedAt: string;
+    closedAt: string | null;
+    status: string;
+    staffName: string | null;
+  };
+  games: {
+    id: string;
+    courtLabel: string;
+    gameType: string;
+    isWarmup: boolean;
+    startedAt: string;
+    endedAt: string | null;
+    durationMinutes: number;
+    players: { id: string; name: string; avatar: string }[];
+  }[];
+  surveyResponses: {
+    playerId: string;
+    playerName: string;
+    experience: number;
+    matchQuality: string;
+    wouldReturn: string;
+  }[];
+  surveySummary: {
+    responseCount: number;
+    avgExperience: number | null;
+    matchQualityCounts: { too_easy: number; perfect: number; too_hard: number };
+    wouldReturnCounts: { yes: number; maybe: number; no: number };
+  };
+}
+
+const MATCH_LABELS: Record<string, string> = {
+  too_easy: "Too easy",
+  perfect: "Balanced",
+  too_hard: "Too hard",
+};
+
+const RETURN_LABELS: Record<string, string> = {
+  yes: "Would return",
+  maybe: "Maybe",
+  no: "Would not return",
+};
+
+const EXPERIENCE_EMOJIS: Record<number, string> = {
+  1: "😞",
+  2: "😐",
+  3: "🙂",
+  4: "😄",
+  5: "🤩",
+};
+
 export default function AnalyticsPage() {
   const [data, setData] = useState<Analytics | null>(null);
   const [selectedVenue, setSelectedVenue] = useState("");
+  const [detailSessionId, setDetailSessionId] = useState<string | null>(null);
+  const [sessionDetail, setSessionDetail] = useState<SessionDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
 
   useEffect(() => {
     const params = selectedVenue ? `?venueId=${selectedVenue}` : "";
     api.get<Analytics>(`/api/admin/analytics${params}`).then(setData).catch(console.error);
   }, [selectedVenue]);
+
+  const openSessionDetail = useCallback((sessionId: string) => {
+    setDetailSessionId(sessionId);
+    setSessionDetail(null);
+    setDetailError(null);
+    setDetailLoading(true);
+    api
+      .get<SessionDetail>(`/api/admin/sessions/${sessionId}/detail`)
+      .then(setSessionDetail)
+      .catch((e) => setDetailError(e instanceof Error ? e.message : "Failed to load session"))
+      .finally(() => setDetailLoading(false));
+  }, []);
+
+  const closeSessionDetail = useCallback(() => {
+    setDetailSessionId(null);
+    setSessionDetail(null);
+    setDetailError(null);
+  }, []);
 
   const fmtMin = (m: number) => m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ""}`;
 
@@ -94,7 +170,19 @@ export default function AnalyticsPage() {
             </thead>
             <tbody>
               {data.recentSessions.map((s) => (
-                <tr key={s.id} className="border-b border-neutral-800 last:border-0">
+                <tr
+                  key={s.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => openSessionDetail(s.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      openSessionDetail(s.id);
+                    }
+                  }}
+                  className="border-b border-neutral-800 last:border-0 cursor-pointer hover:bg-neutral-800/60 transition-colors"
+                >
                   <td className="px-4 py-3 font-medium">{s.venueName}</td>
                   <td className="px-4 py-3 text-neutral-400">{new Date(s.date).toLocaleDateString()}</td>
                   <td className="px-4 py-3">
@@ -123,7 +211,12 @@ export default function AnalyticsPage() {
         {/* Mobile cards */}
         <div className="space-y-2 md:hidden">
           {data.recentSessions.map((s) => (
-            <div key={s.id} className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => openSessionDetail(s.id)}
+              className="w-full text-left rounded-xl border border-neutral-800 bg-neutral-900 p-3 hover:bg-neutral-800/80 transition-colors"
+            >
               <div className="flex items-center justify-between mb-1.5">
                 <span className="font-medium text-sm">{s.venueName}</span>
                 <StatusBadge status={s.status} />
@@ -136,13 +229,191 @@ export default function AnalyticsPage() {
                 <span>{fmtMin(s.totalWaitMinutes)} wait</span>
                 <RatioBadge ratio={s.waitPlayRatio} />
               </div>
-            </div>
+            </button>
           ))}
           {data.recentSessions.length === 0 && (
             <p className="py-6 text-center text-sm text-neutral-500">No sessions yet</p>
           )}
         </div>
+        <p className="mt-2 text-xs text-neutral-500">Click a session to see games and player survey feedback.</p>
       </div>
+
+      {detailSessionId && (
+        <div
+          className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60 p-0 md:p-4"
+          onClick={closeSessionDetail}
+        >
+          <div
+            className="flex max-h-[min(92vh,900px)] w-full max-w-2xl flex-col rounded-t-2xl border border-neutral-700 bg-neutral-900 shadow-xl md:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-neutral-800 px-4 py-3 md:px-5">
+              <div className="min-w-0">
+                <h4 className="text-base font-semibold text-white md:text-lg">Session detail</h4>
+                {sessionDetail && (
+                  <p className="mt-0.5 text-sm text-neutral-400 truncate">
+                    {sessionDetail.session.venueName}
+                    <span className="text-neutral-600"> · </span>
+                    {new Date(sessionDetail.session.openedAt).toLocaleString()}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={closeSessionDetail}
+                className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-white"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 md:px-5 md:py-5">
+              {detailLoading && (
+                <p className="text-sm text-neutral-500">Loading session…</p>
+              )}
+              {detailError && (
+                <p className="text-sm text-red-400">{detailError}</p>
+              )}
+              {!detailLoading && !detailError && sessionDetail && (
+                <div className="space-y-6">
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <StatusBadge status={sessionDetail.session.status} />
+                    {sessionDetail.session.staffName && (
+                      <span className="rounded-full bg-neutral-800 px-2 py-0.5 text-neutral-300">
+                        Staff: {sessionDetail.session.staffName}
+                      </span>
+                    )}
+                  </div>
+
+                  <section>
+                    <h5 className="mb-2 flex items-center gap-2 text-sm font-semibold text-neutral-300">
+                      <MessageSquareHeart className="h-4 w-4 text-amber-400" />
+                      Player surveys
+                    </h5>
+                    {sessionDetail.surveySummary.responseCount === 0 ? (
+                      <p className="text-sm text-neutral-500">No survey responses for this session yet.</p>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                          <div className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-3">
+                            <p className="text-[11px] text-neutral-500">Avg. experience</p>
+                            <p className="text-lg font-semibold tabular-nums">
+                              {sessionDetail.surveySummary.avgExperience ?? "—"}
+                              {sessionDetail.surveySummary.avgExperience != null && (
+                                <span className="text-sm font-normal text-neutral-500">/5</span>
+                              )}
+                            </p>
+                          </div>
+                          <div className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-3">
+                            <p className="text-[11px] text-neutral-500">Responses</p>
+                            <p className="text-lg font-semibold tabular-nums">
+                              {sessionDetail.surveySummary.responseCount}
+                            </p>
+                          </div>
+                          <div className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-3 col-span-2">
+                            <p className="text-[11px] text-neutral-500 mb-1">Match level</p>
+                            <div className="flex flex-wrap gap-1.5 text-[11px]">
+                              <span className="rounded bg-amber-500/15 px-1.5 py-0.5 text-amber-400">
+                                Too easy {sessionDetail.surveySummary.matchQualityCounts.too_easy}
+                              </span>
+                              <span className="rounded bg-green-500/15 px-1.5 py-0.5 text-green-400">
+                                Balanced {sessionDetail.surveySummary.matchQualityCounts.perfect}
+                              </span>
+                              <span className="rounded bg-rose-500/15 px-1.5 py-0.5 text-rose-400">
+                                Too hard {sessionDetail.surveySummary.matchQualityCounts.too_hard}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="rounded-lg border border-neutral-800 divide-y divide-neutral-800">
+                          {sessionDetail.surveyResponses.map((r) => (
+                            <div
+                              key={r.playerId}
+                              className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 text-sm"
+                            >
+                              <span className="font-medium text-neutral-200">{r.playerName}</span>
+                              <span className="text-lg" title={`${r.experience}/5`}>
+                                {EXPERIENCE_EMOJIS[r.experience] ?? "🙂"}
+                              </span>
+                              <span className="text-neutral-400 text-xs">
+                                {MATCH_LABELS[r.matchQuality] ?? r.matchQuality}
+                              </span>
+                              <span
+                                className={cn(
+                                  "ml-auto text-xs",
+                                  r.wouldReturn === "yes" && "text-green-400",
+                                  r.wouldReturn === "maybe" && "text-amber-400",
+                                  r.wouldReturn === "no" && "text-red-400/90"
+                                )}
+                              >
+                                {RETURN_LABELS[r.wouldReturn] ?? r.wouldReturn}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </section>
+
+                  <section>
+                    <h5 className="mb-2 flex items-center gap-2 text-sm font-semibold text-neutral-300">
+                      <Trophy className="h-4 w-4 text-blue-400" />
+                      Games ({sessionDetail.games.length})
+                    </h5>
+                    {sessionDetail.games.length === 0 ? (
+                      <p className="text-sm text-neutral-500">No court assignments recorded.</p>
+                    ) : (
+                      <div className="overflow-x-auto rounded-lg border border-neutral-800">
+                        <table className="w-full min-w-[520px] text-left text-xs">
+                          <thead className="border-b border-neutral-800 bg-neutral-950/50 text-neutral-500">
+                            <tr>
+                              <th className="px-3 py-2 font-medium">Court</th>
+                              <th className="px-3 py-2 font-medium">Type</th>
+                              <th className="px-3 py-2 font-medium">Duration</th>
+                              <th className="px-3 py-2 font-medium">Players</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sessionDetail.games.map((g) => (
+                              <tr key={g.id} className="border-b border-neutral-800/80 last:border-0">
+                                <td className="px-3 py-2 align-top">
+                                  <span className="font-medium text-neutral-200">{g.courtLabel}</span>
+                                  {g.isWarmup && (
+                                    <span className="ml-1.5 rounded bg-neutral-700 px-1 py-0.5 text-[10px] text-neutral-400">
+                                      warmup
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2 align-top capitalize text-neutral-300">
+                                  {g.gameType}
+                                </td>
+                                <td className="px-3 py-2 align-top tabular-nums text-neutral-400">
+                                  {fmtMin(g.durationMinutes)}
+                                </td>
+                                <td className="px-3 py-2 text-neutral-300">
+                                  <div className="flex flex-wrap gap-x-1.5 gap-y-0.5">
+                                    {g.players.map((p) => (
+                                      <span key={p.id} className="inline-flex items-center gap-1 rounded bg-neutral-800/80 px-1.5 py-0.5">
+                                        <span>{p.avatar}</span>
+                                        <span className="max-w-[120px] truncate">{p.name}</span>
+                                      </span>
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </section>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
