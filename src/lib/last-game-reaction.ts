@@ -2,8 +2,8 @@
 export const LAST_GAME_OPTIONS = [
   { rating: "love" as const, emoji: "❤️" },
   { rating: "fire" as const, emoji: "🔥" },
-  { rating: "neutral" as const, emoji: "😐" },
   { rating: "thumbs_up" as const, emoji: "👍" },
+  { rating: "neutral" as const, emoji: "😐" },
   { rating: "frustrated" as const, emoji: "😤" },
 ] as const;
 
