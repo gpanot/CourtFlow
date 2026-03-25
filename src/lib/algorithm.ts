@@ -597,6 +597,50 @@ export async function scheduleWarmupTransitionPublic(
   scheduleWarmupTransition(assignmentId, venueId, sessionId, courtId, secs);
 }
 
+/**
+ * Converts a full warmup assignment into an active game (same as the scheduled timer).
+ * Idempotent: returns false if assignment is missing, ended, or not warmup.
+ * Use when the in-process setTimeout was lost (deploy/restart) and the TV shows 0:00 warmup.
+ */
+export async function runWarmupToActiveTransition(
+  assignmentId: string,
+  venueId: string,
+  sessionId: string,
+  courtId: string
+): Promise<boolean> {
+  const assignment = await prisma.courtAssignment.findUnique({
+    where: { id: assignmentId },
+  });
+  if (!assignment || assignment.endedAt || !assignment.isWarmup) return false;
+
+  const gameStart = new Date(Date.now() - AUTO_START_DELAY_SECONDS * 1000);
+  await prisma.courtAssignment.update({
+    where: { id: assignmentId },
+    data: { isWarmup: false, startedAt: gameStart },
+  });
+
+  await prisma.court.update({
+    where: { id: courtId },
+    data: { status: "active" },
+  });
+
+  await prisma.queueEntry.updateMany({
+    where: {
+      playerId: { in: assignment.playerIds },
+      sessionId,
+      status: "assigned",
+    },
+    data: { status: "playing" },
+  });
+
+  const allCourts = await prisma.court.findMany({
+    where: { venueId, activeInSession: true },
+    include: { courtAssignments: { where: { endedAt: null }, take: 1 } },
+  });
+  emitToVenue(venueId, "court:updated", allCourts);
+  return true;
+}
+
 function scheduleWarmupTransition(
   assignmentId: string,
   venueId: string,
@@ -606,39 +650,7 @@ function scheduleWarmupTransition(
 ) {
   setTimeout(async () => {
     try {
-      const assignment = await prisma.courtAssignment.findUnique({
-        where: { id: assignmentId },
-      });
-      if (!assignment || assignment.endedAt || !assignment.isWarmup) return;
-
-      // Convert warmup to real game — backdate startedAt so it skips the "Starting" phase
-      const gameStart = new Date(Date.now() - AUTO_START_DELAY_SECONDS * 1000);
-      await prisma.courtAssignment.update({
-        where: { id: assignmentId },
-        data: { isWarmup: false, startedAt: gameStart },
-      });
-
-      await prisma.court.update({
-        where: { id: courtId },
-        data: { status: "active" },
-      });
-
-      await prisma.queueEntry.updateMany({
-        where: {
-          playerId: { in: assignment.playerIds },
-          sessionId,
-          status: "assigned",
-        },
-        data: { status: "playing" },
-      });
-
-
-
-      const allCourts = await prisma.court.findMany({
-        where: { venueId, activeInSession: true },
-        include: { courtAssignments: { where: { endedAt: null }, take: 1 } },
-      });
-      emitToVenue(venueId, "court:updated", allCourts);
+      await runWarmupToActiveTransition(assignmentId, venueId, sessionId, courtId);
     } catch (err) {
       console.error("Warmup transition error:", err);
     }

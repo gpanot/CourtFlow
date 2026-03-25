@@ -203,6 +203,17 @@ export function StaffDashboard() {
     }
   };
 
+  /** After deploy/restart the warmup timer never fires; TV shows 0:00 — this runs the same transition. */
+  const handleFinishWarmup = async (courtId: string) => {
+    try {
+      await api.post(`/api/courts/${courtId}/finish-warmup`);
+      setSelectedCourt(null);
+      await fetchState();
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  };
+
   const handlePlayerAction = async (playerId: string, _playerName: string, action: "remove_from_queue" | "end_session" | "change_level" | "assign_to_court", data?: Record<string, unknown>) => {
     try {
       if (action === "assign_to_court" && data?.courtId) {
@@ -517,6 +528,16 @@ export function StaffDashboard() {
                   >
                     <Users className="h-5 w-5" />
                     Auto-fill from Queue
+                  </button>
+                )}
+
+                {selectedCourt.status === "warmup" && selectedCourt.players.length >= 4 && (
+                  <button
+                    onClick={() => handleFinishWarmup(selectedCourt.id)}
+                    className="w-full rounded-xl bg-amber-600 py-5 text-lg font-bold text-white transition-colors hover:bg-amber-500 flex items-center justify-center gap-2"
+                  >
+                    <Play className="h-5 w-5" />
+                    Start game (end warmup)
                   </button>
                 )}
 
