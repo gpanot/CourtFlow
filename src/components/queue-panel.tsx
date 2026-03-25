@@ -67,6 +67,7 @@ interface QueuePanelProps {
   onPlayerAction?: (playerId: string, playerName: string, action: PlayerAction, data?: Record<string, unknown>) => void;
   onCreateGroup?: () => void;
   onDissolveGroup?: (groupId: string) => void;
+  /** When true, staff can assign waiting players to idle/warmup courts (manual or auto warmup session). */
   isWarmupManual?: boolean;
   courts?: CourtInfo[];
 }
@@ -310,6 +311,7 @@ function QueueRow({
   isNextUp: boolean;
   onPlayerAction?: (playerId: string, playerName: string, action: PlayerAction, data?: Record<string, unknown>) => void;
   onDissolveGroup?: (groupId: string) => void;
+  /** When true, staff can assign waiting players to idle/warmup courts (manual or auto warmup session). */
   isWarmupManual?: boolean;
   courts?: CourtInfo[];
 }) {
@@ -462,6 +464,7 @@ function PlayerActionMenu({
   onAction: (action: PlayerAction, data?: Record<string, unknown>) => void;
   onLevelChanged?: (newLevel: string) => void;
   onClose: () => void;
+  /** When true, staff can assign waiting players to idle/warmup courts (manual or auto warmup session). */
   isWarmupManual?: boolean;
   courts?: CourtInfo[];
 }) {

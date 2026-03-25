@@ -22,6 +22,38 @@ function isSkillCompatible(candidateLevel: SkillLevel, courtPlayerLevels: SkillL
   return true;
 }
 
+type WaitingWithPlayer = {
+  playerId: string;
+  player: { name: string; skillLevel: SkillLevel; gender: string };
+};
+
+/** Greedy fill: skill-compatible first, then anyone (same as manual autofill). */
+function buildGreedyWarmupFill(
+  slotsToFill: number,
+  currentLevels: SkillLevel[],
+  waitingEntries: WaitingWithPlayer[]
+): { playerId: string; playerName: string }[] {
+  const toAssign: { playerId: string; playerName: string }[] = [];
+  const remainingLevels = [...currentLevels];
+  for (const entry of waitingEntries) {
+    if (toAssign.length >= slotsToFill) break;
+    if (isSkillCompatible(entry.player.skillLevel as SkillLevel, remainingLevels)) {
+      toAssign.push({ playerId: entry.playerId, playerName: entry.player.name });
+      remainingLevels.push(entry.player.skillLevel as SkillLevel);
+    }
+  }
+  if (toAssign.length < slotsToFill) {
+    const assignedIds = new Set(toAssign.map((a) => a.playerId));
+    for (const entry of waitingEntries) {
+      if (toAssign.length >= slotsToFill) break;
+      if (!assignedIds.has(entry.playerId)) {
+        toAssign.push({ playerId: entry.playerId, playerName: entry.player.name });
+      }
+    }
+  }
+  return toAssign;
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ courtId: string }> }
@@ -82,37 +114,18 @@ export async function POST(
         })),
         waitingEntries
       );
-      if (!picked || picked.length < slotsToFill) {
-        return error(
-          "No players available that match auto warmup rules (skill balance and 4M / 4F / 2M+2F)",
-          400
-        );
+      if (picked && picked.length >= slotsToFill) {
+        toAssign = picked;
+      } else {
+        // Staff asked to fill the court — fall back so the court still fills when strict 4M/4F/2×2 + skill is impossible
+        toAssign = buildGreedyWarmupFill(slotsToFill, currentLevels, waitingEntries);
       }
-      toAssign = picked;
     } else {
-      // Manual session: skill-first greedy, then fill with anyone (staff-triggered autofill)
-      const remainingLevels = [...currentLevels];
-      for (const entry of waitingEntries) {
-        if (toAssign.length >= slotsToFill) break;
-        if (isSkillCompatible(entry.player.skillLevel as SkillLevel, remainingLevels)) {
-          toAssign.push({ playerId: entry.playerId, playerName: entry.player.name });
-          remainingLevels.push(entry.player.skillLevel as SkillLevel);
-        }
-      }
+      toAssign = buildGreedyWarmupFill(slotsToFill, currentLevels, waitingEntries);
+    }
 
-      if (toAssign.length < slotsToFill) {
-        const assignedIds = new Set(toAssign.map((a) => a.playerId));
-        for (const entry of waitingEntries) {
-          if (toAssign.length >= slotsToFill) break;
-          if (!assignedIds.has(entry.playerId)) {
-            toAssign.push({ playerId: entry.playerId, playerName: entry.player.name });
-          }
-        }
-      }
-
-      if (toAssign.length === 0) {
-        return error("No players available in the queue", 400);
-      }
+    if (toAssign.length === 0) {
+      return error("No players available in the queue", 400);
     }
 
     const newPlayerIds = toAssign.map((a) => a.playerId);

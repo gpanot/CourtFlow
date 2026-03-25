@@ -427,16 +427,18 @@ export function StaffDashboard() {
             onPlayerAction={handlePlayerAction}
             onCreateGroup={() => setShowCreateGroup(true)}
             onDissolveGroup={handleDissolveGroup}
-            isWarmupManual={hasWarmupOrIdleCourts && session.warmupMode === "manual"}
-            courts={hasWarmupOrIdleCourts && session.warmupMode === "manual" ? courts
-              .filter((c) => c.status === "warmup" || c.status === "idle")
-              .map((c) => ({
-                id: c.id,
-                label: c.label,
-                status: c.status,
-                playerCount: c.players.length,
-                players: c.players.map((p) => ({ name: p.name, skillLevel: p.skillLevel })),
-              })) : undefined}
+            isWarmupManual={hasWarmupOrIdleCourts}
+            courts={hasWarmupOrIdleCourts
+              ? courts
+                  .filter((c) => c.status === "warmup" || c.status === "idle")
+                  .map((c) => ({
+                    id: c.id,
+                    label: c.label,
+                    status: c.status,
+                    playerCount: c.players.length,
+                    players: c.players.map((p) => ({ name: p.name, skillLevel: p.skillLevel })),
+                  }))
+              : undefined}
           />
         )}
 
