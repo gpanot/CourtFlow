@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
-import { json, error } from "@/lib/api-helpers";
+import { json, error, errorJson } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
 import { runRotation } from "@/lib/algorithm";
@@ -23,10 +23,32 @@ export async function POST(
     });
     if (!session) return error("No active session", 400);
 
-    const assigned = await runRotation(court.venueId, session.id, courtId);
+    const rotation = await runRotation(court.venueId, session.id, courtId);
 
-    if (!assigned) {
-      return error("Not enough players in the queue to start a game", 400);
+    if (!rotation.ok) {
+      if (rotation.reason === "insufficient_waiting") {
+        return errorJson(
+          {
+            error: `Need 4 players with status “waiting” in the queue to start automatically. Currently ${rotation.waitingCount} waiting.`,
+            code: "INSUFFICIENT_WAITING",
+            waitingCount: rotation.waitingCount,
+          },
+          400
+        );
+      }
+      if (rotation.reason === "no_valid_foursome") {
+        return errorJson(
+          {
+            error:
+              "There are enough players in line, but no foursome matches rotation rules: use 4 men, 4 women, or 2 men + 2 women (3–1 splits are not used for auto-start). You can fill this court from the queue anyway (warmup) if you choose.",
+            code: "NO_VALID_FOURSOME",
+            waitingCount: rotation.waitingCount,
+            suggestAutofill: rotation.waitingCount >= 4,
+          },
+          400
+        );
+      }
+      return error("This court is not ready to start a game (must be idle and in session).", 400);
     }
 
     const allCourts = await prisma.court.findMany({

@@ -192,6 +192,8 @@ model Court {
   status          CourtStatus @default(idle)
   activeInSession Boolean     @default(false) @map("active_in_session")
   isBookable      Boolean     @default(false) @map("is_bookable")
+  /** After staff restores from maintenance/stand-by, assignments skip warmup until next maintenance. */
+  skipWarmupAfterMaintenance Boolean @default(false) @map("skip_warmup_after_maintenance")
 
   venue            Venue              @relation(fields: [venueId], references: [id])
   courtAssignments CourtAssignment[]

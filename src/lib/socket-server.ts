@@ -1,5 +1,4 @@
 import type { Server as SocketIOServer } from "socket.io";
-import { sendPushToPlayer } from "./push";
 
 export function getIO(): SocketIOServer {
   const io = (globalThis as Record<string, unknown>).__socketIO as SocketIOServer | undefined;
@@ -37,8 +36,10 @@ export function emitToPlayer(playerId: string, event: string, data: unknown) {
     const title = PUSH_TITLES[type] || "CourtFlow";
     const body = (notif.message as string) || "";
 
-    sendPushToPlayer(playerId, { title, body, tag: type, data: notif }).catch((err) =>
-      console.warn("[Push] Failed to send:", err)
+    void import("./push").then(({ sendPushToPlayer }) =>
+      sendPushToPlayer(playerId, { title, body, tag: type, data: notif }).catch((err) =>
+        console.warn("[Push] Failed to send:", err)
+      )
     );
   }
 }

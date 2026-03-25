@@ -1,18 +1,66 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
+import staffI18n from "@/i18n/staff-i18n";
 import { useSessionStore } from "@/stores/session-store";
-import { api } from "@/lib/api-client";
+import { api, ApiRequestError } from "@/lib/api-client";
 import { useSocket } from "@/hooks/use-socket";
 import { joinVenue } from "@/lib/socket-client";
 import { CourtCard, type CourtData } from "@/components/court-card";
 import { GenderIcon } from "@/components/gender-icon";
 import { QueuePanel, type QueueEntryData } from "@/components/queue-panel";
 import { cn } from "@/lib/cn";
-import { Plus, X, LogOut, Users, LayoutGrid, AlertTriangle, User, Flame, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, History, Calendar, Loader2, Target, Settings2, Play, Check } from "lucide-react";
+import { Plus, X, Users, LayoutGrid, AlertTriangle, User, UserPlus, Flame, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, Calendar, Loader2, Target, Play, Check } from "lucide-react";
 import { WARMUP_DURATION_SECONDS, MIN_GROUP_SIZE, MAX_GROUP_SIZE } from "@/lib/constants";
+import { isSessionWarmupDisplayMode } from "@/lib/session-warmup-display";
 import { QRCodeSVG } from "qrcode.react";
 import { SessionSummary } from "./session-summary";
+import { StaffCheckInPanel } from "@/components/staff-check-in-panel";
+
+function genderLabelForDialog(g: string, t: TFunction) {
+  if (g === "male") return t("staff.dashboard.labelsGenderMale");
+  if (g === "female") return t("staff.dashboard.labelsGenderFemale");
+  if (g === "other") return t("staff.dashboard.labelsGenderOther");
+  return g.trim() ? g : t("staff.dashboard.labelsDash");
+}
+
+function formatSkillLevelLabel(level: string, t: TFunction) {
+  if (!level || level === "—") return t("staff.dashboard.labelsDash");
+  const l = level.toLowerCase();
+  const map: Record<string, string> = {
+    beginner: "staff.checkIn.skillBeginner",
+    intermediate: "staff.checkIn.skillIntermediate",
+    advanced: "staff.checkIn.skillAdvanced",
+    pro: "staff.checkIn.skillPro",
+  };
+  if (map[l]) return t(map[l]);
+  return level.charAt(0).toUpperCase() + level.slice(1);
+}
+
+function skillBadgeClass(level: string) {
+  const l = level.toLowerCase();
+  if (l === "beginner") return "bg-green-700 text-green-100";
+  if (l === "intermediate") return "bg-blue-700 text-blue-100";
+  if (l === "advanced") return "bg-purple-700 text-purple-100";
+  if (l === "pro") return "bg-red-700 text-red-100";
+  return "bg-neutral-600 text-neutral-200";
+}
+
+/** Same FIFO window auto-start uses (first 4 waiting). */
+function firstFourWaitingFifo(entries: QueueEntryData[]) {
+  return [...entries]
+    .filter((e) => e.status === "waiting")
+    .sort((a, b) => new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime())
+    .slice(0, 4)
+    .map((e) => ({
+      name: e.player.name,
+      gender: e.player.gender ?? "",
+      skillLevel: e.player.skillLevel ?? "",
+    }));
+}
 
 interface SessionData {
   id: string;
@@ -34,10 +82,13 @@ interface VenueData {
   courts: { id: string; label: string; activeInSession: boolean }[];
 }
 
-type Tab = "courts" | "queue" | "qr";
+type Tab = "courts" | "checkin" | "queue" | "qr";
 
 export function StaffDashboard() {
-  const { venueId, staffName, clearAuth } = useSessionStore();
+  const { t } = useTranslation();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { venueId } = useSessionStore();
   const [venue, setVenue] = useState<VenueData | null>(null);
   const [session, setSession] = useState<SessionData | null>(null);
   const [courts, setCourts] = useState<CourtData[]>([]);
@@ -48,6 +99,13 @@ export function StaffDashboard() {
   const [confirmAddCourt, setConfirmAddCourt] = useState<{ id: string; label: string } | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<{ courtId: string; courtLabel: string; step: 1 | 2 } | null>(null);
   const [confirmMaintenance, setConfirmMaintenance] = useState<{ courtId: string; courtLabel: string } | null>(null);
+  const [courtActionError, setCourtActionError] = useState<string | null>(null);
+  const [confirmQueueAutofill, setConfirmQueueAutofill] = useState<{
+    courtId: string;
+    courtLabel: string;
+    detail: string;
+    waitingPlayers: { name: string; gender: string; skillLevel: string }[];
+  } | null>(null);
   const [confirmStartGame, setConfirmStartGame] = useState<{ courtId: string; courtLabel: string; step: 1 | 2 } | null>(null);
   const [confirmReplace, setConfirmReplace] = useState<{
     courtId: string;
@@ -57,7 +115,6 @@ export function StaffDashboard() {
     step: 1 | 2;
   } | null>(null);
   const [replaceBusy, setReplaceBusy] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
   const [closedSessionId, setClosedSessionId] = useState<string | null>(null);
   const [viewingSessionId, setViewingSessionId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
@@ -66,6 +123,18 @@ export function StaffDashboard() {
   const [showMixEditor, setShowMixEditor] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const { on } = useSocket();
+
+  useEffect(() => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam === "checkin" || tabParam === "add") setTab("checkin");
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (searchParams.get("history") === "1") {
+      setShowHistory(true);
+      router.replace("/staff");
+    }
+  }, [searchParams, router]);
 
   const fetchState = useCallback(async () => {
     if (!venueId) return;
@@ -76,7 +145,7 @@ export function StaffDashboard() {
         queue: QueueEntryData[];
         gameTypeMix: GameTypeMixStats | null;
         warmupDurationSeconds?: number;
-      }>(`/api/courts/state?venueId=${venueId}`);
+      }>(`/api/courts/state?venueId=${venueId}&staffQueue=1`);
       setSession(data.session);
       setCourts([...data.courts].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true })));
       setQueue(data.queue);
@@ -120,7 +189,7 @@ export function StaffDashboard() {
 
   const handleCloseSession = async () => {
     if (!session) return;
-    if (!confirm("Close this session? All queuing players will be notified.")) return;
+    if (!confirm(t("staff.dashboard.closeSessionConfirm"))) return;
     try {
       const closingId = session.id;
       await api.post(`/api/sessions/${closingId}/close`);
@@ -183,23 +252,39 @@ export function StaffDashboard() {
     }
   };
 
-  const handleStartGameOnIdle = async (courtId: string) => {
+  const handleStartGameOnIdle = async (courtId: string, courtLabel: string) => {
     try {
       await api.post(`/api/courts/${courtId}/start-game`);
       setSelectedCourt(null);
       await fetchState();
     } catch (e) {
-      alert((e as Error).message);
+      if (
+        e instanceof ApiRequestError &&
+        e.code === "NO_VALID_FOURSOME" &&
+        e.suggestAutofill
+      ) {
+        setConfirmQueueAutofill({
+          courtId,
+          courtLabel,
+          detail: e.message,
+          waitingPlayers: firstFourWaitingFifo(queue),
+        });
+        return;
+      }
+      const msg = e instanceof Error ? e.message : "Something went wrong";
+      setCourtActionError(msg);
     }
   };
 
-  const handleAutofill = async (courtId: string) => {
+  const handleAutofillFromQueue = async (courtId: string) => {
     try {
       await api.post(`/api/courts/${courtId}/warmup-autofill`);
+      setConfirmQueueAutofill(null);
       setSelectedCourt(null);
       await fetchState();
-    } catch (e) {
-      alert((e as Error).message);
+    } catch (err) {
+      setConfirmQueueAutofill(null);
+      setCourtActionError(err instanceof Error ? err.message : "Autofill failed");
     }
   };
 
@@ -214,16 +299,31 @@ export function StaffDashboard() {
     }
   };
 
-  const handlePlayerAction = async (playerId: string, _playerName: string, action: "remove_from_queue" | "end_session" | "change_level" | "assign_to_court", data?: Record<string, unknown>) => {
+  const handlePlayerAction = async (
+    playerId: string,
+    _playerName: string,
+    action:
+      | "remove_from_queue"
+      | "back_to_queue"
+      | "end_session"
+      | "change_level"
+      | "assign_to_court"
+      | "edit_player",
+    data?: Record<string, unknown>
+  ) => {
     try {
       if (action === "assign_to_court" && data?.courtId) {
         await api.post(`/api/courts/${data.courtId}/warmup-assign`, { playerId });
       } else if (action === "remove_from_queue") {
-        await api.post("/api/queue/staff-remove", { playerId, venueId });
+        await api.post("/api/queue/staff-break", { playerId, venueId });
+      } else if (action === "back_to_queue") {
+        await api.post("/api/queue/staff-back-to-queue", { playerId, venueId });
       } else if (action === "end_session") {
         await api.post(`/api/players/${playerId}/end-session`, { venueId, reason: "staff_action" });
       } else if (action === "change_level" && data?.skillLevel) {
         await api.patch(`/api/players/${playerId}`, { skillLevel: data.skillLevel });
+      } else if (action === "edit_player" && typeof data?.name === "string" && typeof data?.gender === "string") {
+        await api.patch(`/api/players/${playerId}`, { name: data.name.trim(), gender: data.gender });
       }
       await fetchState();
     } catch (e) {
@@ -242,7 +342,7 @@ export function StaffDashboard() {
   };
 
   const handleDissolveGroup = async (groupId: string) => {
-    if (!confirm("Dissolve this group? Players will become solo in the queue.")) return;
+    if (!confirm(t("staff.dashboard.dissolveGroupConfirm"))) return;
     try {
       await api.post("/api/queue/group/dissolve", { groupId, venueId });
       await fetchState();
@@ -262,9 +362,9 @@ export function StaffDashboard() {
       setSelectedCourt(null);
       await fetchState();
       if (result.replacementPlayerName) {
-        alert(`Replaced with ${result.replacementPlayerName}`);
+        alert(t("staff.dashboard.replacedWith", { name: result.replacementPlayerName }));
       } else {
-        alert("Player removed. No replacement available in the queue.");
+        alert(t("staff.dashboard.noReplacement"));
       }
     } catch (e) {
       alert((e as Error).message);
@@ -274,15 +374,27 @@ export function StaffDashboard() {
   };
 
   const waitingCount = queue.filter((e) => e.status === "waiting").length;
-  const hasWarmupCourts = courts.some((c) => c.status === "warmup");
-  const hasActiveCourts = courts.some((c) => c.status === "active");
-  const isWarmupMode = !!session && courts.length > 0 && !hasActiveCourts && (hasWarmupCourts || courts.every((c) => c.status === "idle"));
-  const hasWarmupOrIdleCourts = !!session && courts.some((c) => c.status === "warmup" || c.status === "idle");
+  const queueUsedNamesLower = useMemo(() => {
+    const active = new Set(["waiting", "on_break", "assigned", "playing"]);
+    return queue.filter((e) => active.has(e.status)).map((e) => e.player.name.trim().toLowerCase());
+  }, [queue]);
+  const isWarmupMode = isSessionWarmupDisplayMode(courts, !!session);
+  const hasWarmupOrIdleCourts =
+    !!session &&
+    courts.some(
+      (c) =>
+        c.status === "warmup" ||
+        c.status === "idle" ||
+        (c.status === "active" &&
+          c.players.length < 4 &&
+          c.assignment &&
+          c.assignment.isWarmup === false)
+    );
 
   if (!venueId) {
     return (
       <div className="flex min-h-dvh items-center justify-center">
-        <p className="text-neutral-400">No venue assigned. Contact admin.</p>
+        <p className="text-neutral-400">{t("staff.dashboard.noVenueAssigned")}</p>
       </div>
     );
   }
@@ -292,29 +404,32 @@ export function StaffDashboard() {
       {/* Header */}
       <header className="flex items-center gap-3 border-b border-neutral-800 px-4 py-3">
         <button
-          onClick={() => setShowProfile(true)}
+          type="button"
+          onClick={() => router.push("/staff/profile")}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 transition-colors"
         >
           <User className="h-5 w-5" />
         </button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-lg font-bold text-blue-500 leading-tight">Staff Dashboard</h1>
+          <h1 className="text-lg font-bold text-blue-500 leading-tight">{t("staff.dashboard.title")}</h1>
           <p className="text-sm text-neutral-400 truncate">{venue?.name}</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {session ? (
             <button
+              type="button"
               onClick={handleCloseSession}
               className="rounded-lg bg-red-700 px-3 py-1.5 text-sm font-medium text-white"
             >
-              Close Session
+              {t("staff.dashboard.closeSession")}
             </button>
           ) : (
             <button
+              type="button"
               onClick={() => setShowOpenSession(true)}
               className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white"
             >
-              Open Session
+              {t("staff.dashboard.openSession")}
             </button>
           )}
         </div>
@@ -323,31 +438,48 @@ export function StaffDashboard() {
       {/* Tab bar */}
       <div className="flex border-b border-neutral-800">
         <button
+          type="button"
           onClick={() => setTab("courts")}
           className={cn(
             "flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2",
             tab === "courts" ? "border-b-2 border-blue-500 text-white" : "text-neutral-400"
           )}
         >
-          <LayoutGrid className="h-4 w-4" /> Courts
+          <LayoutGrid className="h-4 w-4" /> {t("staff.dashboard.tabCourts")}
         </button>
         <button
+          type="button"
+          onClick={() => setTab("checkin")}
+          className={cn(
+            "flex-1 py-3 text-sm font-medium flex items-center justify-center gap-1.5 min-w-0",
+            tab === "checkin" ? "border-b-2 border-blue-500 text-white" : "text-neutral-400"
+          )}
+        >
+          <UserPlus className="h-4 w-4 shrink-0" />
+          <span className="truncate">{t("staff.dashboard.tabCheckIn")}</span>
+        </button>
+        <button
+          type="button"
           onClick={() => setTab("queue")}
           className={cn(
-            "flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2",
+            "flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 min-w-0",
             tab === "queue" ? "border-b-2 border-blue-500 text-white" : "text-neutral-400"
           )}
         >
-          <Users className="h-4 w-4" /> Queue ({queue.filter((e) => e.status === "waiting").length})
+          <Users className="h-4 w-4 shrink-0" />
+          <span className="truncate">
+            {t("staff.dashboard.tabQueue", { count: queue.filter((e) => e.status === "waiting").length })}
+          </span>
         </button>
         <button
+          type="button"
           onClick={() => setTab("qr")}
           className={cn(
             "flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2",
             tab === "qr" ? "border-b-2 border-blue-500 text-white" : "text-neutral-400"
           )}
         >
-          <QrCode className="h-4 w-4" /> QR Code
+          <QrCode className="h-4 w-4 shrink-0" /> {t("staff.dashboard.tabQr")}
         </button>
       </div>
 
@@ -355,8 +487,8 @@ export function StaffDashboard() {
       <main className="flex-1 overflow-y-auto p-4">
         {!session && !showOpenSession && (
           <div className="flex h-64 flex-col items-center justify-center gap-3 text-center">
-            <p className="text-lg text-neutral-500">No active session.</p>
-            <p className="text-sm text-neutral-600">Open a session so players can check in and warm up.</p>
+            <p className="text-lg text-neutral-500">{t("staff.dashboard.noActiveSession")}</p>
+            <p className="text-sm text-neutral-600">{t("staff.dashboard.noActiveSessionHint")}</p>
           </div>
         )}
 
@@ -365,6 +497,7 @@ export function StaffDashboard() {
             courts={venue?.courts || []}
             onOpen={(courtIds, mix, warmupMode) => handleOpenSession(courtIds, mix, warmupMode)}
             onCancel={() => setShowOpenSession(false)}
+            t={t}
           />
         )}
 
@@ -377,13 +510,18 @@ export function StaffDashboard() {
                   <Flame className="h-5 w-5 shrink-0 text-amber-400" />
                   <div>
                     <p className="font-semibold text-amber-300">
-                      Warm Up — {session.warmupMode === "manual" ? "Manual" : "Auto"}
+                      {t("staff.dashboard.warmupBannerTitle", {
+                        mode:
+                          session.warmupMode === "manual"
+                            ? t("staff.dashboard.warmupManual")
+                            : t("staff.dashboard.warmupAuto"),
+                      })}
                     </p>
                     <p className="text-xs text-amber-400/70">
                       {session.warmupMode === "manual"
-                        ? "Go to Queue tab to assign players to courts."
-                        : "Players are being assigned to courts as they arrive."}{" "}
-                      Games start after {warmupDurationSeconds / 60} min warmup.
+                        ? t("staff.dashboard.warmupManualHint")
+                        : t("staff.dashboard.warmupAutoHint")}{" "}
+                      {t("staff.dashboard.warmupGamesAfter", { minutes: warmupDurationSeconds / 60 })}
                     </p>
                   </div>
                 </div>
@@ -395,6 +533,7 @@ export function StaffDashboard() {
               <GameTypeMixTracker
                 stats={gameTypeMix}
                 onEdit={() => setShowMixEditor(true)}
+                t={t}
               />
             )}
 
@@ -407,6 +546,7 @@ export function StaffDashboard() {
                   warmup={isWarmupMode}
                   queueWaiting={waitingCount}
                   warmupDurationSeconds={warmupDurationSeconds}
+                  translationI18n={staffI18n}
                   onClick={() => setSelectedCourt(court)}
                 />
               ))}
@@ -430,31 +570,50 @@ export function StaffDashboard() {
           </div>
         )}
 
+        {session && tab === "checkin" && venueId && (
+          <StaffCheckInPanel venueId={venueId} queueNamesLower={queueUsedNamesLower} onAdded={fetchState} />
+        )}
+
         {session && tab === "queue" && (
           <QueuePanel
             entries={queue}
             variant="staff"
             maxDisplay={50}
+            translationI18n={staffI18n}
             onPlayerAction={handlePlayerAction}
             onCreateGroup={() => setShowCreateGroup(true)}
             onDissolveGroup={handleDissolveGroup}
             isWarmupManual={hasWarmupOrIdleCourts}
             courts={hasWarmupOrIdleCourts
               ? courts
-                  .filter((c) => c.status === "warmup" || c.status === "idle")
+                  .filter(
+                    (c) =>
+                      c.status === "warmup" ||
+                      c.status === "idle" ||
+                      (c.status === "active" &&
+                        c.players.length < 4 &&
+                        c.assignment &&
+                        c.assignment.isWarmup === false)
+                  )
                   .map((c) => ({
                     id: c.id,
                     label: c.label,
                     status: c.status,
                     playerCount: c.players.length,
-                    players: c.players.map((p) => ({ name: p.name, skillLevel: p.skillLevel })),
+                    assignmentIsWarmup: c.assignment?.isWarmup,
+                    players: c.players.map((p) => ({
+                      id: p.id,
+                      name: p.name,
+                      skillLevel: p.skillLevel,
+                      gender: p.gender,
+                    })),
                   }))
               : undefined}
           />
         )}
 
         {tab === "qr" && (
-          <QRCodeTab venueId={venueId} venueName={venue?.name} hasSession={!!session} />
+          <QRCodeTab venueId={venueId} venueName={venue?.name} hasSession={!!session} t={t} />
         )}
 
       </main>
@@ -477,7 +636,7 @@ export function StaffDashboard() {
               {/* Players on court */}
               {selectedCourt.players.length > 0 && (
                 <div className="space-y-3">
-                  <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">Players on court</p>
+                  <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">{t("staff.dashboard.playersOnCourt")}</p>
                   {selectedCourt.players.map((player) => (
                     <div
                       key={player.id}
@@ -508,7 +667,7 @@ export function StaffDashboard() {
                           className="shrink-0 ml-3 flex items-center gap-1.5 rounded-lg bg-amber-600/15 px-3 py-2 text-sm font-medium text-amber-400 hover:bg-amber-600/25 transition-colors"
                         >
                           <Repeat className="h-4 w-4" />
-                          Replace
+                          {t("staff.dashboard.replace")}
                         </button>
                       )}
                     </div>
@@ -518,26 +677,13 @@ export function StaffDashboard() {
 
               {/* Actions */}
               <div className="space-y-4">
-                {/* Auto-fill button for warmup/idle courts with < 4 players */}
-                {(selectedCourt.status === "warmup" || (selectedCourt.status === "idle" && hasWarmupOrIdleCourts)) &&
-                  selectedCourt.players.length < 4 &&
-                  waitingCount > 0 && (
-                  <button
-                    onClick={() => handleAutofill(selectedCourt.id)}
-                    className="w-full rounded-xl bg-green-600 py-5 text-lg font-bold text-white transition-colors hover:bg-green-500 flex items-center justify-center gap-2"
-                  >
-                    <Users className="h-5 w-5" />
-                    Auto-fill from Queue
-                  </button>
-                )}
-
                 {selectedCourt.status === "warmup" && selectedCourt.players.length >= 4 && (
                   <button
                     onClick={() => handleFinishWarmup(selectedCourt.id)}
                     className="w-full rounded-xl bg-amber-600 py-5 text-lg font-bold text-white transition-colors hover:bg-amber-500 flex items-center justify-center gap-2"
                   >
                     <Play className="h-5 w-5" />
-                    Start game (end warmup)
+                    {t("staff.dashboard.startGameEndWarmup")}
                   </button>
                 )}
 
@@ -551,20 +697,22 @@ export function StaffDashboard() {
                     className="w-full rounded-xl bg-green-600 py-5 text-lg font-bold text-white transition-colors hover:bg-green-500 flex items-center justify-center gap-2"
                   >
                     <RotateCcw className="h-5 w-5" />
-                    Start New Game
+                    {t("staff.dashboard.startNewGame")}
                   </button>
                 )}
 
                 {selectedCourt.status === "idle" && (
                   <button
-                    onClick={() => handleStartGameOnIdle(selectedCourt.id)}
+                    onClick={() => handleStartGameOnIdle(selectedCourt.id, selectedCourt.label)}
                     disabled={waitingCount < 4}
                     className="w-full rounded-xl bg-green-600 py-5 text-lg font-bold text-white transition-colors hover:bg-green-500 disabled:opacity-40 disabled:hover:bg-green-600 flex items-center justify-center gap-2"
                   >
                     <Play className="h-5 w-5" />
                     {waitingCount >= 4
-                      ? "Start New Game"
-                      : `Need ${4 - waitingCount} more player${4 - waitingCount !== 1 ? "s" : ""}`}
+                      ? t("staff.dashboard.startNewGame")
+                      : 4 - waitingCount === 1
+                        ? t("staff.dashboard.needMorePlayers", { count: 1 })
+                        : t("staff.dashboard.needMorePlayersPlural", { count: 4 - waitingCount })}
                   </button>
                 )}
 
@@ -575,13 +723,13 @@ export function StaffDashboard() {
                       className="flex-1 rounded-xl bg-green-600/20 py-4 text-sm font-medium text-green-400 hover:bg-green-600/30 flex items-center justify-center gap-2"
                     >
                       <RotateCcw className="h-4 w-4" />
-                      Restore Court
+                      {t("staff.dashboard.restoreCourt")}
                     </button>
                     <button
                       onClick={() => setConfirmRemove({ courtId: selectedCourt.id, courtLabel: selectedCourt.label, step: 1 })}
                       className="flex-1 rounded-xl bg-neutral-800 py-4 text-sm font-medium text-neutral-300 hover:bg-neutral-700"
                     >
-                      Remove from Session
+                      {t("staff.dashboard.removeFromSession")}
                     </button>
                   </div>
                 ) : (
@@ -590,13 +738,13 @@ export function StaffDashboard() {
                       onClick={() => setConfirmRemove({ courtId: selectedCourt.id, courtLabel: selectedCourt.label, step: 1 })}
                       className="flex-1 rounded-xl bg-neutral-800 py-4 text-sm font-medium text-neutral-300 hover:bg-neutral-700"
                     >
-                      Remove from Session
+                      {t("staff.dashboard.removeFromSession")}
                     </button>
                     <button
                       onClick={() => setConfirmMaintenance({ courtId: selectedCourt.id, courtLabel: selectedCourt.label })}
-                      className="flex-1 rounded-xl bg-neutral-800 py-4 text-sm font-medium text-red-400 hover:bg-neutral-700"
+                      className="flex-1 rounded-xl bg-neutral-800 py-4 text-sm font-medium text-neutral-300 hover:bg-neutral-700"
                     >
-                      Set Maintenance
+                      {t("staff.dashboard.setIdle")}
                     </button>
                   </div>
                 )}
@@ -604,20 +752,6 @@ export function StaffDashboard() {
             </div>
           </div>
         </div>
-      )}
-
-      {/* Profile bottom sheet */}
-      {showProfile && (
-        <StaffProfile
-          staffName={staffName}
-          venueName={venue?.name}
-          onLogout={clearAuth}
-          onClose={() => setShowProfile(false)}
-          onHistory={() => {
-            setShowProfile(false);
-            setShowHistory(true);
-          }}
-        />
       )}
 
       {/* Confirm Add Court */}
@@ -631,9 +765,9 @@ export function StaffDashboard() {
               <div className="rounded-full bg-amber-600/20 p-3">
                 <AlertTriangle className="h-6 w-6 text-amber-400" />
               </div>
-              <h3 className="text-lg font-bold">Add {confirmAddCourt.label}?</h3>
+              <h3 className="text-lg font-bold">{t("staff.dashboard.addCourtTitle", { label: confirmAddCourt.label })}</h3>
               <p className="text-sm text-neutral-400">
-                This court will become active in the current session and players may be assigned to it immediately.
+                {t("staff.dashboard.addCourtBody")}
               </p>
             </div>
             <div className="flex gap-3">
@@ -644,13 +778,13 @@ export function StaffDashboard() {
                 }}
                 className="flex-1 rounded-xl bg-green-600 py-3 font-semibold text-white hover:bg-green-500"
               >
-                Yes, Add Court
+                {t("staff.dashboard.yesAddCourt")}
               </button>
               <button
                 onClick={() => setConfirmAddCourt(null)}
                 className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
               >
-                Cancel
+                {t("staff.dashboard.cancel")}
               </button>
             </div>
           </div>
@@ -670,9 +804,9 @@ export function StaffDashboard() {
                   <div className="rounded-full bg-amber-600/20 p-3">
                     <AlertTriangle className="h-6 w-6 text-amber-400" />
                   </div>
-                  <h3 className="text-lg font-bold">Remove {confirmRemove.courtLabel}?</h3>
+                  <h3 className="text-lg font-bold">{t("staff.dashboard.removeCourtTitle", { label: confirmRemove.courtLabel })}</h3>
                   <p className="text-sm text-neutral-400">
-                    This will remove the court from the current session. Any active game on this court will be affected.
+                    {t("staff.dashboard.removeCourtBody")}
                   </p>
                 </div>
                 <div className="flex gap-3">
@@ -680,13 +814,13 @@ export function StaffDashboard() {
                     onClick={() => setConfirmRemove({ ...confirmRemove, step: 2 })}
                     className="flex-1 rounded-xl bg-amber-600 py-3 font-semibold text-white hover:bg-amber-500"
                   >
-                    Continue
+                    {t("staff.dashboard.continue")}
                   </button>
                   <button
                     onClick={() => setConfirmRemove(null)}
                     className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
                   >
-                    Cancel
+                    {t("staff.dashboard.cancel")}
                   </button>
                 </div>
               </>
@@ -696,9 +830,9 @@ export function StaffDashboard() {
                   <div className="rounded-full bg-red-600/20 p-3">
                     <AlertTriangle className="h-6 w-6 text-red-400" />
                   </div>
-                  <h3 className="text-lg font-bold">Are you sure?</h3>
+                  <h3 className="text-lg font-bold">{t("staff.dashboard.areYouSure")}</h3>
                   <p className="text-sm text-neutral-400">
-                    Please confirm you want to remove <span className="font-semibold text-neutral-200">{confirmRemove.courtLabel}</span> from this session. Players on this court will need to be reassigned.
+                    {t("staff.dashboard.removeCourtConfirmBody", { label: confirmRemove.courtLabel })}
                   </p>
                 </div>
                 <div className="flex gap-3">
@@ -706,13 +840,13 @@ export function StaffDashboard() {
                     onClick={() => handleRemoveCourt(confirmRemove.courtId)}
                     className="flex-1 rounded-xl bg-red-600 py-3 font-semibold text-white hover:bg-red-500"
                   >
-                    Yes, Remove Court
+                    {t("staff.dashboard.yesRemoveCourt")}
                   </button>
                   <button
                     onClick={() => setConfirmRemove(null)}
                     className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
                   >
-                    Cancel
+                    {t("staff.dashboard.cancel")}
                   </button>
                 </div>
               </>
@@ -721,7 +855,7 @@ export function StaffDashboard() {
         </div>
       )}
 
-      {/* Confirm Set Maintenance */}
+      {/* Confirm set court idle (stand by on TV) */}
       {confirmMaintenance && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setConfirmMaintenance(null)}>
           <div
@@ -729,32 +863,119 @@ export function StaffDashboard() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex flex-col items-center gap-3 text-center">
-              <div className="rounded-full bg-red-600/20 p-3">
-                <Wrench className="h-6 w-6 text-red-400" />
+              <div className="rounded-full bg-neutral-700/50 p-3">
+                <Wrench className="h-6 w-6 text-neutral-400" />
               </div>
-              <h3 className="text-lg font-bold">Set {confirmMaintenance.courtLabel} to Maintenance?</h3>
+              <h3 className="text-lg font-bold">{t("staff.dashboard.setIdleTitle", { label: confirmMaintenance.courtLabel })}</h3>
               <p className="text-sm text-neutral-400">
-                This court will be <span className="font-semibold text-neutral-200">temporarily suspended</span>. No players will be assigned to it until you restore it.
+                {t("staff.dashboard.setIdleBody1")}
               </p>
               <p className="text-sm text-neutral-400">
-                All other courts will continue to operate normally.
+                {t("staff.dashboard.setIdleBody2")}
+              </p>
+              <p className="text-sm text-neutral-400">
+                {t("staff.dashboard.setIdleBody3")}
               </p>
               <p className="text-xs text-neutral-500 mt-1">
-                To bring the court back, tap on it and select &ldquo;Restore Court&rdquo;.
+                {t("staff.dashboard.setIdleHint")}
               </p>
             </div>
             <div className="flex gap-3">
               <button
                 onClick={() => handleSetMaintenance(confirmMaintenance.courtId)}
-                className="flex-1 rounded-xl bg-red-600 py-3 font-semibold text-white hover:bg-red-500"
+                className="flex-1 rounded-xl bg-neutral-600 py-3 font-semibold text-white hover:bg-neutral-500"
               >
-                Yes, Set Maintenance
+                {t("staff.dashboard.yesSetIdle")}
               </button>
               <button
                 onClick={() => setConfirmMaintenance(null)}
                 className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
               >
-                Cancel
+                {t("staff.dashboard.cancel")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Start-game errors / offer queue autofill (above court sheet z-50) */}
+      {courtActionError && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setCourtActionError(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold text-center mb-3">{t("staff.dashboard.cantStartTitle")}</h3>
+            <p className="text-sm text-neutral-300 text-center mb-6 whitespace-pre-wrap">{courtActionError}</p>
+            <button
+              type="button"
+              onClick={() => setCourtActionError(null)}
+              className="w-full rounded-xl bg-neutral-700 py-3 font-semibold text-white hover:bg-neutral-600"
+            >
+              {t("staff.dashboard.ok")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {confirmQueueAutofill && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setConfirmQueueAutofill(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-bold mb-2">{t("staff.dashboard.rotationRules")}</h3>
+            <p className="text-sm text-neutral-300 mb-4 whitespace-pre-wrap">{confirmQueueAutofill.detail}</p>
+            {confirmQueueAutofill.waitingPlayers.length > 0 && (
+              <div className="mb-4 rounded-xl border border-neutral-700 bg-neutral-800/40 p-3">
+                <p className="text-xs font-medium uppercase tracking-wider text-neutral-500 mb-2">
+                  {t("staff.dashboard.nextFourFifo")}
+                </p>
+                <ul className="space-y-2.5">
+                  {confirmQueueAutofill.waitingPlayers.map((p, i) => (
+                    <li key={`${p.name}-${i}`} className="flex items-center gap-2.5 text-sm min-w-0">
+                      <GenderIcon gender={p.gender} className="h-4 w-4 opacity-100 shrink-0" />
+                      <span className="font-medium text-white truncate min-w-0">{p.name}</span>
+                      <span className="text-neutral-500 shrink-0">·</span>
+                      <span className="text-neutral-400 shrink-0">{genderLabelForDialog(p.gender, t)}</span>
+                      <span className="text-neutral-500 shrink-0">·</span>
+                      <span
+                        className={cn(
+                          "shrink-0 rounded-full px-2 py-0.5 text-xs font-medium",
+                          skillBadgeClass(p.skillLevel || "—")
+                        )}
+                      >
+                        {formatSkillLevelLabel(p.skillLevel || "—", t)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <p className="text-sm text-neutral-500 mb-6">
+              {t("staff.dashboard.fillFromQueuePrompt", { court: confirmQueueAutofill.courtLabel })}
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => handleAutofillFromQueue(confirmQueueAutofill.courtId)}
+                className="flex-1 rounded-xl bg-green-600 py-3 font-semibold text-white hover:bg-green-500 flex items-center justify-center gap-2"
+              >
+                <Users className="h-5 w-5 shrink-0" />
+                {t("staff.dashboard.fillFromQueue")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmQueueAutofill(null)}
+                className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
+              >
+                {t("staff.dashboard.cancel")}
               </button>
             </div>
           </div>
@@ -774,9 +995,9 @@ export function StaffDashboard() {
                   <div className="rounded-full bg-green-600/20 p-3">
                     <RotateCcw className="h-6 w-6 text-green-400" />
                   </div>
-                  <h3 className="text-lg font-bold">End current game on {confirmStartGame.courtLabel}?</h3>
+                  <h3 className="text-lg font-bold">{t("staff.dashboard.endGameTitle", { label: confirmStartGame.courtLabel })}</h3>
                   <p className="text-sm text-neutral-400">
-                    This will end the current game, requeue the players, and assign the next group from the queue.
+                    {t("staff.dashboard.endGameBody")}
                   </p>
                 </div>
                 <div className="flex gap-3">
@@ -784,13 +1005,13 @@ export function StaffDashboard() {
                     onClick={() => setConfirmStartGame({ ...confirmStartGame, step: 2 })}
                     className="flex-1 rounded-xl bg-green-600 py-3 font-semibold text-white hover:bg-green-500"
                   >
-                    Continue
+                    {t("staff.dashboard.continue")}
                   </button>
                   <button
                     onClick={() => setConfirmStartGame(null)}
                     className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
                   >
-                    Cancel
+                    {t("staff.dashboard.cancel")}
                   </button>
                 </div>
               </>
@@ -800,9 +1021,9 @@ export function StaffDashboard() {
                   <div className="rounded-full bg-amber-600/20 p-3">
                     <AlertTriangle className="h-6 w-6 text-amber-400" />
                   </div>
-                  <h3 className="text-lg font-bold">Are you sure?</h3>
+                  <h3 className="text-lg font-bold">{t("staff.dashboard.areYouSure")}</h3>
                   <p className="text-sm text-neutral-400">
-                    Players on <span className="font-semibold text-neutral-200">{confirmStartGame.courtLabel}</span> will be sent back to the queue and the next 4 players will be assigned.
+                    {t("staff.dashboard.startNewGameConfirmBody", { label: confirmStartGame.courtLabel })}
                   </p>
                 </div>
                 <div className="flex gap-3">
@@ -813,13 +1034,13 @@ export function StaffDashboard() {
                     }}
                     className="flex-1 rounded-xl bg-green-600 py-3 font-semibold text-white hover:bg-green-500"
                   >
-                    Yes, Start New Game
+                    {t("staff.dashboard.yesStartNewGame")}
                   </button>
                   <button
                     onClick={() => setConfirmStartGame(null)}
                     className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
                   >
-                    Cancel
+                    {t("staff.dashboard.cancel")}
                   </button>
                 </div>
               </>
@@ -841,9 +1062,9 @@ export function StaffDashboard() {
                   <div className="rounded-full bg-amber-600/20 p-3">
                     <Repeat className="h-6 w-6 text-amber-400" />
                   </div>
-                  <h3 className="text-lg font-bold">Replace {confirmReplace.playerName}?</h3>
+                  <h3 className="text-lg font-bold">{t("staff.dashboard.replacePlayerTitle", { name: confirmReplace.playerName })}</h3>
                   <p className="text-sm text-neutral-400">
-                    This player will be removed from <span className="font-semibold text-neutral-200">{confirmReplace.courtLabel}</span> and sent back to the queue. A replacement will be pulled from the queue.
+                    {t("staff.dashboard.replacePlayerBody", { court: confirmReplace.courtLabel })}
                   </p>
                 </div>
                 <div className="flex gap-3">
@@ -851,13 +1072,13 @@ export function StaffDashboard() {
                     onClick={() => setConfirmReplace({ ...confirmReplace, step: 2 })}
                     className="flex-1 rounded-xl bg-amber-600 py-3 font-semibold text-white hover:bg-amber-500"
                   >
-                    Continue
+                    {t("staff.dashboard.continue")}
                   </button>
                   <button
                     onClick={() => setConfirmReplace(null)}
                     className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
                   >
-                    Cancel
+                    {t("staff.dashboard.cancel")}
                   </button>
                 </div>
               </>
@@ -867,9 +1088,12 @@ export function StaffDashboard() {
                   <div className="rounded-full bg-red-600/20 p-3">
                     <AlertTriangle className="h-6 w-6 text-red-400" />
                   </div>
-                  <h3 className="text-lg font-bold">Confirm replacement</h3>
+                  <h3 className="text-lg font-bold">{t("staff.dashboard.confirmReplacement")}</h3>
                   <p className="text-sm text-neutral-400">
-                    <span className="font-semibold text-neutral-200">{confirmReplace.playerName}</span> will be immediately removed and a new player assigned to {confirmReplace.courtLabel}. This cannot be undone.
+                    {t("staff.dashboard.confirmReplacementBody", {
+                      name: confirmReplace.playerName,
+                      court: confirmReplace.courtLabel,
+                    })}
                   </p>
                 </div>
                 <div className="flex gap-3">
@@ -878,13 +1102,13 @@ export function StaffDashboard() {
                     disabled={replaceBusy}
                     className="flex-1 rounded-xl bg-red-600 py-3 font-semibold text-white hover:bg-red-500 disabled:opacity-50"
                   >
-                    {replaceBusy ? "Replacing…" : "Yes, Replace Now"}
+                    {replaceBusy ? t("staff.dashboard.replacing") : t("staff.dashboard.yesReplaceNow")}
                   </button>
                   <button
                     onClick={() => setConfirmReplace(null)}
                     className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
                   >
-                    Cancel
+                    {t("staff.dashboard.cancel")}
                   </button>
                 </div>
               </>
@@ -899,6 +1123,7 @@ export function StaffDashboard() {
           entries={queue}
           onConfirm={handleCreateGroup}
           onClose={() => setShowCreateGroup(false)}
+          t={t}
         />
       )}
 
@@ -947,6 +1172,7 @@ export function StaffDashboard() {
         <GameTypeMixEditor
           sessionId={session.id}
           currentMix={gameTypeMix?.target ?? null}
+          t={t}
           onClose={() => setShowMixEditor(false)}
           onSave={async (mix) => {
             try {
@@ -963,24 +1189,32 @@ export function StaffDashboard() {
   );
 }
 
-const MIX_PRESETS: { label: string; desc: string; mix: { men: number; women: number; mixed: number } | null }[] = [
-  { label: "Same Gender (Auto)", desc: "Prioritise men/women games", mix: { men: 40, women: 40, mixed: 20 } },
-  { label: "Balanced (Auto)", desc: "Equal split across all types", mix: { men: 33, women: 33, mixed: 34 } },
-  { label: "Mixed Focus", desc: "More mixed doubles", mix: { men: 25, women: 25, mixed: 50 } },
-  { label: "No Target", desc: "FIFO order, no balancing", mix: null },
+const STAFF_MIX_PRESET_DATA: { mix: { men: number; women: number; mixed: number } | null }[] = [
+  { mix: { men: 40, women: 40, mixed: 20 } },
+  { mix: { men: 33, women: 33, mixed: 34 } },
+  { mix: { men: 25, women: 25, mixed: 50 } },
+  { mix: null },
 ];
+
+const STAFF_MIX_PRESET_LABEL_KEYS = [
+  { label: "staff.dashboard.mixPreset1Label", desc: "staff.dashboard.mixPreset1Desc" },
+  { label: "staff.dashboard.mixPreset2Label", desc: "staff.dashboard.mixPreset2Desc" },
+  { label: "staff.dashboard.mixPreset3Label", desc: "staff.dashboard.mixPreset3Desc" },
+  { label: "staff.dashboard.mixPreset4Label", desc: "staff.dashboard.mixPreset4Desc" },
+] as const;
 
 function OpenSessionPanel({
   courts,
   onOpen,
   onCancel,
+  t,
 }: {
   courts: { id: string; label: string }[];
   onOpen: (courtIds: string[], mix?: { men: number; women: number; mixed: number } | null, warmupMode?: "manual" | "auto") => void;
   onCancel: () => void;
+  t: TFunction;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [warmupMode, setWarmupMode] = useState<"manual" | "auto">("manual");
 
   const toggle = (id: string) => {
     setSelected((prev) => {
@@ -993,10 +1227,10 @@ function OpenSessionPanel({
 
   return (
     <div className="space-y-5">
-      <h2 className="text-xl font-bold">Open Session</h2>
+      <h2 className="text-xl font-bold">{t("staff.dashboard.openSessionTitle")}</h2>
 
       <div>
-        <p className="text-sm text-neutral-400 mb-2">Select courts to activate:</p>
+        <p className="text-sm text-neutral-400 mb-2">{t("staff.dashboard.selectCourts")}</p>
         <div className="grid grid-cols-2 gap-2">
           {courts.map((c) => (
             <button
@@ -1015,50 +1249,17 @@ function OpenSessionPanel({
         </div>
       </div>
 
-      {/* Warm-up mode */}
-      <div>
-        <p className="text-sm text-neutral-400 mb-2">Warm-Up Mode</p>
-        <div className="flex rounded-xl border border-neutral-700 bg-neutral-800/50 p-1">
-          <button
-            onClick={() => setWarmupMode("manual")}
-            className={cn(
-              "flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors",
-              warmupMode === "manual"
-                ? "bg-blue-600 text-white"
-                : "text-neutral-400 hover:text-neutral-200"
-            )}
-          >
-            Manual
-          </button>
-          <button
-            onClick={() => setWarmupMode("auto")}
-            className={cn(
-              "flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors",
-              warmupMode === "auto"
-                ? "bg-blue-600 text-white"
-                : "text-neutral-400 hover:text-neutral-200"
-            )}
-          >
-            Auto
-          </button>
-        </div>
-        <p className="text-xs text-neutral-500 mt-1.5">
-          {warmupMode === "manual"
-            ? "You assign players to courts as they arrive."
-            : "Players are assigned to courts automatically."}
-        </p>
-      </div>
-
       <div className="flex gap-3">
         <button
-          onClick={() => onOpen(Array.from(selected), MIX_PRESETS[0].mix, warmupMode)}
+          type="button"
+          onClick={() => onOpen(Array.from(selected), STAFF_MIX_PRESET_DATA[0].mix, "manual")}
           disabled={selected.size === 0}
           className="flex-1 rounded-xl bg-green-600 py-3 font-semibold text-white disabled:opacity-40"
         >
-          Open Session ({selected.size} courts)
+          {t("staff.dashboard.openSessionWithCount", { count: selected.size })}
         </button>
-        <button onClick={onCancel} className="rounded-xl bg-neutral-800 px-6 py-3 text-neutral-300">
-          Cancel
+        <button type="button" onClick={onCancel} className="rounded-xl bg-neutral-800 px-6 py-3 text-neutral-300">
+          {t("staff.dashboard.cancel")}
         </button>
       </div>
     </div>
@@ -1068,15 +1269,17 @@ function OpenSessionPanel({
 function GameTypeMixTracker({
   stats,
   onEdit,
+  t,
 }: {
   stats: GameTypeMixStats;
   onEdit: () => void;
+  t: TFunction;
 }) {
   const { target, played, totalGames } = stats;
   const types = [
-    { key: "men" as const, label: "Men", color: "bg-blue-500", textColor: "text-blue-400" },
-    { key: "women" as const, label: "Women", color: "bg-pink-500", textColor: "text-pink-400" },
-    { key: "mixed" as const, label: "Mixed", color: "bg-purple-500", textColor: "text-purple-400" },
+    { key: "men" as const, label: t("staff.dashboard.mixMen"), color: "bg-blue-500", textColor: "text-blue-400" },
+    { key: "women" as const, label: t("staff.dashboard.mixWomen"), color: "bg-pink-500", textColor: "text-pink-400" },
+    { key: "mixed" as const, label: t("staff.dashboard.mixMixed"), color: "bg-purple-500", textColor: "text-purple-400" },
   ];
 
   return (
@@ -1085,14 +1288,15 @@ function GameTypeMixTracker({
         <div className="flex items-center gap-2">
           <Target className="h-4 w-4 text-blue-400" />
           <span className="text-xs font-medium text-neutral-400">
-            Game Mix ({totalGames} games)
+            {t("staff.dashboard.gameMix", { count: totalGames })}
           </span>
         </div>
         <button
+          type="button"
           onClick={onEdit}
           className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
         >
-          {target ? "Edit" : "Set Target"}
+          {target ? t("staff.dashboard.edit") : t("staff.dashboard.setTarget")}
         </button>
       </div>
 
@@ -1130,20 +1334,23 @@ function GameTypeMixTracker({
 function GameTypeMixEditor({
   sessionId,
   currentMix,
+  t,
   onClose,
   onSave,
 }: {
   sessionId: string;
   currentMix: { men: number; women: number; mixed: number } | null;
+  t: TFunction;
   onClose: () => void;
   onSave: (mix: { men: number; women: number; mixed: number } | null) => void;
 }) {
+  void sessionId;
   const findMatchingPreset = (mix: { men: number; women: number; mixed: number } | null) => {
     if (!mix) {
-      const idx = MIX_PRESETS.findIndex((p) => p.mix === null);
+      const idx = STAFF_MIX_PRESET_DATA.findIndex((p) => p.mix === null);
       return idx >= 0 ? idx : 0;
     }
-    const idx = MIX_PRESETS.findIndex(
+    const idx = STAFF_MIX_PRESET_DATA.findIndex(
       (p) => p.mix && p.mix.men === mix.men && p.mix.women === mix.women && p.mix.mixed === mix.mixed
     );
     return idx >= 0 ? idx : 0;
@@ -1158,18 +1365,20 @@ function GameTypeMixEditor({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-center justify-between">
-          <h3 className="text-lg font-bold">Game Type Target</h3>
-          <button onClick={onClose} className="rounded-full bg-neutral-800 p-1.5 text-neutral-400 hover:bg-neutral-700">
+          <h3 className="text-lg font-bold">{t("staff.dashboard.gameTypeTarget")}</h3>
+          <button type="button" onClick={onClose} className="rounded-full bg-neutral-800 p-1.5 text-neutral-400 hover:bg-neutral-700">
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <div className="space-y-2 mb-5">
-          {MIX_PRESETS.map((preset, i) => {
+          {STAFF_MIX_PRESET_DATA.map((preset, i) => {
             const isSelected = selectedIdx === i;
+            const keys = STAFF_MIX_PRESET_LABEL_KEYS[i];
             return (
               <button
                 key={i}
+                type="button"
                 onClick={() => setSelectedIdx(i)}
                 className={cn(
                   "w-full rounded-xl border px-4 py-3 text-left transition-all",
@@ -1181,9 +1390,9 @@ function GameTypeMixEditor({
                 <div className="flex items-center justify-between">
                   <div>
                     <span className={cn("text-sm font-semibold", isSelected ? "text-blue-400" : "text-neutral-200")}>
-                      {preset.label}
+                      {t(keys.label)}
                     </span>
-                    <p className="text-[11px] text-neutral-500 mt-0.5">{preset.desc}</p>
+                    <p className="text-[11px] text-neutral-500 mt-0.5">{t(keys.desc)}</p>
                   </div>
                   <div className={cn(
                     "h-5 w-5 rounded-full border-2 flex items-center justify-center transition-colors",
@@ -1200,9 +1409,15 @@ function GameTypeMixEditor({
                       <div className={cn("transition-all", isSelected ? "bg-purple-500" : "bg-purple-500/40")} style={{ width: `${preset.mix.mixed}%` }} />
                     </div>
                     <div className="flex justify-between text-[10px] font-mono">
-                      <span className={isSelected ? "text-blue-400" : "text-neutral-600"}>Men {preset.mix.men}%</span>
-                      <span className={isSelected ? "text-pink-400" : "text-neutral-600"}>Women {preset.mix.women}%</span>
-                      <span className={isSelected ? "text-purple-400" : "text-neutral-600"}>Mixed {preset.mix.mixed}%</span>
+                      <span className={isSelected ? "text-blue-400" : "text-neutral-600"}>
+                        {t("staff.dashboard.mixEditorMenPct", { pct: preset.mix.men })}
+                      </span>
+                      <span className={isSelected ? "text-pink-400" : "text-neutral-600"}>
+                        {t("staff.dashboard.mixEditorWomenPct", { pct: preset.mix.women })}
+                      </span>
+                      <span className={isSelected ? "text-purple-400" : "text-neutral-600"}>
+                        {t("staff.dashboard.mixEditorMixedPct", { pct: preset.mix.mixed })}
+                      </span>
                     </div>
                   </div>
                 )}
@@ -1213,16 +1428,18 @@ function GameTypeMixEditor({
 
         <div className="flex gap-3">
           <button
-            onClick={() => onSave(selectedIdx >= 0 ? MIX_PRESETS[selectedIdx].mix : null)}
+            type="button"
+            onClick={() => onSave(selectedIdx >= 0 ? STAFF_MIX_PRESET_DATA[selectedIdx].mix : null)}
             className="flex-1 rounded-xl bg-blue-600 py-3 font-semibold text-white hover:bg-blue-500"
           >
-            Save
+            {t("staff.dashboard.save")}
           </button>
           <button
+            type="button"
             onClick={onClose}
             className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
           >
-            Cancel
+            {t("staff.dashboard.cancel")}
           </button>
         </div>
       </div>
@@ -1234,10 +1451,12 @@ function CreateGroupModal({
   entries,
   onConfirm,
   onClose,
+  t,
 }: {
   entries: QueueEntryData[];
   onConfirm: (playerIds: string[]) => void;
   onClose: () => void;
+  t: TFunction;
 }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -1272,9 +1491,9 @@ function CreateGroupModal({
           <X className="h-5 w-5" />
         </button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-lg font-bold leading-tight">Create Group</h1>
+          <h1 className="text-lg font-bold leading-tight">{t("staff.dashboard.createGroupTitle")}</h1>
           <p className="text-sm text-neutral-400">
-            Select {MIN_GROUP_SIZE}–{MAX_GROUP_SIZE} players · {selected.size} selected
+            {t("staff.dashboard.createGroupSubtitle", { min: MIN_GROUP_SIZE, max: MAX_GROUP_SIZE, selected: selected.size })}
           </p>
         </div>
       </header>
@@ -1283,8 +1502,8 @@ function CreateGroupModal({
         {soloWaiting.length === 0 ? (
           <div className="flex h-48 flex-col items-center justify-center gap-2 text-center">
             <Users className="h-10 w-10 text-neutral-700" />
-            <p className="text-neutral-500">No solo players available</p>
-            <p className="text-sm text-neutral-600">Players must be waiting and not already in a group.</p>
+            <p className="text-neutral-500">{t("staff.dashboard.noSoloPlayers")}</p>
+            <p className="text-sm text-neutral-600">{t("staff.dashboard.noSoloPlayersHint")}</p>
           </div>
         ) : (
           <div className="space-y-1.5">
@@ -1316,7 +1535,7 @@ function CreateGroupModal({
                     {entry.player.name}
                   </span>
                   <span className="text-xs text-neutral-500 capitalize">
-                    {entry.player.skillLevel}
+                    {formatSkillLevelLabel(entry.player.skillLevel || "—", t)}
                   </span>
                 </button>
               );
@@ -1333,8 +1552,10 @@ function CreateGroupModal({
         >
           <Users className="h-5 w-5" />
           {selected.size >= MIN_GROUP_SIZE
-            ? `Create Group of ${selected.size}`
-            : `Select at least ${MIN_GROUP_SIZE - selected.size} more player${MIN_GROUP_SIZE - selected.size !== 1 ? "s" : ""}`}
+            ? t("staff.dashboard.createGroupCta", { count: selected.size })
+            : MIN_GROUP_SIZE - selected.size === 1
+              ? t("staff.dashboard.selectMorePlayers", { count: 1 })
+              : t("staff.dashboard.selectMorePlayersPlural", { count: MIN_GROUP_SIZE - selected.size })}
         </button>
       </div>
     </div>
@@ -1345,10 +1566,12 @@ function QRCodeTab({
   venueId,
   venueName,
   hasSession,
+  t,
 }: {
   venueId: string | null;
   venueName: string | undefined;
   hasSession: boolean;
+  t: TFunction;
 }) {
   const [origin, setOrigin] = useState("");
   const [showTvSetup, setShowTvSetup] = useState(false);
@@ -1373,7 +1596,7 @@ function QRCodeTab({
           className="flex items-center gap-2 self-start text-sm text-neutral-400 hover:text-white transition-colors"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to QR Codes
+          {t("staff.dashboard.backToQr")}
         </button>
 
         <div className="flex flex-col items-center gap-6">
@@ -1382,24 +1605,24 @@ function QRCodeTab({
           </div>
 
           <div className="text-center">
-            <h2 className="text-xl font-bold">Setup the TV Display</h2>
+            <h2 className="text-xl font-bold">{t("staff.dashboard.tvSetupTitle")}</h2>
             <p className="mt-1 text-sm text-neutral-400">
-              Show live court status on a TV screen for <span className="font-medium text-neutral-200">{venueName}</span>
+              {t("staff.dashboard.tvSetupSubtitle", { venue: venueName ?? "" })}
             </p>
           </div>
 
           <div className="w-full max-w-sm space-y-4">
             <div className="rounded-xl border border-blue-500/30 bg-blue-600/10 p-4">
-              <p className="text-xs font-medium text-blue-400 uppercase tracking-wider mb-2">Type this on the TV</p>
+              <p className="text-xs font-medium text-blue-400 uppercase tracking-wider mb-2">{t("staff.dashboard.typeOnTv")}</p>
               <p className="text-2xl font-bold font-mono text-center text-white tracking-wide py-2">{tvShortUrl}</p>
               <p className="text-xs text-blue-300/60 text-center mt-1">
-                Open the TV browser and type this URL. You&apos;ll pick the venue on screen.
+                {t("staff.dashboard.tvUrlHint")}
               </p>
             </div>
 
             <div className="flex items-center gap-3">
               <div className="h-px flex-1 bg-neutral-700" />
-              <span className="text-xs text-neutral-500">or scan to auto-connect</span>
+              <span className="text-xs text-neutral-500">{t("staff.dashboard.orScan")}</span>
               <div className="h-px flex-1 bg-neutral-700" />
             </div>
 
@@ -1413,12 +1636,12 @@ function QRCodeTab({
                 />
               </div>
               <p className="text-xs text-neutral-500 text-center">
-                If the TV has a camera or QR scanner, this links directly to the right venue.
+                {t("staff.dashboard.tvCameraHint")}
               </p>
             </div>
 
             <div className="rounded-xl bg-neutral-800/50 px-4 py-3">
-              <p className="text-xs text-neutral-500 mb-1">Full link (with venue pre-selected)</p>
+              <p className="text-xs text-neutral-500 mb-1">{t("staff.dashboard.fullLink")}</p>
               <p className="break-all text-sm text-neutral-300 font-mono">{tvFullUrl}</p>
             </div>
           </div>
@@ -1438,16 +1661,16 @@ function QRCodeTab({
           <Tv className="h-5 w-5 text-blue-400" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-medium text-white">Setup the TV</p>
-          <p className="text-xs text-neutral-400">Get the URL to display courts on a TV screen</p>
+          <p className="font-medium text-white">{t("staff.dashboard.setupTv")}</p>
+          <p className="text-xs text-neutral-400">{t("staff.dashboard.setupTvDesc")}</p>
         </div>
         <ChevronRight className="h-5 w-5 shrink-0 text-neutral-500" />
       </button>
 
       <div className="text-center">
-        <h2 className="text-xl font-bold">Player Check-in</h2>
+        <h2 className="text-xl font-bold">{t("staff.dashboard.playerCheckIn")}</h2>
         <p className="mt-1 text-sm text-neutral-400">
-          Players scan this code to join <span className="font-medium text-neutral-200">{venueName}</span>
+          {t("staff.dashboard.playerScanQr", { venue: venueName ?? "" })}
         </p>
       </div>
 
@@ -1463,16 +1686,16 @@ function QRCodeTab({
       {!hasSession && (
         <div className="flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-600/10 px-4 py-3">
           <AlertTriangle className="h-5 w-5 shrink-0 text-amber-400" />
-          <p className="text-sm text-amber-300">No active session — players can sign up but won&apos;t be able to join a game yet.</p>
+          <p className="text-sm text-amber-300">{t("staff.dashboard.noSessionQrWarning")}</p>
         </div>
       )}
 
       <div className="w-full max-w-sm space-y-3">
         <p className="text-center text-xs text-neutral-500">
-          Display this QR code at the entrance so players go directly to the right venue.
+          {t("staff.dashboard.displayQrHint")}
         </p>
         <div className="rounded-xl bg-neutral-800/50 px-4 py-3">
-          <p className="text-xs text-neutral-500 mb-1">Link</p>
+          <p className="text-xs text-neutral-500 mb-1">{t("staff.dashboard.link")}</p>
           <p className="break-all text-sm text-neutral-300 font-mono">{playerUrl}</p>
         </div>
       </div>
@@ -1487,11 +1710,15 @@ function QRCodeTab({
               try {
                 const res = await api.post<{ sent: number; total: number }>("/api/push/test", { venueId });
                 setTestPushStatus("sent");
-                setTestPushResult(`Sent to ${res.total} player${res.total !== 1 ? "s" : ""}`);
+                setTestPushResult(
+                  res.total === 1
+                    ? t("staff.dashboard.sentToPlayers", { count: res.total })
+                    : t("staff.dashboard.sentToPlayersPlural", { count: res.total })
+                );
                 setTimeout(() => setTestPushStatus("idle"), 4000);
               } catch {
                 setTestPushStatus("error");
-                setTestPushResult("Failed to send test notification");
+                setTestPushResult(t("staff.dashboard.testNotifFailed"));
                 setTimeout(() => setTestPushStatus("idle"), 4000);
               }
             }}
@@ -1506,110 +1733,17 @@ function QRCodeTab({
             )}
           >
             {testPushStatus === "sending" ? (
-              <><Loader2 className="h-4 w-4 animate-spin" /> Sending...</>
+              <><Loader2 className="h-4 w-4 animate-spin" /> {t("staff.dashboard.sending")}</>
             ) : testPushStatus === "sent" ? (
               <><Check className="h-4 w-4" /> {testPushResult}</>
             ) : testPushStatus === "error" ? (
               <>{testPushResult}</>
             ) : (
-              <>🔔 Send Test Notification to All Players</>
+              <>🔔 {t("staff.dashboard.sendTestNotif")}</>
             )}
           </button>
         </div>
       )}
-    </div>
-  );
-}
-
-function StaffProfile({
-  staffName,
-  venueName,
-  onLogout,
-  onClose,
-  onHistory,
-}: {
-  staffName: string | null;
-  venueName: string | undefined;
-  onLogout: () => void;
-  onClose: () => void;
-  onHistory: () => void;
-}) {
-  const [confirmLogout, setConfirmLogout] = useState(false);
-
-  if (confirmLogout) {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setConfirmLogout(false)}>
-        <div
-          className="w-full max-w-sm rounded-2xl border border-neutral-700 bg-neutral-900 p-6"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="mb-4 flex flex-col items-center gap-3 text-center">
-            <div className="rounded-full bg-red-600/20 p-3">
-              <LogOut className="h-6 w-6 text-red-400" />
-            </div>
-            <h3 className="text-lg font-bold">Log out?</h3>
-            <p className="text-sm text-neutral-400">
-              You will be signed out of this device. The next staff member can log in with their own credentials.
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <button
-              onClick={onLogout}
-              className="flex-1 rounded-xl bg-red-600 py-3 font-semibold text-white hover:bg-red-500"
-            >
-              Yes, Log Out
-            </button>
-            <button
-              onClick={() => setConfirmLogout(false)}
-              className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={onClose}>
-      <div
-        className="w-full max-w-lg rounded-t-2xl border-t border-neutral-700 bg-neutral-900 p-5 pb-8"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-4 mb-5">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-blue-600/20">
-            <User className="h-7 w-7 text-blue-400" />
-          </div>
-          <div className="min-w-0">
-            <h3 className="text-lg font-bold truncate">{staffName || "Staff"}</h3>
-            <p className="text-sm text-neutral-400">{venueName || "No venue"}</p>
-          </div>
-        </div>
-
-        <button
-          onClick={onHistory}
-          className="flex w-full items-center justify-between rounded-xl bg-neutral-800 px-4 py-3.5 mb-3 hover:bg-neutral-700 transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <History className="h-5 w-5 text-blue-400" />
-            <span className="font-medium text-neutral-200">Session History</span>
-          </div>
-          <ChevronRight className="h-5 w-5 text-neutral-500" />
-        </button>
-
-        <p className="text-xs text-neutral-500 mb-4">
-          This device may be shared between staff members. Log out at the end of your shift.
-        </p>
-
-        <button
-          onClick={() => setConfirmLogout(true)}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-600/15 py-3.5 font-medium text-red-400 hover:bg-red-600/25 transition-colors"
-        >
-          <LogOut className="h-5 w-5" />
-          Log Out
-        </button>
-      </div>
     </div>
   );
 }
@@ -1632,6 +1766,8 @@ function SessionHistoryPanel({
   onViewSession: (sessionId: string) => void;
   onClose: () => void;
 }) {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language?.toLowerCase().startsWith("vi") ? "vi-VN" : "en-US";
   const [sessions, setSessions] = useState<SessionHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -1645,11 +1781,11 @@ function SessionHistoryPanel({
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
-    return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+    return d.toLocaleDateString(locale, { weekday: "short", month: "short", day: "numeric" });
   };
 
   const formatTime = (dateStr: string) => {
-    return new Date(dateStr).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+    return new Date(dateStr).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
   };
 
   const getDuration = (openedAt: string, closedAt: string | null) => {
@@ -1671,8 +1807,8 @@ function SessionHistoryPanel({
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-lg font-bold leading-tight">Session History</h1>
-          <p className="text-sm text-neutral-400">Past sessions at this venue</p>
+          <h1 className="text-lg font-bold leading-tight">{t("staff.dashboard.historyTitle")}</h1>
+          <p className="text-sm text-neutral-400">{t("staff.dashboard.historySubtitle")}</p>
         </div>
       </header>
 
@@ -1684,8 +1820,8 @@ function SessionHistoryPanel({
         ) : sessions.length === 0 ? (
           <div className="flex h-48 flex-col items-center justify-center gap-2 text-center">
             <Calendar className="h-10 w-10 text-neutral-700" />
-            <p className="text-neutral-500">No past sessions yet</p>
-            <p className="text-sm text-neutral-600">Session statistics will appear here after you close a session.</p>
+            <p className="text-neutral-500">{t("staff.dashboard.historyEmpty")}</p>
+            <p className="text-sm text-neutral-600">{t("staff.dashboard.historyEmptyHint")}</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -1708,11 +1844,11 @@ function SessionHistoryPanel({
                 <div className="flex shrink-0 items-center gap-3">
                   <div className="text-right">
                     <p className="text-sm font-medium text-neutral-300">{s.playerCount}</p>
-                    <p className="text-[10px] text-neutral-600">players</p>
+                    <p className="text-[10px] text-neutral-600">{t("staff.dashboard.historyPlayers")}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-medium text-neutral-300">{s.gameCount}</p>
-                    <p className="text-[10px] text-neutral-600">games</p>
+                    <p className="text-[10px] text-neutral-600">{t("staff.dashboard.historyGames")}</p>
                   </div>
                   <ChevronRight className="h-4 w-4 text-neutral-600" />
                 </div>

@@ -2,10 +2,17 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
 import { getWarmupDurationSecondsFromSettings } from "@/lib/warmup-settings";
+import { recoverStuckQueueStatusesForActiveGames } from "@/lib/recover-queue-status";
+
+const STAFF_QUEUE_STATUSES = ["waiting", "on_break", "assigned", "playing"] as const;
 
 export async function GET(request: NextRequest) {
   const venueId = request.nextUrl.searchParams.get("venueId");
   if (!venueId) return error("venueId is required");
+
+  const staffQueue =
+    request.nextUrl.searchParams.get("staffQueue") === "1" ||
+    request.nextUrl.searchParams.get("staffQueue") === "true";
 
   try {
     const [session, venueRow] = await Promise.all([
@@ -80,10 +87,12 @@ export async function GET(request: NextRequest) {
 
     let queue: unknown[] = [];
     if (session) {
+      await recoverStuckQueueStatusesForActiveGames(session.id);
+
       const rawQueue = await prisma.queueEntry.findMany({
         where: {
           sessionId: session.id,
-          status: { in: ["waiting", "on_break"] },
+          status: { in: staffQueue ? [...STAFF_QUEUE_STATUSES] : ["waiting", "on_break"] },
         },
         include: {
           player: true,
@@ -91,6 +100,16 @@ export async function GET(request: NextRequest) {
         },
         orderBy: { joinedAt: "asc" },
       });
+
+      const statusOrder: Record<string, number> = { waiting: 0, on_break: 1, assigned: 2, playing: 3 };
+      if (staffQueue) {
+        rawQueue.sort((a, b) => {
+          const oa = statusOrder[a.status] ?? 99;
+          const ob = statusOrder[b.status] ?? 99;
+          if (oa !== ob) return oa - ob;
+          return a.joinedAt.getTime() - b.joinedAt.getTime();
+        });
+      }
 
       const waitingPlayerIds = rawQueue.map((e) => e.playerId);
       const completedAssignments = await prisma.courtAssignment.findMany({

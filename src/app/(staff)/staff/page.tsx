@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslation } from "react-i18next";
 import { useSessionStore } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { StaffDashboard } from "./dashboard";
@@ -14,6 +15,7 @@ interface StaffVenue {
 }
 
 export default function StaffPage() {
+  const { t } = useTranslation();
   const { token, staffId, venueId, role, onboardingCompleted, setAuth, clearAuth } = useSessionStore();
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
@@ -32,12 +34,6 @@ export default function StaffPage() {
     }
   }, [token, staffId, role]);
 
-  useEffect(() => {
-    if (token && staffId && role === "superadmin") {
-      setShowRoleChoice(true);
-    }
-  }, [token, staffId, role]);
-
   if (token && staffId && venueId && !showRoleChoice) {
     return <StaffDashboard />;
   }
@@ -49,8 +45,8 @@ export default function StaffPage() {
           <div className="flex flex-col items-center gap-4">
             <CourtFlowLogo size="large" dark asLink={false} />
             <div className="text-center">
-              <h1 className="text-xl font-semibold text-white">Continue as...</h1>
-              <p className="mt-1 text-sm text-neutral-400">Choose how you want to use CourtFlow</p>
+              <h1 className="text-xl font-semibold text-white">{t("staff.login.continueAs")}</h1>
+              <p className="mt-1 text-sm text-neutral-400">{t("staff.login.chooseHow")}</p>
             </div>
           </div>
 
@@ -66,8 +62,8 @@ export default function StaffPage() {
                 <Shield className="h-5 w-5 text-purple-400" />
               </div>
               <div className="min-w-0">
-                <p className="font-semibold text-white">Admin Dashboard</p>
-                <p className="text-xs text-neutral-400">Manage venues, staff & analytics</p>
+                <p className="font-semibold text-white">{t("staff.login.adminDashboard")}</p>
+                <p className="text-xs text-neutral-400">{t("staff.login.adminDashboardDesc")}</p>
               </div>
             </button>
 
@@ -79,7 +75,7 @@ export default function StaffPage() {
                 } else if (loginVenues.length > 1) {
                   setPendingVenues(loginVenues);
                 } else {
-                  setErr("No venue assigned. Create one from the Admin Dashboard first.");
+                  setErr(t("staff.login.noVenueCreateAdmin"));
                 }
               }}
               className="group flex w-full items-center gap-4 rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 text-left transition-all hover:border-blue-500/40 hover:bg-blue-500/10"
@@ -88,8 +84,8 @@ export default function StaffPage() {
                 <Clipboard className="h-5 w-5 text-blue-400" />
               </div>
               <div className="min-w-0">
-                <p className="font-semibold text-white">Staff Dashboard</p>
-                <p className="text-xs text-neutral-400">Manage courts & sessions on-site</p>
+                <p className="font-semibold text-white">{t("staff.login.staffDashboard")}</p>
+                <p className="text-xs text-neutral-400">{t("staff.login.staffDashboardDesc")}</p>
               </div>
             </button>
           </div>
@@ -101,7 +97,7 @@ export default function StaffPage() {
             }}
             className="block w-full text-center text-sm text-neutral-500 transition-colors hover:text-neutral-300"
           >
-            Sign out
+            {t("staff.login.signOut")}
           </button>
         </div>
       </div>
@@ -115,8 +111,8 @@ export default function StaffPage() {
           <div className="flex flex-col items-center gap-4">
             <CourtFlowLogo size="large" dark asLink={false} />
             <div className="text-center">
-              <h1 className="text-xl font-semibold text-white">Select Venue</h1>
-              <p className="mt-1 text-sm text-neutral-400">Choose which venue to manage today</p>
+              <h1 className="text-xl font-semibold text-white">{t("staff.login.selectVenue")}</h1>
+              <p className="mt-1 text-sm text-neutral-400">{t("staff.login.selectVenueDesc")}</p>
             </div>
           </div>
           <div className="space-y-2">
@@ -179,12 +175,12 @@ export default function StaffPage() {
       if (!data.staff.venueId && data.staff.venues.length > 1) {
         setPendingVenues(data.staff.venues);
       } else if (!data.staff.venueId && data.staff.venues.length === 0) {
-        setErr("No venue assigned. Contact an admin.");
+        setErr(t("staff.login.noVenueAssigned"));
       }
     } catch (e) {
       const msg = (e as Error).message;
       if (msg.includes("prisma") || msg.includes("column") || msg.includes("database") || msg.includes("ECONNREFUSED")) {
-        setErr("Unable to connect right now. Please try again later.");
+        setErr(t("staff.login.connectionError"));
       } else {
         setErr(msg);
       }
@@ -208,8 +204,8 @@ export default function StaffPage() {
         <div className="rounded-2xl border border-neutral-800/70 bg-neutral-900/50 p-6 backdrop-blur-sm">
           <form onSubmit={handleLogin} className="space-y-5">
             <div className="text-center">
-              <h1 className="text-xl font-semibold text-white">Welcome back</h1>
-              <p className="mt-1 text-sm text-neutral-500">Sign in to manage your courts</p>
+              <h1 className="text-xl font-semibold text-white">{t("staff.login.welcomeBack")}</h1>
+              <p className="mt-1 text-sm text-neutral-500">{t("staff.login.signInSubtitle")}</p>
             </div>
 
             {err && (
@@ -220,7 +216,7 @@ export default function StaffPage() {
 
             <div className="space-y-3">
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-neutral-400">Phone number</label>
+                <label className="mb-1.5 block text-xs font-medium text-neutral-400">{t("staff.login.phoneNumber")}</label>
                 <div className="relative">
                   <Phone className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-600" />
                   <input
@@ -234,12 +230,12 @@ export default function StaffPage() {
               </div>
 
               <div>
-                <label className="mb-1.5 block text-xs font-medium text-neutral-400">Password</label>
+                <label className="mb-1.5 block text-xs font-medium text-neutral-400">{t("staff.login.password")}</label>
                 <div className="relative">
                   <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-600" />
                   <input
                     type={showPassword ? "text" : "password"}
-                    placeholder="Enter your password"
+                    placeholder={t("staff.login.passwordPlaceholder")}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="w-full rounded-lg border border-neutral-800 bg-neutral-950/60 py-2.5 pl-10 pr-10 text-sm text-white placeholder:text-neutral-600 transition-colors focus:border-green-500/60 focus:outline-none focus:ring-1 focus:ring-green-500/20"
@@ -262,7 +258,7 @@ export default function StaffPage() {
                 onChange={(e) => setRememberMe(e.target.checked)}
                 className="h-3.5 w-3.5 rounded border-neutral-700 bg-neutral-900 accent-green-500"
               />
-              <span className="text-xs text-neutral-500">Remember me</span>
+              <span className="text-xs text-neutral-500">{t("staff.login.rememberMe")}</span>
             </label>
 
             <button
@@ -270,7 +266,7 @@ export default function StaffPage() {
               disabled={loading}
               className="w-full rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white transition-all hover:bg-green-500 disabled:opacity-50"
             >
-              {loading ? "Signing in..." : "Sign In"}
+              {loading ? t("staff.login.signingIn") : t("staff.login.signIn")}
             </button>
           </form>
         </div>

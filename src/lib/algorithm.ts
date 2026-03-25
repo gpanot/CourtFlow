@@ -273,13 +273,24 @@ function findGroupWithFill(candidates: QueueCandidate[]): QueueCandidate[] | nul
   return null;
 }
 
+export type RunRotationFailureReason =
+  | "court_not_ready"
+  | "insufficient_waiting"
+  | "no_valid_foursome";
+
+export type RunRotationResult =
+  | { ok: true }
+  | { ok: false; reason: RunRotationFailureReason; waitingCount: number };
+
 export async function runRotation(
   venueId: string,
   sessionId: string,
   courtId: string
-): Promise<boolean> {
+): Promise<RunRotationResult> {
   const court = await prisma.court.findUnique({ where: { id: courtId } });
-  if (!court || court.status !== "idle" || !court.activeInSession) return false;
+  if (!court || court.status !== "idle" || !court.activeInSession) {
+    return { ok: false, reason: "court_not_ready", waitingCount: 0 };
+  }
 
   const session = await prisma.session.findUnique({ where: { id: sessionId } });
   const target = session?.gameTypeMix as GameTypeMix | null;
@@ -291,7 +302,13 @@ export async function runRotation(
     take: QUEUE_LOOKAHEAD,
   });
 
-  if (waitingEntries.length < COURT_PLAYER_COUNT) return false;
+  if (waitingEntries.length < COURT_PLAYER_COUNT) {
+    return {
+      ok: false,
+      reason: "insufficient_waiting",
+      waitingCount: waitingEntries.length,
+    };
+  }
 
   const allCandidates: QueueCandidate[] = waitingEntries.map((e) => ({
     entryId: e.id,
@@ -320,7 +337,13 @@ export async function runRotation(
   } else {
     selectedPlayers = fullGroup ?? soloSelection;
   }
-  if (!selectedPlayers) return false;
+  if (!selectedPlayers) {
+    return {
+      ok: false,
+      reason: "no_valid_foursome",
+      waitingCount: waitingEntries.length,
+    };
+  }
 
   const playerIds = selectedPlayers.map((p) => p.playerId);
   const groupIds = [...new Set(selectedPlayers.filter((p) => p.groupId).map((p) => p.groupId!))];
@@ -384,7 +407,7 @@ export async function runRotation(
     }
   }, AUTO_START_DELAY_SECONDS * 1000);
 
-  return true;
+  return { ok: true };
 }
 
 function toQueueCandidateStub(
@@ -469,9 +492,9 @@ export async function assignToWarmup(
     return assignment && assignment.isWarmup && assignment.playerIds.length < 4;
   });
 
-  // Second: find an idle court
+  // Second: find an idle court (exclude post-maintenance courts that must not use warmup)
   if (!targetCourt) {
-    targetCourt = courts.find((c) => c.status === "idle");
+    targetCourt = courts.find((c) => c.status === "idle" && !c.skipWarmupAfterMaintenance);
   }
 
   if (!targetCourt) return false;

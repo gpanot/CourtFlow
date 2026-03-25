@@ -18,6 +18,7 @@ import { LogOut } from "lucide-react";
 import { isPushSupported, subscribeToPush, getNotificationPermission } from "@/lib/push-client";
 import { NotificationCard } from "./notification-card";
 import { InstallCard } from "./install-card";
+import { isSessionWarmupDisplayMode } from "@/lib/session-warmup-display";
 
 interface Venue {
   id: string;
@@ -137,10 +138,7 @@ export function PlayerHome() {
         courts: CourtState[];
         warmupDurationSeconds?: number;
       }>(`/api/courts/state?venueId=${selectedVenue}`);
-      const hasActive = courtsState.courts.some((c) => c.status === "active");
-      const hasWarmup = courtsState.courts.some((c) => c.status === "warmup");
-      const allIdle = courtsState.courts.length > 0 && courtsState.courts.every((c) => c.status === "idle");
-      setIsWarmup(!hasActive && (hasWarmup || allIdle));
+      setIsWarmup(isSessionWarmupDisplayMode(courtsState.courts, true));
 
       if (playerId) {
         const entries = await api.get<QueueEntry[]>(`/api/queue?sessionId=${sess.id}`);

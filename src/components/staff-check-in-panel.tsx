@@ -1,0 +1,268 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { api } from "@/lib/api-client";
+import { cn } from "@/lib/cn";
+import { SKILL_LEVELS, SKILL_DESCRIPTIONS, type SkillLevelType } from "@/lib/constants";
+import { Loader2, UserPlus } from "lucide-react";
+
+const GENDERS = ["male", "female"] as const;
+
+export interface StaffCheckInRecent {
+  id: string;
+  name: string;
+  gender: string;
+  skillLevel: string;
+}
+
+interface StaffCheckInPanelProps {
+  venueId: string;
+  /** Lowercased display names already in this session queue (waiting / on court / break). */
+  queueNamesLower: string[];
+  onAdded: () => void;
+}
+
+const FLASH_MS = 3200;
+
+export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCheckInPanelProps) {
+  const { t } = useTranslation();
+
+  const skillLabel = (level: SkillLevelType) => {
+    const keys = {
+      beginner: "staff.checkIn.skillBeginner",
+      intermediate: "staff.checkIn.skillIntermediate",
+      advanced: "staff.checkIn.skillAdvanced",
+      pro: "staff.checkIn.skillPro",
+    } as const;
+    return t(keys[level]);
+  };
+
+  const genderLabel = (g: (typeof GENDERS)[number]) =>
+    g === "male" ? t("staff.checkIn.genderMale") : t("staff.checkIn.genderFemale");
+
+  const duplicateNameMsg = t("staff.checkIn.duplicateName");
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [name, setName] = useState("");
+  const [gender, setGender] = useState<(typeof GENDERS)[number] | "">("");
+  const [skill, setSkill] = useState<SkillLevelType | "">("");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState("");
+  const [recent, setRecent] = useState<StaffCheckInRecent[]>([]);
+  const [flashMessage, setFlashMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    };
+  }, []);
+
+  const showFlash = (message: string) => {
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    setFlashMessage(message);
+    flashTimerRef.current = setTimeout(() => {
+      setFlashMessage(null);
+      flashTimerRef.current = null;
+    }, FLASH_MS);
+  };
+
+  const trimmedName = name.trim();
+  const nameIsDuplicate =
+    trimmedName.length > 0 && queueNamesLower.includes(trimmedName.toLowerCase());
+  /** After name + gender, surface duplicate immediately (no need to tap Add). */
+  const showDuplicateWarning = nameIsDuplicate && gender !== "";
+
+  const submit = async () => {
+    setErr("");
+    const trimmed = name.trim();
+    if (!trimmed || !gender || !skill) {
+      setErr(t("staff.checkIn.requiredFields"));
+      return;
+    }
+    if (queueNamesLower.includes(trimmed.toLowerCase())) {
+      setErr(duplicateNameMsg);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await api.post<{
+        success: boolean;
+        player: { id: string; name: string; gender: string; skillLevel: string };
+      }>("/api/queue/staff-add-walk-in", {
+        venueId,
+        name: trimmed,
+        gender,
+        skillLevel: skill,
+      });
+      if (res.player) {
+        showFlash(t("staff.checkIn.addedFlash", { name: res.player.name }));
+        setRecent((prev) => {
+          const next = [
+            {
+              id: res.player.id,
+              name: res.player.name,
+              gender: res.player.gender,
+              skillLevel: res.player.skillLevel,
+            },
+            ...prev.filter((p) => p.id !== res.player.id),
+          ];
+          return next.slice(0, 5);
+        });
+      }
+      setName("");
+      setGender("");
+      setSkill("");
+      onAdded();
+      requestAnimationFrame(() => nameInputRef.current?.focus());
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="mx-auto w-full max-w-md space-y-6">
+      <div
+        className={cn(
+          "flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors duration-200",
+          flashMessage
+            ? "border-green-500/50 bg-green-600/15"
+            : "border-green-500/25 bg-green-600/10"
+        )}
+      >
+        <UserPlus className="h-6 w-6 shrink-0 text-green-400" />
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold text-green-300">{t("staff.checkIn.title")}</p>
+          {flashMessage ? (
+            <p className="text-sm font-medium text-green-200" role="status" aria-live="polite">
+              {flashMessage}
+            </p>
+          ) : (
+            <p className="text-xs text-neutral-400">
+              {t("staff.checkIn.subtitle")}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {showDuplicateWarning && (
+        <div
+          id="checkin-duplicate-name"
+          className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300"
+          role="alert"
+          aria-live="polite"
+        >
+          {duplicateNameMsg}
+        </div>
+      )}
+      {err && !showDuplicateWarning && (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{err}</div>
+      )}
+
+      <div className="space-y-4 rounded-xl border border-neutral-800 bg-neutral-900/40 p-4">
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-neutral-400">{t("staff.checkIn.name")}</label>
+          <input
+            ref={nameInputRef}
+            type="text"
+            placeholder={t("staff.checkIn.playerNamePlaceholder")}
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+              setErr("");
+            }}
+            className={cn(
+              "w-full rounded-xl border bg-neutral-950 px-4 py-3 text-white placeholder:text-neutral-500 focus:outline-none",
+              showDuplicateWarning ? "border-red-500/50 focus:border-red-500" : "border-neutral-700 focus:border-green-500"
+            )}
+            aria-invalid={showDuplicateWarning}
+            aria-describedby={showDuplicateWarning ? "checkin-duplicate-name" : undefined}
+            autoComplete="off"
+            autoCapitalize="words"
+          />
+        </div>
+
+        <div>
+          <p className="mb-2 text-xs font-medium text-neutral-400">{t("staff.checkIn.gender")}</p>
+          <div className="grid grid-cols-2 gap-2">
+            {GENDERS.map((g) => (
+              <button
+                key={g}
+                type="button"
+                onClick={() => setGender(g)}
+                className={cn(
+                  "rounded-xl border-2 py-3 text-sm font-medium capitalize transition-colors",
+                  gender === g
+                    ? "border-green-500 bg-green-600/20 text-green-400"
+                    : "border-neutral-700 text-neutral-300 hover:border-neutral-500"
+                )}
+              >
+                {genderLabel(g)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="mb-2 text-xs font-medium text-neutral-400">{t("staff.checkIn.skillLevel")}</p>
+          <div className="space-y-2">
+            {SKILL_LEVELS.map((level) => (
+              <button
+                key={level}
+                type="button"
+                onClick={() => setSkill(level)}
+                className={cn(
+                  "w-full rounded-xl border-2 p-3 text-left transition-colors",
+                  skill === level ? "border-green-500 bg-green-600/20" : "border-neutral-700 hover:border-neutral-500"
+                )}
+              >
+                <span className="font-medium capitalize text-white">{skillLabel(level)}</span>
+                <p className="text-sm text-neutral-400">{SKILL_DESCRIPTIONS[level]}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={submit}
+          disabled={loading || !name.trim() || !gender || !skill || showDuplicateWarning}
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50"
+        >
+          {loading ? (
+            <>
+              <Loader2 className="h-5 w-5 animate-spin" />
+              {t("staff.checkIn.adding")}
+            </>
+          ) : (
+            t("staff.checkIn.addToQueue")
+          )}
+        </button>
+      </div>
+
+      {recent.length > 0 && (
+        <div className="rounded-xl border border-neutral-800 bg-neutral-900/30 p-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-neutral-500">{t("staff.checkIn.recentlyAdded")}</p>
+          <ul className="space-y-2">
+            {recent.map((p) => (
+              <li
+                key={p.id}
+                className="flex items-center justify-between gap-2 rounded-lg bg-neutral-800/50 px-3 py-2 text-sm"
+              >
+                <span className="font-medium text-white">{p.name}</span>
+                <span className="shrink-0 text-neutral-400">
+                  {(p.gender === "male" || p.gender === "female" ? genderLabel(p.gender) : p.gender)} ·{" "}
+                  {(["beginner", "intermediate", "advanced", "pro"] as const).includes(p.skillLevel as SkillLevelType)
+                    ? skillLabel(p.skillLevel as SkillLevelType)
+                    : p.skillLevel}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}

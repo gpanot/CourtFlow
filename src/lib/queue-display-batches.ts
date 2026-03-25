@@ -2,7 +2,7 @@ import { isValidPickleballGenderMixForFour } from "@/lib/pickleball-gender";
 import { QUEUE_LOOKAHEAD } from "@/lib/constants";
 
 export type DisplayRowForBatch = {
-  position: number;
+  position: number | null;
   allPlayers: { gender?: string }[];
 };
 
@@ -70,7 +70,7 @@ export function partitionDisplayRowsIntoBalancedBatches<T extends DisplayRowForB
     for (const i of sortedDesc) {
       pool.splice(i, 1);
     }
-    batch.sort((a, b) => a.position - b.position);
+    batch.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
     batches.push(batch);
   }
 

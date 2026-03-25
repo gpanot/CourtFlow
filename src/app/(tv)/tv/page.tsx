@@ -13,6 +13,7 @@ import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import { TvReactionOverlay } from "@/components/tv-reaction-overlay";
 import { resolveTvLocale, tvI18n } from "@/i18n/tv-i18n";
+import { isSessionWarmupDisplayMode } from "@/lib/session-warmup-display";
 
 type VenueTvSettings = { logoSpin?: boolean; tvLocale?: string };
 
@@ -150,9 +151,7 @@ export default function TVDisplayPage() {
   const activeCourts = sortedCourts.filter((c) => c.status !== "maintenance");
   const courtCount = activeCourts.length;
   const waitingCount = state.queue.filter((e: { status: string }) => e.status === "waiting").length;
-  const hasWarmupCourts = state.courts.some((c) => c.status === "warmup");
-  const hasActiveCourts = state.courts.some((c) => c.status === "active");
-  const isWarmupMode = !!state.session && state.courts.length > 0 && !hasActiveCourts && (hasWarmupCourts || state.courts.every((c) => c.status === "idle"));
+  const isWarmupMode = isSessionWarmupDisplayMode(state.courts, !!state.session);
 
   const toggleOrientation = () => {
     setRotated((prev) => {

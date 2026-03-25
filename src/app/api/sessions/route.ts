@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     if (courtIds?.length) {
       await prisma.court.updateMany({
         where: { id: { in: courtIds }, venueId },
-        data: { activeInSession: true, status: "idle" },
+        data: { activeInSession: true, status: "idle", skipWarmupAfterMaintenance: false },
       });
     }
 

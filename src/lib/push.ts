@@ -1,12 +1,9 @@
-import webpush from "web-push";
 import { prisma } from "./db";
 
 const VAPID_PUBLIC = process.env["NEXT_PUBLIC_VAPID_PUBLIC_KEY"] || process.env["VAPID_PUBLIC_KEY"] || "";
 const VAPID_PRIVATE = process.env["VAPID_PRIVATE_KEY"] || "";
 
-if (VAPID_PUBLIC && VAPID_PRIVATE) {
-  webpush.setVapidDetails("mailto:noreply@courtflow.app", VAPID_PUBLIC, VAPID_PRIVATE);
-}
+let vapidConfigured = false;
 
 interface PushPayload {
   title: string;
@@ -17,6 +14,12 @@ interface PushPayload {
 
 export async function sendPushToPlayer(playerId: string, payload: PushPayload) {
   if (!VAPID_PUBLIC || !VAPID_PRIVATE) return;
+
+  const webpush = (await import("web-push")).default;
+  if (!vapidConfigured) {
+    webpush.setVapidDetails("mailto:noreply@courtflow.app", VAPID_PUBLIC, VAPID_PRIVATE);
+    vapidConfigured = true;
+  }
 
   const player = await prisma.player.findUnique({
     where: { id: playerId },

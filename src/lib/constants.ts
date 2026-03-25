@@ -14,7 +14,7 @@ export const COURT_STATUS_COLORS = {
   starting: "bg-blue-600",
   idle: "bg-neutral-700",
   warmup: "bg-amber-500",
-  maintenance: "bg-red-700",
+  maintenance: "bg-neutral-600",
 } as const;
 
 export const AUTO_START_DELAY_SECONDS = 60;

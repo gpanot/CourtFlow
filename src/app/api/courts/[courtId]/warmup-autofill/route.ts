@@ -8,7 +8,7 @@ import {
   scheduleWarmupTransitionPublic,
   selectPlayersForWarmupAutofill,
 } from "@/lib/algorithm";
-import { getSkillIndex, MAX_SKILL_GAP } from "@/lib/constants";
+import { AUTO_START_DELAY_SECONDS, getSkillIndex, MAX_SKILL_GAP } from "@/lib/constants";
 import type { GameType, SkillLevel } from "@prisma/client";
 import { getVenueWarmupDurationSeconds } from "@/lib/warmup-settings";
 
@@ -74,18 +74,34 @@ export async function POST(
     });
     if (!court) return error("Court not found", 404);
     if (!court.activeInSession) return error("Court is not in the active session", 400);
-    if (court.status !== "warmup" && court.status !== "idle") {
-      return error("Court is not in warmup", 400);
-    }
 
     const session = await prisma.session.findFirst({
       where: { venueId: court.venueId, status: "open" },
     });
     if (!session) return error("No active session", 400);
 
-    const warmupDurationSeconds = await getVenueWarmupDurationSeconds(court.venueId);
-
     const existingAssignment = court.courtAssignments[0];
+    const skipWarmup = court.skipWarmupAfterMaintenance;
+
+    if (!skipWarmup && court.status !== "warmup" && court.status !== "idle") {
+      return error("Court is not in warmup", 400);
+    }
+    if (
+      skipWarmup &&
+      court.status !== "idle" &&
+      court.status !== "active"
+    ) {
+      return error("Court is not available", 400);
+    }
+    if (
+      skipWarmup &&
+      court.status === "active" &&
+      (!existingAssignment || existingAssignment.isWarmup)
+    ) {
+      return error("Court is not available", 400);
+    }
+
+    const warmupDurationSeconds = await getVenueWarmupDurationSeconds(court.venueId);
     const currentPlayerIds = existingAssignment?.playerIds ?? [];
     if (currentPlayerIds.length >= 4) {
       return error("Court is already full", 400);
@@ -136,7 +152,60 @@ export async function POST(
     const gameTypeForCourt: GameType =
       allPlayersForType.length >= 4 ? deriveGameType(allPlayersForType) : "mixed";
 
-    if (existingAssignment && existingAssignment.isWarmup) {
+    if (skipWarmup) {
+      const gameStart = new Date(Date.now() - AUTO_START_DELAY_SECONDS * 1000);
+      let assignmentIdForNotify: string;
+
+      if (existingAssignment && !existingAssignment.isWarmup) {
+        await prisma.courtAssignment.update({
+          where: { id: existingAssignment.id },
+          data: { playerIds: mergedPlayerIds, gameType: gameTypeForCourt },
+        });
+        assignmentIdForNotify = existingAssignment.id;
+      } else {
+        const assignment = await prisma.courtAssignment.create({
+          data: {
+            courtId: court.id,
+            sessionId: session.id,
+            playerIds: newPlayerIds,
+            groupIds: [],
+            gameType: gameTypeForCourt,
+            isWarmup: false,
+            startedAt: gameStart,
+          },
+        });
+        await prisma.court.update({
+          where: { id: court.id },
+          data: { status: "active" },
+        });
+        assignmentIdForNotify = assignment.id;
+      }
+
+      await prisma.queueEntry.updateMany({
+        where: { playerId: { in: newPlayerIds }, sessionId: session.id, status: "waiting" },
+        data: { status: "playing" },
+      });
+
+      for (const pid of newPlayerIds) {
+        const teammates = allPlayersForType
+          .filter((p) => p.id !== pid)
+          .map((p) => ({
+            name: p.name,
+            skillLevel: p.skillLevel,
+            groupId: null as string | null,
+          }));
+        emitToPlayer(pid, "player:notification", {
+          type: "court_assigned",
+          message: `${court.label} — go play!`,
+          courtLabel: court.label,
+          courtId: court.id,
+          assignmentId: assignmentIdForNotify,
+          isWarmup: false,
+          teammates,
+          gameType: gameTypeForCourt,
+        });
+      }
+    } else if (existingAssignment && existingAssignment.isWarmup) {
       const updatedPlayerIds = mergedPlayerIds;
       const updateData: { playerIds: string[]; startedAt?: Date; gameType?: GameType } = {
         playerIds: updatedPlayerIds,

@@ -86,7 +86,7 @@ export function CourtsManager({
 
   const statusColor = (s: string) => {
     if (s === "active") return "bg-green-500";
-    if (s === "maintenance") return "bg-red-500";
+    if (s === "maintenance") return "bg-neutral-500";
     return "bg-neutral-600";
   };
 

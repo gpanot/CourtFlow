@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api-client";
 import { Download, X, Loader2 } from "lucide-react";
 
@@ -78,31 +79,72 @@ interface SessionSummaryProps {
   onClose: () => void;
 }
 
-const SKILL_LABELS: Record<string, string> = {
+function pct(value: number, total: number): string {
+  if (total === 0) return "0%";
+  return `${Math.round((value / total) * 100)}%`;
+}
+
+/** English labels for PDF export only */
+const PDF_SKILL_LABELS: Record<string, string> = {
   beginner: "Beginner",
   intermediate: "Intermediate",
   advanced: "Advanced",
   pro: "Pro",
 };
 
-const GENDER_LABELS: Record<string, string> = {
+const PDF_GENDER_LABELS: Record<string, string> = {
   male: "Male",
   female: "Female",
   other: "Other",
 };
 
-const GAME_TYPE_LABELS: Record<string, string> = {
+const PDF_GAME_TYPE_LABELS: Record<string, string> = {
   men: "4 Men",
   women: "4 Women",
   mixed: "Mixed",
 };
 
-function pct(value: number, total: number): string {
-  if (total === 0) return "0%";
-  return `${Math.round((value / total) * 100)}%`;
-}
-
 export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
+  const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language?.toLowerCase().startsWith("vi") ? "vi-VN" : "en-US";
+
+  const skillLabel = useCallback(
+    (s: string) => {
+      const m: Record<string, string> = {
+        beginner: t("staff.sessionSummary.skillBeginner"),
+        intermediate: t("staff.sessionSummary.skillIntermediate"),
+        advanced: t("staff.sessionSummary.skillAdvanced"),
+        pro: t("staff.sessionSummary.skillPro"),
+      };
+      return m[s] || s;
+    },
+    [t]
+  );
+
+  const genderLabel = useCallback(
+    (g: string) => {
+      const m: Record<string, string> = {
+        male: t("staff.sessionSummary.genderMale"),
+        female: t("staff.sessionSummary.genderFemale"),
+        other: t("staff.sessionSummary.genderOther"),
+      };
+      return m[g] || g;
+    },
+    [t]
+  );
+
+  const gameTypeLabel = useCallback(
+    (type: string) => {
+      const m: Record<string, string> = {
+        men: t("staff.sessionSummary.gameTypeMen"),
+        women: t("staff.sessionSummary.gameTypeWomen"),
+        mixed: t("staff.sessionSummary.gameTypeMixed"),
+      };
+      return m[type] || type;
+    },
+    [t]
+  );
+
   const [data, setData] = useState<SessionStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -282,7 +324,7 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
       for (const level of skillOrder) {
         const count = players.skillDistribution[level] || 0;
         if (count > 0) {
-          statRow(SKILL_LABELS[level] || level, `${count} (${pct(count, players.total)})`);
+          statRow(PDF_SKILL_LABELS[level] || level, `${count} (${pct(count, players.total)})`);
         }
       }
 
@@ -312,7 +354,7 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
       // ── Gender Distribution ──
       sectionTitle("Gender Distribution");
       for (const [gender, count] of Object.entries(players.genderDistribution)) {
-        statRow(GENDER_LABELS[gender] || gender, `${count} (${pct(count, players.total)})`);
+        statRow(PDF_GENDER_LABELS[gender] || gender, `${count} (${pct(count, players.total)})`);
       }
       y += 2;
 
@@ -321,7 +363,7 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
       for (const [type, count] of Object.entries(gameTypes)) {
         if (count > 0) {
           statRow(
-            GAME_TYPE_LABELS[type] || type,
+            PDF_GAME_TYPE_LABELS[type] || type,
             `${count} game${count !== 1 ? "s" : ""} (${pct(count, courts.totalGames)})`
           );
         }
@@ -515,8 +557,8 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
           doc.setFontSize(7);
           doc.text(nameStr, pCols[0], y);
           doc.setFontSize(6);
-          doc.text((SKILL_LABELS[p.skillLevel] || p.skillLevel).substring(0, 5), pCols[1], y);
-          doc.text((GENDER_LABELS[p.gender] || p.gender).substring(0, 3), pCols[2], y);
+          doc.text((PDF_SKILL_LABELS[p.skillLevel] || p.skillLevel).substring(0, 5), pCols[1], y);
+          doc.text((PDF_GENDER_LABELS[p.gender] || p.gender).substring(0, 3), pCols[2], y);
           doc.setFontSize(7);
           doc.text(String(p.gamesPlayed), pCols[3], y, { align: "center" });
           doc.text(`${p.minutesPlayed}`, pCols[4], y, { align: "center" });
@@ -582,30 +624,30 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
   if (!data) {
     return (
       <div className="flex h-dvh flex-col items-center justify-center bg-neutral-950 p-6 text-center">
-        <p className="text-xl text-neutral-400">Could not load session data</p>
+        <p className="text-xl text-neutral-400">{t("staff.sessionSummary.loadError")}</p>
         <button onClick={onClose} className="mt-6 rounded-xl bg-neutral-800 px-8 py-3 font-medium text-white">
-          Close
+          {t("staff.sessionSummary.close")}
         </button>
       </div>
     );
   }
 
   const { session, venue, players, courts, rotation, gameTypes, playerExperience: px } = data;
-  const dateStr = new Date(session.date).toLocaleDateString("en-US", {
+  const dateStr = new Date(session.date).toLocaleDateString(dateLocale, {
     weekday: "long",
     month: "long",
     day: "numeric",
   });
-  const openedTime = new Date(session.openedAt).toLocaleTimeString("en-US", {
+  const openedTime = new Date(session.openedAt).toLocaleTimeString(dateLocale, {
     hour: "2-digit",
     minute: "2-digit",
   });
   const closedTime = session.closedAt
-    ? new Date(session.closedAt).toLocaleTimeString("en-US", {
+    ? new Date(session.closedAt).toLocaleTimeString(dateLocale, {
         hour: "2-digit",
         minute: "2-digit",
       })
-    : "now";
+    : t("staff.sessionSummary.now");
   const hours = Math.floor(session.durationMin / 60);
   const mins = session.durationMin % 60;
   const durationStr = hours > 0 ? `${hours}h ${mins}min` : `${mins}min`;
@@ -625,7 +667,7 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
           <div>
             <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-green-600/20 px-3 py-1">
               <div className="h-2 w-2 rounded-full bg-green-500" />
-              <span className="text-sm font-medium text-green-400">Session Closed</span>
+              <span className="text-sm font-medium text-green-400">{t("staff.sessionSummary.sessionClosed")}</span>
             </div>
             <h1 className="text-xl font-bold text-white">{venue.name}</h1>
             <p className="mt-0.5 text-sm text-neutral-400">{dateStr}</p>
@@ -645,15 +687,15 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4 text-center">
             <p className="text-3xl font-bold text-white">{players.total}</p>
-            <p className="mt-1 text-xs text-neutral-500">players</p>
+            <p className="mt-1 text-xs text-neutral-500">{t("staff.sessionSummary.players")}</p>
           </div>
           <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4 text-center">
             <p className="text-3xl font-bold text-blue-400">{courts.totalCourts}</p>
-            <p className="mt-1 text-xs text-neutral-500">courts</p>
+            <p className="mt-1 text-xs text-neutral-500">{t("staff.sessionSummary.courts")}</p>
           </div>
           <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4 text-center">
             <p className="text-3xl font-bold text-purple-400">{courts.totalGames}</p>
-            <p className="mt-1 text-xs text-neutral-500">games</p>
+            <p className="mt-1 text-xs text-neutral-500">{t("staff.sessionSummary.games")}</p>
           </div>
         </div>
 
@@ -664,48 +706,48 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
                 ? `${Math.floor(courts.totalPlayMinutes / 60)}h${courts.totalPlayMinutes % 60}m`
                 : `${courts.totalPlayMinutes}m`}
             </p>
-            <p className="mt-1 text-xs text-neutral-500">total play time</p>
+            <p className="mt-1 text-xs text-neutral-500">{t("staff.sessionSummary.totalPlayTime")}</p>
           </div>
           <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4 text-center">
             <p className="text-2xl font-bold text-emerald-400">{courts.overallUtilizationPct}%</p>
-            <p className="mt-1 text-xs text-neutral-500">utilization</p>
+            <p className="mt-1 text-xs text-neutral-500">{t("staff.sessionSummary.utilization")}</p>
           </div>
           <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4 text-center">
             <p className="text-2xl font-bold text-neutral-200">{courts.avgGameDuration}m</p>
-            <p className="mt-1 text-xs text-neutral-500">avg game time</p>
+            <p className="mt-1 text-xs text-neutral-500">{t("staff.sessionSummary.avgGameTime")}</p>
           </div>
         </div>
 
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4 text-center">
             <p className="text-2xl font-bold text-neutral-200">{players.avgMinutesPerPlayer}m</p>
-            <p className="mt-1 text-xs text-neutral-500">avg play/player</p>
+            <p className="mt-1 text-xs text-neutral-500">{t("staff.sessionSummary.avgPlayPerPlayer")}</p>
           </div>
           <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4 text-center">
             <p className="text-2xl font-bold text-neutral-200">{players.avgGamesPerPlayer}</p>
-            <p className="mt-1 text-xs text-neutral-500">avg games/player</p>
+            <p className="mt-1 text-xs text-neutral-500">{t("staff.sessionSummary.avgGamesPerPlayer")}</p>
           </div>
           <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-4 text-center">
             <p className={`text-2xl font-bold ${px.avgWaitPct < 20 ? "text-green-400" : px.avgWaitPct < 30 ? "text-amber-400" : "text-red-400"}`}>
               {px.avgWaitingPerPlayer}m
             </p>
-            <p className="mt-1 text-xs text-neutral-500">avg wait/player</p>
+            <p className="mt-1 text-xs text-neutral-500">{t("staff.sessionSummary.avgWaitPerPlayer")}</p>
           </div>
         </div>
 
         {/* Players */}
         <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
           <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-neutral-400">
-            Players
+            {t("staff.sessionSummary.playersSection")}
           </h3>
           <div className="grid grid-cols-2 gap-4 text-center">
             <div>
               <p className="text-2xl font-bold text-white">{players.total}</p>
-              <p className="mt-1 text-xs text-neutral-500">total</p>
+              <p className="mt-1 text-xs text-neutral-500">{t("staff.sessionSummary.total")}</p>
             </div>
             <div>
               <p className="text-2xl font-bold text-blue-400">{players.peak}</p>
-              <p className="mt-1 text-xs text-neutral-500">peak at once</p>
+              <p className="mt-1 text-xs text-neutral-500">{t("staff.sessionSummary.peakAtOnce")}</p>
             </div>
           </div>
         </div>
@@ -713,7 +755,7 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
         {/* Skill Distribution */}
         <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
           <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-neutral-400">
-            Skill Balance
+            {t("staff.sessionSummary.skillBalance")}
           </h3>
           <div className="space-y-2">
             {(["beginner", "intermediate", "advanced", "pro"] as const).map((level) => {
@@ -722,7 +764,7 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
               return (
                 <div key={level}>
                   <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-neutral-300 capitalize">{level}</span>
+                    <span className="text-neutral-300 capitalize">{skillLabel(level)}</span>
                     <span className="text-neutral-500">
                       {count} ({pct(count, players.total)})
                     </span>
@@ -742,7 +784,7 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
         {/* Gender Distribution */}
         <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
           <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-neutral-400">
-            Gender Balance
+            {t("staff.sessionSummary.genderBalance")}
           </h3>
           <div className="flex items-center gap-3">
             {Object.entries(players.genderDistribution).map(([gender, count]) => {
@@ -750,7 +792,7 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
               return (
                 <div key={gender} className="flex-1 text-center">
                   <p className="text-2xl font-bold text-white">{count}</p>
-                  <p className="text-xs text-neutral-500 capitalize">{gender}</p>
+                  <p className="text-xs text-neutral-500 capitalize">{genderLabel(gender)}</p>
                   <div className="mt-2 h-2 rounded-full bg-neutral-800">
                     <div
                       className="h-2 rounded-full bg-blue-500"
@@ -766,7 +808,7 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
         {/* Game Types */}
         <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
           <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-neutral-400">
-            Game Types
+            {t("staff.sessionSummary.gameTypes")}
           </h3>
           <div className="flex items-center gap-3">
             {Object.entries(gameTypes).map(([type, count]) => (
@@ -775,7 +817,7 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
                 className="flex-1 rounded-xl bg-neutral-800/60 p-3 text-center"
               >
                 <p className="text-xl font-bold text-white">{count}</p>
-                <p className="mt-1 text-xs text-neutral-500">{GAME_TYPE_LABELS[type] || type}</p>
+                <p className="mt-1 text-xs text-neutral-500">{gameTypeLabel(type)}</p>
               </div>
             ))}
           </div>
@@ -784,31 +826,31 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
         {/* Courts */}
         <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
           <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-neutral-400">
-            Court Activity
+            {t("staff.sessionSummary.courtActivity")}
           </h3>
           <div className="grid grid-cols-3 gap-4 text-center mb-4">
             <div>
               <p className="text-2xl font-bold text-white">{courts.totalGames}</p>
-              <p className="mt-1 text-xs text-neutral-500">total games</p>
+              <p className="mt-1 text-xs text-neutral-500">{t("staff.sessionSummary.totalGames")}</p>
             </div>
             <div>
               <p className="text-2xl font-bold text-blue-400">{courts.activeCourts}</p>
-              <p className="mt-1 text-xs text-neutral-500">courts used</p>
+              <p className="mt-1 text-xs text-neutral-500">{t("staff.sessionSummary.courtsUsed")}</p>
             </div>
             <div>
               <p className="text-2xl font-bold text-neutral-300">{courts.avgGamesPerCourt}</p>
-              <p className="mt-1 text-xs text-neutral-500">avg/court</p>
+              <p className="mt-1 text-xs text-neutral-500">{t("staff.sessionSummary.avgPerCourt")}</p>
             </div>
           </div>
 
           {courts.breakdown.length > 0 && (
             <div className="space-y-2 rounded-xl bg-neutral-800/50 p-3">
               <div className="grid grid-cols-5 gap-1 text-xs text-neutral-500 font-medium mb-1">
-                <span>Court</span>
-                <span className="text-center">Games</span>
-                <span className="text-center">Total</span>
-                <span className="text-center">Avg</span>
-                <span className="text-right">Util</span>
+                <span>{t("staff.sessionSummary.courtCol")}</span>
+                <span className="text-center">{t("staff.sessionSummary.gamesCol")}</span>
+                <span className="text-center">{t("staff.sessionSummary.totalCol")}</span>
+                <span className="text-center">{t("staff.sessionSummary.avgCol")}</span>
+                <span className="text-right">{t("staff.sessionSummary.utilCol")}</span>
               </div>
               {courts.breakdown.map((c) => (
                 <div key={c.label} className="grid grid-cols-5 gap-1 text-sm">
@@ -826,19 +868,19 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
         {/* Rotation */}
         <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
           <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-neutral-400">
-            Rotation Efficiency
+            {t("staff.sessionSummary.rotationEfficiency")}
           </h3>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-neutral-400">Avg time between games</span>
+              <span className="text-sm text-neutral-400">{t("staff.sessionSummary.avgTimeBetweenGames")}</span>
               <span className="font-semibold text-white">{rotation.avgIdleMinutes} min</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-neutral-400">Rotations handled</span>
+              <span className="text-sm text-neutral-400">{t("staff.sessionSummary.rotationsHandled")}</span>
               <span className="font-semibold text-white">{rotation.totalRotations}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-neutral-400">Manual interventions</span>
+              <span className="text-sm text-neutral-400">{t("staff.sessionSummary.manualInterventions")}</span>
               <span className="font-semibold text-white">{rotation.manualInterventions}</span>
             </div>
           </div>
@@ -847,22 +889,22 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
         {/* Player Experience */}
         <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
           <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-neutral-400">
-            Player Experience
+            {t("staff.sessionSummary.playerExperience")}
           </h3>
           <div className="grid grid-cols-3 gap-4 text-center mb-4">
             <div>
               <p className="text-2xl font-bold text-white">{px.avgWaitingPerPlayer}m</p>
-              <p className="mt-1 text-xs text-neutral-500">avg wait/player</p>
+              <p className="mt-1 text-xs text-neutral-500">{t("staff.sessionSummary.avgWaitPerPlayer")}</p>
             </div>
             <div>
               <p className={`text-2xl font-bold ${px.avgWaitPct < 20 ? "text-green-400" : px.avgWaitPct < 30 ? "text-amber-400" : "text-red-400"}`}>
                 {px.avgWaitPct}%
               </p>
-              <p className="mt-1 text-xs text-neutral-500">avg wait ratio</p>
+              <p className="mt-1 text-xs text-neutral-500">{t("staff.sessionSummary.avgWaitRatio")}</p>
             </div>
             <div>
               <p className="text-2xl font-bold text-neutral-300">{px.longestWaitMinutes}m</p>
-              <p className="mt-1 text-xs text-neutral-500">longest wait</p>
+              <p className="mt-1 text-xs text-neutral-500">{t("staff.sessionSummary.longestWait")}</p>
             </div>
           </div>
 
@@ -873,8 +915,8 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
               <div className="bg-red-500" style={{ width: `${px.avgWaitPct}%` }} />
             </div>
             <div className="flex justify-between mt-1 text-xs">
-              <span className="text-green-400">Playing {100 - px.avgWaitPct}%</span>
-              <span className="text-red-400">Waiting {px.avgWaitPct}%</span>
+              <span className="text-green-400">{t("staff.sessionSummary.playingPct", { pct: 100 - px.avgWaitPct })}</span>
+              <span className="text-red-400">{t("staff.sessionSummary.waitingPct", { pct: px.avgWaitPct })}</span>
             </div>
           </div>
 
@@ -882,22 +924,22 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
           <div className="grid grid-cols-3 gap-2 mb-4">
             <div className="rounded-lg bg-green-600/15 p-2 text-center">
               <p className="text-lg font-bold text-green-400">{px.playersUnder20Pct}</p>
-              <p className="text-[10px] text-green-400/70">&lt;20% Ideal</p>
+              <p className="text-[10px] text-green-400/70">{t("staff.sessionSummary.waitIdeal")}</p>
             </div>
             <div className="rounded-lg bg-amber-500/15 p-2 text-center">
               <p className="text-lg font-bold text-amber-400">{px.playersBetween20And30Pct}</p>
-              <p className="text-[10px] text-amber-400/70">20-30% OK</p>
+              <p className="text-[10px] text-amber-400/70">{t("staff.sessionSummary.waitOk")}</p>
             </div>
             <div className="rounded-lg bg-red-500/15 p-2 text-center">
               <p className="text-lg font-bold text-red-400">{px.playersOver30Pct}</p>
-              <p className="text-[10px] text-red-400/70">&gt;30% Poor</p>
+              <p className="text-[10px] text-red-400/70">{t("staff.sessionSummary.waitPoor")}</p>
             </div>
           </div>
 
           {/* Rating + Recommendation */}
           <div className={`rounded-xl p-3 ${px.rating === "ideal" ? "bg-green-600/15 border border-green-800" : px.rating === "acceptable" ? "bg-amber-500/15 border border-amber-800" : "bg-red-500/15 border border-red-800"}`}>
             <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${px.rating === "ideal" ? "bg-green-600 text-white" : px.rating === "acceptable" ? "bg-amber-500 text-white" : "bg-red-500 text-white"}`}>
-              {px.rating === "ideal" ? "IDEAL" : px.rating === "acceptable" ? "ACCEPTABLE" : "NEEDS IMPROVEMENT"}
+              {px.rating === "ideal" ? t("staff.sessionSummary.ideal") : px.rating === "acceptable" ? t("staff.sessionSummary.acceptable") : t("staff.sessionSummary.needsImprovement")}
             </span>
             <p className="mt-2 text-xs text-neutral-300 leading-relaxed">{px.recommendation}</p>
           </div>
@@ -907,18 +949,18 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
         {players.playerDetails.length > 0 && (
           <div className="rounded-2xl border border-neutral-800 bg-neutral-900 p-5">
             <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-neutral-400">
-              Player Details
+              {t("staff.sessionSummary.playerDetails")}
             </h3>
             <div className="overflow-x-auto -mx-2">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-xs text-neutral-500 border-b border-neutral-800">
-                    <th className="text-left py-2 px-2 font-medium">Player</th>
-                    <th className="text-center py-2 px-1 font-medium">Level</th>
-                    <th className="text-center py-2 px-1 font-medium">Games</th>
-                    <th className="text-center py-2 px-1 font-medium">Play</th>
-                    <th className="text-center py-2 px-1 font-medium">Wait</th>
-                    <th className="text-center py-2 px-1 font-medium">Wait%</th>
+                    <th className="text-left py-2 px-2 font-medium">{t("staff.sessionSummary.tablePlayer")}</th>
+                    <th className="text-center py-2 px-1 font-medium">{t("staff.sessionSummary.tableLevel")}</th>
+                    <th className="text-center py-2 px-1 font-medium">{t("staff.sessionSummary.tableGames")}</th>
+                    <th className="text-center py-2 px-1 font-medium">{t("staff.sessionSummary.tablePlay")}</th>
+                    <th className="text-center py-2 px-1 font-medium">{t("staff.sessionSummary.tableWait")}</th>
+                    <th className="text-center py-2 px-1 font-medium">{t("staff.sessionSummary.tableWaitPct")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -968,13 +1010,13 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3.5 font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-60"
         >
           {exporting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
-          {exporting ? "Generating..." : "Export Analytics (PDF)"}
+          {exporting ? t("staff.sessionSummary.generating") : t("staff.sessionSummary.exportPdf")}
         </button>
         <button
           onClick={onClose}
           className="w-full rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 transition-colors hover:bg-neutral-700"
         >
-          Back to Dashboard
+          {t("staff.sessionSummary.backToDashboard")}
         </button>
       </div>
     </div>

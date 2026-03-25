@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import type { CourtStatus } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { json, error, notFound, parseBody } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
@@ -79,9 +80,20 @@ export async function PATCH(
       }
     }
 
+    const nextStatus = body.status as CourtStatus | undefined;
+    const updateData: Record<string, unknown> = { ...body };
+    if (nextStatus === "maintenance") {
+      updateData.skipWarmupAfterMaintenance = false;
+    } else if (
+      court.status === "maintenance" &&
+      (nextStatus === "idle" || nextStatus === "active")
+    ) {
+      updateData.skipWarmupAfterMaintenance = true;
+    }
+
     const updated = await prisma.court.update({
       where: { id: courtId },
-      data: body,
+      data: updateData,
     });
 
     const session = await prisma.session.findFirst({

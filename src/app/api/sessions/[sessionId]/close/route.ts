@@ -35,7 +35,7 @@ export async function POST(
 
     await prisma.court.updateMany({
       where: { venueId: session.venueId },
-      data: { activeInSession: false, status: "idle" },
+      data: { activeInSession: false, status: "idle", skipWarmupAfterMaintenance: false },
     });
 
     await prisma.auditLog.create({
