@@ -3,6 +3,8 @@ FROM node:20-alpine AS base
 FROM base AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
+# prisma/schema.prisma must exist before npm ci (postinstall runs prisma generate)
+COPY prisma ./prisma
 RUN npm ci
 
 FROM base AS builder
