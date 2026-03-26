@@ -85,9 +85,11 @@ export function usePwaInstall() {
   const isIos =
     typeof navigator !== "undefined" &&
     /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isAndroid =
+    typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
 
   const canPrompt = store.prompt !== null;
   const showBanner = !installed && (canPrompt || (mobile && !isStandalone()));
 
-  return { showBanner, isIos, installed, promptInstall, canPrompt };
+  return { showBanner, isIos, isAndroid, installed, promptInstall, canPrompt };
 }

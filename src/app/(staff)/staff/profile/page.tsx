@@ -6,7 +6,8 @@ import { useTranslation } from "react-i18next";
 import { useSessionStore } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { StaffLanguageToggle } from "../staff-language-toggle";
-import { ArrowLeft, User, History, ChevronRight, LogOut, Phone } from "lucide-react";
+import { ArrowLeft, User, History, ChevronRight, LogOut, Phone, Download } from "lucide-react";
+import { usePwaInstall } from "@/hooks/use-pwa-install";
 
 export default function StaffProfilePage() {
   const { t } = useTranslation();
@@ -15,6 +16,8 @@ export default function StaffProfilePage() {
   const [venueName, setVenueName] = useState<string | undefined>();
   const [profileLoaded, setProfileLoaded] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
+  const [installManualHint, setInstallManualHint] = useState(false);
+  const { isAndroid, installed, canPrompt, promptInstall } = usePwaInstall();
 
   useEffect(() => {
     if (!token || !staffId || !venueId) {
@@ -128,6 +131,32 @@ export default function StaffProfilePage() {
             </p>
           </div>
         </div>
+
+        {isAndroid && !installed && (
+          <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 px-4 py-3 space-y-2">
+            <div className="flex items-center gap-2 text-sm font-medium text-neutral-200">
+              <Download className="h-4 w-4 shrink-0 text-blue-400" aria-hidden />
+              {t("staff.profile.installApp")}
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                setInstallManualHint(false);
+                if (canPrompt) {
+                  await promptInstall();
+                } else {
+                  setInstallManualHint(true);
+                }
+              }}
+              className="w-full rounded-lg bg-blue-600 py-2.5 text-sm font-semibold text-white hover:bg-blue-500 transition-colors"
+            >
+              {t("staff.profile.installAppButton")}
+            </button>
+            {installManualHint && (
+              <p className="text-xs text-neutral-400 leading-relaxed">{t("staff.profile.installAppManualHint")}</p>
+            )}
+          </div>
+        )}
 
         <div className="flex items-center justify-between rounded-xl border border-neutral-800 bg-neutral-900/50 px-4 py-3">
           <span className="text-sm font-medium text-neutral-200">{t("staff.profile.language")}</span>
