@@ -6,6 +6,7 @@
     "seed": "tsx prisma/seed.ts"
   },
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "tsx server.ts",
     "dev:next": "next dev",
     "build": "next build && tsc --project tsconfig.server.json",

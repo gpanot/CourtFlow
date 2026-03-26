@@ -6,6 +6,7 @@ import { emitToVenue, emitToPlayer } from "@/lib/socket-server";
 import { deriveGameType, scheduleWarmupTransitionPublic } from "@/lib/algorithm";
 import { getVenueWarmupDurationSeconds } from "@/lib/warmup-settings";
 import { AUTO_START_DELAY_SECONDS } from "@/lib/constants";
+import { markSessionIntroWarmupComplete } from "@/lib/session-intro-warmup";
 
 export async function POST(
   request: NextRequest,
@@ -48,8 +49,16 @@ export async function POST(
 
     const existingAssignment = court.courtAssignments[0];
     const skipWarmup = court.skipWarmupAfterMaintenance;
+    const directPlayOnly = skipWarmup || session.introWarmupComplete;
 
-    if (skipWarmup) {
+    if (session.introWarmupComplete && court.status === "warmup") {
+      return error(
+        "Warm-up is over for this session. End warm-up or start the game on this court first.",
+        400
+      );
+    }
+
+    if (directPlayOnly) {
       const canDirectAssign =
         court.status === "idle" ||
         (court.status === "active" &&
@@ -77,7 +86,7 @@ export async function POST(
       emitToVenue(court.venueId, "queue:updated", queueEntries);
     };
 
-    if (skipWarmup && court.status === "active" && existingAssignment && !existingAssignment.isWarmup) {
+    if (directPlayOnly && court.status === "active" && existingAssignment && !existingAssignment.isWarmup) {
       const updatedPlayerIds = [...existingAssignment.playerIds, playerId];
       const allRoster = await prisma.player.findMany({ where: { id: { in: updatedPlayerIds } } });
       const gameType =
@@ -112,11 +121,12 @@ export async function POST(
         gameType,
       });
 
+      await markSessionIntroWarmupComplete(session.id);
       await emitUpdates();
       return json({ success: true });
     }
 
-    if (skipWarmup && court.status === "idle") {
+    if (directPlayOnly && court.status === "idle") {
       const gameStart = new Date(Date.now() - AUTO_START_DELAY_SECONDS * 1000);
       const assignment = await prisma.courtAssignment.create({
         data: {
@@ -151,6 +161,7 @@ export async function POST(
         gameType: "mixed",
       });
 
+      await markSessionIntroWarmupComplete(session.id);
       await emitUpdates();
       return json({ success: true });
     }

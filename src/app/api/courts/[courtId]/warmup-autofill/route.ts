@@ -11,6 +11,7 @@ import {
 import { AUTO_START_DELAY_SECONDS, getSkillIndex, MAX_SKILL_GAP } from "@/lib/constants";
 import type { GameType, SkillLevel } from "@prisma/client";
 import { getVenueWarmupDurationSeconds } from "@/lib/warmup-settings";
+import { markSessionIntroWarmupComplete } from "@/lib/session-intro-warmup";
 
 function isSkillCompatible(candidateLevel: SkillLevel, courtPlayerLevels: SkillLevel[]): boolean {
   const candidateIdx = getSkillIndex(candidateLevel as SkillLevel);
@@ -82,23 +83,24 @@ export async function POST(
 
     const existingAssignment = court.courtAssignments[0];
     const skipWarmup = court.skipWarmupAfterMaintenance;
+    const directPlayOnly = skipWarmup || session.introWarmupComplete;
 
-    if (!skipWarmup && court.status !== "warmup" && court.status !== "idle") {
+    if (session.introWarmupComplete && court.status === "warmup") {
+      return error(
+        "Warm-up is over for this session. End warm-up or start the game on this court first.",
+        400
+      );
+    }
+
+    if (directPlayOnly) {
+      if (court.status !== "idle" && court.status !== "active") {
+        return error("Court is not available", 400);
+      }
+      if (court.status === "active" && (!existingAssignment || existingAssignment.isWarmup)) {
+        return error("Court is not available", 400);
+      }
+    } else if (court.status !== "warmup" && court.status !== "idle") {
       return error("Court is not in warmup", 400);
-    }
-    if (
-      skipWarmup &&
-      court.status !== "idle" &&
-      court.status !== "active"
-    ) {
-      return error("Court is not available", 400);
-    }
-    if (
-      skipWarmup &&
-      court.status === "active" &&
-      (!existingAssignment || existingAssignment.isWarmup)
-    ) {
-      return error("Court is not available", 400);
     }
 
     const warmupDurationSeconds = await getVenueWarmupDurationSeconds(court.venueId);
@@ -152,7 +154,7 @@ export async function POST(
     const gameTypeForCourt: GameType =
       allPlayersForType.length >= 4 ? deriveGameType(allPlayersForType) : "mixed";
 
-    if (skipWarmup) {
+    if (directPlayOnly) {
       const gameStart = new Date(Date.now() - AUTO_START_DELAY_SECONDS * 1000);
       let assignmentIdForNotify: string;
 
@@ -205,6 +207,8 @@ export async function POST(
           gameType: gameTypeForCourt,
         });
       }
+
+      await markSessionIntroWarmupComplete(session.id);
     } else if (existingAssignment && existingAssignment.isWarmup) {
       const updatedPlayerIds = mergedPlayerIds;
       const updateData: { playerIds: string[]; startedAt?: Date; gameType?: GameType } = {

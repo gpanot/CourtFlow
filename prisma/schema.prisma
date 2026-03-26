@@ -215,6 +215,8 @@ model Session {
   title        String?
   gameTypeMix  Json?         @map("game_type_mix")
   warmupMode   String        @default("manual") @map("warmup_mode")
+  /// After the first real game starts, no new warm-up courts/assignments for this session.
+  introWarmupComplete Boolean @default(false) @map("intro_warmup_complete")
   maxPlayers   Int?          @map("max_players")
 
   venue            Venue              @relation(fields: [venueId], references: [id])

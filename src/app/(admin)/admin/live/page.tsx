@@ -10,10 +10,10 @@ import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { Wifi, WifiOff, Flame, Monitor, ChevronLeft } from "lucide-react";
 import { resolveTvLocale, tvI18n } from "@/i18n/tv-i18n";
-import { courtCardWarmupPresentation, isSessionWarmupDisplayMode } from "@/lib/session-warmup-display";
+import { isSessionWarmupDisplayMode } from "@/lib/session-warmup-display";
 
 interface VenueState {
-  session: { id: string; status: string } | null;
+  session: { id: string; status: string; introWarmupComplete?: boolean } | null;
   courts: CourtData[];
   queue: QueueEntryData[];
   warmupDurationSeconds?: number;
@@ -206,7 +206,11 @@ export default function LiveSessionsPage() {
   const activeCourts = sortedCourts.filter((c) => c.status !== "maintenance");
   const courtCount = activeCourts.length;
   const waitingCount = state.queue.filter((e) => e.status === "waiting").length;
-  const isWarmupMode = isSessionWarmupDisplayMode(state.courts, !!state.session);
+  const isWarmupMode = isSessionWarmupDisplayMode(
+    state.courts,
+    !!state.session,
+    state.session?.introWarmupComplete
+  );
 
   const gridCols =
     courtCount <= 3
@@ -286,7 +290,7 @@ export default function LiveSessionsPage() {
                     key={court.id}
                     court={court}
                     variant="tv"
-                    warmup={courtCardWarmupPresentation(court, state.courts, !!state.session)}
+                    warmup={isWarmupMode}
                     warmupDurationSeconds={state.warmupDurationSeconds}
                   />
                 ))}

@@ -15,7 +15,7 @@ import { QueuePanel, type QueueEntryData } from "@/components/queue-panel";
 import { cn } from "@/lib/cn";
 import { Plus, X, Users, LayoutGrid, AlertTriangle, User, UserPlus, Flame, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, Calendar, Loader2, Target, Play, Check, ListPlus } from "lucide-react";
 import { WARMUP_DURATION_SECONDS, MIN_GROUP_SIZE, MAX_GROUP_SIZE } from "@/lib/constants";
-import { courtCardWarmupPresentation, isSessionWarmupDisplayMode } from "@/lib/session-warmup-display";
+import { isSessionWarmupDisplayMode } from "@/lib/session-warmup-display";
 import { QRCodeSVG } from "qrcode.react";
 import { SessionSummary } from "./session-summary";
 import { StaffCheckInPanel } from "@/components/staff-check-in-panel";
@@ -70,6 +70,7 @@ interface SessionData {
   venueId: string;
   gameTypeMix?: { men: number; women: number; mixed: number } | null;
   warmupMode?: "manual" | "auto";
+  introWarmupComplete?: boolean;
 }
 
 interface GameTypeMixStats {
@@ -438,7 +439,7 @@ export function StaffDashboard() {
     const active = new Set(["waiting", "on_break", "assigned", "playing"]);
     return queue.filter((e) => active.has(e.status)).map((e) => e.player.name.trim().toLowerCase());
   }, [queue]);
-  const isWarmupMode = isSessionWarmupDisplayMode(courts, !!session);
+  const isWarmupMode = isSessionWarmupDisplayMode(courts, !!session, session?.introWarmupComplete);
   const assignableCourtsForQueue = useMemo(() => {
     if (!session) return undefined;
     const filtered = courts.filter(canCourtAcceptManualAssign);
@@ -614,7 +615,7 @@ export function StaffDashboard() {
                   key={court.id}
                   court={court}
                   variant="staff"
-                  warmup={courtCardWarmupPresentation(court, courts, !!session)}
+                  warmup={isWarmupMode}
                   queueWaiting={waitingCount}
                   warmupDurationSeconds={warmupDurationSeconds}
                   translationI18n={staffI18n}

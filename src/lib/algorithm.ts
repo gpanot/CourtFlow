@@ -3,6 +3,7 @@ import { emitToPlayer, emitToVenue } from "./socket-server";
 import { isValidPickleballGenderMixForFour } from "./pickleball-gender";
 import { getSkillIndex, QUEUE_LOOKAHEAD, MAX_SKILL_GAP, AUTO_START_DELAY_SECONDS, MIN_GROUP_SIZE, COURT_PLAYER_COUNT } from "./constants";
 import { getVenueWarmupDurationSeconds } from "./warmup-settings";
+import { markSessionIntroWarmupComplete } from "./session-intro-warmup";
 import type { SkillLevel, GameType } from "@prisma/client";
 
 export interface GameTypeMix {
@@ -364,6 +365,8 @@ export async function runRotation(
     data: { status: "active" },
   });
 
+  await markSessionIntroWarmupComplete(sessionId);
+
   for (const p of selectedPlayers) {
     await prisma.queueEntry.update({
       where: { id: p.entryId },
@@ -475,6 +478,7 @@ export async function assignToWarmup(
   playerId: string
 ): Promise<boolean> {
   const session = await prisma.session.findUnique({ where: { id: sessionId } });
+  if (session?.introWarmupComplete) return false;
   const enforceWarmupGender = session?.warmupMode === "auto";
 
   const player = await prisma.player.findUnique({ where: { id: playerId } });
@@ -661,6 +665,7 @@ export async function runWarmupToActiveTransition(
     include: { courtAssignments: { where: { endedAt: null }, take: 1 } },
   });
   emitToVenue(venueId, "court:updated", allCourts);
+  await markSessionIntroWarmupComplete(sessionId);
   return true;
 }
 

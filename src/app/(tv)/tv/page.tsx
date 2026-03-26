@@ -13,12 +13,12 @@ import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import { TvReactionOverlay } from "@/components/tv-reaction-overlay";
 import { resolveTvLocale, tvI18n } from "@/i18n/tv-i18n";
-import { courtCardWarmupPresentation, isSessionWarmupDisplayMode } from "@/lib/session-warmup-display";
+import { isSessionWarmupDisplayMode } from "@/lib/session-warmup-display";
 
 type VenueTvSettings = { logoSpin?: boolean; tvLocale?: string };
 
 interface VenueState {
-  session: { id: string; status: string } | null;
+  session: { id: string; status: string; introWarmupComplete?: boolean } | null;
   courts: CourtData[];
   queue: QueueEntryData[];
   warmupDurationSeconds?: number;
@@ -151,7 +151,11 @@ export default function TVDisplayPage() {
   const activeCourts = sortedCourts.filter((c) => c.status !== "maintenance");
   const courtCount = activeCourts.length;
   const waitingCount = state.queue.filter((e: { status: string }) => e.status === "waiting").length;
-  const isWarmupMode = isSessionWarmupDisplayMode(state.courts, !!state.session);
+  const isWarmupMode = isSessionWarmupDisplayMode(
+    state.courts,
+    !!state.session,
+    state.session?.introWarmupComplete
+  );
 
   const toggleOrientation = () => {
     setRotated((prev) => {
@@ -325,7 +329,7 @@ export default function TVDisplayPage() {
                       key={court.id}
                       court={court}
                       variant="tv"
-                      warmup={courtCardWarmupPresentation(court, state.courts, !!state.session)}
+                      warmup={isWarmupMode}
                       warmupDurationSeconds={state.warmupDurationSeconds}
                     />
                   ))}
@@ -338,7 +342,7 @@ export default function TVDisplayPage() {
                     key={court.id}
                     court={court}
                     variant="tv"
-                    warmup={courtCardWarmupPresentation(court, state.courts, !!state.session)}
+                    warmup={isWarmupMode}
                     warmupDurationSeconds={state.warmupDurationSeconds}
                   />
                 ))}

@@ -136,9 +136,12 @@ export function PlayerHome() {
 
       const courtsState = await api.get<{
         courts: CourtState[];
+        session: { introWarmupComplete?: boolean } | null;
         warmupDurationSeconds?: number;
       }>(`/api/courts/state?venueId=${selectedVenue}`);
-      setIsWarmup(isSessionWarmupDisplayMode(courtsState.courts, true));
+      setIsWarmup(
+        isSessionWarmupDisplayMode(courtsState.courts, true, courtsState.session?.introWarmupComplete)
+      );
 
       if (playerId) {
         const entries = await api.get<QueueEntry[]>(`/api/queue?sessionId=${sess.id}`);
