@@ -207,7 +207,6 @@
       "mixEditorMenPct": "Men {{pct}}%",
       "mixEditorWomenPct": "Women {{pct}}%",
       "mixEditorMixedPct": "Mixed {{pct}}%",
-      "courtTapToStart": "Tap to start a new game →",
       "startNewGameAuto": "Start New Game (Auto)",
       "assignPlayersManual": "Assign Player to Court (Manual)",
       "manualPickerTitle": "Assign to {{court}}",

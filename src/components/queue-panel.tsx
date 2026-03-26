@@ -153,6 +153,8 @@ interface QueuePanelProps {
   onDissolveGroup?: (groupId: string) => void;
   /** When true, staff can assign waiting players to courts that accept manual assign (warmup-assign API). */
   isWarmupManual?: boolean;
+  /** Mirrors session `introWarmupComplete` for partial active-court assign eligibility. */
+  introWarmupComplete?: boolean;
   courts?: CourtInfo[];
   /** Maps players to courts for staff queue grouping (all session courts with assignments). */
   queueCourtGroups?: StaffQueueCourtGroup[];
@@ -167,6 +169,7 @@ export function QueuePanel({
   onCreateGroup,
   onDissolveGroup,
   isWarmupManual,
+  introWarmupComplete,
   courts,
   queueCourtGroups,
   translationI18n,
@@ -483,6 +486,7 @@ export function QueuePanel({
                     onPlayerAction={onPlayerAction}
                     onDissolveGroup={onDissolveGroup}
                     isWarmupManual={isWarmupManual}
+                    introWarmupComplete={introWarmupComplete}
                     courts={courts}
                   />
                 ))}
@@ -553,6 +557,7 @@ export function QueuePanel({
                           onPlayerAction={onPlayerAction}
                           onDissolveGroup={onDissolveGroup}
                           isWarmupManual={isWarmupManual}
+                          introWarmupComplete={introWarmupComplete}
                           courts={courts}
                           inCourtGroup
                         />
@@ -632,6 +637,7 @@ function QueueRow({
   onPlayerAction,
   onDissolveGroup,
   isWarmupManual,
+  introWarmupComplete,
   courts,
   breakSectionRow,
   inCourtGroup,
@@ -647,6 +653,7 @@ function QueueRow({
   onDissolveGroup?: (groupId: string) => void;
   /** When true, staff can assign waiting players to courts that accept manual assign (warmup-assign API). */
   isWarmupManual?: boolean;
+  introWarmupComplete?: boolean;
   courts?: CourtInfo[];
   /** Staff-only: row in "Having a Break" with Back to Queue instead of ⋮ menu. */
   breakSectionRow?: boolean;
@@ -814,6 +821,7 @@ function QueueRow({
           }}
           onClose={() => { setMenuOpen(false); setSelectedPlayer(null); }}
           isWarmupManual={isWarmupManual}
+          introWarmupComplete={introWarmupComplete}
           courts={courts}
         />
       )}
@@ -835,6 +843,7 @@ function PlayerActionMenu({
   onLevelChanged,
   onClose,
   isWarmupManual,
+  introWarmupComplete,
   courts,
 }: {
   playerName: string;
@@ -845,6 +854,7 @@ function PlayerActionMenu({
   onClose: () => void;
   /** When true, staff can assign waiting players to courts that accept manual assign (warmup-assign API). */
   isWarmupManual?: boolean;
+  introWarmupComplete?: boolean;
   courts?: CourtInfo[];
 }) {
   const [confirmAction, setConfirmAction] = useState<PlayerAction | null>(null);
@@ -1053,6 +1063,7 @@ function PlayerActionMenu({
                 playerCount: court.playerCount,
                 assignmentIsWarmup: court.assignmentIsWarmup,
                 skipWarmupAfterMaintenance: court.skipWarmupAfterMaintenance,
+                introWarmupComplete,
               });
               const disabled = isFull || !isAvailable;
               return (

@@ -442,7 +442,7 @@ export function StaffDashboard() {
   const isWarmupMode = isSessionWarmupDisplayMode(courts, !!session, session?.introWarmupComplete);
   const assignableCourtsForQueue = useMemo(() => {
     if (!session) return undefined;
-    const filtered = courts.filter(canCourtAcceptManualAssign);
+    const filtered = courts.filter((c) => canCourtAcceptManualAssign(c, session.introWarmupComplete));
     if (filtered.length === 0) return undefined;
     return filtered.map((c) => ({
       id: c.id,
@@ -458,7 +458,7 @@ export function StaffDashboard() {
         gender: p.gender,
       })),
     }));
-  }, [session, courts]);
+  }, [session, courts, session?.introWarmupComplete]);
 
   /** All courts with players — for grouping “On court” rows in the Queue tab. */
   const staffQueueCourtGroups = useMemo<StaffQueueCourtGroup[]>(
@@ -629,7 +629,6 @@ export function StaffDashboard() {
                   court={court}
                   variant="staff"
                   warmup={isWarmupMode}
-                  queueWaiting={waitingCount}
                   warmupDurationSeconds={warmupDurationSeconds}
                   translationI18n={staffI18n}
                   onClick={() => setSelectedCourt(court)}
@@ -679,6 +678,7 @@ export function StaffDashboard() {
             onCreateGroup={() => setShowCreateGroup(true)}
             onDissolveGroup={handleDissolveGroup}
             isWarmupManual={!!assignableCourtsForQueue}
+            introWarmupComplete={session?.introWarmupComplete}
             courts={assignableCourtsForQueue}
             queueCourtGroups={staffQueueCourtGroups}
           />
@@ -813,7 +813,7 @@ export function StaffDashboard() {
                           maxSlots: 4 - selectedCourt.players.length,
                         })
                       }
-                      disabled={waitingCount < 1 || !canCourtAcceptManualAssign(selectedCourt)}
+                      disabled={waitingCount < 1 || !canCourtAcceptManualAssign(selectedCourt, session?.introWarmupComplete)}
                       className="w-full rounded-xl bg-neutral-800 py-5 text-lg font-semibold text-white transition-colors hover:bg-neutral-700 disabled:opacity-40 disabled:hover:bg-neutral-800 flex items-center justify-center gap-2"
                     >
                       <ListPlus className="h-5 w-5" />
@@ -836,7 +836,7 @@ export function StaffDashboard() {
                 )}
 
                 {selectedCourt.status === "active" &&
-                  canCourtAcceptManualAssign(selectedCourt) &&
+                  canCourtAcceptManualAssign(selectedCourt, session?.introWarmupComplete) &&
                   session && (
                     <button
                       type="button"
@@ -847,7 +847,7 @@ export function StaffDashboard() {
                           maxSlots: 4 - selectedCourt.players.length,
                         })
                       }
-                      disabled={waitingCount < 1 || !canCourtAcceptManualAssign(selectedCourt)}
+                      disabled={waitingCount < 1 || !canCourtAcceptManualAssign(selectedCourt, session?.introWarmupComplete)}
                       className="w-full rounded-xl bg-neutral-800 py-5 text-lg font-semibold text-white transition-colors hover:bg-neutral-700 disabled:opacity-40 disabled:hover:bg-neutral-800 flex items-center justify-center gap-2"
                     >
                       <ListPlus className="h-5 w-5" />
@@ -881,7 +881,7 @@ export function StaffDashboard() {
                         onClick={() => void openAssignFromStandbyOrIdle()}
                         disabled={
                           waitingCount < 1 ||
-                          (selectedCourt.status !== "maintenance" && !canCourtAcceptManualAssign(selectedCourt))
+                          (selectedCourt.status !== "maintenance" && !canCourtAcceptManualAssign(selectedCourt, session?.introWarmupComplete))
                         }
                         className="w-full rounded-xl bg-neutral-800 py-5 text-lg font-semibold text-white transition-colors hover:bg-neutral-700 disabled:opacity-40 disabled:hover:bg-neutral-800 flex items-center justify-center gap-2"
                       >
@@ -897,7 +897,14 @@ export function StaffDashboard() {
                     <button
                       type="button"
                       onClick={() => setConfirmRemove({ courtId: selectedCourt.id, courtLabel: selectedCourt.label, step: 1 })}
-                      className="flex-1 rounded-xl bg-neutral-800 py-4 text-sm font-medium text-neutral-300 hover:bg-neutral-700"
+                      className={cn(
+                        "rounded-xl bg-neutral-800 py-4 text-sm font-medium text-neutral-300 hover:bg-neutral-700",
+                        selectedCourt.status === "active" &&
+                          selectedCourt.assignment &&
+                          selectedCourt.players.length === 4
+                          ? "w-full"
+                          : "flex-1",
+                      )}
                     >
                       {t("staff.dashboard.removeFromSession")}
                     </button>
@@ -911,13 +918,19 @@ export function StaffDashboard() {
                       {t("staff.dashboard.removeFromSession")}
                     </button>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => setConfirmMaintenance({ courtId: selectedCourt.id, courtLabel: selectedCourt.label })}
-                      className="flex-1 rounded-xl bg-neutral-800 py-4 text-sm font-medium text-neutral-300 hover:bg-neutral-700"
-                    >
-                      {t("staff.dashboard.setIdle")}
-                    </button>
+                    !(
+                      selectedCourt.status === "active" &&
+                      selectedCourt.assignment &&
+                      selectedCourt.players.length === 4
+                    ) && (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmMaintenance({ courtId: selectedCourt.id, courtLabel: selectedCourt.label })}
+                        className="flex-1 rounded-xl bg-neutral-800 py-4 text-sm font-medium text-neutral-300 hover:bg-neutral-700"
+                      >
+                        {t("staff.dashboard.setIdle")}
+                      </button>
+                    )
                   )}
                 </div>
               </div>

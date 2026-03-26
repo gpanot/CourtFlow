@@ -38,7 +38,6 @@ interface CourtCardProps {
   court: CourtData;
   variant?: "tv" | "staff";
   warmup?: boolean;
-  queueWaiting?: number;
   /** Venue-configured warmup length for countdown (full court warmup). */
   warmupDurationSeconds?: number;
   onClick?: () => void;
@@ -78,7 +77,6 @@ export function CourtCard({
   court,
   variant = "tv",
   warmup = false,
-  queueWaiting = 0,
   warmupDurationSeconds,
   onClick,
   translationI18n,
@@ -235,20 +233,15 @@ export function CourtCard({
         </div>
       )}
 
-      {/* Idle — available (no warmup context) */}
-      {court.status === "idle" && !warmup && (
-        <div className={isTV ? "mt-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]" : "mt-4"}>
+      {/* Idle — available (TV only; staff starts games from the court action sheet / queue) */}
+      {court.status === "idle" && !warmup && isTV && (
+        <div className="mt-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]">
           <p
-            className={cn("text-neutral-400", isTV ? "" : "text-lg")}
-            style={isTV ? { fontSize: "clamp(0.75rem, min(calc(2 * var(--tw, 1vw)), calc(3 * var(--th, 1vh))), min(2.25rem, calc(6 * var(--th, 1vh))))" } : undefined}
+            className="text-neutral-400"
+            style={{ fontSize: "clamp(0.75rem, min(calc(2 * var(--tw, 1vw)), calc(3 * var(--th, 1vh))), min(2.25rem, calc(6 * var(--th, 1vh))))" }}
           >
             {t("court.available")}
           </p>
-          {!isTV && queueWaiting >= 4 && (
-            <p className="mt-2 text-sm font-medium text-green-400">
-              {t("staff.dashboard.courtTapToStart")}
-            </p>
-          )}
         </div>
       )}
 
