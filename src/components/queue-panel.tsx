@@ -533,8 +533,9 @@ function QueueRow({
           isTV ? "gap-[calc(0.4*var(--tw,1vw))] px-[calc(0.64*var(--tw,1vw))] py-[calc(0.48*var(--th,1vh))] leading-tight" : "gap-3 px-4 py-2",
           entry.status === "on_break" && !breakSectionRow && "opacity-60",
           breakSectionRow && "border-amber-800/40 bg-amber-950/15",
-          !isTV && entry.status === "assigned" && "border-amber-900/35 bg-amber-950/15",
-          !isTV && entry.status === "playing" && "border-emerald-900/35 bg-emerald-950/10"
+          !isTV &&
+            (entry.status === "assigned" || entry.status === "playing") &&
+            "border-emerald-900/35 bg-emerald-950/10"
         )}
       >
         <span
@@ -615,10 +616,7 @@ function QueueRow({
           </div>
         )}
 
-        {!isTV && entry.status === "assigned" && (
-          <span className="text-xs font-medium text-amber-400 shrink-0">Warm-up</span>
-        )}
-        {!isTV && entry.status === "playing" && (
+        {!isTV && (entry.status === "assigned" || entry.status === "playing") && (
           <span className="text-xs font-medium text-emerald-400 shrink-0">Playing</span>
         )}
 
