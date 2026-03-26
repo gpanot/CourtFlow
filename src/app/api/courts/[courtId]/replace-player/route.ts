@@ -11,7 +11,10 @@ export async function POST(
   try {
     const auth = requireStaff(request.headers);
     const { courtId } = await params;
-    const { playerId } = await parseBody<{ playerId: string }>(request);
+    const { playerId, replacementPlayerId } = await parseBody<{
+      playerId: string;
+      replacementPlayerId?: string;
+    }>(request);
 
     if (!playerId) return error("playerId is required");
 
@@ -31,28 +34,49 @@ export async function POST(
     });
     if (!session) return error("No active session", 400);
 
-    const SKIP_FIRST_N = 8;
+    let replacement: {
+      id: string;
+      playerId: string;
+      player: { name: string };
+    } | null = null;
 
-    const allWaiting = await prisma.queueEntry.findMany({
-      where: { sessionId: session.id, status: "waiting", groupId: null },
-      include: { player: true },
-      orderBy: { joinedAt: "asc" },
-    });
-
-    const candidatesAfterSkip = allWaiting.slice(SKIP_FIRST_N);
-    const candidatesFallback = allWaiting.slice(0, SKIP_FIRST_N);
-
-    let replacement: (typeof allWaiting)[number] | null = null;
-
-    // Try candidates after the first 8 to avoid disrupting planned teams
-    for (const entry of candidatesAfterSkip) {
+    if (replacementPlayerId) {
+      if (replacementPlayerId === playerId) {
+        return error("Replacement must be a different player", 400);
+      }
+      const entry = await prisma.queueEntry.findFirst({
+        where: {
+          sessionId: session.id,
+          playerId: replacementPlayerId,
+          status: "waiting",
+          groupId: null,
+        },
+        include: { player: true },
+      });
+      if (!entry) {
+        return error("Replacement player is not available as a solo waiting player", 400);
+      }
       replacement = entry;
-      break;
-    }
+    } else {
+      const SKIP_FIRST_N = 8;
 
-    // Fallback: pick from the first 8 if nobody else available
-    if (!replacement && candidatesFallback.length > 0) {
-      replacement = candidatesFallback[candidatesFallback.length - 1];
+      const allWaiting = await prisma.queueEntry.findMany({
+        where: { sessionId: session.id, status: "waiting", groupId: null },
+        include: { player: true },
+        orderBy: { joinedAt: "asc" },
+      });
+
+      const candidatesAfterSkip = allWaiting.slice(SKIP_FIRST_N);
+      const candidatesFallback = allWaiting.slice(0, SKIP_FIRST_N);
+
+      for (const entry of candidatesAfterSkip) {
+        replacement = entry;
+        break;
+      }
+
+      if (!replacement && candidatesFallback.length > 0) {
+        replacement = candidatesFallback[candidatesFallback.length - 1];
+      }
     }
 
     // Remove the old player from the court assignment
@@ -106,6 +130,7 @@ export async function POST(
         metadata: {
           removedPlayerId: playerId,
           replacementPlayerId: replacement?.playerId ?? null,
+          replacementSource: replacementPlayerId ? "manual" : "auto",
         },
       },
     });

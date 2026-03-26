@@ -50,6 +50,7 @@ export async function POST(request: NextRequest) {
       staff: {
         id: staff.id,
         name: staff.name,
+        phone: staff.phone,
         role: staff.role,
         onboardingCompleted: staff.onboardingCompleted,
       },

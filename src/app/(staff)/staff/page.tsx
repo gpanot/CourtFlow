@@ -93,7 +93,15 @@ export default function StaffPage() {
           <button
             onClick={() => {
               setShowRoleChoice(false);
-              setAuth({ token: null, staffId: null, role: null, venueId: null, staffName: null, onboardingCompleted: null });
+              setAuth({
+                token: null,
+                staffId: null,
+                role: null,
+                venueId: null,
+                staffName: null,
+                staffPhone: null,
+                onboardingCompleted: null,
+              });
             }}
             className="block w-full text-center text-sm text-neutral-500 transition-colors hover:text-neutral-300"
           >
@@ -144,6 +152,7 @@ export default function StaffPage() {
         staff: {
           id: string;
           name: string;
+          phone: string;
           role: string;
           venues: StaffVenue[];
           venueId: string | null;
@@ -156,6 +165,7 @@ export default function StaffPage() {
         token: data.token,
         staffId: data.staff.id,
         staffName: data.staff.name,
+        staffPhone: data.staff.phone,
         role: data.staff.role as "staff" | "superadmin",
         venueId: data.staff.venueId,
         onboardingCompleted: data.staff.onboardingCompleted,

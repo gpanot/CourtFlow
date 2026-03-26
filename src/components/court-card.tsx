@@ -30,6 +30,8 @@ export interface CourtData {
   status: "idle" | "warmup" | "active" | "maintenance";
   assignment: (Assignment & { isWarmup?: boolean }) | null;
   players: Player[];
+  /** When true, idle / partial active (non-warmup) accepts direct assign; warmup path is rejected by API. */
+  skipWarmupAfterMaintenance?: boolean;
 }
 
 interface CourtCardProps {

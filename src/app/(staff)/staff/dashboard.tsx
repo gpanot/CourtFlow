@@ -13,12 +13,14 @@ import { CourtCard, type CourtData } from "@/components/court-card";
 import { GenderIcon } from "@/components/gender-icon";
 import { QueuePanel, type QueueEntryData } from "@/components/queue-panel";
 import { cn } from "@/lib/cn";
-import { Plus, X, Users, LayoutGrid, AlertTriangle, User, UserPlus, Flame, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, Calendar, Loader2, Target, Play, Check } from "lucide-react";
+import { Plus, X, Users, LayoutGrid, AlertTriangle, User, UserPlus, Flame, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, Calendar, Loader2, Target, Play, Check, ListPlus } from "lucide-react";
 import { WARMUP_DURATION_SECONDS, MIN_GROUP_SIZE, MAX_GROUP_SIZE } from "@/lib/constants";
 import { isSessionWarmupDisplayMode } from "@/lib/session-warmup-display";
 import { QRCodeSVG } from "qrcode.react";
 import { SessionSummary } from "./session-summary";
 import { StaffCheckInPanel } from "@/components/staff-check-in-panel";
+import { StaffWaitingPicker } from "@/components/staff-waiting-picker";
+import { canCourtAcceptManualAssign } from "@/lib/court-manual-assign";
 
 function genderLabelForDialog(g: string, t: TFunction) {
   if (g === "male") return t("staff.dashboard.labelsGenderMale");
@@ -100,6 +102,11 @@ export function StaffDashboard() {
   const [confirmRemove, setConfirmRemove] = useState<{ courtId: string; courtLabel: string; step: 1 | 2 } | null>(null);
   const [confirmMaintenance, setConfirmMaintenance] = useState<{ courtId: string; courtLabel: string } | null>(null);
   const [courtActionError, setCourtActionError] = useState<string | null>(null);
+  const [manualAssignCourt, setManualAssignCourt] = useState<{
+    id: string;
+    label: string;
+    maxSlots: number;
+  } | null>(null);
   const [confirmQueueAutofill, setConfirmQueueAutofill] = useState<{
     courtId: string;
     courtLabel: string;
@@ -114,6 +121,12 @@ export function StaffDashboard() {
     playerName: string;
     step: 1 | 2;
   } | null>(null);
+  const [replaceManualPicker, setReplaceManualPicker] = useState<{
+    courtId: string;
+    courtLabel: string;
+    removePlayerId: string;
+    removePlayerName: string;
+  } | null>(null);
   const [replaceBusy, setReplaceBusy] = useState(false);
   const [closedSessionId, setClosedSessionId] = useState<string | null>(null);
   const [viewingSessionId, setViewingSessionId] = useState<string | null>(null);
@@ -127,6 +140,7 @@ export function StaffDashboard() {
   useEffect(() => {
     const tabParam = searchParams.get("tab");
     if (tabParam === "checkin" || tabParam === "add") setTab("checkin");
+    if (tabParam === "qr") setTab("qr");
   }, [searchParams]);
 
   useEffect(() => {
@@ -170,6 +184,13 @@ export function StaffDashboard() {
 
     return () => { offCourt(); offQueue(); offSession(); };
   }, [venueId, on, fetchState]);
+
+  useEffect(() => {
+    if (!session) {
+      setManualAssignCourt(null);
+      setReplaceManualPicker(null);
+    }
+  }, [session]);
 
   const handleOpenSession = async (courtIds: string[], mix?: { men: number; women: number; mixed: number } | null, warmupMode?: "manual" | "auto") => {
     if (!venueId) return;
@@ -351,14 +372,20 @@ export function StaffDashboard() {
     }
   };
 
-  const handleReplacePlayer = async (courtId: string, playerId: string) => {
+  const soloWaitingQueueEntries = useMemo(
+    () => queue.filter((e) => e.status === "waiting" && !e.groupId),
+    [queue]
+  );
+
+  const handleReplacePlayer = async (courtId: string, playerId: string, replacementPlayerId?: string) => {
     setReplaceBusy(true);
     try {
       const result = await api.post<{ success: boolean; replacementPlayerName: string | null }>(
         `/api/courts/${courtId}/replace-player`,
-        { playerId }
+        replacementPlayerId ? { playerId, replacementPlayerId } : { playerId }
       );
       setConfirmReplace(null);
+      setReplaceManualPicker(null);
       setSelectedCourt(null);
       await fetchState();
       if (result.replacementPlayerName) {
@@ -379,17 +406,25 @@ export function StaffDashboard() {
     return queue.filter((e) => active.has(e.status)).map((e) => e.player.name.trim().toLowerCase());
   }, [queue]);
   const isWarmupMode = isSessionWarmupDisplayMode(courts, !!session);
-  const hasWarmupOrIdleCourts =
-    !!session &&
-    courts.some(
-      (c) =>
-        c.status === "warmup" ||
-        c.status === "idle" ||
-        (c.status === "active" &&
-          c.players.length < 4 &&
-          c.assignment &&
-          c.assignment.isWarmup === false)
-    );
+  const assignableCourtsForQueue = useMemo(() => {
+    if (!session) return undefined;
+    const filtered = courts.filter(canCourtAcceptManualAssign);
+    if (filtered.length === 0) return undefined;
+    return filtered.map((c) => ({
+      id: c.id,
+      label: c.label,
+      status: c.status,
+      playerCount: c.players.length,
+      assignmentIsWarmup: c.assignment?.isWarmup,
+      skipWarmupAfterMaintenance: c.skipWarmupAfterMaintenance,
+      players: c.players.map((p) => ({
+        id: p.id,
+        name: p.name,
+        skillLevel: p.skillLevel,
+        gender: p.gender,
+      })),
+    }));
+  }, [session, courts]);
 
   if (!venueId) {
     return (
@@ -414,25 +449,20 @@ export function StaffDashboard() {
           <h1 className="text-lg font-bold text-blue-500 leading-tight">{t("staff.dashboard.title")}</h1>
           <p className="text-sm text-neutral-400 truncate">{venue?.name}</p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {session ? (
-            <button
-              type="button"
-              onClick={handleCloseSession}
-              className="rounded-lg bg-red-700 px-3 py-1.5 text-sm font-medium text-white"
-            >
-              {t("staff.dashboard.closeSession")}
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setShowOpenSession(true)}
-              className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white"
-            >
-              {t("staff.dashboard.openSession")}
-            </button>
+        <button
+          type="button"
+          onClick={() => setTab("qr")}
+          aria-label={t("staff.dashboard.tabQr")}
+          title={t("staff.dashboard.tabQr")}
+          className={cn(
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors",
+            tab === "qr"
+              ? "bg-blue-600/35 text-blue-300 ring-2 ring-blue-500/60"
+              : "bg-neutral-700/40 text-neutral-200 hover:bg-neutral-600/50 hover:text-white"
           )}
-        </div>
+        >
+          <QrCode className="h-5 w-5" />
+        </button>
       </header>
 
       {/* Tab bar */}
@@ -471,24 +501,32 @@ export function StaffDashboard() {
             {t("staff.dashboard.tabQueue", { count: queue.filter((e) => e.status === "waiting").length })}
           </span>
         </button>
-        <button
-          type="button"
-          onClick={() => setTab("qr")}
-          className={cn(
-            "flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2",
-            tab === "qr" ? "border-b-2 border-blue-500 text-white" : "text-neutral-400"
-          )}
-        >
-          <QrCode className="h-4 w-4 shrink-0" /> {t("staff.dashboard.tabQr")}
-        </button>
       </div>
 
-      {/* Content */}
-      <main className="flex-1 overflow-y-auto p-4">
-        {!session && !showOpenSession && (
-          <div className="flex h-64 flex-col items-center justify-center gap-3 text-center">
+      {/* Content — min-h-0 so flex child can shrink; tighter padding on check-in mobile */}
+      <main
+        className={cn(
+          "flex-1 min-h-0 overflow-y-auto p-4",
+          session && tab === "checkin" && "max-sm:p-2 max-sm:pt-2 max-sm:pb-3"
+        )}
+      >
+        {!session && !showOpenSession && tab !== "qr" && (
+          <div className="flex h-64 flex-col items-center justify-center gap-3 text-center px-2">
             <p className="text-lg text-neutral-500">{t("staff.dashboard.noActiveSession")}</p>
-            <p className="text-sm text-neutral-600">{t("staff.dashboard.noActiveSessionHint")}</p>
+            {tab === "courts" ? (
+              <>
+                <p className="text-sm text-neutral-600">{t("staff.dashboard.noActiveSessionHint")}</p>
+                <button
+                  type="button"
+                  onClick={() => setShowOpenSession(true)}
+                  className="rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-green-500 transition-colors"
+                >
+                  {t("staff.dashboard.openSession")}
+                </button>
+              </>
+            ) : (
+              <p className="text-sm text-neutral-600">{t("staff.dashboard.noActiveSessionOpenFromCourts")}</p>
+            )}
           </div>
         )}
 
@@ -567,6 +605,16 @@ export function StaffDashboard() {
                   ))}
               </div>
             )}
+
+            <div className="mt-8 border-t border-neutral-800 pt-6 pb-4 flex justify-end">
+              <button
+                type="button"
+                onClick={handleCloseSession}
+                className="rounded-lg bg-red-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-red-600 transition-colors"
+              >
+                {t("staff.dashboard.closeSession")}
+              </button>
+            </div>
           </div>
         )}
 
@@ -583,32 +631,8 @@ export function StaffDashboard() {
             onPlayerAction={handlePlayerAction}
             onCreateGroup={() => setShowCreateGroup(true)}
             onDissolveGroup={handleDissolveGroup}
-            isWarmupManual={hasWarmupOrIdleCourts}
-            courts={hasWarmupOrIdleCourts
-              ? courts
-                  .filter(
-                    (c) =>
-                      c.status === "warmup" ||
-                      c.status === "idle" ||
-                      (c.status === "active" &&
-                        c.players.length < 4 &&
-                        c.assignment &&
-                        c.assignment.isWarmup === false)
-                  )
-                  .map((c) => ({
-                    id: c.id,
-                    label: c.label,
-                    status: c.status,
-                    playerCount: c.players.length,
-                    assignmentIsWarmup: c.assignment?.isWarmup,
-                    players: c.players.map((p) => ({
-                      id: p.id,
-                      name: p.name,
-                      skillLevel: p.skillLevel,
-                      gender: p.gender,
-                    })),
-                  }))
-              : undefined}
+            isWarmupManual={!!assignableCourtsForQueue}
+            courts={assignableCourtsForQueue}
           />
         )}
 
@@ -617,6 +641,48 @@ export function StaffDashboard() {
         )}
 
       </main>
+
+      {manualAssignCourt && (
+        <StaffWaitingPicker
+          entries={queue}
+          courtLabel={manualAssignCourt.label}
+          maxSelectable={manualAssignCourt.maxSlots}
+          translationI18n={staffI18n}
+          onCancel={() => setManualAssignCourt(null)}
+          onConfirm={async (playerIds) => {
+            const target = manualAssignCourt;
+            if (!target) return;
+            try {
+              for (const pid of playerIds) {
+                await api.post(`/api/courts/${target.id}/warmup-assign`, { playerId: pid });
+              }
+              setCourtActionError(null);
+              setManualAssignCourt(null);
+              setSelectedCourt(null);
+              await fetchState();
+            } catch (e) {
+              setCourtActionError(e instanceof Error ? e.message : "Assignment failed");
+            }
+          }}
+        />
+      )}
+
+      {replaceManualPicker && (
+        <StaffWaitingPicker
+          entries={soloWaitingQueueEntries}
+          courtLabel={replaceManualPicker.courtLabel}
+          maxSelectable={1}
+          pickerPurpose="replace"
+          replacedPlayerName={replaceManualPicker.removePlayerName}
+          translationI18n={staffI18n}
+          onCancel={() => setReplaceManualPicker(null)}
+          onConfirm={async (playerIds) => {
+            const rid = playerIds[0];
+            if (!rid) return;
+            await handleReplacePlayer(replaceManualPicker.courtId, replaceManualPicker.removePlayerId, rid);
+          }}
+        />
+      )}
 
       {/* Court Action Sheet — 80% screen height, generous spacing */}
       {selectedCourt && (
@@ -687,6 +753,26 @@ export function StaffDashboard() {
                   </button>
                 )}
 
+                {selectedCourt.status === "warmup" &&
+                  selectedCourt.players.length < 4 &&
+                  session && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setManualAssignCourt({
+                          id: selectedCourt.id,
+                          label: selectedCourt.label,
+                          maxSlots: 4 - selectedCourt.players.length,
+                        })
+                      }
+                      disabled={waitingCount < 1 || !canCourtAcceptManualAssign(selectedCourt)}
+                      className="w-full rounded-xl bg-neutral-800 py-5 text-lg font-semibold text-white transition-colors hover:bg-neutral-700 disabled:opacity-40 disabled:hover:bg-neutral-800 flex items-center justify-center gap-2"
+                    >
+                      <ListPlus className="h-5 w-5" />
+                      {t("staff.dashboard.assignPlayersManual")}
+                    </button>
+                  )}
+
                 {selectedCourt.status === "active" && selectedCourt.assignment && (
                   <button
                     onClick={() => setConfirmStartGame({
@@ -701,19 +787,58 @@ export function StaffDashboard() {
                   </button>
                 )}
 
+                {selectedCourt.status === "active" &&
+                  canCourtAcceptManualAssign(selectedCourt) &&
+                  session && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setManualAssignCourt({
+                          id: selectedCourt.id,
+                          label: selectedCourt.label,
+                          maxSlots: 4 - selectedCourt.players.length,
+                        })
+                      }
+                      disabled={waitingCount < 1 || !canCourtAcceptManualAssign(selectedCourt)}
+                      className="w-full rounded-xl bg-neutral-800 py-5 text-lg font-semibold text-white transition-colors hover:bg-neutral-700 disabled:opacity-40 disabled:hover:bg-neutral-800 flex items-center justify-center gap-2"
+                    >
+                      <ListPlus className="h-5 w-5" />
+                      {t("staff.dashboard.assignPlayersManual")}
+                    </button>
+                  )}
+
                 {selectedCourt.status === "idle" && (
-                  <button
-                    onClick={() => handleStartGameOnIdle(selectedCourt.id, selectedCourt.label)}
-                    disabled={waitingCount < 4}
-                    className="w-full rounded-xl bg-green-600 py-5 text-lg font-bold text-white transition-colors hover:bg-green-500 disabled:opacity-40 disabled:hover:bg-green-600 flex items-center justify-center gap-2"
-                  >
-                    <Play className="h-5 w-5" />
-                    {waitingCount >= 4
-                      ? t("staff.dashboard.startNewGame")
-                      : 4 - waitingCount === 1
-                        ? t("staff.dashboard.needMorePlayers", { count: 1 })
-                        : t("staff.dashboard.needMorePlayersPlural", { count: 4 - waitingCount })}
-                  </button>
+                  <div className="space-y-3">
+                    <button
+                      onClick={() => handleStartGameOnIdle(selectedCourt.id, selectedCourt.label)}
+                      disabled={waitingCount < 4}
+                      className="w-full rounded-xl bg-green-600 py-5 text-lg font-bold text-white transition-colors hover:bg-green-500 disabled:opacity-40 disabled:hover:bg-green-600 flex items-center justify-center gap-2"
+                    >
+                      <Play className="h-5 w-5" />
+                      {waitingCount >= 4
+                        ? t("staff.dashboard.startNewGameAuto")
+                        : 4 - waitingCount === 1
+                          ? t("staff.dashboard.needMorePlayers", { count: 1 })
+                          : t("staff.dashboard.needMorePlayersPlural", { count: 4 - waitingCount })}
+                    </button>
+                    {session && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setManualAssignCourt({
+                            id: selectedCourt.id,
+                            label: selectedCourt.label,
+                            maxSlots: 4 - selectedCourt.players.length,
+                          })
+                        }
+                        disabled={waitingCount < 1 || !canCourtAcceptManualAssign(selectedCourt)}
+                        className="w-full rounded-xl bg-neutral-800 py-5 text-lg font-semibold text-white transition-colors hover:bg-neutral-700 disabled:opacity-40 disabled:hover:bg-neutral-800 flex items-center justify-center gap-2"
+                      >
+                        <ListPlus className="h-5 w-5" />
+                        {t("staff.dashboard.assignPlayersManual")}
+                      </button>
+                    )}
+                  </div>
                 )}
 
                 {selectedCourt.status === "maintenance" ? (
@@ -1069,16 +1194,26 @@ export function StaffDashboard() {
                 </div>
                 <div className="flex gap-3">
                   <button
+                    type="button"
                     onClick={() => setConfirmReplace({ ...confirmReplace, step: 2 })}
                     className="flex-1 rounded-xl bg-amber-600 py-3 font-semibold text-white hover:bg-amber-500"
                   >
-                    {t("staff.dashboard.continue")}
+                    {t("staff.dashboard.replaceAuto")}
                   </button>
                   <button
-                    onClick={() => setConfirmReplace(null)}
+                    type="button"
+                    onClick={() => {
+                      setReplaceManualPicker({
+                        courtId: confirmReplace.courtId,
+                        courtLabel: confirmReplace.courtLabel,
+                        removePlayerId: confirmReplace.playerId,
+                        removePlayerName: confirmReplace.playerName,
+                      });
+                      setConfirmReplace(null);
+                    }}
                     className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
                   >
-                    {t("staff.dashboard.cancel")}
+                    {t("staff.dashboard.replaceManual")}
                   </button>
                 </div>
               </>

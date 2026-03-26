@@ -10,6 +10,7 @@ interface AuthState {
   playerId: string | null;
   staffId: string | null;
   staffName: string | null;
+  staffPhone: string | null;
   venueId: string | null;
   playerName: string | null;
   onboardingCompleted: boolean | null;
@@ -35,6 +36,7 @@ export const useSessionStore = create<SessionStore>()(
       playerId: null,
       staffId: null,
       staffName: null,
+      staffPhone: null,
       venueId: null,
       playerName: null,
       onboardingCompleted: null,
@@ -60,7 +62,7 @@ export const useSessionStore = create<SessionStore>()(
         }
         set({
           token: null, role: null, playerId: null, staffId: null,
-          staffName: null, venueId: null, playerName: null,
+          staffName: null, staffPhone: null, venueId: null, playerName: null,
           onboardingCompleted: null, rememberMe: true,
         });
         if (typeof window !== "undefined") {

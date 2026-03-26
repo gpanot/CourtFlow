@@ -6,13 +6,14 @@ import { useTranslation } from "react-i18next";
 import { useSessionStore } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { StaffLanguageToggle } from "../staff-language-toggle";
-import { ArrowLeft, User, History, ChevronRight, LogOut } from "lucide-react";
+import { ArrowLeft, User, History, ChevronRight, LogOut, Phone } from "lucide-react";
 
 export default function StaffProfilePage() {
   const { t } = useTranslation();
   const router = useRouter();
-  const { token, staffId, venueId, staffName, clearAuth } = useSessionStore();
+  const { token, staffId, venueId, staffName, staffPhone, setAuth, clearAuth } = useSessionStore();
   const [venueName, setVenueName] = useState<string | undefined>();
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
 
   useEffect(() => {
@@ -20,11 +21,27 @@ export default function StaffProfilePage() {
       router.replace("/staff");
       return;
     }
-    api
-      .get<{ name: string }>(`/api/venues/${venueId}`)
-      .then((v) => setVenueName(v.name))
-      .catch(() => setVenueName(undefined));
-  }, [token, staffId, venueId, router]);
+    let cancelled = false;
+    (async () => {
+      const [venueRes, meRes] = await Promise.allSettled([
+        api.get<{ name: string }>(`/api/venues/${venueId}`),
+        api.get<{ name: string; phone: string }>("/api/auth/staff-me"),
+      ]);
+      if (cancelled) return;
+      if (venueRes.status === "fulfilled") setVenueName(venueRes.value.name);
+      else setVenueName(undefined);
+      if (meRes.status === "fulfilled") {
+        setAuth({ staffName: meRes.value.name, staffPhone: meRes.value.phone });
+      }
+      setProfileLoaded(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, staffId, venueId, router, setAuth]);
+
+  const displayName = staffName?.trim() || t("staff.profile.staffFallback");
+  const displayPhone = (staffPhone ?? "").trim() || "—";
 
   if (!token || !staffId || !venueId) {
     return (
@@ -84,13 +101,31 @@ export default function StaffProfilePage() {
       </header>
 
       <main className="flex-1 space-y-6 p-5 pb-10">
-        <div className="flex items-center gap-4">
+        <div className="flex items-start gap-4">
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-blue-600/20">
             <User className="h-7 w-7 text-blue-400" />
           </div>
-          <div className="min-w-0">
-            <h2 className="text-lg font-bold truncate">{staffName || t("staff.profile.staffFallback")}</h2>
-            <p className="text-sm text-neutral-400">{venueName ?? t("staff.profile.noVenue")}</p>
+          <div className="min-w-0 flex-1 space-y-3">
+            <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 px-4 py-3 space-y-2.5">
+              <div>
+                <p className="text-xs font-medium text-neutral-500">{t("staff.profile.nameLabel")}</p>
+                <p className="text-sm font-semibold text-white truncate mt-0.5">
+                  {!profileLoaded ? "…" : displayName}
+                </p>
+              </div>
+              <div className="border-t border-neutral-800 pt-2.5">
+                <p className="text-xs font-medium text-neutral-500 flex items-center gap-1.5">
+                  <Phone className="h-3 w-3 opacity-70" aria-hidden />
+                  {t("staff.profile.phoneLabel")}
+                </p>
+                <p className="text-sm font-medium text-neutral-200 mt-0.5 tabular-nums">
+                  {!profileLoaded ? "…" : displayPhone}
+                </p>
+              </div>
+            </div>
+            <p className="text-sm text-neutral-400">
+              {venueName ?? (profileLoaded ? t("staff.profile.noVenue") : "…")}
+            </p>
           </div>
         </div>
 

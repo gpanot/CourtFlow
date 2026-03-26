@@ -42,7 +42,6 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
     g === "male" ? t("staff.checkIn.genderMale") : t("staff.checkIn.genderFemale");
 
   const duplicateNameMsg = t("staff.checkIn.duplicateName");
-  const nameInputRef = useRef<HTMLInputElement>(null);
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [name, setName] = useState("");
   const [gender, setGender] = useState<(typeof GENDERS)[number] | "">("");
@@ -114,7 +113,6 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
       setGender("");
       setSkill("");
       onAdded();
-      requestAnimationFrame(() => nameInputRef.current?.focus());
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -123,24 +121,27 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
   };
 
   return (
-    <div className="mx-auto w-full max-w-md space-y-6">
+    <div className="mx-auto w-full max-w-md space-y-6 max-sm:space-y-2">
       <div
         className={cn(
-          "flex items-center gap-3 rounded-xl border px-4 py-3 transition-colors duration-200",
-          flashMessage
-            ? "border-green-500/50 bg-green-600/15"
-            : "border-green-500/25 bg-green-600/10"
+          "flex h-[5.25rem] items-center gap-3 rounded-xl border px-4 py-3 transition-colors duration-200 max-sm:h-[4.5rem] max-sm:gap-2 max-sm:rounded-lg max-sm:px-3 max-sm:py-2",
+          flashMessage ? "border-green-500/50 bg-green-600/15" : "border-green-500/25 bg-green-600/10"
         )}
       >
-        <UserPlus className="h-6 w-6 shrink-0 text-green-400" />
+        <UserPlus className="h-6 w-6 shrink-0 text-green-400 max-sm:h-5 max-sm:w-5" />
         <div className="min-w-0 flex-1">
-          <p className="font-semibold text-green-300">{t("staff.checkIn.title")}</p>
+          <p className="font-semibold text-green-300 max-sm:text-sm">{t("staff.checkIn.title")}</p>
           {flashMessage ? (
-            <p className="text-sm font-medium text-green-200" role="status" aria-live="polite">
+            <p
+              className="line-clamp-2 text-sm font-medium leading-snug text-green-200 max-sm:text-xs"
+              role="status"
+              aria-live="polite"
+              title={flashMessage}
+            >
               {flashMessage}
             </p>
           ) : (
-            <p className="text-xs text-neutral-400">
+            <p className="line-clamp-2 text-xs leading-snug text-neutral-400 max-sm:text-[11px]">
               {t("staff.checkIn.subtitle")}
             </p>
           )}
@@ -150,7 +151,7 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
       {showDuplicateWarning && (
         <div
           id="checkin-duplicate-name"
-          className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300"
+          className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300 max-sm:px-2.5 max-sm:py-1.5 max-sm:text-xs"
           role="alert"
           aria-live="polite"
         >
@@ -158,14 +159,17 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
         </div>
       )}
       {err && !showDuplicateWarning && (
-        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{err}</div>
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300 max-sm:px-2.5 max-sm:py-1.5 max-sm:text-xs">
+          {err}
+        </div>
       )}
 
-      <div className="space-y-4 rounded-xl border border-neutral-800 bg-neutral-900/40 p-4">
+      <div className="space-y-4 rounded-xl border border-neutral-800 bg-neutral-900/40 p-4 max-sm:space-y-2.5 max-sm:rounded-lg max-sm:p-3">
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-neutral-400">{t("staff.checkIn.name")}</label>
+          <label className="mb-1.5 block text-xs font-medium text-neutral-400 max-sm:mb-1">
+            {t("staff.checkIn.name")}
+          </label>
           <input
-            ref={nameInputRef}
             type="text"
             placeholder={t("staff.checkIn.playerNamePlaceholder")}
             value={name}
@@ -174,7 +178,7 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
               setErr("");
             }}
             className={cn(
-              "w-full rounded-xl border bg-neutral-950 px-4 py-3 text-white placeholder:text-neutral-500 focus:outline-none",
+              "w-full rounded-xl border bg-neutral-950 px-4 py-3 text-base text-white placeholder:text-neutral-500 focus:outline-none max-sm:rounded-lg max-sm:px-3 max-sm:py-2",
               showDuplicateWarning ? "border-red-500/50 focus:border-red-500" : "border-neutral-700 focus:border-green-500"
             )}
             aria-invalid={showDuplicateWarning}
@@ -185,15 +189,15 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
         </div>
 
         <div>
-          <p className="mb-2 text-xs font-medium text-neutral-400">{t("staff.checkIn.gender")}</p>
-          <div className="grid grid-cols-2 gap-2">
+          <p className="mb-2 text-xs font-medium text-neutral-400 max-sm:mb-1">{t("staff.checkIn.gender")}</p>
+          <div className="grid grid-cols-2 gap-2 max-sm:gap-1.5">
             {GENDERS.map((g) => (
               <button
                 key={g}
                 type="button"
                 onClick={() => setGender(g)}
                 className={cn(
-                  "rounded-xl border-2 py-3 text-sm font-medium capitalize transition-colors",
+                  "rounded-xl border-2 py-3 text-sm font-medium capitalize transition-colors max-sm:rounded-lg max-sm:py-2",
                   gender === g
                     ? "border-green-500 bg-green-600/20 text-green-400"
                     : "border-neutral-700 text-neutral-300 hover:border-neutral-500"
@@ -206,20 +210,20 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
         </div>
 
         <div>
-          <p className="mb-2 text-xs font-medium text-neutral-400">{t("staff.checkIn.skillLevel")}</p>
-          <div className="space-y-2">
+          <p className="mb-2 text-xs font-medium text-neutral-400 max-sm:mb-1">{t("staff.checkIn.skillLevel")}</p>
+          <div className="space-y-2 max-sm:grid max-sm:grid-cols-2 max-sm:gap-2 max-sm:space-y-0">
             {SKILL_LEVELS.map((level) => (
               <button
                 key={level}
                 type="button"
                 onClick={() => setSkill(level)}
                 className={cn(
-                  "w-full rounded-xl border-2 p-3 text-left transition-colors",
+                  "w-full rounded-xl border-2 p-3 text-left transition-colors max-sm:rounded-lg max-sm:p-2.5 max-sm:text-center",
                   skill === level ? "border-green-500 bg-green-600/20" : "border-neutral-700 hover:border-neutral-500"
                 )}
               >
-                <span className="font-medium capitalize text-white">{skillLabel(level)}</span>
-                <p className="text-sm text-neutral-400">{SKILL_DESCRIPTIONS[level]}</p>
+                <span className="font-medium capitalize text-white max-sm:text-sm">{skillLabel(level)}</span>
+                <p className="text-sm text-neutral-400 max-sm:hidden">{SKILL_DESCRIPTIONS[level]}</p>
               </button>
             ))}
           </div>
@@ -229,11 +233,11 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
           type="button"
           onClick={submit}
           disabled={loading || !name.trim() || !gender || !skill || showDuplicateWarning}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50 max-sm:rounded-lg max-sm:py-2.5 max-sm:text-base"
         >
           {loading ? (
             <>
-              <Loader2 className="h-5 w-5 animate-spin" />
+              <Loader2 className="h-5 w-5 animate-spin max-sm:h-4 max-sm:w-4" />
               {t("staff.checkIn.adding")}
             </>
           ) : (
@@ -243,15 +247,17 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
       </div>
 
       {recent.length > 0 && (
-        <div className="rounded-xl border border-neutral-800 bg-neutral-900/30 p-4">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-neutral-500">{t("staff.checkIn.recentlyAdded")}</p>
-          <ul className="space-y-2">
+        <div className="rounded-xl border border-neutral-800 bg-neutral-900/30 p-4 max-sm:rounded-lg max-sm:p-2.5">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-neutral-500 max-sm:mb-1 max-sm:text-[10px]">
+            {t("staff.checkIn.recentlyAdded")}
+          </p>
+          <ul className="space-y-2 max-sm:space-y-1">
             {recent.map((p) => (
               <li
                 key={p.id}
-                className="flex items-center justify-between gap-2 rounded-lg bg-neutral-800/50 px-3 py-2 text-sm"
+                className="flex items-center justify-between gap-2 rounded-lg bg-neutral-800/50 px-3 py-2 text-sm max-sm:px-2 max-sm:py-1 max-sm:text-xs"
               >
-                <span className="font-medium text-white">{p.name}</span>
+                <span className="min-w-0 truncate font-medium text-white">{p.name}</span>
                 <span className="shrink-0 text-neutral-400">
                   {(p.gender === "male" || p.gender === "female" ? genderLabel(p.gender) : p.gender)} ·{" "}
                   {(["beginner", "intermediate", "advanced", "pro"] as const).includes(p.skillLevel as SkillLevelType)

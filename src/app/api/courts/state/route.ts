@@ -71,6 +71,7 @@ export async function GET(request: NextRequest) {
           id: court.id,
           label: court.label,
           status: court.status,
+          skipWarmupAfterMaintenance: court.skipWarmupAfterMaintenance,
           assignment: assignment
             ? {
                 id: assignment.id,

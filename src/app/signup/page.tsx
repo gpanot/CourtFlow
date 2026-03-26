@@ -46,7 +46,7 @@ export default function SignUpPage() {
     try {
       const data = await api.post<{
         token: string;
-        staff: { id: string; name: string; role: string; onboardingCompleted: boolean };
+        staff: { id: string; name: string; phone: string; role: string; onboardingCompleted: boolean };
       }>("/api/auth/signup", { ...form, signupGatePassword: gatePassword });
 
       clearAuth();
@@ -54,6 +54,7 @@ export default function SignUpPage() {
         token: data.token,
         staffId: data.staff.id,
         staffName: data.staff.name,
+        staffPhone: data.staff.phone,
         role: data.staff.role as "superadmin",
         onboardingCompleted: data.staff.onboardingCompleted,
       });
