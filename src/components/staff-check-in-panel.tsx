@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { SKILL_LEVELS, SKILL_DESCRIPTIONS, type SkillLevelType } from "@/lib/constants";
-import { Loader2, UserPlus } from "lucide-react";
+import { AlertTriangle, Loader2, UserPlus } from "lucide-react";
 
 const GENDERS = ["male", "female"] as const;
 
@@ -49,6 +49,7 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [testSeedLoading, setTestSeedLoading] = useState(false);
+  const [confirmTestCreate5, setConfirmTestCreate5] = useState<{ step: 1 | 2 } | null>(null);
   const [err, setErr] = useState("");
   const [recent, setRecent] = useState<StaffCheckInRecent[]>([]);
   const [flashMessage, setFlashMessage] = useState<string | null>(null);
@@ -167,6 +168,7 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
       setErr((e as Error).message);
     } finally {
       setTestSeedLoading(false);
+      setConfirmTestCreate5(null);
     }
   };
 
@@ -341,7 +343,7 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
       <p className="text-center pt-1">
         <button
           type="button"
-          onClick={addFiveTestPlayers}
+          onClick={() => setConfirmTestCreate5({ step: 1 })}
           disabled={loading || testSeedLoading}
           className="text-[11px] text-neutral-500 underline decoration-neutral-600 underline-offset-2 hover:text-neutral-400 disabled:opacity-40 max-sm:text-[10px]"
         >
@@ -355,6 +357,81 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
           )}
         </button>
       </p>
+
+      {confirmTestCreate5 && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => !testSeedLoading && setConfirmTestCreate5(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border border-neutral-700 bg-neutral-900 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {confirmTestCreate5.step === 1 ? (
+              <>
+                <div className="mb-4 flex flex-col items-center gap-3 text-center">
+                  <div className="rounded-full bg-amber-600/20 p-3">
+                    <AlertTriangle className="h-6 w-6 text-amber-400" />
+                  </div>
+                  <h3 className="text-lg font-bold text-white">{t("staff.checkIn.testCreate5Step1Title")}</h3>
+                  <p className="text-sm text-neutral-400">{t("staff.checkIn.testCreate5Step1Body")}</p>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmTestCreate5({ step: 2 })}
+                    className="flex-1 rounded-xl bg-amber-600 py-3 font-semibold text-white hover:bg-amber-500"
+                  >
+                    {t("staff.dashboard.continue")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmTestCreate5(null)}
+                    className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
+                  >
+                    {t("staff.dashboard.cancel")}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="mb-4 flex flex-col items-center gap-3 text-center">
+                  <div className="rounded-full bg-red-600/20 p-3">
+                    <AlertTriangle className="h-6 w-6 text-red-400" />
+                  </div>
+                  <h3 className="text-lg font-bold text-white">{t("staff.dashboard.areYouSure")}</h3>
+                  <p className="text-sm text-neutral-400">{t("staff.checkIn.testCreate5Step2Body")}</p>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => void addFiveTestPlayers()}
+                    disabled={testSeedLoading}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 py-3 font-semibold text-white hover:bg-red-500 disabled:opacity-50"
+                  >
+                    {testSeedLoading ? (
+                      <>
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        {t("staff.checkIn.adding")}
+                      </>
+                    ) : (
+                      t("staff.checkIn.testCreate5ConfirmButton")
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmTestCreate5(null)}
+                    disabled={testSeedLoading}
+                    className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700 disabled:opacity-50"
+                  >
+                    {t("staff.dashboard.cancel")}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
