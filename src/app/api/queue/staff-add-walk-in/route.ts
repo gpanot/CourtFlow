@@ -15,9 +15,11 @@ export async function POST(request: NextRequest) {
       name: string;
       gender: string;
       skillLevel: string;
+      /** Optional; must be unique among players if provided. */
+      phone?: string | null;
     }>(request);
 
-    const { venueId, name, gender: genderRaw, skillLevel: skillRaw } = body;
+    const { venueId, name, gender: genderRaw, skillLevel: skillRaw, phone: phoneRaw } = body;
     if (!venueId?.trim()) return error("venueId is required", 400);
     const trimmedName = name?.trim() ?? "";
     if (!trimmedName) return error("Name is required", 400);
@@ -30,6 +32,10 @@ export async function POST(request: NextRequest) {
     }
     const skillLevel = skillRaw as SkillLevelType;
 
+    const phoneTrimmed =
+      typeof phoneRaw === "string" ? phoneRaw.trim() : "";
+    const phone = phoneTrimmed.length > 0 ? phoneTrimmed : `walkin:${randomUUID()}`;
+
     const session = await prisma.session.findFirst({
       where: { venueId, status: "open" },
     });
@@ -40,17 +46,23 @@ export async function POST(request: NextRequest) {
       return error(`"${conflict}" is already in the queue for this session`, 409);
     }
 
-    const phone = `walkin:${randomUUID()}`;
-
-    const player = await prisma.player.create({
-      data: {
-        name: trimmedName,
-        phone,
-        gender,
-        skillLevel,
-        avatar: "🏓",
-      },
-    });
+    let player;
+    try {
+      player = await prisma.player.create({
+        data: {
+          name: trimmedName,
+          phone,
+          gender,
+          skillLevel,
+          avatar: "🏓",
+        },
+      });
+    } catch (e) {
+      if ((e as { code?: string }).code === "P2002") {
+        return error("A player with this phone number already exists", 409);
+      }
+      throw e;
+    }
 
     const entry = await prisma.queueEntry.create({
       data: {

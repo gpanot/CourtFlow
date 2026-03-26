@@ -1,7 +1,7 @@
 "use client";
 
 import type { i18n as I18nInstance } from "i18next";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/cn";
 import { tvI18n } from "@/i18n/tv-i18n";
@@ -81,6 +81,69 @@ export interface CourtInfo {
   players: { id?: string; name: string; skillLevel: string; gender?: string }[];
 }
 
+/** Active session courts with on-court players — used to group queue rows by court in the staff Queue tab. */
+export interface StaffQueueCourtGroup {
+  courtId: string;
+  label: string;
+  playerIds: string[];
+}
+
+type StaffDisplayRow = {
+  key: string;
+  entry: QueueEntryData;
+  isGroup: boolean;
+  groupSize: number;
+  position: number | null;
+  allPlayers: { id: string; name: string; skillLevel?: string; gender?: string; gamesPlayed?: number; totalPlayMinutesToday?: number }[];
+  cumulativePlayersBefore: number;
+};
+
+function rowPrimaryPlayerId(row: StaffDisplayRow): string {
+  return row.allPlayers[0]?.id ?? row.entry.playerId;
+}
+
+function compareStaffOnCourtRows(
+  a: StaffDisplayRow,
+  b: StaffDisplayRow,
+  playerIdToCourt: Map<string, { courtId: string; label: string }>,
+  sortMode: StaffQueueSortMode
+): number {
+  const la = playerIdToCourt.get(rowPrimaryPlayerId(a))?.label ?? "\uffff";
+  const lb = playerIdToCourt.get(rowPrimaryPlayerId(b))?.label ?? "\uffff";
+  const byLabel = la.localeCompare(lb, undefined, { numeric: true });
+  if (byLabel !== 0) return byLabel;
+  if (sortMode === "name") {
+    return staffQueueRowNameSortKey(a.allPlayers).localeCompare(staffQueueRowNameSortKey(b.allPlayers), undefined, {
+      sensitivity: "base",
+    });
+  }
+  return new Date(a.entry.joinedAt).getTime() - new Date(b.entry.joinedAt).getTime();
+}
+
+function chunkOnCourtRowsByCourt(
+  rows: StaffDisplayRow[],
+  playerIdToCourt: Map<string, { courtId: string; label: string }>
+): { courtId: string; label: string; rows: StaffDisplayRow[] }[] {
+  const chunks: { courtId: string; label: string; rows: StaffDisplayRow[] }[] = [];
+  for (const row of rows) {
+    const pid = rowPrimaryPlayerId(row);
+    const info = playerIdToCourt.get(pid);
+    const courtId = info?.courtId ?? "__unassigned";
+    const label = info?.label ?? "";
+    const last = chunks[chunks.length - 1];
+    if (last && last.courtId === courtId) {
+      last.rows.push(row);
+    } else {
+      chunks.push({ courtId, label, rows: [row] });
+    }
+  }
+  return chunks;
+}
+
+function staffRowVisiblePlayerCount(row: StaffDisplayRow): number {
+  return row.allPlayers.length;
+}
+
 interface QueuePanelProps {
   entries: QueueEntryData[];
   variant?: "tv" | "staff";
@@ -91,18 +154,40 @@ interface QueuePanelProps {
   /** When true, staff can assign waiting players to courts that accept manual assign (warmup-assign API). */
   isWarmupManual?: boolean;
   courts?: CourtInfo[];
+  /** Maps players to courts for staff queue grouping (all session courts with assignments). */
+  queueCourtGroups?: StaffQueueCourtGroup[];
   translationI18n?: I18nInstance;
 }
 
-export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction, onCreateGroup, onDissolveGroup, isWarmupManual, courts, translationI18n }: QueuePanelProps) {
+export function QueuePanel({
+  entries,
+  variant = "tv",
+  maxDisplay,
+  onPlayerAction,
+  onCreateGroup,
+  onDissolveGroup,
+  isWarmupManual,
+  courts,
+  queueCourtGroups,
+  translationI18n,
+}: QueuePanelProps) {
   const { t } = useTranslation("translation", { i18n: translationI18n ?? tvI18n });
   const isTV = variant === "tv";
   const [genderFilter, setGenderFilter] = useState<StaffQueueGenderFilter>(null);
   const [skillFilter, setSkillFilter] = useState<StaffQueueSkillFilter>(null);
   const [sortMode, setSortMode] = useState<StaffQueueSortMode>("queue");
   const [breakOnly, setBreakOnly] = useState(false);
+  const playerIdToCourt = useMemo(() => {
+    const m = new Map<string, { courtId: string; label: string }>();
+    if (!queueCourtGroups?.length) return m;
+    for (const g of queueCourtGroups) {
+      for (const pid of g.playerIds) {
+        m.set(pid, { courtId: g.courtId, label: g.label });
+      }
+    }
+    return m;
+  }, [queueCourtGroups]);
   const limit = maxDisplay ?? (isTV ? TV_QUEUE_DISPLAY_COUNT : 500);
-  const onCourtCount = entries.filter((e) => e.status === "assigned" || e.status === "playing").length;
   /** TV: breaks are staff-only; footer “more players” counts only waiting. */
   const tvWaitingOnlyTotal = entries.filter((e) => e.status === "waiting").length;
 
@@ -127,15 +212,7 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
     : [...entries].filter((e) => e.status !== "on_break");
 
   const seen = new Set<string>();
-  const displayEntries: {
-    key: string;
-    entry: QueueEntryData;
-    isGroup: boolean;
-    groupSize: number;
-    position: number | null;
-    allPlayers: { id: string; name: string; skillLevel?: string; gender?: string; gamesPlayed?: number; totalPlayMinutesToday?: number }[];
-    cumulativePlayersBefore: number;
-  }[] = [];
+  const displayEntries: StaffDisplayRow[] = [];
   let queuePosition = 0;
   let cumulativePlayers = 0;
 
@@ -213,11 +290,17 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
   const soloWaitingCount = entries.filter((e) => e.status === "waiting" && !e.groupId).length;
   const waitingOnlyCount = entries.filter((e) => e.status === "waiting").length;
 
-  let staffMainRows = displayEntries;
+  let staffMainRows: StaffDisplayRow[] = displayEntries;
+  let staffWaitingRows: StaffDisplayRow[] = [];
+  let staffOnCourtRows: StaffDisplayRow[] = [];
+  let onCourtChunks: { courtId: string; label: string; rows: StaffDisplayRow[] }[] = [];
   let staffBreakRows = onBreakStaffEntries;
   if (!isTV) {
     if (breakOnly) {
       staffMainRows = [];
+      staffWaitingRows = [];
+      staffOnCourtRows = [];
+      onCourtChunks = [];
       staffBreakRows = onBreakStaffEntries.filter((e) =>
         staffQueuePlayerMatches({ gender: e.player.gender, skillLevel: e.player.skillLevel }, genderFilter, skillFilter)
       );
@@ -227,16 +310,21 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
         );
       }
     } else {
-      staffMainRows = displayEntries
+      const filteredMain = displayEntries
         .map((row) => staffQueueFilterDisplayRow(row, genderFilter, skillFilter))
-        .filter((row): row is (typeof displayEntries)[number] => row != null);
+        .filter((row): row is StaffDisplayRow => row != null);
+      staffWaitingRows = filteredMain.filter((r) => r.entry.status === "waiting");
+      staffOnCourtRows = filteredMain.filter((r) => r.entry.status === "assigned" || r.entry.status === "playing");
       if (sortMode === "name") {
-        staffMainRows = [...staffMainRows].sort((a, b) =>
+        staffWaitingRows = [...staffWaitingRows].sort((a, b) =>
           staffQueueRowNameSortKey(a.allPlayers).localeCompare(staffQueueRowNameSortKey(b.allPlayers), undefined, {
             sensitivity: "base",
           })
         );
       }
+      staffOnCourtRows = [...staffOnCourtRows].sort((a, b) => compareStaffOnCourtRows(a, b, playerIdToCourt, sortMode));
+      staffMainRows = [...staffWaitingRows, ...staffOnCourtRows];
+      onCourtChunks = chunkOnCourtRowsByCourt(staffOnCourtRows, playerIdToCourt);
       staffBreakRows = onBreakStaffEntries.filter((e) =>
         staffQueuePlayerMatches({ gender: e.player.gender, skillLevel: e.player.skillLevel }, genderFilter, skillFilter)
       );
@@ -265,9 +353,7 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
             ? t("queue.header", { waiting: waitingOnlyCount })
             : breakOnly
               ? t("staff.dashboard.queueFilterBreakViewTitle", { count: staffBreakRows.length })
-              : onCourtCount > 0
-                ? `Queue (${waitingOnlyCount} waiting · ${onCourtCount} on court)`
-                : `Queue (${waitingOnlyCount} waiting)`}
+              : t("staff.dashboard.queuePanelTitle")}
         </h4>
         {!isTV && !breakOnly && onCreateGroup && soloWaitingCount >= MIN_GROUP_SIZE && (
           <button
@@ -375,56 +461,108 @@ export function QueuePanel({ entries, variant = "tv", maxDisplay, onPlayerAction
           </div>
         ) : null
       ) : (
-        <div className="flex flex-col gap-1">
-          {staffMainRows.map(({ key, entry, isGroup, groupSize, position: pos, allPlayers }) => (
-            <QueueRow
-              key={key}
-              entry={entry}
-              isGroup={isGroup}
-              groupSize={groupSize}
-              position={pos}
-              allPlayers={allPlayers}
-              isTV={isTV}
-              isNextUp={pos != null && pos <= 4}
-              onPlayerAction={onPlayerAction}
-              onDissolveGroup={onDissolveGroup}
-              isWarmupManual={isWarmupManual}
-              courts={courts}
-            />
-          ))}
-        </div>
-      )}
-
-      {!isTV && !breakOnly && staffBreakRows.length > 0 && onPlayerAction && (
-        <div className="mt-6 border-t border-neutral-800 pt-4">
-          <h4 className="mb-2 text-sm font-semibold uppercase tracking-wider text-amber-400/90">
-            Having a Break ({staffBreakRows.length})
-          </h4>
-          <div className="flex flex-col gap-1">
-            {staffBreakRows.map((entry) => (
-              <QueueRow
-                key={entry.id}
-                entry={entry}
-                isGroup={false}
-                groupSize={1}
-                position={null}
-                allPlayers={[
-                  {
-                    id: entry.player.id,
-                    name: entry.player.name,
-                    skillLevel: entry.player.skillLevel,
-                    gender: entry.player.gender,
-                    gamesPlayed: entry.gamesPlayed,
-                    totalPlayMinutesToday: entry.totalPlayMinutesToday,
-                  },
-                ]}
-                isTV={false}
-                isNextUp={false}
-                onPlayerAction={onPlayerAction}
-                breakSectionRow
-              />
-            ))}
-          </div>
+        <div className="flex flex-col gap-5">
+          {staffWaitingRows.length > 0 && (
+            <section>
+              <h4 className="mb-2 text-sm font-semibold uppercase tracking-wider text-neutral-400">
+                {t("staff.dashboard.queueSectionQueue", {
+                  count: staffWaitingRows.reduce((n, r) => n + staffRowVisiblePlayerCount(r), 0),
+                })}
+              </h4>
+              <div className="flex flex-col gap-1">
+                {staffWaitingRows.map(({ key, entry, isGroup, groupSize, position: pos, allPlayers }) => (
+                  <QueueRow
+                    key={key}
+                    entry={entry}
+                    isGroup={isGroup}
+                    groupSize={groupSize}
+                    position={pos}
+                    allPlayers={allPlayers}
+                    isTV={isTV}
+                    isNextUp={pos != null && pos <= 4}
+                    onPlayerAction={onPlayerAction}
+                    onDissolveGroup={onDissolveGroup}
+                    isWarmupManual={isWarmupManual}
+                    courts={courts}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+          {staffBreakRows.length > 0 && onPlayerAction && (
+            <section>
+              <h4 className="mb-2 text-sm font-semibold uppercase tracking-wider text-amber-400/90">
+                {t("staff.dashboard.queueSectionBreak", { count: staffBreakRows.length })}
+              </h4>
+              <div className="flex flex-col gap-1">
+                {staffBreakRows.map((entry) => (
+                  <QueueRow
+                    key={entry.id}
+                    entry={entry}
+                    isGroup={false}
+                    groupSize={1}
+                    position={null}
+                    allPlayers={[
+                      {
+                        id: entry.player.id,
+                        name: entry.player.name,
+                        skillLevel: entry.player.skillLevel,
+                        gender: entry.player.gender,
+                        gamesPlayed: entry.gamesPlayed,
+                        totalPlayMinutesToday: entry.totalPlayMinutesToday,
+                      },
+                    ]}
+                    isTV={false}
+                    isNextUp={false}
+                    onPlayerAction={onPlayerAction}
+                    breakSectionRow
+                  />
+                ))}
+              </div>
+            </section>
+          )}
+          {staffOnCourtRows.length > 0 && (
+            <section>
+              <h4 className="mb-2 text-sm font-semibold uppercase tracking-wider text-emerald-400/85">
+                {t("staff.dashboard.queueSectionOnCourt", {
+                  count: staffOnCourtRows.reduce((n, r) => n + staffRowVisiblePlayerCount(r), 0),
+                })}
+              </h4>
+              <div className="flex flex-col gap-2">
+                {onCourtChunks.map((chunk) => (
+                  <div
+                    key={chunk.courtId}
+                    className="rounded-xl border border-sky-500/25 bg-sky-950/10 p-1.5"
+                  >
+                    <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-wider text-sky-400/80">
+                      {chunk.courtId === "__unassigned"
+                        ? t("staff.dashboard.queueCourtUnknown")
+                        : chunk.label}
+                    </p>
+                    <div className="flex flex-col gap-1">
+                      {chunk.rows.map(({ key, entry, isGroup, groupSize, position: pos, allPlayers }) => (
+                        <QueueRow
+                          key={key}
+                          entry={entry}
+                          isGroup={isGroup}
+                          groupSize={groupSize}
+                          position={pos}
+                          allPlayers={allPlayers}
+                          isTV={isTV}
+                          isNextUp={false}
+                          onPlayerAction={onPlayerAction}
+                          onDissolveGroup={onDissolveGroup}
+                          isWarmupManual={isWarmupManual}
+                          courts={courts}
+                          inCourtGroup
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       )}
 
@@ -496,6 +634,7 @@ function QueueRow({
   isWarmupManual,
   courts,
   breakSectionRow,
+  inCourtGroup,
 }: {
   entry: QueueEntryData;
   isGroup: boolean;
@@ -511,6 +650,8 @@ function QueueRow({
   courts?: CourtInfo[];
   /** Staff-only: row in "Having a Break" with Back to Queue instead of ⋮ menu. */
   breakSectionRow?: boolean;
+  /** Staff-only: row inside a per-court group in the On court section (outer card shows the match). */
+  inCourtGroup?: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<{
@@ -535,7 +676,9 @@ function QueueRow({
           breakSectionRow && "border-amber-800/40 bg-amber-950/15",
           !isTV &&
             (entry.status === "assigned" || entry.status === "playing") &&
-            "border-emerald-900/35 bg-emerald-950/10"
+            !inCourtGroup &&
+            "border-emerald-900/35 bg-emerald-950/10",
+          !isTV && inCourtGroup && "border-neutral-800/70 bg-neutral-900/40"
         )}
       >
         <span

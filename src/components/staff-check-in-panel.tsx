@@ -46,7 +46,9 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
   const [name, setName] = useState("");
   const [gender, setGender] = useState<(typeof GENDERS)[number] | "">("");
   const [skill, setSkill] = useState<SkillLevelType | "">("");
+  const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
+  const [testSeedLoading, setTestSeedLoading] = useState(false);
   const [err, setErr] = useState("");
   const [recent, setRecent] = useState<StaffCheckInRecent[]>([]);
   const [flashMessage, setFlashMessage] = useState<string | null>(null);
@@ -85,6 +87,7 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
     }
     setLoading(true);
     try {
+      const phoneTrimmed = phone.trim();
       const res = await api.post<{
         success: boolean;
         player: { id: string; name: string; gender: string; skillLevel: string };
@@ -93,6 +96,7 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
         name: trimmed,
         gender,
         skillLevel: skill,
+        ...(phoneTrimmed ? { phone: phoneTrimmed } : {}),
       });
       if (res.player) {
         showFlash(t("staff.checkIn.addedFlash", { name: res.player.name }));
@@ -112,11 +116,57 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
       setName("");
       setGender("");
       setSkill("");
+      setPhone("");
       onAdded();
     } catch (e) {
       setErr((e as Error).message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const addFiveTestPlayers = async () => {
+    setErr("");
+    setTestSeedLoading(true);
+    const added: StaffCheckInRecent[] = [];
+    try {
+      const base = Date.now();
+      for (let i = 0; i < 5; i++) {
+        const suffix = `${base}-${i}-${Math.random().toString(36).slice(2, 8)}`;
+        const testName = `Test ${suffix}`;
+        const g: (typeof GENDERS)[number] = Math.random() < 0.5 ? "male" : "female";
+        const s = SKILL_LEVELS[Math.floor(Math.random() * SKILL_LEVELS.length)];
+        const res = await api.post<{
+          success: boolean;
+          player: { id: string; name: string; gender: string; skillLevel: string };
+        }>("/api/queue/staff-add-walk-in", {
+          venueId,
+          name: testName,
+          gender: g,
+          skillLevel: s,
+        });
+        if (res.player) {
+          added.push({
+            id: res.player.id,
+            name: res.player.name,
+            gender: res.player.gender,
+            skillLevel: res.player.skillLevel,
+          });
+        }
+      }
+      if (added.length > 0) {
+        showFlash(t("staff.checkIn.testCreate5Flash"));
+        setRecent((prev) => {
+          const next = [...added, ...prev.filter((p) => !added.some((a) => a.id === p.id))];
+          return next.slice(0, 5);
+        });
+      }
+      onAdded();
+    } catch (e) {
+      if (added.length > 0) onAdded();
+      setErr((e as Error).message);
+    } finally {
+      setTestSeedLoading(false);
     }
   };
 
@@ -229,10 +279,28 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
           </div>
         </div>
 
+        <div>
+          <label className="mb-1.5 block text-xs font-medium text-neutral-400 max-sm:mb-1">
+            {t("staff.checkIn.phoneOptional")}
+          </label>
+          <input
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            placeholder={t("staff.checkIn.phonePlaceholder")}
+            value={phone}
+            onChange={(e) => {
+              setPhone(e.target.value);
+              setErr("");
+            }}
+            className="w-full rounded-xl border border-neutral-700 bg-neutral-950 px-4 py-3 text-base text-white placeholder:text-neutral-500 focus:border-green-500 focus:outline-none max-sm:rounded-lg max-sm:px-3 max-sm:py-2"
+          />
+        </div>
+
         <button
           type="button"
           onClick={submit}
-          disabled={loading || !name.trim() || !gender || !skill || showDuplicateWarning}
+          disabled={loading || testSeedLoading || !name.trim() || !gender || !skill || showDuplicateWarning}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50 max-sm:rounded-lg max-sm:py-2.5 max-sm:text-base"
         >
           {loading ? (
@@ -269,6 +337,24 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
           </ul>
         </div>
       )}
+
+      <p className="text-center pt-1">
+        <button
+          type="button"
+          onClick={addFiveTestPlayers}
+          disabled={loading || testSeedLoading}
+          className="text-[11px] text-neutral-500 underline decoration-neutral-600 underline-offset-2 hover:text-neutral-400 disabled:opacity-40 max-sm:text-[10px]"
+        >
+          {testSeedLoading ? (
+            <span className="inline-flex items-center justify-center gap-1">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              {t("staff.checkIn.adding")}
+            </span>
+          ) : (
+            t("staff.checkIn.testCreate5")
+          )}
+        </button>
+      </p>
     </div>
   );
 }

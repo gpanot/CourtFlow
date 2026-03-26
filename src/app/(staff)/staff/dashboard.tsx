@@ -11,7 +11,7 @@ import { useSocket } from "@/hooks/use-socket";
 import { joinVenue } from "@/lib/socket-client";
 import { CourtCard, type CourtData } from "@/components/court-card";
 import { GenderIcon } from "@/components/gender-icon";
-import { QueuePanel, type QueueEntryData } from "@/components/queue-panel";
+import { QueuePanel, type QueueEntryData, type StaffQueueCourtGroup } from "@/components/queue-panel";
 import { cn } from "@/lib/cn";
 import { Plus, X, Users, LayoutGrid, AlertTriangle, User, UserPlus, Flame, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, Calendar, Loader2, Target, Play, Check, ListPlus } from "lucide-react";
 import { WARMUP_DURATION_SECONDS, MIN_GROUP_SIZE, MAX_GROUP_SIZE } from "@/lib/constants";
@@ -460,6 +460,19 @@ export function StaffDashboard() {
     }));
   }, [session, courts]);
 
+  /** All courts with players — for grouping “On court” rows in the Queue tab. */
+  const staffQueueCourtGroups = useMemo<StaffQueueCourtGroup[]>(
+    () =>
+      courts
+        .filter((c) => c.players.length > 0)
+        .map((c) => ({
+          courtId: c.id,
+          label: c.label,
+          playerIds: c.players.map((p) => p.id),
+        })),
+    [courts]
+  );
+
   if (!venueId) {
     return (
       <div className="flex min-h-dvh items-center justify-center">
@@ -667,6 +680,7 @@ export function StaffDashboard() {
             onDissolveGroup={handleDissolveGroup}
             isWarmupManual={!!assignableCourtsForQueue}
             courts={assignableCourtsForQueue}
+            queueCourtGroups={staffQueueCourtGroups}
           />
         )}
 
@@ -1158,18 +1172,24 @@ export function StaffDashboard() {
                     {t("staff.dashboard.endGameBody")}
                   </p>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-col gap-3">
                   <button
+                    type="button"
                     onClick={() => setConfirmStartGame({ ...confirmStartGame, step: 2 })}
-                    className="flex-1 rounded-xl bg-green-600 py-3 font-semibold text-white hover:bg-green-500"
+                    className="w-full rounded-xl bg-green-600 py-3 font-semibold text-white hover:bg-green-500"
                   >
-                    {t("staff.dashboard.continue")}
+                    {t("staff.dashboard.startNewGameAutoFill")}
                   </button>
                   <button
-                    onClick={() => setConfirmStartGame(null)}
-                    className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
+                    type="button"
+                    onClick={async () => {
+                      const courtId = confirmStartGame.courtId;
+                      setConfirmStartGame(null);
+                      await handleSetMaintenance(courtId);
+                    }}
+                    className="w-full rounded-xl bg-neutral-800 py-3 font-medium text-neutral-200 hover:bg-neutral-700"
                   >
-                    {t("staff.dashboard.cancel")}
+                    {t("staff.dashboard.setIdle")}
                   </button>
                 </div>
               </>
@@ -1184,23 +1204,16 @@ export function StaffDashboard() {
                     {t("staff.dashboard.startNewGameConfirmBody", { label: confirmStartGame.courtLabel })}
                   </p>
                 </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={async () => {
-                      await handleEndGame(confirmStartGame.courtId);
-                      setConfirmStartGame(null);
-                    }}
-                    className="flex-1 rounded-xl bg-green-600 py-3 font-semibold text-white hover:bg-green-500"
-                  >
-                    {t("staff.dashboard.yesStartNewGame")}
-                  </button>
-                  <button
-                    onClick={() => setConfirmStartGame(null)}
-                    className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
-                  >
-                    {t("staff.dashboard.cancel")}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await handleEndGame(confirmStartGame.courtId);
+                    setConfirmStartGame(null);
+                  }}
+                  className="w-full rounded-xl bg-green-600 py-3 font-semibold text-white hover:bg-green-500"
+                >
+                  {t("staff.dashboard.yesStartNewGame")}
+                </button>
               </>
             )}
           </div>
