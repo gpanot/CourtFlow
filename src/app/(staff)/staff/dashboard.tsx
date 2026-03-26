@@ -15,7 +15,7 @@ import { QueuePanel, type QueueEntryData } from "@/components/queue-panel";
 import { cn } from "@/lib/cn";
 import { Plus, X, Users, LayoutGrid, AlertTriangle, User, UserPlus, Flame, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, Calendar, Loader2, Target, Play, Check, ListPlus } from "lucide-react";
 import { WARMUP_DURATION_SECONDS, MIN_GROUP_SIZE, MAX_GROUP_SIZE } from "@/lib/constants";
-import { isSessionWarmupDisplayMode } from "@/lib/session-warmup-display";
+import { courtCardWarmupPresentation, isSessionWarmupDisplayMode } from "@/lib/session-warmup-display";
 import { QRCodeSVG } from "qrcode.react";
 import { SessionSummary } from "./session-summary";
 import { StaffCheckInPanel } from "@/components/staff-check-in-panel";
@@ -151,7 +151,7 @@ export function StaffDashboard() {
   }, [searchParams, router]);
 
   const fetchState = useCallback(async () => {
-    if (!venueId) return;
+    if (!venueId) return undefined;
     try {
       const data = await api.get<{
         session: SessionData;
@@ -167,8 +167,10 @@ export function StaffDashboard() {
       if (typeof data.warmupDurationSeconds === "number") {
         setWarmupDurationSeconds(data.warmupDurationSeconds);
       }
+      return data;
     } catch (e) {
       console.error(e);
+      return undefined;
     }
   }, [venueId]);
 
@@ -261,17 +263,29 @@ export function StaffDashboard() {
     }
   };
 
-  const handleRestoreFromMaintenance = async (courtId: string) => {
-    try {
+  /** Brings a stand-by (maintenance) court back to idle; updates sheet state. No-op if already operational. */
+  const restoreMaintenanceCourtToIdle = useCallback(
+    async (courtId: string): Promise<boolean> => {
       const court = courts.find((c) => c.id === courtId);
-      const restoredStatus = court?.assignment ? "active" : "idle";
-      await api.patch(`/api/courts/${courtId}`, { status: restoredStatus });
-      setSelectedCourt(null);
-      await fetchState();
-    } catch (e) {
-      alert((e as Error).message);
-    }
-  };
+      if (court?.status !== "maintenance") return true;
+      try {
+        await api.patch(`/api/courts/${courtId}`, { status: "idle" });
+        const data = await fetchState();
+        if (data) {
+          setSelectedCourt((prev) => {
+            if (prev?.id !== courtId) return prev;
+            const updated = data.courts.find((c) => c.id === courtId);
+            return updated ?? prev;
+          });
+        }
+        return true;
+      } catch (e) {
+        alert((e as Error).message);
+        return false;
+      }
+    },
+    [courts, fetchState]
+  );
 
   const handleStartGameOnIdle = async (courtId: string, courtLabel: string) => {
     try {
@@ -295,6 +309,25 @@ export function StaffDashboard() {
       const msg = e instanceof Error ? e.message : "Something went wrong";
       setCourtActionError(msg);
     }
+  };
+
+  const handleStartGameFromStandbyOrIdle = async (courtId: string, courtLabel: string) => {
+    const ok = await restoreMaintenanceCourtToIdle(courtId);
+    if (!ok) return;
+    await handleStartGameOnIdle(courtId, courtLabel);
+  };
+
+  const openAssignFromStandbyOrIdle = async () => {
+    if (!selectedCourt) return;
+    const { id, label, status, players } = selectedCourt;
+    const wasMaintenance = status === "maintenance";
+    const ok = await restoreMaintenanceCourtToIdle(id);
+    if (!ok) return;
+    setManualAssignCourt({
+      id,
+      label,
+      maxSlots: wasMaintenance ? 4 : 4 - players.length,
+    });
   };
 
   const handleAutofillFromQueue = async (courtId: string) => {
@@ -581,7 +614,7 @@ export function StaffDashboard() {
                   key={court.id}
                   court={court}
                   variant="staff"
-                  warmup={isWarmupMode}
+                  warmup={courtCardWarmupPresentation(court, courts, !!session)}
                   queueWaiting={waitingCount}
                   warmupDurationSeconds={warmupDurationSeconds}
                   translationI18n={staffI18n}
@@ -807,10 +840,16 @@ export function StaffDashboard() {
                     </button>
                   )}
 
-                {selectedCourt.status === "idle" && (
+                {(selectedCourt.status === "idle" || selectedCourt.status === "maintenance") && (
                   <div className="space-y-3">
+                    {selectedCourt.status === "maintenance" && (
+                      <p className="text-sm text-neutral-400 text-center px-1">
+                        {t("staff.dashboard.standbyCourtHint")}
+                      </p>
+                    )}
                     <button
-                      onClick={() => handleStartGameOnIdle(selectedCourt.id, selectedCourt.label)}
+                      type="button"
+                      onClick={() => void handleStartGameFromStandbyOrIdle(selectedCourt.id, selectedCourt.label)}
                       disabled={waitingCount < 4}
                       className="w-full rounded-xl bg-green-600 py-5 text-lg font-bold text-white transition-colors hover:bg-green-500 disabled:opacity-40 disabled:hover:bg-green-600 flex items-center justify-center gap-2"
                     >
@@ -824,14 +863,11 @@ export function StaffDashboard() {
                     {session && (
                       <button
                         type="button"
-                        onClick={() =>
-                          setManualAssignCourt({
-                            id: selectedCourt.id,
-                            label: selectedCourt.label,
-                            maxSlots: 4 - selectedCourt.players.length,
-                          })
+                        onClick={() => void openAssignFromStandbyOrIdle()}
+                        disabled={
+                          waitingCount < 1 ||
+                          (selectedCourt.status !== "maintenance" && !canCourtAcceptManualAssign(selectedCourt))
                         }
-                        disabled={waitingCount < 1 || !canCourtAcceptManualAssign(selectedCourt)}
                         className="w-full rounded-xl bg-neutral-800 py-5 text-lg font-semibold text-white transition-colors hover:bg-neutral-700 disabled:opacity-40 disabled:hover:bg-neutral-800 flex items-center justify-center gap-2"
                       >
                         <ListPlus className="h-5 w-5" />
@@ -841,38 +877,34 @@ export function StaffDashboard() {
                   </div>
                 )}
 
-                {selectedCourt.status === "maintenance" ? (
-                  <div className="flex gap-3 pt-2">
+                <div className="flex gap-3 pt-2">
+                  {selectedCourt.status !== "maintenance" && (
                     <button
-                      onClick={() => handleRestoreFromMaintenance(selectedCourt.id)}
-                      className="flex-1 rounded-xl bg-green-600/20 py-4 text-sm font-medium text-green-400 hover:bg-green-600/30 flex items-center justify-center gap-2"
-                    >
-                      <RotateCcw className="h-4 w-4" />
-                      {t("staff.dashboard.restoreCourt")}
-                    </button>
-                    <button
+                      type="button"
                       onClick={() => setConfirmRemove({ courtId: selectedCourt.id, courtLabel: selectedCourt.label, step: 1 })}
                       className="flex-1 rounded-xl bg-neutral-800 py-4 text-sm font-medium text-neutral-300 hover:bg-neutral-700"
                     >
                       {t("staff.dashboard.removeFromSession")}
                     </button>
-                  </div>
-                ) : (
-                  <div className="flex gap-3 pt-2">
+                  )}
+                  {selectedCourt.status === "maintenance" ? (
                     <button
+                      type="button"
                       onClick={() => setConfirmRemove({ courtId: selectedCourt.id, courtLabel: selectedCourt.label, step: 1 })}
-                      className="flex-1 rounded-xl bg-neutral-800 py-4 text-sm font-medium text-neutral-300 hover:bg-neutral-700"
+                      className="w-full rounded-xl bg-neutral-800 py-4 text-sm font-medium text-neutral-300 hover:bg-neutral-700"
                     >
                       {t("staff.dashboard.removeFromSession")}
                     </button>
+                  ) : (
                     <button
+                      type="button"
                       onClick={() => setConfirmMaintenance({ courtId: selectedCourt.id, courtLabel: selectedCourt.label })}
                       className="flex-1 rounded-xl bg-neutral-800 py-4 text-sm font-medium text-neutral-300 hover:bg-neutral-700"
                     >
                       {t("staff.dashboard.setIdle")}
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
           </div>

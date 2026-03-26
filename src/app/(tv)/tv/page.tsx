@@ -13,7 +13,7 @@ import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import { TvReactionOverlay } from "@/components/tv-reaction-overlay";
 import { resolveTvLocale, tvI18n } from "@/i18n/tv-i18n";
-import { isSessionWarmupDisplayMode } from "@/lib/session-warmup-display";
+import { courtCardWarmupPresentation, isSessionWarmupDisplayMode } from "@/lib/session-warmup-display";
 
 type VenueTvSettings = { logoSpin?: boolean; tvLocale?: string };
 
@@ -325,7 +325,7 @@ export default function TVDisplayPage() {
                       key={court.id}
                       court={court}
                       variant="tv"
-                      warmup={true}
+                      warmup={courtCardWarmupPresentation(court, state.courts, !!state.session)}
                       warmupDurationSeconds={state.warmupDurationSeconds}
                     />
                   ))}
@@ -338,6 +338,7 @@ export default function TVDisplayPage() {
                     key={court.id}
                     court={court}
                     variant="tv"
+                    warmup={courtCardWarmupPresentation(court, state.courts, !!state.session)}
                     warmupDurationSeconds={state.warmupDurationSeconds}
                   />
                 ))}

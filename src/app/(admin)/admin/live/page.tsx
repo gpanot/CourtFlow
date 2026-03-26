@@ -10,7 +10,7 @@ import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { Wifi, WifiOff, Flame, Monitor, ChevronLeft } from "lucide-react";
 import { resolveTvLocale, tvI18n } from "@/i18n/tv-i18n";
-import { isSessionWarmupDisplayMode } from "@/lib/session-warmup-display";
+import { courtCardWarmupPresentation, isSessionWarmupDisplayMode } from "@/lib/session-warmup-display";
 
 interface VenueState {
   session: { id: string; status: string } | null;
@@ -286,7 +286,7 @@ export default function LiveSessionsPage() {
                     key={court.id}
                     court={court}
                     variant="tv"
-                    warmup={isWarmupMode}
+                    warmup={courtCardWarmupPresentation(court, state.courts, !!state.session)}
                     warmupDurationSeconds={state.warmupDurationSeconds}
                   />
                 ))}
