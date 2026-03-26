@@ -51,6 +51,13 @@ function SkillTag({ level }: { level?: string }) {
 const checkboxClass =
   "h-4 w-4 shrink-0 rounded border-neutral-600 bg-neutral-800 text-green-600 focus:ring-green-500 focus:ring-offset-0 focus:ring-1";
 
+export type StaffWaitingPickerCourtPlayer = {
+  id: string;
+  name: string;
+  skillLevel?: string;
+  gender?: string;
+};
+
 interface StaffWaitingPickerProps {
   entries: QueueEntryData[];
   courtLabel: string;
@@ -62,6 +69,8 @@ interface StaffWaitingPickerProps {
   pickerPurpose?: "court_assign" | "replace";
   /** Player being replaced (shown in title when pickerPurpose is replace). */
   replacedPlayerName?: string;
+  /** Players already on this court (compact roster below the header). */
+  courtRoster?: StaffWaitingPickerCourtPlayer[];
 }
 
 export function StaffWaitingPicker({
@@ -73,6 +82,7 @@ export function StaffWaitingPicker({
   translationI18n,
   pickerPurpose = "court_assign",
   replacedPlayerName,
+  courtRoster = [],
 }: StaffWaitingPickerProps) {
   const { t } = useTranslation("translation", translationI18n ? { i18n: translationI18n } : undefined);
   const isReplace = pickerPurpose === "replace";
@@ -98,8 +108,8 @@ export function StaffWaitingPicker({
   }, [fifoRows, genderFilter, skillFilter, sortMode]);
 
   const genderMixAlert = useMemo(
-    () => (isReplace ? null : getManualPickerGenderMixAlert(selected, fifoRows)),
-    [isReplace, selected, fifoRows]
+    () => (isReplace ? null : getManualPickerGenderMixAlert(selected, fifoRows, courtRoster)),
+    [isReplace, selected, fifoRows, courtRoster]
   );
 
   const toggle = useCallback(
@@ -156,6 +166,32 @@ export function StaffWaitingPicker({
         </h2>
       </div>
 
+      {courtRoster.length > 0 && (
+        <div className="shrink-0 border-b border-neutral-800 px-3 py-2">
+          <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+            {t("staff.dashboard.manualPickerOnCourt")}
+          </p>
+          <ul className="grid grid-cols-2 gap-1.5">
+            {courtRoster.map((p) => (
+              <li
+                key={p.id}
+                className="flex min-w-0 flex-col gap-0.5 rounded-lg border border-neutral-800/90 bg-neutral-900/60 px-1.5 py-1"
+              >
+                <div className="flex min-w-0 items-center gap-1">
+                  <GenderIcon gender={p.gender} className="h-3.5 w-3.5 shrink-0 opacity-100" />
+                  <span className="min-w-0 truncate text-[11px] font-medium leading-tight text-neutral-100">
+                    {p.name}
+                  </span>
+                </div>
+                <div className="flex justify-end pl-4">
+                  <SkillTag level={p.skillLevel} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="border-b border-neutral-800 shrink-0 px-3 py-1.5 space-y-1.5 leading-snug">
         <p className="text-xs text-neutral-500">
           {isReplace
@@ -163,14 +199,20 @@ export function StaffWaitingPicker({
             : t("staff.dashboard.manualPickerHint", { selected: selected.size, max: maxSelectable })}
         </p>
         {genderMixAlert?.kind === "skewedFour" && (
-          <p role="alert" className="flex gap-1.5 items-start text-xs text-amber-200/95">
-            <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-400" aria-hidden />
+          <p
+            role="alert"
+            className="flex items-start gap-2 rounded-lg border border-red-500/35 bg-red-950/40 px-2 py-2 text-sm font-medium leading-snug text-red-200"
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" aria-hidden />
             <span>{t("staff.dashboard.manualPickerGenderMixWarning")}</span>
           </p>
         )}
         {genderMixAlert?.kind === "fourthWouldSkew" && (
-          <p role="alert" className="flex gap-1.5 items-start text-xs text-amber-200/95">
-            <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-400" aria-hidden />
+          <p
+            role="alert"
+            className="flex items-start gap-2 rounded-lg border border-red-500/35 bg-red-950/40 px-2 py-2 text-sm font-medium leading-snug text-red-200"
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" aria-hidden />
             <span>
               {t("staff.dashboard.manualPickerGenderMixBeforeFourth", {
                 gender:

@@ -695,6 +695,7 @@ export function StaffDashboard() {
           entries={queue}
           courtLabel={manualAssignCourt.label}
           maxSelectable={manualAssignCourt.maxSlots}
+          courtRoster={courts.find((c) => c.id === manualAssignCourt.id)?.players ?? []}
           translationI18n={staffI18n}
           onCancel={() => setManualAssignCourt(null)}
           onConfirm={async (playerIds) => {
@@ -722,6 +723,7 @@ export function StaffDashboard() {
           maxSelectable={1}
           pickerPurpose="replace"
           replacedPlayerName={replaceManualPicker.removePlayerName}
+          courtRoster={courts.find((c) => c.id === replaceManualPicker.courtId)?.players ?? []}
           translationI18n={staffI18n}
           onCancel={() => setReplaceManualPicker(null)}
           onConfirm={async (playerIds) => {
@@ -1115,7 +1117,10 @@ export function StaffDashboard() {
             className="w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 p-6 shadow-xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-lg font-bold mb-2">{t("staff.dashboard.rotationRules")}</h3>
+            <h3 className="mb-2 flex items-center gap-2 text-lg font-bold">
+              <AlertTriangle className="h-6 w-6 shrink-0 text-red-500" aria-hidden />
+              {t("staff.dashboard.rotationRules")}
+            </h3>
             <p className="text-sm text-neutral-300 mb-4 whitespace-pre-wrap">{confirmQueueAutofill.detail}</p>
             {confirmQueueAutofill.waitingPlayers.length > 0 && (
               <div className="mb-4 rounded-xl border border-neutral-700 bg-neutral-800/40 p-3">

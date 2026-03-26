@@ -102,27 +102,53 @@ function countSelectedGenders(
   return { male, female, other, total: male + female + other };
 }
 
+function countOnCourtGenders(players: readonly { gender?: string }[]): {
+  male: number;
+  female: number;
+  other: number;
+} {
+  let male = 0;
+  let female = 0;
+  let other = 0;
+  for (const p of players) {
+    const g = (p.gender ?? "").toLowerCase();
+    if (g === "male") male++;
+    else if (g === "female") female++;
+    else other++;
+  }
+  return { male, female, other };
+}
+
 /**
- * Banner alerts while building a foursome one-by-one:
- * - **skewedFour**: four selected, split 1M/3F or 3M/1F (not 2–2, 4M, or 4F).
- * - **fourthWouldSkew**: three selected, all binary genders; the next pick of `problematicGender`
+ * Banner alerts while building a foursome (on-court roster + queue picks):
+ * - **skewedFour**: four people total, split 1M/3F or 3M/1F (not 2–2, 4M, or 4F).
+ * - **fourthWouldSkew**: three people total, all binary genders; the next pick of `problematicGender`
  *   would force a 3–1 split (adding the other gender can still yield 2–2 or 4–0).
  */
 export function getManualPickerGenderMixAlert(
   selectedIds: Set<string>,
-  rows: StaffWaitingPickerRow[]
+  rows: StaffWaitingPickerRow[],
+  courtRoster: readonly { gender?: string }[] = []
 ): ManualPickerGenderMixAlert | null {
-  const n = selectedIds.size;
-  if (n === 0) return null;
-  const { male, female, other, total } = countSelectedGenders(selectedIds, rows);
-  if (total !== n || other > 0) return null;
+  const nSel = selectedIds.size;
+  if (nSel === 0 && courtRoster.length === 0) return null;
 
-  if (n === 4) {
+  const sel = countSelectedGenders(selectedIds, rows);
+  const oc = countOnCourtGenders(courtRoster);
+  if (sel.other > 0 || oc.other > 0) return null;
+  if (sel.total !== nSel) return null;
+
+  const male = sel.male + oc.male;
+  const female = sel.female + oc.female;
+  const totalPeople = courtRoster.length + nSel;
+  if (male + female !== totalPeople) return null;
+
+  if (totalPeople === 4) {
     if ((male === 1 && female === 3) || (male === 3 && female === 1)) return { kind: "skewedFour" };
     return null;
   }
 
-  if (n === 3) {
+  if (totalPeople === 3) {
     if (male === 3 && female === 0) return { kind: "fourthWouldSkew", problematicGender: "female" };
     if (male === 0 && female === 3) return { kind: "fourthWouldSkew", problematicGender: "male" };
     if (male === 2 && female === 1) return { kind: "fourthWouldSkew", problematicGender: "male" };
