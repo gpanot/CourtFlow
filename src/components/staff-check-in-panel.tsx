@@ -648,7 +648,9 @@ ${test.error ? `Error: ${test.error}` : ''}
                       ? g === 'male'
                         ? "border-blue-500 bg-blue-600/20 text-blue-400"
                         : "border-pink-500 bg-pink-600/20 text-pink-400"
-                      : "border-neutral-700 text-neutral-400 hover:border-neutral-500 hover:text-neutral-300"
+                      : g === 'male'
+                        ? "border-blue-500/50 bg-blue-600/10 text-blue-300"
+                        : "border-pink-500/50 bg-pink-600/10 text-pink-300"
                   )}
                   title={genderLabel(g)}
                 >
