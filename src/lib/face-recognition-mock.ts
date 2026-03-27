@@ -19,7 +19,7 @@ export interface FaceEnrollmentResult {
 }
 
 class MockFaceRecognitionService {
-  private mockPlayers = new Map<string, { name: string; enrolledAt: Date }>();
+  private mockPlayers = new Map<string, { name: string; faceSubjectId: string; enrolledAt: Date }>();
 
   /**
    * Mock face enrollment - just stores the player info
@@ -41,6 +41,7 @@ class MockFaceRecognitionService {
       // Store in mock database
       this.mockPlayers.set(playerId, {
         name: player.name,
+        faceSubjectId: `face_${playerId}_${Date.now()}`, // Generate unique face ID
         enrolledAt: new Date(),
       });
 
@@ -99,11 +100,16 @@ class MockFaceRecognitionService {
           playerId: randomPlayerId,
           displayName: mockPlayer.name,
           confidence: 0.85 + Math.random() * 0.14, // 85-99% confidence
+          faceSubjectId: mockPlayer.faceSubjectId, // Add faceSubjectId for linking
         };
       } else {
+        // Generate a new face subject ID for the new player
+        const newFaceSubjectId = `face_new_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        
         return {
           success: true,
           resultType: "new_player",
+          faceSubjectId: newFaceSubjectId, // Return the new face ID
         };
       }
     } catch (error) {

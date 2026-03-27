@@ -17,6 +17,7 @@ export interface FaceRecognitionResult {
   queueNumber?: number;
   confidence?: number;
   alreadyCheckedIn?: boolean;
+  faceSubjectId?: string; // Added for linking face to player
   error?: string;
 }
 
