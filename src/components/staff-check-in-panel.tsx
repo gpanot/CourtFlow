@@ -397,6 +397,43 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
       setCapturedFace(imageBase64);
       setShowFacePreview(true);
       
+      // Perform immediate quality analysis for instant feedback
+      try {
+        const response = await api.post<{
+          qualityCheck: {
+            overall: 'good' | 'fair' | 'poor';
+            checks: {
+              faceDetected: boolean;
+              lighting: 'good' | 'fair' | 'poor';
+              focus: 'good' | 'fair' | 'poor';
+              size: 'good' | 'fair' | 'poor';
+            };
+            message: string;
+            canForce: boolean;
+          };
+        }>("/api/queue/analyze-face-quality", {
+          imageBase64,
+        });
+        
+        if (response.qualityCheck) {
+          setFaceQuality(response.qualityCheck);
+        }
+      } catch (qualityError) {
+        console.error("Quality analysis failed:", qualityError);
+        // Set a default quality state if analysis fails
+        setFaceQuality({
+          overall: 'fair',
+          checks: {
+            faceDetected: true,
+            lighting: 'fair',
+            focus: 'fair',
+            size: 'fair',
+          },
+          message: 'Photo captured. Quality assessment pending.',
+          canForce: true,
+        });
+      }
+      
     } catch (e) {
       console.error("Camera capture error:", e);
       const errorMessage = e instanceof Error ? e.message : "Unknown camera error";

@@ -19,8 +19,72 @@ export interface FaceEnrollmentResult {
   error?: string;
 }
 
+export interface FaceDetectionResult {
+  faceDetected: boolean;
+  faceInfo?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    imageWidth: number;
+    imageHeight: number;
+  };
+  brightness?: number;
+  sharpness?: number;
+}
+
 class MockFaceRecognitionService {
   private mockPlayers = new Map<string, { name: string; faceSubjectId: string; enrolledAt: Date }>();
+
+  /**
+   * Mock face detection - simulates face detection and quality analysis
+   */
+  async detectFace(imageBase64: string): Promise<FaceDetectionResult> {
+    try {
+      // Simulate processing time
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // For demo purposes, simulate face detection with 90% success rate
+      const faceDetected = Math.random() > 0.1; // 90% chance of detecting a face
+
+      if (!faceDetected) {
+        return {
+          faceDetected: false,
+        };
+      }
+
+      // Simulate face bounding box (centered, reasonable size)
+      const imageWidth = 640;
+      const imageHeight = 480;
+      const faceWidth = Math.floor(imageWidth * (0.15 + Math.random() * 0.25)); // 15-40% of image width
+      const faceHeight = Math.floor(faceWidth * 1.2); // Typical face aspect ratio
+      const faceX = Math.floor((imageWidth - faceWidth) / 2 + (Math.random() - 0.5) * 100); // Some random offset
+      const faceY = Math.floor((imageHeight - faceHeight) / 2 + (Math.random() - 0.5) * 50);
+
+      // Simulate brightness and sharpness metrics
+      const brightness = 0.3 + Math.random() * 0.5; // 0.3-0.8 range
+      const sharpness = 0.4 + Math.random() * 0.5; // 0.4-0.9 range
+
+      return {
+        faceDetected: true,
+        faceInfo: {
+          x: Math.max(0, faceX),
+          y: Math.max(0, faceY),
+          width: faceWidth,
+          height: faceHeight,
+          imageWidth,
+          imageHeight,
+        },
+        brightness,
+        sharpness,
+      };
+    } catch (error) {
+      console.error("Mock face detection failed:", error);
+      return {
+        faceDetected: false,
+      };
+    }
+  }
 
   /**
    * Mock face enrollment - just stores the player info
@@ -66,53 +130,66 @@ class MockFaceRecognitionService {
   }
 
   /**
-   * Mock face recognition - simulates face detection
+   * Mock face recognition - simulates realistic face detection and matching
    */
   async recognizeFace(imageBase64: string): Promise<FaceRecognitionResult> {
     try {
       // Simulate processing time
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // For demo purposes, randomly decide if it's a new or returning player
-      const isReturningPlayer = Math.random() > 0.3; // 70% chance of returning player
+      // For demo purposes, simulate face detection with 95% success rate
+      const faceDetected = Math.random() > 0.05; // 95% chance of detecting a face
 
-      if (isReturningPlayer && this.mockPlayers.size > 0) {
-        // Pick a random enrolled player
-        const playerIds = Array.from(this.mockPlayers.keys());
-        const randomPlayerId = playerIds[Math.floor(Math.random() * playerIds.length)];
-        const mockPlayer = this.mockPlayers.get(randomPlayerId)!;
-
-        // Get player details from database
-        const player = await prisma.player.findUnique({
-          where: { id: randomPlayerId },
-        });
-
-        if (!player) {
-          return {
-            success: false,
-            resultType: "error",
-            error: "Player not found for matched face",
-          };
-        }
-
-        return {
-          success: true,
-          resultType: "matched",
-          playerId: randomPlayerId,
-          displayName: mockPlayer.name,
-          confidence: 0.85 + Math.random() * 0.14, // 85-99% confidence
-          faceSubjectId: mockPlayer.faceSubjectId
-        };
-      } else {
-        // Generate a new face subject ID for the new player
-        const newFaceSubjectId = `face_new_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-        
+      if (!faceDetected) {
         return {
           success: true,
           resultType: "new_player",
-          faceSubjectId: newFaceSubjectId, // Return the new face ID
         };
       }
+
+      // If we have enrolled players, try to match with high accuracy
+      if (this.mockPlayers.size > 0) {
+        // Simulate face matching with 85% accuracy for enrolled players
+        const isMatch = Math.random() > 0.15; // 85% chance of matching existing player
+        
+        if (isMatch) {
+          // Pick a random enrolled player (in real system, would match based on face features)
+          const playerIds = Array.from(this.mockPlayers.keys());
+          const randomPlayerId = playerIds[Math.floor(Math.random() * playerIds.length)];
+          const mockPlayer = this.mockPlayers.get(randomPlayerId)!;
+
+          // Get player details from database
+          const player = await prisma.player.findUnique({
+            where: { id: randomPlayerId },
+          });
+
+          if (!player) {
+            return {
+              success: false,
+              resultType: "error",
+              error: "Player not found for matched face",
+            };
+          }
+
+          return {
+            success: true,
+            resultType: "matched",
+            playerId: randomPlayerId,
+            displayName: mockPlayer.name,
+            confidence: 0.85 + Math.random() * 0.14, // 85-99% confidence
+            faceSubjectId: mockPlayer.faceSubjectId
+          };
+        }
+      }
+
+      // Generate a new face subject ID for the new player
+      const newFaceSubjectId = `face_new_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      
+      return {
+        success: true,
+        resultType: "new_player",
+        faceSubjectId: newFaceSubjectId, // Return the new face ID
+      };
     } catch (error) {
       console.error("Mock face recognition failed:", error);
       return {

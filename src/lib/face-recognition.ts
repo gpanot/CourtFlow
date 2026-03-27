@@ -1,12 +1,9 @@
 import { prisma } from "@/lib/db";
 import { mockFaceRecognitionService } from "./face-recognition-mock";
 
-// CompreFace API configuration
 const COMPREFACE_API_URL = process.env.COMPREFACE_API_URL || "http://localhost:8000/api/v1";
 const COMPREFACE_API_KEY = process.env.COMPREFACE_API_KEY;
-const COMPREFACE_COLLECTION_NAME = process.env.COMPREFACE_COLLECTION_NAME || "courtflow_players";
 
-// Use mock service if CompreFace is not configured
 const USE_MOCK_SERVICE = !COMPREFACE_API_KEY || COMPREFACE_API_KEY === "your-api-key-here";
 
 export interface FaceRecognitionResult {
@@ -17,7 +14,7 @@ export interface FaceRecognitionResult {
   queueNumber?: number;
   confidence?: number;
   alreadyCheckedIn?: boolean;
-  faceSubjectId?: string; // Added for linking face to player
+  faceSubjectId?: string;
   error?: string;
 }
 
@@ -27,82 +24,83 @@ export interface FaceEnrollmentResult {
   error?: string;
 }
 
+// ── Helper: base64 → Blob ──────────────────────────────────────────────────
+function base64ToBlob(base64: string, mimeType = "image/jpeg"): Blob {
+  const byteString = atob(base64);
+  const buffer = new ArrayBuffer(byteString.length);
+  const view = new Uint8Array(buffer);
+  for (let i = 0; i < byteString.length; i++) {
+    view[i] = byteString.charCodeAt(i);
+  }
+  return new Blob([buffer], { type: mimeType });
+}
+
 class FaceRecognitionService {
-  private headers = {
-    "x-api-key": COMPREFACE_API_KEY || "",
-    "Content-Type": "application/json",
-  };
 
+  // ── Core request helper ──────────────────────────────────────────────────
+  // NOTE: do NOT set Content-Type here — let fetch set it automatically
+  //       for FormData (it needs to include the boundary parameter).
   private async makeRequest(endpoint: string, options: RequestInit = {}) {
-    try {
-      const response = await fetch(`${COMPREFACE_API_URL}${endpoint}`, {
-        headers: this.headers,
-        ...options,
-      });
+    const url = `${COMPREFACE_API_URL}${endpoint}`;
+    console.log(`[CompreFace] ${options.method ?? "GET"} ${url}`);
 
-      if (!response.ok) {
-        throw new Error(`CompreFace API error: ${response.status} ${response.statusText}`);
-      }
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        "x-api-key": COMPREFACE_API_KEY || "",
+        // ✅ Only pass x-api-key — never set Content-Type for FormData
+        ...(options.headers ?? {}),
+      },
+    });
 
-      return await response.json();
-    } catch (error) {
-      console.error("CompreFace API request failed:", error);
-      throw error;
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      throw new Error(
+        `CompreFace API error: ${response.status} ${response.statusText}${body ? ` — ${body}` : ""}`
+      );
     }
+
+    return response.json();
   }
 
-  /**
-   * Enroll a new face in the recognition system
-   */
+  // ── Enroll a face ────────────────────────────────────────────────────────
   async enrollFace(imageBase64: string, playerId: string): Promise<FaceEnrollmentResult> {
     if (USE_MOCK_SERVICE) {
       return mockFaceRecognitionService.enrollFace(imageBase64, playerId);
     }
 
     try {
-      // Create face subject
-      const subjectData = await this.makeRequest("/face-subject", {
-        method: "POST",
-        body: JSON.stringify({
-          subject: `player_${playerId}`,
-        }),
-      });
+      const subjectId = `player_${playerId}`;
 
-      // Add face image to subject
-      const faceData = await this.makeRequest("/recognition/face", {
-        method: "POST",
-        body: JSON.stringify({
-          face_collection_name: COMPREFACE_COLLECTION_NAME,
-          subject: `player_${playerId}`,
-          image_base64: imageBase64,
-        }),
-      });
+      // ✅ CORRECT endpoint: POST /recognition/faces?subject=player_xxx
+      //    Body: multipart/form-data with a "file" field
+      //    (NOT JSON, NOT /recognition/face, NOT /face-subject)
+      const formData = new FormData();
+      formData.append("file", base64ToBlob(imageBase64), "face.jpg");
 
-      // Update player record with face subject ID
+      await this.makeRequest(
+        `/recognition/faces?subject=${encodeURIComponent(subjectId)}`,
+        { method: "POST", body: formData }
+      );
+
       await prisma.player.update({
         where: { id: playerId },
-        data: { faceSubjectId: `player_${playerId}` },
+        data: { faceSubjectId: subjectId },
       });
 
-      return {
-        success: true,
-        subjectId: `player_${playerId}`,
-      };
-    } catch (error) {
-      console.error("Face enrollment failed:", error);
+      return { success: true, subjectId };
+    } catch (err) {
+      console.error("Face enrollment failed:", err);
       return {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error during face enrollment",
+        error: err instanceof Error ? err.message : "Unknown enrollment error",
       };
     }
   }
 
-  /**
-   * Recognize a face from image
-   */
+  // ── Recognize a face ─────────────────────────────────────────────────────
   async recognizeFace(imageBase64: string): Promise<FaceRecognitionResult> {
     if (USE_MOCK_SERVICE) {
-      // Handle test image case
       if (imageBase64 === "test_image_no_camera") {
         return mockFaceRecognitionService.recognizeTestImage();
       }
@@ -110,132 +108,130 @@ class FaceRecognitionService {
     }
 
     try {
-      const result = await this.makeRequest("/recognition/recognize", {
-        method: "POST",
-        body: JSON.stringify({
-          face_collection_name: COMPREFACE_COLLECTION_NAME,
-          image_base64: imageBase64,
-          limit: 1,
-          threshold: 0.7,
-        }),
-      });
+      // ✅ CORRECT endpoint: POST /recognition/recognize
+      //    Body: multipart/form-data with a "file" field
+      //    Optional query params: limit, det_prob_threshold
+      //    (NOT JSON body, NOT /recognition/identify)
+      const formData = new FormData();
+      formData.append("file", base64ToBlob(imageBase64), "frame.jpg");
 
-      if (result.result && result.result.length > 0) {
-        const match = result.result[0];
-        const subjectId = match.subject;
-        const confidence = match.similarity;
+      const result = await this.makeRequest(
+        "/recognition/recognize?limit=1&det_prob_threshold=0.8",
+        { method: "POST", body: formData }
+      );
 
-        // Extract player ID from subject ID
-        const playerId = subjectId.replace("player_", "");
+      // CompreFace response shape:
+      // { result: [ { subjects: [ { subject, similarity } ], ... } ] }
+      const faces = result?.result ?? [];
 
-        // Get player details
-        const player = await prisma.player.findUnique({
-          where: { id: playerId },
-        });
+      if (faces.length === 0) {
+        // No face detected in image
+        return { success: true, resultType: "new_player" };
+      }
 
-        if (!player) {
-          return {
-            success: false,
-            resultType: "error",
-            error: "Player not found for matched face",
-          };
-        }
+      const face = faces[0];
+      const subjects: Array<{ subject: string; similarity: number }> =
+        face?.subjects ?? [];
 
-        return {
-          success: true,
-          resultType: "matched",
-          playerId,
-          displayName: player.name,
-          confidence,
-        };
-      } else {
+      if (subjects.length === 0 || subjects[0].similarity < 0.85) {
+        // Face detected but no confident match → new player
         return {
           success: true,
           resultType: "new_player",
+          faceSubjectId: undefined,
         };
       }
-    } catch (error) {
-      console.error("Face recognition failed:", error);
+
+      const bestMatch = subjects[0];
+      const subjectId = bestMatch.subject;          // e.g. "player_clxxx..."
+      const confidence = bestMatch.similarity;
+
+      // Extract playerId from subjectId
+      const playerId = subjectId.replace(/^player_/, "");
+
+      const player = await prisma.player.findUnique({ where: { id: playerId } });
+
+      if (!player) {
+        // Subject exists in CompreFace but not in DB — treat as new
+        return { success: true, resultType: "new_player" };
+      }
+
+      return {
+        success: true,
+        resultType: "matched",
+        playerId,
+        displayName: player.name,
+        confidence,
+      };
+    } catch (err) {
+      console.error("Face recognition failed:", err);
       return {
         success: false,
         resultType: "error",
-        error: error instanceof Error ? error.message : "Unknown error during face recognition",
+        error: err instanceof Error ? err.message : "Unknown recognition error",
       };
     }
   }
 
-  /**
-   * Remove a face from the recognition system
-   */
+  // ── Remove a face ────────────────────────────────────────────────────────
   async removeFace(playerId: string): Promise<boolean> {
     if (USE_MOCK_SERVICE) {
       return mockFaceRecognitionService.removeFace(playerId);
     }
 
     try {
-      const player = await prisma.player.findUnique({
-        where: { id: playerId },
-      });
+      const player = await prisma.player.findUnique({ where: { id: playerId } });
+      if (!player?.faceSubjectId) return true;
 
-      if (!player?.faceSubjectId) {
-        return true; // No face to remove
-      }
+      // ✅ CORRECT endpoint: DELETE /recognition/subjects/:subject
+      //    (NOT /face-subject/:id)
+      await this.makeRequest(
+        `/recognition/subjects/${encodeURIComponent(player.faceSubjectId)}`,
+        { method: "DELETE" }
+      );
 
-      // Delete face subject
-      await this.makeRequest(`/face-subject/${player.faceSubjectId}`, {
-        method: "DELETE",
-      });
-
-      // Update player record
       await prisma.player.update({
         where: { id: playerId },
         data: { faceSubjectId: null },
       });
 
       return true;
-    } catch (error) {
-      console.error("Face removal failed:", error);
+    } catch (err) {
+      console.error("Face removal failed:", err);
       return false;
     }
   }
 
-  /**
-   * Check if CompreFace service is available
-   */
+  // ── Health check ─────────────────────────────────────────────────────────
   async checkHealth(): Promise<boolean> {
     if (USE_MOCK_SERVICE) {
       return mockFaceRecognitionService.checkHealth();
     }
-
     try {
-      await this.makeRequest("/health");
-      return true;
-    } catch (error) {
+      // ✅ CORRECT endpoint: GET /actuator/health
+      //    (NOT /health)
+      //    Note: this is on the BASE url, not /api/v1
+      const baseUrl = COMPREFACE_API_URL.replace("/api/v1", "");
+      const response = await fetch(`${baseUrl}/actuator/health`, {
+        headers: { "x-api-key": COMPREFACE_API_KEY || "" },
+      });
+      return response.ok;
+    } catch {
       return false;
     }
   }
 
-  /**
-   * Get next available queue number for a session
-   */
+  // ── Queue helpers ────────────────────────────────────────────────────────
   async getNextQueueNumber(sessionId: string): Promise<number> {
     const lastEntry = await prisma.queueEntry.findFirst({
-      where: {
-        sessionId,
-        queueNumber: { not: null },
-      },
+      where: { sessionId, queueNumber: { not: null } },
       orderBy: { queueNumber: "desc" },
     });
-
     return (lastEntry?.queueNumber || 0) + 1;
   }
 
-  /**
-   * Check if player is already checked in within 4 hours
-   */
   async isRecentlyCheckedIn(playerId: string, sessionId: string): Promise<boolean> {
     const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
-    
     const recentEntry = await prisma.queueEntry.findFirst({
       where: {
         playerId,
@@ -244,22 +240,12 @@ class FaceRecognitionService {
         status: { in: ["waiting", "assigned", "playing"] },
       },
     });
-
     return !!recentEntry;
   }
 
-  /**
-   * Get service statistics
-   */
   getStats() {
-    if (USE_MOCK_SERVICE) {
-      return mockFaceRecognitionService.getStats();
-    }
-
-    return {
-      enrolledPlayers: 0, // Would need to implement CompreFace API call
-      isMock: false,
-    };
+    if (USE_MOCK_SERVICE) return mockFaceRecognitionService.getStats();
+    return { enrolledPlayers: 0, isMock: false };
   }
 }
 
