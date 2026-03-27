@@ -555,7 +555,7 @@ ${test.error ? `Error: ${test.error}` : ''}
 
         <div>
           <p className="mb-2 text-xs font-medium text-neutral-400 max-sm:mb-1">{t("staff.checkIn.skillLevel")}</p>
-          <div className="space-y-2 max-sm:grid max-sm:grid-cols-2 max-sm:gap-2 max-sm:space-y-0">
+          <div className="grid grid-cols-3 gap-2 max-sm:grid-cols-2 max-sm:gap-1.5">
             {SKILL_LEVELS.filter(level => level !== "pro").map((level) => (
               <button
                 key={level}
