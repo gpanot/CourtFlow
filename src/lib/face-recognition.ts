@@ -239,7 +239,7 @@ class FaceRecognitionService {
               faceMatchCount: 0,
               topMatch: null,
               interpretation:
-                "No FaceMatch above 85% in collection — kiosk will treat as stranger (new_player)",
+                "No FaceMatch above 85% in collection — kiosk returns needs_registration (register on Check-in tab first)",
             },
           }),
         };

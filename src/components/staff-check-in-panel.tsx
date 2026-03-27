@@ -501,10 +501,8 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
             name: response.displayName, 
             number: response.queueNumber 
           }));
-        } else if (response.resultType === "new_player") {
-          showFlash(t("staff.checkIn.faceNewPlayerSuccess", { 
-            number: response.queueNumber 
-          }));
+        } else if (response.resultType === "needs_registration") {
+          showFlash(t("staff.checkIn.faceNeedsRegistration"));
         } else if (response.resultType === "already_checked_in") {
           showFlash(t("staff.checkIn.faceAlreadyCheckedIn", { 
             name: response.displayName 

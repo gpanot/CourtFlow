@@ -242,16 +242,19 @@
       "captureFace": "Capture Face",
       "faceCapturing": "Capturing…",
       "faceCheckInSuccess": "{{name}} checked in with face! Number {{number}}",
-      "faceNewPlayerSuccess": "New player checked in with face! Number {{number}}",
       "faceAlreadyCheckedIn": "{{name}} already checked in within 4 hours",
-      "faceNeedsReview": "Face needs staff review"
+      "faceNeedsReview": "Face needs staff review",
+      "faceNeedsRegistration": "Face not in system — register on the Check-in tab first (this kiosk only recognizes existing players)."
     },
     "kiosk": {
       "title": "Face Kiosk",
       "startKiosk": "Start Kiosk",
       "stopKiosk": "Stop Kiosk",
       "readyToStart": "Ready to Start Face Check-in",
-      "startDescription": "Click Start Kiosk to begin automatic face recognition. Players can check in by simply looking at the camera.",
+      "startDescription": "Click Start Kiosk to begin automatic face recognition. Known players can check in by looking at the camera.",
+      "existingPlayersOnly": "New players must register first on the Check-in tab (walk-in or add with face) before using the kiosk.",
+      "needsRegistration": "NOT RECOGNIZED — REGISTER AT CHECK-IN",
+      "needsRegistrationHint": "Go to the Check-in tab so staff can add you (with optional face). Then you can use this kiosk next time.",
       "lookAtCamera": "LOOK AT CAMERA",
       "positionFace": "Position your face in the frame",
       "holdStill": "Hold still for a moment",

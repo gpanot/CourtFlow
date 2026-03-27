@@ -4,11 +4,11 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { Camera, CameraOff, Loader2, User, AlertTriangle, RefreshCw } from "lucide-react";
+import { Camera, CameraOff, Loader2, User, AlertTriangle, RefreshCw, UserPlus } from "lucide-react";
 
 type KioskState =
   | "idle" | "detecting" | "processing" | "success"
-  | "error" | "no_face" | "multi_face" | "already_checked_in";
+  | "error" | "no_face" | "multi_face" | "already_checked_in" | "needs_registration";
 
 interface FaceKioskTabProps { venueId: string; }
 
@@ -136,10 +136,20 @@ export function FaceKioskTab({ venueId }: FaceKioskTabProps) {
         setResultData({ displayName: response.displayName, queueNumber: response.queueNumber });
         switch (response.resultType) {
           case "matched":
-          case "new_player":       setState("success"); break;
-          case "already_checked_in": setState("already_checked_in"); break;
-          case "no_face":          setState("no_face"); break;
-          case "multi_face":       setState("multi_face"); break;
+            setState("success");
+            break;
+          case "needs_registration":
+            setState("needs_registration");
+            break;
+          case "already_checked_in":
+            setState("already_checked_in");
+            break;
+          case "no_face":
+            setState("no_face");
+            break;
+          case "multi_face":
+            setState("multi_face");
+            break;
           default:
             setState("error");
             setError(response.error ?? "Unknown result type");
@@ -251,6 +261,8 @@ export function FaceKioskTab({ venueId }: FaceKioskTabProps) {
           ? t("staff.kiosk.welcomeBack", { name: resultData.displayName })
           : t("staff.kiosk.welcome");
       case "already_checked_in": return t("staff.kiosk.alreadyCheckedIn", { name: resultData.displayName });
+      case "needs_registration":
+        return t("staff.kiosk.needsRegistration");
       case "no_face":            return t("staff.kiosk.noFaceDetected") ?? "No face detected — look at the camera";
       case "multi_face":         return t("staff.kiosk.multipleFaces") ?? "Multiple faces detected — one at a time";
       case "error":              return error || t("staff.kiosk.tryAgain");
@@ -265,6 +277,7 @@ export function FaceKioskTab({ venueId }: FaceKioskTabProps) {
       case "processing":         return "text-blue-300";
       case "success":            return "text-green-400";
       case "already_checked_in": return "text-amber-400";
+      case "needs_registration": return "text-sky-300";
       case "no_face":
       case "multi_face":         return "text-yellow-400";
       case "error":              return "text-red-400";
@@ -272,8 +285,15 @@ export function FaceKioskTab({ venueId }: FaceKioskTabProps) {
     }
   };
 
-  const showOverlay = ["processing","success","error","no_face","multi_face","already_checked_in"]
-    .includes(state);
+  const showOverlay = [
+    "processing",
+    "success",
+    "error",
+    "no_face",
+    "multi_face",
+    "already_checked_in",
+    "needs_registration",
+  ].includes(state);
 
   return (
     <div className="flex flex-col h-full bg-neutral-950">
@@ -311,7 +331,12 @@ export function FaceKioskTab({ venueId }: FaceKioskTabProps) {
               <Camera className="h-16 w-16 text-neutral-600" />
             </div>
             <h3 className="text-2xl font-bold text-white mb-2">{t("staff.kiosk.readyToStart")}</h3>
-            <p className="text-neutral-400 max-w-md mb-4">{t("staff.kiosk.startDescription")}</p>
+            <p className="text-neutral-400 max-w-md mb-4">
+              {t("staff.kiosk.startDescription")}
+            </p>
+            <p className="text-neutral-500 max-w-md mb-4 text-sm">
+              {t("staff.kiosk.existingPlayersOnly")}
+            </p>
             <div className="bg-neutral-800/50 rounded-lg p-3 max-w-md text-sm text-neutral-300">
               <p className="font-medium mb-1">💡 Camera Setup Tips:</p>
               <ul className="text-left space-y-1 text-xs">
@@ -370,6 +395,11 @@ export function FaceKioskTab({ venueId }: FaceKioskTabProps) {
                         <span className="text-white text-xl">✓</span>
                       </div>
                     )}
+                    {state === "needs_registration" && (
+                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-sky-700 flex items-center justify-center">
+                        <UserPlus className="h-8 w-8 text-white" />
+                      </div>
+                    )}
                     {state === "no_face" && <CameraOff className="h-16 w-16 mx-auto mb-4 text-yellow-300" />}
                     {state === "multi_face" && (
                       <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-yellow-600 flex items-center justify-center">
@@ -379,6 +409,11 @@ export function FaceKioskTab({ venueId }: FaceKioskTabProps) {
                     {state === "error" && <AlertTriangle className="h-16 w-16 mx-auto mb-4 text-red-300" />}
 
                     <p className={cn("text-lg font-medium", getStateColor())}>{getStateMessage()}</p>
+                    {state === "needs_registration" && (
+                      <p className="text-neutral-300 text-sm mt-3 max-w-sm mx-auto">
+                        {t("staff.kiosk.needsRegistrationHint")}
+                      </p>
+                    )}
                     {state === "success" && resultData.queueNumber && (
                       <p className="text-6xl font-bold text-green-400 mt-3">#{resultData.queueNumber}</p>
                     )}

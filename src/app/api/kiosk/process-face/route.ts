@@ -200,10 +200,14 @@ export async function POST(request: NextRequest) {
           confidence: recognitionResult.confidence,
         };
       } else if (recognitionResult.resultType === "new_player") {
-        // Check if there's an existing player with the same face (shouldn't happen, but safety check)
-        const existingPlayerByFace = await prisma.player.findFirst({
-          where: { faceSubjectId: recognitionResult.faceSubjectId },
-        });
+        // Kiosk only checks in players already in AWS + DB; new players register via Check-in tab first.
+        const existingPlayerByFace =
+          recognitionResult.faceSubjectId != null &&
+          recognitionResult.faceSubjectId !== ""
+            ? await prisma.player.findFirst({
+                where: { faceSubjectId: recognitionResult.faceSubjectId },
+              })
+            : null;
 
         if (existingPlayerByFace) {
           // Use existing player if face already exists
@@ -314,122 +318,16 @@ export async function POST(request: NextRequest) {
             confidence: recognitionResult.confidence,
           };
         } else {
-          // Create new player with faceSubjectId from AWS Rekognition
-          const newPlayer = await prisma.player.create({
-            data: {
-              name: `Player ${Date.now()}`,
-              phone: `face_checkin_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-              gender: "other",
-              skillLevel: "beginner",
-              avatar: "🏓",
-              faceSubjectId: recognitionResult.faceSubjectId, // Save the face ID from AWS Rekognition
-            },
-          });
-
-          // Enroll face
-          const enrollmentResult = await faceRecognitionService.enrollFace(
-            imageBase64,
-            newPlayer.id
-          );
-
-          if (!enrollmentResult.success) {
-            // Clean up player if enrollment failed
-            await prisma.player.delete({ where: { id: newPlayer.id } });
-            
-            await prisma.faceAttempt.update({
-              where: { id: faceAttempt.id },
-              data: { resultType: "error" },
-            });
-
-            return json({
-              success: false,
-              resultType: "error",
-              error: "Failed to enroll face for new player",
-              ...faceDbg,
-            });
-          }
-
-          // Get next queue number and add to queue
-          const queueNumber = await faceRecognitionService.getNextQueueNumber(session.id);
-
-          // Check if player was previously in this session
-          const existingEntry = await prisma.queueEntry.findUnique({
-            where: {
-              sessionId_playerId: {
-                sessionId: session.id,
-                playerId: newPlayer.id,
-              },
-            },
-          });
-
-          let queueEntry;
-          if (existingEntry) {
-            // Player was in session before — re-activate them
-            queueEntry = await prisma.queueEntry.update({
-              where: { id: existingEntry.id },
-              data: {
-                status: "waiting",
-                queueNumber,
-                joinedAt: new Date(), // reset join time for fair queue position
-              },
-              include: { player: true },
-            });
-          } else {
-            // First time in this session — create fresh entry
-            queueEntry = await prisma.queueEntry.create({
-              data: {
-                sessionId: session.id,
-                playerId: newPlayer.id,
-                status: "waiting",
-                queueNumber,
-              },
-              include: { player: true },
-            });
-          }
-
           await prisma.faceAttempt.update({
             where: { id: faceAttempt.id },
-            data: {
-              resultType: "new_player",
-              matchedPlayerId: newPlayer.id,
-              queueNumberAssigned: queueNumber,
-            },
+            data: { resultType: "needs_registration" },
           });
 
-          const allEntries = await prisma.queueEntry.findMany({
-            where: { sessionId: session.id, status: { in: ["waiting", "on_break"] } },
-            include: {
-              player: true,
-              group: { include: { queueEntries: { where: { status: { not: "left" } }, include: { player: true } } } },
-            },
-            orderBy: { joinedAt: "asc" },
-          });
-
-          emitToVenue(venueId, "queue:updated", allEntries);
-
-          await prisma.auditLog.create({
-            data: {
-              venueId,
-              staffId: auth.id,
-              action: "face_check_in_player",
-              targetId: newPlayer.id,
-              metadata: { 
-                queueEntryId: queueEntry.id, 
-                sessionId: session.id,
-                method: "face_recognition",
-                newPlayerCreated: true,
-                faceSubjectId: recognitionResult.faceSubjectId,
-              },
-            },
-          });
-
-          result = {
+          return json({
             success: true,
-            resultType: "new_player",
-            playerId: newPlayer.id,
-            displayName: newPlayer.name,
-            queueNumber,
-          };
+            resultType: "needs_registration",
+            ...faceDbg,
+          });
         }
       } else {
         // Handle needs_review case
