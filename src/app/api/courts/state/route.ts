@@ -33,7 +33,16 @@ export async function GET(request: NextRequest) {
     const courtsWithPlayers = await Promise.all(
       courts.map(async (court) => {
         const assignment = court.courtAssignments[0] || null;
-        let players: { id: string; name: string; skillLevel: string; gender: string; groupId: string | null }[] = [];
+        let players: {
+          id: string;
+          name: string;
+          skillLevel: string;
+          gender: string;
+          groupId: string | null;
+          queueNumber: number | null;
+          facePhotoPath: string | null;
+          avatar: string;
+        }[] = [];
 
         if (assignment) {
           const playerRecords = await prisma.player.findMany({
@@ -47,16 +56,24 @@ export async function GET(request: NextRequest) {
             },
           });
 
-          players = playerRecords.map((p) => {
-            const qe = queueEntries.find((e) => e.playerId === p.id);
-            return {
-              id: p.id,
-              name: p.name,
-              skillLevel: p.skillLevel,
-              gender: p.gender,
-              groupId: qe?.groupId || null,
-            };
-          });
+          const byId = new Map(playerRecords.map((p) => [p.id, p]));
+          players = assignment.playerIds
+            .map((id) => {
+              const p = byId.get(id);
+              if (!p) return null;
+              const qe = queueEntries.find((e) => e.playerId === p.id);
+              return {
+                id: p.id,
+                name: p.name,
+                skillLevel: p.skillLevel,
+                gender: p.gender,
+                groupId: qe?.groupId || null,
+                queueNumber: qe?.queueNumber ?? null,
+                facePhotoPath: p.facePhotoPath ?? null,
+                avatar: p.avatar,
+              };
+            })
+            .filter((row): row is NonNullable<typeof row> => row != null);
         }
 
         return {

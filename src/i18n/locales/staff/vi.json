@@ -72,6 +72,8 @@
       "mixMen": "Nam",
       "mixWomen": "Nữ",
       "mixMixed": "Hỗn hợp",
+      "courtCardHeading": "Sân {{label}}",
+      "courtCardOpenSlot": "Ô người chơi trống",
       "playersOnCourt": "Người chơi trên sân",
       "replace": "Thay",
       "startGameEndWarmup": "Bắt đầu trận (kết thúc khởi động)",

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import type { i18n as I18nInstance } from "i18next";
 import { useTranslation } from "react-i18next";
 import { formatTimer, getTimerColor, TIMER_COLORS, AUTO_START_DELAY_SECONDS } from "@/lib/constants";
 import { cn } from "@/lib/cn";
@@ -8,7 +9,9 @@ import { tvI18n } from "@/i18n/tv-i18n";
 
 interface TimerProps {
   startedAt: string;
-  size?: "sm" | "md" | "lg" | "xl" | "tv";
+  size?: "sm" | "md" | "lg" | "xl" | "tv" | "staff";
+  /** When set (e.g. staff app), use merged staff+TV translations instead of TV-only i18n. */
+  i18n?: I18nInstance;
 }
 
 const sizeClasses = {
@@ -17,6 +20,7 @@ const sizeClasses = {
   lg: "text-4xl",
   xl: "text-6xl",
   tv: "",
+  staff: "text-lg",
 };
 
 const tvTimerStyle = { fontSize: "clamp(0.9rem, min(calc(2.7 * var(--tw, 1vw)), calc(3.6 * var(--th, 1vh))), min(3.15rem, calc(9 * var(--th, 1vh))))" };
@@ -53,8 +57,8 @@ export function ElapsedTimer({ startedAt, size = "md" }: TimerProps) {
   );
 }
 
-export function GamePhaseTimer({ startedAt, size = "md" }: TimerProps) {
-  const { t } = useTranslation("translation", { i18n: tvI18n });
+export function GamePhaseTimer({ startedAt, size = "md", i18n }: TimerProps) {
+  const { t } = useTranslation("translation", { i18n: i18n ?? tvI18n });
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -68,6 +72,7 @@ export function GamePhaseTimer({ startedAt, size = "md" }: TimerProps) {
   }, [startedAt]);
 
   const isStarting = elapsed < AUTO_START_DELAY_SECONDS;
+  const isStaff = size === "staff";
 
   if (isStarting) {
     const remaining = AUTO_START_DELAY_SECONDS - elapsed;
@@ -80,10 +85,13 @@ export function GamePhaseTimer({ startedAt, size = "md" }: TimerProps) {
           -{formatTimer(remaining)}
         </span>
         <span
-          className={cn("font-semibold text-blue-400", size === "tv" ? "" : "text-sm")}
+          className={cn(
+            "font-semibold text-blue-400",
+            size === "tv" ? "" : isStaff ? "text-xs text-blue-300/90" : "text-sm"
+          )}
           style={size === "tv" ? tvLabelStyle : undefined}
         >
-          {size === "tv" ? t("timer.goToCourt") : "Go to court"}
+          {t("timer.goToCourt")}
         </span>
       </div>
     );
@@ -101,10 +109,13 @@ export function GamePhaseTimer({ startedAt, size = "md" }: TimerProps) {
         {formatTimer(playingTime)}
       </span>
       <span
-        className={cn("font-semibold text-green-400", size === "tv" ? "" : "text-sm")}
+        className={cn(
+          "font-semibold",
+          size === "tv" ? "text-green-400" : isStaff ? "text-xs font-medium text-neutral-400" : "text-sm text-green-400"
+        )}
         style={size === "tv" ? tvLabelStyle : undefined}
       >
-        {size === "tv" ? t("timer.playing") : "Playing"}
+        {t("timer.playing")}
       </span>
     </div>
   );

@@ -20,6 +20,7 @@ import {
   type StaffQueueSkillLevel,
 } from "@/lib/staff-queue-filter-utils";
 import { StaffQueueFilterBar } from "@/components/staff-queue-filter-bar";
+import { playerNameWithCheckIn } from "@/lib/player-display";
 
 const skillDotColors: Record<string, string> = {
   beginner: "bg-green-500",
@@ -79,7 +80,7 @@ export interface CourtInfo {
   /** Present when court has an open assignment; false = active game / post-maintenance direct play. */
   assignmentIsWarmup?: boolean;
   skipWarmupAfterMaintenance?: boolean;
-  players: { id?: string; name: string; skillLevel: string; gender?: string }[];
+  players: { id?: string; name: string; skillLevel: string; gender?: string; queueNumber?: number | null }[];
 }
 
 /** Active session courts with on-court players — used to group queue rows by court in the staff Queue tab. */
@@ -1094,7 +1095,9 @@ function PlayerActionMenu({
                             className="flex items-center gap-1 text-xs text-neutral-300"
                           >
                             <GenderIcon gender={p.gender} className="h-3.5 w-3.5 opacity-100" />
-                            <span className="font-medium text-white">{p.name}</span>
+                            <span className="font-medium text-white">
+                              {playerNameWithCheckIn(p.name, p.queueNumber)}
+                            </span>
                             <SkillTag level={p.skillLevel} />
                           </span>
                         ))}

@@ -73,6 +73,8 @@
       "mixMen": "Men",
       "mixWomen": "Women",
       "mixMixed": "Mixed",
+      "courtCardHeading": "Court {{label}}",
+      "courtCardOpenSlot": "Open player slot",
       "playersOnCourt": "Players on court",
       "replace": "Replace",
       "startGameEndWarmup": "Start game (end warmup)",

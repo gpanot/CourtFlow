@@ -22,6 +22,7 @@ import {
   type StaffQueueSkillLevel,
 } from "@/lib/staff-queue-filter-utils";
 import { StaffQueueFilterBar } from "@/components/staff-queue-filter-bar";
+import { playerNameWithCheckIn } from "@/lib/player-display";
 
 const skillLevelMeta: Record<string, { label: string }> = {
   beginner: { label: "Beginner" },
@@ -56,6 +57,7 @@ export type StaffWaitingPickerCourtPlayer = {
   name: string;
   skillLevel?: string;
   gender?: string;
+  queueNumber?: number | null;
 };
 
 interface StaffWaitingPickerProps {
@@ -180,7 +182,7 @@ export function StaffWaitingPicker({
                 <div className="flex min-w-0 items-center gap-1">
                   <GenderIcon gender={p.gender} className="h-3.5 w-3.5 shrink-0 opacity-100" />
                   <span className="min-w-0 truncate text-[11px] font-medium leading-tight text-neutral-100">
-                    {p.name}
+                    {playerNameWithCheckIn(p.name, p.queueNumber)}
                   </span>
                 </div>
                 <div className="flex justify-end pl-4">

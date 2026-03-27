@@ -21,6 +21,7 @@ import { StaffCheckInPanel } from "@/components/staff-check-in-panel";
 import { StaffWaitingPicker } from "@/components/staff-waiting-picker";
 import { FaceKioskTab } from "@/components/face-kiosk-tab";
 import { canCourtAcceptManualAssign } from "@/lib/court-manual-assign";
+import { playerNameWithCheckIn } from "@/lib/player-display";
 
 function genderLabelForDialog(g: string, t: TFunction) {
   if (g === "male") return t("staff.dashboard.labelsGenderMale");
@@ -438,6 +439,7 @@ export function StaffDashboard() {
         name: p.name,
         skillLevel: p.skillLevel,
         gender: p.gender,
+        queueNumber: p.queueNumber,
       })),
     }));
   }, [session, courts]);
@@ -729,7 +731,9 @@ export function StaffDashboard() {
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <GenderIcon gender={player.gender} className="h-4 w-4 shrink-0" />
-                        <span className="text-base font-medium truncate">{player.name}</span>
+                        <span className="text-base font-medium truncate">
+                          {playerNameWithCheckIn(player.name, player.queueNumber)}
+                        </span>
                         <span className={cn(
                           "shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium",
                           player.skillLevel === "beginner" && "bg-green-700 text-green-100",
