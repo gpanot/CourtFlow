@@ -566,8 +566,7 @@ ${test.error ? `Error: ${test.error}` : ''}
                   skill === level ? "border-green-500 bg-green-600/20" : "border-neutral-700 hover:border-neutral-500"
                 )}
               >
-                <span className="font-medium capitalize text-white max-sm:text-sm">{skillLabel(level)}</span>
-                <p className="text-sm text-neutral-400 max-sm:hidden">{SKILL_DESCRIPTIONS[level]}</p>
+                <span className="font-medium capitalize text-white text-sm">{skillLabel(level)}</span>
               </button>
             ))}
           </div>
