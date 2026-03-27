@@ -2,10 +2,11 @@ import { NextRequest } from "next/server";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { faceRecognitionService } from "@/lib/face-recognition";
+import {
+  faceRecognitionService,
+  type FaceRecognitionDebugInfo,
+} from "@/lib/face-recognition";
 import { emitToVenue } from "@/lib/socket-server";
-import { SKILL_LEVELS, type SkillLevelType } from "@/lib/constants";
-
 export async function POST(request: NextRequest) {
   try {
     const auth = requireStaff(request.headers);
@@ -13,9 +14,11 @@ export async function POST(request: NextRequest) {
       venueId: string;
       imageBase64: string;
       kioskId?: string;
+      /** When true, response includes faceDebug (AWS SearchFaces summary) for staff kiosk UI */
+      debug?: boolean;
     }>(request);
 
-    const { venueId, imageBase64, kioskId } = body;
+    const { venueId, imageBase64, kioskId, debug: wantsDebug } = body;
 
     if (!venueId?.trim()) {
       return error("venueId is required", 400);
@@ -44,10 +47,30 @@ export async function POST(request: NextRequest) {
     });
 
     let result;
+    let faceDebugForResponse: FaceRecognitionDebugInfo | undefined;
 
     try {
+      console.log("[Kiosk] Processing face for session:", session.id);
+      console.log("[Kiosk] imageBase64 length:", imageBase64?.length);
+      console.log("[Kiosk] debug payload:", wantsDebug === true);
+
       // Recognize face
-      const recognitionResult = await faceRecognitionService.recognizeFace(imageBase64);
+      const recognitionResult = await faceRecognitionService.recognizeFace(
+        imageBase64,
+        { debug: wantsDebug === true }
+      );
+
+      if (wantsDebug === true && recognitionResult.recognitionDebug) {
+        faceDebugForResponse = recognitionResult.recognitionDebug;
+      }
+
+      const faceDbg = faceDebugForResponse
+        ? { faceDebug: faceDebugForResponse }
+        : {};
+
+      if (recognitionResult.recognitionDebug) {
+        console.log("[Kiosk] Rekognition debug:", recognitionResult.recognitionDebug);
+      }
 
       if (recognitionResult.resultType === "error") {
         await prisma.faceAttempt.update({
@@ -59,6 +82,7 @@ export async function POST(request: NextRequest) {
           success: false,
           resultType: "error",
           error: recognitionResult.error,
+          ...faceDbg,
         });
       }
 
@@ -84,6 +108,7 @@ export async function POST(request: NextRequest) {
             playerId: recognitionResult.playerId,
             displayName: recognitionResult.displayName,
             alreadyCheckedIn: true,
+            ...faceDbg,
           });
         }
 
@@ -199,6 +224,7 @@ export async function POST(request: NextRequest) {
               playerId: existingPlayerByFace.id,
               displayName: existingPlayerByFace.name,
               alreadyCheckedIn: true,
+              ...faceDbg,
             });
           }
 
@@ -319,6 +345,7 @@ export async function POST(request: NextRequest) {
               success: false,
               resultType: "error",
               error: "Failed to enroll face for new player",
+              ...faceDbg,
             });
           }
 
@@ -425,7 +452,10 @@ export async function POST(request: NextRequest) {
       throw error;
     }
 
-    return json(result);
+    return json({
+      ...result,
+      ...(faceDebugForResponse ? { faceDebug: faceDebugForResponse } : {}),
+    });
   } catch (e) {
     console.error("[Kiosk Process Face] Error:", e);
     return error((e as Error).message, 500);

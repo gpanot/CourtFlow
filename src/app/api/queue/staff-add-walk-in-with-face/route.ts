@@ -6,6 +6,7 @@ import { requireStaff } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
 import { SKILL_LEVELS, type SkillLevelType } from "@/lib/constants";
 import { findQueueDisplayNameConflict } from "@/lib/queue-display-name";
+import { faceRecognitionService } from "@/lib/face-recognition";
 import { mockFaceRecognitionService } from "@/lib/face-recognition-mock";
 
 // Helper function to get next queue number
@@ -239,16 +240,55 @@ export async function POST(request: NextRequest) {
       throw e;
     }
 
-    // Enroll face for this player
+    // Enroll face in AWS (same collection as kiosk SearchFacesByImage)
+    let faceEnrollment: {
+      success: boolean;
+      awsFaceId?: string;
+      error?: string;
+    } = { success: false };
+
     try {
-      const faceEnrollmentResult = await mockFaceRecognitionService.enrollFace(imageBase64, player.id);
+      console.log("[StaffFace] Add with face — saving profile + IndexFaces", {
+        playerId: player.id,
+        name: player.name,
+        imageBase64Length: imageBase64.length,
+        externalImageId: `player_${player.id}`,
+      });
+
+      const faceEnrollmentResult = await faceRecognitionService.enrollFace(
+        imageBase64,
+        player.id
+      );
+
+      faceEnrollment = {
+        success: faceEnrollmentResult.success,
+        awsFaceId: faceEnrollmentResult.subjectId,
+        error: faceEnrollmentResult.error,
+      };
+
+      console.log("[StaffFace] IndexFaces result:", faceEnrollment);
+
+      const after = await prisma.player.findUnique({
+        where: { id: player.id },
+        select: { faceSubjectId: true },
+      });
+      console.log(
+        "[StaffFace] DB face_subject_id after enroll:",
+        after?.faceSubjectId ?? "(null)"
+      );
+
       if (!faceEnrollmentResult.success) {
-        console.error("Face enrollment failed:", faceEnrollmentResult.error);
-        // Continue anyway - player is added even if face enrollment fails
+        console.error(
+          "[StaffFace] AWS enrollment FAILED — kiosk will treat this person as a stranger until enrollment works:",
+          faceEnrollmentResult.error
+        );
       }
     } catch (e) {
-      console.error("Face enrollment error:", e);
-      // Continue anyway
+      console.error("[StaffFace] Face enrollment error:", e);
+      faceEnrollment = {
+        success: false,
+        error: e instanceof Error ? e.message : "Unknown enrollment error",
+      };
     }
 
     const entry = await prisma.queueEntry.create({
@@ -267,7 +307,12 @@ export async function POST(request: NextRequest) {
         staffId: auth.id,
         action: "walk_in_player_added_with_face",
         targetId: player.id,
-        metadata: { queueEntryId: entry.id, sessionId: session.id, faceEnrolled: true },
+        metadata: {
+          queueEntryId: entry.id,
+          sessionId: session.id,
+          faceEnrolled: faceEnrollment.success,
+          awsFaceId: faceEnrollment.awsFaceId,
+        },
       },
     });
 
@@ -294,6 +339,7 @@ export async function POST(request: NextRequest) {
         queueEntryId: entry.id,
         queueNumber: entry.queueNumber,
         qualityCheck: qualityAnalysis,
+        faceEnrollment,
       },
       201
     );

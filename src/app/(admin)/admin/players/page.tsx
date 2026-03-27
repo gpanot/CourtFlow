@@ -5,7 +5,7 @@ import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { Search, X, SlidersHorizontal, Users, UserPlus, Clock, Activity, Hourglass, Gauge, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Gamepad2, Star, MapPin, CalendarDays, Timer, Plus, Pencil, Trash2 } from "lucide-react";
 
-type SortKey = "name" | "gender" | "skillLevel" | "totalSessions" | "totalGames" | "totalPlayMinutes" | "totalWaitMinutes" | "waitPlayRatio" | "venues";
+type SortKey = "name" | "phone" | "gender" | "skillLevel" | "totalSessions" | "totalGames" | "totalPlayMinutes" | "totalWaitMinutes" | "waitPlayRatio" | "venues";
 type SortDir = "asc" | "desc";
 const SKILL_ORDER: Record<string, number> = { beginner: 0, intermediate: 1, advanced: 2, pro: 3 };
 
@@ -119,6 +119,9 @@ export default function PlayersPage() {
       switch (sortKey) {
         case "name":
           cmp = a.name.localeCompare(b.name);
+          break;
+        case "phone":
+          cmp = a.phone.localeCompare(b.phone);
           break;
         case "gender":
           cmp = a.gender.localeCompare(b.gender);
@@ -376,7 +379,7 @@ export default function PlayersPage() {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
             <input
               type="text"
-              placeholder="Search name or phone..."
+              placeholder="Search by name or phone..."
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               className="w-full rounded-lg border border-neutral-700 bg-neutral-800 pl-9 pr-4 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
@@ -453,6 +456,7 @@ export default function PlayersPage() {
           <thead className="border-b border-neutral-800 text-neutral-400">
             <tr>
               <SortableHeader label="Player" sortKey="name" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
+              <SortableHeader label="Phone" sortKey="phone" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
               <SortableHeader label="Skill" sortKey="skillLevel" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
               <SortableHeader label="Gender" sortKey="gender" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
               <SortableHeader label="Sess." sortKey="totalSessions" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
@@ -477,6 +481,7 @@ export default function PlayersPage() {
                     )}
                   </div>
                 </td>
+                <td className="px-2.5 py-2 text-neutral-400 text-[11px] tabular-nums">{p.phone}</td>
                 <td className="px-2.5 py-2">
                   <SkillBadge
                     playerId={p.id}
@@ -540,7 +545,7 @@ export default function PlayersPage() {
             ))}
             {!loading && players.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-4 py-8 text-center text-neutral-500">No players found</td>
+                <td colSpan={12} className="px-4 py-8 text-center text-neutral-500">No players found</td>
               </tr>
             )}
           </tbody>

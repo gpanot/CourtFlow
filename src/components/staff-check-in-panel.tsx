@@ -202,6 +202,11 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
         success: boolean;
         player: { id: string; name: string; gender: string; skillLevel: string };
         queueNumber?: number;
+        faceEnrollment?: {
+          success: boolean;
+          awsFaceId?: string;
+          error?: string;
+        };
       }>("/api/queue/staff-add-walk-in-with-face", {
         venueId,
         name: trimmed,
@@ -211,9 +216,24 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
         imageBase64,
         forceAdd: true,
       });
-      
+
+      if (res.faceEnrollment?.success) {
+        console.log(
+          "[StaffFace] Profile saved; AWS IndexFaces ok — kiosk can match:",
+          res.faceEnrollment.awsFaceId
+        );
+      } else if (res.faceEnrollment && !res.faceEnrollment.success) {
+        console.warn("[StaffFace] AWS enrollment failed:", res.faceEnrollment.error);
+      }
+
       if (res.player) {
-        showFlash(t("staff.checkIn.addedFlash", { name: res.player.name }));
+        if (res.faceEnrollment && !res.faceEnrollment.success) {
+          showFlash(
+            `${res.player.name} added to queue — face NOT enrolled in AWS (kiosk won’t recognize). ${res.faceEnrollment.error ?? ""}`
+          );
+        } else {
+          showFlash(t("staff.checkIn.addedFlash", { name: res.player.name }));
+        }
         setRecent((prev) => {
           const next = [
             {

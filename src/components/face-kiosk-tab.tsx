@@ -33,6 +33,8 @@ export function FaceKioskTab({ venueId }: FaceKioskTabProps) {
   }>({});
   const [isKioskActive, setIsKioskActive] = useState(false);
   const [flashMessage, setFlashMessage] = useState<string | null>(null);
+  /** Last AWS SearchFaces debug payload (dev only — server sends when debug: true) */
+  const [faceDebug, setFaceDebug] = useState<Record<string, unknown> | null>(null);
 
   const showFlash = useCallback((message: string) => {
     if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
@@ -111,11 +113,23 @@ export function FaceKioskTab({ venueId }: FaceKioskTabProps) {
         displayName?: string;
         queueNumber?: number;
         error?: string;
-      }>("/api/kiosk/process-face", { venueId, imageBase64 });
+        faceDebug?: Record<string, unknown>;
+      }>("/api/kiosk/process-face", {
+        venueId,
+        imageBase64,
+        ...(process.env.NODE_ENV === "development" ? { debug: true } : {}),
+      });
 
       if (processingTimeoutRef.current) {
         clearTimeout(processingTimeoutRef.current);
         processingTimeoutRef.current = null;
+      }
+
+      if (process.env.NODE_ENV === "development" && response.faceDebug) {
+        setFaceDebug(response.faceDebug);
+        console.log("[Kiosk UI] faceDebug:", response.faceDebug);
+      } else {
+        setFaceDebug(null);
       }
 
       if (response.success) {
@@ -139,6 +153,7 @@ export function FaceKioskTab({ venueId }: FaceKioskTabProps) {
         clearTimeout(processingTimeoutRef.current);
         processingTimeoutRef.current = null;
       }
+      setFaceDebug(null);
       setState("error");
       setError(err instanceof Error ? err.message : "Network error");
     }
@@ -146,6 +161,7 @@ export function FaceKioskTab({ venueId }: FaceKioskTabProps) {
     cooldownRef.current = setTimeout(() => {
       setState("idle");
       setResultData({});
+      setFaceDebug(null);
     }, COOLDOWN_MS);
   }, [venueId]);
 
@@ -187,6 +203,7 @@ export function FaceKioskTab({ venueId }: FaceKioskTabProps) {
       stopCamera();
       setState("idle");
       setResultData({});
+      setFaceDebug(null);
       if (cooldownRef.current) clearTimeout(cooldownRef.current);
       if (processingTimeoutRef.current) clearTimeout(processingTimeoutRef.current);
     } else {
@@ -386,6 +403,17 @@ export function FaceKioskTab({ venueId }: FaceKioskTabProps) {
                 </button>
               )}
             </div>
+
+            {process.env.NODE_ENV === "development" && faceDebug && (
+              <div className="w-full max-w-2xl rounded-lg border border-amber-500/40 bg-amber-950/30 p-3 text-left">
+                <p className="text-amber-200 text-xs font-semibold mb-1">
+                  Face debug (dev) — AWS SearchFacesByImage summary
+                </p>
+                <pre className="text-[10px] leading-relaxed text-amber-100/90 overflow-x-auto whitespace-pre-wrap break-all max-h-48 overflow-y-auto">
+                  {JSON.stringify(faceDebug, null, 2)}
+                </pre>
+              </div>
+            )}
           </>
         )}
       </div>

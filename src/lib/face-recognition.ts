@@ -13,7 +13,22 @@ const COLLECTION_ID = process.env.AWS_REKOGNITION_COLLECTION || "courtflow-playe
 
 const USE_MOCK_SERVICE =
   !process.env.AWS_ACCESS_KEY_ID ||
-  process.env.AWS_ACCESS_KEY_ID === "your-key-here";
+  process.env.AWS_ACCESS_KEY_ID === "your-key-here" ||
+  process.env.AWS_ACCESS_KEY_ID.trim() === "";
+
+console.log(
+  "[FaceRecognition] Mode:",
+  USE_MOCK_SERVICE ? "MOCK" : "AWS Rekognition"
+);
+console.log(
+  "[FaceRecognition] AWS Key present:",
+  !!process.env.AWS_ACCESS_KEY_ID
+);
+console.log("[FaceRecognition] AWS Region:", process.env.AWS_REGION);
+console.log(
+  "[FaceRecognition] Collection:",
+  process.env.AWS_REKOGNITION_COLLECTION
+);
 
 const rekognition = USE_MOCK_SERVICE
   ? null
@@ -24,6 +39,23 @@ const rekognition = USE_MOCK_SERVICE
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
       },
     });
+
+/** Populated when recognizeFace(..., { debug: true }) for kiosk/staff diagnostics */
+export interface FaceRecognitionDebugInfo {
+  mode: "MOCK" | "AWS";
+  collectionId?: string;
+  awsQueried: boolean;
+  faceMatchCount?: number;
+  topMatch?: {
+    similarity?: number;
+    externalImageId?: string;
+    faceId?: string;
+  } | null;
+  externalPlayerIdFromAws?: string | null;
+  dbPlayerFound?: boolean;
+  dbPlayerName?: string | null;
+  interpretation: string;
+}
 
 export interface FaceRecognitionResult {
   success: boolean;
@@ -40,6 +72,7 @@ export interface FaceRecognitionResult {
   alreadyCheckedIn?: boolean;
   faceSubjectId?: string;
   error?: string;
+  recognitionDebug?: FaceRecognitionDebugInfo;
 }
 
 export interface FaceEnrollmentResult {
@@ -94,6 +127,11 @@ class FaceRecognitionService {
       );
 
       const faceRecord = response.FaceRecords?.[0]?.Face;
+      console.log("[Rekognition] IndexFaces response:", {
+        faceId: faceRecord?.FaceId,
+        externalImageId: faceRecord?.ExternalImageId,
+        confidence: faceRecord?.Confidence,
+      });
       if (!faceRecord?.FaceId) {
         return {
           success: false,
@@ -119,12 +157,38 @@ class FaceRecognitionService {
   }
 
   // ── Recognize a face ─────────────────────────────────────────────────────
-  async recognizeFace(imageBase64: string): Promise<FaceRecognitionResult> {
+  async recognizeFace(
+    imageBase64: string,
+    options?: { debug?: boolean }
+  ): Promise<FaceRecognitionResult> {
+    const dbg = options?.debug === true;
+
     if (USE_MOCK_SERVICE) {
       if (imageBase64 === "test_image_no_camera") {
-        return mockFaceRecognitionService.recognizeTestImage();
+        const r = await mockFaceRecognitionService.recognizeTestImage();
+        return dbg
+          ? {
+              ...r,
+              recognitionDebug: {
+                mode: "MOCK",
+                awsQueried: false,
+                interpretation: "mock_test_image_path",
+              },
+            }
+          : r;
       }
-      return mockFaceRecognitionService.recognizeFace(imageBase64);
+      const r = await mockFaceRecognitionService.recognizeFace(imageBase64);
+      return dbg
+        ? {
+            ...r,
+            recognitionDebug: {
+              mode: "MOCK",
+              awsQueried: false,
+              interpretation:
+                "mock_service — SearchFacesByImage not called; use real AWS credentials for kiosk matching",
+            },
+          }
+        : r;
     }
 
     try {
@@ -142,9 +206,43 @@ class FaceRecognitionService {
 
       const matches = response.FaceMatches ?? [];
 
+      console.log("[Rekognition] SearchFaces response:", {
+        matchCount: matches.length,
+        topMatch: matches[0]
+          ? {
+              similarity: matches[0].Similarity,
+              externalImageId: matches[0].Face?.ExternalImageId,
+              faceId: matches[0].Face?.FaceId,
+            }
+          : null,
+      });
+      console.log("[Rekognition] Collection:", COLLECTION_ID);
+
+      const top = matches[0];
+      const topDbg = top
+        ? {
+            similarity: top.Similarity,
+            externalImageId: top.Face?.ExternalImageId,
+            faceId: top.Face?.FaceId,
+          }
+        : null;
+
       if (matches.length === 0) {
-        // No match found — new player
-        return { success: true, resultType: "new_player" };
+        return {
+          success: true,
+          resultType: "new_player",
+          ...(dbg && {
+            recognitionDebug: {
+              mode: "AWS",
+              collectionId: COLLECTION_ID,
+              awsQueried: true,
+              faceMatchCount: 0,
+              topMatch: null,
+              interpretation:
+                "No FaceMatch above 85% in collection — kiosk will treat as stranger (new_player)",
+            },
+          }),
+        };
       }
 
       const bestMatch = matches[0];
@@ -159,8 +257,23 @@ class FaceRecognitionService {
       });
 
       if (!player) {
-        // Face exists in AWS but not in DB — treat as new player
-        return { success: true, resultType: "new_player" };
+        return {
+          success: true,
+          resultType: "new_player",
+          ...(dbg && {
+            recognitionDebug: {
+              mode: "AWS",
+              collectionId: COLLECTION_ID,
+              awsQueried: true,
+              faceMatchCount: matches.length,
+              topMatch: topDbg,
+              externalPlayerIdFromAws: playerId || null,
+              dbPlayerFound: false,
+              interpretation:
+                "AWS returned a face match but no Player row for ExternalImageId — treating as new_player",
+            },
+          }),
+        };
       }
 
       console.log(
@@ -173,6 +286,20 @@ class FaceRecognitionService {
         playerId,
         displayName: player.name,
         confidence,
+        ...(dbg && {
+          recognitionDebug: {
+            mode: "AWS",
+            collectionId: COLLECTION_ID,
+            awsQueried: true,
+            faceMatchCount: matches.length,
+            topMatch: topDbg,
+            externalPlayerIdFromAws: playerId,
+            dbPlayerFound: true,
+            dbPlayerName: player.name,
+            interpretation:
+              "Matched AWS indexed face to DB player — kiosk should check in automatically",
+          },
+        }),
       };
     } catch (err: any) {
       // InvalidParameterException = no face in image
@@ -180,7 +307,21 @@ class FaceRecognitionService {
         err?.name === "InvalidParameterException" &&
         err?.message?.includes("no faces")
       ) {
-        return { success: true, resultType: "new_player" };
+        return {
+          success: true,
+          resultType: "new_player",
+          ...(dbg && {
+            recognitionDebug: {
+              mode: "AWS",
+              collectionId: COLLECTION_ID,
+              awsQueried: true,
+              faceMatchCount: 0,
+              topMatch: null,
+              interpretation:
+                "Rekognition: no face detected in image (InvalidParameterException) — flow uses new_player",
+            },
+          }),
+        };
       }
 
       console.error("[Rekognition] Recognition failed:", err);
@@ -188,6 +329,13 @@ class FaceRecognitionService {
         success: false,
         resultType: "error",
         error: err instanceof Error ? err.message : "Unknown recognition error",
+        ...(dbg && {
+          recognitionDebug: {
+            mode: "AWS",
+            awsQueried: true,
+            interpretation: `Rekognition error: ${err instanceof Error ? err.message : String(err)}`,
+          },
+        }),
       };
     }
   }
