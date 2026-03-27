@@ -8,15 +8,13 @@ import { useSocket } from "@/hooks/use-socket";
 import { joinVenue, leaveVenue } from "@/lib/socket-client";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { Wifi, WifiOff, Flame, Monitor, ChevronLeft } from "lucide-react";
+import { Wifi, WifiOff, Monitor, ChevronLeft } from "lucide-react";
 import { resolveTvLocale, tvI18n } from "@/i18n/tv-i18n";
-import { isSessionWarmupDisplayMode } from "@/lib/session-warmup-display";
 
 interface VenueState {
-  session: { id: string; status: string; introWarmupComplete?: boolean } | null;
+  session: { id: string; status: string } | null;
   courts: CourtData[];
   queue: QueueEntryData[];
-  warmupDurationSeconds?: number;
 }
 
 interface VenueMeta {
@@ -205,12 +203,6 @@ export default function LiveSessionsPage() {
   );
   const activeCourts = sortedCourts.filter((c) => c.status !== "maintenance");
   const courtCount = activeCourts.length;
-  const waitingCount = state.queue.filter((e) => e.status === "waiting").length;
-  const isWarmupMode = isSessionWarmupDisplayMode(
-    state.courts,
-    !!state.session,
-    state.session?.introWarmupComplete
-  );
 
   const gridCols =
     courtCount <= 3
@@ -240,11 +232,7 @@ export default function LiveSessionsPage() {
           )}
         </div>
         <div className="flex items-center gap-3">
-          {isWarmupMode ? (
-            <span className="flex items-center gap-1.5 rounded-full bg-amber-500/20 px-2.5 py-1 text-xs font-medium text-amber-400">
-              <Flame className="h-3 w-3" /> {t("warmupCheckedIn", { count: waitingCount })}
-            </span>
-          ) : state.session ? (
+          {state.session ? (
             <span className="rounded-full bg-green-600/20 px-2.5 py-1 text-xs font-medium text-green-400">
               {t("sessionActiveCourts", { count: courtCount })}
             </span>
@@ -277,33 +265,15 @@ export default function LiveSessionsPage() {
           <div className="flex min-h-[60vh] flex-col lg:flex-row">
             {/* Court grid */}
             <div className="flex-1 p-3 md:p-4">
-              {isWarmupMode && (
-                <div className="mb-4 flex flex-col items-center gap-1 text-center">
-                  <Flame className="h-8 w-8 text-amber-400 opacity-80" />
-                  <p className="text-xl font-bold text-amber-300">{t("warmupTime")}</p>
-                  <p className="text-sm text-amber-400/70">{t("warmupHeroHint")}</p>
-                </div>
-              )}
               <div className={cn("grid gap-3 auto-rows-fr", gridCols)}>
                 {sortedCourts.map((court) => (
-                  <CourtCard
-                    key={court.id}
-                    court={court}
-                    variant="tv"
-                    warmup={isWarmupMode}
-                    warmupDurationSeconds={state.warmupDurationSeconds}
-                  />
+                  <CourtCard key={court.id} court={court} variant="tv" />
                 ))}
               </div>
             </div>
 
             {/* Queue sidebar */}
             <div className="shrink-0 border-t border-neutral-800 p-3 md:w-64 md:border-l md:border-t-0 md:p-4 lg:w-72">
-              {isWarmupMode && (
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-amber-400">
-                  {t("checkedIn")}
-                </p>
-              )}
               <QueuePanel entries={state.queue} variant="tv" />
             </div>
           </div>

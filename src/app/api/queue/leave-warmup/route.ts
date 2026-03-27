@@ -3,9 +3,10 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireAuth } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
-import { assignToWarmup } from "@/lib/algorithm";
+import { assignPlayerFromQueueToCourt } from "@/lib/algorithm";
 import { QUEUE_LOOKAHEAD } from "@/lib/constants";
 
+/** Player leaves an assigned (not yet playing) court slot — e.g. needs a break before the game starts. */
 export async function POST(request: NextRequest) {
   try {
     const auth = requireAuth(request.headers);
@@ -14,13 +15,12 @@ export async function POST(request: NextRequest) {
     const entry = await prisma.queueEntry.findFirst({
       where: { playerId: auth.id, status: "assigned" },
     });
-    if (!entry) return error("Not in warmup", 400);
+    if (!entry) return error("Not assigned to a court", 400);
 
     const assignment = await prisma.courtAssignment.findFirst({
       where: {
         sessionId: entry.sessionId,
         endedAt: null,
-        isWarmup: true,
         playerIds: { has: auth.id },
       },
     });
@@ -50,7 +50,6 @@ export async function POST(request: NextRequest) {
       data: { status: "left", groupId: null },
     });
 
-    // Backfill warmup from the waiting queue (auto mode tries several positions for valid 4th)
     const waiting = await prisma.queueEntry.findMany({
       where: { sessionId: entry.sessionId, status: "waiting" },
       orderBy: { joinedAt: "asc" },
@@ -59,10 +58,10 @@ export async function POST(request: NextRequest) {
     const session = await prisma.session.findUnique({ where: { id: entry.sessionId } });
     if (session?.warmupMode === "auto") {
       for (const w of waiting) {
-        if (await assignToWarmup(venueId, entry.sessionId, w.playerId)) break;
+        if (await assignPlayerFromQueueToCourt(venueId, entry.sessionId, w.playerId)) break;
       }
     } else if (waiting[0]) {
-      await assignToWarmup(venueId, entry.sessionId, waiting[0].playerId);
+      await assignPlayerFromQueueToCourt(venueId, entry.sessionId, waiting[0].playerId);
     }
 
     const allEntries = await prisma.queueEntry.findMany({
@@ -81,7 +80,7 @@ export async function POST(request: NextRequest) {
 
     return json({ success: true });
   } catch (e) {
-    console.error("[Queue LeaveWarmup] Error:", e);
+    console.error("[Queue LeaveAssignedCourt] Error:", e);
     return error((e as Error).message, 500);
   }
 }

@@ -3,10 +3,8 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { emitToVenue, emitToPlayer } from "@/lib/socket-server";
-import { deriveGameType, scheduleWarmupTransitionPublic } from "@/lib/algorithm";
-import { getVenueWarmupDurationSeconds } from "@/lib/warmup-settings";
-import { AUTO_START_DELAY_SECONDS } from "@/lib/constants";
-import { markSessionIntroWarmupComplete } from "@/lib/session-intro-warmup";
+import { deriveGameType, scheduleAssignedToPlayingTransition } from "@/lib/algorithm";
+import { COURT_PLAYER_COUNT } from "@/lib/constants";
 
 export async function POST(
   request: NextRequest,
@@ -45,31 +43,17 @@ export async function POST(
     const player = await prisma.player.findUnique({ where: { id: playerId } });
     if (!player) return error("Player not found", 404);
 
-    const warmupDurationSeconds = await getVenueWarmupDurationSeconds(court.venueId);
-
     const existingAssignment = court.courtAssignments[0];
-    const skipWarmup = court.skipWarmupAfterMaintenance;
-    const directPlayOnly = skipWarmup || session.introWarmupComplete;
 
-    if (session.introWarmupComplete && court.status === "warmup") {
-      return error(
-        "Warm-up is over for this session. End warm-up or start the game on this court first.",
-        400
-      );
-    }
+    const canAssignIdle = court.status === "idle" && !existingAssignment;
+    const canAssignPartialActive =
+      court.status === "active" &&
+      existingAssignment &&
+      !existingAssignment.isWarmup &&
+      existingAssignment.playerIds.length < COURT_PLAYER_COUNT;
 
-    if (directPlayOnly) {
-      const canDirectAssign =
-        court.status === "idle" ||
-        (court.status === "active" &&
-          existingAssignment &&
-          !existingAssignment.isWarmup &&
-          existingAssignment.playerIds.length < 4);
-      if (!canDirectAssign) {
-        return error("Court is not available for assignment", 400);
-      }
-    } else if (court.status !== "idle" && court.status !== "warmup") {
-      return error("Court is not available for warmup assignment", 400);
+    if (!canAssignIdle && !canAssignPartialActive) {
+      return error("Court is not available for assignment", 400);
     }
 
     const emitUpdates = async () => {
@@ -86,11 +70,11 @@ export async function POST(
       emitToVenue(court.venueId, "queue:updated", queueEntries);
     };
 
-    if (directPlayOnly && court.status === "active" && existingAssignment && !existingAssignment.isWarmup) {
+    if (canAssignPartialActive && existingAssignment) {
       const updatedPlayerIds = [...existingAssignment.playerIds, playerId];
       const allRoster = await prisma.player.findMany({ where: { id: { in: updatedPlayerIds } } });
       const gameType =
-        updatedPlayerIds.length >= 4 ? deriveGameType(allRoster) : existingAssignment.gameType;
+        updatedPlayerIds.length >= COURT_PLAYER_COUNT ? deriveGameType(allRoster) : existingAssignment.gameType;
 
       await prisma.courtAssignment.update({
         where: { id: existingAssignment.id },
@@ -99,7 +83,7 @@ export async function POST(
 
       await prisma.queueEntry.updateMany({
         where: { playerId, sessionId: session.id, status: "waiting" },
-        data: { status: "playing" },
+        data: { status: "assigned" },
       });
 
       const otherPlayers = await prisma.player.findMany({
@@ -112,7 +96,6 @@ export async function POST(
         courtLabel: court.label,
         courtId: court.id,
         assignmentId: existingAssignment.id,
-        isWarmup: false,
         teammates: otherPlayers.map((p) => ({
           name: p.name,
           skillLevel: p.skillLevel,
@@ -121,135 +104,50 @@ export async function POST(
         gameType,
       });
 
-      await markSessionIntroWarmupComplete(session.id);
-      await emitUpdates();
-      return json({ success: true });
-    }
-
-    if (directPlayOnly && court.status === "idle") {
-      const gameStart = new Date(Date.now() - AUTO_START_DELAY_SECONDS * 1000);
-      const assignment = await prisma.courtAssignment.create({
-        data: {
-          courtId: court.id,
-          sessionId: session.id,
-          playerIds: [playerId],
-          groupIds: [],
-          gameType: "mixed",
-          isWarmup: false,
-          startedAt: gameStart,
-        },
-      });
-
-      await prisma.court.update({
-        where: { id: court.id },
-        data: { status: "active" },
-      });
-
-      await prisma.queueEntry.updateMany({
-        where: { playerId, sessionId: session.id, status: "waiting" },
-        data: { status: "playing" },
-      });
-
-      emitToPlayer(playerId, "player:notification", {
-        type: "court_assigned",
-        message: `${court.label} — go play!`,
-        courtLabel: court.label,
-        courtId: court.id,
-        assignmentId: assignment.id,
-        isWarmup: false,
-        teammates: [],
-        gameType: "mixed",
-      });
-
-      await markSessionIntroWarmupComplete(session.id);
-      await emitUpdates();
-      return json({ success: true });
-    }
-
-    if (existingAssignment && existingAssignment.isWarmup) {
-      if (existingAssignment.playerIds.length >= 4) {
-        return error("Court is already full", 400);
-      }
-
-      const updatedPlayerIds = [...existingAssignment.playerIds, playerId];
-      const updateData: { playerIds: string[]; startedAt?: Date } = { playerIds: updatedPlayerIds };
-      if (updatedPlayerIds.length >= 4) {
-        updateData.startedAt = new Date();
-      }
-
-      await prisma.courtAssignment.update({
-        where: { id: existingAssignment.id },
-        data: updateData,
-      });
-
-      await prisma.queueEntry.updateMany({
-        where: { playerId, sessionId: session.id, status: "waiting" },
-        data: { status: "assigned" },
-      });
-
-      const otherPlayers = await prisma.player.findMany({
-        where: { id: { in: existingAssignment.playerIds } },
-      });
-
-      emitToPlayer(playerId, "player:notification", {
-        type: "court_assigned",
-        message: `${court.label} — go warm up!`,
-        courtLabel: court.label,
-        courtId: court.id,
-        assignmentId: existingAssignment.id,
-        isWarmup: true,
-        warmupDurationSeconds,
-        teammates: otherPlayers.map((p) => ({
-          name: p.name,
-          skillLevel: p.skillLevel,
-          groupId: null,
-        })),
-        gameType: "mixed",
-      });
-
-      if (updatedPlayerIds.length >= 4) {
-        await scheduleWarmupTransitionPublic(
+      if (updatedPlayerIds.length >= COURT_PLAYER_COUNT) {
+        scheduleAssignedToPlayingTransition(
           existingAssignment.id,
           court.venueId,
           session.id,
-          court.id,
-          warmupDurationSeconds
+          updatedPlayerIds
         );
       }
-    } else {
-      const assignment = await prisma.courtAssignment.create({
-        data: {
-          courtId: court.id,
-          sessionId: session.id,
-          playerIds: [playerId],
-          groupIds: [],
-          gameType: "mixed",
-          isWarmup: true,
-        },
-      });
 
-      await prisma.court.update({
-        where: { id: court.id },
-        data: { status: "warmup" },
-      });
-
-      await prisma.queueEntry.updateMany({
-        where: { playerId, sessionId: session.id, status: "waiting" },
-        data: { status: "assigned" },
-      });
-
-      emitToPlayer(playerId, "player:notification", {
-        type: "court_assigned",
-        message: `${court.label} — go warm up!`,
-        courtLabel: court.label,
-        courtId: court.id,
-        assignmentId: assignment.id,
-        isWarmup: true,
-        warmupDurationSeconds,
-        teammates: [],
-        gameType: "mixed",
-      });
+      await emitUpdates();
+      return json({ success: true });
     }
+
+    // Idle — first player on court
+    const assignment = await prisma.courtAssignment.create({
+      data: {
+        courtId: court.id,
+        sessionId: session.id,
+        playerIds: [playerId],
+        groupIds: [],
+        gameType: "mixed",
+        isWarmup: false,
+      },
+    });
+
+    await prisma.court.update({
+      where: { id: court.id },
+      data: { status: "active" },
+    });
+
+    await prisma.queueEntry.updateMany({
+      where: { playerId, sessionId: session.id, status: "waiting" },
+      data: { status: "assigned" },
+    });
+
+    emitToPlayer(playerId, "player:notification", {
+      type: "court_assigned",
+      message: `${court.label} — go play!`,
+      courtLabel: court.label,
+      courtId: court.id,
+      assignmentId: assignment.id,
+      teammates: [],
+      gameType: "mixed",
+    });
 
     await emitUpdates();
     return json({ success: true });

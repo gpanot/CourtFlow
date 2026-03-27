@@ -2,15 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { formatTimer, getTimerColor, TIMER_COLORS, AUTO_START_DELAY_SECONDS, WARMUP_DURATION_SECONDS } from "@/lib/constants";
+import { formatTimer, getTimerColor, TIMER_COLORS, AUTO_START_DELAY_SECONDS } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 import { tvI18n } from "@/i18n/tv-i18n";
 
 interface TimerProps {
   startedAt: string;
   size?: "sm" | "md" | "lg" | "xl" | "tv";
-  /** Warmup countdown length; defaults to global fallback when omitted. */
-  durationSeconds?: number;
 }
 
 const sizeClasses = {
@@ -107,41 +105,6 @@ export function GamePhaseTimer({ startedAt, size = "md" }: TimerProps) {
         style={size === "tv" ? tvLabelStyle : undefined}
       >
         {size === "tv" ? t("timer.playing") : "Playing"}
-      </span>
-    </div>
-  );
-}
-
-export function WarmupCountdownTimer({ startedAt, size = "md", durationSeconds }: TimerProps) {
-  const { t } = useTranslation("translation", { i18n: tvI18n });
-  const total = durationSeconds ?? WARMUP_DURATION_SECONDS;
-  const [elapsed, setElapsed] = useState(0);
-
-  useEffect(() => {
-    const start = new Date(startedAt).getTime();
-    const update = () => {
-      setElapsed(Math.floor((Date.now() - start) / 1000));
-    };
-    update();
-    const interval = setInterval(update, 1000);
-    return () => clearInterval(interval);
-  }, [startedAt]);
-
-  const remaining = Math.max(0, total - elapsed);
-
-  return (
-    <div className="flex items-baseline gap-2">
-      <span
-        className={cn("tabular-nums font-bold text-amber-400", sizeClasses[size])}
-        style={size === "tv" ? tvTimerStyle : undefined}
-      >
-        {formatTimer(remaining)}
-      </span>
-      <span
-        className={cn("font-semibold text-amber-400/70", size === "tv" ? "" : "text-sm")}
-        style={size === "tv" ? tvLabelStyle : undefined}
-      >
-        {size === "tv" ? t("timer.warmUp") : "Warm Up"}
       </span>
     </div>
   );

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireAuth } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
-import { assignToWarmup } from "@/lib/algorithm";
+import { assignPlayerFromQueueToCourt } from "@/lib/algorithm";
 
 export async function GET(request: NextRequest) {
   const sessionId = request.nextUrl.searchParams.get("sessionId");
@@ -88,17 +88,23 @@ export async function POST(request: NextRequest) {
 
     emitToVenue(venueId, "queue:updated", allEntries);
 
-    // In auto mode, try to assign the player to a warmup court if any are available
-    // In manual mode, player stays in queue for host to assign
+    // In auto mode, assign to a partial active court or a free idle court when possible.
+    // In manual mode, player stays in queue for staff to assign.
     if (session.warmupMode !== "manual") {
       const courts = await prisma.court.findMany({
         where: { venueId, activeInSession: true },
+        include: {
+          courtAssignments: { where: { endedAt: null }, take: 1, orderBy: { startedAt: "desc" } },
+        },
       });
-      const hasWarmupOrIdleCourt = courts.some(
-        (c) => c.status === "idle" || c.status === "warmup"
-      );
-      if (hasWarmupOrIdleCourt) {
-        await assignToWarmup(venueId, sessionId, auth.id);
+      const hasSlot = courts.some((c) => {
+        if (c.status === "idle" && !c.skipWarmupAfterMaintenance) return true;
+        if (c.status !== "active") return false;
+        const a = c.courtAssignments[0];
+        return a && !a.isWarmup && a.playerIds.length < 4;
+      });
+      if (hasSlot) {
+        await assignPlayerFromQueueToCourt(venueId, sessionId, auth.id);
       }
     }
 

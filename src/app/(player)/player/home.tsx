@@ -18,8 +18,6 @@ import { LogOut } from "lucide-react";
 import { isPushSupported, subscribeToPush, getNotificationPermission } from "@/lib/push-client";
 import { NotificationCard } from "./notification-card";
 import { InstallCard } from "./install-card";
-import { isSessionWarmupDisplayMode } from "@/lib/session-warmup-display";
-
 interface Venue {
   id: string;
   name: string;
@@ -53,7 +51,6 @@ export function PlayerHome() {
   const [showProfile, setShowProfile] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [joining, setJoining] = useState(false);
-  const [isWarmup, setIsWarmup] = useState(false);
   const [avatar, setAvatar] = useState("🏓");
   const [recapSessionId, setRecapSessionId] = useState<string | null>(null);
   const [venueLogoutConfirmOpen, setVenueLogoutConfirmOpen] = useState(false);
@@ -136,12 +133,8 @@ export function PlayerHome() {
 
       const courtsState = await api.get<{
         courts: CourtState[];
-        session: { introWarmupComplete?: boolean } | null;
-        warmupDurationSeconds?: number;
+        session: { id: string } | null;
       }>(`/api/courts/state?venueId=${selectedVenue}`);
-      setIsWarmup(
-        isSessionWarmupDisplayMode(courtsState.courts, true, courtsState.session?.introWarmupComplete)
-      );
 
       if (playerId) {
         const entries = await api.get<QueueEntry[]>(`/api/queue?sessionId=${sess.id}`);
@@ -158,10 +151,6 @@ export function PlayerHome() {
                 type: myEntry.status === "assigned" ? "court_assigned" : "game_started",
                 courtLabel: myCourt.label,
                 gameType: myCourt.assignment?.gameType || "mixed",
-                isWarmup: myCourt.assignment?.isWarmup || false,
-                ...(typeof courtsState.warmupDurationSeconds === "number"
-                  ? { warmupDurationSeconds: courtsState.warmupDurationSeconds }
-                  : {}),
                 teammates: myCourt.players
                   .filter((p) => p.id !== playerId)
                   .map((p) => ({ name: p.name, skillLevel: p.skillLevel, groupId: p.groupId })),

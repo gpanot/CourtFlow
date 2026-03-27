@@ -7,8 +7,6 @@ export type ManualAssignCourtShape = {
   playerCount: number;
   assignmentIsWarmup?: boolean;
   skipWarmupAfterMaintenance?: boolean;
-  /** Session flag: same as `Session.introWarmupComplete` — direct play assign to partial active courts. */
-  introWarmupComplete?: boolean;
 };
 
 function manualAssignEligibleCore(input: ManualAssignCourtShape): boolean {
@@ -16,33 +14,22 @@ function manualAssignEligibleCore(input: ManualAssignCourtShape): boolean {
   if (status === "maintenance") return false;
   if (input.playerCount >= 4) return false;
 
-  const skip = !!input.skipWarmupAfterMaintenance;
-  const directPlay = skip || !!input.introWarmupComplete;
+  if (status === "idle") return true;
 
-  if (directPlay) {
-    if (status === "idle") return true;
-    // Match API: `!existingAssignment.isWarmup` (undefined counts as not warmup).
-    const notWarmupAssignment = input.assignmentIsWarmup !== true;
-    return !!(status === "active" && notWarmupAssignment && input.playerCount < 4);
-  }
-
-  return status === "idle" || status === "warmup";
+  const notWarmupAssignment = input.assignmentIsWarmup !== true;
+  return !!(status === "active" && notWarmupAssignment && input.playerCount < 4);
 }
 
 /**
  * Whether staff may assign waiting players via POST .../warmup-assign (mirrors
  * `src/app/api/courts/[courtId]/warmup-assign/route.ts`).
  */
-export function canCourtAcceptManualAssign(
-  court: CourtData & { skipWarmupAfterMaintenance?: boolean },
-  introWarmupComplete?: boolean
-): boolean {
+export function canCourtAcceptManualAssign(court: CourtData & { skipWarmupAfterMaintenance?: boolean }): boolean {
   return manualAssignEligibleCore({
     status: court.status,
     playerCount: court.players.length,
     assignmentIsWarmup: court.assignment?.isWarmup,
     skipWarmupAfterMaintenance: court.skipWarmupAfterMaintenance,
-    introWarmupComplete,
   });
 }
 

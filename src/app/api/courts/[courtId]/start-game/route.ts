@@ -40,7 +40,7 @@ export async function POST(
         return errorJson(
           {
             error:
-              "There are enough players in line, but no foursome matches rotation rules: use 4 men, 4 women, or 2 men + 2 women (3–1 splits are not used for auto-start). You can fill this court from the queue anyway (warmup) if you choose.",
+              "There are enough players in line, but no foursome matches rotation rules: use 4 men, 4 women, or 2 men + 2 women (3–1 splits are not used for auto-start). You can assign players from the queue manually if you choose.",
             code: "NO_VALID_FOURSOME",
             waitingCount: rotation.waitingCount,
             suggestAutofill: rotation.waitingCount >= 4,

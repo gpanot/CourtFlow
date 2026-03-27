@@ -20,16 +20,9 @@ import {
 } from "lucide-react";
 import { CourtsManager, type Court } from "@/components/admin/CourtsManager";
 import { resolveTvLocale, tvI18n, type TvLocale } from "@/i18n/tv-i18n";
-import {
-  WARMUP_MINUTES_OPTIONS,
-  normalizeWarmupMinutes,
-  type WarmupMinutesOption,
-} from "@/lib/warmup-settings";
-
 interface VenueSettings {
   logoSpin?: boolean;
   tvLocale?: string;
-  warmupMinutes?: number;
   [key: string]: unknown;
 }
 
@@ -512,19 +505,6 @@ function TVDisplaySettings({
     }
   };
 
-  const warmupMinutes = normalizeWarmupMinutes(settings.warmupMinutes);
-
-  const setWarmupMinutes = async (minutes: WarmupMinutesOption) => {
-    try {
-      await api.patch(`/api/venues/${venueId}`, {
-        settings: { ...settings, warmupMinutes: minutes },
-      });
-      await onRefresh();
-    } catch (e) {
-      alert((e as Error).message);
-    }
-  };
-
   const previewText = text || tvText || "";
   const previewLines = previewText ? previewText.split("\n").slice(0, 4) : [];
 
@@ -638,30 +618,6 @@ function TVDisplaySettings({
             </div>
             <p className="text-xs text-neutral-600">
               On-screen text on <code className="text-neutral-500">/tv</code> uses this language. Custom lines above stay as you type them.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-xs text-neutral-500">Warmup length (when a session is in warmup)</label>
-            <div className="inline-flex rounded-lg border border-neutral-700 p-0.5 bg-neutral-900/80">
-              {WARMUP_MINUTES_OPTIONS.map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setWarmupMinutes(m)}
-                  className={cn(
-                    "rounded-md px-3 py-1.5 text-xs font-medium transition-colors min-w-[2.75rem]",
-                    warmupMinutes === m
-                      ? "bg-purple-600 text-white"
-                      : "text-neutral-400 hover:text-white hover:bg-neutral-800"
-                  )}
-                >
-                  {m} min
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-neutral-600">
-              Countdown on the TV display and when games auto-start after four players are on a warmup court.
             </p>
           </div>
 

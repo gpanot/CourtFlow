@@ -2,8 +2,6 @@ import { prisma } from "./db";
 import { emitToPlayer, emitToVenue } from "./socket-server";
 import { isValidPickleballGenderMixForFour } from "./pickleball-gender";
 import { getSkillIndex, QUEUE_LOOKAHEAD, MAX_SKILL_GAP, AUTO_START_DELAY_SECONDS, MIN_GROUP_SIZE, COURT_PLAYER_COUNT } from "./constants";
-import { getVenueWarmupDurationSeconds } from "./warmup-settings";
-import { markSessionIntroWarmupComplete } from "./session-intro-warmup";
 import type { SkillLevel, GameType } from "@prisma/client";
 
 export interface GameTypeMix {
@@ -18,6 +16,36 @@ async function emitCourtUpdate(venueId: string) {
     include: { courtAssignments: { where: { endedAt: null }, take: 1 } },
   });
   emitToVenue(venueId, "court:updated", allCourts);
+}
+
+/** After full assign (4 players), move queue from assigned → playing after AUTO_START_DELAY (same as runRotation). */
+export function scheduleAssignedToPlayingTransition(
+  assignmentId: string,
+  venueId: string,
+  sessionId: string,
+  playerIds: string[]
+): void {
+  setTimeout(async () => {
+    try {
+      const current = await prisma.courtAssignment.findUnique({
+        where: { id: assignmentId },
+      });
+      if (current && !current.endedAt) {
+        await prisma.queueEntry.updateMany({
+          where: { playerId: { in: playerIds }, sessionId, status: "assigned" },
+          data: { status: "playing" },
+        });
+
+        const allCourts = await prisma.court.findMany({
+          where: { venueId, activeInSession: true },
+          include: { courtAssignments: { where: { endedAt: null }, take: 1 } },
+        });
+        emitToVenue(venueId, "court:updated", allCourts);
+      }
+    } catch (err) {
+      console.error("Auto-start error:", err);
+    }
+  }, AUTO_START_DELAY_SECONDS * 1000);
 }
 
 interface QueueCandidate {
@@ -365,8 +393,6 @@ export async function runRotation(
     data: { status: "active" },
   });
 
-  await markSessionIntroWarmupComplete(sessionId);
-
   for (const p of selectedPlayers) {
     await prisma.queueEntry.update({
       where: { id: p.entryId },
@@ -388,27 +414,7 @@ export async function runRotation(
     });
   }
 
-  setTimeout(async () => {
-    try {
-      const current = await prisma.courtAssignment.findUnique({
-        where: { id: assignment.id },
-      });
-      if (current && !current.endedAt) {
-        await prisma.queueEntry.updateMany({
-          where: { playerId: { in: playerIds }, sessionId, status: "assigned" },
-          data: { status: "playing" },
-        });
-
-        const allCourts = await prisma.court.findMany({
-          where: { venueId, activeInSession: true },
-          include: { courtAssignments: { where: { endedAt: null }, take: 1 } },
-        });
-        emitToVenue(venueId, "court:updated", allCourts);
-      }
-    } catch (err) {
-      console.error("Auto-start error:", err);
-    }
-  }, AUTO_START_DELAY_SECONDS * 1000);
+  scheduleAssignedToPlayingTransition(assignment.id, venueId, sessionId, playerIds);
 
   return { ok: true };
 }
@@ -431,10 +437,10 @@ function toQueueCandidateStub(
 }
 
 /**
- * Staff "autofill" warmup in **auto** session mode: pick waiting players so the
+ * Staff autofill in **auto** session mode: pick waiting players so the
  * full court is 4M, 4F, or 2M+2F and skill-compatible (same rule as rotation).
  */
-export function selectPlayersForWarmupAutofill(
+export function selectPlayersForCourtAutofill(
   currentPlayers: { id: string; gender: string; skillLevel: SkillLevel }[],
   waitingEntries: Array<{
     playerId: string;
@@ -472,14 +478,17 @@ export function selectPlayersForWarmupAutofill(
   return bestCombo;
 }
 
-export async function assignToWarmup(
+/**
+ * Auto-assign one waiting player from the queue to an active partial court or a free idle court.
+ * When `warmupMode === "auto"`, enforces valid pickleball gender mix when adding the 4th player.
+ */
+export async function assignPlayerFromQueueToCourt(
   venueId: string,
   sessionId: string,
   playerId: string
 ): Promise<boolean> {
   const session = await prisma.session.findUnique({ where: { id: sessionId } });
-  if (session?.introWarmupComplete) return false;
-  const enforceWarmupGender = session?.warmupMode === "auto";
+  const enforceGenderOnFourth = session?.warmupMode === "auto";
 
   const player = await prisma.player.findUnique({ where: { id: playerId } });
   if (!player) return false;
@@ -489,27 +498,23 @@ export async function assignToWarmup(
     include: { courtAssignments: { where: { endedAt: null }, take: 1, orderBy: { startedAt: "desc" } } },
   });
 
-  // First: find a warmup court with < 4 players
   let targetCourt = courts.find((c) => {
-    if (c.status !== "warmup") return false;
-    const assignment = c.courtAssignments[0];
-    return assignment && assignment.isWarmup && assignment.playerIds.length < 4;
+    if (c.status !== "active") return false;
+    const a = c.courtAssignments[0];
+    return a && !a.isWarmup && a.playerIds.length < COURT_PLAYER_COUNT;
   });
 
-  // Second: find an idle court (exclude post-maintenance courts that must not use warmup)
   if (!targetCourt) {
     targetCourt = courts.find((c) => c.status === "idle" && !c.skipWarmupAfterMaintenance);
   }
 
   if (!targetCourt) return false;
 
-  const warmupDurationSeconds = await getVenueWarmupDurationSeconds(venueId);
-
   const existingAssignment = targetCourt.courtAssignments[0];
 
-  if (existingAssignment && existingAssignment.isWarmup) {
+  if (existingAssignment && !existingAssignment.isWarmup && targetCourt.status === "active") {
     const existingIds = existingAssignment.playerIds;
-    if (enforceWarmupGender && existingIds.length === 3) {
+    if (enforceGenderOnFourth && existingIds.length === 3) {
       const existingPlayers = await prisma.player.findMany({ where: { id: { in: existingIds } } });
       const genders = [...existingPlayers.map((p) => p.gender), player.gender];
       if (!isValidPickleballGenderMixForFour(genders)) {
@@ -518,16 +523,15 @@ export async function assignToWarmup(
     }
 
     const updatedPlayerIds = [...existingIds, playerId];
-
     const allRoster = await prisma.player.findMany({ where: { id: { in: updatedPlayerIds } } });
 
-    const updateData: { playerIds: string[]; startedAt?: Date; gameType?: GameType } = {
+    const updateData: { playerIds: string[]; gameType?: GameType } = {
       playerIds: updatedPlayerIds,
     };
-    if (updatedPlayerIds.length >= 4) {
-      updateData.startedAt = new Date();
+    if (updatedPlayerIds.length >= COURT_PLAYER_COUNT) {
       updateData.gameType = deriveGameType(allRoster);
     }
+
     await prisma.courtAssignment.update({
       where: { id: existingAssignment.id },
       data: updateData,
@@ -543,16 +547,16 @@ export async function assignToWarmup(
     });
 
     const gameType: GameType =
-      updatedPlayerIds.length >= 4 ? deriveGameType(allRoster) : "mixed";
+      updatedPlayerIds.length >= COURT_PLAYER_COUNT
+        ? deriveGameType(allRoster)
+        : existingAssignment.gameType;
 
     emitToPlayer(playerId, "player:notification", {
       type: "court_assigned",
-      message: `${targetCourt.label} — go warm up!`,
+      message: `${targetCourt.label} — go play!`,
       courtLabel: targetCourt.label,
       courtId: targetCourt.id,
       assignmentId: existingAssignment.id,
-      isWarmup: true,
-      warmupDurationSeconds,
       teammates: otherPlayers.map((p) => ({
         name: p.name,
         skillLevel: p.skillLevel,
@@ -563,17 +567,19 @@ export async function assignToWarmup(
 
     await emitCourtUpdate(venueId);
 
-    if (updatedPlayerIds.length >= 4) {
-      scheduleWarmupTransition(
+    if (updatedPlayerIds.length >= COURT_PLAYER_COUNT) {
+      scheduleAssignedToPlayingTransition(
         existingAssignment.id,
         venueId,
         sessionId,
-        targetCourt.id,
-        warmupDurationSeconds
+        updatedPlayerIds
       );
     }
-  } else {
-    // Create new warmup assignment on idle court
+
+    return true;
+  }
+
+  if (targetCourt.status === "idle" && !existingAssignment) {
     const assignment = await prisma.courtAssignment.create({
       data: {
         courtId: targetCourt.id,
@@ -581,13 +587,13 @@ export async function assignToWarmup(
         playerIds: [playerId],
         groupIds: [],
         gameType: "mixed",
-        isWarmup: true,
+        isWarmup: false,
       },
     });
 
     await prisma.court.update({
       where: { id: targetCourt.id },
-      data: { status: "warmup" },
+      data: { status: "active" },
     });
 
     await prisma.queueEntry.updateMany({
@@ -597,92 +603,19 @@ export async function assignToWarmup(
 
     emitToPlayer(playerId, "player:notification", {
       type: "court_assigned",
-      message: `${targetCourt.label} — go warm up!`,
+      message: `${targetCourt.label} — go play!`,
       courtLabel: targetCourt.label,
       courtId: targetCourt.id,
       assignmentId: assignment.id,
-      isWarmup: true,
-      warmupDurationSeconds,
       teammates: [],
       gameType: "mixed",
     });
 
     await emitCourtUpdate(venueId);
+    return true;
   }
 
-  return true;
-}
-
-export async function scheduleWarmupTransitionPublic(
-  assignmentId: string,
-  venueId: string,
-  sessionId: string,
-  courtId: string,
-  durationSeconds?: number
-) {
-  const secs = durationSeconds ?? (await getVenueWarmupDurationSeconds(venueId));
-  scheduleWarmupTransition(assignmentId, venueId, sessionId, courtId, secs);
-}
-
-/**
- * Converts a full warmup assignment into an active game (same as the scheduled timer).
- * Idempotent: returns false if assignment is missing, ended, or not warmup.
- * Use when the in-process setTimeout was lost (deploy/restart) and the TV shows 0:00 warmup.
- */
-export async function runWarmupToActiveTransition(
-  assignmentId: string,
-  venueId: string,
-  sessionId: string,
-  courtId: string
-): Promise<boolean> {
-  const assignment = await prisma.courtAssignment.findUnique({
-    where: { id: assignmentId },
-  });
-  if (!assignment || assignment.endedAt || !assignment.isWarmup) return false;
-
-  const gameStart = new Date(Date.now() - AUTO_START_DELAY_SECONDS * 1000);
-  await prisma.courtAssignment.update({
-    where: { id: assignmentId },
-    data: { isWarmup: false, startedAt: gameStart },
-  });
-
-  await prisma.court.update({
-    where: { id: courtId },
-    data: { status: "active" },
-  });
-
-  await prisma.queueEntry.updateMany({
-    where: {
-      playerId: { in: assignment.playerIds },
-      sessionId,
-      status: "assigned",
-    },
-    data: { status: "playing" },
-  });
-
-  const allCourts = await prisma.court.findMany({
-    where: { venueId, activeInSession: true },
-    include: { courtAssignments: { where: { endedAt: null }, take: 1 } },
-  });
-  emitToVenue(venueId, "court:updated", allCourts);
-  await markSessionIntroWarmupComplete(sessionId);
-  return true;
-}
-
-function scheduleWarmupTransition(
-  assignmentId: string,
-  venueId: string,
-  sessionId: string,
-  courtId: string,
-  durationSeconds: number
-) {
-  setTimeout(async () => {
-    try {
-      await runWarmupToActiveTransition(assignmentId, venueId, sessionId, courtId);
-    } catch (err) {
-      console.error("Warmup transition error:", err);
-    }
-  }, durationSeconds * 1000);
+  return false;
 }
 
 export async function findReplacement(

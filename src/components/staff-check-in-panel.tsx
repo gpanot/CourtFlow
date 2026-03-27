@@ -1,14 +1,45 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { SKILL_LEVELS, SKILL_DESCRIPTIONS, type SkillLevelType } from "@/lib/constants";
-import { AlertTriangle, Loader2, UserPlus, Camera, Play, Bug } from "lucide-react";
+import { AlertTriangle, Loader2, UserPlus, Camera, SwitchCamera } from "lucide-react";
 import { testCameraSupport } from "@/lib/camera-test";
 
 const GENDERS = ["male", "female"] as const;
+
+function isMobileLikeDevice(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  if (/Android|iPhone|iPad|iPod/i.test(ua)) return true;
+  // iPadOS 13+ often reports as Mac with touch
+  if (typeof navigator.maxTouchPoints === "number" && navigator.maxTouchPoints > 1 && /Macintosh|MacIntel/.test(ua)) {
+    return true;
+  }
+  return false;
+}
+
+async function acquireFacePreviewStream(facingMode: "user" | "environment"): Promise<MediaStream> {
+  const videoConstraints = {
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
+    facingMode,
+    aspectRatio: { ideal: 16 / 9 },
+    frameRate: { ideal: 30 },
+  };
+  try {
+    return await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
+  } catch {
+    try {
+      return await navigator.mediaDevices.getUserMedia({ video: { facingMode } });
+    } catch {
+      console.log("Face camera: falling back to default device");
+      return navigator.mediaDevices.getUserMedia({ video: true });
+    }
+  }
+}
 
 export interface StaffCheckInRecent {
   id: string;
@@ -53,6 +84,8 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
   const [testSeedLoading, setTestSeedLoading] = useState(false);
   const [faceCaptureLoading, setFaceCaptureLoading] = useState(false);
   const [faceLivePreview, setFaceLivePreview] = useState(false);
+  /** Mobile defaults to back camera (environment); desktop to front (user). */
+  const [faceCameraFacing, setFaceCameraFacing] = useState<"user" | "environment">("user");
   const [capturedFace, setCapturedFace] = useState<string | null>(null);
   const faceStreamRef = useRef<MediaStream | null>(null);
   const faceVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -97,6 +130,10 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
         faceStreamRef.current = null;
       }
     };
+  }, []);
+
+  useLayoutEffect(() => {
+    if (isMobileLikeDevice()) setFaceCameraFacing("environment");
   }, []);
 
   const showFlash = (message: string) => {
@@ -305,21 +342,7 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
         throw new Error(errorMessage);
       }
 
-      let stream: MediaStream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            facingMode: "user",
-            aspectRatio: { ideal: 16 / 9 },
-            frameRate: { ideal: 30 },
-          },
-        });
-      } catch (mediaError) {
-        console.log("Primary camera request failed, trying fallback:", mediaError);
-        stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      }
+      const stream = await acquireFacePreviewStream(faceCameraFacing);
 
       faceStreamRef.current = stream;
       const video = faceVideoRef.current;
@@ -436,6 +459,50 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
   const cancelFaceLivePreview = () => {
     setErr("");
     stopFaceCamera();
+  };
+
+  const switchFaceCameraFacing = async () => {
+    if (!faceLivePreview || faceCaptureLoading || testSeedLoading) return;
+    const prevFacing = faceCameraFacing;
+    const nextFacing = prevFacing === "user" ? "environment" : "user";
+    setFaceCameraFacing(nextFacing);
+    setFaceCaptureLoading(true);
+    setErr("");
+    const video = faceVideoRef.current;
+    const oldStream = faceStreamRef.current;
+    if (oldStream) {
+      oldStream.getTracks().forEach((t) => t.stop());
+      faceStreamRef.current = null;
+    }
+    if (video) video.srcObject = null;
+
+    try {
+      const newStream = await acquireFacePreviewStream(nextFacing);
+      faceStreamRef.current = newStream;
+      if (!video) throw new Error("Preview not ready — try again.");
+      video.srcObject = newStream;
+      video.setAttribute("playsinline", "true");
+      video.muted = true;
+
+      await Promise.race([
+        new Promise<void>((resolve, reject) => {
+          video.onloadedmetadata = () => {
+            video.play().then(resolve).catch(reject);
+          };
+          video.onerror = () => reject(new Error("Video failed to load"));
+        }),
+        new Promise<void>((_, reject) =>
+          setTimeout(() => reject(new Error("Camera timeout")), 8000)
+        ),
+      ]);
+      setFaceLivePreview(true);
+    } catch (e) {
+      setFaceCameraFacing(prevFacing);
+      stopFaceCamera();
+      setErr(mapCameraError(e instanceof Error ? e.message : "Unknown camera error"));
+    } finally {
+      setFaceCaptureLoading(false);
+    }
   };
 
   // Test face recognition without camera
@@ -775,6 +842,18 @@ ${test.error ? `Error: ${test.error}` : ''}
                   muted
                   autoPlay
                 />
+                {faceLivePreview && (
+                  <button
+                    type="button"
+                    onClick={() => void switchFaceCameraFacing()}
+                    disabled={faceCaptureLoading}
+                    className="absolute bottom-2 right-2 flex h-11 w-11 items-center justify-center rounded-full border border-white/25 bg-black/55 text-white shadow-lg backdrop-blur-sm transition-colors hover:bg-black/70 disabled:opacity-40 max-sm:h-10 max-sm:w-10"
+                    title={t("staff.checkIn.faceSwitchCamera")}
+                    aria-label={t("staff.checkIn.faceSwitchCamera")}
+                  >
+                    <SwitchCamera className="h-5 w-5 max-sm:h-[18px] max-sm:w-[18px]" />
+                  </button>
+                )}
                 {!faceLivePreview && (
                   <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-neutral-950/80 px-4 text-center">
                     <Camera className="h-8 w-8 text-neutral-600 max-sm:h-7 max-sm:w-7" />

@@ -13,9 +13,8 @@ import { CourtCard, type CourtData } from "@/components/court-card";
 import { GenderIcon } from "@/components/gender-icon";
 import { QueuePanel, type QueueEntryData, type StaffQueueCourtGroup } from "@/components/queue-panel";
 import { cn } from "@/lib/cn";
-import { Plus, X, Users, LayoutGrid, AlertTriangle, User, UserPlus, Flame, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, Calendar, Loader2, Target, Play, Check, ListPlus, Camera } from "lucide-react";
-import { WARMUP_DURATION_SECONDS, MIN_GROUP_SIZE, MAX_GROUP_SIZE } from "@/lib/constants";
-import { isSessionWarmupDisplayMode } from "@/lib/session-warmup-display";
+import { Plus, X, Users, LayoutGrid, AlertTriangle, User, UserPlus, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, Calendar, Loader2, Target, Play, Check, ListPlus, Camera } from "lucide-react";
+import { MIN_GROUP_SIZE, MAX_GROUP_SIZE } from "@/lib/constants";
 import { QRCodeSVG } from "qrcode.react";
 import { SessionSummary } from "./session-summary";
 import { StaffCheckInPanel } from "@/components/staff-check-in-panel";
@@ -71,7 +70,6 @@ interface SessionData {
   venueId: string;
   gameTypeMix?: { men: number; women: number; mixed: number } | null;
   warmupMode?: "manual" | "auto";
-  introWarmupComplete?: boolean;
 }
 
 interface GameTypeMixStats {
@@ -134,7 +132,6 @@ export function StaffDashboard() {
   const [viewingSessionId, setViewingSessionId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [gameTypeMix, setGameTypeMix] = useState<GameTypeMixStats | null>(null);
-  const [warmupDurationSeconds, setWarmupDurationSeconds] = useState(WARMUP_DURATION_SECONDS);
   const [showMixEditor, setShowMixEditor] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const { on } = useSocket();
@@ -160,15 +157,11 @@ export function StaffDashboard() {
         courts: CourtData[];
         queue: QueueEntryData[];
         gameTypeMix: GameTypeMixStats | null;
-        warmupDurationSeconds?: number;
       }>(`/api/courts/state?venueId=${venueId}&staffQueue=1`);
       setSession(data.session);
       setCourts([...data.courts].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true })));
       setQueue(data.queue);
       setGameTypeMix(data.gameTypeMix);
-      if (typeof data.warmupDurationSeconds === "number") {
-        setWarmupDurationSeconds(data.warmupDurationSeconds);
-      }
       return data;
     } catch (e) {
       console.error(e);
@@ -344,17 +337,6 @@ export function StaffDashboard() {
     }
   };
 
-  /** After deploy/restart the warmup timer never fires; TV shows 0:00 — this runs the same transition. */
-  const handleFinishWarmup = async (courtId: string) => {
-    try {
-      await api.post(`/api/courts/${courtId}/finish-warmup`);
-      setSelectedCourt(null);
-      await fetchState();
-    } catch (e) {
-      alert((e as Error).message);
-    }
-  };
-
   const handlePlayerAction = async (
     playerId: string,
     _playerName: string,
@@ -440,10 +422,9 @@ export function StaffDashboard() {
     const active = new Set(["waiting", "on_break", "assigned", "playing"]);
     return queue.filter((e) => active.has(e.status)).map((e) => e.player.name.trim().toLowerCase());
   }, [queue]);
-  const isWarmupMode = isSessionWarmupDisplayMode(courts, !!session, session?.introWarmupComplete);
   const assignableCourtsForQueue = useMemo(() => {
     if (!session) return undefined;
-    const filtered = courts.filter((c) => canCourtAcceptManualAssign(c, session.introWarmupComplete));
+    const filtered = courts.filter((c) => canCourtAcceptManualAssign(c));
     if (filtered.length === 0) return undefined;
     return filtered.map((c) => ({
       id: c.id,
@@ -459,7 +440,7 @@ export function StaffDashboard() {
         gender: p.gender,
       })),
     }));
-  }, [session, courts, session?.introWarmupComplete]);
+  }, [session, courts]);
 
   /** All courts with players — for grouping “On court” rows in the Queue tab. */
   const staffQueueCourtGroups = useMemo<StaffQueueCourtGroup[]>(
@@ -600,31 +581,6 @@ export function StaffDashboard() {
 
         {session && tab === "courts" && (
           <div className="space-y-4">
-            {/* Warmup banner */}
-            {isWarmupMode && (
-              <div className="rounded-xl border border-amber-500/40 bg-amber-600/10 p-4">
-                <div className="flex items-center gap-3">
-                  <Flame className="h-5 w-5 shrink-0 text-amber-400" />
-                  <div>
-                    <p className="font-semibold text-amber-300">
-                      {t("staff.dashboard.warmupBannerTitle", {
-                        mode:
-                          session.warmupMode === "manual"
-                            ? t("staff.dashboard.warmupManual")
-                            : t("staff.dashboard.warmupAuto"),
-                      })}
-                    </p>
-                    <p className="text-xs text-amber-400/70">
-                      {session.warmupMode === "manual"
-                        ? t("staff.dashboard.warmupManualHint")
-                        : t("staff.dashboard.warmupAutoHint")}{" "}
-                      {t("staff.dashboard.warmupGamesAfter", { minutes: warmupDurationSeconds / 60 })}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
             {/* Game type mix tracker */}
             {gameTypeMix && gameTypeMix.totalGames > 0 && (
               <GameTypeMixTracker
@@ -640,8 +596,6 @@ export function StaffDashboard() {
                   key={court.id}
                   court={court}
                   variant="staff"
-                  warmup={isWarmupMode}
-                  warmupDurationSeconds={warmupDurationSeconds}
                   translationI18n={staffI18n}
                   onClick={() => setSelectedCourt(court)}
                 />
@@ -690,7 +644,6 @@ export function StaffDashboard() {
             onCreateGroup={() => setShowCreateGroup(true)}
             onDissolveGroup={handleDissolveGroup}
             isWarmupManual={!!assignableCourtsForQueue}
-            introWarmupComplete={session?.introWarmupComplete}
             courts={assignableCourtsForQueue}
             queueCourtGroups={staffQueueCourtGroups}
           />
@@ -809,36 +762,6 @@ export function StaffDashboard() {
 
               {/* Actions */}
               <div className="space-y-4">
-                {selectedCourt.status === "warmup" && selectedCourt.players.length >= 4 && (
-                  <button
-                    onClick={() => handleFinishWarmup(selectedCourt.id)}
-                    className="w-full rounded-xl bg-amber-600 py-5 text-lg font-bold text-white transition-colors hover:bg-amber-500 flex items-center justify-center gap-2"
-                  >
-                    <Play className="h-5 w-5" />
-                    {t("staff.dashboard.startGameEndWarmup")}
-                  </button>
-                )}
-
-                {selectedCourt.status === "warmup" &&
-                  selectedCourt.players.length < 4 &&
-                  session && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setManualAssignCourt({
-                          id: selectedCourt.id,
-                          label: selectedCourt.label,
-                          maxSlots: 4 - selectedCourt.players.length,
-                        })
-                      }
-                      disabled={waitingCount < 1 || !canCourtAcceptManualAssign(selectedCourt, session?.introWarmupComplete)}
-                      className="w-full rounded-xl bg-neutral-800 py-5 text-lg font-semibold text-white transition-colors hover:bg-neutral-700 disabled:opacity-40 disabled:hover:bg-neutral-800 flex items-center justify-center gap-2"
-                    >
-                      <ListPlus className="h-5 w-5" />
-                      {t("staff.dashboard.assignPlayersManual")}
-                    </button>
-                  )}
-
                 {selectedCourt.status === "active" && selectedCourt.assignment && (
                   <button
                     onClick={() => setConfirmStartGame({
@@ -854,7 +777,7 @@ export function StaffDashboard() {
                 )}
 
                 {selectedCourt.status === "active" &&
-                  canCourtAcceptManualAssign(selectedCourt, session?.introWarmupComplete) &&
+                  canCourtAcceptManualAssign(selectedCourt) &&
                   session && (
                     <button
                       type="button"
@@ -865,7 +788,7 @@ export function StaffDashboard() {
                           maxSlots: 4 - selectedCourt.players.length,
                         })
                       }
-                      disabled={waitingCount < 1 || !canCourtAcceptManualAssign(selectedCourt, session?.introWarmupComplete)}
+                      disabled={waitingCount < 1 || !canCourtAcceptManualAssign(selectedCourt)}
                       className="w-full rounded-xl bg-neutral-800 py-5 text-lg font-semibold text-white transition-colors hover:bg-neutral-700 disabled:opacity-40 disabled:hover:bg-neutral-800 flex items-center justify-center gap-2"
                     >
                       <ListPlus className="h-5 w-5" />
@@ -899,7 +822,7 @@ export function StaffDashboard() {
                         onClick={() => void openAssignFromStandbyOrIdle()}
                         disabled={
                           waitingCount < 1 ||
-                          (selectedCourt.status !== "maintenance" && !canCourtAcceptManualAssign(selectedCourt, session?.introWarmupComplete))
+                          (selectedCourt.status !== "maintenance" && !canCourtAcceptManualAssign(selectedCourt))
                         }
                         className="w-full rounded-xl bg-neutral-800 py-5 text-lg font-semibold text-white transition-colors hover:bg-neutral-700 disabled:opacity-40 disabled:hover:bg-neutral-800 flex items-center justify-center gap-2"
                       >

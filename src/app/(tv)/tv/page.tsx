@@ -8,20 +8,18 @@ import { useSocket } from "@/hooks/use-socket";
 import { joinVenue } from "@/lib/socket-client";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { Wifi, WifiOff, Flame, RotateCcw } from "lucide-react";
+import { Wifi, WifiOff, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import { TvReactionOverlay } from "@/components/tv-reaction-overlay";
 import { resolveTvLocale, tvI18n } from "@/i18n/tv-i18n";
-import { isSessionWarmupDisplayMode } from "@/lib/session-warmup-display";
 
 type VenueTvSettings = { logoSpin?: boolean; tvLocale?: string };
 
 interface VenueState {
-  session: { id: string; status: string; introWarmupComplete?: boolean } | null;
+  session: { id: string; status: string } | null;
   courts: CourtData[];
   queue: QueueEntryData[];
-  warmupDurationSeconds?: number;
 }
 
 export default function TVDisplayPage() {
@@ -150,12 +148,6 @@ export default function TVDisplayPage() {
   const sortedCourts = [...state.courts].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
   const activeCourts = sortedCourts.filter((c) => c.status !== "maintenance");
   const courtCount = activeCourts.length;
-  const waitingCount = state.queue.filter((e: { status: string }) => e.status === "waiting").length;
-  const isWarmupMode = isSessionWarmupDisplayMode(
-    state.courts,
-    !!state.session,
-    state.session?.introWarmupComplete
-  );
 
   const toggleOrientation = () => {
     setRotated((prev) => {
@@ -171,8 +163,6 @@ export default function TVDisplayPage() {
     : courtCount <= 9 ? "grid-cols-3"
     : "grid-cols-3 lg:grid-cols-4";
 
-  // --tw = 1% of effective visual width, --th = 1% of effective visual height.
-  // When CSS-rotated for landscape TV, swap vw↔vh so sizing stays correct.
   const outerStyle = {
     "--tw": rotated ? "1vh" : "1vw",
     "--th": rotated ? "1vw" : "1vh",
@@ -193,7 +183,6 @@ export default function TVDisplayPage() {
         className="flex h-dvh w-screen flex-col overflow-hidden bg-black text-white"
         style={rotated ? { width: "100dvh", height: "100dvw" } : undefined}
       >
-        {/* Top bar */}
         <header className="shrink-0 flex items-center justify-between border-b border-neutral-800 px-[calc(2*var(--tw,1vw))] py-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]">
           <div className="flex min-w-0 items-center gap-[calc(1.25*var(--tw,1vw))]">
             <div className="flex shrink-0 items-center gap-[calc(0.75*var(--tw,1vw))]">
@@ -226,12 +215,7 @@ export default function TVDisplayPage() {
             </div>
           </div>
           <div className="flex items-center gap-[calc(1.5*var(--tw,1vw))]">
-            {isWarmupMode ? (
-              <span className="flex items-center gap-2 rounded-full bg-amber-500/20 px-3 py-1 font-medium text-amber-400 text-[clamp(0.65rem,calc(1.2*var(--tw,1vw)),1rem)]">
-                <Flame className="h-[calc(1.2*var(--tw,1vw))] w-[calc(1.2*var(--tw,1vw))] min-h-3 min-w-3" />{" "}
-                {t("warmupCheckedIn", { count: waitingCount })}
-              </span>
-            ) : state.session ? (
+            {state.session ? (
               <span className="rounded-full bg-green-600/20 px-3 py-1 font-medium text-green-400 text-[clamp(0.65rem,calc(1.2*var(--tw,1vw)),1rem)]">
                 {t("sessionActiveCourts", { count: courtCount })}
               </span>
@@ -266,9 +250,7 @@ export default function TVDisplayPage() {
           </div>
         </header>
 
-        {/* Main content */}
         <div className="flex flex-1 min-h-0 overflow-hidden">
-          {/* Court grid */}
           <main className="flex-1 min-w-0 min-h-0 overflow-hidden p-[min(calc(1.5*var(--tw,1vw)),calc(2*var(--th,1vh)))]">
             {!state.session ? (
               <div className="flex h-full flex-col items-center justify-center gap-[calc(3*var(--th,1vh))]">
@@ -298,59 +280,15 @@ export default function TVDisplayPage() {
                   {t("waitingSessionStart")}
                 </p>
               </div>
-            ) : isWarmupMode ? (
-              <div className="flex h-full min-h-0 flex-col gap-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]">
-                {/* Warmup hero — capped by vh so the court grid always fits on one TV screen (no scroll) */}
-                <div className="shrink-0 flex flex-col items-center justify-center gap-[min(calc(0.5*var(--th,1vh)),calc(0.35*var(--tw,1vw)))] text-center py-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]">
-                  <Flame
-                    className="text-amber-400 opacity-80 shrink-0"
-                    style={{
-                      width: "clamp(1.25rem, min(calc(3 * var(--tw, 1vw)), calc(5 * var(--th, 1vh))), min(3.5rem, calc(10 * var(--th, 1vh))))",
-                      height: "clamp(1.25rem, min(calc(3 * var(--tw, 1vw)), calc(5 * var(--th, 1vh))), min(3.5rem, calc(10 * var(--th, 1vh))))",
-                    }}
-                  />
-                  <p
-                    className="font-bold text-amber-300 leading-tight"
-                    style={{ fontSize: "clamp(1rem, min(calc(3 * var(--tw, 1vw)), calc(4 * var(--th, 1vh))), min(2.75rem, calc(8 * var(--th, 1vh))))" }}
-                  >
-                    {t("warmupTime")}
-                  </p>
-                  <p
-                    className="text-amber-400/70 leading-snug"
-                    style={{ fontSize: "clamp(0.65rem, min(calc(1.5 * var(--tw, 1vw)), calc(2 * var(--th, 1vh))), min(1.35rem, calc(4 * var(--th, 1vh))))" }}
-                  >
-                    {t("warmupHeroHint")}
-                  </p>
-                </div>
-                {/* Court cards in warmup state */}
-                <div className={cn("grid min-h-0 flex-1 overflow-hidden gap-[min(var(--tw,1vw),var(--th,1vh))] auto-rows-fr", gridCols)}>
-                  {sortedCourts.map((court) => (
-                    <CourtCard
-                      key={court.id}
-                      court={court}
-                      variant="tv"
-                      warmup={isWarmupMode}
-                      warmupDurationSeconds={state.warmupDurationSeconds}
-                    />
-                  ))}
-                </div>
-              </div>
             ) : (
               <div className={cn("grid h-full min-h-0 overflow-hidden gap-[min(var(--tw,1vw),var(--th,1vh))] auto-rows-fr", gridCols)}>
                 {sortedCourts.map((court) => (
-                  <CourtCard
-                    key={court.id}
-                    court={court}
-                    variant="tv"
-                    warmup={isWarmupMode}
-                    warmupDurationSeconds={state.warmupDurationSeconds}
-                  />
+                  <CourtCard key={court.id} court={court} variant="tv" />
                 ))}
               </div>
             )}
           </main>
 
-          {/* Queue sidebar */}
           {state.session && (
             <aside
               className="shrink-0 border-l border-neutral-800 flex flex-col overflow-hidden"
@@ -373,14 +311,6 @@ export default function TVDisplayPage() {
                   />
                 </div>
               </div>
-              {isWarmupMode && (
-                <p
-                  className="mb-[calc(0.4*var(--th,1vh))] font-semibold text-amber-400 uppercase tracking-wider"
-                  style={{ fontSize: "clamp(0.36rem, min(calc(0.8 * var(--tw, 1vw)), calc(1.2 * var(--th, 1vh))), 0.7rem)" }}
-                >
-                  {t("checkedIn")}
-                </p>
-              )}
               <div className="flex-1 min-h-0 overflow-y-auto">
                 <QueuePanel entries={state.queue} variant="tv" />
               </div>

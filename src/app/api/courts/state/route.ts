@@ -1,7 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
-import { getWarmupDurationSecondsFromSettings } from "@/lib/warmup-settings";
 import { recoverStuckQueueStatusesForActiveGames } from "@/lib/recover-queue-status";
 
 const STAFF_QUEUE_STATUSES = ["waiting", "on_break", "assigned", "playing"] as const;
@@ -15,17 +14,10 @@ export async function GET(request: NextRequest) {
     request.nextUrl.searchParams.get("staffQueue") === "true";
 
   try {
-    const [session, venueRow] = await Promise.all([
-      prisma.session.findFirst({
-        where: { venueId, status: "open" },
-        orderBy: { openedAt: "desc" },
-      }),
-      prisma.venue.findUnique({
-        where: { id: venueId },
-        select: { settings: true },
-      }),
-    ]);
-    const warmupDurationSeconds = getWarmupDurationSecondsFromSettings(venueRow?.settings);
+    const session = await prisma.session.findFirst({
+      where: { venueId, status: "open" },
+      orderBy: { openedAt: "desc" },
+    });
 
     const courts = await prisma.court.findMany({
       where: { venueId, activeInSession: true },
@@ -159,7 +151,6 @@ export async function GET(request: NextRequest) {
       courts: courtsWithPlayers,
       queue,
       gameTypeMix: gameTypeMixStats,
-      warmupDurationSeconds,
     });
   } catch (e) {
     return error((e as Error).message, 500);

@@ -4,7 +4,7 @@ import type { i18n as I18nInstance } from "i18next";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/cn";
 import { tvI18n } from "@/i18n/tv-i18n";
-import { GamePhaseTimer, WarmupCountdownTimer } from "./timer";
+import { GamePhaseTimer } from "./timer";
 import { Link } from "lucide-react";
 import { GenderIcon } from "@/components/gender-icon";
 import { AUTO_START_DELAY_SECONDS } from "@/lib/constants";
@@ -30,16 +30,12 @@ export interface CourtData {
   status: "idle" | "warmup" | "active" | "maintenance";
   assignment: (Assignment & { isWarmup?: boolean }) | null;
   players: Player[];
-  /** When true, idle / partial active (non-warmup) accepts direct assign; warmup path is rejected by API. */
   skipWarmupAfterMaintenance?: boolean;
 }
 
 interface CourtCardProps {
   court: CourtData;
   variant?: "tv" | "staff";
-  warmup?: boolean;
-  /** Venue-configured warmup length for countdown (full court warmup). */
-  warmupDurationSeconds?: number;
   onClick?: () => void;
   /** When set (e.g. staff app), use this i18n instance instead of TV copy. */
   translationI18n?: I18nInstance;
@@ -50,7 +46,6 @@ const statusConfig = {
   starting: { bg: "bg-blue-600/20 border-blue-500", dot: "bg-blue-500" },
   idle: { bg: "bg-neutral-800/50 border-neutral-600", dot: "bg-neutral-500" },
   maintenance: { bg: "bg-neutral-800/60 border-neutral-500", dot: "bg-neutral-400" },
-  warmup: { bg: "bg-amber-600/15 border-amber-500/60", dot: "bg-amber-400" },
 };
 
 const skillBadgeColors: Record<string, string> = {
@@ -76,20 +71,15 @@ function gameTypeTvLabel(gameType: string, t: (k: string) => string) {
 export function CourtCard({
   court,
   variant = "tv",
-  warmup = false,
-  warmupDurationSeconds,
   onClick,
   translationI18n,
 }: CourtCardProps) {
   const { t } = useTranslation("translation", { i18n: translationI18n ?? tvI18n });
-  const isWarmupCourt = court.status === "warmup";
-  const isIdleWarmup = warmup && court.status === "idle";
-  const starting = court.status === "active" && isStartingPhase(court.assignment);
+  const normalizedStatus = court.status === "warmup" ? "active" : court.status;
+  const starting = normalizedStatus === "active" && isStartingPhase(court.assignment);
 
-  const configKey = (isWarmupCourt || isIdleWarmup) ? "warmup"
-    : starting ? "starting"
-    : court.status;
-  const config = statusConfig[configKey] || statusConfig.idle;
+  const configKey = starting ? "starting" : normalizedStatus;
+  const config = statusConfig[configKey as keyof typeof statusConfig] || statusConfig.idle;
   const isTV = variant === "tv";
 
   const tvStarting = isTV && starting;
@@ -116,7 +106,7 @@ export function CourtCard({
         </h3>
         <div className={cn("flex items-center gap-2", tvStarting && "animate-blink-sharp")}>
           <div className={cn("rounded-full", isTV ? "h-[min(var(--tw,1vw),calc(1.5*var(--th,1vh)))] w-[min(var(--tw,1vw),calc(1.5*var(--th,1vh)))] min-h-1.5 min-w-1.5" : "h-3 w-3", config.dot)} />
-          {court.status === "active" && court.assignment && (
+          {normalizedStatus === "active" && court.assignment && (
             <span
               className={cn("rounded-md bg-neutral-700 px-2 py-0.5 font-medium uppercase", isTV ? "" : "text-xs")}
               style={isTV ? { fontSize: "clamp(0.5rem, min(var(--tw, 1vw), calc(1.5 * var(--th, 1vh))), 0.875rem)" } : undefined}
@@ -131,8 +121,7 @@ export function CourtCard({
         </div>
       </div>
 
-      {/* Active game — shows Starting (blue) or Playing (green) phase */}
-      {court.status === "active" && court.assignment && (
+      {normalizedStatus === "active" && court.assignment && (
         <>
           <div className={isTV ? "mt-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]" : "mt-3"}>
             <GamePhaseTimer
@@ -168,97 +157,13 @@ export function CourtCard({
         </>
       )}
 
-      {/* Warmup court with 4 players — show countdown */}
-      {isWarmupCourt && court.assignment && court.players.length >= 4 && (
-        <div className={isTV ? "mt-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]" : "mt-3"}>
-          <WarmupCountdownTimer
-            startedAt={court.assignment.startedAt}
-            size={isTV ? "tv" : "lg"}
-            durationSeconds={warmupDurationSeconds}
-          />
-          <div
-            className={cn(isTV ? "mt-[min(calc(0.5*var(--th,1vh)),calc(0.25*var(--tw,1vw)))] space-y-[calc(0.3*var(--th,1vh))]" : "mt-2 space-y-1")}
-            style={isTV ? { fontSize: "clamp(0.7rem, min(calc(1.75 * var(--tw, 1vw)), calc(2.5 * var(--th, 1vh))), min(1.75rem, calc(4.5 * var(--th, 1vh))))" } : undefined}
-          >
-            {court.players.map((player) => (
-              <div key={player.id} className="flex items-center gap-2">
-                {!isTV && <GenderIcon gender={player.gender} className="h-4 w-4" />}
-                <span className="font-medium truncate text-amber-200">{player.name}</span>
-                {!isTV && (
-                  <span
-                    className={cn(
-                      "shrink-0 rounded-full px-2 py-0.5 font-medium text-xs",
-                      skillBadgeColors[player.skillLevel] || "bg-neutral-600"
-                    )}
-                  >
-                    {player.skillLevel[0].toUpperCase()}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Warmup court filling up (< 4 players) */}
-      {isWarmupCourt && court.assignment && court.players.length < 4 && (
-        <div className={isTV ? "mt-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]" : "mt-3"}>
-          <p
-            className={cn("font-semibold text-amber-400 animate-blink-sharp", isTV ? "" : "text-lg")}
-            style={isTV ? { fontSize: "clamp(0.75rem, min(calc(1.75 * var(--tw, 1vw)), calc(2.5 * var(--th, 1vh))), min(1.75rem, calc(4.5 * var(--th, 1vh))))" } : undefined}
-          >
-            {t("court.warmupProgress", { current: court.players.length })}
-          </p>
-          <div
-            className={cn(isTV ? "mt-[min(calc(0.5*var(--th,1vh)),calc(0.25*var(--tw,1vw)))] space-y-[calc(0.3*var(--th,1vh))]" : "mt-2 space-y-1")}
-            style={isTV ? { fontSize: "clamp(0.7rem, min(calc(1.75 * var(--tw, 1vw)), calc(2.5 * var(--th, 1vh))), min(1.75rem, calc(4.5 * var(--th, 1vh))))" } : undefined}
-          >
-            {court.players.map((player) => (
-              <div key={player.id} className="flex items-center gap-2">
-                {!isTV && <GenderIcon gender={player.gender} className="h-4 w-4" />}
-                <span className="font-medium truncate text-amber-200">{player.name}</span>
-                {!isTV && (
-                  <span
-                    className={cn(
-                      "shrink-0 rounded-full px-2 py-0.5 font-medium text-xs",
-                      skillBadgeColors[player.skillLevel] || "bg-neutral-600"
-                    )}
-                  >
-                    {player.skillLevel[0].toUpperCase()}
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Idle — available (TV only; staff starts games from the court action sheet / queue) */}
-      {court.status === "idle" && !warmup && isTV && (
+      {normalizedStatus === "idle" && isTV && (
         <div className="mt-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]">
           <p
             className="text-neutral-400"
             style={{ fontSize: "clamp(0.75rem, min(calc(2 * var(--tw, 1vw)), calc(3 * var(--th, 1vh))), min(2.25rem, calc(6 * var(--th, 1vh))))" }}
           >
             {t("court.available")}
-          </p>
-        </div>
-      )}
-
-      {/* Idle — waiting for warmup players */}
-      {isIdleWarmup && (
-        <div className={isTV ? "mt-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]" : "mt-3"}>
-          <p
-            className={cn("font-semibold text-amber-400", isTV ? "" : "text-lg")}
-            style={isTV ? { fontSize: "clamp(0.75rem, min(calc(2 * var(--tw, 1vw)), calc(2.75 * var(--th, 1vh))), min(1.85rem, calc(5 * var(--th, 1vh))))" } : undefined}
-          >
-            {t("court.warmup")}
-          </p>
-          <p
-            className={cn("text-amber-300/60", isTV ? "mt-[calc(0.25*var(--th,1vh))]" : "mt-0.5 text-sm")}
-            style={isTV ? { fontSize: "clamp(0.6rem, min(calc(1.35 * var(--tw, 1vw)), calc(2 * var(--th, 1vh))), min(1.35rem, calc(3.5 * var(--th, 1vh))))" } : undefined}
-          >
-            {t("court.waitingPlayers")}
           </p>
         </div>
       )}

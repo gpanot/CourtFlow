@@ -34,7 +34,6 @@ interface SessionDetail {
     id: string;
     courtLabel: string;
     gameType: string;
-    isWarmup: boolean;
     startedAt: string;
     endedAt: string | null;
     durationMinutes: number;
@@ -379,11 +378,6 @@ export default function AnalyticsPage() {
                               <tr key={g.id} className="border-b border-neutral-800/80 last:border-0">
                                 <td className="px-3 py-2 align-top">
                                   <span className="font-medium text-neutral-200">{g.courtLabel}</span>
-                                  {g.isWarmup && (
-                                    <span className="ml-1.5 rounded bg-neutral-700 px-1 py-0.5 text-[10px] text-neutral-400">
-                                      warmup
-                                    </span>
-                                  )}
                                 </td>
                                 <td className="px-3 py-2 align-top capitalize text-neutral-300">
                                   {g.gameType}
