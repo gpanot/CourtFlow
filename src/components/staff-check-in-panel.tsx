@@ -608,64 +608,78 @@ ${test.error ? `Error: ${test.error}` : ''}
       )}
 
       <div className="space-y-4 rounded-xl border border-neutral-800 bg-neutral-900/40 p-4 max-sm:space-y-2.5 max-sm:rounded-lg max-sm:p-3">
-        <div>
-          <label className="mb-1.5 block text-xs font-medium text-neutral-400 max-sm:mb-1">
-            {t("staff.checkIn.name")}
-          </label>
-          <input
-            type="text"
-            placeholder={t("staff.checkIn.playerNamePlaceholder")}
-            value={name}
-            onChange={(e) => {
-              setName(e.target.value);
-              setErr("");
-            }}
-            className={cn(
-              "w-full rounded-xl border bg-neutral-950 px-4 py-3 text-base text-white placeholder:text-neutral-500 focus:outline-none max-sm:rounded-lg max-sm:px-3 max-sm:py-2",
-              showDuplicateWarning ? "border-red-500/50 focus:border-red-500" : "border-neutral-700 focus:border-green-500"
-            )}
-            aria-invalid={showDuplicateWarning}
-            aria-describedby={showDuplicateWarning ? "checkin-duplicate-name" : undefined}
-            autoComplete="off"
-            autoCapitalize="words"
-          />
-        </div>
-
-        <div>
-          <p className="mb-2 text-xs font-medium text-neutral-400 max-sm:mb-1">{t("staff.checkIn.gender")}</p>
-          <div className="grid grid-cols-2 gap-2 max-sm:gap-1.5">
-            {GENDERS.map((g) => (
-              <button
-                key={g}
-                type="button"
-                onClick={() => setGender(g)}
-                className={cn(
-                  "rounded-xl border-2 py-3 text-sm font-medium capitalize transition-colors max-sm:rounded-lg max-sm:py-2",
-                  gender === g
-                    ? "border-green-500 bg-green-600/20 text-green-400"
-                    : "border-neutral-700 text-neutral-300 hover:border-neutral-500"
-                )}
-              >
-                {genderLabel(g)}
-              </button>
-            ))}
+        {/* Name + Gender Row */}
+        <div className="flex gap-2 max-sm:gap-1.5">
+          <div className="flex-1">
+            <label className="mb-1.5 block text-xs font-medium text-neutral-400 max-sm:mb-1">
+              {t("staff.checkIn.name")}
+            </label>
+            <input
+              type="text"
+              placeholder={t("staff.checkIn.playerNamePlaceholder")}
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                setErr("");
+              }}
+              className={cn(
+                "w-full rounded-xl border bg-neutral-950 px-4 py-3 text-base text-white placeholder:text-neutral-500 focus:outline-none max-sm:rounded-lg max-sm:px-3 max-sm:py-2",
+                showDuplicateWarning ? "border-red-500/50 focus:border-red-500" : "border-neutral-700 focus:border-green-500"
+              )}
+              aria-invalid={showDuplicateWarning}
+              aria-describedby={showDuplicateWarning ? "checkin-duplicate-name" : undefined}
+              autoComplete="off"
+              autoCapitalize="words"
+            />
+          </div>
+          
+          {/* Gender Icons */}
+          <div>
+            <p className="mb-1.5 text-xs font-medium text-neutral-400 max-sm:mb-1">{t("staff.checkIn.gender")}</p>
+            <div className="flex gap-1 max-sm:gap-1">
+              {GENDERS.map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => setGender(g)}
+                  className={cn(
+                    "flex h-11 w-11 items-center justify-center rounded-xl border-2 transition-colors max-sm:h-10 max-sm:w-10 max-sm:rounded-lg",
+                    gender === g
+                      ? "border-green-500 bg-green-600/20 text-green-400"
+                      : "border-neutral-700 text-neutral-400 hover:border-neutral-500 hover:text-neutral-300"
+                  )}
+                  title={genderLabel(g)}
+                >
+                  {g === 'male' ? (
+                    <svg className="h-5 w-5 max-sm:h-4 max-sm:w-4" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+                    </svg>
+                  ) : (
+                    <svg className="h-5 w-5 max-sm:h-4 max-sm:w-4" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
+        {/* Skill Levels - Single row on all devices */}
         <div>
           <p className="mb-2 text-xs font-medium text-neutral-400 max-sm:mb-1">{t("staff.checkIn.skillLevel")}</p>
-          <div className="grid grid-cols-3 gap-2 max-sm:grid-cols-2 max-sm:gap-1.5">
+          <div className="grid grid-cols-3 gap-2 max-sm:gap-1.5">
             {SKILL_LEVELS.filter(level => level !== "pro").map((level) => (
               <button
                 key={level}
                 type="button"
                 onClick={() => setSkill(level)}
                 className={cn(
-                  "w-full rounded-xl border-2 p-3 text-left transition-colors max-sm:rounded-lg max-sm:p-2.5 max-sm:text-center",
+                  "w-full rounded-xl border-2 p-3 text-center transition-colors max-sm:rounded-lg max-sm:p-2 max-sm:text-sm",
                   skill === level ? "border-green-500 bg-green-600/20" : "border-neutral-700 hover:border-neutral-500"
                 )}
               >
-                <span className="font-medium capitalize text-white text-sm">{skillLabel(level)}</span>
+                <span className="font-medium capitalize text-white">{skillLabel(level)}</span>
               </button>
             ))}
           </div>
