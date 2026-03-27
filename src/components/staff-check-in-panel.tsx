@@ -54,6 +54,17 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
   const [faceCaptureLoading, setFaceCaptureLoading] = useState(false);
   const [capturedFace, setCapturedFace] = useState<string | null>(null);
   const [showFacePreview, setShowFacePreview] = useState(false);
+  const [faceQuality, setFaceQuality] = useState<{
+    overall: 'good' | 'fair' | 'poor' | null;
+    checks: {
+      faceDetected: boolean;
+      lighting: 'good' | 'fair' | 'poor';
+      focus: 'good' | 'fair' | 'poor';
+      size: 'good' | 'fair' | 'poor';
+    } | null;
+    message: string;
+    canForce: boolean;
+  } | null>(null);
   const [confirmTestCreate5, setConfirmTestCreate5] = useState<{ step: 1 | 2 } | null>(null);
   const [err, setErr] = useState("");
   const [recent, setRecent] = useState<StaffCheckInRecent[]>([]);
@@ -105,6 +116,18 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
         success: boolean;
         player: { id: string; name: string; gender: string; skillLevel: string };
         queueNumber?: number;
+        qualityCheck?: {
+          overall: 'good' | 'fair' | 'poor';
+          checks: {
+            faceDetected: boolean;
+            lighting: 'good' | 'fair' | 'poor';
+            focus: 'good' | 'fair' | 'poor';
+            size: 'good' | 'fair' | 'poor';
+          };
+          message: string;
+          canForce: boolean;
+        };
+        requiresRetake?: boolean;
       }>("/api/queue/staff-add-walk-in-with-face", {
         venueId,
         name: trimmed,
@@ -112,6 +135,81 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
         skillLevel: skill,
         ...(phoneTrimmed ? { phone: phoneTrimmed } : {}),
         imageBase64,
+      });
+      
+      if (res.requiresRetake && res.qualityCheck) {
+        // Photo quality check failed
+        setFaceQuality(res.qualityCheck);
+        setErr(res.qualityCheck.message);
+        return;
+      }
+      
+      if (res.player) {
+        showFlash(t("staff.checkIn.addedFlash", { name: res.player.name }));
+        setRecent((prev) => {
+          const next = [
+            {
+              id: res.player.id,
+              name: res.player.name,
+              gender: res.player.gender,
+              skillLevel: res.player.skillLevel,
+              queueNumber: res.queueNumber,
+            },
+            ...prev.filter((p) => p.id !== res.player.id),
+          ];
+          return next.slice(0, 5);
+        });
+      }
+      
+      // Reset form
+      setName("");
+      setGender("");
+      setSkill("");
+      setPhone("");
+      setCapturedFace(null);
+      setShowFacePreview(false);
+      setFaceQuality(null);
+      onAdded();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const forceAddWithFace = async () => {
+    setErr("");
+    const trimmed = name.trim();
+    if (!trimmed || !gender || !skill) {
+      setErr(t("staff.checkIn.requiredFields"));
+      return;
+    }
+    if (queueNamesLower.includes(trimmed.toLowerCase())) {
+      setErr(duplicateNameMsg);
+      return;
+    }
+    if (!capturedFace) {
+      setErr("Please capture a face photo first");
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const phoneTrimmed = phone.trim();
+      const imageBase64 = capturedFace.split(',')[1]; // Remove data URL prefix
+      
+      const res = await api.post<{
+        success: boolean;
+        player: { id: string; name: string; gender: string; skillLevel: string };
+        queueNumber?: number;
+      }>("/api/queue/staff-add-walk-in-with-face", {
+        venueId,
+        name: trimmed,
+        gender,
+        skillLevel: skill,
+        ...(phoneTrimmed ? { phone: phoneTrimmed } : {}),
+        imageBase64,
+        forceAdd: true,
       });
       
       if (res.player) {
@@ -138,6 +236,7 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
       setPhone("");
       setCapturedFace(null);
       setShowFacePreview(false);
+      setFaceQuality(null);
       onAdded();
     } catch (e) {
       setErr((e as Error).message);
@@ -617,11 +716,20 @@ ${test.error ? `Error: ${test.error}` : ''}
                 <img 
                   src={capturedFace} 
                   alt="Captured face" 
-                  className="w-32 h-32 rounded-lg object-cover border-2 border-neutral-700"
+                  className={cn(
+                    "w-32 h-32 rounded-lg object-cover border-2",
+                    faceQuality?.overall === 'good' ? 'border-green-500' :
+                    faceQuality?.overall === 'fair' ? 'border-yellow-500' :
+                    faceQuality?.overall === 'poor' ? 'border-red-500' :
+                    'border-neutral-700'
+                  )}
                 />
                 <button
                   type="button"
-                  onClick={() => setCapturedFace(null)}
+                  onClick={() => {
+                    setCapturedFace(null);
+                    setFaceQuality(null);
+                  }}
                   className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
                 >
                   ×
@@ -629,21 +737,135 @@ ${test.error ? `Error: ${test.error}` : ''}
               </div>
             </div>
             
-            <button
-              type="button"
-              onClick={submitWithFace}
-              disabled={loading || testSeedLoading || !name.trim() || !gender || !skill || showDuplicateWarning}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50 max-sm:rounded-lg max-sm:py-2.5 max-sm:text-base"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="h-5 w-5 animate-spin max-sm:h-4 max-sm:w-4" />
-                  {t("staff.checkIn.adding")}
-                </>
-              ) : (
-                "Add Player with Face"
+            {/* Quality Feedback */}
+            {faceQuality && (
+              <div className={cn(
+                "rounded-lg p-3 border",
+                faceQuality.overall === 'good' ? 'bg-green-600/10 border-green-500/50' :
+                faceQuality.overall === 'fair' ? 'bg-yellow-600/10 border-yellow-500/50' :
+                'bg-red-600/10 border-red-500/50'
+              )}>
+                <div className="flex items-center gap-2 mb-2">
+                  {faceQuality.overall === 'good' && (
+                    <>
+                      <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center">
+                        <span className="text-white text-xs">✓</span>
+                      </div>
+                      <span className="text-green-400 text-sm font-medium">Photo Quality: Good</span>
+                    </>
+                  )}
+                  {faceQuality.overall === 'fair' && (
+                    <>
+                      <div className="w-4 h-4 bg-yellow-500 rounded-full flex items-center justify-center">
+                        <span className="text-white text-xs">!</span>
+                      </div>
+                      <span className="text-yellow-400 text-sm font-medium">Photo Quality: Fair</span>
+                    </>
+                  )}
+                  {faceQuality.overall === 'poor' && (
+                    <>
+                      <div className="w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
+                        <span className="text-white text-xs">×</span>
+                      </div>
+                      <span className="text-red-400 text-sm font-medium">Photo Quality: Poor</span>
+                    </>
+                  )}
+                </div>
+                
+                <p className={cn(
+                  "text-xs mb-2",
+                  faceQuality.overall === 'good' ? 'text-green-300' :
+                  faceQuality.overall === 'fair' ? 'text-yellow-300' :
+                  'text-red-300'
+                )}>
+                  {faceQuality.message}
+                </p>
+                
+                {/* Quality Checks */}
+                {faceQuality.checks && (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className={faceQuality.checks.faceDetected ? 'text-green-400' : 'text-red-400'}>
+                        {faceQuality.checks.faceDetected ? '✓' : '✗'}
+                      </span>
+                      <span className="text-neutral-400">Face detected</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className={faceQuality.checks.lighting === 'good' ? 'text-green-400' : faceQuality.checks.lighting === 'fair' ? 'text-yellow-400' : 'text-red-400'}>
+                        {faceQuality.checks.lighting === 'good' ? '✓' : faceQuality.checks.lighting === 'fair' ? '!' : '✗'}
+                      </span>
+                      <span className="text-neutral-400">Lighting</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className={faceQuality.checks.focus === 'good' ? 'text-green-400' : faceQuality.checks.focus === 'fair' ? 'text-yellow-400' : 'text-red-400'}>
+                        {faceQuality.checks.focus === 'good' ? '✓' : faceQuality.checks.focus === 'fair' ? '!' : '✗'}
+                      </span>
+                      <span className="text-neutral-400">Focus</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className={faceQuality.checks.size === 'good' ? 'text-green-400' : faceQuality.checks.size === 'fair' ? 'text-yellow-400' : 'text-red-400'}>
+                        {faceQuality.checks.size === 'good' ? '✓' : faceQuality.checks.size === 'fair' ? '!' : '✗'}
+                      </span>
+                      <span className="text-neutral-400">Face size</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            <div className="space-y-2">
+              {faceQuality && faceQuality.overall !== 'good' && (
+                <button
+                  type="button"
+                  onClick={captureFace}
+                  disabled={faceCaptureLoading || testSeedLoading}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-orange-500/50 bg-orange-600/10 py-3 text-sm font-semibold text-orange-400 transition-colors hover:border-orange-500 hover:bg-orange-600/20 disabled:opacity-50 max-sm:rounded-lg max-sm:py-2.5"
+                >
+                  {faceCaptureLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin max-sm:h-3 max-sm:w-3" />
+                      Retaking...
+                    </>
+                  ) : (
+                    "Retake Photo"
+                  )}
+                </button>
               )}
-            </button>
+              
+              <button
+                type="button"
+                onClick={submitWithFace}
+                disabled={loading || testSeedLoading || !name.trim() || !gender || !skill || showDuplicateWarning || (faceQuality?.overall === 'poor' && !faceQuality?.canForce)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50 max-sm:rounded-lg max-sm:py-2.5 max-sm:text-base"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin max-sm:h-4 max-sm:w-4" />
+                    {t("staff.checkIn.adding")}
+                  </>
+                ) : (
+                  "Add Player with Face"
+                )}
+              </button>
+              
+              {faceQuality && faceQuality.canForce && faceQuality.overall !== 'good' && (
+                <button
+                  type="button"
+                  onClick={forceAddWithFace}
+                  disabled={loading || testSeedLoading || !name.trim() || !gender || !skill || showDuplicateWarning}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-orange-500/50 bg-orange-600/10 py-3 text-sm font-semibold text-orange-400 transition-colors hover:border-orange-500 hover:bg-orange-600/20 disabled:opacity-50 max-sm:rounded-lg max-sm:py-2.5"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin max-sm:h-3 max-sm:w-3" />
+                      Force Adding...
+                    </>
+                  ) : (
+                    "Force Add (Override Quality Check)"
+                  )}
+                </button>
+              )}
+            </div>
           </div>
         )}
 
