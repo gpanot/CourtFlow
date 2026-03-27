@@ -100,7 +100,7 @@ class MockFaceRecognitionService {
           playerId: randomPlayerId,
           displayName: mockPlayer.name,
           confidence: 0.85 + Math.random() * 0.14, // 85-99% confidence
-          faceSubjectId: mockPlayer.faceSubjectId, // Add faceSubjectId for linking
+          faceSubjectId: mockPlayer.faceSubjectId
         };
       } else {
         // Generate a new face subject ID for the new player
