@@ -52,6 +52,8 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
   const [loading, setLoading] = useState(false);
   const [testSeedLoading, setTestSeedLoading] = useState(false);
   const [faceCaptureLoading, setFaceCaptureLoading] = useState(false);
+  const [capturedFace, setCapturedFace] = useState<string | null>(null);
+  const [showFacePreview, setShowFacePreview] = useState(false);
   const [confirmTestCreate5, setConfirmTestCreate5] = useState<{ step: 1 | 2 } | null>(null);
   const [err, setErr] = useState("");
   const [recent, setRecent] = useState<StaffCheckInRecent[]>([]);
@@ -77,6 +79,72 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
     trimmedName.length > 0 && queueNamesLower.includes(trimmedName.toLowerCase());
   /** After name + gender, surface duplicate immediately (no need to tap Add). */
   const showDuplicateWarning = nameIsDuplicate && gender !== "";
+
+  const submitWithFace = async () => {
+    setErr("");
+    const trimmed = name.trim();
+    if (!trimmed || !gender || !skill) {
+      setErr(t("staff.checkIn.requiredFields"));
+      return;
+    }
+    if (queueNamesLower.includes(trimmed.toLowerCase())) {
+      setErr(duplicateNameMsg);
+      return;
+    }
+    if (!capturedFace) {
+      setErr("Please capture a face photo first");
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const phoneTrimmed = phone.trim();
+      const imageBase64 = capturedFace.split(',')[1]; // Remove data URL prefix
+      
+      const res = await api.post<{
+        success: boolean;
+        player: { id: string; name: string; gender: string; skillLevel: string };
+        queueNumber?: number;
+      }>("/api/queue/staff-add-walk-in-with-face", {
+        venueId,
+        name: trimmed,
+        gender,
+        skillLevel: skill,
+        ...(phoneTrimmed ? { phone: phoneTrimmed } : {}),
+        imageBase64,
+      });
+      
+      if (res.player) {
+        showFlash(t("staff.checkIn.addedFlash", { name: res.player.name }));
+        setRecent((prev) => {
+          const next = [
+            {
+              id: res.player.id,
+              name: res.player.name,
+              gender: res.player.gender,
+              skillLevel: res.player.skillLevel,
+              queueNumber: res.queueNumber,
+            },
+            ...prev.filter((p) => p.id !== res.player.id),
+          ];
+          return next.slice(0, 5);
+        });
+      }
+      
+      // Reset form
+      setName("");
+      setGender("");
+      setSkill("");
+      setPhone("");
+      setCapturedFace(null);
+      setShowFacePreview(false);
+      onAdded();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const submit = async () => {
     setErr("");
@@ -215,7 +283,7 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       
       // Convert to base64
-      const imageBase64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+      const imageBase64 = canvas.toDataURL('image/jpeg', 0.8);
       
       if (!imageBase64) {
         throw new Error("Failed to capture image from camera");
@@ -226,59 +294,10 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
         track.stop();
       });
       
-      // Process face with backend
-      const response = await api.post<{
-        success: boolean;
-        resultType: string;
-        playerId?: string;
-        displayName?: string;
-        queueNumber?: number;
-        alreadyCheckedIn?: boolean;
-        error?: string;
-      }>("/api/kiosk/process-face", {
-        venueId,
-        imageBase64,
-      });
+      // Store captured face and show preview
+      setCapturedFace(imageBase64);
+      setShowFacePreview(true);
       
-      if (response.success) {
-        if (response.resultType === "matched") {
-          showFlash(t("staff.checkIn.faceCheckInSuccess", { 
-            name: response.displayName, 
-            number: response.queueNumber 
-          }));
-        } else if (response.resultType === "new_player") {
-          showFlash(t("staff.checkIn.faceNewPlayerSuccess", { 
-            number: response.queueNumber 
-          }));
-        } else if (response.resultType === "already_checked_in") {
-          showFlash(t("staff.checkIn.faceAlreadyCheckedIn", { 
-            name: response.displayName 
-          }));
-        } else if (response.resultType === "needs_review") {
-          showFlash(t("staff.checkIn.faceNeedsReview"));
-        }
-        
-        // Add to recent list if we have player info
-        if (response.playerId && response.queueNumber) {
-          setRecent((prev) => {
-            const next = [
-              {
-                id: response.playerId!,
-                name: response.displayName || "Unknown Player",
-                gender: "",
-                skillLevel: "",
-                queueNumber: response.queueNumber,
-              },
-              ...prev.filter((p) => p.id !== response.playerId),
-            ];
-            return next.slice(0, 5);
-          });
-        }
-        
-        onAdded();
-      } else {
-        setErr(response.error || "Face recognition failed");
-      }
     } catch (e) {
       console.error("Camera capture error:", e);
       const errorMessage = e instanceof Error ? e.message : "Unknown camera error";
@@ -611,38 +630,48 @@ ${test.error ? `Error: ${test.error}` : ''}
           ) : (
             <>
               <Camera className="h-5 w-5 max-sm:h-4 max-sm:w-4" />
-              {t("staff.checkIn.captureFace")}
+              {capturedFace ? "Retake Photo" : t("staff.checkIn.captureFace")}
             </>
           )}
         </button>
 
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-neutral-700"></div>
+        {capturedFace && (
+          <div className="space-y-3">
+            <div className="text-center">
+              <p className="text-xs font-medium text-neutral-400 mb-2">Face Preview</p>
+              <div className="relative inline-block">
+                <img 
+                  src={capturedFace} 
+                  alt="Captured face" 
+                  className="w-32 h-32 rounded-lg object-cover border-2 border-neutral-700"
+                />
+                <button
+                  type="button"
+                  onClick={() => setCapturedFace(null)}
+                  className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            
+            <button
+              type="button"
+              onClick={submitWithFace}
+              disabled={loading || testSeedLoading || !name.trim() || !gender || !skill || showDuplicateWarning}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50 max-sm:rounded-lg max-sm:py-2.5 max-sm:text-base"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin max-sm:h-4 max-sm:w-4" />
+                  {t("staff.checkIn.adding")}
+                </>
+              ) : (
+                "Add Player with Face"
+              )}
+            </button>
           </div>
-          <div className="relative flex justify-center text-xs">
-            <span className="bg-neutral-900 px-2 text-neutral-500">{t("staff.checkIn.or")}</span>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={testFaceWithoutCamera}
-          disabled={faceCaptureLoading || testSeedLoading}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-purple-500/50 bg-purple-600/10 py-4 text-lg font-semibold text-purple-400 transition-colors hover:border-purple-500 hover:bg-purple-600/20 disabled:opacity-50 max-sm:rounded-lg max-sm:py-2.5 max-sm:text-base"
-        >
-          {faceCaptureLoading ? (
-            <>
-              <Loader2 className="h-5 w-5 animate-spin max-sm:h-4 max-sm:w-4" />
-              Testing…
-            </>
-          ) : (
-            <>
-              <Play className="h-5 w-5 max-sm:h-4 max-sm:w-4" />
-              Test Without Camera
-            </>
-          )}
-        </button>
+        )}
 
         <button
           type="button"

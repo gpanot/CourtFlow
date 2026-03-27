@@ -231,96 +231,6 @@ export function FaceKioskTab({ venueId }: FaceKioskTabProps) {
     }, 1500);
   }, [isKioskActive, captureFrame, processFace]);
 
-  // Test camera access
-  const testCamera = useCallback(async () => {
-    setError("");
-    setState("processing");
-    
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-          facingMode: "user",
-        },
-        audio: false,
-      });
-      
-      // If we get here, camera works
-      stream.getTracks().forEach(track => track.stop());
-      setState("idle");
-      showFlash("Camera test successful!");
-    } catch (e) {
-      const errorMessage = e instanceof Error ? e.message : "Unknown camera error";
-      
-      if (errorMessage.includes("Permission denied")) {
-        setError("Camera access denied. Please allow camera access in your browser settings.");
-      } else if (errorMessage.includes("NotFound")) {
-        setError("No camera found. Please connect a camera and try again.");
-      } else if (errorMessage.includes("NotAllowed")) {
-        setError("Camera access blocked. Please check browser permissions.");
-      } else {
-        setError(`Camera test failed: ${errorMessage}`);
-      }
-      setState("error");
-    }
-  }, [showFlash]);
-
-  // Test without camera (using mock data)
-  const testWithoutCamera = useCallback(async () => {
-    setError("");
-    setState("processing");
-    
-    try {
-      // Use mock face recognition with test image
-      const response = await api.post<{
-        success: boolean;
-        resultType: string;
-        playerId?: string;
-        displayName?: string;
-        queueNumber?: number;
-        alreadyCheckedIn?: boolean;
-        error?: string;
-      }>("/api/kiosk/process-face", {
-        venueId,
-        imageBase64: "test_image_no_camera", // Special signal to use test image
-      });
-      
-      if (response.success) {
-        if (response.resultType === "matched") {
-          setResultData({
-            displayName: response.displayName,
-            queueNumber: response.queueNumber,
-            alreadyCheckedIn: response.alreadyCheckedIn,
-          });
-          setState("success");
-        } else if (response.resultType === "new_player") {
-          setResultData({
-            queueNumber: response.queueNumber,
-          });
-          setState("success");
-        } else if (response.resultType === "already_checked_in") {
-          setState("already_checked_in");
-        } else {
-          setState("error");
-          setError("Unknown result type");
-        }
-        
-        // Return to idle after cooldown
-        cooldownRef.current = setTimeout(() => {
-          setState("idle");
-          setResultData({});
-        }, COOLDOWN_MS);
-      } else {
-        setState("error");
-        setError(response.error || "Test failed");
-      }
-    } catch (e) {
-      setState("error");
-      setError(e instanceof Error ? e.message : "Test failed");
-    }
-  }, [venueId]);
-
   // Start/stop kiosk
   const toggleKiosk = useCallback(async () => {
     if (isKioskActive) {
@@ -405,24 +315,6 @@ export function FaceKioskTab({ venueId }: FaceKioskTabProps) {
       <div className="flex items-center justify-between p-4 border-b border-neutral-800">
         <h2 className="text-xl font-bold text-white">{t("staff.kiosk.title")}</h2>
         <div className="flex items-center gap-2">
-          {!isKioskActive && (
-            <>
-              <button
-                onClick={testCamera}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-500 transition-colors"
-              >
-                <RefreshCw className="h-4 w-4" />
-                Test Camera
-              </button>
-              <button
-                onClick={testWithoutCamera}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg font-medium bg-purple-600 text-white hover:bg-purple-500 transition-colors"
-              >
-                <Play className="h-4 w-4" />
-                Test No Camera
-              </button>
-            </>
-          )}
           <button
             onClick={toggleKiosk}
             className={cn(
@@ -473,7 +365,7 @@ export function FaceKioskTab({ venueId }: FaceKioskTabProps) {
                 <li>• Use Chrome or Safari for best camera support</li>
                 <li>• Allow camera permissions when prompted</li>
                 <li>• Ensure your built-in camera is connected</li>
-                <li>• Test camera with the "Test Camera" button first</li>
+                <li>• Position your face clearly in the camera view</li>
               </ul>
             </div>
           </div>
@@ -533,6 +425,13 @@ export function FaceKioskTab({ venueId }: FaceKioskTabProps) {
                       }
                     </p>
                   </div>
+                </div>
+              )}
+              
+              {/* Face Frame Overlay */}
+              {(state === "idle" || state === "detecting") && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="w-48 h-48 border-4 border-green-400 rounded-full opacity-50 animate-pulse" />
                 </div>
               )}
             </div>
