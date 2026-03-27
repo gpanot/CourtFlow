@@ -9,6 +9,7 @@ export interface FaceRecognitionResult {
   queueNumber?: number;
   confidence?: number;
   alreadyCheckedIn?: boolean;
+  faceSubjectId?: string;
   error?: string;
 }
 
