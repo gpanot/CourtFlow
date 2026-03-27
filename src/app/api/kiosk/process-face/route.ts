@@ -90,15 +90,40 @@ export async function POST(request: NextRequest) {
         // Get next queue number and add to queue
         const queueNumber = await faceRecognitionService.getNextQueueNumber(session.id);
 
-        const queueEntry = await prisma.queueEntry.create({
-          data: {
-            sessionId: session.id,
-            playerId: recognitionResult.playerId!,
-            status: "waiting",
-            queueNumber,
+        // Check if player was previously in this session
+        const existingEntry = await prisma.queueEntry.findUnique({
+          where: {
+            sessionId_playerId: {
+              sessionId: session.id,
+              playerId: recognitionResult.playerId!,
+            },
           },
-          include: { player: true },
         });
+
+        let queueEntry;
+        if (existingEntry) {
+          // Player was in session before — re-activate them
+          queueEntry = await prisma.queueEntry.update({
+            where: { id: existingEntry.id },
+            data: {
+              status: "waiting",
+              queueNumber,
+              joinedAt: new Date(), // reset join time for fair queue position
+            },
+            include: { player: true },
+          });
+        } else {
+          // First time in this session — create fresh entry
+          queueEntry = await prisma.queueEntry.create({
+            data: {
+              sessionId: session.id,
+              playerId: recognitionResult.playerId!,
+              status: "waiting",
+              queueNumber,
+            },
+            include: { player: true },
+          });
+        }
 
         // Update face attempt log
         await prisma.faceAttempt.update({
@@ -180,15 +205,40 @@ export async function POST(request: NextRequest) {
           // Get next queue number and add to queue
           const queueNumber = await faceRecognitionService.getNextQueueNumber(session.id);
 
-          const queueEntry = await prisma.queueEntry.create({
-            data: {
-              sessionId: session.id,
-              playerId: existingPlayerByFace.id,
-              status: "waiting",
-              queueNumber,
+          // Check if player was previously in this session
+          const existingEntry = await prisma.queueEntry.findUnique({
+            where: {
+              sessionId_playerId: {
+                sessionId: session.id,
+                playerId: existingPlayerByFace.id,
+              },
             },
-            include: { player: true },
           });
+
+          let queueEntry;
+          if (existingEntry) {
+            // Player was in session before — re-activate them
+            queueEntry = await prisma.queueEntry.update({
+              where: { id: existingEntry.id },
+              data: {
+                status: "waiting",
+                queueNumber,
+                joinedAt: new Date(), // reset join time for fair queue position
+              },
+              include: { player: true },
+            });
+          } else {
+            // First time in this session — create fresh entry
+            queueEntry = await prisma.queueEntry.create({
+              data: {
+                sessionId: session.id,
+                playerId: existingPlayerByFace.id,
+                status: "waiting",
+                queueNumber,
+              },
+              include: { player: true },
+            });
+          }
 
           await prisma.faceAttempt.update({
             where: { id: faceAttempt.id },
@@ -238,7 +288,7 @@ export async function POST(request: NextRequest) {
             confidence: recognitionResult.confidence,
           };
         } else {
-          // Create new player with faceSubjectId from CompreFace
+          // Create new player with faceSubjectId from AWS Rekognition
           const newPlayer = await prisma.player.create({
             data: {
               name: `Player ${Date.now()}`,
@@ -246,7 +296,7 @@ export async function POST(request: NextRequest) {
               gender: "other",
               skillLevel: "beginner",
               avatar: "🏓",
-              faceSubjectId: recognitionResult.faceSubjectId, // Save the face ID from CompreFace
+              faceSubjectId: recognitionResult.faceSubjectId, // Save the face ID from AWS Rekognition
             },
           });
 
@@ -275,15 +325,40 @@ export async function POST(request: NextRequest) {
           // Get next queue number and add to queue
           const queueNumber = await faceRecognitionService.getNextQueueNumber(session.id);
 
-          const queueEntry = await prisma.queueEntry.create({
-            data: {
-              sessionId: session.id,
-              playerId: newPlayer.id,
-              status: "waiting",
-              queueNumber,
+          // Check if player was previously in this session
+          const existingEntry = await prisma.queueEntry.findUnique({
+            where: {
+              sessionId_playerId: {
+                sessionId: session.id,
+                playerId: newPlayer.id,
+              },
             },
-            include: { player: true },
           });
+
+          let queueEntry;
+          if (existingEntry) {
+            // Player was in session before — re-activate them
+            queueEntry = await prisma.queueEntry.update({
+              where: { id: existingEntry.id },
+              data: {
+                status: "waiting",
+                queueNumber,
+                joinedAt: new Date(), // reset join time for fair queue position
+              },
+              include: { player: true },
+            });
+          } else {
+            // First time in this session — create fresh entry
+            queueEntry = await prisma.queueEntry.create({
+              data: {
+                sessionId: session.id,
+                playerId: newPlayer.id,
+                status: "waiting",
+                queueNumber,
+              },
+              include: { player: true },
+            });
+          }
 
           await prisma.faceAttempt.update({
             where: { id: faceAttempt.id },

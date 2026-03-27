@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 
-// Mock face recognition service for testing without CompreFace
+// Mock face recognition service for testing without AWS Rekognition
 export interface FaceRecognitionResult {
   success: boolean;
   resultType: "matched" | "new_player" | "already_checked_in" | "needs_review" | "error";
@@ -263,21 +263,24 @@ class MockFaceRecognitionService {
   }
 
   /**
-   * Check if player is already checked in within 4 hours
+   * Check if player is currently active in session
    */
   async isRecentlyCheckedIn(playerId: string, sessionId: string): Promise<boolean> {
-    const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
-    
-    const recentEntry = await prisma.queueEntry.findFirst({
+    const entry = await prisma.queueEntry.findUnique({
       where: {
-        playerId,
-        sessionId,
-        joinedAt: { gte: fourHoursAgo },
-        status: { in: ["waiting", "assigned", "playing"] },
+        sessionId_playerId: {
+          sessionId,
+          playerId,
+        },
       },
     });
 
-    return !!recentEntry;
+    if (!entry) return false;
+
+    // Only block re-check-in if player is 
+    // currently active in the session
+    return ["waiting", "assigned", "playing", "on_break"]
+      .includes(entry.status);
   }
 
   /**

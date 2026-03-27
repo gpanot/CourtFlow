@@ -1,14 +1,38 @@
 import { prisma } from "@/lib/db";
 import { mockFaceRecognitionService } from "./face-recognition-mock";
+import {
+  RekognitionClient,
+  CreateCollectionCommand,
+  IndexFacesCommand,
+  SearchFacesByImageCommand,
+  DeleteFacesCommand,
+  ListFacesCommand,
+} from "@aws-sdk/client-rekognition";
 
-const COMPREFACE_API_URL = process.env.COMPREFACE_API_URL || "http://localhost:8000/api/v1";
-const COMPREFACE_API_KEY = process.env.COMPREFACE_API_KEY;
+const COLLECTION_ID = process.env.AWS_REKOGNITION_COLLECTION || "courtflow-players";
 
-const USE_MOCK_SERVICE = !COMPREFACE_API_KEY || COMPREFACE_API_KEY === "your-api-key-here";
+const USE_MOCK_SERVICE =
+  !process.env.AWS_ACCESS_KEY_ID ||
+  process.env.AWS_ACCESS_KEY_ID === "your-key-here";
+
+const rekognition = USE_MOCK_SERVICE
+  ? null
+  : new RekognitionClient({
+      region: process.env.AWS_REGION || "ap-southeast-1",
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+      },
+    });
 
 export interface FaceRecognitionResult {
   success: boolean;
-  resultType: "matched" | "new_player" | "already_checked_in" | "needs_review" | "error";
+  resultType:
+    | "matched"
+    | "new_player"
+    | "already_checked_in"
+    | "needs_review"
+    | "error";
   playerId?: string;
   displayName?: string;
   queueNumber?: number;
@@ -24,73 +48,69 @@ export interface FaceEnrollmentResult {
   error?: string;
 }
 
-// ── Helper: base64 → Blob ──────────────────────────────────────────────────
-function base64ToBlob(base64: string, mimeType = "image/jpeg"): Blob {
-  const byteString = atob(base64);
-  const buffer = new ArrayBuffer(byteString.length);
-  const view = new Uint8Array(buffer);
-  for (let i = 0; i < byteString.length; i++) {
-    view[i] = byteString.charCodeAt(i);
-  }
-  return new Blob([buffer], { type: mimeType });
+// ── Helper: base64 → Uint8Array (AWS SDK needs raw bytes) ─────────────────
+function base64ToBytes(base64: string): Uint8Array {
+  return Buffer.from(base64, "base64");
 }
 
 class FaceRecognitionService {
 
-  // ── Core request helper ──────────────────────────────────────────────────
-  // NOTE: do NOT set Content-Type here — let fetch set it automatically
-  //       for FormData (it needs to include the boundary parameter).
-  private async makeRequest(endpoint: string, options: RequestInit = {}) {
-    const url = `${COMPREFACE_API_URL}${endpoint}`;
-    console.log(`[CompreFace] ${options.method ?? "GET"} ${url}`);
-
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        "x-api-key": COMPREFACE_API_KEY || "",
-        // ✅ Only pass x-api-key — never set Content-Type for FormData
-        ...(options.headers ?? {}),
-      },
-    });
-
-    if (!response.ok) {
-      const body = await response.text().catch(() => "");
-      throw new Error(
-        `CompreFace API error: ${response.status} ${response.statusText}${body ? ` — ${body}` : ""}`
+  // ── Ensure collection exists ─────────────────────────────────────────────
+  private async ensureCollection(): Promise<void> {
+    try {
+      await rekognition!.send(
+        new CreateCollectionCommand({ CollectionId: COLLECTION_ID })
       );
+      console.log("[Rekognition] Collection created:", COLLECTION_ID);
+    } catch (err: any) {
+      // ResourceAlreadyExistsException is fine — collection already exists
+      if (err?.name !== "ResourceAlreadyExistsException") {
+        throw err;
+      }
     }
-
-    return response.json();
   }
 
   // ── Enroll a face ────────────────────────────────────────────────────────
-  async enrollFace(imageBase64: string, playerId: string): Promise<FaceEnrollmentResult> {
+  async enrollFace(
+    imageBase64: string,
+    playerId: string
+  ): Promise<FaceEnrollmentResult> {
     if (USE_MOCK_SERVICE) {
       return mockFaceRecognitionService.enrollFace(imageBase64, playerId);
     }
 
     try {
-      const subjectId = `player_${playerId}`;
+      await this.ensureCollection();
 
-      // ✅ CORRECT endpoint: POST /recognition/faces?subject=player_xxx
-      //    Body: multipart/form-data with a "file" field
-      //    (NOT JSON, NOT /recognition/face, NOT /face-subject)
-      const formData = new FormData();
-      formData.append("file", base64ToBlob(imageBase64), "face.jpg");
-
-      await this.makeRequest(
-        `/recognition/faces?subject=${encodeURIComponent(subjectId)}`,
-        { method: "POST", body: formData }
+      const response = await rekognition!.send(
+        new IndexFacesCommand({
+          CollectionId: COLLECTION_ID,
+          Image: { Bytes: base64ToBytes(imageBase64) },
+          ExternalImageId: `player_${playerId}`,
+          MaxFaces: 1,
+          QualityFilter: "AUTO",
+          DetectionAttributes: [],
+        })
       );
 
+      const faceRecord = response.FaceRecords?.[0]?.Face;
+      if (!faceRecord?.FaceId) {
+        return {
+          success: false,
+          error: "No face detected in enrollment image",
+        };
+      }
+
+      // Store the AWS FaceId in the player record
       await prisma.player.update({
         where: { id: playerId },
-        data: { faceSubjectId: subjectId },
+        data: { faceSubjectId: faceRecord.FaceId },
       });
 
-      return { success: true, subjectId };
+      console.log(`[Rekognition] Enrolled face for player ${playerId}:`, faceRecord.FaceId);
+      return { success: true, subjectId: faceRecord.FaceId };
     } catch (err) {
-      console.error("Face enrollment failed:", err);
+      console.error("[Rekognition] Enrollment failed:", err);
       return {
         success: false,
         error: err instanceof Error ? err.message : "Unknown enrollment error",
@@ -108,53 +128,44 @@ class FaceRecognitionService {
     }
 
     try {
-      // ✅ CORRECT endpoint: POST /recognition/recognize
-      //    Body: multipart/form-data with a "file" field
-      //    Optional query params: limit, det_prob_threshold
-      //    (NOT JSON body, NOT /recognition/identify)
-      const formData = new FormData();
-      formData.append("file", base64ToBlob(imageBase64), "frame.jpg");
+      await this.ensureCollection();
 
-      const result = await this.makeRequest(
-        "/recognition/recognize?limit=1&det_prob_threshold=0.8",
-        { method: "POST", body: formData }
+      const response = await rekognition!.send(
+        new SearchFacesByImageCommand({
+          CollectionId: COLLECTION_ID,
+          Image: { Bytes: base64ToBytes(imageBase64) },
+          MaxFaces: 1,
+          FaceMatchThreshold: 85, // 85% confidence minimum
+          QualityFilter: "AUTO",
+        })
       );
 
-      // CompreFace response shape:
-      // { result: [ { subjects: [ { subject, similarity } ], ... } ] }
-      const faces = result?.result ?? [];
+      const matches = response.FaceMatches ?? [];
 
-      if (faces.length === 0) {
-        // No face detected in image
+      if (matches.length === 0) {
+        // No match found — new player
         return { success: true, resultType: "new_player" };
       }
 
-      const face = faces[0];
-      const subjects: Array<{ subject: string; similarity: number }> =
-        face?.subjects ?? [];
+      const bestMatch = matches[0];
+      const confidence = bestMatch.Similarity ?? 0;
+      const externalImageId = bestMatch.Face?.ExternalImageId ?? "";
 
-      if (subjects.length === 0 || subjects[0].similarity < 0.85) {
-        // Face detected but no confident match → new player
-        return {
-          success: true,
-          resultType: "new_player",
-          faceSubjectId: undefined,
-        };
-      }
+      // Extract playerId from ExternalImageId (e.g. "player_clxxx...")
+      const playerId = externalImageId.replace(/^player_/, "");
 
-      const bestMatch = subjects[0];
-      const subjectId = bestMatch.subject;          // e.g. "player_clxxx..."
-      const confidence = bestMatch.similarity;
-
-      // Extract playerId from subjectId
-      const playerId = subjectId.replace(/^player_/, "");
-
-      const player = await prisma.player.findUnique({ where: { id: playerId } });
+      const player = await prisma.player.findUnique({
+        where: { id: playerId },
+      });
 
       if (!player) {
-        // Subject exists in CompreFace but not in DB — treat as new
+        // Face exists in AWS but not in DB — treat as new player
         return { success: true, resultType: "new_player" };
       }
+
+      console.log(
+        `[Rekognition] Matched player ${player.name} with ${confidence.toFixed(1)}% confidence`
+      );
 
       return {
         success: true,
@@ -163,8 +174,16 @@ class FaceRecognitionService {
         displayName: player.name,
         confidence,
       };
-    } catch (err) {
-      console.error("Face recognition failed:", err);
+    } catch (err: any) {
+      // InvalidParameterException = no face in image
+      if (
+        err?.name === "InvalidParameterException" &&
+        err?.message?.includes("no faces")
+      ) {
+        return { success: true, resultType: "new_player" };
+      }
+
+      console.error("[Rekognition] Recognition failed:", err);
       return {
         success: false,
         resultType: "error",
@@ -180,14 +199,17 @@ class FaceRecognitionService {
     }
 
     try {
-      const player = await prisma.player.findUnique({ where: { id: playerId } });
+      const player = await prisma.player.findUnique({
+        where: { id: playerId },
+      });
+
       if (!player?.faceSubjectId) return true;
 
-      // ✅ CORRECT endpoint: DELETE /recognition/subjects/:subject
-      //    (NOT /face-subject/:id)
-      await this.makeRequest(
-        `/recognition/subjects/${encodeURIComponent(player.faceSubjectId)}`,
-        { method: "DELETE" }
+      await rekognition!.send(
+        new DeleteFacesCommand({
+          CollectionId: COLLECTION_ID,
+          FaceIds: [player.faceSubjectId],
+        })
       );
 
       await prisma.player.update({
@@ -197,7 +219,7 @@ class FaceRecognitionService {
 
       return true;
     } catch (err) {
-      console.error("Face removal failed:", err);
+      console.error("[Rekognition] Face removal failed:", err);
       return false;
     }
   }
@@ -208,20 +230,19 @@ class FaceRecognitionService {
       return mockFaceRecognitionService.checkHealth();
     }
     try {
-      // ✅ CORRECT endpoint: GET /actuator/health
-      //    (NOT /health)
-      //    Note: this is on the BASE url, not /api/v1
-      const baseUrl = COMPREFACE_API_URL.replace("/api/v1", "");
-      const response = await fetch(`${baseUrl}/actuator/health`, {
-        headers: { "x-api-key": COMPREFACE_API_KEY || "" },
-      });
-      return response.ok;
+      await rekognition!.send(
+        new ListFacesCommand({
+          CollectionId: COLLECTION_ID,
+          MaxResults: 1,
+        })
+      );
+      return true;
     } catch {
       return false;
     }
   }
 
-  // ── Queue helpers ────────────────────────────────────────────────────────
+  // ── Queue helpers (unchanged) ────────────────────────────────────────────
   async getNextQueueNumber(sessionId: string): Promise<number> {
     const lastEntry = await prisma.queueEntry.findFirst({
       where: { sessionId, queueNumber: { not: null } },
@@ -230,17 +251,25 @@ class FaceRecognitionService {
     return (lastEntry?.queueNumber || 0) + 1;
   }
 
-  async isRecentlyCheckedIn(playerId: string, sessionId: string): Promise<boolean> {
-    const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
-    const recentEntry = await prisma.queueEntry.findFirst({
+  async isRecentlyCheckedIn(
+    playerId: string, 
+    sessionId: string
+  ): Promise<boolean> {
+    const entry = await prisma.queueEntry.findUnique({
       where: {
-        playerId,
-        sessionId,
-        joinedAt: { gte: fourHoursAgo },
-        status: { in: ["waiting", "assigned", "playing"] },
+        sessionId_playerId: {
+          sessionId,
+          playerId,
+        },
       },
     });
-    return !!recentEntry;
+
+    if (!entry) return false;
+
+    // Only block re-check-in if player is 
+    // currently active in the session
+    return ["waiting", "assigned", "playing", "on_break"]
+      .includes(entry.status);
   }
 
   getStats() {

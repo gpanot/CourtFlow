@@ -23,8 +23,8 @@ export async function GET(request: NextRequest) {
       return error("No active session found", 404);
     }
 
-    // Check CompreFace health
-    const comprefaceHealthy = await faceRecognitionService.checkHealth();
+    // Check AWS Rekognition health
+    const rekognitionHealthy = await faceRecognitionService.checkHealth();
 
     return json({
       success: true,
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
         warmupMode: session.warmupMode,
       },
       kiosk: {
-        comprefaceHealthy,
+        rekognitionHealthy,
         cooldownMs: 2000, // 2-second cooldown between attempts
         confidenceThreshold: 0.7,
       },
