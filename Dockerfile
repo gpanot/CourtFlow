@@ -31,4 +31,5 @@ USER nextjs
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
-CMD npx prisma db push --accept-data-loss --skip-generate && node server.js
+# Migrations run in Railway release phase (railway.toml). Container start only runs the server.
+CMD ["node", "server.js"]

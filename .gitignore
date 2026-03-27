@@ -44,9 +44,6 @@ CREDENTIALS.md
 # vercel
 .vercel
 
-# prisma
-/prisma/migrations/
-
 # uploads
 /uploads
 

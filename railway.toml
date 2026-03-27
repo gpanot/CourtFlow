@@ -1,2 +1,6 @@
 [build]
 buildCommand = "echo 'Using Dockerfile'"
+
+# Runs once per deploy before traffic switches (requires DATABASE_URL on the service).
+[deploy]
+releaseCommand = "npx prisma migrate deploy"
