@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
@@ -52,8 +52,10 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
   const [loading, setLoading] = useState(false);
   const [testSeedLoading, setTestSeedLoading] = useState(false);
   const [faceCaptureLoading, setFaceCaptureLoading] = useState(false);
+  const [faceLivePreview, setFaceLivePreview] = useState(false);
   const [capturedFace, setCapturedFace] = useState<string | null>(null);
-  const [showFacePreview, setShowFacePreview] = useState(false);
+  const faceStreamRef = useRef<MediaStream | null>(null);
+  const faceVideoRef = useRef<HTMLVideoElement | null>(null);
   const [faceQuality, setFaceQuality] = useState<{
     overall: 'good' | 'fair' | 'poor' | null;
     checks: {
@@ -73,6 +75,27 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
   useEffect(() => {
     return () => {
       if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    };
+  }, []);
+
+  const stopFaceCamera = useCallback(() => {
+    const stream = faceStreamRef.current;
+    if (stream) {
+      stream.getTracks().forEach((track) => track.stop());
+      faceStreamRef.current = null;
+    }
+    const v = faceVideoRef.current;
+    if (v) v.srcObject = null;
+    setFaceLivePreview(false);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      const stream = faceStreamRef.current;
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+        faceStreamRef.current = null;
+      }
     };
   }, []);
 
@@ -107,101 +130,29 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
       return;
     }
     
+    const forceAdd = faceQuality?.overall === "poor";
+
     setLoading(true);
     try {
       const phoneTrimmed = phone.trim();
-      const imageBase64 = capturedFace.split(',')[1]; // Remove data URL prefix
-      
+      const imageBase64 = capturedFace.split(",")[1]; // Remove data URL prefix
+
       const res = await api.post<{
         success: boolean;
         player: { id: string; name: string; gender: string; skillLevel: string };
         queueNumber?: number;
         qualityCheck?: {
-          overall: 'good' | 'fair' | 'poor';
+          overall: "good" | "fair" | "poor";
           checks: {
             faceDetected: boolean;
-            lighting: 'good' | 'fair' | 'poor';
-            focus: 'good' | 'fair' | 'poor';
-            size: 'good' | 'fair' | 'poor';
+            lighting: "good" | "fair" | "poor";
+            focus: "good" | "fair" | "poor";
+            size: "good" | "fair" | "poor";
           };
           message: string;
           canForce: boolean;
         };
         requiresRetake?: boolean;
-      }>("/api/queue/staff-add-walk-in-with-face", {
-        venueId,
-        name: trimmed,
-        gender,
-        skillLevel: skill,
-        ...(phoneTrimmed ? { phone: phoneTrimmed } : {}),
-        imageBase64,
-      });
-      
-      if (res.requiresRetake && res.qualityCheck) {
-        // Photo quality check failed
-        setFaceQuality(res.qualityCheck);
-        setErr(res.qualityCheck.message);
-        return;
-      }
-      
-      if (res.player) {
-        showFlash(t("staff.checkIn.addedFlash", { name: res.player.name }));
-        setRecent((prev) => {
-          const next = [
-            {
-              id: res.player.id,
-              name: res.player.name,
-              gender: res.player.gender,
-              skillLevel: res.player.skillLevel,
-              queueNumber: res.queueNumber,
-            },
-            ...prev.filter((p) => p.id !== res.player.id),
-          ];
-          return next.slice(0, 5);
-        });
-      }
-      
-      // Reset form
-      setName("");
-      setGender("");
-      setSkill("");
-      setPhone("");
-      setCapturedFace(null);
-      setShowFacePreview(false);
-      setFaceQuality(null);
-      onAdded();
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const forceAddWithFace = async () => {
-    setErr("");
-    const trimmed = name.trim();
-    if (!trimmed || !gender || !skill) {
-      setErr(t("staff.checkIn.requiredFields"));
-      return;
-    }
-    if (queueNamesLower.includes(trimmed.toLowerCase())) {
-      setErr(duplicateNameMsg);
-      return;
-    }
-    if (!capturedFace) {
-      setErr("Please capture a face photo first");
-      return;
-    }
-    
-    setLoading(true);
-    try {
-      const phoneTrimmed = phone.trim();
-      const imageBase64 = capturedFace.split(',')[1]; // Remove data URL prefix
-      
-      const res = await api.post<{
-        success: boolean;
-        player: { id: string; name: string; gender: string; skillLevel: string };
-        queueNumber?: number;
         faceEnrollment?: {
           success: boolean;
           awsFaceId?: string;
@@ -214,8 +165,14 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
         skillLevel: skill,
         ...(phoneTrimmed ? { phone: phoneTrimmed } : {}),
         imageBase64,
-        forceAdd: true,
+        ...(forceAdd ? { forceAdd: true } : {}),
       });
+
+      if (res.requiresRetake && res.qualityCheck && !forceAdd) {
+        setFaceQuality(res.qualityCheck);
+        setErr(res.qualityCheck.message);
+        return;
+      }
 
       if (res.faceEnrollment?.success) {
         console.log(
@@ -248,14 +205,12 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
           return next.slice(0, 5);
         });
       }
-      
-      // Reset form
+
       setName("");
       setGender("");
       setSkill("");
       setPhone("");
       setCapturedFace(null);
-      setShowFacePreview(false);
       setFaceQuality(null);
       onAdded();
     } catch (e) {
@@ -316,117 +271,128 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
     }
   };
 
-  const captureFace = async () => {
+  const mapCameraError = (errorMessage: string) => {
+    if (errorMessage.includes("Permission denied") || errorMessage.includes("NotAllowed")) {
+      return "Camera access denied. Please allow camera access in your browser settings and try again.";
+    }
+    if (errorMessage.includes("NotFound")) {
+      return "No camera found. Please connect a camera and try again.";
+    }
+    if (errorMessage.includes("Camera not supported")) {
+      return "Camera not supported in this browser. Please use Chrome, Safari, or Firefox.";
+    }
+    if (errorMessage.includes("HTTPS")) {
+      return "Camera access requires HTTPS. Please use a secure connection or localhost.";
+    }
+    return `Camera error: ${errorMessage}`;
+  };
+
+  const startFaceCameraPreview = async () => {
     setErr("");
     setFaceCaptureLoading(true);
-    
+    stopFaceCamera();
+    setCapturedFace(null);
+    setFaceQuality(null);
+
     try {
-      // Run camera compatibility test
       const cameraTest = testCameraSupport();
-      console.log('Camera compatibility test:', cameraTest);
-      
       if (!cameraTest.supported) {
         let errorMessage = "Camera not available. ";
-        
-        if (!cameraTest.mediaDevicesAvailable) {
-          errorMessage += "MediaDevices API not supported. ";
-        }
-        
-        if (!cameraTest.getUserMediaAvailable) {
-          errorMessage += "getUserMedia not supported. ";
-        }
-        
-        if (cameraTest.httpsRequired) {
-          errorMessage += "HTTPS required. ";
-        }
-        
+        if (!cameraTest.mediaDevicesAvailable) errorMessage += "MediaDevices API not supported. ";
+        if (!cameraTest.getUserMediaAvailable) errorMessage += "getUserMedia not supported. ";
+        if (cameraTest.httpsRequired) errorMessage += "HTTPS required. ";
         errorMessage += "Please try Chrome, Safari, or Firefox on a secure connection.";
-        
         throw new Error(errorMessage);
       }
 
-      // Request camera access with better constraints for desktop
       let stream: MediaStream;
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { 
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
             width: { ideal: 1280 },
             height: { ideal: 720 },
-            facingMode: 'user',
-            // Add fallback constraints for desktop
-            aspectRatio: { ideal: 16/9 },
-            frameRate: { ideal: 30 }
-          } 
+            facingMode: "user",
+            aspectRatio: { ideal: 16 / 9 },
+            frameRate: { ideal: 30 },
+          },
         });
       } catch (mediaError) {
-        console.log('Primary camera request failed, trying fallback:', mediaError);
-        // Try with minimal constraints
-        stream = await navigator.mediaDevices.getUserMedia({ 
-          video: true 
-        });
+        console.log("Primary camera request failed, trying fallback:", mediaError);
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
       }
-      
-      const video = document.createElement('video');
+
+      faceStreamRef.current = stream;
+      const video = faceVideoRef.current;
+      if (!video) {
+        stream.getTracks().forEach((t) => t.stop());
+        faceStreamRef.current = null;
+        throw new Error("Preview not ready — try again.");
+      }
       video.srcObject = stream;
-      video.setAttribute('playsinline', 'true'); // Important for iOS
-      video.setAttribute('autoplay', 'true');
-      video.setAttribute('muted', 'true');
-      
-      // Wait for video to be ready with timeout
+      video.setAttribute("playsinline", "true");
+      video.muted = true;
+
       await Promise.race([
         new Promise<void>((resolve, reject) => {
           video.onloadedmetadata = () => {
             video.play().then(resolve).catch(reject);
           };
-          video.onerror = reject;
+          video.onerror = () => reject(new Error("Video failed to load"));
         }),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error("Camera timeout")), 5000)
-        )
+        new Promise<void>((_, reject) =>
+          setTimeout(() => reject(new Error("Camera timeout")), 8000)
+        ),
       ]);
-      
-      // Wait a bit for the video to actually start playing
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      // Create canvas to capture image
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
-      const ctx = canvas.getContext('2d');
-      
-      if (!ctx) {
-        throw new Error("Could not get canvas context");
+
+      setFaceLivePreview(true);
+    } catch (e) {
+      console.error("Camera preview error:", e);
+      stopFaceCamera();
+      setErr(mapCameraError(e instanceof Error ? e.message : "Unknown camera error"));
+    } finally {
+      setFaceCaptureLoading(false);
+    }
+  };
+
+  const snapFaceFromPreview = async () => {
+    setErr("");
+    const video = faceVideoRef.current;
+    const stream = faceStreamRef.current;
+    if (!video || !stream || !faceLivePreview) {
+      setErr("Camera preview is not active.");
+      return;
+    }
+
+    setFaceCaptureLoading(true);
+    try {
+      const w = video.videoWidth || 640;
+      const h = video.videoHeight || 480;
+      if (w < 2 || h < 2) {
+        throw new Error("Camera not ready yet — wait a moment and try again.");
       }
-      
-      // Draw the video frame to canvas
+
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Could not get canvas context");
+
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
-      // Convert to base64
-      const imageBase64 = canvas.toDataURL('image/jpeg', 0.8);
-      
-      if (!imageBase64) {
-        throw new Error("Failed to capture image from camera");
-      }
-      
-      // Stop camera
-      stream.getTracks().forEach(track => {
-        track.stop();
-      });
-      
-      // Store captured face and show preview
+      const imageBase64 = canvas.toDataURL("image/jpeg", 0.8);
+      if (!imageBase64) throw new Error("Failed to capture image from camera");
+
+      stopFaceCamera();
       setCapturedFace(imageBase64);
-      setShowFacePreview(true);
-      
-      // Perform immediate quality analysis for instant feedback
+
       try {
         const response = await api.post<{
           qualityCheck: {
-            overall: 'good' | 'fair' | 'poor';
+            overall: "good" | "fair" | "poor";
             checks: {
               faceDetected: boolean;
-              lighting: 'good' | 'fair' | 'poor';
-              focus: 'good' | 'fair' | 'poor';
-              size: 'good' | 'fair' | 'poor';
+              lighting: "good" | "fair" | "poor";
+              focus: "good" | "fair" | "poor";
+              size: "good" | "fair" | "poor";
             };
             message: string;
             canForce: boolean;
@@ -434,45 +400,42 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
         }>("/api/queue/analyze-face-quality", {
           imageBase64,
         });
-        
-        if (response.qualityCheck) {
-          setFaceQuality(response.qualityCheck);
-        }
+
+        if (response.qualityCheck) setFaceQuality(response.qualityCheck);
       } catch (qualityError) {
         console.error("Quality analysis failed:", qualityError);
-        // Set a default quality state if analysis fails
         setFaceQuality({
-          overall: 'fair',
+          overall: "fair",
           checks: {
             faceDetected: true,
-            lighting: 'fair',
-            focus: 'fair',
-            size: 'fair',
+            lighting: "fair",
+            focus: "fair",
+            size: "fair",
           },
-          message: 'Photo captured. Quality assessment pending.',
+          message: "Photo captured. Quality assessment pending.",
           canForce: true,
         });
       }
-      
     } catch (e) {
-      console.error("Camera capture error:", e);
-      const errorMessage = e instanceof Error ? e.message : "Unknown camera error";
-      
-      // Provide more helpful error messages
-      if (errorMessage.includes("Permission denied") || errorMessage.includes("NotAllowed")) {
-        setErr("Camera access denied. Please allow camera access in your browser settings and try again.");
-      } else if (errorMessage.includes("NotFound")) {
-        setErr("No camera found. Please connect a camera and try again.");
-      } else if (errorMessage.includes("Camera not supported")) {
-        setErr("Camera not supported in this browser. Please use Chrome, Safari, or Firefox.");
-      } else if (errorMessage.includes("HTTPS")) {
-        setErr("Camera access requires HTTPS. Please use a secure connection or localhost.");
-      } else {
-        setErr(`Camera error: ${errorMessage}`);
-      }
+      console.error("Camera snap error:", e);
+      setErr(mapCameraError(e instanceof Error ? e.message : "Unknown camera error"));
     } finally {
       setFaceCaptureLoading(false);
     }
+  };
+
+  const handleFaceCaptureClick = async () => {
+    if (faceCaptureLoading || testSeedLoading) return;
+    if (faceLivePreview) {
+      await snapFaceFromPreview();
+    } else {
+      await startFaceCameraPreview();
+    }
+  };
+
+  const cancelFaceLivePreview = () => {
+    setErr("");
+    stopFaceCamera();
   };
 
   // Test face recognition without camera
@@ -700,12 +663,10 @@ ${test.error ? `Error: ${test.error}` : ''}
                   className={cn(
                     "flex h-11 w-[58px] items-center justify-center rounded-xl border-2 transition-colors max-sm:h-10 max-sm:w-[52px] max-sm:rounded-lg",
                     gender === g
-                      ? g === 'male'
+                      ? g === "male"
                         ? "border-blue-500 bg-blue-600/20 text-blue-400"
                         : "border-pink-500 bg-pink-600/20 text-pink-400"
-                      : g === 'male'
-                        ? "border-blue-500/50 bg-blue-600/10 text-blue-300"
-                        : "border-pink-500/50 bg-pink-600/10 text-pink-300"
+                      : "border-neutral-600 bg-neutral-950/80 text-neutral-500 hover:border-neutral-500 hover:text-neutral-400"
                   )}
                   title={genderLabel(g)}
                 >
@@ -768,9 +729,79 @@ ${test.error ? `Error: ${test.error}` : ''}
           />
         </div>
 
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-neutral-400">{t("staff.checkIn.facePreviewLabel")}</p>
+          <div
+            className={cn(
+              "relative mx-auto aspect-[4/3] w-full max-w-sm overflow-hidden rounded-xl border-2 border-dashed bg-neutral-950/80 max-sm:rounded-lg",
+              capturedFace
+                ? faceQuality?.overall === "good"
+                  ? "border-green-500/60 border-solid"
+                  : faceQuality?.overall === "fair"
+                    ? "border-yellow-500/60 border-solid"
+                    : faceQuality?.overall === "poor"
+                      ? "border-red-500/60 border-solid"
+                      : "border-neutral-600 border-solid"
+                : faceLivePreview
+                  ? "border-blue-500/50 border-solid"
+                  : "border-neutral-600"
+            )}
+          >
+            {capturedFace ? (
+              <>
+                <img src={capturedFace} alt="" className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    stopFaceCamera();
+                    setCapturedFace(null);
+                    setFaceQuality(null);
+                  }}
+                  className="absolute -right-1.5 -top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-sm font-bold text-white shadow hover:bg-red-600"
+                  aria-label={t("staff.checkIn.faceClearPhoto")}
+                >
+                  ×
+                </button>
+              </>
+            ) : (
+              <div className="relative h-full min-h-[140px] w-full max-sm:min-h-[120px]">
+                <video
+                  ref={faceVideoRef}
+                  className={cn(
+                    "absolute inset-0 h-full w-full object-cover",
+                    !faceLivePreview && "opacity-0 pointer-events-none"
+                  )}
+                  playsInline
+                  muted
+                  autoPlay
+                />
+                {!faceLivePreview && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-neutral-950/80 px-4 text-center">
+                    <Camera className="h-8 w-8 text-neutral-600 max-sm:h-7 max-sm:w-7" />
+                    <p className="text-xs text-neutral-500 max-sm:text-[11px]">{t("staff.checkIn.facePreviewIdleHint")}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          {faceLivePreview && (
+            <p className="text-center text-xs text-blue-300/90 max-sm:text-[11px]">{t("staff.checkIn.facePreviewLiveHint")}</p>
+          )}
+          {faceLivePreview && (
+            <button
+              type="button"
+              onClick={cancelFaceLivePreview}
+              disabled={faceCaptureLoading}
+              className="w-full text-center text-xs text-neutral-500 underline decoration-neutral-600 underline-offset-2 hover:text-neutral-400 disabled:opacity-40"
+            >
+              {t("staff.checkIn.faceCancelPreview")}
+            </button>
+          )}
+        </div>
+
         <button
           type="button"
-          onClick={captureFace}
+          onClick={() => void handleFaceCaptureClick()}
           disabled={faceCaptureLoading || testSeedLoading}
           className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-blue-500/50 bg-blue-600/10 py-4 text-lg font-semibold text-blue-400 transition-colors hover:border-blue-500 hover:bg-blue-600/20 disabled:opacity-50 max-sm:rounded-lg max-sm:py-2.5 max-sm:text-base"
         >
@@ -782,40 +813,17 @@ ${test.error ? `Error: ${test.error}` : ''}
           ) : (
             <>
               <Camera className="h-5 w-5 max-sm:h-4 max-sm:w-4" />
-              {capturedFace ? "Retake Photo" : t("staff.checkIn.captureFace")}
+              {faceLivePreview
+                ? t("staff.checkIn.faceTakePhoto")
+                : capturedFace
+                  ? t("staff.checkIn.faceRetake")
+                  : t("staff.checkIn.captureFace")}
             </>
           )}
         </button>
 
         {capturedFace && (
           <div className="space-y-3">
-            <div className="text-center">
-              <p className="text-xs font-medium text-neutral-400 mb-2">Face Preview</p>
-              <div className="relative inline-block">
-                <img 
-                  src={capturedFace} 
-                  alt="Captured face" 
-                  className={cn(
-                    "w-32 h-32 rounded-lg object-cover border-2",
-                    faceQuality?.overall === 'good' ? 'border-green-500' :
-                    faceQuality?.overall === 'fair' ? 'border-yellow-500' :
-                    faceQuality?.overall === 'poor' ? 'border-red-500' :
-                    'border-neutral-700'
-                  )}
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCapturedFace(null);
-                    setFaceQuality(null);
-                  }}
-                  className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-            
             {/* Quality Feedback */}
             {faceQuality && (
               <div className={cn(
@@ -896,17 +904,17 @@ ${test.error ? `Error: ${test.error}` : ''}
               {faceQuality && faceQuality.overall !== 'good' && (
                 <button
                   type="button"
-                  onClick={captureFace}
+                  onClick={() => void handleFaceCaptureClick()}
                   disabled={faceCaptureLoading || testSeedLoading}
                   className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-orange-500/50 bg-orange-600/10 py-3 text-sm font-semibold text-orange-400 transition-colors hover:border-orange-500 hover:bg-orange-600/20 disabled:opacity-50 max-sm:rounded-lg max-sm:py-2.5"
                 >
                   {faceCaptureLoading ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin max-sm:h-3 max-sm:w-3" />
-                      Retaking...
+                      {t("staff.checkIn.faceRetaking")}
                     </>
                   ) : (
-                    "Retake Photo"
+                    t("staff.checkIn.faceRetake")
                   )}
                 </button>
               )}
@@ -914,7 +922,7 @@ ${test.error ? `Error: ${test.error}` : ''}
               <button
                 type="button"
                 onClick={submitWithFace}
-                disabled={loading || testSeedLoading || !name.trim() || !gender || !skill || showDuplicateWarning || (faceQuality?.overall === 'poor' && !faceQuality?.canForce)}
+                disabled={loading || testSeedLoading || !name.trim() || !gender || !skill || showDuplicateWarning}
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50 max-sm:rounded-lg max-sm:py-2.5 max-sm:text-base"
               >
                 {loading ? (
@@ -926,43 +934,27 @@ ${test.error ? `Error: ${test.error}` : ''}
                   "Add Player with Face"
                 )}
               </button>
-              
-              {faceQuality && faceQuality.canForce && faceQuality.overall !== 'good' && (
-                <button
-                  type="button"
-                  onClick={forceAddWithFace}
-                  disabled={loading || testSeedLoading || !name.trim() || !gender || !skill || showDuplicateWarning}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-orange-500/50 bg-orange-600/10 py-3 text-sm font-semibold text-orange-400 transition-colors hover:border-orange-500 hover:bg-orange-600/20 disabled:opacity-50 max-sm:rounded-lg max-sm:py-2.5"
-                >
-                  {loading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin max-sm:h-3 max-sm:w-3" />
-                      Force Adding...
-                    </>
-                  ) : (
-                    "Force Add (Override Quality Check)"
-                  )}
-                </button>
-              )}
             </div>
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={submit}
-          disabled={loading || testSeedLoading || !name.trim() || !gender || !skill || showDuplicateWarning}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50 max-sm:rounded-lg max-sm:py-2.5 max-sm:text-base"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="h-5 w-5 animate-spin max-sm:h-4 max-sm:w-4" />
-              {t("staff.checkIn.adding")}
-            </>
-          ) : (
-            t("staff.checkIn.addToQueue")
-          )}
-        </button>
+        {!capturedFace && (
+          <button
+            type="button"
+            onClick={submit}
+            disabled={loading || testSeedLoading || !name.trim() || !gender || !skill || showDuplicateWarning}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50 max-sm:rounded-lg max-sm:py-2.5 max-sm:text-base"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin max-sm:h-4 max-sm:w-4" />
+                {t("staff.checkIn.adding")}
+              </>
+            ) : (
+              t("staff.checkIn.addToQueue")
+            )}
+          </button>
+        )}
       </div>
 
       {recent.length > 0 && (

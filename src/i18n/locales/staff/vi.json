@@ -244,7 +244,22 @@
       "skillBeginner": "Mới chơi",
       "skillIntermediate": "Trung bình",
       "skillAdvanced": "Khá",
-      "skillPro": "Chuyên"
+      "skillPro": "Chuyên",
+      "or": "HOẶC",
+      "captureFace": "Chụp khuôn mặt",
+      "facePreviewLabel": "Ảnh khuôn mặt",
+      "facePreviewIdleHint": "Chạm Chụp khuôn mặt bên dưới để mở camera. Chạm lần nữa để chụp.",
+      "facePreviewLiveHint": "Căn khung cho khách, rồi chạm Chụp ảnh.",
+      "faceTakePhoto": "Chụp ảnh",
+      "faceRetake": "Chụp lại",
+      "faceRetaking": "Đang chụp lại…",
+      "faceCancelPreview": "Huỷ camera",
+      "faceClearPhoto": "Xoá ảnh",
+      "faceCapturing": "Đang chụp…",
+      "faceCheckInSuccess": "{{name}} đã check-in bằng khuôn mặt! Số {{number}}",
+      "faceAlreadyCheckedIn": "{{name}} đã check-in trong 4 giờ qua",
+      "faceNeedsReview": "Khuôn mặt cần nhân viên xem lại",
+      "faceNeedsRegistration": "Chưa có trong hệ thống — đăng ký ở tab Check-in trước (kiosk chỉ nhận người đã có)."
     },
     "sessionSummary": {
       "loadError": "Không tải được dữ liệu phiên",

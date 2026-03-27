@@ -14,6 +14,8 @@ interface PlayerRecord {
   name: string;
   phone: string;
   avatar: string;
+  /** First check-in face capture (staff “add with face”), served from /uploads/players */
+  facePhotoPath?: string | null;
   gender: string;
   skillLevel: string;
   createdAt: string;
@@ -1036,7 +1038,16 @@ function PlayerDetailPanel({
       <div className="relative w-full max-w-md animate-in slide-in-from-right overflow-y-auto bg-neutral-950 border-l border-neutral-800 shadow-2xl">
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-800 bg-neutral-950 px-4 py-3">
           <div className="flex items-center gap-3 min-w-0">
-            <span className="text-2xl">{player.avatar}</span>
+            {player.facePhotoPath ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={player.facePhotoPath}
+                alt=""
+                className="h-12 w-12 shrink-0 rounded-full object-cover border border-neutral-700 bg-neutral-800"
+              />
+            ) : (
+              <span className="text-2xl shrink-0">{player.avatar}</span>
+            )}
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold truncate">{player.name}</h3>
@@ -1071,6 +1082,18 @@ function PlayerDetailPanel({
         </div>
 
         <div className="p-4 space-y-4">
+          {player.facePhotoPath && (
+            <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
+              <p className="text-[11px] text-neutral-500 mb-2">Check-in photo (first face registration)</p>
+              {/* Served from Express/static /uploads — same origin as admin */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={player.facePhotoPath}
+                alt={`${player.name} check-in`}
+                className="mx-auto max-h-72 w-full max-w-sm rounded-lg object-contain bg-black"
+              />
+            </div>
+          )}
           {/* Edit form */}
           {editMode ? (
             <div className="space-y-3 rounded-xl border border-purple-600/30 bg-purple-600/5 p-4">

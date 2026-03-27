@@ -138,6 +138,8 @@ model Player {
   gamePreference        GamePreference @default(no_preference) @map("game_preference")
   notificationsEnabled  Boolean        @default(false) @map("notifications_enabled")
   faceSubjectId         String?        @map("face_subject_id")
+  /// Public URL path served from /uploads (e.g. /uploads/players/{id}.jpg) — set on first face check-in enrollment
+  facePhotoPath         String?        @map("face_photo_path")
   createdAt             DateTime       @default(now()) @map("created_at")
 
   queueEntries      QueueEntry[]

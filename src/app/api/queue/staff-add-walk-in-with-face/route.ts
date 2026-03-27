@@ -7,6 +7,7 @@ import { emitToVenue } from "@/lib/socket-server";
 import { SKILL_LEVELS, type SkillLevelType } from "@/lib/constants";
 import { findQueueDisplayNameConflict } from "@/lib/queue-display-name";
 import { faceRecognitionService } from "@/lib/face-recognition";
+import { savePlayerFacePhotoFromBase64 } from "@/lib/save-player-face-photo";
 import { mockFaceRecognitionService } from "@/lib/face-recognition-mock";
 
 // Helper function to get next queue number
@@ -289,6 +290,14 @@ export async function POST(request: NextRequest) {
         success: false,
         error: e instanceof Error ? e.message : "Unknown enrollment error",
       };
+    }
+
+    const photoPath = await savePlayerFacePhotoFromBase64(player.id, imageBase64);
+    if (photoPath) {
+      await prisma.player.update({
+        where: { id: player.id },
+        data: { facePhotoPath: photoPath },
+      });
     }
 
     const entry = await prisma.queueEntry.create({

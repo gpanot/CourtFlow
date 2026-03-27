@@ -1,3 +1,5 @@
+import { unlink } from "fs/promises";
+import path from "path";
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody, notFound } from "@/lib/api-helpers";
@@ -77,6 +79,23 @@ export async function DELETE(
         where: { membershipId: { in: membershipIds } },
       });
     }
+
+    try {
+      const faceFile = path.join(
+        process.cwd(),
+        "uploads",
+        "players",
+        `${playerId}.jpg`
+      );
+      await unlink(faceFile);
+    } catch {
+      // file may not exist
+    }
+
+    await prisma.faceAttempt.updateMany({
+      where: { matchedPlayerId: playerId },
+      data: { matchedPlayerId: null },
+    });
 
     await prisma.pushSubscription.deleteMany({ where: { playerId } });
     await prisma.queueEntry.deleteMany({ where: { playerId } });
