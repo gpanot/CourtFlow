@@ -592,31 +592,6 @@ ${test.error ? `Error: ${test.error}` : ''}
 
         <button
           type="button"
-          onClick={submit}
-          disabled={loading || testSeedLoading || !name.trim() || !gender || !skill || showDuplicateWarning}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50 max-sm:rounded-lg max-sm:py-2.5 max-sm:text-base"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="h-5 w-5 animate-spin max-sm:h-4 max-sm:w-4" />
-              {t("staff.checkIn.adding")}
-            </>
-          ) : (
-            t("staff.checkIn.addToQueue")
-          )}
-        </button>
-
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-neutral-700"></div>
-          </div>
-          <div className="relative flex justify-center text-xs">
-            <span className="bg-neutral-900 px-2 text-neutral-500">{t("staff.checkIn.or")}</span>
-          </div>
-        </div>
-
-        <button
-          type="button"
           onClick={captureFace}
           disabled={faceCaptureLoading || testSeedLoading}
           className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-blue-500/50 bg-blue-600/10 py-4 text-lg font-semibold text-blue-400 transition-colors hover:border-blue-500 hover:bg-blue-600/20 disabled:opacity-50 max-sm:rounded-lg max-sm:py-2.5 max-sm:text-base"
@@ -674,12 +649,18 @@ ${test.error ? `Error: ${test.error}` : ''}
 
         <button
           type="button"
-          onClick={debugCamera}
-          disabled={faceCaptureLoading || testSeedLoading}
-          className="flex w-full items-center justify-center gap-2 rounded-xl border border-neutral-700 bg-neutral-800/50 py-2 text-sm font-medium text-neutral-300 transition-colors hover:border-neutral-600 hover:bg-neutral-800 disabled:opacity-50 max-sm:rounded-lg max-sm:py-1.5"
+          onClick={submit}
+          disabled={loading || testSeedLoading || !name.trim() || !gender || !skill || showDuplicateWarning}
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50 max-sm:rounded-lg max-sm:py-2.5 max-sm:text-base"
         >
-          <Bug className="h-4 w-4 max-sm:h-3 max-sm:w-3" />
-          Debug Camera
+          {loading ? (
+            <>
+              <Loader2 className="h-5 w-5 animate-spin max-sm:h-4 max-sm:w-4" />
+              {t("staff.checkIn.adding")}
+            </>
+          ) : (
+            t("staff.checkIn.addToQueue")
+          )}
         </button>
       </div>
 
