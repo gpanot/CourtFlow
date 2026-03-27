@@ -636,16 +636,18 @@ ${test.error ? `Error: ${test.error}` : ''}
           {/* Gender Icons */}
           <div>
             <p className="mb-1.5 text-xs font-medium text-neutral-400 max-sm:mb-1">{t("staff.checkIn.gender")}</p>
-            <div className="flex gap-1 max-sm:gap-1">
+            <div className="flex gap-1.5 max-sm:gap-1">
               {GENDERS.map((g) => (
                 <button
                   key={g}
                   type="button"
                   onClick={() => setGender(g)}
                   className={cn(
-                    "flex h-11 w-11 items-center justify-center rounded-xl border-2 transition-colors max-sm:h-10 max-sm:w-10 max-sm:rounded-lg",
+                    "flex h-11 w-[58px] items-center justify-center rounded-xl border-2 transition-colors max-sm:h-10 max-sm:w-[52px] max-sm:rounded-lg",
                     gender === g
-                      ? "border-green-500 bg-green-600/20 text-green-400"
+                      ? g === 'male'
+                        ? "border-blue-500 bg-blue-600/20 text-blue-400"
+                        : "border-pink-500 bg-pink-600/20 text-pink-400"
                       : "border-neutral-700 text-neutral-400 hover:border-neutral-500 hover:text-neutral-300"
                   )}
                   title={genderLabel(g)}
