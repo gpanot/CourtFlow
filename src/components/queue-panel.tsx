@@ -58,6 +58,7 @@ export interface QueueEntryData {
   groupId: string | null;
   totalPlayMinutesToday: number;
   gamesPlayed: number;
+  queueNumber?: number;
   player: QueuePlayer;
   group: QueueGroup | null;
 }
@@ -748,6 +749,9 @@ function QueueRow({
               {!isTV && <GenderIcon gender={entry.player.gender} className="h-4 w-4" />}
               <span className={cn("font-medium", isTV ? "text-[clamp(0.6rem,calc(1.2*var(--tw,1vw)),1.2rem)] line-clamp-2 break-words" : "text-sm truncate")}>
                 {entry.player.name}
+                {entry.queueNumber && (
+                  <span className="ml-2 text-blue-400">#{entry.queueNumber}</span>
+                )}
               </span>
               {!isTV && <SkillTag level={entry.player.skillLevel} />}
               {!isTV && (

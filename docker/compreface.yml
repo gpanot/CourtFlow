@@ -1,0 +1,61 @@
+services:
+  compreface:
+    image: exadel/compreface:latest
+    container_name: compreface
+    ports:
+      - "8000:8000"
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_USER=compreface
+      - POSTGRES_PASSWORD=compreface123
+      - POSTGRES_DB=compreface
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - API_KEY=your-api-key-here
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - compreface_data:/opt/compreface
+    networks:
+      - compreface_network
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:13
+    container_name: compreface_postgres
+    environment:
+      - POSTGRES_USER=compreface
+      - POSTGRES_PASSWORD=compreface123
+      - POSTGRES_DB=compreface
+    volumes:
+      - compreface_postgres_data:/var/lib/postgresql/data
+    networks:
+      - compreface_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U compreface"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:6-alpine
+    container_name: compreface_redis
+    volumes:
+      - compreface_redis_data:/data
+    networks:
+      - compreface_network
+    restart: unless-stopped
+
+volumes:
+  compreface_data:
+  compreface_postgres_data:
+  compreface_redis_data:
+
+networks:
+  compreface_network:
+    driver: bridge

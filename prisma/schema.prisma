@@ -137,6 +137,7 @@ model Player {
   gender                Gender
   gamePreference        GamePreference @default(no_preference) @map("game_preference")
   notificationsEnabled  Boolean        @default(false) @map("notifications_enabled")
+  faceSubjectId         String?        @map("face_subject_id")
   createdAt             DateTime       @default(now()) @map("created_at")
 
   queueEntries      QueueEntry[]
@@ -144,6 +145,7 @@ model Player {
   memberships       Membership[]
   bookings          Booking[]
   coachLessons      CoachLesson[]
+  faceAttempts      FaceAttempt[]
 
   @@map("players")
 }
@@ -238,6 +240,7 @@ model QueueEntry {
   breakUntil            DateTime?      @map("break_until")
   totalPlayMinutesToday Int            @default(0) @map("total_play_minutes_today")
   gamePreference        GamePreference @default(no_preference) @map("game_preference")
+  queueNumber           Int?           @map("queue_number")
 
   session Session      @relation(fields: [sessionId], references: [id])
   player  Player       @relation(fields: [playerId], references: [id])
@@ -502,4 +505,34 @@ model CoachLesson {
   @@index([coachId, date])
   @@index([playerId])
   @@map("coach_lessons")
+}
+
+model FaceAttempt {
+  id                  String   @id @default(cuid())
+  eventId             String   @map("event_id")
+  matchedPlayerId     String?  @map("matched_player_id")
+  resultType          String   @map("result_type")
+  confidence          Float?
+  imageUrl            String?  @map("image_url")
+  createdNewPlayer    Boolean @default(false) @map("created_new_player")
+  hostReviewed        Boolean @default(false) @map("host_reviewed")
+  queueNumberAssigned Int?     @map("queue_number_assigned")
+  kioskDeviceId       String?  @map("kiosk_device_id")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  matchedPlayer Player? @relation(fields: [matchedPlayerId], references: [id])
+
+  @@index([eventId])
+  @@index([createdAt])
+  @@map("face_attempts")
+}
+
+model KioskDevice {
+  id       String  @id @default(cuid())
+  name     String
+  location String?
+  active   Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("kiosk_devices")
 }

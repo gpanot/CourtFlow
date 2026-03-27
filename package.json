@@ -8,6 +8,7 @@
   "scripts": {
     "postinstall": "prisma generate",
     "dev": "tsx server.ts",
+    "dev:https": "HTTPS=true SSL_CRT_FILE=./certs/cert.pem SSL_KEY_FILE=./certs/key.pem tsx server.ts",
     "dev:next": "next dev",
     "build": "next build && tsc --project tsconfig.server.json",
     "start": "node dist/server.js",

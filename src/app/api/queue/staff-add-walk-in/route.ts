@@ -7,6 +7,19 @@ import { emitToVenue } from "@/lib/socket-server";
 import { SKILL_LEVELS, type SkillLevelType } from "@/lib/constants";
 import { findQueueDisplayNameConflict } from "@/lib/queue-display-name";
 
+// Helper function to get next queue number
+async function getNextQueueNumber(sessionId: string): Promise<number> {
+  const lastEntry = await prisma.queueEntry.findFirst({
+    where: {
+      sessionId,
+      queueNumber: { not: null },
+    },
+    orderBy: { queueNumber: "desc" },
+  });
+
+  return (lastEntry?.queueNumber || 0) + 1;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const auth = requireStaff(request.headers);
@@ -69,6 +82,7 @@ export async function POST(request: NextRequest) {
         sessionId: session.id,
         playerId: player.id,
         status: "waiting",
+        queueNumber: await getNextQueueNumber(session.id),
       },
       include: { player: true },
     });

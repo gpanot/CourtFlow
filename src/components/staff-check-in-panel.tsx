@@ -5,7 +5,8 @@ import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { SKILL_LEVELS, SKILL_DESCRIPTIONS, type SkillLevelType } from "@/lib/constants";
-import { AlertTriangle, Loader2, UserPlus } from "lucide-react";
+import { AlertTriangle, Loader2, UserPlus, Camera, Play, Bug } from "lucide-react";
+import { testCameraSupport } from "@/lib/camera-test";
 
 const GENDERS = ["male", "female"] as const;
 
@@ -14,6 +15,7 @@ export interface StaffCheckInRecent {
   name: string;
   gender: string;
   skillLevel: string;
+  queueNumber?: number;
 }
 
 interface StaffCheckInPanelProps {
@@ -49,6 +51,7 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [testSeedLoading, setTestSeedLoading] = useState(false);
+  const [faceCaptureLoading, setFaceCaptureLoading] = useState(false);
   const [confirmTestCreate5, setConfirmTestCreate5] = useState<{ step: 1 | 2 } | null>(null);
   const [err, setErr] = useState("");
   const [recent, setRecent] = useState<StaffCheckInRecent[]>([]);
@@ -124,6 +127,276 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
     } finally {
       setLoading(false);
     }
+  };
+
+  const captureFace = async () => {
+    setErr("");
+    setFaceCaptureLoading(true);
+    
+    try {
+      // Run camera compatibility test
+      const cameraTest = testCameraSupport();
+      console.log('Camera compatibility test:', cameraTest);
+      
+      if (!cameraTest.supported) {
+        let errorMessage = "Camera not available. ";
+        
+        if (!cameraTest.mediaDevicesAvailable) {
+          errorMessage += "MediaDevices API not supported. ";
+        }
+        
+        if (!cameraTest.getUserMediaAvailable) {
+          errorMessage += "getUserMedia not supported. ";
+        }
+        
+        if (cameraTest.httpsRequired) {
+          errorMessage += "HTTPS required. ";
+        }
+        
+        errorMessage += "Please try Chrome, Safari, or Firefox on a secure connection.";
+        
+        throw new Error(errorMessage);
+      }
+
+      // Request camera access with better constraints for desktop
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: 'user',
+            // Add fallback constraints for desktop
+            aspectRatio: { ideal: 16/9 },
+            frameRate: { ideal: 30 }
+          } 
+        });
+      } catch (mediaError) {
+        console.log('Primary camera request failed, trying fallback:', mediaError);
+        // Try with minimal constraints
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          video: true 
+        });
+      }
+      
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.setAttribute('playsinline', 'true'); // Important for iOS
+      video.setAttribute('autoplay', 'true');
+      video.setAttribute('muted', 'true');
+      
+      // Wait for video to be ready with timeout
+      await Promise.race([
+        new Promise<void>((resolve, reject) => {
+          video.onloadedmetadata = () => {
+            video.play().then(resolve).catch(reject);
+          };
+          video.onerror = reject;
+        }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Camera timeout")), 5000)
+        )
+      ]);
+      
+      // Wait a bit for the video to actually start playing
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Create canvas to capture image
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth || 640;
+      canvas.height = video.videoHeight || 480;
+      const ctx = canvas.getContext('2d');
+      
+      if (!ctx) {
+        throw new Error("Could not get canvas context");
+      }
+      
+      // Draw the video frame to canvas
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      // Convert to base64
+      const imageBase64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+      
+      if (!imageBase64) {
+        throw new Error("Failed to capture image from camera");
+      }
+      
+      // Stop camera
+      stream.getTracks().forEach(track => {
+        track.stop();
+      });
+      
+      // Process face with backend
+      const response = await api.post<{
+        success: boolean;
+        resultType: string;
+        playerId?: string;
+        displayName?: string;
+        queueNumber?: number;
+        alreadyCheckedIn?: boolean;
+        error?: string;
+      }>("/api/kiosk/process-face", {
+        venueId,
+        imageBase64,
+      });
+      
+      if (response.success) {
+        if (response.resultType === "matched") {
+          showFlash(t("staff.checkIn.faceCheckInSuccess", { 
+            name: response.displayName, 
+            number: response.queueNumber 
+          }));
+        } else if (response.resultType === "new_player") {
+          showFlash(t("staff.checkIn.faceNewPlayerSuccess", { 
+            number: response.queueNumber 
+          }));
+        } else if (response.resultType === "already_checked_in") {
+          showFlash(t("staff.checkIn.faceAlreadyCheckedIn", { 
+            name: response.displayName 
+          }));
+        } else if (response.resultType === "needs_review") {
+          showFlash(t("staff.checkIn.faceNeedsReview"));
+        }
+        
+        // Add to recent list if we have player info
+        if (response.playerId && response.queueNumber) {
+          setRecent((prev) => {
+            const next = [
+              {
+                id: response.playerId!,
+                name: response.displayName || "Unknown Player",
+                gender: "",
+                skillLevel: "",
+                queueNumber: response.queueNumber,
+              },
+              ...prev.filter((p) => p.id !== response.playerId),
+            ];
+            return next.slice(0, 5);
+          });
+        }
+        
+        onAdded();
+      } else {
+        setErr(response.error || "Face recognition failed");
+      }
+    } catch (e) {
+      console.error("Camera capture error:", e);
+      const errorMessage = e instanceof Error ? e.message : "Unknown camera error";
+      
+      // Provide more helpful error messages
+      if (errorMessage.includes("Permission denied") || errorMessage.includes("NotAllowed")) {
+        setErr("Camera access denied. Please allow camera access in your browser settings and try again.");
+      } else if (errorMessage.includes("NotFound")) {
+        setErr("No camera found. Please connect a camera and try again.");
+      } else if (errorMessage.includes("Camera not supported")) {
+        setErr("Camera not supported in this browser. Please use Chrome, Safari, or Firefox.");
+      } else if (errorMessage.includes("HTTPS")) {
+        setErr("Camera access requires HTTPS. Please use a secure connection or localhost.");
+      } else {
+        setErr(`Camera error: ${errorMessage}`);
+      }
+    } finally {
+      setFaceCaptureLoading(false);
+    }
+  };
+
+  // Test face recognition without camera
+  const testFaceWithoutCamera = async () => {
+    setErr("");
+    setFaceCaptureLoading(true);
+    
+    try {
+      // Use mock face recognition with test image
+      const response = await api.post<{
+        success: boolean;
+        resultType: string;
+        playerId?: string;
+        displayName?: string;
+        queueNumber?: number;
+        alreadyCheckedIn?: boolean;
+        error?: string;
+      }>("/api/kiosk/process-face", {
+        venueId,
+        imageBase64: "test_image_no_camera", // Special signal to use test image
+      });
+      
+      if (response.success) {
+        if (response.resultType === "matched") {
+          showFlash(t("staff.checkIn.faceCheckInSuccess", { 
+            name: response.displayName, 
+            number: response.queueNumber 
+          }));
+        } else if (response.resultType === "new_player") {
+          showFlash(t("staff.checkIn.faceNewPlayerSuccess", { 
+            number: response.queueNumber 
+          }));
+        } else if (response.resultType === "already_checked_in") {
+          showFlash(t("staff.checkIn.faceAlreadyCheckedIn", { 
+            name: response.displayName 
+          }));
+        } else if (response.resultType === "needs_review") {
+          showFlash(t("staff.checkIn.faceNeedsReview"));
+        }
+        
+        // Add to recent list if we have player info
+        if (response.playerId && response.queueNumber) {
+          setRecent((prev) => {
+            const next = [
+              {
+                id: response.playerId!,
+                name: response.displayName || "Unknown Player",
+                gender: "",
+                skillLevel: "",
+                queueNumber: response.queueNumber,
+              },
+              ...prev.filter((p) => p.id !== response.playerId),
+            ];
+            return next.slice(0, 5);
+          });
+        }
+        
+        onAdded();
+      } else {
+        setErr(response.error || "Face recognition test failed");
+      }
+    } catch (e) {
+      console.error("Face recognition test error:", e);
+      setErr(e instanceof Error ? e.message : "Face recognition test failed");
+    } finally {
+      setFaceCaptureLoading(false);
+    }
+  };
+
+  // Debug camera support
+  const debugCamera = () => {
+    const test = testCameraSupport();
+    console.log('Camera Debug Info:', test);
+    
+    const debugMessage = `
+Camera Debug Info:
+- Supported: ${test.supported ? '✅' : '❌'}
+- MediaDevices: ${test.mediaDevicesAvailable ? '✅' : '❌'}
+- getUserMedia: ${test.getUserMediaAvailable ? '✅' : '❌'}
+- HTTPS Required: ${test.httpsRequired ? '❌' : '✅'}
+- Protocol: ${test.protocol}
+- Hostname: ${test.hostname}
+- User Agent: ${test.userAgent}
+${test.error ? `Error: ${test.error}` : ''}
+    `.trim();
+    
+    alert(debugMessage);
+  };
+  const getBrowserInfo = () => {
+    const userAgent = navigator.userAgent;
+    console.log('User Agent:', userAgent);
+    console.log('navigator.mediaDevices:', navigator.mediaDevices);
+    console.log('navigator.mediaDevices.getUserMedia:', navigator.mediaDevices?.getUserMedia);
+    
+    if (userAgent.includes('Chrome') && !userAgent.includes('Edg')) return 'Chrome';
+    if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) return 'Safari';
+    if (userAgent.includes('Firefox')) return 'Firefox';
+    if (userAgent.includes('Edg')) return 'Edge';
+    return 'Unknown';
   };
 
   const addFiveTestPlayers = async () => {
@@ -264,7 +537,7 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
         <div>
           <p className="mb-2 text-xs font-medium text-neutral-400 max-sm:mb-1">{t("staff.checkIn.skillLevel")}</p>
           <div className="space-y-2 max-sm:grid max-sm:grid-cols-2 max-sm:gap-2 max-sm:space-y-0">
-            {SKILL_LEVELS.map((level) => (
+            {SKILL_LEVELS.filter(level => level !== "pro").map((level) => (
               <button
                 key={level}
                 type="button"
@@ -314,6 +587,72 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
             t("staff.checkIn.addToQueue")
           )}
         </button>
+
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-neutral-700"></div>
+          </div>
+          <div className="relative flex justify-center text-xs">
+            <span className="bg-neutral-900 px-2 text-neutral-500">{t("staff.checkIn.or")}</span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={captureFace}
+          disabled={faceCaptureLoading || testSeedLoading}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-blue-500/50 bg-blue-600/10 py-4 text-lg font-semibold text-blue-400 transition-colors hover:border-blue-500 hover:bg-blue-600/20 disabled:opacity-50 max-sm:rounded-lg max-sm:py-2.5 max-sm:text-base"
+        >
+          {faceCaptureLoading ? (
+            <>
+              <Loader2 className="h-5 w-5 animate-spin max-sm:h-4 max-sm:w-4" />
+              {t("staff.checkIn.faceCapturing")}
+            </>
+          ) : (
+            <>
+              <Camera className="h-5 w-5 max-sm:h-4 max-sm:w-4" />
+              {t("staff.checkIn.captureFace")}
+            </>
+          )}
+        </button>
+
+        <div className="relative">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-neutral-700"></div>
+          </div>
+          <div className="relative flex justify-center text-xs">
+            <span className="bg-neutral-900 px-2 text-neutral-500">{t("staff.checkIn.or")}</span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={testFaceWithoutCamera}
+          disabled={faceCaptureLoading || testSeedLoading}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-purple-500/50 bg-purple-600/10 py-4 text-lg font-semibold text-purple-400 transition-colors hover:border-purple-500 hover:bg-purple-600/20 disabled:opacity-50 max-sm:rounded-lg max-sm:py-2.5 max-sm:text-base"
+        >
+          {faceCaptureLoading ? (
+            <>
+              <Loader2 className="h-5 w-5 animate-spin max-sm:h-4 max-sm:w-4" />
+              Testing…
+            </>
+          ) : (
+            <>
+              <Play className="h-5 w-5 max-sm:h-4 max-sm:w-4" />
+              Test Without Camera
+            </>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={debugCamera}
+          disabled={faceCaptureLoading || testSeedLoading}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-neutral-700 bg-neutral-800/50 py-2 text-sm font-medium text-neutral-300 transition-colors hover:border-neutral-600 hover:bg-neutral-800 disabled:opacity-50 max-sm:rounded-lg max-sm:py-1.5"
+        >
+          <Bug className="h-4 w-4 max-sm:h-3 max-sm:w-3" />
+          Debug Camera
+        </button>
       </div>
 
       {recent.length > 0 && (
@@ -327,7 +666,12 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
                 key={p.id}
                 className="flex items-center justify-between gap-2 rounded-lg bg-neutral-800/50 px-3 py-2 text-sm max-sm:px-2 max-sm:py-1 max-sm:text-xs"
               >
-                <span className="min-w-0 truncate font-medium text-white">{p.name}</span>
+                <span className="min-w-0 truncate font-medium text-white">
+                  {p.name}
+                  {p.queueNumber && (
+                    <span className="ml-2 text-blue-400">#{p.queueNumber}</span>
+                  )}
+                </span>
                 <span className="shrink-0 text-neutral-400">
                   {(p.gender === "male" || p.gender === "female" ? genderLabel(p.gender) : p.gender)} ·{" "}
                   {(["beginner", "intermediate", "advanced", "pro"] as const).includes(p.skillLevel as SkillLevelType)

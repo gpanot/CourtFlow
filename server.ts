@@ -1,5 +1,7 @@
 import express from "express";
 import { createServer } from "http";
+import { createServer as createHttpsServer } from "https";
+import fs from "fs";
 import next from "next";
 import path from "path";
 import { Server as SocketIOServer } from "socket.io";
@@ -13,9 +15,26 @@ const handle = app.getRequestHandler();
 
 app.prepare().then(() => {
   const expressApp = express();
-  const httpServer = createServer(expressApp);
+  
+  // Create HTTP or HTTPS server based on environment
+  let server;
+  const isHttps = process.env.HTTPS === 'true';
+  
+  if (isHttps && process.env.SSL_CRT_FILE && process.env.SSL_KEY_FILE) {
+    try {
+      const cert = fs.readFileSync(process.env.SSL_CRT_FILE);
+      const key = fs.readFileSync(process.env.SSL_KEY_FILE);
+      server = createHttpsServer({ cert, key }, expressApp);
+      console.log('🔐 HTTPS server enabled');
+    } catch (error) {
+      console.error('❌ Failed to load SSL certificates, falling back to HTTP:', error);
+      server = createServer(expressApp);
+    }
+  } else {
+    server = createServer(expressApp);
+  }
 
-  const io = new SocketIOServer(httpServer, {
+  const io = new SocketIOServer(server, {
     cors: {
       origin: "*",
       methods: ["GET", "POST"],
@@ -54,8 +73,9 @@ app.prepare().then(() => {
     return handle(req, res);
   });
 
-  httpServer.listen(port, () => {
-    console.log(`\n  CourtFlow running on http://${hostname}:${port}`);
+  server.listen(port, () => {
+    const protocol = process.env.HTTPS === 'true' ? 'https' : 'http';
+    console.log(`\n  CourtFlow running on ${protocol}://${hostname}:${port}`);
     console.log(`  Socket.io ready`);
     console.log(`  Mode: ${dev ? "development" : "production"}\n`);
   });

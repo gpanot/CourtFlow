@@ -1,0 +1,35 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+healthcheckPath = "/api/health"
+healthcheckTimeout = 100
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
+
+[[services]]
+name = "compreface"
+
+[services.variables]
+API_KEY = "your-production-api-key-here"
+POSTGRES_HOST = "postgres"
+POSTGRES_PORT = "5432"
+POSTGRES_USER = "compreface"
+POSTGRES_PASSWORD = "compreface123"
+POSTGRES_DB = "compreface"
+REDIS_HOST = "redis"
+REDIS_PORT = "6379"
+
+[services.ports]
+port = 8000
+
+[[services]]
+name = "postgres"
+
+[services.variables]
+POSTGRES_USER = "compreface"
+POSTGRES_PASSWORD = "compreface123"
+POSTGRES_DB = "compreface"
+
+[[services]]
+name = "redis"

@@ -13,13 +13,14 @@ import { CourtCard, type CourtData } from "@/components/court-card";
 import { GenderIcon } from "@/components/gender-icon";
 import { QueuePanel, type QueueEntryData, type StaffQueueCourtGroup } from "@/components/queue-panel";
 import { cn } from "@/lib/cn";
-import { Plus, X, Users, LayoutGrid, AlertTriangle, User, UserPlus, Flame, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, Calendar, Loader2, Target, Play, Check, ListPlus } from "lucide-react";
+import { Plus, X, Users, LayoutGrid, AlertTriangle, User, UserPlus, Flame, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, Calendar, Loader2, Target, Play, Check, ListPlus, Camera } from "lucide-react";
 import { WARMUP_DURATION_SECONDS, MIN_GROUP_SIZE, MAX_GROUP_SIZE } from "@/lib/constants";
 import { isSessionWarmupDisplayMode } from "@/lib/session-warmup-display";
 import { QRCodeSVG } from "qrcode.react";
 import { SessionSummary } from "./session-summary";
 import { StaffCheckInPanel } from "@/components/staff-check-in-panel";
 import { StaffWaitingPicker } from "@/components/staff-waiting-picker";
+import { FaceKioskTab } from "@/components/face-kiosk-tab";
 import { canCourtAcceptManualAssign } from "@/lib/court-manual-assign";
 
 function genderLabelForDialog(g: string, t: TFunction) {
@@ -85,7 +86,7 @@ interface VenueData {
   courts: { id: string; label: string; activeInSession: boolean }[];
 }
 
-type Tab = "courts" | "checkin" | "queue" | "qr";
+type Tab = "courts" | "checkin" | "queue" | "qr" | "kiosk";
 
 export function StaffDashboard() {
   const { t } = useTranslation();
@@ -548,6 +549,17 @@ export function StaffDashboard() {
             {t("staff.dashboard.tabQueue", { count: queue.filter((e) => e.status === "waiting").length })}
           </span>
         </button>
+        <button
+          type="button"
+          onClick={() => setTab("kiosk")}
+          className={cn(
+            "flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 min-w-0",
+            tab === "kiosk" ? "border-b-2 border-blue-500 text-white" : "text-neutral-400"
+          )}
+        >
+          <Camera className="h-4 w-4 shrink-0" />
+          <span className="truncate">{t("staff.dashboard.tabKiosk")}</span>
+        </button>
       </div>
 
       {/* Content — min-h-0 so flex child can shrink; tighter padding on check-in mobile */}
@@ -686,6 +698,10 @@ export function StaffDashboard() {
 
         {tab === "qr" && (
           <QRCodeTab venueId={venueId} venueName={venue?.name} hasSession={!!session} t={t} />
+        )}
+
+        {tab === "kiosk" && venueId && (
+          <FaceKioskTab venueId={venueId} />
         )}
 
       </main>
