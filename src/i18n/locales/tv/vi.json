@@ -5,6 +5,7 @@
   "defaultVenueName": "Màn hình sân",
   "warmupCheckedIn": "Khởi động · {{count}} người chơi đã check-in",
   "sessionActiveCourts": "Phiên đang diễn ra · {{count}} sân",
+  "live": "Trực tiếp",
   "noActiveSession": "Chưa có phiên",
   "rotatePortrait": "Xoay dọc",
   "rotateLandscape": "Xoay ngang (TV)",
@@ -21,7 +22,8 @@
     "outOfService": "Sân tạm nghỉ",
     "gameMen": "nam",
     "gameWomen": "nữ",
-    "gameMixed": "hỗn hợp"
+    "gameMixed": "hỗn hợp",
+    "starting": "Bắt đầu"
   },
   "timer": {
     "goToCourt": "Vào sân",
@@ -33,5 +35,13 @@
     "empty": "Chưa có ai trong hàng chờ",
     "groupOf": "Nhóm {{count}} người",
     "morePlayers": "+{{count}} người chơi"
+  },
+  "tvQueue": {
+    "waiting": "Chờ",
+    "nextUp": "Tiếp theo"
+  },
+  "viewSwitch": {
+    "toStrip": "Bảng: hàng chờ trên, số trên sân",
+    "toLegacy": "Cổ điển: hàng chờ cạnh và tên"
   }
 }

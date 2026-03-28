@@ -5,9 +5,10 @@ import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/cn";
 import { tvI18n } from "@/i18n/tv-i18n";
 import { GamePhaseTimer } from "./timer";
-import { Link, Users } from "lucide-react";
+import { Link, UserRound, Users } from "lucide-react";
 import { AUTO_START_DELAY_SECONDS, COURT_PLAYER_COUNT } from "@/lib/constants";
 import { playerNameWithCheckIn } from "@/lib/player-display";
+import { isPlayerAvatarImageSrc } from "@/lib/player-avatar-display";
 
 interface Player {
   id: string;
@@ -39,6 +40,8 @@ export interface CourtData {
 interface CourtCardProps {
   court: CourtData;
   variant?: "tv" | "staff";
+  /** TV only: legacy = names + sidebar layout; strip = numbers-first board. */
+  tvDisplay?: "legacy" | "strip";
   onClick?: () => void;
   /** When set (e.g. staff app), use this i18n instance instead of TV copy. */
   translationI18n?: I18nInstance;
@@ -74,6 +77,7 @@ function gameTypeTvLabel(gameType: string, t: (k: string) => string) {
 export function CourtCard({
   court,
   variant = "tv",
+  tvDisplay = "legacy",
   onClick,
   translationI18n,
 }: CourtCardProps) {
@@ -131,47 +135,58 @@ export function CourtCard({
         </div>
 
         {normalizedStatus === "active" && court.assignment && (
-          <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="mt-2.5 grid grid-cols-2 gap-1.5 sm:mt-3 sm:gap-2">
             {Array.from({ length: COURT_PLAYER_COUNT }, (_, i) => {
               const player = court.players[i];
               if (player) {
                 return (
                   <div
                     key={player.id}
-                    className="relative flex min-w-0 gap-2.5 rounded-xl border border-neutral-700/90 bg-neutral-900/65 p-2"
+                    className="relative h-[9.75rem] w-full overflow-hidden rounded-lg border border-neutral-700/70 bg-neutral-900 shadow-md ring-1 ring-black/30 sm:h-[10.25rem]"
                   >
-                    <div className="relative h-[4.5rem] w-[4.5rem] shrink-0 overflow-hidden rounded-lg bg-neutral-800 sm:h-[5.25rem] sm:w-[5.25rem]">
-                      {player.facePhotoPath ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={player.facePhotoPath}
-                          alt=""
-                          className="h-full w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-3xl leading-none sm:text-4xl">
-                          {player.avatar ?? "🏓"}
-                        </div>
-                      )}
-                      {player.groupId && (
-                        <Link
-                          className="absolute right-1 top-1 h-3.5 w-3.5 text-blue-400 drop-shadow-md"
-                          aria-hidden
-                        />
-                      )}
-                    </div>
-                    <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
-                      <p className="truncate text-base font-bold leading-tight text-white">{player.name}</p>
-                      <div className="flex items-center gap-1.5 min-h-[1.125rem]">
+                    {player.facePhotoPath ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={player.facePhotoPath}
+                        alt=""
+                        className="absolute inset-0 h-full w-full object-cover object-center"
+                      />
+                    ) : isPlayerAvatarImageSrc(player.avatar) ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={player.avatar}
+                        alt=""
+                        className="absolute inset-0 h-full w-full object-cover object-center"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-neutral-800 to-neutral-950 text-3xl leading-none sm:text-4xl">
+                        {player.avatar ?? "🏓"}
+                      </div>
+                    )}
+                    <div
+                      className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_top,rgba(0,0,0,0.9)_0%,rgba(0,0,0,0.5)_38%,transparent_72%)]"
+                    />
+                    {player.groupId && (
+                      <div className="absolute right-1 top-1 z-20 rounded bg-black/50 p-0.5 backdrop-blur-sm">
+                        <Link className="block h-3 w-3 text-blue-400" aria-hidden />
+                      </div>
+                    )}
+                    <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col items-center justify-end px-1.5 pb-1.5 pt-6 text-center">
+                      <p className="w-full truncate text-xs font-bold leading-tight text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] sm:text-[13px]">
+                        {player.name}
+                      </p>
+                      <div className="mt-0.5 flex items-center justify-center gap-1">
                         <span
                           className={cn(
-                            "h-2 w-2 shrink-0 rounded-full",
-                            staffSkillDot[player.skillLevel] ?? "bg-neutral-500"
+                            "h-1.5 w-1.5 shrink-0 rounded-full ring-1 ring-black/30",
+                            staffSkillDot[player.skillLevel] ?? "bg-neutral-400"
                           )}
                         />
-                        {player.queueNumber != null && (
-                          <span className="text-xs tabular-nums text-neutral-400">#{player.queueNumber}</span>
-                        )}
+                        {player.queueNumber != null ? (
+                          <span className="text-[10px] font-medium tabular-nums text-white/90 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] sm:text-[11px]">
+                            #{player.queueNumber}
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -180,17 +195,11 @@ export function CourtCard({
               return (
                 <div
                   key={`slot-empty-${i}`}
-                  className="flex min-w-0 gap-2.5 rounded-xl border border-dashed border-neutral-700/55 bg-neutral-900/30 p-2"
+                  className="relative flex h-[9.75rem] w-full flex-col items-center justify-center overflow-hidden rounded-lg border border-dashed border-neutral-600/45 bg-neutral-950/50 ring-1 ring-inset ring-white/[0.04] sm:h-[10.25rem]"
                   aria-label={t("staff.dashboard.courtCardOpenSlot")}
                 >
-                  <div className="h-[4.5rem] w-[4.5rem] shrink-0 rounded-lg border border-dashed border-neutral-600/50 bg-neutral-800/25 sm:h-[5.25rem] sm:w-[5.25rem]" />
-                  <div className="flex min-w-0 flex-1 flex-col justify-center gap-1.5">
-                    <div className="h-3.5 w-16 max-w-full rounded bg-neutral-700/35" />
-                    <div className="flex items-center gap-1.5">
-                      <span className="h-2 w-2 shrink-0 rounded-full bg-neutral-700/45" />
-                      <div className="h-3 w-8 rounded bg-neutral-700/30" />
-                    </div>
-                  </div>
+                  <UserRound className="h-7 w-7 text-neutral-600/55 sm:h-8 sm:w-8" strokeWidth={1.15} aria-hidden />
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-black/20 to-transparent" />
                 </div>
               );
             })}
@@ -200,6 +209,84 @@ export function CourtCard({
       </div>
     );
   }
+
+  if (tvDisplay === "strip") {
+    const numSize =
+      "clamp(1.25rem, min(calc(4.2 * var(--tw, 1vw)), calc(5 * var(--th, 1vh))), min(2.25rem, calc(5.5 * var(--th, 1vh))))";
+    const labelSize =
+      "clamp(1rem, min(calc(3 * var(--tw, 1vw)), calc(4 * var(--th, 1vh))), min(2rem, calc(5 * var(--th, 1vh))))";
+
+    return (
+      <div
+        className={cn(
+          "flex flex-col overflow-hidden rounded-2xl border-2 transition-all duration-300",
+          "p-[min(calc(1.25*var(--tw,1vw)),calc(1.75*var(--th,1vh)))]",
+          "h-full min-h-0 justify-between",
+          config.bg,
+          tvStarting && "animate-border-blink",
+          onClick && "cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+        )}
+        onClick={onClick}
+      >
+        <div className="flex items-center justify-between gap-2 min-h-[1.25em]">
+          <h3 className="font-semibold leading-none text-neutral-100 truncate" style={{ fontSize: labelSize }}>
+            {court.label}
+          </h3>
+          {starting && (
+            <span
+              className="shrink-0 rounded-md bg-blue-950/80 px-2 py-0.5 font-semibold uppercase tracking-wide text-blue-200"
+              style={{
+                fontSize: "clamp(0.45rem, min(var(--tw, 1vw), calc(1.2 * var(--th, 1vh))), 0.65rem)",
+              }}
+            >
+              {t("court.starting")}
+            </span>
+          )}
+        </div>
+
+        {normalizedStatus === "active" && court.assignment && (
+          <>
+            <div className="mt-[min(calc(0.35*var(--th,1vh)),calc(0.25*var(--tw,1vw)))]">
+              <GamePhaseTimer startedAt={court.assignment.startedAt} size="tv" />
+            </div>
+            <div className="mt-[min(calc(0.5*var(--th,1vh)),calc(0.35*var(--tw,1vw)))] flex flex-nowrap gap-[min(calc(0.35*var(--tw,1vw)),calc(0.25*var(--th,1vh)))] items-baseline">
+              {Array.from({ length: COURT_PLAYER_COUNT }, (_, i) => {
+                const player = court.players[i];
+                const n = player?.queueNumber;
+                return (
+                  <span
+                    key={player?.id ?? `empty-${i}`}
+                    className={cn(
+                      "min-w-[2ch] shrink-0 text-center font-semibold tabular-nums leading-none",
+                      starting ? "text-blue-300" : "text-white"
+                    )}
+                    style={{ fontSize: numSize }}
+                  >
+                    {n != null ? String(n) : "—"}
+                  </span>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {normalizedStatus === "idle" && (
+          <div className="mt-auto flex flex-1 items-center">
+            <span className="font-light text-neutral-600" style={{ fontSize: numSize }}>
+              —
+            </span>
+          </div>
+        )}
+
+        {court.status === "maintenance" && (
+          <p className="mt-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))] text-neutral-500" style={{ fontSize: labelSize }}>
+            {t("court.outOfService")}
+          </p>
+        )}
+      </div>
+    );
+  }
+
 
   return (
     <div

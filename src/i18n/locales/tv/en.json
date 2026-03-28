@@ -5,6 +5,7 @@
   "defaultVenueName": "Court Display",
   "warmupCheckedIn": "Warm Up · {{count}} players checked in",
   "sessionActiveCourts": "Session Active · {{count}} courts",
+  "live": "Live",
   "noActiveSession": "No Active Session",
   "rotatePortrait": "Back to portrait",
   "rotateLandscape": "Rotate for TV (landscape)",
@@ -21,7 +22,8 @@
     "outOfService": "Court on Stand By",
     "gameMen": "men",
     "gameWomen": "women",
-    "gameMixed": "mix"
+    "gameMixed": "mix",
+    "starting": "Starting"
   },
   "timer": {
     "goToCourt": "Go to court",
@@ -33,5 +35,13 @@
     "empty": "No players in queue",
     "groupOf": "Group of {{count}}",
     "morePlayers": "+{{count}} players"
+  },
+  "tvQueue": {
+    "waiting": "Waiting",
+    "nextUp": "Next up"
+  },
+  "viewSwitch": {
+    "toStrip": "Board view: queue on top, numbers on courts",
+    "toLegacy": "Classic view: sidebar queue and names"
   }
 }

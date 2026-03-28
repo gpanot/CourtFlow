@@ -8,13 +8,17 @@ import { useSocket } from "@/hooks/use-socket";
 import { joinVenue } from "@/lib/socket-client";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { Wifi, WifiOff, RotateCcw } from "lucide-react";
+import { LayoutGrid, PanelRight } from "lucide-react";
 import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import { TvReactionOverlay } from "@/components/tv-reaction-overlay";
 import { resolveTvLocale, tvI18n } from "@/i18n/tv-i18n";
+import { TvQueueStrip } from "@/components/tv-queue-strip";
 
 type VenueTvSettings = { logoSpin?: boolean; tvLocale?: string };
+
+const TV_LAYOUT_STORAGE_KEY = "tv-layout-mode";
+type TvLayoutMode = "legacy" | "strip";
 
 interface VenueState {
   session: { id: string; status: string } | null;
@@ -29,15 +33,10 @@ export default function TVDisplayPage() {
     { id: string; name: string; logoUrl?: string | null; tvText?: string | null; settings?: VenueTvSettings }[]
   >([]);
   const [state, setState] = useState<VenueState>({ session: null, courts: [], queue: [] });
-  const [connected, setConnected] = useState(true);
   const [clock, setClock] = useState(new Date());
-  const [rotated, setRotated] = useState(false);
+  const [tvLayout, setTvLayout] = useState<TvLayoutMode>("legacy");
   const tvRootRef = useRef<HTMLDivElement>(null);
   const { on } = useSocket();
-
-  useEffect(() => {
-    if (localStorage.getItem("tv-orientation") === "rotated") setRotated(true);
-  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => setClock(new Date()), 1000);
@@ -45,15 +44,29 @@ export default function TVDisplayPage() {
   }, []);
 
   useEffect(() => {
-    api.get<
-      { id: string; name: string; logoUrl?: string | null; tvText?: string | null; settings?: VenueTvSettings }[]
-    >("/api/venues").then(setVenues).catch(console.error);
+    const vid = new URLSearchParams(window.location.search).get("venueId");
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- read ?venueId after mount to match SSR
+    if (vid) setVenueId(vid);
   }, []);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const vid = params.get("venueId");
-    if (vid) setVenueId(vid);
+    const v = localStorage.getItem(TV_LAYOUT_STORAGE_KEY);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- restore layout preference after mount (localStorage)
+    if (v === "strip" || v === "legacy") setTvLayout(v);
+  }, []);
+
+  const toggleTvLayout = useCallback(() => {
+    setTvLayout((prev) => {
+      const next: TvLayoutMode = prev === "legacy" ? "strip" : "legacy";
+      localStorage.setItem(TV_LAYOUT_STORAGE_KEY, next);
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    api.get<
+      { id: string; name: string; logoUrl?: string | null; tvText?: string | null; settings?: VenueTvSettings }[]
+    >("/api/venues").then(setVenues).catch(console.error);
   }, []);
 
   const fetchState = useCallback(async () => {
@@ -69,7 +82,9 @@ export default function TVDisplayPage() {
   useEffect(() => {
     if (!venueId) return;
     joinVenue(venueId);
-    fetchState();
+    queueMicrotask(() => {
+      void fetchState();
+    });
 
     const offCourt = on("court:updated", () => fetchState());
     const offQueue = on("queue:updated", () => fetchState());
@@ -94,8 +109,7 @@ export default function TVDisplayPage() {
           : v
       ));
     });
-    const offConnect = on("connect", () => { setConnected(true); fetchState(); });
-    const offDisconnect = on("disconnect", () => setConnected(false));
+    const offConnect = on("connect", () => { void fetchState(); });
 
     return () => {
       offCourt();
@@ -103,7 +117,6 @@ export default function TVDisplayPage() {
       offSession();
       offVenue();
       offConnect();
-      offDisconnect();
     };
   }, [venueId, on, fetchState]);
 
@@ -149,40 +162,26 @@ export default function TVDisplayPage() {
   const activeCourts = sortedCourts.filter((c) => c.status !== "maintenance");
   const courtCount = activeCourts.length;
 
-  const toggleOrientation = () => {
-    setRotated((prev) => {
-      const next = !prev;
-      localStorage.setItem("tv-orientation", next ? "rotated" : "normal");
-      return next;
-    });
-  };
-
   const gridCols =
     courtCount <= 3 ? "grid-cols-1 lg:grid-cols-3"
     : courtCount <= 6 ? "grid-cols-2 lg:grid-cols-3"
     : courtCount <= 9 ? "grid-cols-3"
     : "grid-cols-3 lg:grid-cols-4";
 
+  const stripGridCols =
+    courtCount <= 8 ? "grid-cols-2" : gridCols;
+
   const outerStyle = {
-    "--tw": rotated ? "1vh" : "1vw",
-    "--th": rotated ? "1vw" : "1vh",
-    ...(rotated && {
-      position: "fixed",
-      width: "100dvh",
-      height: "100dvw",
-      top: "50%",
-      left: "50%",
-      transform: "translate(-50%, -50%) rotate(90deg)",
-    }),
+    "--tw": "1vw",
+    "--th": "1vh",
   } as React.CSSProperties;
+
+  const playerQrUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/player?venueId=${venueId}`;
 
   return (
     <div ref={tvRootRef} className="relative overflow-hidden bg-black" style={outerStyle}>
       <TvReactionOverlay enabled={!!venueId} mountRef={tvRootRef} />
-      <div
-        className="flex h-dvh w-screen flex-col overflow-hidden bg-black text-white"
-        style={rotated ? { width: "100dvh", height: "100dvw" } : undefined}
-      >
+      <div className="flex h-dvh w-screen flex-col overflow-hidden bg-black text-white">
         <header className="shrink-0 flex items-center justify-between border-b border-neutral-800 px-[calc(2*var(--tw,1vw))] py-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]">
           <div className="flex min-w-0 items-center gap-[calc(1.25*var(--tw,1vw))]">
             <div className="flex shrink-0 items-center gap-[calc(0.75*var(--tw,1vw))]">
@@ -216,44 +215,51 @@ export default function TVDisplayPage() {
           </div>
           <div className="flex items-center gap-[calc(1.5*var(--tw,1vw))]">
             {state.session ? (
-              <span className="rounded-full bg-green-600/20 px-3 py-1 font-medium text-green-400 text-[clamp(0.65rem,calc(1.2*var(--tw,1vw)),1rem)]">
-                {t("sessionActiveCourts", { count: courtCount })}
+              <span className="inline-flex items-center gap-[calc(0.5*var(--tw,1vw))] rounded-full bg-green-600/20 px-3 py-1 font-medium text-green-400 text-[clamp(0.65rem,calc(1.2*var(--tw,1vw)),1rem)]">
+                <span
+                  className="h-[clamp(0.35rem,calc(0.55*var(--tw,1vw)),0.5rem)] w-[clamp(0.35rem,calc(0.55*var(--tw,1vw)),0.5rem)] shrink-0 rounded-full bg-green-400 animate-pulse"
+                  aria-hidden
+                />
+                {t("live")}
               </span>
             ) : (
               <span className="rounded-full bg-neutral-700 px-3 py-1 font-medium text-neutral-400 text-[clamp(0.65rem,calc(1.2*var(--tw,1vw)),1rem)]">
                 {t("noActiveSession")}
               </span>
             )}
+            {state.session && (
+              <>
+                <button
+                  type="button"
+                  onClick={toggleTvLayout}
+                  className="flex shrink-0 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 p-[min(calc(0.35*var(--tw,1vw)),calc(0.5*var(--th,1vh)))] text-neutral-300 hover:bg-neutral-800 hover:text-white"
+                  title={tvLayout === "legacy" ? t("viewSwitch.toStrip") : t("viewSwitch.toLegacy")}
+                  aria-label={tvLayout === "legacy" ? t("viewSwitch.toStrip") : t("viewSwitch.toLegacy")}
+                >
+                  {tvLayout === "legacy" ? (
+                    <LayoutGrid className="h-[calc(1.5*var(--tw,1vw))] w-[calc(1.5*var(--tw,1vw))] min-h-5 min-w-5" />
+                  ) : (
+                    <PanelRight className="h-[calc(1.5*var(--tw,1vw))] w-[calc(1.5*var(--tw,1vw))] min-h-5 min-w-5" />
+                  )}
+                </button>
+              </>
+            )}
             <span className="tabular-nums text-neutral-400 text-[clamp(0.875rem,calc(1.8*var(--tw,1vw)),1.75rem)]">
               {clock.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
             </span>
-            <button
-              onClick={toggleOrientation}
-              className={cn(
-                "rounded-md p-1 transition-colors",
-                rotated
-                  ? "text-green-400 bg-green-900/40 hover:bg-green-900/60"
-                  : "text-neutral-500 hover:bg-neutral-800 hover:text-neutral-300"
-              )}
-              title={rotated ? t("rotatePortrait") : t("rotateLandscape")}
-            >
-              <RotateCcw className="h-[calc(1.6*var(--tw,1vw))] w-[calc(1.6*var(--tw,1vw))] min-h-3.5 min-w-3.5" />
-            </button>
-            {connected ? (
-              <Wifi className="h-[calc(1.8*var(--tw,1vw))] w-[calc(1.8*var(--tw,1vw))] min-h-4 min-w-4 text-green-500" />
-            ) : (
-              <div className="flex items-center gap-1 text-amber-400">
-                <WifiOff className="h-[calc(1.8*var(--tw,1vw))] w-[calc(1.8*var(--tw,1vw))] min-h-4 min-w-4" />
-                <span className="text-[clamp(0.65rem,calc(1.1*var(--tw,1vw)),0.875rem)]">{t("reconnecting")}</span>
-              </div>
-            )}
           </div>
         </header>
 
         <div className="flex flex-1 min-h-0 overflow-hidden">
-          <main className="flex-1 min-w-0 min-h-0 overflow-hidden p-[min(calc(1.5*var(--tw,1vw)),calc(2*var(--th,1vh)))]">
+          <main
+            className={cn(
+              "min-h-0 overflow-hidden",
+              state.session && tvLayout === "legacy" ? "flex-1 min-w-0 p-[min(calc(1.5*var(--tw,1vw)),calc(2*var(--th,1vh)))]" : "flex-1 min-w-0",
+              state.session && tvLayout === "strip" && "flex flex-col min-h-0"
+            )}
+          >
             {!state.session ? (
-              <div className="flex h-full flex-col items-center justify-center gap-[calc(3*var(--th,1vh))]">
+              <div className="flex h-full flex-col items-center justify-center gap-[calc(3*var(--th,1vh))] p-[min(calc(1.5*var(--tw,1vw)),calc(2*var(--th,1vh)))]">
                 {venueLogoUrl && (
                   <div className={cn(
                     "h-[clamp(6rem,calc(20*var(--th,1vh)),16rem)] w-[clamp(6rem,calc(20*var(--th,1vh)),16rem)] shrink-0 rounded-full overflow-hidden border-2 border-neutral-800 bg-neutral-900",
@@ -280,6 +286,22 @@ export default function TVDisplayPage() {
                   {t("waitingSessionStart")}
                 </p>
               </div>
+            ) : tvLayout === "strip" ? (
+              <>
+                <div className="shrink-0 border-b border-neutral-800 px-[min(calc(1.5*var(--tw,1vw)),calc(2*var(--th,1vh)))] py-[min(var(--th,1vh),calc(0.75*var(--tw,1vw)))]">
+                  <TvQueueStrip entries={state.queue} />
+                </div>
+                <div
+                  className={cn(
+                    "grid min-h-0 flex-1 overflow-hidden gap-[min(var(--tw,1vw),var(--th,1vh))] auto-rows-fr p-[min(calc(1.5*var(--tw,1vw)),calc(2*var(--th,1vh)))]",
+                    stripGridCols
+                  )}
+                >
+                  {sortedCourts.map((court) => (
+                    <CourtCard key={court.id} court={court} variant="tv" tvDisplay="strip" />
+                  ))}
+                </div>
+              </>
             ) : (
               <div className={cn("grid h-full min-h-0 overflow-hidden gap-[min(var(--tw,1vw),var(--th,1vh))] auto-rows-fr", gridCols)}>
                 {sortedCourts.map((court) => (
@@ -289,7 +311,7 @@ export default function TVDisplayPage() {
             )}
           </main>
 
-          {state.session && (
+          {state.session && tvLayout === "legacy" && (
             <aside
               className="shrink-0 border-l border-neutral-800 flex flex-col overflow-hidden"
               style={{
@@ -303,7 +325,7 @@ export default function TVDisplayPage() {
                   style={{ maxHeight: "calc(36 * var(--th, 1vh))", maxWidth: "calc(36 * var(--th, 1vh))" }}
                 >
                   <QRCodeSVG
-                    value={`${typeof window !== "undefined" ? window.location.origin : ""}/player?venueId=${venueId}`}
+                    value={playerQrUrl}
                     size={1000}
                     level="H"
                     includeMargin={false}

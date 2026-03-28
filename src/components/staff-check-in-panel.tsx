@@ -2,7 +2,13 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { api } from "@/lib/api-client";
+import { api, ApiRequestError } from "@/lib/api-client";
+import {
+  pickTestWalkInProfiles,
+  randomFictionalUsE164Phone,
+  testWalkInAvatarForSlot,
+} from "@/lib/test-walk-in-fixtures";
+import { isPlayerAvatarImageSrc } from "@/lib/player-avatar-display";
 import { cn } from "@/lib/cn";
 import { SKILL_LEVELS, SKILL_DESCRIPTIONS, type SkillLevelType } from "@/lib/constants";
 import { AlertTriangle, Loader2, UserPlus, Camera, SwitchCamera } from "lucide-react";
@@ -47,6 +53,7 @@ export interface StaffCheckInRecent {
   gender: string;
   skillLevel: string;
   queueNumber?: number;
+  avatar?: string;
 }
 
 interface StaffCheckInPanelProps {
@@ -607,27 +614,44 @@ ${test.error ? `Error: ${test.error}` : ''}
     setTestSeedLoading(true);
     const added: StaffCheckInRecent[] = [];
     try {
-      const base = Date.now();
-      for (let i = 0; i < 5; i++) {
-        const suffix = `${base}-${i}-${Math.random().toString(36).slice(2, 8)}`;
-        const testName = `Test ${suffix}`;
-        const g: (typeof GENDERS)[number] = Math.random() < 0.5 ? "male" : "female";
+      const profiles = pickTestWalkInProfiles(5, queueNamesLower);
+      for (let i = 0; i < profiles.length; i++) {
+        const profile = profiles[i]!;
         const s = SKILL_LEVELS[Math.floor(Math.random() * SKILL_LEVELS.length)];
-        const res = await api.post<{
+        const avatar = testWalkInAvatarForSlot(i);
+        let res: {
           success: boolean;
-          player: { id: string; name: string; gender: string; skillLevel: string };
-        }>("/api/queue/staff-add-walk-in", {
-          venueId,
-          name: testName,
-          gender: g,
-          skillLevel: s,
-        });
-        if (res.player) {
+          player: { id: string; name: string; gender: string; skillLevel: string; avatar?: string };
+        } | null = null;
+        for (let attempt = 0; attempt < 12; attempt++) {
+          try {
+            res = await api.post<{
+              success: boolean;
+              player: { id: string; name: string; gender: string; skillLevel: string; avatar?: string };
+            }>("/api/queue/staff-add-walk-in", {
+              venueId,
+              name: profile.name,
+              gender: profile.gender,
+              skillLevel: s,
+              phone: randomFictionalUsE164Phone(),
+              avatar,
+            });
+            break;
+          } catch (e) {
+            const conflict =
+              e instanceof ApiRequestError &&
+              e.status === 409 &&
+              /phone|already exists/i.test(e.message);
+            if (!conflict || attempt === 11) throw e;
+          }
+        }
+        if (res?.player) {
           added.push({
             id: res.player.id,
             name: res.player.name,
             gender: res.player.gender,
             skillLevel: res.player.skillLevel,
+            avatar: res.player.avatar,
           });
         }
       }
@@ -1047,7 +1071,19 @@ ${test.error ? `Error: ${test.error}` : ''}
                 key={p.id}
                 className="flex items-center justify-between gap-2 rounded-lg bg-neutral-800/50 px-3 py-2 text-sm max-sm:px-2 max-sm:py-1 max-sm:text-xs"
               >
-                <span className="min-w-0 truncate font-medium text-white">
+                {isPlayerAvatarImageSrc(p.avatar) ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={p.avatar}
+                    alt=""
+                    className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-white/10 max-sm:h-8 max-sm:w-8"
+                  />
+                ) : p.avatar ? (
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-lg max-sm:h-8 max-sm:w-8 max-sm:text-base">
+                    {p.avatar}
+                  </span>
+                ) : null}
+                <span className="min-w-0 flex-1 truncate font-medium text-white">
                   {p.name}
                   {p.queueNumber && (
                     <span className="ml-2 text-blue-400">#{p.queueNumber}</span>

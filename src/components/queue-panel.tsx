@@ -21,6 +21,7 @@ import {
 } from "@/lib/staff-queue-filter-utils";
 import { StaffQueueFilterBar } from "@/components/staff-queue-filter-bar";
 import { playerNameWithCheckIn } from "@/lib/player-display";
+import { isPlayerAvatarImageSrc } from "@/lib/player-avatar-display";
 
 const skillDotColors: Record<string, string> = {
   beginner: "bg-green-500",
@@ -769,9 +770,22 @@ function QueueRow({
         )}
 
         {isTV && !isGroup && entry.player.avatar && (
-          <span className={cn("shrink-0 text-[clamp(0.8rem,calc(1.6*var(--tw,1vw)),1.6rem)] inline-block", isNextUp && "animate-spin-y")}>
-            {entry.player.avatar}
-          </span>
+          isPlayerAvatarImageSrc(entry.player.avatar) ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={entry.player.avatar}
+              alt=""
+              className={cn(
+                "shrink-0 rounded-full object-cover border border-white/20",
+                "h-[clamp(1.5rem,calc(3*var(--tw,1vw)),2.5rem)] w-[clamp(1.5rem,calc(3*var(--tw,1vw)),2.5rem)]",
+                isNextUp && "animate-spin-y"
+              )}
+            />
+          ) : (
+            <span className={cn("shrink-0 text-[clamp(0.8rem,calc(1.6*var(--tw,1vw)),1.6rem)] inline-block", isNextUp && "animate-spin-y")}>
+              {entry.player.avatar}
+            </span>
+          )
         )}
 
         {!isTV && onPlayerAction && !isGroup && breakSectionRow && (

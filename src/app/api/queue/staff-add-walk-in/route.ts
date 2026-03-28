@@ -7,6 +7,16 @@ import { emitToVenue } from "@/lib/socket-server";
 import { SKILL_LEVELS, type SkillLevelType } from "@/lib/constants";
 import { findQueueDisplayNameConflict } from "@/lib/queue-display-name";
 
+function normalizeWalkInAvatar(raw: string | null | undefined): string {
+  if (raw == null) return "🏓";
+  const s = raw.trim();
+  if (!s) return "🏓";
+  if (s.length > 512) return "🏓";
+  if (/^javascript:/i.test(s)) return "🏓";
+  if (s.includes("<") || s.includes(">")) return "🏓";
+  return s;
+}
+
 // Helper function to get next queue number
 async function getNextQueueNumber(sessionId: string): Promise<number> {
   const lastEntry = await prisma.queueEntry.findFirst({
@@ -30,9 +40,11 @@ export async function POST(request: NextRequest) {
       skillLevel: string;
       /** Optional; must be unique among players if provided. */
       phone?: string | null;
+      /** Optional emoji or image URL/path (e.g. /test-avatars/00.jpg). */
+      avatar?: string | null;
     }>(request);
 
-    const { venueId, name, gender: genderRaw, skillLevel: skillRaw, phone: phoneRaw } = body;
+    const { venueId, name, gender: genderRaw, skillLevel: skillRaw, phone: phoneRaw, avatar: avatarRaw } = body;
     if (!venueId?.trim()) return error("venueId is required", 400);
     const trimmedName = name?.trim() ?? "";
     if (!trimmedName) return error("Name is required", 400);
@@ -67,7 +79,9 @@ export async function POST(request: NextRequest) {
           phone,
           gender,
           skillLevel,
-          avatar: "🏓",
+          avatar: normalizeWalkInAvatar(
+            typeof avatarRaw === "string" ? avatarRaw : null
+          ),
         },
       });
     } catch (e) {
@@ -116,6 +130,7 @@ export async function POST(request: NextRequest) {
           name: player.name,
           gender: player.gender,
           skillLevel: player.skillLevel,
+          avatar: player.avatar,
         },
         queueEntryId: entry.id,
       },
