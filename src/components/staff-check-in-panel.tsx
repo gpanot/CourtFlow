@@ -618,7 +618,7 @@ ${test.error ? `Error: ${test.error}` : ''}
       for (let i = 0; i < profiles.length; i++) {
         const profile = profiles[i]!;
         const s = SKILL_LEVELS[Math.floor(Math.random() * SKILL_LEVELS.length)];
-        const avatar = testWalkInAvatarForSlot(i);
+        const avatar = testWalkInAvatarForSlot(i, profile.gender);
         let res: {
           success: boolean;
           player: { id: string; name: string; gender: string; skillLevel: string; avatar?: string };

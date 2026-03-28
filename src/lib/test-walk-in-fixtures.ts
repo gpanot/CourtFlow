@@ -1,6 +1,9 @@
 /**
  * Staff check-in "Create 5" demo data: real-style names, fixed local avatars
  * under /public/test-avatars/, and fictional US (+1 555…) phones.
+ *
+ * Avatars are portrait headshots (JPEG) sourced from RandomUser’s static portrait
+ * set and stored locally so demos do not depend on their CDN at runtime.
  */
 
 export const TEST_WALK_IN_AVATAR_PATHS = [
@@ -124,6 +127,12 @@ export function randomFictionalUsE164Phone(): string {
   return `+1555${String(n).padStart(7, "0")}`;
 }
 
-export function testWalkInAvatarForSlot(slotIndex: number): string {
-  return TEST_WALK_IN_AVATAR_PATHS[slotIndex % TEST_WALK_IN_AVATAR_PATHS.length]!;
+/** Indices into TEST_WALK_IN_AVATAR_PATHS — even slots are men, odd are women (see download order in repo history). */
+const TEST_WALK_IN_MALE_AVATAR_INDEX = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18] as const;
+const TEST_WALK_IN_FEMALE_AVATAR_INDEX = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19] as const;
+
+export function testWalkInAvatarForSlot(slotIndex: number, gender: TestWalkInGender): string {
+  const pool = gender === "male" ? TEST_WALK_IN_MALE_AVATAR_INDEX : TEST_WALK_IN_FEMALE_AVATAR_INDEX;
+  const pathIndex = pool[slotIndex % pool.length]!;
+  return TEST_WALK_IN_AVATAR_PATHS[pathIndex]!;
 }
