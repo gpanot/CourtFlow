@@ -3,7 +3,13 @@
 import { useState, useEffect } from "react";
 import type { i18n as I18nInstance } from "i18next";
 import { useTranslation } from "react-i18next";
-import { formatTimer, getTimerColor, TIMER_COLORS, AUTO_START_DELAY_SECONDS } from "@/lib/constants";
+import {
+  formatTimer,
+  getTimerColor,
+  TIMER_COLORS,
+  AUTO_START_DELAY_SECONDS,
+  TV_PLAYING_ELAPSED_HIDE_SECONDS,
+} from "@/lib/constants";
 import { cn } from "@/lib/cn";
 import { tvI18n } from "@/i18n/tv-i18n";
 
@@ -99,15 +105,18 @@ export function GamePhaseTimer({ startedAt, size = "md", i18n }: TimerProps) {
 
   const playingTime = elapsed - AUTO_START_DELAY_SECONDS;
   const colorKey = getTimerColor(playingTime);
+  const hideTvPlayingClock = size === "tv" && playingTime < TV_PLAYING_ELAPSED_HIDE_SECONDS;
 
   return (
     <div className="flex items-baseline gap-2">
-      <span
-        className={cn("tabular-nums font-bold transition-colors duration-1000", TIMER_COLORS[colorKey], sizeClasses[size])}
-        style={size === "tv" ? tvTimerStyle : undefined}
-      >
-        {formatTimer(playingTime)}
-      </span>
+      {!hideTvPlayingClock && (
+        <span
+          className={cn("tabular-nums font-bold transition-colors duration-1000", TIMER_COLORS[colorKey], sizeClasses[size])}
+          style={size === "tv" ? tvTimerStyle : undefined}
+        >
+          {formatTimer(playingTime)}
+        </span>
+      )}
       <span
         className={cn(
           "font-semibold",

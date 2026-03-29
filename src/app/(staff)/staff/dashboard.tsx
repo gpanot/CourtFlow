@@ -11,15 +11,18 @@ import { useSocket } from "@/hooks/use-socket";
 import { joinVenue } from "@/lib/socket-client";
 import { CourtCard, type CourtData } from "@/components/court-card";
 import { GenderIcon } from "@/components/gender-icon";
+import { PlayerAvatarThumb } from "@/components/player-avatar-thumb";
 import { QueuePanel, type QueueEntryData, type StaffQueueCourtGroup } from "@/components/queue-panel";
 import { cn } from "@/lib/cn";
-import { Plus, X, Users, LayoutGrid, AlertTriangle, User, UserPlus, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, Calendar, Loader2, Target, Play, Check, ListPlus, Camera } from "lucide-react";
-import { MIN_GROUP_SIZE, MAX_GROUP_SIZE } from "@/lib/constants";
+import { Plus, X, Users, LayoutGrid, AlertTriangle, User, UserPlus, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, Calendar, Loader2, Target, Play, Check, ListPlus, Camera, Search } from "lucide-react";
+import { MIN_GROUP_SIZE, MAX_GROUP_SIZE, COURT_PLAYER_COUNT } from "@/lib/constants";
 import { QRCodeSVG } from "qrcode.react";
 import { SessionSummary } from "./session-summary";
 import { StaffCheckInPanel } from "@/components/staff-check-in-panel";
 import { StaffWaitingPicker } from "@/components/staff-waiting-picker";
 import { FaceKioskTab } from "@/components/face-kiosk-tab";
+import { StaffPlayerSearchOverlay } from "@/components/staff-player-search-overlay";
+import { RankBottomSheet } from "@/components/rank-bottom-sheet";
 import { canCourtAcceptManualAssign } from "@/lib/court-manual-assign";
 import { playerNameWithCheckIn } from "@/lib/player-display";
 
@@ -50,6 +53,13 @@ function skillBadgeClass(level: string) {
   if (l === "advanced") return "bg-purple-700 text-purple-100";
   if (l === "pro") return "bg-red-700 text-red-100";
   return "bg-neutral-600 text-neutral-200";
+}
+
+function staffCourtSheetNameClass(gender?: string | null) {
+  const g = gender?.toLowerCase().trim();
+  if (g === "male") return "text-blue-400";
+  if (g === "female") return "text-pink-400";
+  return "text-white";
 }
 
 /** Same FIFO window auto-start uses (first 4 waiting). */
@@ -135,7 +145,21 @@ export function StaffDashboard() {
   const [gameTypeMix, setGameTypeMix] = useState<GameTypeMixStats | null>(null);
   const [showMixEditor, setShowMixEditor] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [playerSearchOpen, setPlayerSearchOpen] = useState(false);
+  const [rankSheetCourt, setRankSheetCourt] = useState<CourtData | null>(null);
   const { on } = useSocket();
+
+  const rankingBannerCourts = useMemo(
+    () =>
+      courts.filter(
+        (c) => c.rankingBannerEligible && c.status === "active" && c.players.length === COURT_PLAYER_COUNT
+      ),
+    [courts]
+  );
+
+  useEffect(() => {
+    if (!session) setRankSheetCourt(null);
+  }, [session]);
 
   useEffect(() => {
     const tabParam = searchParams.get("tab");
@@ -179,8 +203,14 @@ export function StaffDashboard() {
     const offCourt = on("court:updated", () => fetchState());
     const offQueue = on("queue:updated", () => fetchState());
     const offSession = on("session:updated", () => fetchState());
+    const offRankings = on("rankings:updated", () => fetchState());
 
-    return () => { offCourt(); offQueue(); offSession(); };
+    return () => {
+      offCourt();
+      offQueue();
+      offSession();
+      offRankings();
+    };
   }, [venueId, on, fetchState]);
 
   useEffect(() => {
@@ -480,20 +510,31 @@ export function StaffDashboard() {
           <h1 className="text-lg font-bold text-blue-500 leading-tight">{t("staff.dashboard.title")}</h1>
           <p className="text-sm text-neutral-400 truncate">{venue?.name}</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setTab("qr")}
-          aria-label={t("staff.dashboard.tabQr")}
-          title={t("staff.dashboard.tabQr")}
-          className={cn(
-            "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors",
-            tab === "qr"
-              ? "bg-blue-600/35 text-blue-300 ring-2 ring-blue-500/60"
-              : "bg-neutral-700/40 text-neutral-200 hover:bg-neutral-600/50 hover:text-white"
-          )}
-        >
-          <QrCode className="h-5 w-5" />
-        </button>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setPlayerSearchOpen(true)}
+            aria-label={t("staff.dashboard.playerSearch.openAria")}
+            title={t("staff.dashboard.playerSearch.openAria")}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-700/40 text-neutral-200 hover:bg-neutral-600/50 hover:text-white transition-colors"
+          >
+            <Search className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("qr")}
+            aria-label={t("staff.dashboard.tabQr")}
+            title={t("staff.dashboard.tabQr")}
+            className={cn(
+              "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors",
+              tab === "qr"
+                ? "bg-blue-600/35 text-blue-300 ring-2 ring-blue-500/60"
+                : "bg-neutral-700/40 text-neutral-200 hover:bg-neutral-600/50 hover:text-white"
+            )}
+          >
+            <QrCode className="h-5 w-5" />
+          </button>
+        </div>
       </header>
 
       {/* Tab bar */}
@@ -502,32 +543,33 @@ export function StaffDashboard() {
           type="button"
           onClick={() => setTab("courts")}
           className={cn(
-            "flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2",
+            "flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 max-sm:gap-0",
             tab === "courts" ? "border-b-2 border-blue-500 text-white" : "text-neutral-400"
           )}
         >
-          <LayoutGrid className="h-4 w-4" /> {t("staff.dashboard.tabCourts")}
+          <LayoutGrid className="h-4 w-4 max-sm:hidden" aria-hidden />
+          {t("staff.dashboard.tabCourts")}
         </button>
         <button
           type="button"
           onClick={() => setTab("checkin")}
           className={cn(
-            "flex-1 py-3 text-sm font-medium flex items-center justify-center gap-1.5 min-w-0",
+            "flex-1 py-3 text-sm font-medium flex items-center justify-center gap-1.5 min-w-0 max-sm:gap-0",
             tab === "checkin" ? "border-b-2 border-blue-500 text-white" : "text-neutral-400"
           )}
         >
-          <UserPlus className="h-4 w-4 shrink-0" />
+          <UserPlus className="h-4 w-4 shrink-0 max-sm:hidden" aria-hidden />
           <span className="truncate">{t("staff.dashboard.tabCheckIn")}</span>
         </button>
         <button
           type="button"
           onClick={() => setTab("queue")}
           className={cn(
-            "flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 min-w-0",
+            "flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 min-w-0 max-sm:gap-0",
             tab === "queue" ? "border-b-2 border-blue-500 text-white" : "text-neutral-400"
           )}
         >
-          <Users className="h-4 w-4 shrink-0" />
+          <Users className="h-4 w-4 shrink-0 max-sm:hidden" aria-hidden />
           <span className="truncate">
             {t("staff.dashboard.tabQueue", { count: queue.filter((e) => e.status === "waiting").length })}
           </span>
@@ -536,11 +578,11 @@ export function StaffDashboard() {
           type="button"
           onClick={() => setTab("kiosk")}
           className={cn(
-            "flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 min-w-0",
+            "flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 min-w-0 max-sm:gap-0",
             tab === "kiosk" ? "border-b-2 border-blue-500 text-white" : "text-neutral-400"
           )}
         >
-          <Camera className="h-4 w-4 shrink-0" />
+          <Camera className="h-4 w-4 shrink-0 max-sm:hidden" aria-hidden />
           <span className="truncate">{t("staff.dashboard.tabKiosk")}</span>
         </button>
       </div>
@@ -548,7 +590,10 @@ export function StaffDashboard() {
       {/* Content — min-h-0 so flex child can shrink; tighter padding on check-in mobile */}
       <main
         className={cn(
-          "flex-1 min-h-0 overflow-y-auto p-4",
+          "flex-1 min-h-0 p-4",
+          tab === "kiosk" && venueId
+            ? "flex flex-col overflow-hidden max-sm:p-2 sm:p-4"
+            : "overflow-y-auto",
           session && tab === "checkin" && "max-sm:p-2 max-sm:pt-2 max-sm:pb-3"
         )}
       >
@@ -583,15 +628,39 @@ export function StaffDashboard() {
 
         {session && tab === "courts" && (
           <div className="space-y-4">
-            {/* Game type mix tracker */}
-            {gameTypeMix && gameTypeMix.totalGames > 0 && (
-              <GameTypeMixTracker
-                stats={gameTypeMix}
-                onEdit={() => setShowMixEditor(true)}
-                t={t}
-              />
+            {rankingBannerCourts.length > 0 && (
+              <div className="flex items-center gap-2 rounded-xl border border-amber-700/50 bg-amber-950/40 py-2.5 pl-3 pr-2">
+                <div className="flex shrink-0 items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 shrink-0 text-amber-400" aria-hidden />
+                  <span className="text-sm font-semibold text-amber-100 whitespace-nowrap">
+                    {t("staff.dashboard.ranking.bannerLabel")}
+                  </span>
+                </div>
+                <div
+                  className="min-w-0 flex-1 overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch] [scrollbar-width:thin]"
+                  role="region"
+                  aria-label={t("staff.dashboard.ranking.courtsScrollAria")}
+                >
+                  <div className="flex w-max flex-nowrap items-stretch gap-2 pr-2 pb-0.5">
+                    {rankingBannerCourts.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => setRankSheetCourt(c)}
+                        className={cn(
+                          "shrink-0 rounded-lg px-5 py-2.5 text-sm font-semibold transition-colors min-w-[5rem] sm:min-w-[6rem]",
+                          rankSheetCourt?.id === c.id
+                            ? "bg-amber-500 text-neutral-950"
+                            : "bg-amber-900/60 text-amber-100 hover:bg-amber-800/70 active:bg-amber-800/90"
+                        )}
+                      >
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
             )}
-
             <div className="grid gap-3 sm:grid-cols-2">
               {courts.map((court) => (
                 <CourtCard
@@ -618,6 +687,14 @@ export function StaffDashboard() {
                     </button>
                   ))}
               </div>
+            )}
+
+            {gameTypeMix && gameTypeMix.totalGames > 0 && (
+              <GameTypeMixTracker
+                stats={gameTypeMix}
+                onEdit={() => setShowMixEditor(true)}
+                t={t}
+              />
             )}
 
             <div className="mt-8 border-t border-neutral-800 pt-6 pb-4 flex justify-end">
@@ -660,6 +737,35 @@ export function StaffDashboard() {
         )}
 
       </main>
+
+      {session && (
+        <RankBottomSheet
+          open={!!rankSheetCourt}
+          court={rankSheetCourt}
+          sessionId={session.id}
+          onClose={() => setRankSheetCourt(null)}
+          onSaved={() => {
+            void fetchState();
+          }}
+        />
+      )}
+
+      {playerSearchOpen && venueId && (
+        <StaffPlayerSearchOverlay
+          venueId={venueId}
+          hasSession={!!session}
+          queue={queue}
+          translationI18n={staffI18n}
+          assignableCourts={assignableCourtsForQueue}
+          staffQueueCourtGroups={staffQueueCourtGroups}
+          isWarmupManual={!!assignableCourtsForQueue}
+          onPlayerAction={handlePlayerAction}
+          onCreateGroup={() => setShowCreateGroup(true)}
+          onDissolveGroup={handleDissolveGroup}
+          onClose={() => setPlayerSearchOpen(false)}
+          onRefresh={fetchState}
+        />
+      )}
 
       {manualAssignCourt && (
         <StaffWaitingPicker
@@ -730,8 +836,17 @@ export function StaffDashboard() {
                       className="flex items-center justify-between rounded-xl bg-neutral-800/70 px-4 py-4"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <GenderIcon gender={player.gender} className="h-4 w-4 shrink-0" />
-                        <span className="text-base font-medium truncate">
+                        <PlayerAvatarThumb
+                          facePhotoPath={player.facePhotoPath}
+                          avatar={player.avatar}
+                          sizeClass="h-10 w-10"
+                        />
+                        <span
+                          className={cn(
+                            "text-base font-medium truncate",
+                            staffCourtSheetNameClass(player.gender)
+                          )}
+                        >
                           {playerNameWithCheckIn(player.name, player.queueNumber)}
                         </span>
                         <span className={cn(

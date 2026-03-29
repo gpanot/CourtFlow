@@ -75,6 +75,12 @@ enum StaffRole {
   superadmin
 }
 
+enum PlayerAppAuthMethod {
+  face_pwa
+  wristband
+  phone_otp
+}
+
 enum PaymentStatus {
   UNPAID
   PAID
@@ -140,16 +146,34 @@ model Player {
   faceSubjectId         String?        @map("face_subject_id")
   /// Public URL path served from /uploads (e.g. /uploads/players/{id}.jpg) — set on first face check-in enrollment
   facePhotoPath         String?        @map("face_photo_path")
+  rankingScore          Int            @default(200) @map("ranking_score")
+  rankingCount          Int            @default(0) @map("ranking_count")
+  lastRankedAt          DateTime?      @map("last_ranked_at")
   createdAt             DateTime       @default(now()) @map("created_at")
 
   queueEntries      QueueEntry[]
+  playerRankings    PlayerRanking[]
   pushSubscriptions PushSubscription[]
   memberships       Membership[]
   bookings          Booking[]
   coachLessons      CoachLesson[]
   faceAttempts      FaceAttempt[]
+  appAuthLogs       PlayerAppAuthLog[]
 
   @@map("players")
+}
+
+model PlayerAppAuthLog {
+  id        String              @id @default(cuid())
+  playerId  String              @map("player_id")
+  method    PlayerAppAuthMethod
+  sessionId String?             @map("session_id")
+  createdAt DateTime            @default(now()) @map("created_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([playerId, createdAt])
+  @@map("player_app_auth_logs")
 }
 
 model PushSubscription {
@@ -185,6 +209,7 @@ model StaffMember {
   paidPayments  StaffPayment[]  @relation("PaidByStaff")
   coachPackages CoachPackage[]
   coachLessons  CoachLesson[]
+  playerRankings PlayerRanking[]
 
   @@map("staff_members")
 }
@@ -203,6 +228,7 @@ model Court {
   courtAssignments CourtAssignment[]
   bookings         Booking[]
   coachLessons     CoachLesson[]
+  playerRankings   PlayerRanking[]
 
   @@map("courts")
 }
@@ -228,6 +254,7 @@ model Session {
   queueEntries     QueueEntry[]
   playerGroups     PlayerGroup[]
   courtAssignments CourtAssignment[]
+  playerRankings   PlayerRanking[]
 
   @@map("sessions")
 }
@@ -282,6 +309,26 @@ model CourtAssignment {
   session Session @relation(fields: [sessionId], references: [id])
 
   @@map("court_assignments")
+}
+
+model PlayerRanking {
+  id         String   @id @default(cuid())
+  playerId   String   @map("player_id")
+  courtId    String   @map("court_id")
+  sessionId  String   @map("session_id")
+  staffId    String   @map("staff_id")
+  position   Int
+  scoreDelta Int      @map("score_delta")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  player  Player      @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  court   Court       @relation(fields: [courtId], references: [id], onDelete: Cascade)
+  session Session     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  staff   StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, courtId])
+  @@index([sessionId, courtId, createdAt])
+  @@map("player_rankings")
 }
 
 model AuditLog {
@@ -514,6 +561,8 @@ model FaceAttempt {
   eventId             String   @map("event_id")
   matchedPlayerId     String?  @map("matched_player_id")
   resultType          String   @map("result_type")
+  /// Staff kiosk: phone used when check-in is confirmed via phone fallback (digits-normalized lookup).
+  phoneNumber         String?  @map("phone_number")
   confidence          Float?
   imageUrl            String?  @map("image_url")
   createdNewPlayer    Boolean @default(false) @map("created_new_player")

@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/cn";
 import { tvI18n } from "@/i18n/tv-i18n";
 import { GamePhaseTimer } from "./timer";
-import { Link, UserRound, Users } from "lucide-react";
+import { Link, UserRound } from "lucide-react";
 import { AUTO_START_DELAY_SECONDS, COURT_PLAYER_COUNT } from "@/lib/constants";
 import { playerNameWithCheckIn } from "@/lib/player-display";
 import { isPlayerAvatarImageSrc } from "@/lib/player-avatar-display";
@@ -19,6 +19,9 @@ interface Player {
   queueNumber?: number | null;
   facePhotoPath?: string | null;
   avatar?: string;
+  /** Staff-only from courts/state (staffQueue=1). */
+  rankingScore?: number;
+  rankingCount?: number;
 }
 
 interface Assignment {
@@ -35,6 +38,8 @@ export interface CourtData {
   assignment: (Assignment & { isWarmup?: boolean }) | null;
   players: Player[];
   skipWarmupAfterMaintenance?: boolean;
+  /** Staff-only: banner should prompt ranking for this court. */
+  rankingBannerEligible?: boolean;
 }
 
 interface CourtCardProps {
@@ -54,12 +59,23 @@ const statusConfig = {
   maintenance: { bg: "bg-neutral-800/60 border-neutral-500", dot: "bg-neutral-400" },
 };
 
+/** Same mapping as queue panel & staff skill badges: int=blue, adv=purple, pro=red */
 const staffSkillDot: Record<string, string> = {
   beginner: "bg-green-500",
-  intermediate: "bg-orange-500",
-  advanced: "bg-blue-500",
-  pro: "bg-purple-500",
+  intermediate: "bg-blue-500",
+  advanced: "bg-purple-500",
+  pro: "bg-red-500",
 };
+
+/** First word only (e.g. given name); capped for a single-line overlay. */
+function staffCourtPlayerShortName(fullName: string): string {
+  const trimmed = fullName.trim();
+  if (!trimmed) return "";
+  const first = trimmed.split(/\s+/)[0] ?? trimmed;
+  const maxLen = 12;
+  if (first.length > maxLen) return `${first.slice(0, maxLen - 1)}…`;
+  return first;
+}
 
 function isStartingPhase(assignment: Assignment | null): boolean {
   if (!assignment) return false;
@@ -103,8 +119,8 @@ export function CourtCard({
         onClick={onClick}
       >
         <div className="flex items-center gap-2 min-w-0">
-          <h3 className="shrink-0 truncate text-sm font-bold uppercase tracking-wide text-white max-[380px]:max-w-[40%]">
-            {t("staff.dashboard.courtCardHeading", { label: court.label }).toUpperCase()}
+          <h3 className="shrink-0 truncate text-lg font-bold tracking-wide text-white max-[380px]:max-w-[40%] sm:text-xl">
+            {court.label}
           </h3>
 
           {normalizedStatus === "active" && court.assignment ? (
@@ -119,8 +135,7 @@ export function CourtCard({
                   i18n={i18n}
                 />
               </div>
-              <div className="flex shrink-0 items-center gap-1 rounded-full border border-purple-500/45 bg-purple-600/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-purple-100">
-                <Users className="h-3.5 w-3.5 opacity-90" aria-hidden />
+              <div className="flex shrink-0 items-center rounded-full border border-purple-500/45 bg-purple-600/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-purple-100">
                 {gameTypeTvLabel(court.assignment.gameType, t)}
               </div>
             </>
@@ -171,23 +186,22 @@ export function CourtCard({
                         <Link className="block h-3 w-3 text-blue-400" aria-hidden />
                       </div>
                     )}
-                    <div className="absolute inset-x-0 bottom-0 z-10 flex flex-col items-center justify-end px-1.5 pb-1.5 pt-6 text-center">
-                      <p className="w-full truncate text-xs font-bold leading-tight text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] sm:text-[13px]">
-                        {player.name}
-                      </p>
-                      <div className="mt-0.5 flex items-center justify-center gap-1">
-                        <span
-                          className={cn(
-                            "h-1.5 w-1.5 shrink-0 rounded-full ring-1 ring-black/30",
-                            staffSkillDot[player.skillLevel] ?? "bg-neutral-400"
-                          )}
-                        />
-                        {player.queueNumber != null ? (
-                          <span className="text-[10px] font-medium tabular-nums text-white/90 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] sm:text-[11px]">
-                            #{player.queueNumber}
-                          </span>
-                        ) : null}
-                      </div>
+                    <div className="absolute inset-x-0 bottom-0 z-10 flex min-w-0 items-center justify-center gap-1.5 px-1.5 pb-1.5 pt-5">
+                      <span className="min-w-0 max-w-[46%] truncate text-left text-xs font-bold leading-none text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)] sm:max-w-[48%] sm:text-[13px]">
+                        {staffCourtPlayerShortName(player.name)}
+                      </span>
+                      <span
+                        className={cn(
+                          "h-2 w-2 shrink-0 rounded-full ring-1 ring-black/30",
+                          staffSkillDot[(player.skillLevel ?? "").toLowerCase().trim()] ??
+                            "bg-neutral-400"
+                        )}
+                      />
+                      {player.queueNumber != null ? (
+                        <span className="shrink-0 text-[10px] font-medium tabular-nums text-white/90 drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] sm:text-[11px]">
+                          #{player.queueNumber}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                 );
@@ -221,17 +235,22 @@ export function CourtCard({
         className={cn(
           "flex flex-col overflow-hidden rounded-2xl border-2 transition-all duration-300",
           "p-[min(calc(1.25*var(--tw,1vw)),calc(1.75*var(--th,1vh)))]",
-          "h-full min-h-0 justify-between",
+          "h-full min-h-0",
           config.bg,
           tvStarting && "animate-border-blink",
           onClick && "cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
         )}
         onClick={onClick}
       >
-        <div className="flex items-center justify-between gap-2 min-h-[1.25em]">
-          <h3 className="font-semibold leading-none text-neutral-100 truncate" style={{ fontSize: labelSize }}>
-            {court.label}
-          </h3>
+        <div className="flex shrink-0 items-start justify-between gap-2">
+          <div className="flex min-w-0 flex-col gap-[min(calc(0.2*var(--th,1vh)),calc(0.15*var(--tw,1vw)))]">
+            <h3 className="font-semibold leading-none text-neutral-100 truncate" style={{ fontSize: labelSize }}>
+              {court.label}
+            </h3>
+            {normalizedStatus === "active" && court.assignment && (
+              <GamePhaseTimer startedAt={court.assignment.startedAt} size="tv" />
+            )}
+          </div>
           {starting && (
             <span
               className="shrink-0 rounded-md bg-blue-950/80 px-2 py-0.5 font-semibold uppercase tracking-wide text-blue-200"
@@ -245,11 +264,8 @@ export function CourtCard({
         </div>
 
         {normalizedStatus === "active" && court.assignment && (
-          <>
-            <div className="mt-[min(calc(0.35*var(--th,1vh)),calc(0.25*var(--tw,1vw)))]">
-              <GamePhaseTimer startedAt={court.assignment.startedAt} size="tv" />
-            </div>
-            <div className="mt-[min(calc(0.5*var(--th,1vh)),calc(0.35*var(--tw,1vw)))] flex flex-nowrap gap-[min(calc(0.35*var(--tw,1vw)),calc(0.25*var(--th,1vh)))] items-baseline">
+          <div className="flex min-h-0 flex-1 items-center justify-start">
+            <div className="flex flex-nowrap items-baseline gap-[min(calc(0.65*var(--tw,1vw)),calc(0.5*var(--th,1vh)))]">
               {Array.from({ length: COURT_PLAYER_COUNT }, (_, i) => {
                 const player = court.players[i];
                 const n = player?.queueNumber;
@@ -257,7 +273,7 @@ export function CourtCard({
                   <span
                     key={player?.id ?? `empty-${i}`}
                     className={cn(
-                      "min-w-[2ch] shrink-0 text-center font-semibold tabular-nums leading-none",
+                      "inline-flex min-w-[3.25ch] shrink-0 justify-center px-[min(0.2em,calc(0.12*var(--tw,1vw)))] font-semibold tabular-nums leading-none",
                       starting ? "text-blue-300" : "text-white"
                     )}
                     style={{ fontSize: numSize }}
@@ -267,11 +283,11 @@ export function CourtCard({
                 );
               })}
             </div>
-          </>
+          </div>
         )}
 
         {normalizedStatus === "idle" && (
-          <div className="mt-auto flex flex-1 items-center">
+          <div className="flex min-h-0 flex-1 items-center justify-start">
             <span className="font-light text-neutral-600" style={{ fontSize: numSize }}>
               —
             </span>
@@ -279,9 +295,11 @@ export function CourtCard({
         )}
 
         {court.status === "maintenance" && (
-          <p className="mt-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))] text-neutral-500" style={{ fontSize: labelSize }}>
-            {t("court.outOfService")}
-          </p>
+          <div className="flex min-h-0 flex-1 items-center justify-start">
+            <p className="text-neutral-500" style={{ fontSize: labelSize }}>
+              {t("court.outOfService")}
+            </p>
+          </div>
         )}
       </div>
     );

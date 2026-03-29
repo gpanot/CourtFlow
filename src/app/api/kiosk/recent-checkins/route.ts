@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
       id: attempt.id,
       timestamp: attempt.createdAt,
       resultType: attempt.resultType,
+      phoneNumber: attempt.phoneNumber,
       confidence: attempt.confidence,
       queueNumberAssigned: attempt.queueNumberAssigned,
       createdNewPlayer: attempt.createdNewPlayer,

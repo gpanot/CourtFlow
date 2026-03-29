@@ -110,6 +110,7 @@ export async function POST(
           id: p.id,
           gender: p.gender,
           skillLevel: p.skillLevel as SkillLevel,
+          rankingScore: p.rankingScore,
         })),
         waitingEntries
       );

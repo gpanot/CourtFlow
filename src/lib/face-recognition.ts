@@ -194,72 +194,106 @@ class FaceRecognitionService {
     try {
       await this.ensureCollection();
 
-      const response = await rekognition!.send(
-        new SearchFacesByImageCommand({
-          CollectionId: COLLECTION_ID,
-          Image: { Bytes: base64ToBytes(imageBase64) },
-          MaxFaces: 1,
-          FaceMatchThreshold: 85, // 85% confidence minimum
-          QualityFilter: "AUTO",
-        })
-      );
+      const imageBytes = base64ToBytes(imageBase64);
 
-      const matches = response.FaceMatches ?? [];
+      // Allow up to 3 retries to skip orphaned faces (AWS face exists but player deleted from DB)
+      const MAX_ORPHAN_RETRIES = 3;
+      const orphanFaceIdsToSkip: string[] = [];
 
-      console.log("[Rekognition] SearchFaces response:", {
-        matchCount: matches.length,
-        topMatch: matches[0]
+      for (let attempt = 0; attempt <= MAX_ORPHAN_RETRIES; attempt++) {
+        const response = await rekognition!.send(
+          new SearchFacesByImageCommand({
+            CollectionId: COLLECTION_ID,
+            Image: { Bytes: imageBytes },
+            MaxFaces: 5,
+            FaceMatchThreshold: 85,
+            QualityFilter: "AUTO",
+          })
+        );
+
+        const allMatches = response.FaceMatches ?? [];
+        const matches = orphanFaceIdsToSkip.length > 0
+          ? allMatches.filter((m) => !orphanFaceIdsToSkip.includes(m.Face?.FaceId ?? ""))
+          : allMatches;
+
+        console.log("[Rekognition] SearchFaces response:", {
+          matchCount: matches.length,
+          attempt,
+          orphansSkipped: orphanFaceIdsToSkip.length,
+          topMatch: matches[0]
+            ? {
+                similarity: matches[0].Similarity,
+                externalImageId: matches[0].Face?.ExternalImageId,
+                faceId: matches[0].Face?.FaceId,
+              }
+            : null,
+        });
+        console.log("[Rekognition] Collection:", COLLECTION_ID);
+
+        const top = matches[0];
+        const topDbg = top
           ? {
-              similarity: matches[0].Similarity,
-              externalImageId: matches[0].Face?.ExternalImageId,
-              faceId: matches[0].Face?.FaceId,
+              similarity: top.Similarity,
+              externalImageId: top.Face?.ExternalImageId,
+              faceId: top.Face?.FaceId,
             }
-          : null,
-      });
-      console.log("[Rekognition] Collection:", COLLECTION_ID);
+          : null;
 
-      const top = matches[0];
-      const topDbg = top
-        ? {
-            similarity: top.Similarity,
-            externalImageId: top.Face?.ExternalImageId,
-            faceId: top.Face?.FaceId,
+        if (matches.length === 0) {
+          return {
+            success: true,
+            resultType: "new_player",
+            ...(dbg && {
+              recognitionDebug: {
+                mode: "AWS",
+                collectionId: COLLECTION_ID,
+                awsQueried: true,
+                faceMatchCount: 0,
+                topMatch: null,
+                interpretation:
+                  orphanFaceIdsToSkip.length > 0
+                    ? `No matches after removing ${orphanFaceIdsToSkip.length} orphaned face(s) — needs_registration`
+                    : "No FaceMatch above 85% in collection — kiosk returns needs_registration (register on Check-in tab first)",
+              },
+            }),
+          };
+        }
+
+        const bestMatch = matches[0];
+        const confidence = bestMatch.Similarity ?? 0;
+        const externalImageId = bestMatch.Face?.ExternalImageId ?? "";
+        const matchedFaceId = bestMatch.Face?.FaceId ?? "";
+        const playerId = externalImageId.replace(/^player_/, "");
+
+        const player = await prisma.player.findUnique({
+          where: { id: playerId },
+        });
+
+        if (!player) {
+          // Orphan: face in AWS but player deleted — auto-clean and retry
+          console.warn(
+            `[Rekognition] Orphan face detected: faceId=${matchedFaceId} externalImageId=${externalImageId} — deleting from AWS and retrying`
+          );
+          orphanFaceIdsToSkip.push(matchedFaceId);
+          if (matchedFaceId) {
+            rekognition!
+              .send(new DeleteFacesCommand({ CollectionId: COLLECTION_ID, FaceIds: [matchedFaceId] }))
+              .then(() => console.log(`[Rekognition] Orphan face ${matchedFaceId} deleted`))
+              .catch((e: unknown) => console.error(`[Rekognition] Failed to delete orphan face:`, e));
           }
-        : null;
+          continue;
+        }
 
-      if (matches.length === 0) {
+        console.log(
+          `[Rekognition] Matched player ${player.name} with ${confidence.toFixed(1)}% confidence`
+        );
+
         return {
           success: true,
-          resultType: "new_player",
-          ...(dbg && {
-            recognitionDebug: {
-              mode: "AWS",
-              collectionId: COLLECTION_ID,
-              awsQueried: true,
-              faceMatchCount: 0,
-              topMatch: null,
-              interpretation:
-                "No FaceMatch above 85% in collection — kiosk returns needs_registration (register on Check-in tab first)",
-            },
-          }),
-        };
-      }
-
-      const bestMatch = matches[0];
-      const confidence = bestMatch.Similarity ?? 0;
-      const externalImageId = bestMatch.Face?.ExternalImageId ?? "";
-
-      // Extract playerId from ExternalImageId (e.g. "player_clxxx...")
-      const playerId = externalImageId.replace(/^player_/, "");
-
-      const player = await prisma.player.findUnique({
-        where: { id: playerId },
-      });
-
-      if (!player) {
-        return {
-          success: true,
-          resultType: "new_player",
+          resultType: "matched",
+          playerId,
+          displayName: player.name,
+          confidence,
           ...(dbg && {
             recognitionDebug: {
               mode: "AWS",
@@ -267,37 +301,30 @@ class FaceRecognitionService {
               awsQueried: true,
               faceMatchCount: matches.length,
               topMatch: topDbg,
-              externalPlayerIdFromAws: playerId || null,
-              dbPlayerFound: false,
+              externalPlayerIdFromAws: playerId,
+              dbPlayerFound: true,
+              dbPlayerName: player.name,
               interpretation:
-                "AWS returned a face match but no Player row for ExternalImageId — treating as new_player",
+                orphanFaceIdsToSkip.length > 0
+                  ? `Matched after skipping ${orphanFaceIdsToSkip.length} orphaned face(s)`
+                  : "Matched AWS indexed face to DB player — kiosk should check in automatically",
             },
           }),
         };
       }
 
-      console.log(
-        `[Rekognition] Matched player ${player.name} with ${confidence.toFixed(1)}% confidence`
-      );
-
+      // Exhausted retries (all top matches were orphans)
       return {
         success: true,
-        resultType: "matched",
-        playerId,
-        displayName: player.name,
-        confidence,
+        resultType: "new_player",
         ...(dbg && {
           recognitionDebug: {
             mode: "AWS",
             collectionId: COLLECTION_ID,
             awsQueried: true,
-            faceMatchCount: matches.length,
-            topMatch: topDbg,
-            externalPlayerIdFromAws: playerId,
-            dbPlayerFound: true,
-            dbPlayerName: player.name,
-            interpretation:
-              "Matched AWS indexed face to DB player — kiosk should check in automatically",
+            faceMatchCount: 0,
+            topMatch: null,
+            interpretation: `All ${orphanFaceIdsToSkip.length} matches were orphaned faces (deleted from DB) — cleaned from AWS`,
           },
         }),
       };
@@ -399,6 +426,7 @@ class FaceRecognitionService {
     return (lastEntry?.queueNumber || 0) + 1;
   }
 
+  /** True if this player already has a non–left queue row for this session (not time-based). */
   async isRecentlyCheckedIn(
     playerId: string, 
     sessionId: string
@@ -414,8 +442,6 @@ class FaceRecognitionService {
 
     if (!entry) return false;
 
-    // Only block re-check-in if player is 
-    // currently active in the session
     return ["waiting", "assigned", "playing", "on_break"]
       .includes(entry.status);
   }

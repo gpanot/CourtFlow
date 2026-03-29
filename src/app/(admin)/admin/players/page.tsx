@@ -3,11 +3,77 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { Search, X, SlidersHorizontal, Users, UserPlus, Clock, Activity, Hourglass, Gauge, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Gamepad2, Star, MapPin, CalendarDays, Timer, Plus, Pencil, Trash2 } from "lucide-react";
+import { Search, X, SlidersHorizontal, Users, UserPlus, Clock, Activity, Hourglass, Gauge, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Gamepad2, Star, MapPin, CalendarDays, Timer, Plus, Pencil, Trash2, Fingerprint, Smartphone } from "lucide-react";
 
 type SortKey = "name" | "phone" | "gender" | "skillLevel" | "totalSessions" | "totalGames" | "totalPlayMinutes" | "totalWaitMinutes" | "waitPlayRatio" | "venues";
 type SortDir = "asc" | "desc";
 const SKILL_ORDER: Record<string, number> = { beginner: 0, intermediate: 1, advanced: 2, pro: 3 };
+
+function formatBytes(n: number): string {
+  if (!Number.isFinite(n) || n < 0) return "—";
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(n < 10 * 1024 ? 1 : 0)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function CheckInFacePhotoBlock({ src, alt }: { src: string; alt: string }) {
+  const [dims, setDims] = useState<{ w: number; h: number } | null>(null);
+  const [bytes, setBytes] = useState<number | null>(null);
+
+  useEffect(() => {
+    setDims(null);
+    setBytes(null);
+    let cancelled = false;
+    (async () => {
+      try {
+        const head = await fetch(src, { method: "HEAD" });
+        const len = head.headers.get("content-length");
+        if (!cancelled && len) {
+          const parsed = parseInt(len, 10);
+          if (!Number.isNaN(parsed)) {
+            setBytes(parsed);
+            return;
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+      try {
+        const res = await fetch(src);
+        if (cancelled) return;
+        const blob = await res.blob();
+        if (!cancelled) setBytes(blob.size);
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [src]);
+
+  const parts: string[] = [];
+  if (dims) parts.push(`${dims.w}×${dims.h}`);
+  if (bytes != null) parts.push(formatBytes(bytes));
+
+  return (
+    <>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt={alt}
+        onLoad={(e) => {
+          const el = e.currentTarget;
+          setDims({ w: el.naturalWidth, h: el.naturalHeight });
+        }}
+        className="mx-auto max-h-72 w-full max-w-sm rounded-lg object-contain bg-black"
+      />
+      {parts.length > 0 && (
+        <p className="mt-2 text-center text-[11px] text-neutral-500 tabular-nums">{parts.join(" · ")}</p>
+      )}
+    </>
+  );
+}
 
 interface PlayerRecord {
   id: string;
@@ -19,6 +85,8 @@ interface PlayerRecord {
   gender: string;
   skillLevel: string;
   createdAt: string;
+  rankingScore: number;
+  rankingCount: number;
   totalSessions: number;
   totalGames: number;
   totalPlayMinutes: number;
@@ -27,6 +95,18 @@ interface PlayerRecord {
   venues: { id: string; name: string }[];
   lastSeen: { date: string; venue: string } | null;
   isActiveToday: boolean;
+}
+
+interface CheckInInsights {
+  faceRegisteredAt: string | null;
+  faceRegistrationSource: string | null;
+  counts: {
+    kioskFaceCheckIns: number;
+    appFaceSignIns: number;
+    wristbandSignIns: number;
+    phoneOtpSignIns: number;
+  };
+  timeline: { at: string; kind: "kiosk_face" | "app_face" | "wristband" | "phone_otp"; detail?: string }[];
 }
 
 interface PlayerSession {
@@ -41,6 +121,8 @@ interface PlayerSession {
   partnersCount: number;
   gamesByType: { men: number; women: number; mixed: number };
   feedback: { experience: number; matchQuality: string; wouldReturn: string } | null;
+  rankings?: { position: number; scoreDelta: number; courtLabel: string; createdAt: string }[];
+  participants?: { id: string; name: string; avatar: string; skillLevel: string; rankingScore: number }[];
 }
 
 interface PlayerStats {
@@ -87,6 +169,7 @@ export default function PlayersPage() {
 
   const [detailPlayer, setDetailPlayer] = useState<PlayerRecord | null>(null);
   const [detailSessions, setDetailSessions] = useState<PlayerSession[]>([]);
+  const [detailCheckIn, setDetailCheckIn] = useState<CheckInInsights | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
   const [editingSkillId, setEditingSkillId] = useState<string | null>(null);
@@ -201,12 +284,18 @@ export default function PlayersPage() {
   const openPlayerDetail = async (player: PlayerRecord) => {
     setDetailPlayer(player);
     setDetailLoading(true);
+    setDetailCheckIn(null);
     try {
-      const sessions = await api.get<PlayerSession[]>(`/api/players/${player.id}/sessions`);
+      const [sessions, insights] = await Promise.all([
+        api.get<PlayerSession[]>(`/api/players/${player.id}/sessions`),
+        api.get<CheckInInsights>(`/api/admin/players/${player.id}/check-in-insights`).catch(() => null),
+      ]);
       setDetailSessions(sessions);
+      setDetailCheckIn(insights);
     } catch (e) {
       console.error(e);
       setDetailSessions([]);
+      setDetailCheckIn(null);
     } finally {
       setDetailLoading(false);
     }
@@ -283,6 +372,7 @@ export default function PlayersPage() {
       if (detailPlayer?.id === target.id) {
         setDetailPlayer(null);
         setDetailSessions([]);
+        setDetailCheckIn(null);
         setEditingSkillId(null);
         setEditMode(false);
       }
@@ -742,13 +832,14 @@ export default function PlayersPage() {
         <PlayerDetailPanel
           player={detailPlayer}
           sessions={detailSessions}
+          checkInInsights={detailCheckIn}
           loading={detailLoading}
           editingSkill={editingSkillId === detailPlayer.id}
           savingSkill={savingSkillId === detailPlayer.id}
           onToggleSkill={() => setEditingSkillId(editingSkillId === detailPlayer.id ? null : detailPlayer.id)}
           onSelectSkill={(level) => updateSkillLevel(detailPlayer.id, level)}
           onCloseSkill={() => setEditingSkillId(null)}
-          onClose={() => { setDetailPlayer(null); setDetailSessions([]); setEditingSkillId(null); setEditMode(false); }}
+          onClose={() => { setDetailPlayer(null); setDetailSessions([]); setDetailCheckIn(null); setEditingSkillId(null); setEditMode(false); }}
           fmtDate={fmtDate}
           fmtMin={fmtMin}
           editMode={editMode}
@@ -983,9 +1074,36 @@ function SkillBadge({
   );
 }
 
+function formatCheckInSource(action: string | null): string {
+  if (!action) return "";
+  const map: Record<string, string> = {
+    walk_in_player_added_with_face: "Staff check-in (new player + face)",
+    face_manual_resolve_new_player: "Kiosk — new player from face review",
+    walk_in_player_reactivated_with_face: "Staff check-in (reactivated + face)",
+    kiosk_new_player: "Kiosk host review",
+  };
+  return map[action] ?? action;
+}
+
+function timelineEntryLabel(entry: CheckInInsights["timeline"][0]): string {
+  switch (entry.kind) {
+    case "kiosk_face":
+      return entry.detail ? `Kiosk face · ${entry.detail}` : "Kiosk face check-in";
+    case "app_face":
+      return "Player app · Face sign-in";
+    case "wristband":
+      return "Player app · Wristband # (after face failed)";
+    case "phone_otp":
+      return "Player app · Phone / OTP";
+    default:
+      return entry.kind;
+  }
+}
+
 function PlayerDetailPanel({
   player,
   sessions,
+  checkInInsights,
   loading,
   editingSkill,
   savingSkill,
@@ -1007,6 +1125,7 @@ function PlayerDetailPanel({
 }: {
   player: PlayerRecord;
   sessions: PlayerSession[];
+  checkInInsights: CheckInInsights | null;
   loading: boolean;
   editingSkill: boolean;
   savingSkill: boolean;
@@ -1086,12 +1205,7 @@ function PlayerDetailPanel({
             <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
               <p className="text-[11px] text-neutral-500 mb-2">Check-in photo (first face registration)</p>
               {/* Served from Express/static /uploads — same origin as admin */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={player.facePhotoPath}
-                alt={`${player.name} check-in`}
-                className="mx-auto max-h-72 w-full max-w-sm rounded-lg object-contain bg-black"
-              />
+              <CheckInFacePhotoBlock src={player.facePhotoPath} alt={`${player.name} check-in`} />
             </div>
           )}
           {/* Edit form */}
@@ -1171,10 +1285,24 @@ function PlayerDetailPanel({
                 <p className="text-sm font-medium capitalize">{player.gender}</p>
               </div>
               <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+                <p className="text-[11px] text-neutral-500 mb-1">Ranking Score</p>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-sm font-bold tabular-nums">{player.rankingScore}</span>
+                  <span className="text-[10px] text-neutral-500">/ 450</span>
+                </div>
+                <div className="mt-1.5 h-1.5 w-full rounded-full bg-neutral-800 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-green-500 via-amber-400 to-red-500"
+                    style={{ width: `${Math.round(((player.rankingScore - 50) / 400) * 100)}%` }}
+                  />
+                </div>
+                <p className="mt-1 text-[10px] text-neutral-500 tabular-nums">{player.rankingCount} ranking{player.rankingCount !== 1 ? "s" : ""} recorded</p>
+              </div>
+              <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
                 <p className="text-[11px] text-neutral-500 mb-1">Registered</p>
                 <p className="text-sm font-medium">{fmtDate(player.createdAt)}</p>
               </div>
-              <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
+              <div className="col-span-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
                 <p className="text-[11px] text-neutral-500 mb-1">Last Seen</p>
                 <p className="text-sm font-medium">{player.lastSeen ? fmtDate(player.lastSeen.date) : "—"}</p>
                 {player.lastSeen && <p className="text-[10px] text-neutral-500">{player.lastSeen.venue}</p>}
@@ -1204,6 +1332,77 @@ function PlayerDetailPanel({
               <p className="text-sm font-bold tabular-nums">{avgFeedback ?? "—"}</p>
               <p className="text-[10px] text-neutral-500">Avg Rating</p>
             </div>
+          </div>
+
+          {/* Check-in & sign-in log */}
+          <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
+            <div className="mb-3 flex items-center gap-2">
+              <Fingerprint className="h-4 w-4 text-purple-400" />
+              <p className="text-xs font-medium text-neutral-300">Check-in &amp; sign-in</p>
+            </div>
+            {checkInInsights ? (
+              <div className="space-y-3">
+                <div className="rounded-lg border border-neutral-800/80 bg-neutral-950/50 px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-wide text-neutral-500">Registered with face</p>
+                  <p className="text-sm font-medium text-white">
+                    {checkInInsights.faceRegisteredAt
+                      ? `${fmtDate(checkInInsights.faceRegisteredAt)} · ${formatCheckInSource(checkInInsights.faceRegistrationSource)}`
+                      : "Not on file (no staff/kiosk face enrollment event)"}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-lg border border-neutral-800 bg-neutral-950/50 px-2.5 py-2 text-center">
+                    <p className="text-lg font-bold tabular-nums text-white">{checkInInsights.counts.kioskFaceCheckIns}</p>
+                    <p className="text-[10px] text-neutral-500">Kiosk face check-ins</p>
+                  </div>
+                  <div className="rounded-lg border border-neutral-800 bg-neutral-950/50 px-2.5 py-2 text-center">
+                    <p className="text-lg font-bold tabular-nums text-emerald-400/90">{checkInInsights.counts.appFaceSignIns}</p>
+                    <p className="text-[10px] text-neutral-500">App face sign-ins</p>
+                  </div>
+                  <div className="rounded-lg border border-neutral-800 bg-neutral-950/50 px-2.5 py-2 text-center">
+                    <p className="text-lg font-bold tabular-nums text-amber-400/90">{checkInInsights.counts.wristbandSignIns}</p>
+                    <p className="text-[10px] text-neutral-500">Wristband # (fallback)</p>
+                  </div>
+                  <div className="rounded-lg border border-neutral-800 bg-neutral-950/50 px-2.5 py-2 text-center">
+                    <p className="text-lg font-bold tabular-nums text-sky-400/90">{checkInInsights.counts.phoneOtpSignIns}</p>
+                    <p className="text-[10px] text-neutral-500 flex items-center justify-center gap-1">
+                      <Smartphone className="h-3 w-3 shrink-0 opacity-70" />
+                      Phone / OTP
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">Recent activity</p>
+                  {checkInInsights.timeline.length === 0 ? (
+                    <p className="py-2 text-center text-[11px] text-neutral-600">No kiosk or app sign-in events logged yet</p>
+                  ) : (
+                    <ul className="max-h-48 space-y-1.5 overflow-y-auto pr-1">
+                      {checkInInsights.timeline.map((row, i) => (
+                        <li
+                          key={`${row.at}-${row.kind}-${i}`}
+                          className="flex items-start justify-between gap-2 rounded-md bg-neutral-950/80 px-2 py-1.5 text-[11px]"
+                        >
+                          <span className="text-neutral-300">{timelineEntryLabel(row)}</span>
+                          <span className="shrink-0 tabular-nums text-neutral-500">
+                            {new Date(row.at).toLocaleString(undefined, {
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className="mt-2 text-[10px] text-neutral-600">
+                    App sign-ins are recorded from this release onward. Kiosk face rows come from successful camera check-ins.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-center text-[11px] text-neutral-600 py-2">Could not load check-in summary</p>
+            )}
           </div>
 
           {/* Venues */}
@@ -1283,6 +1482,50 @@ function PlayerDetailPanel({
                           <span className="ml-auto text-[10px] text-green-400">Would return</span>
                         )}
                       </div>
+                    )}
+                    {s.rankings && s.rankings.length > 0 && (
+                      <div className="mt-2">
+                        <p className="text-[10px] font-medium text-neutral-500 mb-1">Rankings this session</p>
+                        <div className="space-y-1">
+                          {s.rankings.map((r, i) => (
+                            <div key={i} className="flex items-center gap-2 rounded bg-neutral-800/70 px-2 py-1">
+                              <span className="text-[11px] font-medium text-neutral-300">#{r.position}</span>
+                              <span className="text-[10px] text-neutral-500">{r.courtLabel}</span>
+                              <span className={cn(
+                                "ml-auto text-[11px] font-bold tabular-nums",
+                                r.scoreDelta > 0 ? "text-green-400" : r.scoreDelta < 0 ? "text-red-400" : "text-neutral-400"
+                              )}>
+                                {r.scoreDelta > 0 ? "+" : ""}{r.scoreDelta}
+                              </span>
+                              <span className="text-[10px] text-neutral-600">
+                                {new Date(r.createdAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {s.participants && s.participants.length > 0 && (
+                      <details className="mt-2 group">
+                        <summary className="text-[10px] font-medium text-neutral-500 cursor-pointer select-none hover:text-neutral-400">
+                          {s.participants.length} participant{s.participants.length !== 1 ? "s" : ""} in session
+                        </summary>
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {s.participants.map((p) => (
+                            <span
+                              key={p.id}
+                              className={cn(
+                                "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px]",
+                                p.id === player.id ? "bg-purple-600/20 text-purple-300 ring-1 ring-purple-600/40" : "bg-neutral-800 text-neutral-400"
+                              )}
+                            >
+                              <span>{p.avatar}</span>
+                              <span className="truncate max-w-[80px]">{p.name}</span>
+                              <span className="text-[9px] text-neutral-600 tabular-nums">{p.rankingScore}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </details>
                     )}
                   </div>
                 ))}

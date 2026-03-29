@@ -5,7 +5,12 @@ import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
 import { SKILL_LEVELS, type SkillLevelType } from "@/lib/constants";
-import { findQueueDisplayNameConflict } from "@/lib/queue-display-name";
+import {
+  findLeftQueueEntryBySessionDisplayName,
+  findQueueDisplayNameConflict,
+} from "@/lib/queue-display-name";
+import type { SkillLevel } from "@prisma/client";
+import { initialRankingScoreForSkillLevel } from "@/lib/ranking";
 
 function normalizeWalkInAvatar(raw: string | null | undefined): string {
   if (raw == null) return "🏓";
@@ -71,6 +76,67 @@ export async function POST(request: NextRequest) {
       return error(`"${conflict}" is already in the queue for this session`, 409);
     }
 
+    const leftSameName = await findLeftQueueEntryBySessionDisplayName(session.id, trimmedName);
+    if (leftSameName) {
+      const queueNumber =
+        leftSameName.queueNumber != null
+          ? leftSameName.queueNumber
+          : await getNextQueueNumber(session.id);
+      const entry = await prisma.queueEntry.update({
+        where: { id: leftSameName.entryId },
+        data: {
+          status: "waiting",
+          joinedAt: new Date(),
+          queueNumber,
+          groupId: null,
+          breakUntil: null,
+        },
+        include: { player: true },
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          venueId,
+          staffId: auth.id,
+          action: "walk_in_player_reactivated",
+          targetId: entry.playerId,
+          metadata: {
+            queueEntryId: entry.id,
+            sessionId: session.id,
+            priorStatus: "left",
+          },
+        },
+      });
+
+      const allEntries = await prisma.queueEntry.findMany({
+        where: { sessionId: session.id, status: { in: ["waiting", "on_break"] } },
+        include: {
+          player: true,
+          group: { include: { queueEntries: { where: { status: { not: "left" } }, include: { player: true } } } },
+        },
+        orderBy: { joinedAt: "asc" },
+      });
+
+      emitToVenue(venueId, "queue:updated", allEntries);
+
+      return json(
+        {
+          success: true,
+          reactivated: true,
+          player: {
+            id: entry.player.id,
+            name: entry.player.name,
+            gender: entry.player.gender,
+            skillLevel: entry.player.skillLevel,
+            avatar: entry.player.avatar,
+          },
+          queueEntryId: entry.id,
+          queueNumber: entry.queueNumber,
+        },
+        200
+      );
+    }
+
     let player;
     try {
       player = await prisma.player.create({
@@ -82,6 +148,7 @@ export async function POST(request: NextRequest) {
           avatar: normalizeWalkInAvatar(
             typeof avatarRaw === "string" ? avatarRaw : null
           ),
+          rankingScore: initialRankingScoreForSkillLevel(skillLevel as SkillLevel),
         },
       });
     } catch (e) {

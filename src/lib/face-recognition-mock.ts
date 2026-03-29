@@ -262,9 +262,7 @@ class MockFaceRecognitionService {
     return (lastEntry?.queueNumber || 0) + 1;
   }
 
-  /**
-   * Check if player is currently active in session
-   */
+  /** True if this player already has a non–left queue row for this session (not time-based). */
   async isRecentlyCheckedIn(playerId: string, sessionId: string): Promise<boolean> {
     const entry = await prisma.queueEntry.findUnique({
       where: {
@@ -277,8 +275,6 @@ class MockFaceRecognitionService {
 
     if (!entry) return false;
 
-    // Only block re-check-in if player is 
-    // currently active in the session
     return ["waiting", "assigned", "playing", "on_break"]
       .includes(entry.status);
   }

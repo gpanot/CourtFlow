@@ -32,7 +32,7 @@ export function BreakScreen({ breakUntil, venueId, onReturn }: BreakScreenProps)
   }, [breakUntil, onReturn]);
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center bg-amber-950/10 p-6 text-center">
+    <div className="flex min-h-dvh flex-col items-center justify-center bg-amber-950/10 px-6 pb-6 pt-[max(5rem,env(safe-area-inset-top,0px)+2.5rem)] text-center">
       <Coffee className="mb-6 h-16 w-16 text-amber-400" />
 
       <h2 className="mb-2 text-3xl font-bold">{t("break.title")}</h2>

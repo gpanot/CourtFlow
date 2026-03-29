@@ -60,7 +60,7 @@ export function CourtAssignedScreen({ notification, venueId, onRefresh }: CourtA
   };
 
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center bg-blue-950/30 p-6 text-center">
+    <div className="flex min-h-dvh flex-col items-center justify-center bg-blue-950/30 px-6 pb-6 pt-[max(5rem,env(safe-area-inset-top,0px)+2.5rem)] text-center">
       <div className="mb-6 rounded-full bg-blue-600/20 px-4 py-1 text-sm font-medium text-blue-400">
         {t("courtAssigned.assigned")}
       </div>

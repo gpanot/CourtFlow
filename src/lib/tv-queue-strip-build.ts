@@ -11,7 +11,13 @@ export type TvStripQueueRow = {
 };
 
 function buildTvDisplayRows(entries: QueueEntryData[], limit: number): TvStripQueueRow[] {
-  const entriesForMainQueueBuild = [...entries].filter((e) => e.status !== "on_break");
+  const entriesForMainQueueBuild = [...entries]
+    .filter((e) => e.status !== "on_break")
+    .sort((a, b) => {
+      const dt = new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime();
+      if (dt !== 0) return dt;
+      return a.id.localeCompare(b.id);
+    });
   const seen = new Set<string>();
   const displayEntries: TvStripQueueRow[] = [];
   let queuePosition = 0;

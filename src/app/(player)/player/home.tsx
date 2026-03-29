@@ -15,9 +15,13 @@ import { BreakScreen } from "./break-screen";
 import { ProfileScreen } from "./profile";
 import { SessionRecapScreen } from "./session-recap";
 import { LogOut } from "lucide-react";
-import { isPushSupported, subscribeToPush, getNotificationPermission } from "@/lib/push-client";
+import { isPushSupported, subscribeToPush, getNotificationPermission, usePwaStandalone } from "@/lib/push-client";
 import { NotificationCard } from "./notification-card";
 import { InstallCard } from "./install-card";
+import { PlayerAvatarThumb } from "@/components/player-avatar-thumb";
+import { PlayerIdentityHeader } from "@/components/player-identity-header";
+import { PlayerTvDisplayModal } from "@/components/player-tv-display-modal";
+
 interface Venue {
   id: string;
   name: string;
@@ -33,6 +37,24 @@ interface QueueEntry {
   groupId: string | null;
   breakUntil: string | null;
   sessionId: string;
+  queueNumber?: number | null;
+}
+
+interface PlayerMeData {
+  queueNumber: number | null;
+  queuePosition: number | null;
+  status: string | null;
+  courtLabel: string | null;
+  lastGame: { courtLabel: string; players: { name: string; photo: string | null }[] } | null;
+  venueId: string | null;
+  venueName: string | null;
+}
+
+interface TodayPlayer {
+  id: string;
+  name: string;
+  facePhotoPath?: string | null;
+  avatar?: string | null;
 }
 
 type PlayerView = "home" | "queue" | "assigned" | "playing" | "break" | "profile" | "session_recap";
@@ -50,15 +72,20 @@ export function PlayerHome() {
   const [notification, setNotification] = useState<Record<string, unknown> | null>(null);
   const [showProfile, setShowProfile] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [joining, setJoining] = useState(false);
   const [avatar, setAvatar] = useState("🏓");
   const [recapSessionId, setRecapSessionId] = useState<string | null>(null);
   const [venueLogoutConfirmOpen, setVenueLogoutConfirmOpen] = useState(false);
+  const [playerMe, setPlayerMe] = useState<PlayerMeData | null>(null);
+  const [todaysPlayers, setTodaysPlayers] = useState<TodayPlayer[]>([]);
+  const [courtBanner, setCourtBanner] = useState<string | null>(null);
+  const [notifDismissed, setNotifDismissed] = useState(false);
+  const [tvModalOpen, setTvModalOpen] = useState(false);
   const inRecapRef = useRef(false);
   /** When true, sync queue/session data but do not change `view` (user is on Profile). */
   const suppressAutoViewRef = useRef(false);
   const manuallyLeftRef = useRef(false);
   const { on } = useSocket();
+  const pwaStandalone = usePwaStandalone();
 
   suppressAutoViewRef.current = showProfile;
   useEffect(() => {
@@ -67,6 +94,8 @@ export function PlayerHome() {
       api.get<{ avatar: string }>(`/api/players/${playerId}`).then((p) => {
         if (p.avatar) setAvatar(p.avatar);
       }).catch(console.error);
+
+      api.get<PlayerMeData>("/api/player/me").then(setPlayerMe).catch(console.error);
 
       if (isPushSupported() && getNotificationPermission() === "granted") {
         subscribeToPush(playerId).catch(() => {});
@@ -134,9 +163,23 @@ export function PlayerHome() {
       const courtsState = await api.get<{
         courts: CourtState[];
         session: { id: string } | null;
+        queue?: { id: string; playerId: string; player: { name: string; facePhotoPath?: string | null; avatar?: string | null } }[];
       }>(`/api/courts/state?venueId=${selectedVenue}`);
 
+      if (courtsState.queue) {
+        setTodaysPlayers(
+          courtsState.queue.map((e) => ({
+            id: e.playerId,
+            name: e.player.name,
+            facePhotoPath: e.player.facePhotoPath,
+            avatar: e.player.avatar,
+          }))
+        );
+      }
+
       if (playerId) {
+        api.get<PlayerMeData>("/api/player/me").then(setPlayerMe).catch(console.error);
+
         const entries = await api.get<QueueEntry[]>(`/api/queue?sessionId=${sess.id}`);
         const myEntry = entries.find((e: QueueEntry) => e.playerId === playerId);
         setQueueEntry(myEntry || null);
@@ -232,6 +275,14 @@ export function PlayerHome() {
       else if (notif.type === "requeued") fetchPlayerState();
     });
 
+    const offCourtAssigned = on("court:assigned", (data: unknown) => {
+      const d = data as { playerId?: string; courtLabel?: string };
+      if (d.playerId === playerId && d.courtLabel) {
+        setCourtBanner(t("homeNew.courtReady", { court: d.courtLabel }));
+        setTimeout(() => setCourtBanner(null), 10000);
+      }
+    });
+
     const offQueue = on("queue:updated", () => fetchPlayerState({ updateView: false }));
     const offSession = on("session:updated", () => fetchPlayerState({ updateView: false }));
     const offVenue = on("venue:updated", (...args: unknown[]) => {
@@ -243,8 +294,8 @@ export function PlayerHome() {
       ));
     });
 
-    return () => { offConnect(); offNotif(); offQueue(); offSession(); offVenue(); };
-  }, [selectedVenue, playerId, on, fetchPlayerState, setAuth, setViewTracked]);
+    return () => { offConnect(); offNotif(); offCourtAssigned(); offQueue(); offSession(); offVenue(); };
+  }, [selectedVenue, playerId, on, fetchPlayerState, setAuth, setViewTracked, t]);
 
   /** When the player is assigned or on court, mark session so queue can show "last game?" after they rejoin the line. */
   useEffect(() => {
@@ -282,10 +333,12 @@ export function PlayerHome() {
           <div className="mb-8 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <button
+                type="button"
                 onClick={() => setShowProfile(true)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-lg"
+                className="shrink-0 rounded-full p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                aria-label={t("home.profileAria")}
               >
-                {avatar}
+                <PlayerAvatarThumb avatar={avatar} />
               </button>
               <div>
                 <h1 className="text-2xl font-bold text-green-500">CourtFlow</h1>
@@ -370,82 +423,169 @@ export function PlayerHome() {
     );
   }
 
-  // Home - Join the Game
+  // Home - read-only queue status
   if (view === "home") {
+    const showNotifBanner =
+      !notifDismissed && pwaStandalone && isPushSupported() && getNotificationPermission() !== "granted";
+    const displayPlayers = todaysPlayers.slice(0, 24);
+    const extraPlayers = todaysPlayers.length > 24 ? todaysPlayers.length - 24 : 0;
+
     return (
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,24px))]">
-        <div className="shrink-0 flex items-center gap-3">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,24px))]">
+        {/* Header */}
+        <div className="shrink-0 flex items-center gap-3 mb-4">
           <button
+            type="button"
             onClick={() => setShowProfile(true)}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-lg"
+            className="shrink-0 rounded-full p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+            aria-label={t("home.profileAria")}
           >
-            {avatar}
+            <PlayerAvatarThumb avatar={avatar} />
           </button>
-          <div>
+          <div className="flex-1">
             <h1 className="text-2xl font-bold text-green-500">CourtFlow</h1>
             <p className="text-neutral-400">{venueName}</p>
           </div>
+          <button
+            type="button"
+            onClick={() => setVenueLogoutConfirmOpen(true)}
+            className="p-2 text-neutral-400"
+            aria-label={t("home.logOutAria")}
+          >
+            <LogOut className="h-5 w-5" />
+          </button>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 overflow-hidden">
-          {errorMsg && (
-            <div className="w-full rounded-xl bg-red-900/30 border border-red-800 p-3 text-center">
-              <p className="text-sm text-red-400">{errorMsg}</p>
-              <button onClick={() => setErrorMsg(null)} className="mt-1 text-xs text-red-500 underline">
-                {t("common.dismiss")}
+        {/* Court assigned banner */}
+        {courtBanner && (
+          <div className="mb-4 rounded-xl bg-green-600/20 border border-green-600/50 p-4 text-center">
+            <p className="text-lg font-bold text-green-400">{courtBanner}</p>
+          </div>
+        )}
+
+        {/* Notification enable banner */}
+        {showNotifBanner && (
+          <div className="mb-4 rounded-xl border border-amber-800/50 bg-amber-950/30 p-4">
+            <p className="font-medium text-amber-400 text-sm">{t("homeNew.enableNotifTitle")}</p>
+            <div className="mt-2 flex gap-2">
+              <button
+                onClick={() => {
+                  if (playerId) subscribeToPush(playerId).catch(() => {});
+                  setNotifDismissed(true);
+                }}
+                className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-500"
+              >
+                {t("homeNew.enableNotifAction")}
+              </button>
+              <button
+                onClick={() => setNotifDismissed(true)}
+                className="rounded-lg bg-neutral-800 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:bg-neutral-700"
+              >
+                {t("homeNew.enableNotifLater")}
               </button>
             </div>
-          )}
-          {!session ? (
-            <div className="flex flex-col items-center gap-5">
-              {venueLogoUrl && (
-                <div className={cn(
-                  "h-28 w-28 shrink-0 rounded-full overflow-hidden border-2 border-neutral-800 bg-neutral-900",
-                  logoSpin && "animate-flip-y"
-                )}>
-                  <img src={venueLogoUrl} alt={venueName} className="h-full w-full object-cover" />
-                </div>
-              )}
-              {venueTvText && (
-                <div className="text-center space-y-1">
-                  {venueTvText.split("\n").slice(0, 4).map((line, i) => (
-                    <p key={i} className={i === 0 ? "text-lg font-semibold text-neutral-300" : "text-sm text-neutral-400"}>{line}</p>
+          </div>
+        )}
+
+        {errorMsg && (
+          <div className="mb-4 w-full rounded-xl bg-red-900/30 border border-red-800 p-3 text-center">
+            <p className="text-sm text-red-400">{errorMsg}</p>
+            <button onClick={() => setErrorMsg(null)} className="mt-1 text-xs text-red-500 underline">
+              {t("common.dismiss")}
+            </button>
+          </div>
+        )}
+
+        {!session ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-4">
+            {venueLogoUrl && (
+              <div className={cn(
+                "h-28 w-28 shrink-0 rounded-full overflow-hidden border-2 border-neutral-800 bg-neutral-900",
+                logoSpin && "animate-flip-y"
+              )}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={venueLogoUrl} alt={venueName} className="h-full w-full object-cover" />
+              </div>
+            )}
+            <p className="text-center text-lg font-medium text-neutral-300">{t("homeNew.noActiveSession")}</p>
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {/* Wristband number */}
+            {playerMe?.queueNumber != null && (
+              <div className="rounded-2xl border border-neutral-700 bg-neutral-900 p-5 text-center">
+                <p className="text-xs uppercase tracking-wider text-neutral-500">{t("homeNew.yourSessionNumber")}</p>
+                <p className="mt-1 text-6xl font-extrabold text-green-500">{playerMe.queueNumber}</p>
+                <p className="mt-1 text-xs text-neutral-600">{t("homeNew.showIfAsked")}</p>
+              </div>
+            )}
+
+            {/* Queue position / Court status */}
+            {playerMe?.status && (
+              <div className="rounded-2xl border border-neutral-700 bg-neutral-900 p-5 text-center">
+                <p className="text-sm text-neutral-400">{t("homeNew.youAre")}</p>
+                <p className="text-4xl font-bold text-white">{playerMe.queueNumber ?? "—"}</p>
+                {playerMe.status === "waiting" && playerMe.queuePosition != null && (
+                  <p className="mt-1 text-sm text-neutral-400">
+                    {t("homeNew.aheadOfYou", { count: playerMe.queuePosition })}
+                  </p>
+                )}
+                {(playerMe.status === "playing" || playerMe.status === "assigned") && playerMe.courtLabel && (
+                  <p className="mt-1 text-sm font-medium text-green-400">
+                    {t("homeNew.youreOnCourt", { court: playerMe.courtLabel })}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Last game card */}
+            {playerMe?.lastGame && (
+              <div className="rounded-2xl border border-neutral-700 bg-neutral-900 p-4">
+                <p className="mb-3 text-xs uppercase tracking-wider text-neutral-500">{t("homeNew.lastGame")}</p>
+                <div className="flex items-center justify-center gap-4">
+                  {playerMe.lastGame.players.slice(0, 3).map((p, i) => (
+                    <div key={i} className="flex flex-col items-center gap-1">
+                      <PlayerAvatarThumb
+                        facePhotoPath={p.photo}
+                        sizeClass="h-11 w-11"
+                      />
+                      <span className="text-xs text-neutral-300 max-w-[56px] truncate">{p.name.split(" ")[0]}</span>
+                    </div>
                   ))}
                 </div>
-              )}
-              <p className="text-neutral-600 text-sm mt-2">{t("home.waitingSession")}</p>
-            </div>
-          ) : (
-            <button
-              disabled={joining}
-              onClick={async () => {
-                setErrorMsg(null);
-                setJoining(true);
+                <p className="mt-2 text-center text-xs text-neutral-600">{playerMe.lastGame.courtLabel}</p>
+              </div>
+            )}
 
-                if (isPushSupported() && getNotificationPermission() === "default") {
-                  Notification.requestPermission().catch(() => {});
-                }
+            {/* Today's players grid */}
+            {displayPlayers.length > 0 && (
+              <div className="rounded-2xl border border-neutral-700 bg-neutral-900 p-4">
+                <p className="mb-1 text-xs uppercase tracking-wider text-neutral-500">{t("homeNew.playingToday")}</p>
+                <p className="mb-3 text-xs text-neutral-600">{venueName}</p>
+                <div className="flex flex-wrap gap-3 justify-center">
+                  {displayPlayers.map((p) => (
+                    <div key={p.id} className="flex flex-col items-center gap-1">
+                      <PlayerAvatarThumb
+                        facePhotoPath={p.facePhotoPath}
+                        avatar={p.avatar}
+                        sizeClass="h-10 w-10"
+                      />
+                      <span className="text-[10px] text-neutral-400 max-w-[48px] truncate">{p.name.split(" ")[0]}</span>
+                    </div>
+                  ))}
+                  {extraPlayers > 0 && (
+                    <div className="flex h-10 items-center">
+                      <span className="text-xs text-neutral-500">{t("homeNew.playersMore", { count: extraPlayers })}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
-                try {
-                  await api.post("/api/queue", { sessionId: session.id, venueId: selectedVenue });
-
-                  if (playerId && isPushSupported() && getNotificationPermission() === "granted") {
-                    subscribeToPush(playerId).catch(() => {});
-                  }
-
-                  await fetchPlayerState();
-                } catch (e) {
-                  console.error("Join queue error:", e);
-                  setErrorMsg((e as Error).message);
-                } finally {
-                  setJoining(false);
-                }
-              }}
-              className="flex h-40 w-40 items-center justify-center rounded-full bg-green-600 text-xl font-bold text-white shadow-lg shadow-green-600/30 transition-transform hover:scale-105 active:scale-95 disabled:opacity-60 disabled:scale-100"
-            >
-              {joining ? t("home.joining") : <>{t("home.joinTheGameLine1")}<br />{t("home.joinTheGameLine2")}</>}
-            </button>
-          )}
+        <div className="shrink-0 mt-4 space-y-3">
+          <InstallCard />
         </div>
 
         <div className="shrink-0 flex justify-center pt-2">
@@ -458,10 +598,43 @@ export function PlayerHome() {
           </button>
         </div>
 
-        <div className="shrink-0 space-y-3">
-          <NotificationCard />
-          <InstallCard />
-        </div>
+        {venueLogoutConfirmOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="home-logout-confirm-title"
+            onClick={() => setVenueLogoutConfirmOpen(false)}
+          >
+            <div
+              className="w-full max-w-sm rounded-xl border border-neutral-700 bg-neutral-900 p-5 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 id="home-logout-confirm-title" className="text-lg font-semibold text-white">
+                {t("home.logoutConfirmTitle")}
+              </h2>
+              <div className="mt-6 flex gap-3 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setVenueLogoutConfirmOpen(false)}
+                  className="rounded-lg border border-neutral-600 px-4 py-2 text-sm font-medium text-neutral-200 transition-colors hover:bg-neutral-800"
+                >
+                  {t("common.cancel")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setVenueLogoutConfirmOpen(false);
+                    clearAuth();
+                  }}
+                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-500"
+                >
+                  {t("home.logout")}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -490,52 +663,84 @@ export function PlayerHome() {
         venueName={venueName}
         sessionId={session?.id || ""}
         avatar={avatar}
+        playerName={playerName ?? ""}
+        queueNumber={playerMe?.queueNumber ?? queueEntry.queueNumber ?? null}
         onShowProfile={() => setShowProfile(true)}
         onRefresh={fetchPlayerState}
       />
     );
   }
 
-  const profileOverlay = (
-    <button
-      onClick={() => setShowProfile(true)}
-      className="absolute left-5 top-5 z-40 flex h-10 w-10 items-center justify-center rounded-full bg-neutral-800/80 text-lg backdrop-blur-sm"
-    >
-      {avatar}
-    </button>
+  const queueNumberForHeader = playerMe?.queueNumber ?? queueEntry?.queueNumber ?? null;
+
+  const identityHeaderOverlay = (
+    <div className="pointer-events-none absolute left-4 right-4 top-[max(1rem,env(safe-area-inset-top))] z-40">
+      <div className="pointer-events-auto">
+        <PlayerIdentityHeader
+          avatar={avatar}
+          playerName={playerName ?? ""}
+          queueNumber={queueNumberForHeader}
+          venueName={venueName}
+          onShowProfile={() => setShowProfile(true)}
+          onOpenTv={() => setTvModalOpen(true)}
+          avatarThumbClassName="border-neutral-500/50 bg-neutral-800/80 backdrop-blur-sm"
+        />
+      </div>
+    </div>
   );
 
   if (view === "assigned") {
     return (
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-        {profileOverlay}
-        <CourtAssignedScreen notification={notification} venueId={selectedVenue} onRefresh={fetchPlayerState} />
-      </div>
+      <>
+        <PlayerTvDisplayModal
+          venueId={selectedVenue}
+          open={tvModalOpen}
+          onClose={() => setTvModalOpen(false)}
+        />
+        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+          {identityHeaderOverlay}
+          <CourtAssignedScreen notification={notification} venueId={selectedVenue} onRefresh={fetchPlayerState} />
+        </div>
+      </>
     );
   }
 
   if (view === "playing") {
     return (
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-        {profileOverlay}
-        <InGameScreen notification={notification} />
-      </div>
+      <>
+        <PlayerTvDisplayModal
+          venueId={selectedVenue}
+          open={tvModalOpen}
+          onClose={() => setTvModalOpen(false)}
+        />
+        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+          {identityHeaderOverlay}
+          <InGameScreen notification={notification} />
+        </div>
+      </>
     );
   }
 
   if (view === "break" && queueEntry) {
     return (
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-        {profileOverlay}
-        <BreakScreen
-          breakUntil={queueEntry.breakUntil || ""}
+      <>
+        <PlayerTvDisplayModal
           venueId={selectedVenue}
-          onReturn={async () => {
-            await api.post("/api/queue/return", { venueId: selectedVenue });
-            await fetchPlayerState();
-          }}
+          open={tvModalOpen}
+          onClose={() => setTvModalOpen(false)}
         />
-      </div>
+        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+          {identityHeaderOverlay}
+          <BreakScreen
+            breakUntil={queueEntry.breakUntil || ""}
+            venueId={selectedVenue}
+            onReturn={async () => {
+              await api.post("/api/queue/return", { venueId: selectedVenue });
+              await fetchPlayerState();
+            }}
+          />
+        </div>
+      </>
     );
   }
 

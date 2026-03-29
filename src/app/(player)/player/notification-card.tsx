@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Bell } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useSessionStore } from "@/stores/session-store";
-import { isPushSupported, subscribeToPush, getNotificationPermission } from "@/lib/push-client";
+import { isPushSupported, subscribeToPush, getNotificationPermission, usePwaStandalone } from "@/lib/push-client";
 
 /** If permission is granted and SW already has a push subscription, setup succeeded despite a failed result (e.g. transient server error). */
 async function hasActivePushSubscription(): Promise<boolean> {
@@ -24,11 +24,12 @@ interface NotificationCardProps {
 export function NotificationCard({ onEnabled }: NotificationCardProps = {}) {
   const { t, i18n } = useTranslation();
   const { playerId } = useSessionStore();
+  const pwaStandalone = usePwaStandalone();
   const [enabled, setEnabled] = useState(() => getNotificationPermission() === "granted");
   const [requesting, setRequesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!isPushSupported() || enabled || !playerId) return null;
+  if (!isPushSupported() || enabled || !playerId || !pwaStandalone) return null;
 
   const handleEnable = async () => {
     setRequesting(true);

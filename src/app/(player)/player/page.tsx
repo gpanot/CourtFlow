@@ -98,7 +98,13 @@ export default function PlayerPage() {
   if (!hydrated || !validated) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center bg-black">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-700 border-t-green-500" aria-label={t("common.loading")} />
+        {/* i18n language differs SSR vs client (localStorage); suppressHydrationWarning avoids mismatch on aria-label */}
+        <div
+          className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-700 border-t-green-500"
+          aria-label={t("common.loading")}
+          aria-busy="true"
+          suppressHydrationWarning
+        />
       </div>
     );
   }

@@ -13,6 +13,7 @@ import { cn } from "@/lib/cn";
 import { SKILL_LEVELS, SKILL_DESCRIPTIONS, type SkillLevelType } from "@/lib/constants";
 import { AlertTriangle, Loader2, UserPlus, Camera, SwitchCamera } from "lucide-react";
 import { testCameraSupport } from "@/lib/camera-test";
+import { KioskConfirmationScreen } from "@/components/kiosk-confirmation-screen";
 
 const GENDERS = ["male", "female"] as const;
 
@@ -111,12 +112,66 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
   const [err, setErr] = useState("");
   const [recent, setRecent] = useState<StaffCheckInRecent[]>([]);
   const [flashMessage, setFlashMessage] = useState<string | null>(null);
+  const [addFaceConfirmation, setAddFaceConfirmation] = useState<{
+    displayName: string;
+    queueNumber: number;
+    queuePosition?: number;
+    skillLevel: string;
+    gender: string;
+    totalSessions?: number;
+    enrollmentWarning: string | null;
+  } | null>(null);
+  const [phoneDuplicate, setPhoneDuplicate] = useState<{ name: string } | null>(null);
+  const phoneCheckAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     return () => {
       if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+      phoneCheckAbortRef.current?.abort();
     };
   }, []);
+
+  /** After 8+ digits, check DB for an existing player on this number (digits-only match). */
+  useEffect(() => {
+    const trimmed = phone.trim();
+    const digits = trimmed.replace(/\D/g, "");
+    if (digits.length < 8) {
+      phoneCheckAbortRef.current?.abort();
+      phoneCheckAbortRef.current = null;
+      setPhoneDuplicate(null);
+      return;
+    }
+
+    const ac = new AbortController();
+    phoneCheckAbortRef.current?.abort();
+    phoneCheckAbortRef.current = ac;
+
+    const timer = window.setTimeout(async () => {
+      if (phoneCheckAbortRef.current !== ac) return;
+      try {
+        const q = encodeURIComponent(trimmed);
+        const res = await api.get<{ exists: boolean; name: string | null }>(
+          `/api/queue/check-walk-in-phone?phone=${q}`,
+          { signal: ac.signal }
+        );
+        if (phoneCheckAbortRef.current !== ac) return;
+        if (res.exists) {
+          setPhoneDuplicate({ name: res.name ?? "" });
+        } else {
+          setPhoneDuplicate(null);
+        }
+      } catch (e) {
+        if ((e as Error).name === "AbortError") return;
+        if (phoneCheckAbortRef.current !== ac) return;
+        setPhoneDuplicate(null);
+      }
+    }, 450);
+
+    return () => {
+      window.clearTimeout(timer);
+      ac.abort();
+    };
+  }, [phone]);
 
   const stopFaceCamera = useCallback(() => {
     const stream = faceStreamRef.current;
@@ -157,6 +212,7 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
     trimmedName.length > 0 && queueNamesLower.includes(trimmedName.toLowerCase());
   /** After name + gender, surface duplicate immediately (no need to tap Add). */
   const showDuplicateWarning = nameIsDuplicate && gender !== "";
+  const showPhoneDuplicateWarning = phoneDuplicate !== null;
 
   const submitWithFace = async () => {
     setErr("");
@@ -185,6 +241,8 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
         success: boolean;
         player: { id: string; name: string; gender: string; skillLevel: string };
         queueNumber?: number;
+        queuePosition?: number;
+        totalSessions?: number;
         qualityCheck?: {
           overall: "good" | "fair" | "poor";
           checks: {
@@ -228,12 +286,31 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
       }
 
       if (res.player) {
-        if (res.faceEnrollment && !res.faceEnrollment.success) {
-          showFlash(
-            `${res.player.name} added to queue — face NOT enrolled in AWS (kiosk won’t recognize). ${res.faceEnrollment.error ?? ""}`
-          );
+        const qn = res.queueNumber;
+        if (qn != null && qn > 0) {
+          const enrollWarn =
+            res.faceEnrollment && !res.faceEnrollment.success
+              ? t("staff.checkIn.faceEnrollmentWarningShort", {
+                  error: res.faceEnrollment.error ?? "",
+                })
+              : null;
+          setAddFaceConfirmation({
+            displayName: res.player.name,
+            queueNumber: qn,
+            queuePosition: res.queuePosition,
+            skillLevel: res.player.skillLevel,
+            gender: res.player.gender,
+            totalSessions: res.totalSessions,
+            enrollmentWarning: enrollWarn,
+          });
         } else {
-          showFlash(t("staff.checkIn.addedFlash", { name: res.player.name }));
+          if (res.faceEnrollment && !res.faceEnrollment.success) {
+            showFlash(
+              `${res.player.name} added to queue — face NOT enrolled in AWS (kiosk won’t recognize). ${res.faceEnrollment.error ?? ""}`
+            );
+          } else {
+            showFlash(t("staff.checkIn.addedFlash", { name: res.player.name }));
+          }
         }
         setRecent((prev) => {
           const next = [
@@ -254,6 +331,7 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
       setGender("");
       setSkill("");
       setPhone("");
+      setPhoneDuplicate(null);
       setCapturedFace(null);
       setFaceQuality(null);
       onAdded();
@@ -710,7 +788,19 @@ ${test.error ? `Error: ${test.error}` : ''}
           {duplicateNameMsg}
         </div>
       )}
-      {err && !showDuplicateWarning && (
+      {showPhoneDuplicateWarning && (
+        <div
+          id="checkin-duplicate-phone"
+          className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300 max-sm:px-2.5 max-sm:py-1.5 max-sm:text-xs"
+          role="alert"
+          aria-live="polite"
+        >
+          {phoneDuplicate?.name
+            ? t("staff.checkIn.duplicatePhoneNamed", { name: phoneDuplicate.name })
+            : t("staff.checkIn.duplicatePhone")}
+        </div>
+      )}
+      {err && !showDuplicateWarning && !showPhoneDuplicateWarning && (
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300 max-sm:px-2.5 max-sm:py-1.5 max-sm:text-xs">
           {err}
         </div>
@@ -816,6 +906,8 @@ ${test.error ? `Error: ${test.error}` : ''}
               setPhone(e.target.value);
               setErr("");
             }}
+            aria-invalid={showPhoneDuplicateWarning}
+            aria-describedby={showPhoneDuplicateWarning ? "checkin-duplicate-phone" : undefined}
             className="w-full rounded-xl border border-neutral-700 bg-neutral-950 px-4 py-3 text-base text-white placeholder:text-neutral-500 focus:border-green-500 focus:outline-none max-sm:rounded-lg max-sm:px-3 max-sm:py-2"
           />
         </div>
@@ -1004,28 +1096,18 @@ ${test.error ? `Error: ${test.error}` : ''}
             )}
             
             <div className="space-y-2">
-              {faceQuality && faceQuality.overall !== 'good' && (
-                <button
-                  type="button"
-                  onClick={() => void handleFaceCaptureClick()}
-                  disabled={faceCaptureLoading || testSeedLoading}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-orange-500/50 bg-orange-600/10 py-3 text-sm font-semibold text-orange-400 transition-colors hover:border-orange-500 hover:bg-orange-600/20 disabled:opacity-50 max-sm:rounded-lg max-sm:py-2.5"
-                >
-                  {faceCaptureLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin max-sm:h-3 max-sm:w-3" />
-                      {t("staff.checkIn.faceRetaking")}
-                    </>
-                  ) : (
-                    t("staff.checkIn.faceRetake")
-                  )}
-                </button>
-              )}
-              
               <button
                 type="button"
                 onClick={submitWithFace}
-                disabled={loading || testSeedLoading || !name.trim() || !gender || !skill || showDuplicateWarning}
+                disabled={
+                  loading ||
+                  testSeedLoading ||
+                  !name.trim() ||
+                  !gender ||
+                  !skill ||
+                  showDuplicateWarning ||
+                  showPhoneDuplicateWarning
+                }
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50 max-sm:rounded-lg max-sm:py-2.5 max-sm:text-base"
               >
                 {loading ? (
@@ -1045,7 +1127,15 @@ ${test.error ? `Error: ${test.error}` : ''}
           <button
             type="button"
             onClick={submit}
-            disabled={loading || testSeedLoading || !name.trim() || !gender || !skill || showDuplicateWarning}
+            disabled={
+              loading ||
+              testSeedLoading ||
+              !name.trim() ||
+              !gender ||
+              !skill ||
+              showDuplicateWarning ||
+              showPhoneDuplicateWarning
+            }
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50 max-sm:rounded-lg max-sm:py-2.5 max-sm:text-base"
           >
             {loading ? (
@@ -1190,6 +1280,25 @@ ${test.error ? `Error: ${test.error}` : ''}
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {addFaceConfirmation && (
+        <div className="fixed inset-0 z-[100] flex flex-col bg-neutral-950 p-2 sm:p-4">
+          <div className="mx-auto flex h-full min-h-0 w-full max-w-lg flex-1 flex-col">
+            <KioskConfirmationScreen
+              mode="staff"
+              displayName={addFaceConfirmation.displayName}
+              queueNumber={addFaceConfirmation.queueNumber}
+              queuePosition={addFaceConfirmation.queuePosition}
+              skillLevel={addFaceConfirmation.skillLevel}
+              gender={addFaceConfirmation.gender}
+              totalSessions={addFaceConfirmation.totalSessions}
+              isReturning={false}
+              enrollmentWarning={addFaceConfirmation.enrollmentWarning}
+              onScanNext={() => setAddFaceConfirmation(null)}
+            />
           </div>
         </div>
       )}

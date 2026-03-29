@@ -11,6 +11,7 @@ import { ArrowLeft, Trophy, Clock, Check, Pencil, ChevronRight, Bell, BellOff } 
 import { isPushSupported, subscribeToPush, unsubscribeFromPush, getNotificationPermission } from "@/lib/push-client";
 import { NotificationCard } from "./notification-card";
 import { InstallCard } from "./install-card";
+import { PlayerAvatarThumb } from "@/components/player-avatar-thumb";
 
 const AVATAR_OPTIONS = [
   "🏓", "🎾", "⚡", "🔥", "🌟", "💪", "🦊", "🐻",
@@ -184,11 +185,17 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
           {/* Avatar + Name */}
           <div className="flex flex-col items-center gap-3">
             <button
+              type="button"
               onClick={() => setEditingAvatar(true)}
-              className="relative flex h-24 w-24 items-center justify-center rounded-full bg-neutral-800 text-5xl transition-transform hover:scale-105"
+              className="relative rounded-full p-0 transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+              aria-label={t("profile.editAvatarAria")}
             >
-              {profile.avatar || "🏓"}
-              <span className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-xs text-white">
+              <PlayerAvatarThumb
+                avatar={profile.avatar || "🏓"}
+                sizeClass="h-24 w-24"
+                textFallbackClassName="text-5xl"
+              />
+              <span className="pointer-events-none absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-xs text-white shadow-md">
                 <Pencil className="h-3.5 w-3.5" />
               </span>
             </button>
@@ -586,7 +593,7 @@ function SessionDetailScreen({
             <div className="space-y-2">
               {stats.partners.map((p) => (
                 <div key={p.id} className="flex items-center gap-3 rounded-xl bg-neutral-800/60 px-3 py-2.5">
-                  <span className="text-xl">{p.avatar}</span>
+                  <PlayerAvatarThumb avatar={p.avatar} sizeClass="h-10 w-10" textFallbackClassName="text-xl" />
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-white truncate">{p.name}</p>
                   </div>

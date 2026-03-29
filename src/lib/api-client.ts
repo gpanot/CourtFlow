@@ -66,7 +66,7 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  get: <T>(url: string) => request<T>(url),
+  get: <T>(url: string, init?: RequestInit) => request<T>(url, { method: "GET", ...init }),
   post: <T>(url: string, body?: unknown) =>
     request<T>(url, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
   put: <T>(url: string, body: unknown) =>

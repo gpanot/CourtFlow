@@ -34,8 +34,13 @@ export function middleware(request: NextRequest) {
   return NextResponse.redirect(url);
 }
 
+/**
+ * Exclude Next.js internals so dev HMR / Turbopack / devtools work when SITE_GATE_ENABLED.
+ * Without `/_next/` (not just static|image), webpack-hmr and chunk loads hit the gate and break.
+ * `__nextjs_*` routes are used by Next dev overlay (e.g. stack frames).
+ */
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|ico|webp|woff2?|js|json)).*)",
+    "/((?!_next/|__nextjs|favicon.ico|.*\\.(?:svg|png|jpg|ico|webp|woff2?|js|json)).*)",
   ],
 };

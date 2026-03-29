@@ -3,6 +3,7 @@ import { verifyOtp, signToken } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { setPlayerAuthCookieOnResponse } from "@/lib/player-auth-cookie";
+import { logPlayerAppAuth } from "@/lib/player-app-auth-log";
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,6 +16,13 @@ export async function POST(request: NextRequest) {
     const existingPlayer = await prisma.player.findUnique({ where: { phone } });
 
     if (existingPlayer) {
+      const openSession = await prisma.session.findFirst({
+        where: { status: "open" },
+        orderBy: { openedAt: "desc" },
+        select: { id: true },
+      });
+      void logPlayerAppAuth(existingPlayer.id, "phone_otp", openSession?.id);
+
       const token = signToken({ id: existingPlayer.id, role: "player" });
       const res = NextResponse.json({
         token,

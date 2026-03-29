@@ -1,5 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
+import type { SkillLevel } from "@prisma/client";
+import { initialRankingScoreForSkillLevel } from "@/lib/ranking";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
 
@@ -187,6 +189,8 @@ export async function GET(request: NextRequest) {
         gender: player.gender,
         skillLevel: player.skillLevel,
         createdAt: player.createdAt,
+        rankingScore: player.rankingScore,
+        rankingCount: player.rankingCount,
         totalSessions: sessions.size,
         totalGames: gameCounts[player.id] || 0,
         totalPlayMinutes,
@@ -223,13 +227,18 @@ export async function POST(request: NextRequest) {
     if (!body.phone?.trim()) return error("Phone is required", 400);
     if (!body.gender) return error("Gender is required", 400);
 
+    const rawSkill = ((body.skillLevel as string) || "beginner").toLowerCase();
+    const skill: SkillLevel = ["beginner", "intermediate", "advanced", "pro"].includes(rawSkill)
+      ? (rawSkill as SkillLevel)
+      : "beginner";
     const player = await prisma.player.create({
       data: {
         name: body.name.trim(),
         phone: body.phone.trim(),
         gender: body.gender as never,
-        skillLevel: (body.skillLevel as never) ?? "beginner",
+        skillLevel: skill,
         avatar: body.avatar || "🏓",
+        rankingScore: initialRankingScoreForSkillLevel(skill),
       },
     });
 

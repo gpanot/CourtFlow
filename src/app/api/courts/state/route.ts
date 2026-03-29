@@ -5,6 +5,16 @@ import { recoverStuckQueueStatusesForActiveGames } from "@/lib/recover-queue-sta
 
 const STAFF_QUEUE_STATUSES = ["waiting", "on_break", "assigned", "playing"] as const;
 
+/** Player fields exposed on queue/court when the client is not staff (no internal ranking). */
+const PUBLIC_PLAYER_SELECT = {
+  id: true,
+  name: true,
+  avatar: true,
+  skillLevel: true,
+  gender: true,
+  facePhotoPath: true,
+} as const;
+
 export async function GET(request: NextRequest) {
   const venueId = request.nextUrl.searchParams.get("venueId");
   if (!venueId) return error("venueId is required");
@@ -33,7 +43,7 @@ export async function GET(request: NextRequest) {
     const courtsWithPlayers = await Promise.all(
       courts.map(async (court) => {
         const assignment = court.courtAssignments[0] || null;
-        let players: {
+        type CourtPlayerRow = {
           id: string;
           name: string;
           skillLevel: string;
@@ -42,7 +52,12 @@ export async function GET(request: NextRequest) {
           queueNumber: number | null;
           facePhotoPath: string | null;
           avatar: string;
-        }[] = [];
+          rankingScore?: number;
+          rankingCount?: number;
+        };
+
+        let players: CourtPlayerRow[] = [];
+        let rankingBannerEligible = false;
 
         if (assignment) {
           const playerRecords = await prisma.player.findMany({
@@ -62,7 +77,7 @@ export async function GET(request: NextRequest) {
               const p = byId.get(id);
               if (!p) return null;
               const qe = queueEntries.find((e) => e.playerId === p.id);
-              return {
+              const row: CourtPlayerRow = {
                 id: p.id,
                 name: p.name,
                 skillLevel: p.skillLevel,
@@ -72,8 +87,33 @@ export async function GET(request: NextRequest) {
                 facePhotoPath: p.facePhotoPath ?? null,
                 avatar: p.avatar,
               };
+              if (staffQueue) {
+                row.rankingScore = p.rankingScore;
+                row.rankingCount = p.rankingCount;
+              }
+              return row;
             })
             .filter((row): row is NonNullable<typeof row> => row != null);
+
+          if (
+            staffQueue &&
+            session &&
+            court.status === "active" &&
+            players.length === 4
+          ) {
+            const elapsedMin = (Date.now() - assignment.startedAt.getTime()) / 60000;
+            const lowRanked = players.filter((pl) => (pl.rankingCount ?? 0) < 3).length;
+            if (elapsedMin > 4 && lowRanked >= 2) {
+              const existing = await prisma.playerRanking.findFirst({
+                where: {
+                  sessionId: session.id,
+                  courtId: court.id,
+                  createdAt: { gte: assignment.startedAt },
+                },
+              });
+              rankingBannerEligible = !existing;
+            }
+          }
         }
 
         return {
@@ -90,6 +130,7 @@ export async function GET(request: NextRequest) {
                 isWarmup: assignment.isWarmup,
               }
             : null,
+          ...(staffQueue ? { rankingBannerEligible } : {}),
           players,
         };
       })
@@ -105,10 +146,19 @@ export async function GET(request: NextRequest) {
           status: { in: staffQueue ? [...STAFF_QUEUE_STATUSES] : ["waiting", "on_break"] },
         },
         include: {
-          player: true,
-          group: { include: { queueEntries: { include: { player: true }, where: { status: { not: "left" } } } } },
+          player: staffQueue ? true : { select: PUBLIC_PLAYER_SELECT },
+          group: {
+            include: {
+              queueEntries: {
+                include: {
+                  player: staffQueue ? true : { select: PUBLIC_PLAYER_SELECT },
+                },
+                where: { status: { not: "left" } },
+              },
+            },
+          },
         },
-        orderBy: { joinedAt: "asc" },
+        orderBy: [{ joinedAt: "asc" }, { id: "asc" }],
       });
 
       const statusOrder: Record<string, number> = { waiting: 0, on_break: 1, assigned: 2, playing: 3 };
@@ -117,7 +167,9 @@ export async function GET(request: NextRequest) {
           const oa = statusOrder[a.status] ?? 99;
           const ob = statusOrder[b.status] ?? 99;
           if (oa !== ob) return oa - ob;
-          return a.joinedAt.getTime() - b.joinedAt.getTime();
+          const dt = a.joinedAt.getTime() - b.joinedAt.getTime();
+          if (dt !== 0) return dt;
+          return a.id.localeCompare(b.id);
         });
       }
 

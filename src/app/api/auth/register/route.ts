@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { error, parseBody } from "@/lib/api-helpers";
 import { setPlayerAuthCookieOnResponse } from "@/lib/player-auth-cookie";
 import type { SkillLevel, Gender } from "@prisma/client";
+import { initialRankingScoreForSkillLevel } from "@/lib/ranking";
 
 interface RegisterBody {
   phone: string;
@@ -28,6 +29,7 @@ export async function POST(request: NextRequest) {
         name: body.name,
         gender: body.gender,
         skillLevel: body.skillLevel,
+        rankingScore: initialRankingScoreForSkillLevel(body.skillLevel),
       },
     });
 

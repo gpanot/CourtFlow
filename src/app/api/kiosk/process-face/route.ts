@@ -7,6 +7,52 @@ import {
   type FaceRecognitionDebugInfo,
 } from "@/lib/face-recognition";
 import { emitToVenue } from "@/lib/socket-server";
+
+const QUEUE_WAITING_STATUSES = ["waiting", "on_break"] as const;
+
+async function buildAlreadyCheckedInResponse(
+  sessionId: string,
+  playerId: string,
+  displayName: string | undefined,
+  faceDbg: Record<string, unknown>
+) {
+  const player = await prisma.player.findUnique({
+    where: { id: playerId },
+    select: { skillLevel: true, name: true },
+  });
+  const sessionEntry = await prisma.queueEntry.findUnique({
+    where: {
+      sessionId_playerId: { sessionId, playerId },
+    },
+    select: { queueNumber: true },
+  });
+  const allEntries = await prisma.queueEntry.findMany({
+    where: { sessionId, status: { in: [...QUEUE_WAITING_STATUSES] } },
+    orderBy: { joinedAt: "asc" },
+  });
+  const queuePositionRaw = allEntries.findIndex((e) => e.playerId === playerId) + 1;
+  const totalSessions = await prisma.queueEntry.count({
+    where: { playerId, status: "left" },
+  });
+  const queueNumber =
+    sessionEntry?.queueNumber != null && sessionEntry.queueNumber > 0
+      ? sessionEntry.queueNumber
+      : undefined;
+  return json({
+    success: true,
+    resultType: "already_checked_in",
+    playerId,
+    displayName: displayName ?? player?.name ?? undefined,
+    alreadyCheckedIn: true,
+    queueNumber,
+    queuePosition: queuePositionRaw > 0 ? queuePositionRaw : undefined,
+    skillLevel: player?.skillLevel,
+    totalSessions,
+    isReturning: true,
+    ...faceDbg,
+  });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const auth = requireStaff(request.headers);
@@ -87,7 +133,7 @@ export async function POST(request: NextRequest) {
       }
 
       if (recognitionResult.resultType === "matched") {
-        // Check if player is already checked in within 4 hours
+        // Block only while this player already has an active queue row for this session
         const recentlyCheckedIn = await faceRecognitionService.isRecentlyCheckedIn(
           recognitionResult.playerId!,
           session.id
@@ -102,20 +148,14 @@ export async function POST(request: NextRequest) {
             },
           });
 
-          return json({
-            success: true,
-            resultType: "already_checked_in",
-            playerId: recognitionResult.playerId,
-            displayName: recognitionResult.displayName,
-            alreadyCheckedIn: true,
-            ...faceDbg,
-          });
+          return buildAlreadyCheckedInResponse(
+            session.id,
+            recognitionResult.playerId!,
+            recognitionResult.displayName ?? undefined,
+            faceDbg
+          );
         }
 
-        // Get next queue number and add to queue
-        const queueNumber = await faceRecognitionService.getNextQueueNumber(session.id);
-
-        // Check if player was previously in this session
         const existingEntry = await prisma.queueEntry.findUnique({
           where: {
             sessionId_playerId: {
@@ -125,9 +165,14 @@ export async function POST(request: NextRequest) {
           },
         });
 
+        const queueNumber =
+          existingEntry?.queueNumber != null
+            ? existingEntry.queueNumber
+            : await faceRecognitionService.getNextQueueNumber(session.id);
+
         let queueEntry;
         if (existingEntry) {
-          // Player was in session before — re-activate them
+          // Player was in session before — re-activate them (keep same check-in # when set)
           queueEntry = await prisma.queueEntry.update({
             where: { id: existingEntry.id },
             data: {
@@ -190,12 +235,22 @@ export async function POST(request: NextRequest) {
           },
         });
 
+        const pid = recognitionResult.playerId!;
+        const queuePositionRaw = allEntries.findIndex((e) => e.playerId === pid) + 1;
+        const totalSessions = await prisma.queueEntry.count({
+          where: { playerId: pid, status: "left" },
+        });
+
         result = {
           success: true,
           resultType: "matched",
           playerId: recognitionResult.playerId,
           displayName: recognitionResult.displayName,
           queueNumber,
+          queuePosition: queuePositionRaw > 0 ? queuePositionRaw : undefined,
+          skillLevel: queueEntry.player.skillLevel,
+          totalSessions,
+          isReturning: true,
           alreadyCheckedIn: false,
           confidence: recognitionResult.confidence,
         };
@@ -222,20 +277,14 @@ export async function POST(request: NextRequest) {
               data: { resultType: "already_checked_in" },
             });
 
-            return json({
-              success: true,
-              resultType: "already_checked_in",
-              playerId: existingPlayerByFace.id,
-              displayName: existingPlayerByFace.name,
-              alreadyCheckedIn: true,
-              ...faceDbg,
-            });
+            return buildAlreadyCheckedInResponse(
+              session.id,
+              existingPlayerByFace.id,
+              existingPlayerByFace.name,
+              faceDbg
+            );
           }
 
-          // Get next queue number and add to queue
-          const queueNumber = await faceRecognitionService.getNextQueueNumber(session.id);
-
-          // Check if player was previously in this session
           const existingEntry = await prisma.queueEntry.findUnique({
             where: {
               sessionId_playerId: {
@@ -245,9 +294,14 @@ export async function POST(request: NextRequest) {
             },
           });
 
+          const queueNumber =
+            existingEntry?.queueNumber != null
+              ? existingEntry.queueNumber
+              : await faceRecognitionService.getNextQueueNumber(session.id);
+
           let queueEntry;
           if (existingEntry) {
-            // Player was in session before — re-activate them
+            // Player was in session before — re-activate them (keep same check-in # when set)
             queueEntry = await prisma.queueEntry.update({
               where: { id: existingEntry.id },
               data: {
@@ -308,12 +362,22 @@ export async function POST(request: NextRequest) {
             },
           });
 
+          const eid = existingPlayerByFace.id;
+          const queuePositionRawNp = allEntries.findIndex((e) => e.playerId === eid) + 1;
+          const totalSessionsNp = await prisma.queueEntry.count({
+            where: { playerId: eid, status: "left" },
+          });
+
           result = {
             success: true,
             resultType: "matched",
             playerId: existingPlayerByFace.id,
             displayName: existingPlayerByFace.name,
             queueNumber,
+            queuePosition: queuePositionRawNp > 0 ? queuePositionRawNp : undefined,
+            skillLevel: queueEntry.player.skillLevel,
+            totalSessions: totalSessionsNp,
+            isReturning: true,
             alreadyCheckedIn: false,
             confidence: recognitionResult.confidence,
           };

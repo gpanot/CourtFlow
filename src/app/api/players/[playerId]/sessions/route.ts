@@ -20,25 +20,35 @@ export async function GET(
     const sessionIds = [...new Set(queueEntries.map((e) => e.sessionId))];
     if (sessionIds.length === 0) return json([]);
 
-    const sessions = await prisma.session.findMany({
-      where: { id: { in: sessionIds } },
-      include: { venue: { select: { id: true, name: true } } },
-      orderBy: { date: "desc" },
-    });
+    const [sessions, assignments, feedbackLogs, playerRankings, allSessionQueueEntries] = await Promise.all([
+      prisma.session.findMany({
+        where: { id: { in: sessionIds } },
+        include: { venue: { select: { id: true, name: true } } },
+        orderBy: { date: "desc" },
+      }),
+      prisma.courtAssignment.findMany({
+        where: {
+          sessionId: { in: sessionIds },
+          playerIds: { has: playerId },
+        },
+      }),
+      prisma.auditLog.findMany({
+        where: { action: "player_feedback", targetId: playerId },
+      }),
+      prisma.playerRanking.findMany({
+        where: { playerId, sessionId: { in: sessionIds } },
+        include: { court: { select: { label: true } } },
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.queueEntry.findMany({
+        where: { sessionId: { in: sessionIds } },
+        select: {
+          sessionId: true,
+          player: { select: { id: true, name: true, avatar: true, skillLevel: true, rankingScore: true } },
+        },
+      }),
+    ]);
 
-    const assignments = await prisma.courtAssignment.findMany({
-      where: {
-        sessionId: { in: sessionIds },
-        playerIds: { has: playerId },
-      },
-    });
-
-    const feedbackLogs = await prisma.auditLog.findMany({
-      where: {
-        action: "player_feedback",
-        targetId: playerId,
-      },
-    });
     const feedbackBySession: Record<string, { experience: number; matchQuality: string; wouldReturn: string }> = {};
     for (const log of feedbackLogs) {
       const meta = log.metadata as Record<string, unknown> | null;
@@ -51,12 +61,25 @@ export async function GET(
       }
     }
 
+    const rankingsBySession: Record<string, typeof playerRankings> = {};
+    for (const pr of playerRankings) {
+      (rankingsBySession[pr.sessionId] ??= []).push(pr);
+    }
+
+    const participantsBySession: Record<string, { id: string; name: string; avatar: string; skillLevel: string; rankingScore: number }[]> = {};
+    for (const entry of allSessionQueueEntries) {
+      const list = (participantsBySession[entry.sessionId] ??= []);
+      if (!list.some((p) => p.id === entry.player.id)) {
+        list.push(entry.player);
+      }
+    }
+
     const result = sessions.map((sess) => {
       const sessAssignments = assignments.filter((a) => a.sessionId === sess.id);
 
       let totalPlayMinutes = 0;
       const partnerSet = new Set<string>();
-      let gamesByType = { men: 0, women: 0, mixed: 0 };
+      const gamesByType = { men: 0, women: 0, mixed: 0 };
 
       let gamesPlayed = 0;
       for (const a of sessAssignments) {
@@ -73,6 +96,13 @@ export async function GET(
       }
 
       const feedback = feedbackBySession[sess.id] || null;
+      const sessRankings = (rankingsBySession[sess.id] ?? []).map((r) => ({
+        position: r.position,
+        scoreDelta: r.scoreDelta,
+        courtLabel: r.court.label,
+        createdAt: r.createdAt.toISOString(),
+      }));
+      const participants = participantsBySession[sess.id] ?? [];
 
       return {
         sessionId: sess.id,
@@ -86,6 +116,8 @@ export async function GET(
         partnersCount: partnerSet.size,
         gamesByType,
         feedback,
+        rankings: sessRankings,
+        participants,
       };
     });
 

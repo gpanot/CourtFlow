@@ -1,7 +1,17 @@
 import { prisma } from "./db";
 import { emitToPlayer, emitToVenue } from "./socket-server";
 import { isValidPickleballGenderMixForFour } from "./pickleball-gender";
-import { getSkillIndex, QUEUE_LOOKAHEAD, MAX_SKILL_GAP, AUTO_START_DELAY_SECONDS, MIN_GROUP_SIZE, COURT_PLAYER_COUNT } from "./constants";
+import {
+  getSkillIndex,
+  QUEUE_LOOKAHEAD,
+  MAX_SKILL_GAP,
+  AUTO_START_DELAY_SECONDS,
+  MIN_GROUP_SIZE,
+  COURT_PLAYER_COUNT,
+  RANKING_POOL_SIZE,
+  RANKING_MAX_GAP_SOFT,
+} from "./constants";
+import { maxPairwiseRankingGap } from "./ranking";
 import type { SkillLevel, GameType } from "@prisma/client";
 
 export interface GameTypeMix {
@@ -57,6 +67,7 @@ interface QueueCandidate {
   groupId: string | null;
   joinedAt: Date;
   totalPlayMinutesToday: number;
+  rankingScore: number;
 }
 
 function checkSkillBalance(players: QueueCandidate[]): boolean {
@@ -179,45 +190,57 @@ function scoreMixDeviation(
   return deviation;
 }
 
-/**
- * Select the best 4 players from the queue, considering:
- * 1. Valid pickleball gender mix (4M, 4F, or 2M+2F — never 3–1)
- * 2. Game type mix targets (if set)
- * 3. FIFO fairness (penalise skipping too far)
- */
-function selectBestFour(
-  candidates: QueueCandidate[],
+function fifoMixScoreForIndices(
+  combo: QueueCandidate[],
+  a: number,
+  b: number,
+  c: number,
+  d: number,
   currentCounts: Record<GameType, number>,
   target: GameTypeMix | null
-): QueueCandidate[] | null {
-  if (candidates.length < COURT_PLAYER_COUNT) return null;
+): number {
+  const gameType = deriveGameType(combo);
+  const mixScore = target ? scoreMixDeviation(gameType, currentCounts, target) : 0;
+  const avgIdx = (a + b + c + d) / 4;
+  const skipPenalty = (avgIdx - 1.5) * 2;
+  return mixScore + skipPenalty;
+}
 
-  const pool = candidates.slice(0, QUEUE_LOOKAHEAD);
+/**
+ * Enumerate valid gender foursomes from a fixed pool; optionally rank by
+ * min max pairwise rankingScore gap first, then mix + FIFO.
+ */
+function selectBestFourFromPool(
+  pool: QueueCandidate[],
+  currentCounts: Record<GameType, number>,
+  target: GameTypeMix | null,
+  useRanking: boolean
+): QueueCandidate[] | null {
   const n = pool.length;
   if (n < COURT_PLAYER_COUNT) return null;
 
   let bestCombo: QueueCandidate[] | null = null;
+  let bestMaxGap = Infinity;
   let bestScore = Infinity;
 
   for (let a = 0; a < n - 3; a++) {
     for (let b = a + 1; b < n - 2; b++) {
       for (let c = b + 1; c < n - 1; c++) {
         for (let d = c + 1; d < n; d++) {
-          const combo = [pool[a], pool[b], pool[c], pool[d]];
+          const combo = [pool[a]!, pool[b]!, pool[c]!, pool[d]!];
           if (!isValidPickleballGenderFoursome(combo)) continue;
 
-          const gameType = deriveGameType(combo);
-          const mixScore = target ? scoreMixDeviation(gameType, currentCounts, target) : 0;
+          const fifoMix = fifoMixScoreForIndices(combo, a, b, c, d, currentCounts, target);
 
-          // Penalise skipping: average index position (0-based).
-          // FIFO-perfect = indices 0,1,2,3 → avg 1.5 → penalty 0
-          const avgIdx = (a + b + c + d) / 4;
-          const skipPenalty = (avgIdx - 1.5) * 2;
-
-          const totalScore = mixScore + skipPenalty;
-
-          if (totalScore < bestScore) {
-            bestScore = totalScore;
+          if (useRanking) {
+            const maxGap = maxPairwiseRankingGap(combo.map((p) => p.rankingScore));
+            if (maxGap < bestMaxGap || (maxGap === bestMaxGap && fifoMix < bestScore)) {
+              bestMaxGap = maxGap;
+              bestScore = fifoMix;
+              bestCombo = combo;
+            }
+          } else if (fifoMix < bestScore) {
+            bestScore = fifoMix;
             bestCombo = combo;
           }
         }
@@ -226,6 +249,36 @@ function selectBestFour(
   }
 
   return bestCombo;
+}
+
+/**
+ * Select the best 4 players from the queue, considering:
+ * 1. Valid pickleball gender mix (4M, 4F, or 2M+2F — never 3–1)
+ * 2. Within the first RANKING_POOL_SIZE solos: minimize max rankingScore gap,
+ *    then game type mix + FIFO (if no valid foursome in that window, fall back
+ *    to full QUEUE_LOOKAHEAD with mix + FIFO only)
+ */
+function selectBestFour(
+  candidates: QueueCandidate[],
+  currentCounts: Record<GameType, number>,
+  target: GameTypeMix | null
+): QueueCandidate[] | null {
+  if (candidates.length < COURT_PLAYER_COUNT) return null;
+
+  const pool8 = candidates.slice(0, Math.min(RANKING_POOL_SIZE, candidates.length));
+  const from8 = selectBestFourFromPool(pool8, currentCounts, target, true);
+  if (from8) {
+    const g = maxPairwiseRankingGap(from8.map((p) => p.rankingScore));
+    if (g > RANKING_MAX_GAP_SOFT) {
+      console.warn(
+        `[CourtFlow] Foursome max ranking gap ${g} exceeds soft limit ${RANKING_MAX_GAP_SOFT} (assigning anyway)`
+      );
+    }
+    return from8;
+  }
+
+  const pool30 = candidates.slice(0, QUEUE_LOOKAHEAD);
+  return selectBestFourFromPool(pool30, currentCounts, target, false);
 }
 
 /**
@@ -348,6 +401,7 @@ export async function runRotation(
     groupId: e.groupId,
     joinedAt: e.joinedAt,
     totalPlayMinutesToday: e.totalPlayMinutesToday,
+    rankingScore: e.player.rankingScore,
   }));
 
   const fullGroup = findGroupWithFill(allCandidates);
@@ -420,7 +474,7 @@ export async function runRotation(
 }
 
 function toQueueCandidateStub(
-  p: { gender: string; skillLevel: SkillLevel },
+  p: { gender: string; skillLevel: SkillLevel; rankingScore?: number },
   playerId: string,
   playerName: string
 ): QueueCandidate {
@@ -433,6 +487,7 @@ function toQueueCandidateStub(
     groupId: null,
     joinedAt: new Date(),
     totalPlayMinutesToday: 0,
+    rankingScore: p.rankingScore ?? 200,
   };
 }
 
@@ -441,10 +496,10 @@ function toQueueCandidateStub(
  * full court is 4M, 4F, or 2M+2F and skill-compatible (same rule as rotation).
  */
 export function selectPlayersForCourtAutofill(
-  currentPlayers: { id: string; gender: string; skillLevel: SkillLevel }[],
+  currentPlayers: { id: string; gender: string; skillLevel: SkillLevel; rankingScore?: number }[],
   waitingEntries: Array<{
     playerId: string;
-    player: { name: string; gender: string; skillLevel: SkillLevel };
+    player: { name: string; gender: string; skillLevel: SkillLevel; rankingScore: number };
   }>,
 ): { playerId: string; playerName: string }[] | null {
   const slotsToFill = 4 - currentPlayers.length;
@@ -653,6 +708,7 @@ export async function findReplacement(
       groupId: null,
       joinedAt: entry.joinedAt,
       totalPlayMinutesToday: entry.totalPlayMinutesToday,
+      rankingScore: entry.player.rankingScore,
     };
 
     const allOnCourt: QueueCandidate[] = [
@@ -665,6 +721,7 @@ export async function findReplacement(
         groupId: null,
         joinedAt: new Date(),
         totalPlayMinutesToday: 0,
+        rankingScore: p.rankingScore,
       })),
       candidate,
     ];

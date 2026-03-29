@@ -4,6 +4,7 @@ import { requireStaff } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { faceRecognitionService } from "@/lib/face-recognition";
 import { emitToVenue } from "@/lib/socket-server";
+import { initialRankingScoreForSkillLevel } from "@/lib/ranking";
 
 export async function POST(request: NextRequest) {
   try {
@@ -58,31 +59,52 @@ export async function POST(request: NextRequest) {
     let result;
 
     if (action === "select_player") {
-      // Check if player is already checked in within 4 hours
-      const recentlyCheckedIn = await faceRecognitionService.isRecentlyCheckedIn(
-        selectedPlayerId!,
-        session.id
-      );
+      const existingEntry = await prisma.queueEntry.findUnique({
+        where: {
+          sessionId_playerId: {
+            sessionId: session.id,
+            playerId: selectedPlayerId!,
+          },
+        },
+      });
 
-      if (recentlyCheckedIn) {
+      if (
+        existingEntry &&
+        ["waiting", "assigned", "playing", "on_break"].includes(existingEntry.status)
+      ) {
         return json({
           success: false,
-          error: "Player is already checked in within 4 hours",
+          error: "Player is already active in this session queue",
         });
       }
 
-      // Get next queue number and add to queue
-      const queueNumber = await faceRecognitionService.getNextQueueNumber(session.id);
+      const queueNumber =
+        existingEntry?.queueNumber != null
+          ? existingEntry.queueNumber
+          : await faceRecognitionService.getNextQueueNumber(session.id);
 
-      const queueEntry = await prisma.queueEntry.create({
-        data: {
-          sessionId: session.id,
-          playerId: selectedPlayerId!,
-          status: "waiting",
-          queueNumber,
-        },
-        include: { player: true },
-      });
+      const queueEntry =
+        existingEntry != null
+          ? await prisma.queueEntry.update({
+              where: { id: existingEntry.id },
+              data: {
+                status: "waiting",
+                joinedAt: new Date(),
+                queueNumber,
+                groupId: null,
+                breakUntil: null,
+              },
+              include: { player: true },
+            })
+          : await prisma.queueEntry.create({
+              data: {
+                sessionId: session.id,
+                playerId: selectedPlayerId!,
+                status: "waiting",
+                queueNumber,
+              },
+              include: { player: true },
+            });
 
       // Update face attempt
       await prisma.faceAttempt.update({
@@ -126,6 +148,7 @@ export async function POST(request: NextRequest) {
           gender: "other",
           skillLevel: "beginner",
           avatar: "🏓",
+          rankingScore: initialRankingScoreForSkillLevel("beginner"),
         },
       });
 

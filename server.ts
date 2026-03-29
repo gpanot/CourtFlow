@@ -2,6 +2,7 @@ import express from "express";
 import { createServer } from "http";
 import { createServer as createHttpsServer } from "https";
 import fs from "fs";
+import os from "os";
 import next from "next";
 import path from "path";
 import { Server as SocketIOServer } from "socket.io";
@@ -73,9 +74,23 @@ app.prepare().then(() => {
     return handle(req, res);
   });
 
-  server.listen(port, () => {
-    const protocol = process.env.HTTPS === 'true' ? 'https' : 'http';
-    console.log(`\n  CourtFlow running on ${protocol}://${hostname}:${port}`);
+  server.listen(port, hostname, () => {
+    const protocol = process.env.HTTPS === "true" ? "https" : "http";
+    const lanUrls = Object.values(os.networkInterfaces())
+      .flat()
+      .filter((a): a is NonNullable<typeof a> => {
+        if (!a || a.internal) return false;
+        const fam = a.family as string | number;
+        return fam === "IPv4" || fam === 4;
+      })
+      .map((a) => `${protocol}://${a.address}:${port}`);
+
+    console.log(`\n  CourtFlow listening on ${hostname}:${port} (${protocol.toUpperCase()})`);
+    if (protocol === "http" && lanUrls.length > 0) {
+      console.log(`  On your phone (same Wi‑Fi), open:`);
+      for (const u of lanUrls) console.log(`    ${u}`);
+      console.log(`  (Use http:// not https:// unless you started npm run dev:https)`);
+    }
     console.log(`  Socket.io ready`);
     console.log(`  Mode: ${dev ? "development" : "production"}\n`);
   });

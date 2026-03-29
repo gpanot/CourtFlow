@@ -4,6 +4,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody, notFound } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
+import { faceRecognitionService } from "@/lib/face-recognition";
 
 export async function PATCH(
   request: NextRequest,
@@ -80,6 +81,12 @@ export async function DELETE(
       });
     }
 
+    if (existing.faceSubjectId) {
+      await faceRecognitionService.removeFace(playerId).catch((e) =>
+        console.error(`[DeletePlayer] AWS face removal failed for ${playerId}:`, e)
+      );
+    }
+
     try {
       const faceFile = path.join(
         process.cwd(),
@@ -98,6 +105,7 @@ export async function DELETE(
     });
 
     await prisma.pushSubscription.deleteMany({ where: { playerId } });
+    await prisma.playerRanking.deleteMany({ where: { playerId } });
     await prisma.queueEntry.deleteMany({ where: { playerId } });
     await prisma.coachLesson.deleteMany({ where: { playerId } });
     await prisma.booking.deleteMany({ where: { playerId } });

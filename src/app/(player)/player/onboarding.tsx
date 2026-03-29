@@ -1,250 +1,312 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { useSessionStore } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
-import { SKILL_LEVELS, type SkillLevelType } from "@/lib/constants";
-import { cn } from "@/lib/cn";
+import { CameraCapture, type CameraCaptureHandle } from "@/components/camera-capture";
+import { Loader2 } from "lucide-react";
 import { PlayerLanguageToggle } from "./player-language-toggle";
 
-type Step = "phone" | "otp" | "profile";
+type Step = "wristband" | "face_scan";
+
+interface FaceLoginResponse {
+  success: boolean;
+  playerId?: string;
+  playerName?: string;
+  queueNumber?: number | null;
+  sessionToken?: string;
+  resultType?: string;
+  error?: string;
+}
+
+interface WristbandLoginResponse {
+  success: boolean;
+  playerId?: string;
+  playerName?: string;
+  queueNumber?: number | null;
+  sessionToken?: string;
+  error?: string;
+  _debug?: Record<string, unknown>;
+}
 
 export function OnboardingFlow() {
   const { t } = useTranslation();
+  const searchParams = useSearchParams();
   const { setAuth, clearAuth } = useSessionStore();
-  const [step, setStep] = useState<Step>("phone");
-  const [phone, setPhone] = useState("");
-  const [otp, setOtp] = useState("");
-  const [name, setName] = useState("");
-  const [gender, setGender] = useState<"male" | "female" | "">("");
-  const [skill, setSkill] = useState<SkillLevelType | "">("");
+  const [step, setStep] = useState<Step>("wristband");
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
-  const [devCode, setDevCode] = useState("");
-  const sendBtnRef = useRef<HTMLButtonElement>(null);
-  const [titleTaps, setTitleTaps] = useState(0);
+  const [wristbandNumber, setWristbandNumber] = useState("");
+  const [cameraActive, setCameraActive] = useState(false);
+  const [captureCountdown, setCaptureCountdown] = useState<number | null>(null);
+  /** True when user landed on wristband after face scan failed — show "Try face scan again". */
+  const [afterFaceFailure, setAfterFaceFailure] = useState(false);
+  const cameraRef = useRef<CameraCaptureHandle>(null);
+  const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const debugOn = searchParams.get("debug") === "1";
+  const [wristbandDebugText, setWristbandDebugText] = useState("");
 
-  const sendOtp = async () => {
+  const handleAuth = useCallback(
+    (data: { playerId: string; playerName: string; sessionToken?: string }) => {
+      clearAuth();
+      setAuth({
+        token: data.sessionToken || "",
+        playerId: data.playerId,
+        role: "player",
+        playerName: data.playerName,
+      });
+    },
+    [clearAuth, setAuth]
+  );
+
+  const attemptFaceCapture = useCallback(async () => {
+    if (!cameraRef.current || loading) return;
     setErr("");
     setLoading(true);
-    try {
-      const res = await api.post<{ success: boolean; code?: string }>("/api/auth/send-otp", { phone });
-      if (res.code) setDevCode(res.code);
-      setStep("otp");
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
+
+    const waitForReady = (attempts = 0): Promise<string | null> => {
+      return new Promise((resolve) => {
+        const frame = cameraRef.current?.captureFrame();
+        if (frame) {
+          resolve(frame);
+          return;
+        }
+        if (attempts > 15) {
+          resolve(null);
+          return;
+        }
+        setTimeout(() => resolve(waitForReady(attempts + 1)), 400);
+      });
+    };
+
+    const imageBase64 = await waitForReady();
+    if (!imageBase64) {
+      setErr(t("faceLogin.cameraNotReady"));
       setLoading(false);
+      return;
     }
-  };
 
-  const verifyOtp = async () => {
-    setErr("");
-    setLoading(true);
     try {
-      const res = await api.post<{
-        token?: string;
-        player?: { id: string; name: string };
-        isNew: boolean;
-        verified?: boolean;
-      }>("/api/auth/verify-otp", { phone, code: otp });
+      const res = await api.post<FaceLoginResponse>("/api/player/face-login", {
+        imageBase64,
+        mode: "pwa",
+      });
 
-      if (res.token && res.player) {
-        clearAuth();
-        setAuth({
-          token: res.token,
-          playerId: res.player.id,
-          role: "player",
-          playerName: res.player.name,
+      if (res.success && res.playerId && res.playerName) {
+        handleAuth({
+          playerId: res.playerId,
+          playerName: res.playerName,
+          sessionToken: res.sessionToken,
         });
       } else {
-        setStep("profile");
+        setErr(t("faceLogin.notRecognized"));
+        setCameraActive(false);
+        setAfterFaceFailure(true);
+        setStep("wristband");
       }
     } catch (e) {
-      setErr((e as Error).message);
+      setErr((e as Error).message || t("faceLogin.error"));
+      setCameraActive(false);
+      setAfterFaceFailure(true);
+      setStep("wristband");
     } finally {
       setLoading(false);
     }
-  };
+  }, [loading, handleAuth, t]);
 
-  const register = async () => {
-    if (!name || !gender || !skill) {
-      setErr(t("onboarding.allFieldsRequired"));
+  useEffect(() => {
+    if (step !== "face_scan" || !cameraActive) return;
+
+    setCaptureCountdown(3);
+    let count = 3;
+
+    countdownRef.current = setInterval(() => {
+      count -= 1;
+      if (count <= 0) {
+        if (countdownRef.current) clearInterval(countdownRef.current);
+        setCaptureCountdown(null);
+        attemptFaceCapture();
+      } else {
+        setCaptureCountdown(count);
+      }
+    }, 1000);
+
+    return () => {
+      if (countdownRef.current) clearInterval(countdownRef.current);
+    };
+  }, [step, cameraActive, attemptFaceCapture]);
+
+  const handleWristbandLogin = async () => {
+    const num = parseInt(wristbandNumber, 10);
+    if (!num || isNaN(num)) {
+      setErr(t("faceLogin.invalidNumber"));
       return;
     }
     setErr("");
+    setAfterFaceFailure(false);
     setLoading(true);
+    const venueId = searchParams.get("venueId") || undefined;
+    const payload = {
+      queueNumber: num,
+      ...(venueId ? { venueId } : {}),
+      ...(debugOn ? { debug: true } : {}),
+    };
+
+    const logDebug = (label: string, data: unknown) => {
+      const line = `${new Date().toISOString()} ${label}\n${JSON.stringify(data, null, 2)}`;
+      console.log("[CourtFlow wristband]", label, data);
+      if (debugOn) setWristbandDebugText((prev) => (prev ? `${prev}\n\n---\n\n` : "") + line);
+    };
+
+    logDebug("request", payload);
+
     try {
-      const res = await api.post<{ token: string; player: { id: string; name: string } }>("/api/auth/register", {
-        phone,
-        name,
-        gender,
-        skillLevel: skill,
+      const res = await api.post<WristbandLoginResponse>("/api/player/wristband-login", payload);
+      logDebug("response", {
+        success: res.success,
+        hasSessionToken: !!res.sessionToken,
+        sessionTokenLength: res.sessionToken?.length ?? 0,
+        playerId: res.playerId,
+        error: res.error,
+        _debug: res._debug,
       });
-      clearAuth();
-      setAuth({ token: res.token, playerId: res.player.id, role: "player", playerName: res.player.name });
+
+      if (res.success && res.playerId && res.playerName) {
+        handleAuth({
+          playerId: res.playerId,
+          playerName: res.playerName,
+          sessionToken: res.sessionToken,
+        });
+      } else {
+        setErr(res.error || t("faceLogin.numberNotFound"));
+      }
     } catch (e) {
-      setErr((e as Error).message);
+      const msg = (e as Error).message;
+      logDebug("throw", { message: msg, name: (e as Error).name });
+      setErr(msg);
     } finally {
       setLoading(false);
     }
   };
 
-  return (
-    <div className="relative flex min-h-0 flex-1 flex-col justify-center overflow-y-auto overscroll-contain p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))]">
-      {step === "phone" && (
-        <div className="pointer-events-none absolute right-5 top-5 z-10">
-          <div className="pointer-events-auto">
-            <PlayerLanguageToggle />
-          </div>
-        </div>
-      )}
+  const handleCameraError = useCallback(
+    (msg: string) => {
+      setErr(msg);
+      setCameraActive(false);
+      setAfterFaceFailure(true);
+      setStep("wristband");
+    },
+    []
+  );
 
-      <div className="mb-8 text-center">
-        <h1
-          className="text-4xl font-bold text-green-500 select-none cursor-default"
-          onClick={() => setTitleTaps((t) => t + 1)}
-        >
-          CourtFlow
-        </h1>
-        <p className="mt-1 text-neutral-400">{t("onboarding.tagline")}</p>
-      </div>
-
-      {err && <p className="mb-4 rounded-lg bg-red-900/30 p-3 text-sm text-red-400">{err}</p>}
-
-      {step === "phone" && (
-        <div className="space-y-4">
-          <input
-            type="tel"
-            placeholder={t("onboarding.phonePlaceholder")}
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            onFocus={() => {
-              setTimeout(() => {
-                sendBtnRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-              }, 350);
-            }}
-            className="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-4 py-4 text-lg text-white placeholder:text-neutral-500 focus:border-green-500 focus:outline-none"
-            autoFocus
+  if (step === "face_scan") {
+    return (
+      <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden bg-black p-6">
+        <div className="relative mb-6 h-64 w-64 overflow-hidden rounded-full border-4 border-green-500/50">
+          <CameraCapture
+            ref={cameraRef}
+            active={cameraActive}
+            onError={handleCameraError}
+            className="h-full w-full"
+            videoClassName="h-full w-full object-cover scale-125"
           />
-          <button
-            ref={sendBtnRef}
-            onClick={sendOtp}
-            disabled={loading || !phone}
-            className="w-full rounded-xl bg-green-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50"
-          >
-            {loading ? t("onboarding.sending") : t("onboarding.sendCode")}
-          </button>
-        </div>
-      )}
-
-      {step === "otp" && (
-        <div className="space-y-4">
-          <p className="text-center text-neutral-400">
-            {t("onboarding.otpIntro", { phone })}
-          </p>
-          {devCode && (
-            <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-center">
-              <p className="text-xs text-amber-400/70 mb-1">{t("onboarding.demoMode")}</p>
-              <p className="text-amber-300 font-mono text-2xl font-bold tracking-widest">{devCode}</p>
+          {loading && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+              <Loader2 className="h-10 w-10 animate-spin text-green-400" />
             </div>
           )}
-          <input
-            type="text"
-            inputMode="numeric"
-            placeholder="000000"
-            maxLength={6}
-            value={otp}
-            onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-            className="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-4 py-4 text-center text-2xl tracking-[0.5em] text-white placeholder:text-neutral-500 focus:border-green-500 focus:outline-none"
-            autoFocus
-          />
-          <button
-            onClick={verifyOtp}
-            disabled={loading || otp.length !== 6}
-            className="w-full rounded-xl bg-green-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50"
-          >
-            {loading ? t("onboarding.verifying") : t("onboarding.verify")}
-          </button>
-          <button
-            onClick={() => { setStep("phone"); setOtp(""); }}
-            className="w-full py-2 text-sm text-neutral-400 hover:text-white"
-          >
-            {t("onboarding.changeNumber")}
-          </button>
-        </div>
-      )}
-
-      {step === "profile" && (
-        <div className="space-y-4">
-          <h2 className="text-xl font-semibold">{t("onboarding.profileTitle")}</h2>
-
-          <input
-            type="text"
-            placeholder={t("onboarding.namePlaceholder")}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-4 py-3 text-white placeholder:text-neutral-500 focus:border-green-500 focus:outline-none"
-            autoFocus
-          />
-
-          <div>
-            <p className="mb-2 text-sm text-neutral-400">{t("onboarding.gender")}</p>
-            <div className="grid grid-cols-2 gap-2">
-              {(["male", "female"] as const).map((g) => (
-                <button
-                  key={g}
-                  onClick={() => setGender(g)}
-                  className={cn(
-                    "rounded-xl border-2 py-3 font-medium capitalize transition-colors",
-                    gender === g
-                      ? "border-green-500 bg-green-600/20 text-green-400"
-                      : "border-neutral-700 text-neutral-300 hover:border-neutral-500"
-                  )}
-                >
-                  {t(`gender.${g}`)}
-                </button>
-              ))}
+          {captureCountdown !== null && !loading && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-5xl font-bold text-white drop-shadow-lg">{captureCountdown}</span>
             </div>
-          </div>
-
-          <div>
-            <p className="mb-2 text-sm text-neutral-400">{t("onboarding.skillLevel")}</p>
-            <div className="space-y-2">
-              {SKILL_LEVELS.map((level) => (
-                <button
-                  key={level}
-                  onClick={() => setSkill(level)}
-                  className={cn(
-                    "w-full rounded-xl border-2 p-3 text-left transition-colors",
-                    skill === level
-                      ? "border-green-500 bg-green-600/20"
-                      : "border-neutral-700 hover:border-neutral-500"
-                  )}
-                >
-                  <span className="font-medium capitalize text-white">{t(`skillLevels.${level}`)}</span>
-                  <p className="text-sm text-neutral-400">{t(`skillLevels.${level}Desc`)}</p>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <button
-            onClick={register}
-            disabled={loading || !name || !gender || !skill}
-            className="w-full rounded-xl bg-green-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50"
-          >
-            {loading ? t("onboarding.creatingProfile") : t("onboarding.letsPlay")}
-          </button>
+          )}
         </div>
-      )}
 
-      {titleTaps >= 5 && (
-        <Link href="/" className="mt-6 block text-center text-sm text-neutral-400">
-          {t("onboarding.homeLink")}
-        </Link>
+        <p className="text-lg font-medium text-white">
+          {loading ? t("faceLogin.processing") : t("faceLogin.lookAtCamera")}
+        </p>
+        <p className="mt-1 text-sm text-neutral-400">{t("faceLogin.usedHereToday")}</p>
+
+        {err && <p className="mt-4 rounded-lg bg-red-900/30 p-3 text-sm text-red-400">{err}</p>}
+
+        <button
+          onClick={() => {
+            setCameraActive(false);
+            setStep("wristband");
+            setErr("");
+          }}
+          className="mt-6 text-sm text-neutral-500 hover:text-neutral-300"
+        >
+          {t("common.back")}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto overscroll-contain p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))]">
+      <div className="pointer-events-none absolute right-5 top-5 z-10">
+        <div className="pointer-events-auto">
+          <PlayerLanguageToggle />
+        </div>
+      </div>
+
+      <div className="mb-8 w-full max-w-xs text-center">
+        <h1 className="text-4xl font-bold text-green-500">CourtFlow</h1>
+        {err && <p className="mt-3 rounded-lg bg-red-900/30 p-3 text-sm text-red-400">{err}</p>}
+      </div>
+
+      <p className="mb-6 text-center text-lg text-neutral-100">{t("faceLogin.enterWristband")}</p>
+
+      <input
+        type="number"
+        inputMode="numeric"
+        placeholder="#"
+        value={wristbandNumber}
+        onChange={(e) => setWristbandNumber(e.target.value)}
+        className="w-full max-w-xs rounded-xl border border-neutral-700 bg-neutral-900 px-4 py-4 text-center text-3xl font-bold text-white placeholder:text-neutral-600 focus:border-green-500 focus:outline-none [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        autoFocus
+      />
+
+      <button
+        onClick={handleWristbandLogin}
+        disabled={loading || !wristbandNumber}
+        className="mt-4 w-full max-w-xs rounded-xl bg-green-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50"
+      >
+        {loading ? t("faceLogin.verifying") : t("faceLogin.confirm")}
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          setErr("");
+          setAfterFaceFailure(false);
+          setStep("face_scan");
+          setCameraActive(true);
+        }}
+        className="mt-4 text-sm text-neutral-500 hover:text-neutral-300"
+      >
+        {afterFaceFailure ? t("faceLogin.tryFaceAgain") : t("faceLogin.tryFaceScan")}
+      </button>
+
+      <Link href="/" className="mt-2 text-sm text-neutral-600 hover:text-neutral-400">
+        {t("common.back")}
+      </Link>
+
+      {debugOn && (
+        <div className="mt-6 w-full max-w-md rounded-lg border border-amber-700/50 bg-amber-950/40 p-3 text-left">
+          <p className="mb-1 text-xs font-semibold text-amber-400">Debug (?debug=1)</p>
+          <p className="mb-2 text-[10px] text-amber-200/80">
+            Server logs tag <code className="text-amber-300">[player/wristband-login]</code>. Check the terminal running{" "}
+            <code className="text-amber-300">npm run dev</code>.
+          </p>
+          <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all text-[10px] leading-tight text-neutral-300">
+            {wristbandDebugText || "Tap Confirm to log request/response here."}
+          </pre>
+        </div>
       )}
     </div>
   );

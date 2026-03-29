@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useSessionStore } from "@/stores/session-store";
 
 function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
@@ -20,6 +21,28 @@ export function isPushSupported(): boolean {
     "PushManager" in window &&
     "Notification" in window
   );
+}
+
+/** True when the app runs as an installed PWA (standalone), not a normal browser tab. */
+export function isPwaStandalone(): boolean {
+  if (typeof window === "undefined") return false;
+  if (window.matchMedia("(display-mode: standalone)").matches) return true;
+  if (window.matchMedia("(display-mode: fullscreen)").matches) return true;
+  if (window.matchMedia("(display-mode: minimal-ui)").matches) return true;
+  const nav = navigator as Navigator & { standalone?: boolean };
+  return nav.standalone === true;
+}
+
+/**
+ * Standalone PWA detection after mount. Initial value is always false so SSR and the first
+ * client paint match; updates on the client so push prompts only appear in installed PWAs.
+ */
+export function usePwaStandalone(): boolean {
+  const [standalone, setStandalone] = useState(false);
+  useEffect(() => {
+    setStandalone(isPwaStandalone());
+  }, []);
+  return standalone;
 }
 
 export function getNotificationPermission(): NotificationPermission | "unsupported" {

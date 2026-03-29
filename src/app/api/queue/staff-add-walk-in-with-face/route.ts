@@ -5,10 +5,15 @@ import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
 import { SKILL_LEVELS, type SkillLevelType } from "@/lib/constants";
-import { findQueueDisplayNameConflict } from "@/lib/queue-display-name";
+import {
+  findLeftQueueEntryBySessionDisplayName,
+  findQueueDisplayNameConflict,
+} from "@/lib/queue-display-name";
 import { faceRecognitionService } from "@/lib/face-recognition";
 import { savePlayerFacePhotoFromBase64 } from "@/lib/save-player-face-photo";
 import { mockFaceRecognitionService } from "@/lib/face-recognition-mock";
+import type { SkillLevel } from "@prisma/client";
+import { initialRankingScoreForSkillLevel } from "@/lib/ranking";
 
 // Helper function to get next queue number
 async function getNextQueueNumber(sessionId: string): Promise<number> {
@@ -223,6 +228,109 @@ export async function POST(request: NextRequest) {
       return error(`"${conflict}" is already in the queue for this session`, 409);
     }
 
+    const leftSameName = await findLeftQueueEntryBySessionDisplayName(session.id, trimmedName);
+    if (leftSameName) {
+      const existingPlayer = await prisma.player.findUnique({ where: { id: leftSameName.playerId } });
+      if (!existingPlayer) {
+        return error("Existing queue row references a missing player", 500);
+      }
+
+      const queueNumber =
+        leftSameName.queueNumber != null
+          ? leftSameName.queueNumber
+          : await getNextQueueNumber(session.id);
+
+      const entry = await prisma.queueEntry.update({
+        where: { id: leftSameName.entryId },
+        data: {
+          status: "waiting",
+          joinedAt: new Date(),
+          queueNumber,
+          groupId: null,
+          breakUntil: null,
+        },
+        include: { player: true },
+      });
+
+      const photoPath = await savePlayerFacePhotoFromBase64(existingPlayer.id, imageBase64);
+      if (photoPath) {
+        await prisma.player.update({
+          where: { id: existingPlayer.id },
+          data: { facePhotoPath: photoPath },
+        });
+      }
+
+      let faceEnrollment: {
+        success: boolean;
+        awsFaceId?: string;
+        error?: string;
+      } = { success: !!existingPlayer.faceSubjectId };
+
+      if (!existingPlayer.faceSubjectId) {
+        const faceEnrollmentResult = await faceRecognitionService.enrollFace(
+          imageBase64,
+          existingPlayer.id
+        );
+        faceEnrollment = {
+          success: faceEnrollmentResult.success,
+          awsFaceId: faceEnrollmentResult.subjectId,
+          error: faceEnrollmentResult.error,
+        };
+      }
+
+      await prisma.auditLog.create({
+        data: {
+          venueId,
+          staffId: auth.id,
+          action: "walk_in_player_reactivated_with_face",
+          targetId: existingPlayer.id,
+          metadata: {
+            queueEntryId: entry.id,
+            sessionId: session.id,
+            priorStatus: "left",
+            faceEnrolled: faceEnrollment.success,
+          },
+        },
+      });
+
+      const allEntries = await prisma.queueEntry.findMany({
+        where: { sessionId: session.id, status: { in: ["waiting", "on_break"] } },
+        include: {
+          player: true,
+          group: { include: { queueEntries: { where: { status: { not: "left" } }, include: { player: true } } } },
+        },
+        orderBy: { joinedAt: "asc" },
+      });
+
+      emitToVenue(venueId, "queue:updated", allEntries);
+
+      const rid = entry.playerId;
+      const queuePositionRaw = allEntries.findIndex((e) => e.playerId === rid) + 1;
+      const totalSessionsR = await prisma.queueEntry.count({
+        where: { playerId: rid, status: "left" },
+      });
+
+      return json(
+        {
+          success: true,
+          reactivated: true,
+          player: {
+            id: entry.player.id,
+            name: entry.player.name,
+            gender: entry.player.gender,
+            skillLevel: entry.player.skillLevel,
+          },
+          queueEntryId: entry.id,
+          queueNumber: entry.queueNumber,
+          queuePosition: queuePositionRaw > 0 ? queuePositionRaw : undefined,
+          totalSessions: totalSessionsR,
+          qualityCheck: qualityAnalysis,
+          faceEnrollment,
+        },
+        200
+      );
+    }
+
     let player;
     try {
       player = await prisma.player.create({
@@ -232,6 +340,7 @@ export async function POST(request: NextRequest) {
           gender,
           skillLevel,
           avatar: "🏓",
+          rankingScore: initialRankingScoreForSkillLevel(skillLevel as SkillLevel),
         },
       });
     } catch (e) {
@@ -336,6 +445,12 @@ export async function POST(request: NextRequest) {
 
     emitToVenue(venueId, "queue:updated", allEntries);
 
+    const nid = player.id;
+    const queuePositionNew = allEntries.findIndex((e) => e.playerId === nid) + 1;
+    const totalSessionsNew = await prisma.queueEntry.count({
+      where: { playerId: nid, status: "left" },
+    });
+
     return json(
       {
         success: true,
@@ -347,6 +462,8 @@ export async function POST(request: NextRequest) {
         },
         queueEntryId: entry.id,
         queueNumber: entry.queueNumber,
+        queuePosition: queuePositionNew > 0 ? queuePositionNew : undefined,
+        totalSessions: totalSessionsNew,
         qualityCheck: qualityAnalysis,
         faceEnrollment,
       },

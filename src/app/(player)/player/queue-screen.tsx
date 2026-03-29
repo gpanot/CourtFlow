@@ -5,10 +5,12 @@ import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api-client";
 import { useSessionStore } from "@/stores/session-store";
 import { cn } from "@/lib/cn";
-import { Link, Coffee } from "lucide-react";
+import { Link, Coffee, RefreshCw } from "lucide-react";
 import { NotificationCard } from "./notification-card";
 import { InstallCard } from "./install-card";
 import { LAST_GAME_OPTIONS } from "@/lib/last-game-reaction";
+import { PlayerIdentityHeader } from "@/components/player-identity-header";
+import { PlayerTvDisplayModal } from "@/components/player-tv-display-modal";
 
 interface QueueScreenProps {
   entry: { id: string; groupId: string | null; sessionId: string };
@@ -16,6 +18,8 @@ interface QueueScreenProps {
   venueName: string;
   sessionId: string;
   avatar?: string;
+  playerName: string;
+  queueNumber: number | null;
   onShowProfile?: () => void;
   onRefresh: () => void;
 }
@@ -31,7 +35,17 @@ interface QueueInfo {
   group: { id: string; code: string; members: { name: string }[] } | null;
 }
 
-export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onShowProfile, onRefresh }: QueueScreenProps) {
+export function QueueScreen({
+  entry,
+  venueId,
+  venueName,
+  sessionId,
+  avatar,
+  playerName,
+  queueNumber,
+  onShowProfile,
+  onRefresh,
+}: QueueScreenProps) {
   const { t } = useTranslation();
   const { playerId } = useSessionStore();
   const [info, setInfo] = useState<QueueInfo | null>(null);
@@ -40,6 +54,8 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
   const [lastGameFeedbackDone, setLastGameFeedbackDone] = useState(false);
   const [lastGameSubmitting, setLastGameSubmitting] = useState(false);
   const [showLastGamePrompt, setShowLastGamePrompt] = useState(false);
+  const [refreshCooldown, setRefreshCooldown] = useState(0);
+  const [tvModalOpen, setTvModalOpen] = useState(false);
 
   useEffect(() => {
     if (!sessionId) {
@@ -105,6 +121,19 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
     return () => clearInterval(interval);
   }, [fetchQueueInfo]);
 
+  useEffect(() => {
+    if (refreshCooldown <= 0) return;
+    const id = window.setTimeout(() => setRefreshCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(id);
+  }, [refreshCooldown]);
+
+  const handleManualRefresh = () => {
+    if (refreshCooldown > 0) return;
+    void fetchQueueInfo();
+    onRefresh();
+    setRefreshCooldown(15);
+  };
+
   const leaveQueue = async () => {
     setLeaving(true);
     try {
@@ -140,28 +169,26 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-6 pt-6 pb-[calc(1.5rem+env(safe-area-inset-bottom,24px))]">
       {/* Header */}
-      <div className="mb-2 shrink-0 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {onShowProfile && (
-            <button
-              onClick={onShowProfile}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-lg"
-            >
-              {avatar || "🏓"}
-            </button>
-          )}
-          <div>
-            <h2 className="text-sm text-neutral-400">{venueName}</h2>
-            {info?.group && (
+      <div className="mb-2 shrink-0">
+        <PlayerIdentityHeader
+          className="w-full min-w-0"
+          avatar={avatar}
+          playerName={playerName}
+          queueNumber={queueNumber}
+          venueName={venueName}
+          onShowProfile={onShowProfile}
+          onOpenTv={() => setTvModalOpen(true)}
+          groupSlot={
+            info?.group ? (
               <div className="flex items-center gap-1 text-blue-400">
-                <Link className="h-4 w-4" />
-                <span className="text-sm font-medium">
+                <Link className="h-4 w-4 shrink-0" />
+                <span className="truncate text-sm font-medium">
                   {t("queue.groupOf", { count: info.group.members.length })}
                 </span>
               </div>
-            )}
-          </div>
-        </div>
+            ) : null
+          }
+        />
       </div>
 
       <div className="shrink-0 space-y-3">
@@ -175,7 +202,7 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
           "font-bold text-green-500",
           info?.group ? "text-6xl" : "text-8xl"
         )}>
-          #{info?.position || "—"}
+          {info?.position || "—"}
         </p>
         <p className="text-xl font-medium text-neutral-300">
           {t("queue.inLine")}
@@ -225,8 +252,25 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
       )}
 
       {/* Bottom actions */}
-      <div className="shrink-0">
+      <div className="shrink-0 space-y-2">
         <button
+          type="button"
+          disabled={refreshCooldown > 0}
+          onClick={handleManualRefresh}
+          className={cn(
+            "flex w-full items-center justify-center gap-2.5 rounded-xl py-4 text-base font-semibold transition-colors",
+            refreshCooldown > 0
+              ? "cursor-not-allowed border border-neutral-800 bg-neutral-900/80 text-neutral-500"
+              : "bg-green-600 text-white shadow-lg shadow-green-900/30 hover:bg-green-500"
+          )}
+        >
+          <RefreshCw className="h-5 w-5 shrink-0" />
+          {refreshCooldown > 0
+            ? t("queue.refreshCooldown", { seconds: refreshCooldown })
+            : t("queue.refreshQueue")}
+        </button>
+        <button
+          type="button"
           onClick={() => setShowBreakConfirm(true)}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-neutral-800 py-3 text-sm font-medium text-neutral-300"
         >
@@ -234,6 +278,8 @@ export function QueueScreen({ entry, venueId, venueName, sessionId, avatar, onSh
           {t("queue.needBreak")}
         </button>
       </div>
+
+      <PlayerTvDisplayModal venueId={venueId} open={tvModalOpen} onClose={() => setTvModalOpen(false)} />
 
       {showBreakConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowBreakConfirm(false)}>
