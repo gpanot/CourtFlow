@@ -151,9 +151,15 @@ export function StaffDashboard() {
 
   const rankingBannerCourts = useMemo(
     () =>
-      courts.filter(
-        (c) => c.rankingBannerEligible && c.status === "active" && c.players.length === COURT_PLAYER_COUNT
-      ),
+      courts
+        .filter(
+          (c) => c.rankingBannerEligible && c.status === "active" && c.players.length === COURT_PLAYER_COUNT
+        )
+        .sort((a, b) => {
+          const aStart = a.assignment?.startedAt ? new Date(a.assignment.startedAt).getTime() : Infinity;
+          const bStart = b.assignment?.startedAt ? new Date(b.assignment.startedAt).getTime() : Infinity;
+          return aStart - bStart;
+        }),
     [courts]
   );
 
@@ -205,11 +211,15 @@ export function StaffDashboard() {
     const offSession = on("session:updated", () => fetchState());
     const offRankings = on("rankings:updated", () => fetchState());
 
+    // Poll every 30s so time-based eligibility (ranking banner) stays current
+    const poll = setInterval(() => fetchState(), 30_000);
+
     return () => {
       offCourt();
       offQueue();
       offSession();
       offRankings();
+      clearInterval(poll);
     };
   }, [venueId, on, fetchState]);
 
