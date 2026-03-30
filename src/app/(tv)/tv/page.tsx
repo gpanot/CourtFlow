@@ -14,6 +14,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { TvReactionOverlay } from "@/components/tv-reaction-overlay";
 import { resolveTvLocale, tvI18n } from "@/i18n/tv-i18n";
 import { TvQueueStrip } from "@/components/tv-queue-strip";
+import { TvQueueJoinAnnouncement } from "@/components/tv-queue-join-announcement";
 
 type VenueTvSettings = { logoSpin?: boolean; tvLocale?: string };
 
@@ -182,8 +183,8 @@ export default function TVDisplayPage() {
     <div ref={tvRootRef} className="relative overflow-hidden bg-black" style={outerStyle}>
       <TvReactionOverlay enabled={!!venueId} mountRef={tvRootRef} />
       <div className="flex h-dvh w-screen flex-col overflow-hidden bg-black text-white">
-        <header className="shrink-0 flex items-center justify-between border-b border-neutral-800 px-[calc(2*var(--tw,1vw))] py-[min(var(--th,1vh),calc(0.5*var(--tw,1vw)))]">
-          <div className="flex min-w-0 items-center gap-[calc(1.25*var(--tw,1vw))]">
+        <header className="shrink-0 grid h-[clamp(2.65rem,min(5.5vmin,3.5rem),3.5rem)] min-h-[2.65rem] max-h-[3.5rem] grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-x-[min(calc(0.75*var(--tw,1vw)),calc(1*var(--th,1vh)))] overflow-hidden border-b border-neutral-800 px-[calc(2*var(--tw,1vw))] py-0">
+          <div className="flex min-h-0 min-w-0 h-full max-h-full items-center gap-[calc(1.25*var(--tw,1vw))] justify-self-start overflow-hidden">
             <div className="flex shrink-0 items-center gap-[calc(0.75*var(--tw,1vw))]">
               <img
                 src="/apple-touch-icon.png"
@@ -205,7 +206,7 @@ export default function TVDisplayPage() {
                 <img
                   src={venueLogoUrl}
                   alt={venueName}
-                  className="h-[clamp(1.5rem,calc(3*var(--tw,1vw)),3rem)] w-auto max-w-[min(40vw,12rem)] shrink-0 object-contain"
+                  className="h-full max-h-[clamp(1.35rem,calc(2.6*var(--tw,1vw)),2.35rem)] w-auto max-w-[min(40vw,12rem)] shrink-0 object-contain"
                 />
               )}
               <span className="truncate text-neutral-300 text-[clamp(0.875rem,calc(1.8*var(--tw,1vw)),1.75rem)]">
@@ -213,7 +214,18 @@ export default function TVDisplayPage() {
               </span>
             </div>
           </div>
-          <div className="flex items-center gap-[calc(1.5*var(--tw,1vw))]">
+
+          <div className="flex h-full min-h-0 min-w-0 max-h-full max-w-[min(94vw,42rem)] items-center justify-center justify-self-center self-stretch overflow-hidden px-1">
+            {state.session && (
+              <TvQueueJoinAnnouncement
+                queue={state.queue}
+                sessionId={state.session.id}
+                className="min-h-0"
+              />
+            )}
+          </div>
+
+          <div className="flex min-h-0 min-w-0 h-full max-h-full items-center justify-end justify-self-end gap-[calc(1.5*var(--tw,1vw))] overflow-hidden">
             {state.session ? (
               <span className="inline-flex items-center gap-[calc(0.5*var(--tw,1vw))] rounded-full bg-green-600/20 px-3 py-1 font-medium text-green-400 text-[clamp(0.65rem,calc(1.2*var(--tw,1vw)),1rem)]">
                 <span

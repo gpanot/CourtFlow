@@ -21,7 +21,7 @@ export async function PATCH(
       body.activeInSession === false ||
       body.status === "maintenance";
 
-    let requeuedPlayerIds: string[] = [];
+    let clearedCourtPlayerIds: string[] = [];
 
     if (isDeactivating) {
       const activeAssignment = await prisma.courtAssignment.findFirst({
@@ -39,6 +39,7 @@ export async function PATCH(
           data: { endedAt: now, endedBy: auth.id },
         });
 
+        // Same as end-game: on_break = checked in, not in queue — must scan TV tablet to join again
         for (const playerId of activeAssignment.playerIds) {
           await prisma.queueEntry.updateMany({
             where: {
@@ -46,25 +47,23 @@ export async function PATCH(
               sessionId: activeAssignment.sessionId,
               status: { in: ["playing", "assigned"] },
             },
-            data: { status: "waiting", joinedAt: now, totalPlayMinutesToday: { increment: gameDuration } },
+            data: {
+              status: "on_break",
+              totalPlayMinutesToday: { increment: gameDuration },
+            },
           });
         }
 
-        requeuedPlayerIds = activeAssignment.playerIds;
+        clearedCourtPlayerIds = activeAssignment.playerIds;
 
-        const waitingEntries = await prisma.queueEntry.findMany({
-          where: { sessionId: activeAssignment.sessionId, status: "waiting" },
-          orderBy: { joinedAt: "asc" },
-          select: { playerId: true },
-        });
+        const clearedMessage =
+          "The court was cleared. Scan at the TV when you're ready to join the queue again.";
 
-        for (const playerId of requeuedPlayerIds) {
-          const position = waitingEntries.findIndex((e) => e.playerId === playerId) + 1;
+        for (const playerId of clearedCourtPlayerIds) {
           emitToPlayer(playerId, "player:notification", {
-            type: "requeued",
-            message: `Court ${court.label} was removed. You're #${position} in line.`,
+            type: "game_ended",
+            message: clearedMessage,
             courtLabel: court.label,
-            position,
           });
         }
 
@@ -74,7 +73,11 @@ export async function PATCH(
             staffId: auth.id,
             action: "game_ended",
             targetId: courtId,
-            metadata: { playerIds: requeuedPlayerIds, gameDuration, reason: "court_removed" },
+            metadata: {
+              playerIds: clearedCourtPlayerIds,
+              gameDuration,
+              reason: "court_cleared_to_checked_in",
+            },
           },
         });
       }
@@ -112,7 +115,7 @@ export async function PATCH(
 
     emitToVenue(court.venueId, "court:updated", allCourts);
 
-    if (requeuedPlayerIds.length > 0 && session) {
+    if (clearedCourtPlayerIds.length > 0 && session) {
       const queueEntries = await prisma.queueEntry.findMany({
         where: { sessionId: session.id, status: { in: ["waiting", "on_break"] } },
         include: { player: true, group: true },

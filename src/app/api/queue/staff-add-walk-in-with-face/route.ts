@@ -240,11 +240,11 @@ export async function POST(request: NextRequest) {
           ? leftSameName.queueNumber
           : await getNextQueueNumber(session.id);
 
+      // Re-activate as checked-in (on_break = checked in, not in queue)
       const entry = await prisma.queueEntry.update({
         where: { id: leftSameName.entryId },
         data: {
-          status: "waiting",
-          joinedAt: new Date(),
+          status: "on_break",
           queueNumber,
           groupId: null,
           breakUntil: null,
@@ -409,11 +409,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Create as checked-in (on_break = checked in, not in queue)
     const entry = await prisma.queueEntry.create({
       data: {
         sessionId: session.id,
         playerId: player.id,
-        status: "waiting",
+        status: "on_break",
         queueNumber: await getNextQueueNumber(session.id),
       },
       include: { player: true },

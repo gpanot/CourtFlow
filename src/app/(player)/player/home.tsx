@@ -11,7 +11,6 @@ import { joinVenue, joinPlayer, leaveVenue } from "@/lib/socket-client";
 import { QueueScreen } from "./queue-screen";
 import { CourtAssignedScreen } from "./court-assigned";
 import { InGameScreen } from "./in-game";
-import { BreakScreen } from "./break-screen";
 import { ProfileScreen } from "./profile";
 import { SessionRecapScreen } from "./session-recap";
 import { LogOut } from "lucide-react";
@@ -57,7 +56,7 @@ interface TodayPlayer {
   avatar?: string | null;
 }
 
-type PlayerView = "home" | "queue" | "assigned" | "playing" | "break" | "profile" | "session_recap";
+type PlayerView = "home" | "queue" | "assigned" | "playing" | "profile" | "session_recap";
 
 export function PlayerHome() {
   const { t } = useTranslation();
@@ -213,7 +212,8 @@ export function PlayerHome() {
                 setViewTracked("playing");
                 break;
               case "on_break":
-                setViewTracked("break");
+                // on_break = checked in, not in queue — show home with TV scan instruction
+                setViewTracked("home");
                 break;
               default:
                 setViewTracked("home");
@@ -267,12 +267,12 @@ export function PlayerHome() {
 
 
       if (suppressed) {
-        if (notif.type === "requeued") fetchPlayerState();
+        if (notif.type === "requeued" || notif.type === "game_ended") fetchPlayerState();
         return;
       }
 
       if (notif.type === "court_assigned") setViewTracked("assigned");
-      else if (notif.type === "requeued") fetchPlayerState();
+      else if (notif.type === "requeued" || notif.type === "game_ended") fetchPlayerState();
     });
 
     const offCourtAssigned = on("court:assigned", (data: unknown) => {
@@ -520,8 +520,20 @@ export function PlayerHome() {
               </div>
             )}
 
+            {/* TV scan instruction when checked in but not in queue */}
+            {queueEntry?.status === "on_break" && (
+              <div className="rounded-2xl border border-green-800/50 bg-green-950/30 p-5 text-center">
+                <p className="text-lg font-semibold text-green-400">
+                  {t("homeNew.headToTv")}
+                </p>
+                <p className="mt-1 text-sm text-neutral-400">
+                  {t("homeNew.headToTvSub")}
+                </p>
+              </div>
+            )}
+
             {/* Queue position / Court status */}
-            {playerMe?.status && (
+            {playerMe?.status && playerMe.status !== "on_break" && (
               <div className="rounded-2xl border border-neutral-700 bg-neutral-900 p-5 text-center">
                 <p className="text-sm text-neutral-400">{t("homeNew.youAre")}</p>
                 <p className="text-4xl font-bold text-white">{playerMe.queueNumber ?? "—"}</p>
@@ -716,29 +728,6 @@ export function PlayerHome() {
         <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
           {identityHeaderOverlay}
           <InGameScreen notification={notification} />
-        </div>
-      </>
-    );
-  }
-
-  if (view === "break" && queueEntry) {
-    return (
-      <>
-        <PlayerTvDisplayModal
-          venueId={selectedVenue}
-          open={tvModalOpen}
-          onClose={() => setTvModalOpen(false)}
-        />
-        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
-          {identityHeaderOverlay}
-          <BreakScreen
-            breakUntil={queueEntry.breakUntil || ""}
-            venueId={selectedVenue}
-            onReturn={async () => {
-              await api.post("/api/queue/return", { venueId: selectedVenue });
-              await fetchPlayerState();
-            }}
-          />
         </div>
       </>
     );

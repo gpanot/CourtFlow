@@ -2,7 +2,7 @@
 
 import type { i18n as I18nInstance } from "i18next";
 import { useTranslation } from "react-i18next";
-import { ListOrdered, ArrowDownAZ, Coffee } from "lucide-react";
+import { ListOrdered, ArrowDownAZ, UserCheck } from "lucide-react";
 import { cn } from "@/lib/cn";
 import {
   STAFF_QUEUE_SKILLS,
@@ -15,7 +15,7 @@ import {
 function filterChip(active: boolean, variant: "default" | "break" = "default") {
   return cn(
     "shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors",
-    variant === "break" && active && "bg-amber-600 text-white",
+    variant === "break" && active && "bg-sky-600 text-white",
     variant === "break" && !active && "bg-neutral-800 text-neutral-400 hover:bg-neutral-700 hover:text-neutral-200",
     variant === "default" && active && "bg-blue-600 text-white",
     variant === "default" && !active && "bg-neutral-800 text-neutral-400 hover:bg-neutral-700 hover:text-neutral-200"
@@ -81,8 +81,8 @@ export function StaffQueueFilterBar({
             aria-pressed={breakOnly}
             aria-label={t("staff.dashboard.queueFilterBreakAria")}
           >
-            <Coffee className="h-3.5 w-3.5 shrink-0 opacity-90" />
-            {t("staff.dashboard.queueFilterBreak")}
+            <UserCheck className="h-3.5 w-3.5 shrink-0 opacity-90" />
+            {t("staff.dashboard.queueFilterCheckedIn", { defaultValue: "Checked In" })}
           </button>
         )}
       </div>

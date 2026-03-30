@@ -44,7 +44,16 @@ export async function GET(
         where: { sessionId: { in: sessionIds } },
         select: {
           sessionId: true,
-          player: { select: { id: true, name: true, avatar: true, skillLevel: true, rankingScore: true } },
+          player: {
+            select: {
+              id: true,
+              name: true,
+              avatar: true,
+              facePhotoPath: true,
+              skillLevel: true,
+              rankingScore: true,
+            },
+          },
         },
       }),
     ]);
@@ -66,7 +75,17 @@ export async function GET(
       (rankingsBySession[pr.sessionId] ??= []).push(pr);
     }
 
-    const participantsBySession: Record<string, { id: string; name: string; avatar: string; skillLevel: string; rankingScore: number }[]> = {};
+    const participantsBySession: Record<
+      string,
+      {
+        id: string;
+        name: string;
+        avatar: string;
+        facePhotoPath: string | null;
+        skillLevel: string;
+        rankingScore: number;
+      }[]
+    > = {};
     for (const entry of allSessionQueueEntries) {
       const list = (participantsBySession[entry.sessionId] ??= []);
       if (!list.some((p) => p.id === entry.player.id)) {

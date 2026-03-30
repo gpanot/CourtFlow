@@ -36,6 +36,10 @@
     "groupOf": "Group of {{count}}",
     "morePlayers": "+{{count}} players"
   },
+  "queueJoinAnnouncement": {
+    "lead": "Welcome",
+    "trail": "— you're in the queue!"
+  },
   "tvQueue": {
     "waiting": "Waiting",
     "nextUp": "Next up"

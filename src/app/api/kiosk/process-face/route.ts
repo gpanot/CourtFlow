@@ -8,8 +8,6 @@ import {
 } from "@/lib/face-recognition";
 import { emitToVenue } from "@/lib/socket-server";
 
-const QUEUE_WAITING_STATUSES = ["waiting", "on_break"] as const;
-
 async function buildAlreadyCheckedInResponse(
   sessionId: string,
   playerId: string,
@@ -24,13 +22,18 @@ async function buildAlreadyCheckedInResponse(
     where: {
       sessionId_playerId: { sessionId, playerId },
     },
-    select: { queueNumber: true },
+    select: { queueNumber: true, status: true },
   });
-  const allEntries = await prisma.queueEntry.findMany({
-    where: { sessionId, status: { in: [...QUEUE_WAITING_STATUSES] } },
-    orderBy: { joinedAt: "asc" },
-  });
-  const queuePositionRaw = allEntries.findIndex((e) => e.playerId === playerId) + 1;
+  // Queue position only meaningful if player is actually waiting in queue
+  let queuePosition: number | undefined;
+  if (sessionEntry?.status === "waiting") {
+    const waitingEntries = await prisma.queueEntry.findMany({
+      where: { sessionId, status: "waiting" },
+      orderBy: { joinedAt: "asc" },
+    });
+    const pos = waitingEntries.findIndex((e) => e.playerId === playerId) + 1;
+    queuePosition = pos > 0 ? pos : undefined;
+  }
   const totalSessions = await prisma.queueEntry.count({
     where: { playerId, status: "left" },
   });
@@ -45,7 +48,7 @@ async function buildAlreadyCheckedInResponse(
     displayName: displayName ?? player?.name ?? undefined,
     alreadyCheckedIn: true,
     queueNumber,
-    queuePosition: queuePositionRaw > 0 ? queuePositionRaw : undefined,
+    queuePosition,
     skillLevel: player?.skillLevel,
     totalSessions,
     isReturning: true,
@@ -172,23 +175,22 @@ export async function POST(request: NextRequest) {
 
         let queueEntry;
         if (existingEntry) {
-          // Player was in session before — re-activate them (keep same check-in # when set)
+          // Player was in session before — re-activate as checked-in (on_break = checked in, not in queue)
           queueEntry = await prisma.queueEntry.update({
             where: { id: existingEntry.id },
             data: {
-              status: "waiting",
+              status: "on_break",
               queueNumber,
-              joinedAt: new Date(), // reset join time for fair queue position
             },
             include: { player: true },
           });
         } else {
-          // First time in this session — create fresh entry
+          // First time in this session — create as checked-in (on_break = checked in, not in queue)
           queueEntry = await prisma.queueEntry.create({
             data: {
               sessionId: session.id,
               playerId: recognitionResult.playerId!,
-              status: "waiting",
+              status: "on_break",
               queueNumber,
             },
             include: { player: true },
@@ -206,7 +208,7 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        // Emit real-time update
+        // Emit real-time update (includes waiting + on_break for staff dashboard)
         const allEntries = await prisma.queueEntry.findMany({
           where: { sessionId: session.id, status: { in: ["waiting", "on_break"] } },
           include: {
@@ -235,19 +237,16 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        const pid = recognitionResult.playerId!;
-        const queuePositionRaw = allEntries.findIndex((e) => e.playerId === pid) + 1;
         const totalSessions = await prisma.queueEntry.count({
-          where: { playerId: pid, status: "left" },
+          where: { playerId: recognitionResult.playerId!, status: "left" },
         });
 
         result = {
           success: true,
-          resultType: "matched",
+          resultType: "checked_in",
           playerId: recognitionResult.playerId,
           displayName: recognitionResult.displayName,
           queueNumber,
-          queuePosition: queuePositionRaw > 0 ? queuePositionRaw : undefined,
           skillLevel: queueEntry.player.skillLevel,
           totalSessions,
           isReturning: true,
@@ -301,23 +300,22 @@ export async function POST(request: NextRequest) {
 
           let queueEntry;
           if (existingEntry) {
-            // Player was in session before — re-activate them (keep same check-in # when set)
+            // Player was in session before — re-activate as checked-in (on_break = checked in, not in queue)
             queueEntry = await prisma.queueEntry.update({
               where: { id: existingEntry.id },
               data: {
-                status: "waiting",
+                status: "on_break",
                 queueNumber,
-                joinedAt: new Date(), // reset join time for fair queue position
               },
               include: { player: true },
             });
           } else {
-            // First time in this session — create fresh entry
+            // First time in this session — create as checked-in (on_break = checked in, not in queue)
             queueEntry = await prisma.queueEntry.create({
               data: {
                 sessionId: session.id,
                 playerId: existingPlayerByFace.id,
-                status: "waiting",
+                status: "on_break",
                 queueNumber,
               },
               include: { player: true },
@@ -362,19 +360,16 @@ export async function POST(request: NextRequest) {
             },
           });
 
-          const eid = existingPlayerByFace.id;
-          const queuePositionRawNp = allEntries.findIndex((e) => e.playerId === eid) + 1;
           const totalSessionsNp = await prisma.queueEntry.count({
-            where: { playerId: eid, status: "left" },
+            where: { playerId: existingPlayerByFace.id, status: "left" },
           });
 
           result = {
             success: true,
-            resultType: "matched",
+            resultType: "checked_in",
             playerId: existingPlayerByFace.id,
             displayName: existingPlayerByFace.name,
             queueNumber,
-            queuePosition: queuePositionRawNp > 0 ? queuePositionRawNp : undefined,
             skillLevel: queueEntry.player.skillLevel,
             totalSessions: totalSessionsNp,
             isReturning: true,

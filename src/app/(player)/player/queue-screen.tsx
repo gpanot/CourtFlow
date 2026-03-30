@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api-client";
 import { useSessionStore } from "@/stores/session-store";
 import { cn } from "@/lib/cn";
-import { Link, Coffee, RefreshCw } from "lucide-react";
+import { Link, LogOut, RefreshCw } from "lucide-react";
 import { NotificationCard } from "./notification-card";
 import { InstallCard } from "./install-card";
 import { LAST_GAME_OPTIONS } from "@/lib/last-game-reaction";
@@ -49,7 +49,7 @@ export function QueueScreen({
   const { t } = useTranslation();
   const { playerId } = useSessionStore();
   const [info, setInfo] = useState<QueueInfo | null>(null);
-  const [showBreakConfirm, setShowBreakConfirm] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [lastGameFeedbackDone, setLastGameFeedbackDone] = useState(false);
   const [lastGameSubmitting, setLastGameSubmitting] = useState(false);
@@ -74,7 +74,7 @@ export function QueueScreen({
         { id: string; playerId: string; groupId: string | null; status: string; player: { name: string }; group: { id: string; code: string; queueEntries: { player: { name: string } }[] } | null }[]
       >(`/api/queue?sessionId=${sessionId}`);
 
-      const waiting = entries.filter((e) => e.status === "waiting" || e.status === "on_break");
+      const waiting = entries.filter((e) => e.status === "waiting");
       const seen = new Set<string>();
       let position = 0;
       let myPosition = 0;
@@ -143,7 +143,7 @@ export function QueueScreen({
       alert((e as Error).message);
     } finally {
       setLeaving(false);
-      setShowBreakConfirm(false);
+      setShowLeaveConfirm(false);
     }
   };
 
@@ -271,41 +271,41 @@ export function QueueScreen({
         </button>
         <button
           type="button"
-          onClick={() => setShowBreakConfirm(true)}
+          onClick={() => setShowLeaveConfirm(true)}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-neutral-800 py-3 text-sm font-medium text-neutral-300"
         >
-          <Coffee className="h-4 w-4" />
-          {t("queue.needBreak")}
+          <LogOut className="h-4 w-4" />
+          {t("queue.leaveQueue")}
         </button>
       </div>
 
       <PlayerTvDisplayModal venueId={venueId} open={tvModalOpen} onClose={() => setTvModalOpen(false)} />
 
-      {showBreakConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowBreakConfirm(false)}>
+      {showLeaveConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowLeaveConfirm(false)}>
           <div
             className="w-full max-w-sm mx-4 rounded-2xl border border-neutral-700 bg-neutral-900 p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex flex-col items-center gap-3 text-center">
-              <div className="rounded-full bg-amber-600/20 p-3">
-                <Coffee className="h-6 w-6 text-amber-400" />
+              <div className="rounded-full bg-neutral-700/30 p-3">
+                <LogOut className="h-6 w-6 text-neutral-400" />
               </div>
-              <h3 className="text-lg font-bold">{t("queue.breakTitle")}</h3>
+              <h3 className="text-lg font-bold">{t("queue.leaveQueueTitle")}</h3>
               <p className="text-sm text-neutral-400">
-                {t("queue.breakBody")}
+                {t("queue.leaveQueueBody")}
               </p>
             </div>
             <div className="flex gap-3">
               <button
                 onClick={leaveQueue}
                 disabled={leaving}
-                className="flex-1 rounded-xl bg-amber-600 py-3 font-semibold text-white hover:bg-amber-500 disabled:opacity-60"
+                className="flex-1 rounded-xl bg-red-600 py-3 font-semibold text-white hover:bg-red-500 disabled:opacity-60"
               >
-                {leaving ? t("queue.leaving") : t("queue.yesTakeBreak")}
+                {leaving ? t("queue.leaving") : t("queue.yesLeaveQueue")}
               </button>
               <button
-                onClick={() => setShowBreakConfirm(false)}
+                onClick={() => setShowLeaveConfirm(false)}
                 className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
               >
                 {t("common.stay")}

@@ -83,13 +83,13 @@ export async function POST(request: NextRequest) {
           ? existingEntry.queueNumber
           : await faceRecognitionService.getNextQueueNumber(session.id);
 
+      // Check in as on_break (= checked in, not in queue)
       const queueEntry =
         existingEntry != null
           ? await prisma.queueEntry.update({
               where: { id: existingEntry.id },
               data: {
-                status: "waiting",
-                joinedAt: new Date(),
+                status: "on_break",
                 queueNumber,
                 groupId: null,
                 breakUntil: null,
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
               data: {
                 sessionId: session.id,
                 playerId: selectedPlayerId!,
-                status: "waiting",
+                status: "on_break",
                 queueNumber,
               },
               include: { player: true },
@@ -159,7 +159,7 @@ export async function POST(request: NextRequest) {
         data: {
           sessionId: session.id,
           playerId: newPlayer.id,
-          status: "waiting",
+          status: "on_break",
           queueNumber,
         },
         include: { player: true },

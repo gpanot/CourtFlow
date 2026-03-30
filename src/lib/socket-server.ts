@@ -18,6 +18,7 @@ export function emitToVenue(venueId: string, event: string, data: unknown) {
 const PUSH_TITLES: Record<string, string> = {
   court_assigned: "Court Ready!",
   requeued: "Back in Queue",
+  game_ended: "Scan at TV",
   session_closing: "Session Ending",
   session_ended_by_staff: "Session Ended",
 };

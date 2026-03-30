@@ -6,8 +6,6 @@ import { faceRecognitionService } from "@/lib/face-recognition";
 import { emitToVenue } from "@/lib/socket-server";
 import { findPlayerByPhoneDigits } from "@/lib/find-player-by-phone-digits";
 
-const QUEUE_WAITING_STATUSES = ["waiting", "on_break"] as const;
-
 async function buildAlreadyCheckedInResponse(
   sessionId: string,
   playerId: string,
@@ -21,13 +19,17 @@ async function buildAlreadyCheckedInResponse(
     where: {
       sessionId_playerId: { sessionId, playerId },
     },
-    select: { queueNumber: true },
+    select: { queueNumber: true, status: true },
   });
-  const allEntries = await prisma.queueEntry.findMany({
-    where: { sessionId, status: { in: [...QUEUE_WAITING_STATUSES] } },
-    orderBy: { joinedAt: "asc" },
-  });
-  const queuePositionRaw = allEntries.findIndex((e) => e.playerId === playerId) + 1;
+  let queuePosition: number | undefined;
+  if (sessionEntry?.status === "waiting") {
+    const waitingEntries = await prisma.queueEntry.findMany({
+      where: { sessionId, status: "waiting" },
+      orderBy: { joinedAt: "asc" },
+    });
+    const pos = waitingEntries.findIndex((e) => e.playerId === playerId) + 1;
+    queuePosition = pos > 0 ? pos : undefined;
+  }
   const totalSessions = await prisma.queueEntry.count({
     where: { playerId, status: "left" },
   });
@@ -42,7 +44,7 @@ async function buildAlreadyCheckedInResponse(
     displayName: displayName ?? player?.name ?? undefined,
     alreadyCheckedIn: true,
     queueNumber,
-    queuePosition: queuePositionRaw > 0 ? queuePositionRaw : undefined,
+    queuePosition,
     skillLevel: player?.skillLevel,
     totalSessions,
     isReturning: true,
@@ -95,11 +97,11 @@ export async function POST(request: NextRequest) {
         select: { queueNumber: true },
       });
 
-      const allEntries = await prisma.queueEntry.findMany({
-        where: { sessionId: session.id, status: { in: [...QUEUE_WAITING_STATUSES] } },
+      const waitingEntries = await prisma.queueEntry.findMany({
+        where: { sessionId: session.id, status: "waiting" },
         orderBy: { joinedAt: "asc" },
       });
-      const queuePositionRaw = allEntries.findIndex((e) => e.playerId === row.id) + 1;
+      const queuePositionRaw = waitingEntries.findIndex((e) => e.playerId === row.id) + 1;
       const totalSessions = await prisma.queueEntry.count({
         where: { playerId: row.id, status: "left" },
       });
@@ -186,21 +188,22 @@ export async function POST(request: NextRequest) {
 
         let queueEntry;
         if (existingEntry) {
+          // Re-activate as checked-in (on_break = checked in, not in queue)
           queueEntry = await prisma.queueEntry.update({
             where: { id: existingEntry.id },
             data: {
-              status: "waiting",
+              status: "on_break",
               queueNumber,
-              joinedAt: new Date(),
             },
             include: { player: true },
           });
         } else {
+          // Create as checked-in (on_break = checked in, not in queue)
           queueEntry = await prisma.queueEntry.create({
             data: {
               sessionId: session.id,
               playerId: player.id,
-              status: "waiting",
+              status: "on_break",
               queueNumber,
             },
             include: { player: true },
@@ -251,18 +254,16 @@ export async function POST(request: NextRequest) {
           },
         });
 
-        const queuePositionRaw = allEntries.findIndex((e) => e.playerId === player.id) + 1;
         const totalSessions = await prisma.queueEntry.count({
           where: { playerId: player.id, status: "left" },
         });
 
         return json({
           success: true,
-          resultType: "matched",
+          resultType: "checked_in",
           playerId: player.id,
           displayName: player.name,
           queueNumber,
-          queuePosition: queuePositionRaw > 0 ? queuePositionRaw : undefined,
           skillLevel: queueEntry.player.skillLevel,
           totalSessions,
           isReturning: true,

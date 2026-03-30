@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
+import { PlayerAvatarThumb } from "@/components/player-avatar-thumb";
 import { Search, X, SlidersHorizontal, Users, UserPlus, Clock, Activity, Hourglass, Gauge, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Gamepad2, Star, MapPin, CalendarDays, Timer, Plus, Pencil, Trash2, Fingerprint, Smartphone } from "lucide-react";
 
 type SortKey = "name" | "phone" | "gender" | "skillLevel" | "totalSessions" | "totalGames" | "totalPlayMinutes" | "totalWaitMinutes" | "waitPlayRatio" | "venues";
@@ -122,7 +123,14 @@ interface PlayerSession {
   gamesByType: { men: number; women: number; mixed: number };
   feedback: { experience: number; matchQuality: string; wouldReturn: string } | null;
   rankings?: { position: number; scoreDelta: number; courtLabel: string; createdAt: string }[];
-  participants?: { id: string; name: string; avatar: string; skillLevel: string; rankingScore: number }[];
+  participants?: {
+    id: string;
+    name: string;
+    avatar: string;
+    facePhotoPath?: string | null;
+    skillLevel: string;
+    rankingScore: number;
+  }[];
 }
 
 interface PlayerStats {
@@ -566,7 +574,12 @@ export default function PlayersPage() {
               <tr key={p.id} className="border-b border-neutral-800 last:border-0 hover:bg-neutral-900/50">
                 <td className="px-2.5 py-2">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm">{p.avatar}</span>
+                    <PlayerAvatarThumb
+                      facePhotoPath={p.facePhotoPath}
+                      avatar={p.avatar}
+                      sizeClass="h-7 w-7"
+                      textFallbackClassName="text-sm"
+                    />
                     <span className="font-medium truncate max-w-[120px]">{p.name}</span>
                     {p.isActiveToday && (
                       <span className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" title="Active today" />
@@ -650,7 +663,12 @@ export default function PlayersPage() {
           <div key={p.id} className="rounded-xl border border-neutral-800 bg-neutral-900 p-3" onClick={() => openPlayerDetail(p)}>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2 min-w-0">
-                <span className="text-base shrink-0">{p.avatar}</span>
+                <PlayerAvatarThumb
+                  facePhotoPath={p.facePhotoPath}
+                  avatar={p.avatar}
+                  sizeClass="h-9 w-9"
+                  textFallbackClassName="text-base"
+                />
                 <span className="font-medium text-sm truncate">{p.name}</span>
                 {p.isActiveToday && (
                   <span className="h-2 w-2 rounded-full bg-green-500 shrink-0" />
@@ -1155,18 +1173,15 @@ function PlayerDetailPanel({
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
       <div className="relative w-full max-w-md animate-in slide-in-from-right overflow-y-auto bg-neutral-950 border-l border-neutral-800 shadow-2xl">
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-800 bg-neutral-950 px-4 py-3">
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-800 bg-neutral-950 px-4 py-3">
           <div className="flex items-center gap-3 min-w-0">
-            {player.facePhotoPath ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={player.facePhotoPath}
-                alt=""
-                className="h-12 w-12 shrink-0 rounded-full object-cover border border-neutral-700 bg-neutral-800"
-              />
-            ) : (
-              <span className="text-2xl shrink-0">{player.avatar}</span>
-            )}
+            <PlayerAvatarThumb
+              facePhotoPath={player.facePhotoPath}
+              avatar={player.avatar}
+              sizeClass="h-12 w-12"
+              textFallbackClassName="text-2xl"
+              className="border-neutral-700"
+            />
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold truncate">{player.name}</h3>
@@ -1519,7 +1534,12 @@ function PlayerDetailPanel({
                                 p.id === player.id ? "bg-purple-600/20 text-purple-300 ring-1 ring-purple-600/40" : "bg-neutral-800 text-neutral-400"
                               )}
                             >
-                              <span>{p.avatar}</span>
+                              <PlayerAvatarThumb
+                                facePhotoPath={p.facePhotoPath}
+                                avatar={p.avatar}
+                                sizeClass="h-5 w-5"
+                                textFallbackClassName="text-[10px]"
+                              />
                               <span className="truncate max-w-[80px]">{p.name}</span>
                               <span className="text-[9px] text-neutral-600 tabular-nums">{p.rankingScore}</span>
                             </span>

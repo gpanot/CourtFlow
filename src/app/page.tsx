@@ -38,6 +38,12 @@ export default function LandingPage() {
         >
           TV Display
         </Link>
+        <Link
+          href="/tv-queue"
+          className="flex h-12 items-center justify-center rounded-xl bg-neutral-800 text-sm font-medium text-neutral-300 transition-colors hover:bg-neutral-700"
+        >
+          TV Tablet (Queue Join)
+        </Link>
       </div>
 
       <p className="text-sm text-neutral-600">v0.1.0</p>

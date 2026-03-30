@@ -36,6 +36,10 @@
     "groupOf": "Nhóm {{count}} người",
     "morePlayers": "+{{count}} người chơi"
   },
+  "queueJoinAnnouncement": {
+    "lead": "Chào",
+    "trail": "— bạn đã vào hàng chờ!"
+  },
   "tvQueue": {
     "waiting": "Chờ",
     "nextUp": "Tiếp theo"

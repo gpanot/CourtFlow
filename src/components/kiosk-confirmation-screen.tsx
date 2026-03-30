@@ -64,10 +64,7 @@ export function KioskConfirmationScreen({
         ? skillLevel
         : "—";
 
-  const queuePill =
-    queuePosition != null && queuePosition > 0
-      ? t("staff.kiosk.confirmQueuePosition", { n: queuePosition })
-      : t("staff.kiosk.confirmInQueue");
+  const queuePill = t("staff.kiosk.confirmHeadToTv");
 
   const sessionsDisplay =
     totalSessions != null && totalSessions >= 0 ? String(totalSessions) : "—";
@@ -247,22 +244,6 @@ export function KioskConfirmationScreen({
                 style={{ backgroundColor: PILL_BG }}
               >
                 <span className="text-[9px] font-medium uppercase tracking-wide text-neutral-500 sm:text-xs">
-                  {t("staff.kiosk.confirmQueue")}
-                </span>
-                <span
-                  className={cn(
-                    "px-0.5 text-[10px] font-semibold leading-tight sm:text-sm",
-                    queuePosition != null && queuePosition > 0 ? "text-green-500" : "text-neutral-200"
-                  )}
-                >
-                  {queuePill}
-                </span>
-              </div>
-              <div
-                className="flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 py-2 text-center sm:gap-1 sm:px-3 sm:py-3"
-                style={{ backgroundColor: PILL_BG }}
-              >
-                <span className="text-[9px] font-medium uppercase tracking-wide text-neutral-500 sm:text-xs">
                   {t("staff.kiosk.confirmSessions")}
                 </span>
                 <span className="text-[10px] font-semibold leading-tight text-white sm:text-sm">
@@ -271,9 +252,14 @@ export function KioskConfirmationScreen({
               </div>
             </div>
 
-            <p className="shrink-0 text-center text-xs text-neutral-500 sm:text-sm">
-              {t("staff.kiosk.confirmHaveFun")}
-            </p>
+            <div
+              className="rounded-xl px-3 py-3 text-center sm:px-5 sm:py-4"
+              style={{ backgroundColor: PILL_BG }}
+            >
+              <p className="text-sm font-medium text-green-400 sm:text-base">
+                {queuePill}
+              </p>
+            </div>
           </div>
         )}
       </div>

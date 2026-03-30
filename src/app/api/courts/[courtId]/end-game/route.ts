@@ -37,31 +37,22 @@ export async function POST(
       data: { status: "idle" },
     });
 
+    // Move players to on_break (= checked in, not in queue) — they must scan at TV to re-queue
     for (const playerId of activeAssignment.playerIds) {
       await prisma.queueEntry.updateMany({
         where: { playerId, sessionId: activeAssignment.sessionId, status: "playing" },
         data: {
-          status: "waiting",
-          joinedAt: now,
+          status: "on_break",
           totalPlayMinutesToday: { increment: gameDuration },
         },
       });
     }
 
-    // Compute queue positions to notify players
-    const waitingEntries = await prisma.queueEntry.findMany({
-      where: { sessionId: activeAssignment.sessionId, status: "waiting" },
-      orderBy: { joinedAt: "asc" },
-      select: { playerId: true },
-    });
-
     for (const playerId of activeAssignment.playerIds) {
-      const position = waitingEntries.findIndex((e) => e.playerId === playerId) + 1;
       emitToPlayer(playerId, "player:notification", {
-        type: "requeued",
-        message: `Good game! You're #${position} in line.`,
+        type: "game_ended",
+        message: "Good game! Head to the TV screen when you're ready to play again.",
         courtLabel: court.label,
-        position,
       });
     }
 

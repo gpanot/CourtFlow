@@ -144,12 +144,11 @@ export function FaceKioskTab({ venueId }: FaceKioskTabProps) {
       }
 
       if (response.success) {
-        if (response.resultType === "matched") {
+        if (response.resultType === "matched" || response.resultType === "checked_in") {
           setConsecutiveFailures(0);
           setResultData({
             displayName: response.displayName,
             queueNumber: response.queueNumber,
-            queuePosition: response.queuePosition,
             skillLevel: response.skillLevel,
             totalSessions: response.totalSessions,
             isReturning: response.isReturning ?? true,
@@ -287,7 +286,7 @@ export function FaceKioskTab({ venueId }: FaceKioskTabProps) {
         playerId: pid,
       });
 
-      if (response.resultType === "matched" && response.success) {
+      if ((response.resultType === "matched" || response.resultType === "checked_in") && response.success) {
         setConsecutiveFailures(0);
         setPhoneFlow(null);
         setPhonePreview(null);
@@ -295,7 +294,6 @@ export function FaceKioskTab({ venueId }: FaceKioskTabProps) {
         setResultData({
           displayName: response.displayName,
           queueNumber: response.queueNumber,
-          queuePosition: response.queuePosition,
           skillLevel: response.skillLevel,
           totalSessions: response.totalSessions,
           isReturning: response.isReturning ?? true,

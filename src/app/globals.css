@@ -50,3 +50,39 @@ body:has(#player-app-shell) {
 @utility animate-flip-y {
   animation: flip-y 6s ease-in-out infinite;
 }
+
+@keyframes tv-join-banner-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@utility animate-tv-join-banner {
+  animation: tv-join-banner-in 0.35s ease-out;
+}
+
+@keyframes tv-sparkle-burst {
+  0% {
+    opacity: 0;
+    transform: scale(0.35);
+  }
+  25% {
+    opacity: 1;
+    transform: scale(1.15);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.75);
+  }
+}
+
+@utility animate-tv-sparkle-burst {
+  animation-name: tv-sparkle-burst;
+  animation-duration: 2.2s;
+  animation-timing-function: ease-out;
+  animation-iteration-count: 2;
+  animation-fill-mode: forwards;
+}

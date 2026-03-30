@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CourtFlow TV — Numbers view (mock)</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: #0a0a0a; }
+    .tv {
+      min-height: 100%;
+      background: #0a0a0a;
+      padding: clamp(12px, 1.2vw, 20px);
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      display: flex;
+      flex-direction: column;
+      gap: clamp(10px, 1vh, 14px);
+    }
+    .topbar {
+      flex-shrink: 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding-bottom: clamp(10px, 1vh, 14px);
+      border-bottom: 1px solid #1f1f1f;
+    }
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: clamp(10px, 1.2vw, 16px);
+      min-width: 0;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .brand-mark {
+      width: clamp(28px, 3.5vw, 40px);
+      height: clamp(28px, 3.5vw, 40px);
+      border-radius: 8px;
+      background: linear-gradient(135deg, #166534, #22c55e);
+    }
+    .brand-name {
+      font-size: clamp(14px, 1.5vw, 18px);
+      font-weight: 700;
+      color: #22c55e;
+      letter-spacing: -0.02em;
+    }
+    .topbar-divider {
+      width: 1px;
+      height: 24px;
+      background: #333;
+      flex-shrink: 0;
+    }
+    .venue {
+      font-size: clamp(13px, 1.35vw, 17px);
+      font-weight: 500;
+      color: #d4d4d4;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: clamp(10px, 1.2vw, 18px);
+      flex-shrink: 0;
+    }
+    .session-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(34, 197, 94, 0.15);
+      font-size: clamp(11px, 1vw, 13px);
+      font-weight: 600;
+      color: #4ade80;
+    }
+    .sdot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #22c55e;
+      flex-shrink: 0;
+      animation: live-dot 1.1s ease-in-out infinite;
+    }
+    @keyframes live-dot {
+      0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5); }
+      50% { opacity: 0.35; transform: scale(0.92); box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); }
+    }
+    .clock {
+      font-size: clamp(13px, 1.35vw, 17px);
+      font-variant-numeric: tabular-nums;
+      color: #a3a3a3;
+    }
+    .icon-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border: none;
+      border-radius: 8px;
+      background: #171717;
+      color: #737373;
+      cursor: default;
+    }
+    .icon-btn:hover { background: #262626; color: #a3a3a3; }
+    .icon-btn svg { width: 18px; height: 18px; }
+
+    .court-zone {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .court-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: repeat(4, 1fr);
+      gap: clamp(8px, 0.9vw, 12px);
+      min-height: clamp(320px, 58vh, 720px);
+    }
+    .court-card {
+      border-radius: 12px;
+      padding: clamp(10px, 1.1vw, 14px) clamp(12px, 1.3vw, 16px);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 6px;
+      min-height: 0;
+    }
+    .court-card.active {
+      background: #0d2a18;
+      border: 2px solid #22c55e;
+    }
+    .court-card.starting {
+      background: #0f1a2e;
+      border: 2px solid #3b82f6;
+    }
+    .court-card.idle {
+      background: #111;
+      border: 2px dashed #333;
+    }
+    .card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      min-height: 1.5em;
+    }
+    .card-top.solo {
+      justify-content: flex-start;
+    }
+    .court-label {
+      font-size: clamp(14px, 1.5vw, 18px);
+      font-weight: 600;
+      color: #a3a3a3;
+    }
+    .court-card.active .court-label,
+    .court-card.starting .court-label { color: #fafafa; }
+
+    .badge {
+      font-size: clamp(8px, 0.75vw, 10px);
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+    .badge-starting { background: #1e3a5f; color: #93c5fd; }
+
+    .numbers-row {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: clamp(6px, 0.9vw, 12px);
+      align-items: baseline;
+      justify-content: flex-start;
+    }
+    .pnum {
+      font-size: clamp(22px, min(4.2vw, 5vh), 36px);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: #fafafa;
+      min-width: 2ch;
+      text-align: center;
+      line-height: 1;
+      letter-spacing: -0.02em;
+    }
+    .court-card.starting .pnum { color: #93c5fd; }
+    .idle-label {
+      font-size: clamp(20px, 3.5vw, 28px);
+      color: #404040;
+      font-weight: 300;
+    }
+
+    .waiting-strip {
+      flex-shrink: 0;
+      background: #111;
+      border-radius: 12px;
+      padding: clamp(12px, 1.2vw, 16px) clamp(14px, 1.5vw, 20px);
+      border: 1px solid #1f1f1f;
+    }
+    .waiting-head {
+      margin-bottom: 8px;
+    }
+    .waiting-title {
+      font-size: 10px;
+      color: #525252;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .waiting-line {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: clamp(6px, 0.85vw, 12px);
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding-bottom: 4px;
+      scrollbar-width: thin;
+      scrollbar-color: #333 transparent;
+    }
+    .waiting-line-label {
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #4ade80;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .queue-batch {
+      display: inline-flex;
+      align-items: center;
+      gap: clamp(6px, 0.9vw, 12px);
+      padding: clamp(8px, 1vh, 12px) clamp(10px, 1.2vw, 14px);
+      border-radius: 10px;
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.35);
+      flex-shrink: 0;
+    }
+    /* Match court .pnum — “next 8” readable at TV distance */
+    .queue-batch .wnum.next {
+      font-size: clamp(22px, min(4.2vw, 5vh), 36px);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      min-width: 2ch;
+    }
+    .queue-flow {
+      flex-shrink: 0;
+      font-size: clamp(20px, min(3.2vw, 3.8vh), 30px);
+      font-weight: 600;
+      color: #525252;
+      padding: 0 4px;
+      user-select: none;
+    }
+    .group-sep {
+      color: #333;
+      font-size: 16px;
+      font-weight: 300;
+      padding: 0 1px;
+      user-select: none;
+    }
+    .wnum {
+      font-size: clamp(16px, 1.65vw, 22px);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: #525252;
+      min-width: 2ch;
+      text-align: center;
+    }
+    .wnum.next { color: #4ade80; }
+    .queue-rest-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: clamp(8px, 1vw, 12px);
+      padding: clamp(6px, 0.75vh, 10px) clamp(10px, 1.2vw, 14px);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      flex-shrink: 0;
+    }
+    .queue-ellipsis {
+      color: #737373;
+      font-weight: 600;
+      font-size: clamp(18px, 1.8vw, 24px);
+      letter-spacing: 0.15em;
+      padding-left: clamp(6px, 0.6vw, 10px);
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="tv">
+    <header class="topbar">
+      <div class="topbar-left">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true"></div>
+          <span class="brand-name">CourtFlow</span>
+        </div>
+        <div class="topbar-divider" aria-hidden="true"></div>
+        <span class="venue">MM Pickleball Club</span>
+      </div>
+      <div class="topbar-right">
+        <div class="session-pill">
+          <span class="sdot" aria-hidden="true"></span>
+          <span>Live</span>
+        </div>
+        <span class="clock" id="clock">6:24 PM</span>
+        <button type="button" class="icon-btn" title="Switch display (names / numbers)" aria-label="Switch display layout">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <section class="waiting-strip" aria-label="Waiting queue">
+      <div class="waiting-head">
+        <span class="waiting-title">Waiting</span>
+      </div>
+
+      <div class="waiting-line" aria-label="Queue order">
+        <span class="waiting-line-label">Next up</span>
+        <div class="queue-batch" title="First court batch">
+          <span class="wnum next">55</span>
+          <span class="wnum next">57</span>
+          <span class="wnum next">59</span>
+          <span class="wnum next">61</span>
+        </div>
+        <span class="queue-flow" aria-hidden="true" title="Then">←</span>
+        <div class="queue-batch" title="Second court batch">
+          <span class="wnum next">62</span>
+          <span class="wnum next">64</span>
+          <span class="wnum next">66</span>
+          <span class="wnum next">68</span>
+        </div>
+        <span class="queue-flow" aria-hidden="true" title="Then">←</span>
+        <div class="queue-rest-pill" title="Also waiting">
+          <span class="wnum">71</span>
+          <span class="wnum">73</span>
+          <span class="wnum">75</span>
+          <span class="wnum">77</span>
+        </div>
+        <span class="queue-flow" aria-hidden="true" title="Then">←</span>
+        <div class="queue-rest-pill" title="Also waiting">
+          <span class="wnum">79</span>
+          <span class="wnum">81</span>
+          <span class="wnum">83</span>
+          <span class="wnum">85</span>
+        </div>
+        <span class="queue-flow" aria-hidden="true" title="Then">←</span>
+        <div class="queue-rest-pill" title="Also waiting">
+          <span class="wnum">87</span>
+          <span class="wnum">89</span>
+          <span class="wnum">91</span>
+          <span class="wnum">93</span>
+        </div>
+        <span class="queue-ellipsis" aria-hidden="true">...</span>
+      </div>
+    </section>
+
+    <div class="court-zone">
+      <div class="court-grid">
+        <div class="court-card active">
+          <div class="card-top solo">
+            <span class="court-label">Court A</span>
+          </div>
+          <div class="numbers-row">
+            <span class="pnum">12</span>
+            <span class="pnum">34</span>
+            <span class="pnum">45</span>
+            <span class="pnum">67</span>
+          </div>
+        </div>
+
+        <div class="court-card active">
+          <div class="card-top solo">
+            <span class="court-label">Court B</span>
+          </div>
+          <div class="numbers-row">
+            <span class="pnum">08</span>
+            <span class="pnum">19</span>
+            <span class="pnum">23</span>
+            <span class="pnum">31</span>
+          </div>
+        </div>
+
+        <div class="court-card starting">
+          <div class="card-top">
+            <span class="court-label">Court C</span>
+            <span class="badge badge-starting">Starting</span>
+          </div>
+          <div class="numbers-row">
+            <span class="pnum">46</span>
+            <span class="pnum">48</span>
+            <span class="pnum">51</span>
+            <span class="pnum">53</span>
+          </div>
+        </div>
+
+        <div class="court-card idle">
+          <div class="card-top solo">
+            <span class="court-label">Court D</span>
+          </div>
+          <div class="numbers-row">
+            <span class="idle-label">—</span>
+          </div>
+        </div>
+
+        <div class="court-card active">
+          <div class="card-top solo">
+            <span class="court-label">Court E</span>
+          </div>
+          <div class="numbers-row">
+            <span class="pnum">02</span>
+            <span class="pnum">17</span>
+            <span class="pnum">38</span>
+            <span class="pnum">41</span>
+          </div>
+        </div>
+
+        <div class="court-card active">
+          <div class="card-top solo">
+            <span class="court-label">Court F</span>
+          </div>
+          <div class="numbers-row">
+            <span class="pnum">87</span>
+            <span class="pnum">92</span>
+            <span class="pnum">96</span>
+            <span class="pnum">100</span>
+          </div>
+        </div>
+
+        <div class="court-card idle">
+          <div class="card-top solo">
+            <span class="court-label">Court G</span>
+          </div>
+          <div class="numbers-row">
+            <span class="idle-label">—</span>
+          </div>
+        </div>
+
+        <div class="court-card active">
+          <div class="card-top solo">
+            <span class="court-label">Court H</span>
+          </div>
+          <div class="numbers-row">
+            <span class="pnum">11</span>
+            <span class="pnum">22</span>
+            <span class="pnum">33</span>
+            <span class="pnum">44</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    function tick() {
+      var el = document.getElementById("clock");
+      if (!el) return;
+      el.textContent = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    }
+    tick();
+    setInterval(tick, 1000);
+  </script>
+</body>
+</html>

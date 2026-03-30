@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/cn";
 import { tvI18n } from "@/i18n/tv-i18n";
-import { Link, Coffee, MoreVertical, UserX, LogOut, ArrowUpDown, ChevronLeft, Users, Unlink, MapPin, Pencil, User } from "lucide-react";
+import { Link, MoreVertical, UserX, LogOut, ArrowUpDown, ChevronLeft, Users, Unlink, MapPin, Pencil, User } from "lucide-react";
 import { GenderIcon } from "@/components/gender-icon";
 import { TV_QUEUE_DISPLAY_COUNT, SKILL_LEVELS, type SkillLevelType, MIN_GROUP_SIZE } from "@/lib/constants";
 import { partitionDisplayRowsIntoBalancedBatches } from "@/lib/queue-display-batches";
@@ -41,6 +41,8 @@ interface QueuePlayer {
   id: string;
   name: string;
   avatar?: string;
+  /** Check-in / staff face capture; same as Player model. */
+  facePhotoPath?: string | null;
   skillLevel?: string;
   gender?: string;
   /** Staff queue API only — internal matchmaking score, not shown to players. */
@@ -112,6 +114,7 @@ type StaffDisplayRow = {
     skillLevel?: string;
     gender?: string;
     avatar?: string;
+    facePhotoPath?: string | null;
     queueNumber?: number;
     gamesPlayed?: number;
     totalPlayMinutesToday?: number;
@@ -339,6 +342,7 @@ export function QueuePanel({
               skillLevel: member.player.skillLevel,
               gender: member.player.gender,
               avatar: member.player.avatar,
+              facePhotoPath: member.player.facePhotoPath,
               queueNumber: memberEntry?.queueNumber,
               gamesPlayed: memberEntry?.gamesPlayed ?? 0,
               totalPlayMinutesToday: memberEntry?.totalPlayMinutesToday ?? 0,
@@ -364,6 +368,7 @@ export function QueuePanel({
             skillLevel: e.player.skillLevel,
             gender: e.player.gender,
             avatar: e.player.avatar,
+            facePhotoPath: e.player.facePhotoPath,
             queueNumber: qe?.queueNumber,
             gamesPlayed: qe?.gamesPlayed ?? 0,
             totalPlayMinutesToday: qe?.totalPlayMinutesToday ?? 0,
@@ -377,6 +382,7 @@ export function QueuePanel({
             skillLevel: entry.player.skillLevel,
             gender: entry.player.gender,
             avatar: entry.player.avatar,
+            facePhotoPath: entry.player.facePhotoPath,
             queueNumber: entry.queueNumber,
             gamesPlayed: entry.gamesPlayed ?? 0,
             totalPlayMinutesToday: entry.totalPlayMinutesToday ?? 0,
@@ -596,6 +602,7 @@ export function QueuePanel({
                     skillLevel: entry.player.skillLevel,
                     gender: entry.player.gender,
                     avatar: entry.player.avatar,
+                    facePhotoPath: entry.player.facePhotoPath,
                     gamesPlayed: entry.gamesPlayed,
                     totalPlayMinutesToday: entry.totalPlayMinutesToday,
                     queueNumber: entry.queueNumber,
@@ -605,6 +612,8 @@ export function QueuePanel({
                 isTV={false}
                 isNextUp={false}
                 onPlayerAction={onPlayerAction}
+                isWarmupManual={isWarmupManual}
+                courts={courts}
                 breakSectionRow
               />
             ))}
@@ -641,8 +650,8 @@ export function QueuePanel({
           )}
           {staffBreakRows.length > 0 && onPlayerAction && (
             <section>
-              <h4 className="mb-2 text-sm font-semibold uppercase tracking-wider text-amber-400/90">
-                {t("staff.dashboard.queueSectionBreak", { count: staffBreakRows.length })}
+              <h4 className="mb-2 text-sm font-semibold uppercase tracking-wider text-sky-400/90">
+                {t("staff.dashboard.queueSectionCheckedIn", { count: staffBreakRows.length, defaultValue: `Checked In (${staffBreakRows.length})` })}
               </h4>
               <div className="flex flex-col gap-1">
                 {staffBreakRows.map((entry) => (
@@ -659,6 +668,7 @@ export function QueuePanel({
                         skillLevel: entry.player.skillLevel,
                         gender: entry.player.gender,
                         avatar: entry.player.avatar,
+                        facePhotoPath: entry.player.facePhotoPath,
                         queueNumber: entry.queueNumber,
                         gamesPlayed: entry.gamesPlayed,
                         totalPlayMinutesToday: entry.totalPlayMinutesToday,
@@ -668,6 +678,8 @@ export function QueuePanel({
                     isTV={false}
                     isNextUp={false}
                     onPlayerAction={onPlayerAction}
+                    isWarmupManual={isWarmupManual}
+                    courts={courts}
                     breakSectionRow
                   />
                 ))}
@@ -799,12 +811,14 @@ function staffGenderNameClass(gender?: string) {
 
 function StaffQueueAvatarButton({
   avatar,
+  facePhotoPath,
   gender,
   name,
   size,
   onPreview,
 }: {
   avatar?: string;
+  facePhotoPath?: string | null;
   gender?: string;
   name: string;
   size: "row" | "chip";
@@ -813,6 +827,7 @@ function StaffQueueAvatarButton({
   const dim = size === "row" ? "h-9 w-9" : "h-7 w-7";
   const ring =
     gender === "female" ? "ring-pink-500/45" : gender === "male" ? "ring-blue-500/45" : "ring-white/15";
+  const photoSrc = facePhotoPath?.trim() || (isPlayerAvatarImageSrc(avatar) ? avatar!.trim() : "");
   return (
     <button
       type="button"
@@ -827,9 +842,9 @@ function StaffQueueAvatarButton({
       )}
       aria-label={`Enlarge photo: ${name}`}
     >
-      {isPlayerAvatarImageSrc(avatar) ? (
+      {photoSrc ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={avatar!} alt="" className="h-full w-full object-cover" />
+        <img src={photoSrc} alt="" className="h-full w-full object-cover" />
       ) : avatar?.trim() ? (
         <span className={cn("select-none leading-none", size === "row" ? "text-xl" : "text-base")}>{avatar}</span>
       ) : (
@@ -864,6 +879,7 @@ function QueueRow({
     skillLevel?: string;
     gender?: string;
     avatar?: string;
+    facePhotoPath?: string | null;
     queueNumber?: number;
     gamesPlayed?: number;
     totalPlayMinutesToday?: number;
@@ -885,6 +901,7 @@ function QueueRow({
   const [avatarPreview, setAvatarPreview] = useState<{
     name: string;
     avatar?: string;
+    facePhotoPath?: string | null;
     gender?: string;
     /** Waiting-list position for this row (same for all members in a group row). */
     queuePosition: number | null;
@@ -913,7 +930,7 @@ function QueueRow({
             ? "items-center gap-[calc(0.4*var(--tw,1vw))] px-[calc(0.64*var(--tw,1vw))] py-[calc(0.48*var(--th,1vh))] leading-tight"
             : "items-start gap-3 px-4 py-2",
           entry.status === "on_break" && !breakSectionRow && "opacity-60",
-          breakSectionRow && "border-amber-800/40 bg-amber-950/15",
+          breakSectionRow && "border-sky-800/30 bg-sky-950/10",
           !isTV &&
             (entry.status === "assigned" || entry.status === "playing") &&
             !inCourtGroup &&
@@ -946,6 +963,7 @@ function QueueRow({
                       <div className="shrink-0 self-center">
                         <StaffQueueAvatarButton
                           avatar={p.avatar}
+                          facePhotoPath={p.facePhotoPath}
                           gender={p.gender}
                           name={p.name}
                           size="chip"
@@ -953,6 +971,7 @@ function QueueRow({
                             setAvatarPreview({
                               name: p.name,
                               avatar: p.avatar,
+                              facePhotoPath: p.facePhotoPath,
                               gender: p.gender,
                               queuePosition: entry.status === "waiting" ? position : null,
                               playerNumber: p.queueNumber,
@@ -1004,6 +1023,7 @@ function QueueRow({
                           <span className="shrink-0 self-center">
                             <StaffQueueAvatarButton
                               avatar={e.player.avatar}
+                              facePhotoPath={e.player.facePhotoPath}
                               gender={e.player.gender}
                               name={e.player.name}
                               size="chip"
@@ -1011,6 +1031,7 @@ function QueueRow({
                                 setAvatarPreview({
                                   name: e.player.name,
                                   avatar: e.player.avatar,
+                                  facePhotoPath: e.player.facePhotoPath,
                                   gender: e.player.gender,
                                   queuePosition: entry.status === "waiting" ? position : null,
                                   playerNumber: memberQueueNo,
@@ -1061,6 +1082,7 @@ function QueueRow({
               <div className="shrink-0 self-center">
                 <StaffQueueAvatarButton
                   avatar={entry.player.avatar}
+                  facePhotoPath={entry.player.facePhotoPath}
                   gender={entry.player.gender}
                   name={entry.player.name}
                   size="row"
@@ -1068,6 +1090,7 @@ function QueueRow({
                     setAvatarPreview({
                       name: entry.player.name,
                       avatar: entry.player.avatar,
+                      facePhotoPath: entry.player.facePhotoPath,
                       gender: entry.player.gender,
                       queuePosition: entry.status === "waiting" ? position : null,
                       playerNumber: entry.queueNumber,
@@ -1096,23 +1119,23 @@ function QueueRow({
         </div>
 
         {entry.status === "on_break" && !breakSectionRow && (
-          <div className={cn("flex items-center gap-1 text-amber-400", !isTV && "shrink-0 self-center")}>
-            <Coffee className={cn(isTV ? "h-[calc(0.96*var(--tw,1vw))] w-[calc(0.96*var(--tw,1vw))] min-h-2.5 min-w-2.5" : "h-4 w-4")} />
-            {entry.breakUntil && (
-              <BreakCountdown until={entry.breakUntil} isTV={isTV} />
-            )}
-          </div>
+          <span className={cn("shrink-0 self-center text-xs font-medium text-sky-400", isTV && "text-[clamp(0.48rem,calc(0.88*var(--tw,1vw)),0.9rem)]")}>
+            Checked In
+          </span>
         )}
 
         {!isTV && (entry.status === "assigned" || entry.status === "playing") && (
           <span className="shrink-0 self-center text-xs font-medium text-emerald-400">Playing</span>
         )}
 
-        {isTV && !isGroup && entry.player.avatar && (
-          isPlayerAvatarImageSrc(entry.player.avatar) ? (
+        {isTV &&
+          !isGroup &&
+          (entry.player.facePhotoPath?.trim() ||
+            entry.player.avatar?.trim()) &&
+          (entry.player.facePhotoPath?.trim() || isPlayerAvatarImageSrc(entry.player.avatar) ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={entry.player.avatar}
+              src={(entry.player.facePhotoPath?.trim() || entry.player.avatar) as string}
               alt=""
               className={cn(
                 "shrink-0 rounded-full object-cover border border-white/20",
@@ -1124,33 +1147,36 @@ function QueueRow({
             <span className={cn("shrink-0 text-[clamp(0.8rem,calc(1.6*var(--tw,1vw)),1.6rem)] inline-block", isNextUp && "animate-spin-y")}>
               {entry.player.avatar}
             </span>
-          )
-        )}
+          ))}
 
-        {!isTV && onPlayerAction && !isGroup && breakSectionRow && (
-          <button
-            type="button"
-            onClick={() => onPlayerAction(entry.playerId, entry.player.name, "back_to_queue")}
-            className="shrink-0 self-center rounded-lg bg-green-600/20 px-3 py-1.5 text-xs font-semibold text-green-400 hover:bg-green-600/30"
-          >
-            Back to Queue
-          </button>
-        )}
-        {!isTV && onPlayerAction && !isGroup && !breakSectionRow && (
-          <button
-            type="button"
-            onClick={() =>
-              openMenuFor({
-                id: entry.playerId,
-                name: entry.player.name,
-                skillLevel: entry.player.skillLevel,
-                gender: entry.player.gender,
-              })
-            }
-            className="shrink-0 self-center rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-white"
-          >
-            <MoreVertical className="h-4 w-4" />
-          </button>
+        {!isTV && onPlayerAction && !isGroup && (
+          <div className="flex shrink-0 items-center gap-0.5 self-center">
+            {breakSectionRow && (
+              <button
+                type="button"
+                onClick={() => onPlayerAction(entry.playerId, entry.player.name, "back_to_queue")}
+                className="rounded-lg bg-green-600/20 p-2 text-green-400 hover:bg-green-600/30"
+                aria-label="Add to queue"
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() =>
+                openMenuFor({
+                  id: entry.playerId,
+                  name: entry.player.name,
+                  skillLevel: entry.player.skillLevel,
+                  gender: entry.player.gender,
+                })
+              }
+              className="rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-white"
+              aria-label="Player actions"
+            >
+              <MoreVertical className="h-4 w-4" />
+            </button>
+          </div>
         )}
       </div>
 
@@ -1173,6 +1199,7 @@ function QueueRow({
           onClose={() => { setMenuOpen(false); setSelectedPlayer(null); }}
           isWarmupManual={isWarmupManual}
           courts={courts}
+          hideRemoveFromQueue={breakSectionRow}
         />
       )}
 
@@ -1191,10 +1218,10 @@ function QueueRow({
                 Queue {avatarPreview.queuePosition}
               </p>
             )}
-            {isPlayerAvatarImageSrc(avatarPreview.avatar) ? (
+            {avatarPreview.facePhotoPath?.trim() || isPlayerAvatarImageSrc(avatarPreview.avatar) ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={avatarPreview.avatar!}
+                src={(avatarPreview.facePhotoPath?.trim() || avatarPreview.avatar) as string}
                 alt=""
                 className="max-h-[min(65vh,560px)] w-full rounded-xl object-contain"
               />
@@ -1240,6 +1267,7 @@ function PlayerActionMenu({
   onClose,
   isWarmupManual,
   courts,
+  hideRemoveFromQueue,
 }: {
   playerName: string;
   playerGender?: string;
@@ -1250,6 +1278,8 @@ function PlayerActionMenu({
   /** When true, staff can assign waiting players to courts (warmup-assign API). */
   isWarmupManual?: boolean;
   courts?: CourtInfo[];
+  /** Checked-in / on_break rows: hide “Remove from Queue” (not applicable; use arrow or End session). */
+  hideRemoveFromQueue?: boolean;
 }) {
   const [confirmAction, setConfirmAction] = useState<PlayerAction | null>(null);
   const [view, setView] = useState<"main" | "level" | "court_picker" | "edit_profile">("main");
@@ -1259,12 +1289,12 @@ function PlayerActionMenu({
   const [editErr, setEditErr] = useState("");
 
   if (confirmAction) {
-    const isBreak = confirmAction === "remove_from_queue";
-    const label = isBreak ? "Remove from Queue / Take a break" : "End Player Session";
-    const description = isBreak
-      ? `${playerName} will move to Having a Break at the bottom of this tab. Use Back to Queue when they are ready to play again.`
+    const isRemove = confirmAction === "remove_from_queue";
+    const label = isRemove ? "Remove from Queue" : "End Player Session";
+    const description = isRemove
+      ? `${playerName} will move to the Checked In section. They can scan at the TV to rejoin when ready.`
       : `End ${playerName}'s entire session? They will be fully removed.`;
-    const confirmCta = isBreak ? "Move to break" : `Yes, ${label}`;
+    const confirmCta = isRemove ? "Remove from Queue" : `Yes, ${label}`;
 
     return (
       <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={onClose}>
@@ -1564,19 +1594,21 @@ function PlayerActionMenu({
               <SkillTag level={currentLevel} />
             )}
           </button>
-          <button
-            type="button"
-            onClick={() => setConfirmAction("remove_from_queue")}
-            className="flex w-full items-center gap-3 rounded-xl bg-neutral-800 px-4 py-3.5 text-left font-medium text-white hover:bg-neutral-700 transition-colors"
-          >
-            <UserX className="h-5 w-5 text-amber-400 shrink-0" />
-            <div>
-              <span>Remove from Queue / Take a break</span>
-              <p className="text-xs text-neutral-400 font-normal">
-                Moves them to Having a Break; use Back to Queue when they return
-              </p>
-            </div>
-          </button>
+          {!hideRemoveFromQueue && (
+            <button
+              type="button"
+              onClick={() => setConfirmAction("remove_from_queue")}
+              className="flex w-full items-center gap-3 rounded-xl bg-neutral-800 px-4 py-3.5 text-left font-medium text-white hover:bg-neutral-700 transition-colors"
+            >
+              <UserX className="h-5 w-5 text-amber-400 shrink-0" />
+              <div>
+                <span>Remove from Queue</span>
+                <p className="text-xs text-neutral-400 font-normal">
+                  Moves to Checked In; they can re-scan at the TV to rejoin
+                </p>
+              </div>
+            </button>
+          )}
           <button
             onClick={() => setConfirmAction("end_session")}
             className="flex w-full items-center gap-3 rounded-xl bg-neutral-800 px-4 py-3.5 text-left font-medium text-white hover:bg-neutral-700 transition-colors"
@@ -1593,14 +1625,3 @@ function PlayerActionMenu({
   );
 }
 
-function BreakCountdown({ until, isTV }: { until: string; isTV: boolean }) {
-  const end = new Date(until).getTime();
-  const now = Date.now();
-  const remaining = Math.max(0, Math.floor((end - now) / 60000));
-
-  return (
-    <span className={cn("tabular-nums", isTV ? "text-[clamp(0.48rem,calc(0.88*var(--tw,1vw)),0.9rem)]" : "text-xs")}>
-      {remaining}m
-    </span>
-  );
-}
