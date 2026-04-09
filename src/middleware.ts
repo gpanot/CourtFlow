@@ -11,8 +11,11 @@ function isSiteGateEnabled(): boolean {
   if (v === "true" || v === "1" || v === "on" || v === "yes") {
     return true;
   }
-  // Railway production: protect the public URL when SITE_GATE_ENABLED is unset (same as before SITE_GATE_ENABLED=false).
-  return process.env.RAILWAY_ENVIRONMENT === "production";
+  // Railway: use RAILWAY_ENVIRONMENT_NAME (see railway.com docs). There is no RAILWAY_ENVIRONMENT.
+  const railwayEnv =
+    process.env.RAILWAY_ENVIRONMENT_NAME?.toLowerCase() ||
+    process.env.RAILWAY_ENVIRONMENT?.toLowerCase();
+  return railwayEnv === "production";
 }
 
 export function middleware(request: NextRequest) {
