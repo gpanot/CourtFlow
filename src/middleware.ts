@@ -4,8 +4,15 @@ const COOKIE_NAME = "cf-site-access";
 const TOKEN_VALUE = "granted";
 
 function isSiteGateEnabled(): boolean {
-  const v = process.env.SITE_GATE_ENABLED;
-  return v === "true" || v === "1";
+  const v = process.env.SITE_GATE_ENABLED?.toLowerCase();
+  if (v === "false" || v === "0" || v === "off" || v === "no") {
+    return false;
+  }
+  if (v === "true" || v === "1" || v === "on" || v === "yes") {
+    return true;
+  }
+  // Railway production: protect the public URL when SITE_GATE_ENABLED is unset (same as before SITE_GATE_ENABLED=false).
+  return process.env.RAILWAY_ENVIRONMENT === "production";
 }
 
 export function middleware(request: NextRequest) {
