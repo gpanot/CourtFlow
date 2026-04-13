@@ -3,23 +3,16 @@ import { NextRequest, NextResponse } from "next/server";
 const COOKIE_NAME = "cf-site-access";
 const TOKEN_VALUE = "granted";
 
+/** Set to `false` when you want the site gate back (still respects `SITE_GATE_ENABLED`). */
+const SITE_GATE_TEMPORARILY_OFF = true;
+
 function isSiteGateEnabled(): boolean {
-  const v = process.env.SITE_GATE_ENABLED?.toLowerCase();
-  if (v === "false" || v === "0" || v === "off" || v === "no") {
-    return false;
-  }
-  if (v === "true" || v === "1" || v === "on" || v === "yes") {
-    return true;
-  }
-  // Railway: use RAILWAY_ENVIRONMENT_NAME (see railway.com docs). There is no RAILWAY_ENVIRONMENT.
-  const railwayEnv =
-    process.env.RAILWAY_ENVIRONMENT_NAME?.toLowerCase() ||
-    process.env.RAILWAY_ENVIRONMENT?.toLowerCase();
-  return railwayEnv === "production";
+  const v = process.env.SITE_GATE_ENABLED;
+  return v === "true" || v === "1";
 }
 
 export function middleware(request: NextRequest) {
-  if (!isSiteGateEnabled()) {
+  if (SITE_GATE_TEMPORARILY_OFF || !isSiteGateEnabled()) {
     return NextResponse.next();
   }
 
