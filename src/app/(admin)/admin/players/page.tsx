@@ -102,6 +102,12 @@ interface PlayerRecord {
 interface CheckInInsights {
   faceRegisteredAt: string | null;
   faceRegistrationSource: string | null;
+  recognition?: {
+    rekognitionEnrolled: boolean;
+    facePhotoOnFile: boolean;
+    avatarPhotoOnFile: boolean;
+    registrationEventLoggedFaceEnrolled: boolean | null;
+  };
   counts: {
     kioskFaceCheckIns: number;
     appFaceSignIns: number;
@@ -1369,7 +1375,67 @@ function PlayerDetailPanel({
                       ? `${fmtDate(checkInInsights.faceRegisteredAt)} · ${formatCheckInSource(checkInInsights.faceRegistrationSource)}`
                       : "Not on file (no staff/kiosk face enrollment event)"}
                   </p>
+                  <p className="mt-1.5 text-[10px] leading-snug text-neutral-500">
+                    This line is the first staff/kiosk &quot;face registration&quot; event in the log. It is not the same as a stored photo or cloud face match below.
+                  </p>
                 </div>
+                {checkInInsights.recognition && (
+                  <div className="space-y-2 rounded-lg border border-neutral-800/80 bg-neutral-950/50 px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-wide text-neutral-500">
+                      Picture &amp; kiosk recognition
+                    </p>
+                    <ul className="space-y-1.5 text-[11px] text-neutral-300">
+                      <li className="flex items-center justify-between gap-2">
+                        <span className="text-neutral-400">Cloud face (kiosk / TV match)</span>
+                        <span
+                          className={
+                            checkInInsights.recognition.rekognitionEnrolled
+                              ? "font-medium text-emerald-400"
+                              : "font-medium text-amber-400"
+                          }
+                        >
+                          {checkInInsights.recognition.rekognitionEnrolled ? "Yes" : "No"}
+                        </span>
+                      </li>
+                      <li className="flex items-center justify-between gap-2">
+                        <span className="text-neutral-400">Check-in photo file</span>
+                        <span
+                          className={
+                            checkInInsights.recognition.facePhotoOnFile
+                              ? "font-medium text-emerald-400"
+                              : "font-medium text-neutral-500"
+                          }
+                        >
+                          {checkInInsights.recognition.facePhotoOnFile ? "Yes" : "No"}
+                        </span>
+                      </li>
+                      <li className="flex items-center justify-between gap-2">
+                        <span className="text-neutral-400">App avatar photo</span>
+                        <span
+                          className={
+                            checkInInsights.recognition.avatarPhotoOnFile
+                              ? "font-medium text-emerald-400"
+                              : "font-medium text-neutral-500"
+                          }
+                        >
+                          {checkInInsights.recognition.avatarPhotoOnFile ? "Yes" : "No"}
+                        </span>
+                      </li>
+                    </ul>
+                    {!checkInInsights.recognition.rekognitionEnrolled &&
+                      checkInInsights.faceRegisteredAt && (
+                        <p className="rounded-md border border-amber-900/50 bg-amber-950/30 px-2 py-1.5 text-[10px] leading-snug text-amber-200/90">
+                          A staff face check-in was logged, but there is no cloud face id on this profile. The tablet/kiosk will not match this player until staff completes a successful &quot;add with face&quot; enrollment (or AWS enrollment succeeds). Phone check-in at the kiosk still works if the number is on file.
+                        </p>
+                      )}
+                    {checkInInsights.recognition.registrationEventLoggedFaceEnrolled === false && (
+                      <p className="text-[10px] leading-snug text-neutral-500">
+                        Historical note: the registration audit marked{" "}
+                        <span className="text-neutral-400">faceEnrolled: false</span> (e.g. AWS error at signup).
+                      </p>
+                    )}
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   <div className="rounded-lg border border-neutral-800 bg-neutral-950/50 px-2.5 py-2 text-center">
                     <p className="text-lg font-bold tabular-nums text-white">{checkInInsights.counts.kioskFaceCheckIns}</p>

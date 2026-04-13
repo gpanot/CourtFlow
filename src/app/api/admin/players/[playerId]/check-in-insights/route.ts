@@ -19,9 +19,21 @@ export async function GET(
 
     const player = await prisma.player.findUnique({
       where: { id: playerId },
-      select: { id: true },
+      select: {
+        id: true,
+        faceSubjectId: true,
+        facePhotoPath: true,
+        avatarPhotoPath: true,
+      },
     });
     if (!player) return notFound("Player not found");
+
+    function metaFaceEnrolled(meta: unknown): boolean | null {
+      if (!meta || typeof meta !== "object") return null;
+      const m = meta as Record<string, unknown>;
+      if (typeof m.faceEnrolled === "boolean") return m.faceEnrolled;
+      return null;
+    }
 
     const [
       faceRegisteredAudit,
@@ -37,7 +49,7 @@ export async function GET(
           action: { in: [...FACE_REGISTRATION_AUDIT_ACTIONS] },
         },
         orderBy: { createdAt: "asc" },
-        select: { createdAt: true, action: true },
+        select: { createdAt: true, action: true, metadata: true },
       }),
       prisma.faceAttempt.findFirst({
         where: { matchedPlayerId: playerId, createdNewPlayer: true },
@@ -112,9 +124,21 @@ export async function GET(
     timeline.sort((x, y) => new Date(y.at).getTime() - new Date(x.at).getTime());
     const timelineTrimmed = timeline.slice(0, 35);
 
+    const registrationLoggedFaceEnrolled = metaFaceEnrolled(
+      faceRegisteredAudit?.metadata
+    );
+
     return json({
       faceRegisteredAt,
       faceRegistrationSource: faceRegisteredAudit?.action ?? (createdNewPlayerAttempt ? "kiosk_new_player" : null),
+      recognition: {
+        /** AWS Rekognition face id — required for kiosk / TV face match */
+        rekognitionEnrolled: player.faceSubjectId != null && player.faceSubjectId !== "",
+        facePhotoOnFile: !!(player.facePhotoPath && player.facePhotoPath.trim()),
+        avatarPhotoOnFile: !!(player.avatarPhotoPath && player.avatarPhotoPath.trim()),
+        /** From first staff/kiosk registration audit metadata, if present */
+        registrationEventLoggedFaceEnrolled: registrationLoggedFaceEnrolled,
+      },
       counts: {
         kioskFaceCheckIns: kioskFaceCount,
         appFaceSignIns: countByMethod.face_pwa ?? 0,

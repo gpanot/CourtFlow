@@ -186,6 +186,7 @@ export async function GET(request: NextRequest) {
         phone: player.phone,
         avatar: player.avatar,
         facePhotoPath: player.facePhotoPath,
+        avatarPhotoPath: player.avatarPhotoPath,
         gender: player.gender,
         skillLevel: player.skillLevel,
         createdAt: player.createdAt,
