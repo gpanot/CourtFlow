@@ -142,7 +142,7 @@ export function PlayerHome() {
     }
   }, [searchParams, selectedVenue]);
 
-  const viewRef = useRef<PlayerView>(readPersistedView);
+  const viewRef = useRef<PlayerView>(readPersistedView());
   const setViewTracked = useCallback((v: PlayerView) => {
     viewRef.current = v;
     setView(v);
