@@ -18,6 +18,7 @@ interface Player {
   groupId: string | null;
   queueNumber?: number | null;
   facePhotoPath?: string | null;
+  avatarPhotoPath?: string | null;
   avatar?: string;
   /** Staff-only from courts/state (staffQueue=1). */
   rankingScore?: number;
@@ -159,10 +160,10 @@ export function CourtCard({
                     key={player.id}
                     className="relative h-[9.75rem] w-full overflow-hidden rounded-lg border border-neutral-700/70 bg-neutral-900 shadow-md ring-1 ring-black/30 sm:h-[10.25rem]"
                   >
-                    {player.facePhotoPath ? (
+                    {(player.avatarPhotoPath || player.facePhotoPath) ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={player.facePhotoPath}
+                        src={(player.avatarPhotoPath || player.facePhotoPath)!}
                         alt=""
                         className="absolute inset-0 h-full w-full object-cover object-center"
                       />
@@ -364,7 +365,7 @@ export function CourtCard({
             }}
           >
             {court.players.map((player) => (
-              <div key={player.id} className="flex items-center gap-2">
+              <div key={player.id} className="flex min-w-0 items-center gap-2">
                 {player.groupId && (
                   <Link
                     className={cn(
@@ -373,7 +374,41 @@ export function CourtCard({
                     )}
                   />
                 )}
-                <span className="font-medium truncate">
+                <div
+                  className={cn(
+                    "flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/20 bg-neutral-800",
+                    "h-[clamp(1rem,calc(2.25*var(--tw,1vw)),2rem)] w-[clamp(1rem,calc(2.25*var(--tw,1vw)),2rem)]"
+                  )}
+                >
+                  {(player.avatarPhotoPath?.trim() || player.facePhotoPath?.trim()) ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={(player.avatarPhotoPath?.trim() || player.facePhotoPath?.trim())!}
+                      alt=""
+                      className="h-full w-full object-cover object-center"
+                    />
+                  ) : isPlayerAvatarImageSrc(player.avatar) ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={player.avatar!.trim()}
+                      alt=""
+                      className="h-full w-full object-cover object-center"
+                    />
+                  ) : player.avatar?.trim() ? (
+                    <span
+                      className="flex h-full w-full items-center justify-center leading-none"
+                      style={{
+                        fontSize:
+                          "clamp(0.65rem, min(calc(1.2 * var(--tw, 1vw)), calc(1.8 * var(--th, 1vh))), 1.1rem)",
+                      }}
+                    >
+                      {player.avatar.trim()}
+                    </span>
+                  ) : (
+                    <UserRound className="h-[42%] w-[42%] text-neutral-500" strokeWidth={1.25} aria-hidden />
+                  )}
+                </div>
+                <span className="min-w-0 flex-1 truncate font-medium">
                   {playerNameWithCheckIn(player.name, player.queueNumber)}
                 </span>
               </div>

@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useSessionStore } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { SKILL_LEVELS, type SkillLevelType } from "@/lib/constants";
 import { cn } from "@/lib/cn";
 import { PlayerLanguageToggle } from "./player-language-toggle";
-import { ArrowLeft, Trophy, Clock, Check, Pencil, ChevronRight, Bell, BellOff } from "lucide-react";
+import { ArrowLeft, Trophy, Clock, Check, Pencil, ChevronRight, Bell, BellOff, Camera, Trash2 } from "lucide-react";
 import { isPushSupported, subscribeToPush, unsubscribeFromPush, getNotificationPermission } from "@/lib/push-client";
 import { NotificationCard } from "./notification-card";
-import { InstallCard } from "./install-card";
+
 import { PlayerAvatarThumb } from "@/components/player-avatar-thumb";
+import { AvatarPhotoCropper } from "@/components/avatar-photo-cropper";
 
 const AVATAR_OPTIONS = [
   "🏓", "🎾", "⚡", "🔥", "🌟", "💪", "🦊", "🐻",
@@ -25,6 +26,8 @@ interface PlayerProfile {
   avatar: string;
   skillLevel: string;
   gender: string;
+  avatarPhotoPath?: string | null;
+  facePhotoPath?: string | null;
 }
 
 interface MatchHistory {
@@ -86,6 +89,9 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
   const [editingAvatar, setEditingAvatar] = useState(false);
   const [editSkill, setEditSkill] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [notifToggling, setNotifToggling] = useState(false);
   const pushSupported = isPushSupported();
@@ -155,6 +161,44 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
     setEditingAvatar(false);
   };
 
+  const handlePhotoSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) setCropFile(file);
+    e.target.value = "";
+  };
+
+  const handleCroppedPhoto = async (blob: Blob) => {
+    if (!playerId) return;
+    setCropFile(null);
+    setUploadingPhoto(true);
+    try {
+      const form = new FormData();
+      form.append("avatar", blob, "avatar.jpg");
+      const res = await api.upload<{ avatarPhotoPath: string }>(
+        `/api/players/${playerId}/avatar`,
+        form
+      );
+      setProfile((p) => p ? { ...p, avatarPhotoPath: res.avatarPhotoPath } : p);
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const removePhotoAvatar = async () => {
+    if (!playerId) return;
+    setUploadingPhoto(true);
+    try {
+      await api.delete(`/api/players/${playerId}/avatar`);
+      setProfile((p) => p ? { ...p, avatarPhotoPath: null } : p);
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
   const updateSkill = async (level: SkillLevelType) => {
     await saveField({ skillLevel: level });
     setEditSkill(false);
@@ -184,20 +228,53 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
         <div className="space-y-6">
           {/* Avatar + Name */}
           <div className="flex flex-col items-center gap-3">
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="relative rounded-full p-0 transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                aria-label={t("profile.editAvatarAria")}
+              >
+                <PlayerAvatarThumb
+                  avatarPhotoPath={profile.avatarPhotoPath}
+                  facePhotoPath={profile.facePhotoPath}
+                  avatar={profile.avatar || "🏓"}
+                  sizeClass="h-24 w-24"
+                  textFallbackClassName="text-5xl"
+                />
+                {uploadingPhoto && (
+                  <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50">
+                    <div className="h-6 w-6 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  </div>
+                )}
+                <span className="pointer-events-none absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-green-600 text-xs text-white shadow-md">
+                  <Camera className="h-3.5 w-3.5" />
+                </span>
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handlePhotoSelected}
+              />
+              {profile.avatarPhotoPath && (
+                <button
+                  type="button"
+                  onClick={removePhotoAvatar}
+                  className="absolute -bottom-1 -left-1 flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-xs text-white shadow-md hover:bg-red-500"
+                  aria-label="Remove photo"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
             <button
               type="button"
               onClick={() => setEditingAvatar(true)}
-              className="relative rounded-full p-0 transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
-              aria-label={t("profile.editAvatarAria")}
+              className="text-xs text-blue-400 hover:text-blue-300"
             >
-              <PlayerAvatarThumb
-                avatar={profile.avatar || "🏓"}
-                sizeClass="h-24 w-24"
-                textFallbackClassName="text-5xl"
-              />
-              <span className="pointer-events-none absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-blue-600 text-xs text-white shadow-md">
-                <Pencil className="h-3.5 w-3.5" />
-              </span>
+              {t("profile.chooseEmoji", "Choose emoji")}
             </button>
 
             {editingName ? (
@@ -286,9 +363,6 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
           ) : (
             <NotificationCard onEnabled={() => setNotificationsEnabled(true)} />
           )}
-
-          {/* Install App */}
-          <InstallCard />
 
           {/* Skill Level */}
           <div>
@@ -401,7 +475,7 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
         </div>
       )}
 
-      {/* Avatar picker */}
+      {/* Avatar emoji picker */}
       {editingAvatar && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={() => setEditingAvatar(false)}>
           <div
@@ -428,6 +502,15 @@ export function ProfileScreen({ onBack }: { onBack: () => void }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Photo cropper */}
+      {cropFile && (
+        <AvatarPhotoCropper
+          file={cropFile}
+          onCropped={handleCroppedPhoto}
+          onCancel={() => setCropFile(null)}
+        />
       )}
     </div>
   );

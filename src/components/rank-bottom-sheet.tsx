@@ -130,7 +130,7 @@ export function RankBottomSheet({
                 <span className="w-6 shrink-0 text-center text-sm font-bold tabular-nums text-neutral-300">
                   {pos}
                 </span>
-                <PlayerAvatarThumb facePhotoPath={p.facePhotoPath} avatar={p.avatar} sizeClass="h-10 w-10" />
+                <PlayerAvatarThumb avatarPhotoPath={p.avatarPhotoPath} facePhotoPath={p.facePhotoPath} avatar={p.avatar} sizeClass="h-10 w-10" />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <span className="truncate font-medium text-white">{p.name}</span>

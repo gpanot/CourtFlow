@@ -146,6 +146,8 @@ model Player {
   faceSubjectId         String?        @map("face_subject_id")
   /// Public URL path served from /uploads (e.g. /uploads/players/{id}.jpg) — set on first face check-in enrollment
   facePhotoPath         String?        @map("face_photo_path")
+  /// Player-uploaded avatar photo, takes priority over facePhotoPath for display
+  avatarPhotoPath       String?        @map("avatar_photo_path")
   rankingScore          Int            @default(200) @map("ranking_score")
   rankingCount          Int            @default(0) @map("ranking_count")
   lastRankedAt          DateTime?      @map("last_ranked_at")

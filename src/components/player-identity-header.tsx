@@ -7,6 +7,7 @@ import { cn } from "@/lib/cn";
 import { Tv } from "lucide-react";
 
 export interface PlayerIdentityHeaderProps {
+  avatarPhotoPath?: string | null;
   avatar?: string | null;
   playerName: string;
   queueNumber: number | null;
@@ -21,6 +22,7 @@ export interface PlayerIdentityHeaderProps {
 }
 
 export function PlayerIdentityHeader({
+  avatarPhotoPath,
   avatar,
   playerName,
   queueNumber,
@@ -43,7 +45,7 @@ export function PlayerIdentityHeader({
             className="shrink-0 rounded-full p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
             aria-label={t("home.profileAria")}
           >
-            <PlayerAvatarThumb avatar={avatar || "🏓"} className={avatarThumbClassName} />
+            <PlayerAvatarThumb avatarPhotoPath={avatarPhotoPath} avatar={avatar || "🏓"} className={avatarThumbClassName} />
           </button>
         )}
         <div className="min-w-0 flex-1">

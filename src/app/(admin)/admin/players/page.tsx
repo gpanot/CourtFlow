@@ -83,6 +83,7 @@ interface PlayerRecord {
   avatar: string;
   /** First check-in face capture (staff “add with face”), served from /uploads/players */
   facePhotoPath?: string | null;
+  avatarPhotoPath?: string | null;
   gender: string;
   skillLevel: string;
   createdAt: string;
@@ -128,6 +129,7 @@ interface PlayerSession {
     name: string;
     avatar: string;
     facePhotoPath?: string | null;
+    avatarPhotoPath?: string | null;
     skillLevel: string;
     rankingScore: number;
   }[];
@@ -575,6 +577,7 @@ export default function PlayersPage() {
                 <td className="px-2.5 py-2">
                   <div className="flex items-center gap-1.5">
                     <PlayerAvatarThumb
+                      avatarPhotoPath={p.avatarPhotoPath}
                       facePhotoPath={p.facePhotoPath}
                       avatar={p.avatar}
                       sizeClass="h-7 w-7"
@@ -664,6 +667,7 @@ export default function PlayersPage() {
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2 min-w-0">
                 <PlayerAvatarThumb
+                  avatarPhotoPath={p.avatarPhotoPath}
                   facePhotoPath={p.facePhotoPath}
                   avatar={p.avatar}
                   sizeClass="h-9 w-9"
@@ -1176,6 +1180,7 @@ function PlayerDetailPanel({
           <div className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-800 bg-neutral-950 px-4 py-3">
           <div className="flex items-center gap-3 min-w-0">
             <PlayerAvatarThumb
+              avatarPhotoPath={player.avatarPhotoPath}
               facePhotoPath={player.facePhotoPath}
               avatar={player.avatar}
               sizeClass="h-12 w-12"
@@ -1535,6 +1540,7 @@ function PlayerDetailPanel({
                               )}
                             >
                               <PlayerAvatarThumb
+                                avatarPhotoPath={p.avatarPhotoPath}
                                 facePhotoPath={p.facePhotoPath}
                                 avatar={p.avatar}
                                 sizeClass="h-5 w-5"

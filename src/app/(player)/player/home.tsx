@@ -16,7 +16,7 @@ import { SessionRecapScreen } from "./session-recap";
 import { LogOut } from "lucide-react";
 import { isPushSupported, subscribeToPush, getNotificationPermission, usePwaStandalone } from "@/lib/push-client";
 import { NotificationCard } from "./notification-card";
-import { InstallCard } from "./install-card";
+
 import { PlayerAvatarThumb } from "@/components/player-avatar-thumb";
 import { PlayerIdentityHeader } from "@/components/player-identity-header";
 import { PlayerTvDisplayModal } from "@/components/player-tv-display-modal";
@@ -53,6 +53,7 @@ interface TodayPlayer {
   id: string;
   name: string;
   facePhotoPath?: string | null;
+  avatarPhotoPath?: string | null;
   avatar?: string | null;
 }
 
@@ -72,6 +73,7 @@ export function PlayerHome() {
   const [showProfile, setShowProfile] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [avatar, setAvatar] = useState("🏓");
+  const [avatarPhotoPath, setAvatarPhotoPath] = useState<string | null>(null);
   const [recapSessionId, setRecapSessionId] = useState<string | null>(null);
   const [venueLogoutConfirmOpen, setVenueLogoutConfirmOpen] = useState(false);
   const [playerMe, setPlayerMe] = useState<PlayerMeData | null>(null);
@@ -90,8 +92,9 @@ export function PlayerHome() {
   useEffect(() => {
     api.get<Venue[]>("/api/venues").then(setVenues).catch(console.error);
     if (playerId) {
-      api.get<{ avatar: string }>(`/api/players/${playerId}`).then((p) => {
+      api.get<{ avatar: string; avatarPhotoPath?: string | null }>(`/api/players/${playerId}`).then((p) => {
         if (p.avatar) setAvatar(p.avatar);
+        setAvatarPhotoPath(p.avatarPhotoPath ?? null);
       }).catch(console.error);
 
       api.get<PlayerMeData>("/api/player/me").then(setPlayerMe).catch(console.error);
@@ -162,7 +165,7 @@ export function PlayerHome() {
       const courtsState = await api.get<{
         courts: CourtState[];
         session: { id: string } | null;
-        queue?: { id: string; playerId: string; player: { name: string; facePhotoPath?: string | null; avatar?: string | null } }[];
+        queue?: { id: string; playerId: string; player: { name: string; facePhotoPath?: string | null; avatarPhotoPath?: string | null; avatar?: string | null } }[];
       }>(`/api/courts/state?venueId=${selectedVenue}`);
 
       if (courtsState.queue) {
@@ -171,6 +174,7 @@ export function PlayerHome() {
             id: e.playerId,
             name: e.player.name,
             facePhotoPath: e.player.facePhotoPath,
+            avatarPhotoPath: e.player.avatarPhotoPath,
             avatar: e.player.avatar,
           }))
         );
@@ -315,8 +319,9 @@ export function PlayerHome() {
         onBack={() => {
           setShowProfile(false);
           if (playerId) {
-            api.get<{ avatar: string }>(`/api/players/${playerId}`).then((p) => {
+            api.get<{ avatar: string; avatarPhotoPath?: string | null }>(`/api/players/${playerId}`).then((p) => {
               if (p.avatar) setAvatar(p.avatar);
+              setAvatarPhotoPath(p.avatarPhotoPath ?? null);
             }).catch(console.error);
           }
           void fetchPlayerState();
@@ -338,7 +343,7 @@ export function PlayerHome() {
                 className="shrink-0 rounded-full p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
                 aria-label={t("home.profileAria")}
               >
-                <PlayerAvatarThumb avatar={avatar} />
+                <PlayerAvatarThumb avatarPhotoPath={avatarPhotoPath} avatar={avatar} />
               </button>
               <div>
                 <h1 className="text-2xl font-bold text-green-500">CourtFlow</h1>
@@ -440,7 +445,7 @@ export function PlayerHome() {
             className="shrink-0 rounded-full p-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
             aria-label={t("home.profileAria")}
           >
-            <PlayerAvatarThumb avatar={avatar} />
+            <PlayerAvatarThumb avatarPhotoPath={avatarPhotoPath} avatar={avatar} />
           </button>
           <div className="flex-1">
             <h1 className="text-2xl font-bold text-green-500">CourtFlow</h1>
@@ -578,6 +583,7 @@ export function PlayerHome() {
                   {displayPlayers.map((p) => (
                     <div key={p.id} className="flex flex-col items-center gap-1">
                       <PlayerAvatarThumb
+                        avatarPhotoPath={p.avatarPhotoPath}
                         facePhotoPath={p.facePhotoPath}
                         avatar={p.avatar}
                         sizeClass="h-10 w-10"
@@ -595,10 +601,6 @@ export function PlayerHome() {
             )}
           </div>
         )}
-
-        <div className="shrink-0 mt-4 space-y-3">
-          <InstallCard />
-        </div>
 
         <div className="shrink-0 flex justify-center pt-2">
           <button
@@ -674,6 +676,7 @@ export function PlayerHome() {
         venueId={selectedVenue}
         venueName={venueName}
         sessionId={session?.id || ""}
+        avatarPhotoPath={avatarPhotoPath}
         avatar={avatar}
         playerName={playerName ?? ""}
         queueNumber={playerMe?.queueNumber ?? queueEntry.queueNumber ?? null}
@@ -689,6 +692,7 @@ export function PlayerHome() {
     <div className="pointer-events-none absolute left-4 right-4 top-[max(1rem,env(safe-area-inset-top))] z-40">
       <div className="pointer-events-auto">
         <PlayerIdentityHeader
+          avatarPhotoPath={avatarPhotoPath}
           avatar={avatar}
           playerName={playerName ?? ""}
           queueNumber={queueNumberForHeader}

@@ -65,6 +65,37 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   return data as T;
 }
 
+async function uploadRequest<T>(url: string, formData: FormData): Promise<T> {
+  const token = typeof window !== "undefined"
+    ? useSessionStore.getState().token
+    : null;
+
+  const res = await fetch(`${BASE}${url}`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: formData,
+  });
+
+  let data: Record<string, unknown> = {};
+  const ct = res.headers.get("content-type") || "";
+  if (ct.includes("application/json")) {
+    try {
+      data = (await res.json()) as Record<string, unknown>;
+    } catch {
+      data = {};
+    }
+  }
+
+  if (!res.ok) {
+    const message = typeof data.error === "string" ? data.error : res.statusText || "Upload failed";
+    throw new ApiRequestError(message, { status: res.status });
+  }
+  return data as T;
+}
+
 export const api = {
   get: <T>(url: string, init?: RequestInit) => request<T>(url, { method: "GET", ...init }),
   post: <T>(url: string, body?: unknown) =>
@@ -75,4 +106,5 @@ export const api = {
     request<T>(url, { method: "PATCH", body: JSON.stringify(body) }),
   delete: <T>(url: string, body?: unknown) =>
     request<T>(url, { method: "DELETE", body: body ? JSON.stringify(body) : undefined }),
+  upload: <T>(url: string, formData: FormData) => uploadRequest<T>(url, formData),
 };

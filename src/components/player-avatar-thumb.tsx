@@ -5,6 +5,8 @@ import { cn } from "@/lib/cn";
 import { isPlayerAvatarImageSrc } from "@/lib/player-avatar-display";
 
 export interface PlayerAvatarThumbProps {
+  /** Player-uploaded avatar photo — highest priority */
+  avatarPhotoPath?: string | null;
   facePhotoPath?: string | null;
   avatar?: string | null;
   className?: string;
@@ -15,12 +17,14 @@ export interface PlayerAvatarThumbProps {
 }
 
 export function PlayerAvatarThumb({
+  avatarPhotoPath,
   facePhotoPath,
   avatar,
   className,
   sizeClass = "h-10 w-10",
   textFallbackClassName = "text-lg",
 }: PlayerAvatarThumbProps) {
+  const photoSrc = avatarPhotoPath || facePhotoPath;
   return (
     <div
       className={cn(
@@ -29,9 +33,9 @@ export function PlayerAvatarThumb({
         className
       )}
     >
-      {facePhotoPath ? (
+      {photoSrc ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={facePhotoPath} alt="" className="h-full w-full object-cover object-center" />
+        <img src={photoSrc} alt="" className="h-full w-full object-cover object-center" />
       ) : isPlayerAvatarImageSrc(avatar) ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={avatar!} alt="" className="h-full w-full object-cover object-center" />

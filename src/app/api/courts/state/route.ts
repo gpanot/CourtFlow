@@ -13,6 +13,7 @@ const PUBLIC_PLAYER_SELECT = {
   skillLevel: true,
   gender: true,
   facePhotoPath: true,
+  avatarPhotoPath: true,
 } as const;
 
 export async function GET(request: NextRequest) {
@@ -51,6 +52,7 @@ export async function GET(request: NextRequest) {
           groupId: string | null;
           queueNumber: number | null;
           facePhotoPath: string | null;
+          avatarPhotoPath: string | null;
           avatar: string;
           rankingScore?: number;
           rankingCount?: number;
@@ -85,6 +87,7 @@ export async function GET(request: NextRequest) {
                 groupId: qe?.groupId || null,
                 queueNumber: qe?.queueNumber ?? null,
                 facePhotoPath: p.facePhotoPath ?? null,
+                avatarPhotoPath: p.avatarPhotoPath ?? null,
                 avatar: p.avatar,
               };
               if (staffQueue) {

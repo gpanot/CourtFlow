@@ -22,6 +22,11 @@ import {
 import { StaffQueueFilterBar } from "@/components/staff-queue-filter-bar";
 import { playerNameWithCheckIn } from "@/lib/player-display";
 import { isPlayerAvatarImageSrc } from "@/lib/player-avatar-display";
+import {
+  staffQueueGenderNameClass,
+  StaffQueueRankingScoreBar,
+  StaffQueueSkillTag,
+} from "@/components/staff-queue-player-display";
 
 const skillDotColors: Record<string, string> = {
   beginner: "bg-green-500",
@@ -43,6 +48,7 @@ interface QueuePlayer {
   avatar?: string;
   /** Check-in / staff face capture; same as Player model. */
   facePhotoPath?: string | null;
+  avatarPhotoPath?: string | null;
   skillLevel?: string;
   gender?: string;
   /** Staff queue API only — internal matchmaking score, not shown to players. */
@@ -114,6 +120,7 @@ type StaffDisplayRow = {
     skillLevel?: string;
     gender?: string;
     avatar?: string;
+    avatarPhotoPath?: string | null;
     facePhotoPath?: string | null;
     queueNumber?: number;
     gamesPlayed?: number;
@@ -342,6 +349,7 @@ export function QueuePanel({
               skillLevel: member.player.skillLevel,
               gender: member.player.gender,
               avatar: member.player.avatar,
+              avatarPhotoPath: member.player.avatarPhotoPath,
               facePhotoPath: member.player.facePhotoPath,
               queueNumber: memberEntry?.queueNumber,
               gamesPlayed: memberEntry?.gamesPlayed ?? 0,
@@ -368,6 +376,7 @@ export function QueuePanel({
             skillLevel: e.player.skillLevel,
             gender: e.player.gender,
             avatar: e.player.avatar,
+            avatarPhotoPath: e.player.avatarPhotoPath,
             facePhotoPath: e.player.facePhotoPath,
             queueNumber: qe?.queueNumber,
             gamesPlayed: qe?.gamesPlayed ?? 0,
@@ -382,6 +391,7 @@ export function QueuePanel({
             skillLevel: entry.player.skillLevel,
             gender: entry.player.gender,
             avatar: entry.player.avatar,
+            avatarPhotoPath: entry.player.avatarPhotoPath,
             facePhotoPath: entry.player.facePhotoPath,
             queueNumber: entry.queueNumber,
             gamesPlayed: entry.gamesPlayed ?? 0,
@@ -602,6 +612,7 @@ export function QueuePanel({
                     skillLevel: entry.player.skillLevel,
                     gender: entry.player.gender,
                     avatar: entry.player.avatar,
+                    avatarPhotoPath: entry.player.avatarPhotoPath,
                     facePhotoPath: entry.player.facePhotoPath,
                     gamesPlayed: entry.gamesPlayed,
                     totalPlayMinutesToday: entry.totalPlayMinutesToday,
@@ -668,6 +679,7 @@ export function QueuePanel({
                         skillLevel: entry.player.skillLevel,
                         gender: entry.player.gender,
                         avatar: entry.player.avatar,
+                        avatarPhotoPath: entry.player.avatarPhotoPath,
                         facePhotoPath: entry.player.facePhotoPath,
                         queueNumber: entry.queueNumber,
                         gamesPlayed: entry.gamesPlayed,
@@ -759,40 +771,6 @@ function SkillDot({ level, isTV }: { level?: string; isTV: boolean }) {
   );
 }
 
-const skillTagStyles: Record<string, string> = {
-  beginner: "bg-green-700/60 text-green-200",
-  intermediate: "bg-blue-700/60 text-blue-200",
-  advanced: "bg-purple-700/60 text-purple-200",
-  pro: "bg-red-700/60 text-red-200",
-};
-
-function SkillTag({ level }: { level?: string }) {
-  const style = skillTagStyles[level ?? ""] ?? "bg-neutral-700 text-neutral-300";
-  const full = skillLevelMeta[level ?? ""]?.label ?? level ?? "—";
-  const label = full.slice(0, 3).toUpperCase();
-  return (
-    <span className={cn("shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide", style)}>
-      {label}
-    </span>
-  );
-}
-
-/** Staff-only: relative skill bar (no raw number in UI). */
-function StaffRankingScoreBar({ score }: { score?: number }) {
-  if (score == null || Number.isNaN(score)) return null;
-  const pct = Math.min(100, Math.max(0, (score / 450) * 100));
-  const barColor = score < 150 ? "bg-amber-500" : score < 250 ? "bg-blue-500" : "bg-emerald-500";
-  return (
-    <div
-      className="h-1 w-10 shrink-0 overflow-hidden rounded-full bg-neutral-700"
-      title=""
-      aria-hidden
-    >
-      <div className={cn("h-full rounded-full", barColor)} style={{ width: `${pct}%` }} />
-    </div>
-  );
-}
-
 function PlayerStats({ gamesPlayed, playMinutes, className }: { gamesPlayed: number; playMinutes: number; className?: string }) {
   if (gamesPlayed === 0 && playMinutes === 0) return null;
   return (
@@ -802,15 +780,9 @@ function PlayerStats({ gamesPlayed, playMinutes, className }: { gamesPlayed: num
   );
 }
 
-function staffGenderNameClass(gender?: string) {
-  const g = (gender ?? "").toLowerCase();
-  if (g === "female") return "text-pink-400";
-  if (g === "male") return "text-blue-400";
-  return "text-white";
-}
-
 function StaffQueueAvatarButton({
   avatar,
+  avatarPhotoPath,
   facePhotoPath,
   gender,
   name,
@@ -818,6 +790,7 @@ function StaffQueueAvatarButton({
   onPreview,
 }: {
   avatar?: string;
+  avatarPhotoPath?: string | null;
   facePhotoPath?: string | null;
   gender?: string;
   name: string;
@@ -827,7 +800,7 @@ function StaffQueueAvatarButton({
   const dim = size === "row" ? "h-9 w-9" : "h-7 w-7";
   const ring =
     gender === "female" ? "ring-pink-500/45" : gender === "male" ? "ring-blue-500/45" : "ring-white/15";
-  const photoSrc = facePhotoPath?.trim() || (isPlayerAvatarImageSrc(avatar) ? avatar!.trim() : "");
+  const photoSrc = avatarPhotoPath?.trim() || facePhotoPath?.trim() || (isPlayerAvatarImageSrc(avatar) ? avatar!.trim() : "");
   return (
     <button
       type="button"
@@ -879,6 +852,7 @@ function QueueRow({
     skillLevel?: string;
     gender?: string;
     avatar?: string;
+    avatarPhotoPath?: string | null;
     facePhotoPath?: string | null;
     queueNumber?: number;
     gamesPlayed?: number;
@@ -901,6 +875,7 @@ function QueueRow({
   const [avatarPreview, setAvatarPreview] = useState<{
     name: string;
     avatar?: string;
+    avatarPhotoPath?: string | null;
     facePhotoPath?: string | null;
     gender?: string;
     /** Waiting-list position for this row (same for all members in a group row). */
@@ -963,6 +938,7 @@ function QueueRow({
                       <div className="shrink-0 self-center">
                         <StaffQueueAvatarButton
                           avatar={p.avatar}
+                          avatarPhotoPath={p.avatarPhotoPath}
                           facePhotoPath={p.facePhotoPath}
                           gender={p.gender}
                           name={p.name}
@@ -971,6 +947,7 @@ function QueueRow({
                             setAvatarPreview({
                               name: p.name,
                               avatar: p.avatar,
+                              avatarPhotoPath: p.avatarPhotoPath,
                               facePhotoPath: p.facePhotoPath,
                               gender: p.gender,
                               queuePosition: entry.status === "waiting" ? position : null,
@@ -986,14 +963,14 @@ function QueueRow({
                           onClick={() => openMenuFor({ id: p.id, name: p.name, skillLevel: p.skillLevel, gender: p.gender })}
                           className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 rounded py-0.5 text-left transition-colors hover:text-white"
                         >
-                          <span className={cn("min-w-0 truncate font-medium", staffGenderNameClass(p.gender))}>{p.name}</span>
+                          <span className={cn("min-w-0 truncate font-medium", staffQueueGenderNameClass(p.gender))}>{p.name}</span>
                           {p.queueNumber != null && (
                             <span className="shrink-0 font-semibold tabular-nums text-blue-400">{p.queueNumber}</span>
                           )}
                         </button>
                         <div className="flex flex-wrap items-center gap-1">
-                          <SkillTag level={p.skillLevel} />
-                          <StaffRankingScoreBar score={p.rankingScore} />
+                          <StaffQueueSkillTag level={p.skillLevel} />
+                          <StaffQueueRankingScoreBar score={p.rankingScore} />
                           <PlayerStats gamesPlayed={p.gamesPlayed ?? 0} playMinutes={p.totalPlayMinutesToday ?? 0} className="text-xs" />
                         </div>
                       </div>
@@ -1023,6 +1000,7 @@ function QueueRow({
                           <span className="shrink-0 self-center">
                             <StaffQueueAvatarButton
                               avatar={e.player.avatar}
+                              avatarPhotoPath={e.player.avatarPhotoPath}
                               facePhotoPath={e.player.facePhotoPath}
                               gender={e.player.gender}
                               name={e.player.name}
@@ -1031,6 +1009,7 @@ function QueueRow({
                                 setAvatarPreview({
                                   name: e.player.name,
                                   avatar: e.player.avatar,
+                                  avatarPhotoPath: e.player.avatarPhotoPath,
                                   facePhotoPath: e.player.facePhotoPath,
                                   gender: e.player.gender,
                                   queuePosition: entry.status === "waiting" ? position : null,
@@ -1043,7 +1022,7 @@ function QueueRow({
                         )}
                         <span className="flex min-w-0 flex-col gap-0.5">
                           <span className="flex flex-wrap items-baseline gap-x-1.5">
-                            <span className={cn(!isTV && staffGenderNameClass(e.player.gender))}>
+                            <span className={cn(!isTV && staffQueueGenderNameClass(e.player.gender))}>
                               {e.player.name}
                               {i < entry.group!.queueEntries.length - 1 && ","}
                             </span>
@@ -1053,8 +1032,8 @@ function QueueRow({
                           </span>
                           {!isTV && (
                             <span className="flex flex-wrap items-center gap-1">
-                              <SkillTag level={e.player.skillLevel} />
-                              <StaffRankingScoreBar score={e.player.rankingScore} />
+                              <StaffQueueSkillTag level={e.player.skillLevel} />
+                              <StaffQueueRankingScoreBar score={e.player.rankingScore} />
                             </span>
                           )}
                         </span>
@@ -1082,6 +1061,7 @@ function QueueRow({
               <div className="shrink-0 self-center">
                 <StaffQueueAvatarButton
                   avatar={entry.player.avatar}
+                  avatarPhotoPath={entry.player.avatarPhotoPath}
                   facePhotoPath={entry.player.facePhotoPath}
                   gender={entry.player.gender}
                   name={entry.player.name}
@@ -1090,6 +1070,7 @@ function QueueRow({
                     setAvatarPreview({
                       name: entry.player.name,
                       avatar: entry.player.avatar,
+                      avatarPhotoPath: entry.player.avatarPhotoPath,
                       facePhotoPath: entry.player.facePhotoPath,
                       gender: entry.player.gender,
                       queuePosition: entry.status === "waiting" ? position : null,
@@ -1101,7 +1082,7 @@ function QueueRow({
               </div>
               <div className="flex min-w-0 flex-1 flex-col gap-1">
                 <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                  <span className={cn("truncate text-sm font-medium", staffGenderNameClass(entry.player.gender))}>
+                  <span className={cn("truncate text-sm font-medium", staffQueueGenderNameClass(entry.player.gender))}>
                     {entry.player.name}
                   </span>
                   {entry.queueNumber != null && (
@@ -1109,8 +1090,8 @@ function QueueRow({
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <SkillTag level={entry.player.skillLevel} />
-                  <StaffRankingScoreBar score={entry.player.rankingScore} />
+                  <StaffQueueSkillTag level={entry.player.skillLevel} />
+                  <StaffQueueRankingScoreBar score={entry.player.rankingScore} />
                   <PlayerStats gamesPlayed={entry.gamesPlayed ?? 0} playMinutes={entry.totalPlayMinutesToday ?? 0} className="text-sm" />
                 </div>
               </div>
@@ -1130,12 +1111,12 @@ function QueueRow({
 
         {isTV &&
           !isGroup &&
-          (entry.player.facePhotoPath?.trim() ||
+          (entry.player.avatarPhotoPath?.trim() || entry.player.facePhotoPath?.trim() ||
             entry.player.avatar?.trim()) &&
-          (entry.player.facePhotoPath?.trim() || isPlayerAvatarImageSrc(entry.player.avatar) ? (
+          (entry.player.avatarPhotoPath?.trim() || entry.player.facePhotoPath?.trim() || isPlayerAvatarImageSrc(entry.player.avatar) ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={(entry.player.facePhotoPath?.trim() || entry.player.avatar) as string}
+              src={(entry.player.avatarPhotoPath?.trim() || entry.player.facePhotoPath?.trim() || entry.player.avatar) as string}
               alt=""
               className={cn(
                 "shrink-0 rounded-full object-cover border border-white/20",
@@ -1218,10 +1199,10 @@ function QueueRow({
                 Queue {avatarPreview.queuePosition}
               </p>
             )}
-            {avatarPreview.facePhotoPath?.trim() || isPlayerAvatarImageSrc(avatarPreview.avatar) ? (
+            {avatarPreview.avatarPhotoPath?.trim() || avatarPreview.facePhotoPath?.trim() || isPlayerAvatarImageSrc(avatarPreview.avatar) ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={(avatarPreview.facePhotoPath?.trim() || avatarPreview.avatar) as string}
+                src={(avatarPreview.avatarPhotoPath?.trim() || avatarPreview.facePhotoPath?.trim() || avatarPreview.avatar) as string}
                 alt=""
                 className="max-h-[min(65vh,560px)] w-full rounded-xl object-contain"
               />
@@ -1233,7 +1214,7 @@ function QueueRow({
               </div>
             )}
             <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 px-1">
-              <span className={cn("text-center text-lg font-semibold", staffGenderNameClass(avatarPreview.gender))}>
+              <span className={cn("text-center text-lg font-semibold", staffQueueGenderNameClass(avatarPreview.gender))}>
                 {avatarPreview.name}
               </span>
               {avatarPreview.playerNumber != null && (
@@ -1475,7 +1456,7 @@ function PlayerActionMenu({
               <span className="text-neutral-300">Assign</span>
               <GenderIcon gender={playerGender} className="h-5 w-5 opacity-100" />
               <span className="break-words">{playerName}</span>
-              <SkillTag level={currentLevel} />
+              <StaffQueueSkillTag level={currentLevel} />
               <span className="font-normal text-neutral-400">to…</span>
             </h3>
           </div>
@@ -1527,7 +1508,7 @@ function PlayerActionMenu({
                             <span className="font-medium text-white">
                               {playerNameWithCheckIn(p.name, p.queueNumber)}
                             </span>
-                            <SkillTag level={p.skillLevel} />
+                            <StaffQueueSkillTag level={p.skillLevel} />
                           </span>
                         ))}
                       </div>
@@ -1591,7 +1572,7 @@ function PlayerActionMenu({
               <p className="text-xs text-neutral-400 font-normal">Override player&apos;s self-reported skill level</p>
             </div>
             {currentLevel && (
-              <SkillTag level={currentLevel} />
+              <StaffQueueSkillTag level={currentLevel} />
             )}
           </button>
           {!hideRemoveFromQueue && (

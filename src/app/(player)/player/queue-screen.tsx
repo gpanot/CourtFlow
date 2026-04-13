@@ -7,7 +7,7 @@ import { useSessionStore } from "@/stores/session-store";
 import { cn } from "@/lib/cn";
 import { Link, LogOut, RefreshCw } from "lucide-react";
 import { NotificationCard } from "./notification-card";
-import { InstallCard } from "./install-card";
+
 import { LAST_GAME_OPTIONS } from "@/lib/last-game-reaction";
 import { PlayerIdentityHeader } from "@/components/player-identity-header";
 import { PlayerTvDisplayModal } from "@/components/player-tv-display-modal";
@@ -17,6 +17,7 @@ interface QueueScreenProps {
   venueId: string;
   venueName: string;
   sessionId: string;
+  avatarPhotoPath?: string | null;
   avatar?: string;
   playerName: string;
   queueNumber: number | null;
@@ -40,6 +41,7 @@ export function QueueScreen({
   venueId,
   venueName,
   sessionId,
+  avatarPhotoPath,
   avatar,
   playerName,
   queueNumber,
@@ -172,6 +174,7 @@ export function QueueScreen({
       <div className="mb-2 shrink-0">
         <PlayerIdentityHeader
           className="w-full min-w-0"
+          avatarPhotoPath={avatarPhotoPath}
           avatar={avatar}
           playerName={playerName}
           queueNumber={queueNumber}
@@ -193,7 +196,6 @@ export function QueueScreen({
 
       <div className="shrink-0 space-y-3">
         <NotificationCard />
-        <InstallCard />
       </div>
 
       {/* Center content */}

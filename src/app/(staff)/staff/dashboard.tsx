@@ -12,6 +12,11 @@ import { joinVenue } from "@/lib/socket-client";
 import { CourtCard, type CourtData } from "@/components/court-card";
 import { GenderIcon } from "@/components/gender-icon";
 import { PlayerAvatarThumb } from "@/components/player-avatar-thumb";
+import {
+  staffQueueGenderNameClass,
+  StaffQueueRankingScoreBar,
+  StaffQueueSkillTag,
+} from "@/components/staff-queue-player-display";
 import { QueuePanel, type QueueEntryData, type StaffQueueCourtGroup } from "@/components/queue-panel";
 import { cn } from "@/lib/cn";
 import { Plus, X, Users, LayoutGrid, AlertTriangle, User, UserPlus, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, Calendar, Loader2, Target, Play, Check, ListPlus, Camera, Search } from "lucide-react";
@@ -789,8 +794,15 @@ export function StaffDashboard() {
             const target = manualAssignCourt;
             if (!target) return;
             try {
+              const assigned = new Set<string>();
               for (const pid of playerIds) {
-                await api.post(`/api/courts/${target.id}/warmup-assign`, { playerId: pid });
+                if (assigned.has(pid)) continue;
+                try {
+                  await api.post(`/api/courts/${target.id}/warmup-assign`, { playerId: pid });
+                } catch (innerErr) {
+                  if (innerErr instanceof ApiRequestError && innerErr.status === 400) continue;
+                  throw innerErr;
+                }
               }
               setCourtActionError(null);
               setManualAssignCourt(null);
@@ -847,6 +859,7 @@ export function StaffDashboard() {
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <PlayerAvatarThumb
+                          avatarPhotoPath={player.avatarPhotoPath}
                           facePhotoPath={player.facePhotoPath}
                           avatar={player.avatar}
                           sizeClass="h-10 w-10"
@@ -1741,13 +1754,6 @@ function CreateGroupModal({
     });
   };
 
-  const skillDotColors: Record<string, string> = {
-    beginner: "bg-green-500",
-    intermediate: "bg-blue-500",
-    advanced: "bg-purple-500",
-    pro: "bg-red-500",
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950 text-white">
       <header className="flex items-center gap-3 border-b border-neutral-800 px-4 py-3">
@@ -1773,17 +1779,18 @@ function CreateGroupModal({
             <p className="text-sm text-neutral-600">{t("staff.dashboard.noSoloPlayersHint")}</p>
           </div>
         ) : (
-          <div className="space-y-1.5">
+          <div className="space-y-1">
             {soloWaiting.map((entry) => {
               const isSelected = selected.has(entry.playerId);
               const isFull = selected.size >= MAX_GROUP_SIZE && !isSelected;
               return (
                 <button
                   key={entry.playerId}
+                  type="button"
                   onClick={() => toggle(entry.playerId)}
                   disabled={isFull}
                   className={cn(
-                    "flex w-full items-center gap-3 rounded-xl border px-4 py-3.5 text-left transition-all",
+                    "flex w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-all",
                     isSelected
                       ? "border-blue-500 bg-blue-600/15"
                       : isFull
@@ -1791,19 +1798,39 @@ function CreateGroupModal({
                         : "border-neutral-800 bg-neutral-900 hover:border-neutral-700 hover:bg-neutral-800"
                   )}
                 >
-                  <div className={cn(
-                    "flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
-                    isSelected ? "border-blue-500 bg-blue-500" : "border-neutral-600"
-                  )}>
-                    {isSelected && <Check className="h-3.5 w-3.5 text-white" />}
+                  <div
+                    className={cn(
+                      "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+                      isSelected ? "border-blue-500 bg-blue-500" : "border-neutral-600"
+                    )}
+                  >
+                    {isSelected && <Check className="h-3 w-3 text-white" />}
                   </div>
-                  <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", skillDotColors[entry.player.skillLevel ?? ""] ?? "bg-neutral-500")} />
-                  <span className="flex-1 font-medium text-neutral-200 truncate">
-                    {entry.player.name}
-                  </span>
-                  <span className="text-xs text-neutral-500 capitalize">
-                    {formatSkillLevelLabel(entry.player.skillLevel || "—", t)}
-                  </span>
+                  <PlayerAvatarThumb
+                    avatarPhotoPath={entry.player.avatarPhotoPath}
+                    facePhotoPath={entry.player.facePhotoPath}
+                    avatar={entry.player.avatar}
+                    sizeClass="h-8 w-8"
+                    textFallbackClassName="text-lg"
+                    className={cn(
+                      "shrink-0 ring-2 ring-inset",
+                      entry.player.gender === "female"
+                        ? "ring-pink-500/45"
+                        : entry.player.gender === "male"
+                          ? "ring-blue-500/45"
+                          : "ring-white/15"
+                    )}
+                  />
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <span className={cn("min-w-0 truncate text-sm font-medium", staffQueueGenderNameClass(entry.player.gender))}>
+                      {entry.player.name}
+                    </span>
+                    {entry.queueNumber != null && (
+                      <span className="shrink-0 text-sm font-semibold tabular-nums text-blue-400">{entry.queueNumber}</span>
+                    )}
+                    <StaffQueueSkillTag level={entry.player.skillLevel} />
+                    <StaffQueueRankingScoreBar score={entry.player.rankingScore} />
+                  </div>
                 </button>
               );
             })}
