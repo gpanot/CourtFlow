@@ -96,7 +96,7 @@ export async function POST(
     const currentLevels = currentPlayers.map((p) => p.skillLevel);
 
     const waitingEntries = await prisma.queueEntry.findMany({
-      where: { sessionId: session.id, status: "waiting" },
+      where: { sessionId: session.id, status: "waiting", groupId: null },
       include: { player: true },
       orderBy: { joinedAt: "asc" },
     });

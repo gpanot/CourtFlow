@@ -66,6 +66,34 @@ interface StaffCheckInPanelProps {
 
 const FLASH_MS = 3200;
 
+const CHECKIN_DRAFT_KEY = "courtflow-checkin-draft";
+
+interface CheckInDraft {
+  name: string;
+  gender: "" | "male" | "female";
+  skill: SkillLevelType | "";
+  phone: string;
+}
+
+function readDraft(): CheckInDraft {
+  try {
+    const raw = sessionStorage.getItem(CHECKIN_DRAFT_KEY);
+    if (raw) return JSON.parse(raw) as CheckInDraft;
+  } catch { /* noop */ }
+  return { name: "", gender: "", skill: "", phone: "" };
+}
+
+function writeDraft(patch: Partial<CheckInDraft>) {
+  try {
+    const prev = readDraft();
+    sessionStorage.setItem(CHECKIN_DRAFT_KEY, JSON.stringify({ ...prev, ...patch }));
+  } catch { /* noop */ }
+}
+
+function clearDraft() {
+  try { sessionStorage.removeItem(CHECKIN_DRAFT_KEY); } catch { /* noop */ }
+}
+
 export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCheckInPanelProps) {
   const { t } = useTranslation();
 
@@ -84,10 +112,17 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
 
   const duplicateNameMsg = t("staff.checkIn.duplicateName");
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [name, setName] = useState("");
-  const [gender, setGender] = useState<(typeof GENDERS)[number] | "">("");
-  const [skill, setSkill] = useState<SkillLevelType | "">("");
-  const [phone, setPhone] = useState("");
+
+  const draft = readDraft();
+  const [name, setNameRaw] = useState(draft.name);
+  const [gender, setGenderRaw] = useState<(typeof GENDERS)[number] | "">(draft.gender);
+  const [skill, setSkillRaw] = useState<SkillLevelType | "">(draft.skill);
+  const [phone, setPhoneRaw] = useState(draft.phone);
+
+  const setName = useCallback((v: string) => { setNameRaw(v); writeDraft({ name: v }); }, []);
+  const setGender = useCallback((v: (typeof GENDERS)[number] | "") => { setGenderRaw(v); writeDraft({ gender: v }); }, []);
+  const setSkill = useCallback((v: SkillLevelType | "") => { setSkillRaw(v); writeDraft({ skill: v }); }, []);
+  const setPhone = useCallback((v: string) => { setPhoneRaw(v); writeDraft({ phone: v }); }, []);
   const [loading, setLoading] = useState(false);
   const [testSeedLoading, setTestSeedLoading] = useState(false);
   const [faceCaptureLoading, setFaceCaptureLoading] = useState(false);
@@ -331,6 +366,7 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
       setGender("");
       setSkill("");
       setPhone("");
+      clearDraft();
       setPhoneDuplicate(null);
       setCapturedFace(null);
       setFaceQuality(null);
@@ -385,6 +421,7 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
       setGender("");
       setSkill("");
       setPhone("");
+      clearDraft();
       onAdded();
     } catch (e) {
       setErr((e as Error).message);
@@ -851,21 +888,9 @@ ${test.error ? `Error: ${test.error}` : ''}
                   )}
                   title={genderLabel(g)}
                 >
-                  {g === 'male' ? (
-                    <svg className="h-5 w-5 max-sm:h-4 max-sm:w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="8" r="5"/>
-                      <path d="M12 13v8"/>
-                      <path d="M9 18h6"/>
-                    </svg>
-                  ) : (
-                    <svg className="h-5 w-5 max-sm:h-4 max-sm:w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="9" r="5"/>
-                      <path d="M12 14v7"/>
-                      <path d="M9 18h6"/>
-                      <path d="M12 14l-3 3"/>
-                      <path d="M12 14l3 3"/>
-                    </svg>
-                  )}
+                  <span className="text-sm font-bold tracking-wide max-sm:text-xs">
+                    {g === "male" ? "M" : "F"}
+                  </span>
                 </button>
               ))}
             </div>

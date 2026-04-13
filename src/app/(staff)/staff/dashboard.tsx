@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -102,6 +102,17 @@ interface VenueData {
 
 type Tab = "courts" | "checkin" | "queue" | "qr" | "kiosk";
 
+const STAFF_TAB_KEY = "courtflow-staff-tab";
+const VALID_TABS: Tab[] = ["courts", "checkin", "queue", "qr", "kiosk"];
+
+function readPersistedTab(): Tab {
+  try {
+    const v = sessionStorage.getItem(STAFF_TAB_KEY);
+    if (v && VALID_TABS.includes(v as Tab)) return v as Tab;
+  } catch { /* SSR / blocked storage */ }
+  return "courts";
+}
+
 export function StaffDashboard() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -111,7 +122,14 @@ export function StaffDashboard() {
   const [session, setSession] = useState<SessionData | null>(null);
   const [courts, setCourts] = useState<CourtData[]>([]);
   const [queue, setQueue] = useState<QueueEntryData[]>([]);
-  const [tab, setTab] = useState<Tab>("courts");
+  const [tab, setTabRaw] = useState<Tab>(readPersistedTab);
+  const tabRef = useRef(tab);
+
+  const setTab = useCallback((next: Tab) => {
+    setTabRaw(next);
+    tabRef.current = next;
+    try { sessionStorage.setItem(STAFF_TAB_KEY, next); } catch { /* noop */ }
+  }, []);
   const [selectedCourt, setSelectedCourt] = useState<CourtData | null>(null);
   const [showOpenSession, setShowOpenSession] = useState(false);
   const [confirmAddCourt, setConfirmAddCourt] = useState<{ id: string; label: string } | null>(null);
@@ -176,7 +194,7 @@ export function StaffDashboard() {
     const tabParam = searchParams.get("tab");
     if (tabParam === "checkin" || tabParam === "add") setTab("checkin");
     if (tabParam === "qr") setTab("qr");
-  }, [searchParams]);
+  }, [searchParams, setTab]);
 
   useEffect(() => {
     if (searchParams.get("history") === "1") {
@@ -612,7 +630,7 @@ export function StaffDashboard() {
           session && tab === "checkin" && "max-sm:p-2 max-sm:pt-2 max-sm:pb-3"
         )}
       >
-        {!session && !showOpenSession && tab !== "qr" && (
+        {!session && !showOpenSession && tab !== "qr" && tab !== "kiosk" && (
           <div className="flex h-64 flex-col items-center justify-center gap-3 text-center px-2">
             <p className="text-lg text-neutral-500">{t("staff.dashboard.noActiveSession")}</p>
             {tab === "courts" ? (
@@ -724,23 +742,27 @@ export function StaffDashboard() {
           </div>
         )}
 
-        {session && tab === "checkin" && venueId && (
-          <StaffCheckInPanel venueId={venueId} queueNamesLower={queueUsedNamesLower} onAdded={fetchState} />
+        {session && venueId && (
+          <div className={tab === "checkin" ? undefined : "hidden"}>
+            <StaffCheckInPanel venueId={venueId} queueNamesLower={queueUsedNamesLower} onAdded={fetchState} />
+          </div>
         )}
 
-        {session && tab === "queue" && (
-          <QueuePanel
-            entries={queue}
-            variant="staff"
-            maxDisplay={50}
-            translationI18n={staffI18n}
-            onPlayerAction={handlePlayerAction}
-            onCreateGroup={() => setShowCreateGroup(true)}
-            onDissolveGroup={handleDissolveGroup}
-            isWarmupManual={!!assignableCourtsForQueue}
-            courts={assignableCourtsForQueue}
-            queueCourtGroups={staffQueueCourtGroups}
-          />
+        {session && (
+          <div className={tab === "queue" ? undefined : "hidden"}>
+            <QueuePanel
+              entries={queue}
+              variant="staff"
+              maxDisplay={50}
+              translationI18n={staffI18n}
+              onPlayerAction={handlePlayerAction}
+              onCreateGroup={() => setShowCreateGroup(true)}
+              onDissolveGroup={handleDissolveGroup}
+              isWarmupManual={!!assignableCourtsForQueue}
+              courts={assignableCourtsForQueue}
+              queueCourtGroups={staffQueueCourtGroups}
+            />
+          </div>
         )}
 
         {tab === "qr" && (
@@ -748,7 +770,7 @@ export function StaffDashboard() {
         )}
 
         {tab === "kiosk" && venueId && (
-          <FaceKioskTab venueId={venueId} />
+          <FaceKioskTab venueId={venueId} hasSession={!!session} />
         )}
 
       </main>

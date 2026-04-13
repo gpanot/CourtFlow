@@ -32,6 +32,7 @@ type KioskState =
 
 interface FaceKioskTabProps {
   venueId: string;
+  hasSession?: boolean;
 }
 
 const COOLDOWN_MS = 2000;
@@ -78,7 +79,7 @@ function skillLabelFromKey(level: string, t: (k: string) => string): string {
   return key ? t(key) : level;
 }
 
-export function FaceKioskTab({ venueId }: FaceKioskTabProps) {
+export function FaceKioskTab({ venueId, hasSession = true }: FaceKioskTabProps) {
   const { t } = useTranslation();
 
   const cameraRef = useRef<CameraCaptureHandle>(null);
@@ -478,6 +479,18 @@ export function FaceKioskTab({ venueId }: FaceKioskTabProps) {
     consecutiveFailures >= FACE_FAIL_THRESHOLD &&
     !showOverlay;
 
+  if (!hasSession) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 bg-neutral-950 px-6 text-center">
+        <div className="flex h-20 w-20 items-center justify-center rounded-full bg-neutral-800">
+          <Camera className="h-10 w-10 text-neutral-600" />
+        </div>
+        <p className="text-lg font-medium text-neutral-400">{t("staff.dashboard.noActiveSession")}</p>
+        <p className="max-w-xs text-sm text-neutral-600">{t("staff.dashboard.noActiveSessionOpenFromCourts")}</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col bg-neutral-950">
       <div className="flex items-center justify-between border-b border-neutral-800 p-4">
@@ -657,7 +670,7 @@ export function FaceKioskTab({ venueId }: FaceKioskTabProps) {
                 )}
               </div>
             ) : (
-              <div className="relative aspect-video w-full max-w-2xl shrink-0 overflow-hidden rounded-lg bg-black">
+              <div className="relative aspect-[4/3] w-full max-w-2xl shrink-0 overflow-hidden rounded-lg bg-black">
                 <CameraCapture
                   ref={cameraRef}
                   active={isKioskActive && phoneFlow === null}

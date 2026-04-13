@@ -59,6 +59,22 @@ interface TodayPlayer {
 
 type PlayerView = "home" | "queue" | "assigned" | "playing" | "profile" | "session_recap";
 
+const PLAYER_VIEW_KEY = "courtflow-player-view";
+const PLAYER_PROFILE_KEY = "courtflow-player-profile";
+const VALID_VIEWS: PlayerView[] = ["home", "queue", "assigned", "playing", "profile", "session_recap"];
+
+function readPersistedView(): PlayerView {
+  try {
+    const v = sessionStorage.getItem(PLAYER_VIEW_KEY);
+    if (v && VALID_VIEWS.includes(v as PlayerView)) return v as PlayerView;
+  } catch { /* SSR / blocked storage */ }
+  return "home";
+}
+
+function readPersistedProfile(): boolean {
+  try { return sessionStorage.getItem(PLAYER_PROFILE_KEY) === "1"; } catch { return false; }
+}
+
 export function PlayerHome() {
   const { t } = useTranslation();
   const { playerId, playerName, venueId, token, setAuth, clearAuth } = useSessionStore();
@@ -67,10 +83,14 @@ export function PlayerHome() {
   const [selectedVenue, setSelectedVenue] = useState<string | null>(venueId);
   const [session, setSession] = useState<{ id: string; status?: string } | null>(null);
   const [queueEntry, setQueueEntry] = useState<QueueEntry | null>(null);
-  const [view, setView] = useState<PlayerView>("home");
+  const [view, setView] = useState<PlayerView>(readPersistedView);
   const [initialLoading, setInitialLoading] = useState(true);
   const [notification, setNotification] = useState<Record<string, unknown> | null>(null);
-  const [showProfile, setShowProfile] = useState(false);
+  const [showProfile, setShowProfileRaw] = useState(readPersistedProfile);
+  const setShowProfile = useCallback((v: boolean) => {
+    setShowProfileRaw(v);
+    try { sessionStorage.setItem(PLAYER_PROFILE_KEY, v ? "1" : ""); } catch { /* noop */ }
+  }, []);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [avatar, setAvatar] = useState("🏓");
   const [avatarPhotoPath, setAvatarPhotoPath] = useState<string | null>(null);
@@ -122,10 +142,11 @@ export function PlayerHome() {
     }
   }, [searchParams, selectedVenue]);
 
-  const viewRef = useRef<PlayerView>("home");
+  const viewRef = useRef<PlayerView>(readPersistedView);
   const setViewTracked = useCallback((v: PlayerView) => {
     viewRef.current = v;
     setView(v);
+    try { sessionStorage.setItem(PLAYER_VIEW_KEY, v); } catch { /* noop */ }
   }, []);
 
   const handleLeaveSession = useCallback(() => {

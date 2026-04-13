@@ -58,7 +58,8 @@ export function scheduleAssignedToPlayingTransition(
   }, AUTO_START_DELAY_SECONDS * 1000);
 }
 
-interface QueueCandidate {
+/** Queue row shape used by rotation / group fill (also used by `scripts/verify-groups-not-split.ts`). */
+export interface QueueCandidate {
   entryId: string;
   playerId: string;
   playerName: string;
@@ -258,7 +259,7 @@ function selectBestFourFromPool(
  *    then game type mix + FIFO (if no valid foursome in that window, fall back
  *    to full QUEUE_LOOKAHEAD with mix + FIFO only)
  */
-function selectBestFour(
+export function selectBestFour(
   candidates: QueueCandidate[],
   currentCounts: Record<GameType, number>,
   target: GameTypeMix | null
@@ -321,7 +322,7 @@ function findBestFillForGroup(
  * players from the queue so the total is always COURT_PLAYER_COUNT (4).
  * Returns null if no group with enough solos to fill exists.
  */
-function findGroupWithFill(candidates: QueueCandidate[]): QueueCandidate[] | null {
+export function findGroupWithFill(candidates: QueueCandidate[]): QueueCandidate[] | null {
   const groups = new Map<string, QueueCandidate[]>();
   for (const c of candidates) {
     if (!c.groupId) continue;
@@ -542,6 +543,13 @@ export async function assignPlayerFromQueueToCourt(
   sessionId: string,
   playerId: string
 ): Promise<boolean> {
+  // Never auto-assign a grouped player individually — groups are assigned
+  // atomically via runRotation or the staff warmup-assign route.
+  const entry = await prisma.queueEntry.findFirst({
+    where: { playerId, sessionId, status: "waiting" },
+  });
+  if (entry?.groupId) return false;
+
   const session = await prisma.session.findUnique({ where: { id: sessionId } });
   const enforceGenderOnFourth = session?.warmupMode === "auto";
 

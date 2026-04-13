@@ -113,6 +113,31 @@ async function main() {
   const delay = parseInt(process.argv[4] || String(DELAY_BETWEEN_JOINS_MS), 10);
   const menPercent = parseMenPercent();
 
+  /** Create/update bot Player rows via auth API only — no queue join. */
+  if (mode === "register-only" || mode === "accounts") {
+    if (menPercent != null) {
+      const men = Math.round((count * menPercent) / 100);
+      console.log(`Gender mix: ~${menPercent}% men → ${men} male, ${count - men} female\n`);
+    }
+    console.log(`Registering ${count} bot accounts (no queue)...\n`);
+    let ok = 0;
+    for (let i = 0; i < count; i++) {
+      const phone = `+1900${String(i).padStart(4, "0")}`;
+      const name = NAMES[i] || `Bot ${i + 1}`;
+      const bot = await getOrCreateBot(i, count, menPercent);
+      if (!bot) {
+        console.log(`  ✗ ${name} (${phone}) — failed`);
+        continue;
+      }
+      ok++;
+      console.log(`  ✓ ${name} (${phone})`);
+    }
+    console.log(
+      `\nDone! ${ok}/${count} accounts ready. Check-in: npx tsx scripts/check-in-bots.ts ${count}${menPercent != null ? ` ${menPercent}` : ""}`,
+    );
+    return;
+  }
+
   // Get active session
   const sessRes = await fetch(`${BASE_URL}/api/sessions?venueId=${VENUE_ID}`, {
     headers: jsonHeaders(),
