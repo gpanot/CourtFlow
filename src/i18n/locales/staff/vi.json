@@ -341,7 +341,7 @@
       "confirmSessions": "Phiên đã chơi",
       "confirmQueuePosition": "Thứ {{n}} trong hàng",
       "confirmInQueue": "Trong hàng chờ",
-      "confirmHeadToTv": "Đến màn hình TV để vào hàng chờ khi bạn sẵn sàng!",
+      "confirmHeadToTv": "Khi sẵn sàng chơi \u2192 đi đến màn hình TV và quét khuôn mặt",
       "phoneCheckIn": "Check-in bằng số điện thoại",
       "phoneCheckInTitle": "Check-in bằng điện thoại",
       "phoneCheckInHint": "Nhập số điện thoại của người chơi (trùng hồ sơ).",

@@ -53,7 +53,13 @@ async function buildAlreadyCheckedInResponse(
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = requireStaff(request.headers);
+    let staffId: string | null = null;
+    try {
+      const auth = requireStaff(request.headers);
+      staffId = auth.id;
+    } catch {
+      // Self-service kiosk mode — no staff auth required
+    }
     const body = await parseBody<{
       venueId: string;
       phase: "lookup" | "confirm";
@@ -241,7 +247,7 @@ export async function POST(request: NextRequest) {
         await prisma.auditLog.create({
           data: {
             venueId,
-            staffId: auth.id,
+            staffId,
             action: "face_check_in_player",
             targetId: player.id,
             metadata: {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useTranslation } from "react-i18next";
-import { ArrowRight, Check, ScanLine } from "lucide-react";
+import { ArrowRight, Check, Monitor, ScanLine } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 export interface KioskConfirmationScreenProps {
@@ -253,10 +253,11 @@ export function KioskConfirmationScreen({
             </div>
 
             <div
-              className="rounded-xl px-3 py-3 text-center sm:px-5 sm:py-4"
+              className="rounded-xl px-3 py-3 sm:px-5 sm:py-4"
               style={{ backgroundColor: PILL_BG }}
             >
-              <p className="text-sm font-medium text-green-400 sm:text-base">
+              <p className="flex items-center justify-center gap-2 text-sm font-medium text-green-400 sm:text-base">
+                <Monitor className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" aria-hidden />
                 {queuePill}
               </p>
             </div>

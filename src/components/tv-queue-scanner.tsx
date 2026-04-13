@@ -197,9 +197,11 @@ export function TvQueueScanner({ venueId }: TvQueueScannerProps) {
           return;
         } catch (e) {
           if (cancelled) return;
+          const msg = e instanceof Error ? e.message : "Unknown error";
+          const isNetwork = !navigator.onLine || msg.toLowerCase().includes("fetch") || msg.toLowerCase().includes("network");
           handleScanResult({
             resultType: "error",
-            error: e instanceof Error ? e.message : "Network error",
+            error: isNetwork ? "Network issue \u2014 see staff" : msg,
           });
           return;
         }
@@ -232,7 +234,9 @@ export function TvQueueScanner({ venueId }: TvQueueScannerProps) {
         handleScanResult(res);
       }
     } catch (e) {
-      handleScanResult({ resultType: "error", error: e instanceof Error ? e.message : "Network error" });
+      const msg = e instanceof Error ? e.message : "Unknown error";
+      const isNetwork = !navigator.onLine || msg.toLowerCase().includes("fetch") || msg.toLowerCase().includes("network");
+      handleScanResult({ resultType: "error", error: isNetwork ? "Network issue \u2014 see staff" : msg });
     } finally {
       setNumberLoading(false);
     }
@@ -320,7 +324,7 @@ export function TvQueueScanner({ venueId }: TvQueueScannerProps) {
             Scan To Join
           </button>
           <p className="max-w-md text-sm text-neutral-600">
-            Check in at the desk first if you haven&apos;t today. The front camera will open for a quick face scan.
+            Check in at the entrance first if you haven&apos;t already. The front camera will scan your face.
           </p>
         </div>
       )}
@@ -379,10 +383,10 @@ export function TvQueueScanner({ venueId }: TvQueueScannerProps) {
             <span className="text-3xl">!</span>
           </div>
           <h2 className="text-3xl font-bold text-red-300">
-            Please check in first
+            Check in first
           </h2>
           <p className="text-lg text-neutral-400">
-            Head to the front desk to check in
+            Head to the entrance tablet to check in, then come back here
           </p>
         </div>
       )}

@@ -333,7 +333,7 @@
       "confirmSessions": "Sessions",
       "confirmQueuePosition": "#{{n}} in line",
       "confirmInQueue": "In queue",
-      "confirmHeadToTv": "Head to the TV screen to join the queue when ready!",
+      "confirmHeadToTv": "When ready to play \u2192 walk to the TV screen and scan your face",
       "phoneCheckIn": "Check-in via phone",
       "phoneCheckInTitle": "Check-in by phone",
       "phoneCheckInHint": "Enter the player’s phone number (same as on file).",

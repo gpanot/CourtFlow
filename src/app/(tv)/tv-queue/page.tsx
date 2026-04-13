@@ -19,7 +19,7 @@ export default function TvQueueVenueSelect() {
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-black p-8">
       <h1 className="text-4xl font-bold text-green-500">CourtFlow</h1>
-      <p className="text-xl text-neutral-400">TV Tablet — Select venue</p>
+      <p className="text-xl text-neutral-400">Tablet — Select venue</p>
       <div className="grid gap-3">
         {venues.map((v) => (
           <button
