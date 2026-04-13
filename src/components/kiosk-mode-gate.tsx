@@ -7,7 +7,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import { Monitor, UserCheck } from "lucide-react";
+import { Monitor, MoreHorizontal, UserCheck } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 export type KioskMode = "entrance" | "tv";
@@ -229,13 +229,20 @@ export function KioskModeGate({ venueId, children }: KioskModeGateProps) {
     return (
       <div className="relative h-full w-full">
         {children(mode)}
-        {/* Staff escape hatch: 5 rapid taps in bottom-right corner */}
-        <div
-          className="absolute bottom-0 right-0 z-50 h-16 w-16"
+        {/* Staff: large tap target; 5 quick taps opens PIN then mode selection */}
+        <button
+          type="button"
           onClick={handleEscapeTap}
-          style={{ opacity: 0 }}
-          role="presentation"
-        />
+          className="absolute bottom-2 right-2 z-50 flex min-h-[88px] min-w-[88px] items-center justify-center rounded-2xl border border-neutral-800/80 bg-black/50 p-6 text-neutral-500 shadow-sm backdrop-blur-sm transition-colors hover:border-neutral-600 hover:bg-black/65 hover:text-neutral-400 active:bg-black/75"
+          aria-label="Staff: tap five times quickly to change tablet mode"
+          title="Staff: tap 5 times to change mode"
+        >
+          <MoreHorizontal
+            className="h-8 w-8 shrink-0 opacity-80"
+            strokeWidth={2}
+            aria-hidden
+          />
+        </button>
       </div>
     );
   }
