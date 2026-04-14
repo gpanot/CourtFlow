@@ -56,33 +56,44 @@ export function KioskConfirmationScreen({
 }: KioskConfirmationScreenProps) {
   const { t } = useTranslation();
   const isStaff = mode === "staff";
+  const tr = (
+    key: string,
+    fallback: string,
+    options?: Record<string, string | number>
+  ) => {
+    const value = t(key, options);
+    return value && value !== key ? value : fallback;
+  };
 
   const skillDisplay =
     skillLevel && skillLabelKey(skillLevel)
-      ? t(skillLabelKey(skillLevel)!)
+      ? tr(skillLabelKey(skillLevel)!, skillLevel)
       : skillLevel
         ? skillLevel
         : "—";
 
-  const queuePill = t("staff.kiosk.confirmHeadToTv");
+  const queuePill = tr(
+    "staff.kiosk.confirmHeadToTv",
+    "When ready to play -> walk to the TV screen and scan your face"
+  );
 
   const sessionsDisplay =
     totalSessions != null && totalSessions >= 0 ? String(totalSessions) : "—";
 
   const headerLabel = alreadyCheckedIn
-    ? t("staff.kiosk.confirmAlreadyCheckedIn")
+    ? tr("staff.kiosk.confirmAlreadyCheckedIn", "Already checked in")
     : isReturning
-      ? t("staff.kiosk.confirmWelcomeBack")
-      : t("staff.kiosk.confirmWelcome");
+      ? tr("staff.kiosk.confirmWelcomeBack", "Welcome back")
+      : tr("staff.kiosk.confirmWelcome", "Welcome");
 
   const showSessionNumber =
     !alreadyCheckedIn && queueNumber != null && queueNumber > 0;
 
   const genderLabel =
     gender === "male"
-      ? t("staff.checkIn.genderMale")
+      ? tr("staff.checkIn.genderMale", "Male")
       : gender === "female"
-        ? t("staff.checkIn.genderFemale")
+        ? tr("staff.checkIn.genderFemale", "Female")
         : gender
           ? String(gender)
           : "—";
@@ -98,7 +109,7 @@ export function KioskConfirmationScreen({
             {queueNumber != null && queueNumber > 0 && (
               <div className="flex shrink-0 flex-col items-center py-1 text-center sm:py-2">
                 <p className="mb-0.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-neutral-500 sm:text-xs sm:tracking-[0.2em]">
-                  {t("staff.kiosk.confirmSessionNumberLabel")}
+                  {tr("staff.kiosk.confirmSessionNumberLabel", "SESSION NUMBER")}
                 </p>
                 <p className={cn(SESSION_NUMBER_CLASS, "text-white")}>{queueNumber}</p>
               </div>
@@ -113,7 +124,7 @@ export function KioskConfirmationScreen({
                 style={{ backgroundColor: PILL_BG }}
               >
                 <span className="text-[9px] font-medium uppercase tracking-wide text-neutral-500 sm:text-xs">
-                  {t("staff.kiosk.confirmLevel")}
+                  {tr("staff.kiosk.confirmLevel", "Level")}
                 </span>
                 <span className="px-0.5 text-[10px] font-semibold leading-tight text-white sm:text-sm">
                   {skillDisplay}
@@ -124,7 +135,7 @@ export function KioskConfirmationScreen({
                 style={{ backgroundColor: PILL_BG }}
               >
                 <span className="text-[9px] font-medium uppercase tracking-wide text-neutral-500 sm:text-xs">
-                  {t("staff.checkIn.gender")}
+                  {tr("staff.checkIn.gender", "Gender")}
                 </span>
                 <span className="px-0.5 text-[10px] font-semibold leading-tight text-sky-300 sm:text-sm">
                   {genderLabel}
@@ -135,7 +146,7 @@ export function KioskConfirmationScreen({
                 style={{ backgroundColor: PILL_BG }}
               >
                 <span className="text-[9px] font-medium uppercase tracking-wide text-neutral-500 sm:text-xs">
-                  {t("staff.kiosk.confirmQueue")}
+                  {tr("staff.kiosk.confirmQueue", "Queue")}
                 </span>
                 <span
                   className={cn(
@@ -152,7 +163,7 @@ export function KioskConfirmationScreen({
               <>
                 <div className="rounded-xl border border-dashed border-neutral-500 px-3 py-4 text-center sm:px-5 sm:py-5">
                   <p className="text-xs text-neutral-400 sm:text-sm">
-                    {t("staff.checkIn.wristbandInstructionTop")}
+                    {tr("staff.checkIn.wristbandInstructionTop", "Write on wristband")}
                   </p>
                   <p
                     className="py-2 text-4xl font-bold tabular-nums sm:py-3 sm:text-5xl"
@@ -161,14 +172,14 @@ export function KioskConfirmationScreen({
                     {queueNumber}
                   </p>
                   <p className="text-xs leading-snug text-neutral-400 sm:text-sm">
-                    {t("staff.checkIn.wristbandInstructionBottom")}
+                    {tr("staff.checkIn.wristbandInstructionBottom", "Player watches TV screen for their court.")}
                   </p>
                 </div>
                 <div className="flex shrink-0 justify-center px-1 pt-1 sm:px-2 sm:pt-2">
                   {/* eslint-disable-next-line @next/next/no-img-element -- static asset from /public */}
                   <img
                     src="/wristband.png"
-                    alt={t("staff.checkIn.wristbandIllustrationAlt")}
+                    alt={tr("staff.checkIn.wristbandIllustrationAlt", "Write the session number on the player's wristband with a marker.")}
                     className="h-auto max-h-[min(220px,32svh)] w-full max-w-md object-contain select-none"
                     draggable={false}
                   />
@@ -205,7 +216,7 @@ export function KioskConfirmationScreen({
               {alreadyCheckedIn && queueNumber != null && queueNumber > 0 && (
                 <div className="mt-2 flex shrink-0 flex-col items-center py-1 sm:mt-4 sm:py-2">
                   <p className="mb-0.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-neutral-500 sm:text-xs sm:tracking-[0.2em]">
-                    {t("staff.kiosk.confirmSessionNumberLabel")}
+                    {tr("staff.kiosk.confirmSessionNumberLabel", "SESSION NUMBER")}
                   </p>
                   <p className={SESSION_NUMBER_CLASS} style={{ color: GREEN }}>
                     {queueNumber}
@@ -217,7 +228,7 @@ export function KioskConfirmationScreen({
             {showSessionNumber ? (
               <div className="flex shrink-0 flex-col items-center py-1 sm:py-2">
                 <p className="mb-0.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-neutral-500 sm:text-xs sm:tracking-[0.2em]">
-                  {t("staff.kiosk.confirmSessionNumberLabel")}
+                  {tr("staff.kiosk.confirmSessionNumberLabel", "SESSION NUMBER")}
                 </p>
                 <p className={SESSION_NUMBER_CLASS} style={{ color: GREEN }}>
                   {queueNumber}
@@ -233,7 +244,7 @@ export function KioskConfirmationScreen({
                 style={{ backgroundColor: PILL_BG }}
               >
                 <span className="text-[9px] font-medium uppercase tracking-wide text-neutral-500 sm:text-xs">
-                  {t("staff.kiosk.confirmLevel")}
+                  {tr("staff.kiosk.confirmLevel", "Level")}
                 </span>
                 <span className="px-0.5 text-[10px] font-semibold leading-tight text-white sm:text-sm">
                   {skillDisplay}
@@ -244,7 +255,7 @@ export function KioskConfirmationScreen({
                 style={{ backgroundColor: PILL_BG }}
               >
                 <span className="text-[9px] font-medium uppercase tracking-wide text-neutral-500 sm:text-xs">
-                  {t("staff.kiosk.confirmSessions")}
+                  {tr("staff.kiosk.confirmSessions", "Sessions")}
                 </span>
                 <span className="text-[10px] font-semibold leading-tight text-white sm:text-sm">
                   {sessionsDisplay}
@@ -275,7 +286,7 @@ export function KioskConfirmationScreen({
             onClick={onScanNext}
             className="flex w-full touch-manipulation items-center justify-center gap-2 rounded-xl bg-green-600 px-4 py-3.5 text-base font-semibold text-white transition-colors hover:bg-green-500 active:scale-[0.99] sm:py-4 sm:text-lg"
           >
-            {t("staff.checkIn.confirmNextPlayer")}
+            {tr("staff.checkIn.confirmNextPlayer", "Next player")}
             <ArrowRight className="h-5 w-5 shrink-0" aria-hidden />
           </button>
         ) : (
@@ -290,10 +301,10 @@ export function KioskConfirmationScreen({
           >
             <span className="flex items-center gap-2 text-sm font-semibold sm:text-base" style={{ color: GREEN }}>
               <ScanLine className="h-4 w-4 shrink-0" aria-hidden />
-              {t("staff.kiosk.confirmScanNext")}
+              {tr("staff.kiosk.confirmScanNext", "Scan next player")}
             </span>
             <span className="text-[10px] text-neutral-500 sm:text-xs">
-              {t("staff.kiosk.confirmCameraOffHint")}
+              {tr("staff.kiosk.confirmCameraOffHint", "Camera off - tap to activate")}
             </span>
           </button>
         )}
