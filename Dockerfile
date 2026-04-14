@@ -27,6 +27,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/prisma ./prisma
+RUN mkdir -p /app/uploads/players && chown -R nextjs:nodejs /app/uploads
 USER nextjs
 EXPOSE 3000
 ENV PORT=3000
