@@ -10,7 +10,7 @@ import {
   findQueueDisplayNameConflict,
 } from "@/lib/queue-display-name";
 import { faceRecognitionService } from "@/lib/face-recognition";
-import { savePlayerFacePhotoFromBase64 } from "@/lib/save-player-face-photo";
+import { persistPlayerCheckInFacePhoto } from "@/lib/persist-player-check-in-photo";
 import { analyzeFaceQuality } from "@/lib/face-quality";
 import type { SkillLevel } from "@prisma/client";
 import { initialRankingScoreForSkillLevel } from "@/lib/ranking";
@@ -108,12 +108,10 @@ export async function POST(request: NextRequest) {
         include: { player: true },
       });
 
-      const photoPath = await savePlayerFacePhotoFromBase64(existingPlayer.id, imageBase64);
-      if (photoPath) {
-        await prisma.player.update({
-          where: { id: existingPlayer.id },
-          data: { facePhotoPath: photoPath },
-        });
+      try {
+        await persistPlayerCheckInFacePhoto(existingPlayer.id, imageBase64);
+      } catch (e) {
+        console.error("[StaffFace] check-in photo persist failed:", e);
       }
 
       let faceEnrollment: {
@@ -257,12 +255,10 @@ export async function POST(request: NextRequest) {
       };
     }
 
-    const photoPath = await savePlayerFacePhotoFromBase64(player.id, imageBase64);
-    if (photoPath) {
-      await prisma.player.update({
-        where: { id: player.id },
-        data: { facePhotoPath: photoPath },
-      });
+    try {
+      await persistPlayerCheckInFacePhoto(player.id, imageBase64);
+    } catch (e) {
+      console.error("[StaffFace] check-in photo persist failed:", e);
     }
 
     // Create as checked-in (on_break = checked in, not in queue)

@@ -7,6 +7,7 @@ import {
   type FaceRecognitionDebugInfo,
 } from "@/lib/face-recognition";
 import { emitToVenue } from "@/lib/socket-server";
+import { persistPlayerCheckInFacePhoto } from "@/lib/persist-player-check-in-photo";
 
 async function buildAlreadyCheckedInResponse(
   sessionId: string,
@@ -243,6 +244,15 @@ export async function POST(request: NextRequest) {
           },
         });
 
+        try {
+          await persistPlayerCheckInFacePhoto(
+            recognitionResult.playerId!,
+            imageBase64
+          );
+        } catch (photoErr) {
+          console.error("[Kiosk] check-in photo persist failed:", photoErr);
+        }
+
         const totalSessions = await prisma.queueEntry.count({
           where: { playerId: recognitionResult.playerId!, status: "left" },
         });
@@ -365,6 +375,15 @@ export async function POST(request: NextRequest) {
               },
             },
           });
+
+          try {
+            await persistPlayerCheckInFacePhoto(
+              existingPlayerByFace.id,
+              imageBase64
+            );
+          } catch (photoErr) {
+            console.error("[Kiosk] check-in photo persist failed:", photoErr);
+          }
 
           const totalSessionsNp = await prisma.queueEntry.count({
             where: { playerId: existingPlayerByFace.id, status: "left" },

@@ -233,8 +233,7 @@ export function KioskModeGate({ venueId, children }: KioskModeGateProps) {
         <button
           type="button"
           onClick={handleEscapeTap}
-          className="fixed right-4 z-50 flex min-h-[88px] min-w-[88px] items-center justify-center rounded-2xl border border-neutral-800/80 bg-black/50 p-6 text-neutral-500 shadow-sm backdrop-blur-sm transition-colors hover:border-neutral-600 hover:bg-black/65 hover:text-neutral-400 active:bg-black/75"
-          style={{ bottom: "max(1rem, env(safe-area-inset-bottom))" }}
+          className="absolute bottom-2 right-2 z-50 flex min-h-[88px] min-w-[88px] items-center justify-center rounded-2xl border border-neutral-800/80 bg-black/50 p-6 text-neutral-500 shadow-sm backdrop-blur-sm transition-colors hover:border-neutral-600 hover:bg-black/65 hover:text-neutral-400 active:bg-black/75"
           aria-label="Staff: tap five times quickly to change tablet mode"
           title="Staff: tap 5 times to change mode"
         >
