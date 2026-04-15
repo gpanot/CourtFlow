@@ -13,12 +13,13 @@ export async function POST(request: NextRequest) {
       venueId: string;
       imageBase64?: string;
       queueNumber?: number;
+      playerId?: string;
     }>(request);
 
-    const { venueId, imageBase64, queueNumber } = body;
+    const { venueId, imageBase64, queueNumber, playerId: playerIdInput } = body;
     if (!venueId?.trim()) return error("venueId is required", 400);
-    if (!imageBase64?.trim() && queueNumber == null) {
-      return error("imageBase64 or queueNumber is required", 400);
+    if (!imageBase64?.trim() && queueNumber == null && !playerIdInput?.trim()) {
+      return error("imageBase64, queueNumber, or playerId is required", 400);
     }
 
     const session = await prisma.session.findFirst({
@@ -35,7 +36,15 @@ export async function POST(request: NextRequest) {
     let playerId: string | null = null;
     let playerName = "";
 
-    if (queueNumber != null) {
+    if (playerIdInput?.trim()) {
+      const player = await prisma.player.findUnique({
+        where: { id: playerIdInput.trim() },
+        select: { id: true, name: true },
+      });
+      if (!player) return error("Player not found", 404);
+      playerId = player.id;
+      playerName = player.name;
+    } else if (queueNumber != null) {
       const entry = await prisma.queueEntry.findFirst({
         where: { sessionId: session.id, queueNumber },
         include: { player: true },

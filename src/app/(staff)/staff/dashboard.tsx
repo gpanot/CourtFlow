@@ -73,6 +73,12 @@ function staffCourtSheetNameClass(gender?: string | null) {
   return "text-white";
 }
 
+function triggerPaymentHapticFeedback() {
+  if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function") return;
+  // 3 short pulses so staff can feel incoming payment alerts.
+  navigator.vibrate([80, 60, 80, 60, 80]);
+}
+
 /** Same FIFO window auto-start uses (first 4 waiting). */
 function firstFourWaitingFifo(entries: QueueEntryData[]) {
   return [...entries]
@@ -266,6 +272,7 @@ export function StaffDashboard() {
     const offPaymentNew = on("payment:new", () => {
       fetchPaymentCount();
       void playAssignmentAttentionSound();
+      triggerPaymentHapticFeedback();
     });
     const offPaymentConfirmed = on("payment:confirmed", fetchPaymentCount);
     const offPaymentCancelled = on("payment:cancelled", fetchPaymentCount);

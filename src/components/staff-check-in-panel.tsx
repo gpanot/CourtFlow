@@ -14,6 +14,7 @@ import { SKILL_LEVELS, SKILL_DESCRIPTIONS, type SkillLevelType } from "@/lib/con
 import { AlertTriangle, Loader2, UserPlus, Camera, SwitchCamera } from "lucide-react";
 import { testCameraSupport } from "@/lib/camera-test";
 import { KioskConfirmationScreen } from "@/components/kiosk-confirmation-screen";
+import { useSocket } from "@/hooks/use-socket";
 
 const GENDERS = ["male", "female"] as const;
 
@@ -65,6 +66,7 @@ interface StaffCheckInPanelProps {
 }
 
 const FLASH_MS = 3200;
+const PAYMENT_TIMEOUT_MS = 3 * 60 * 1000;
 
 const CHECKIN_DRAFT_KEY = "courtflow-checkin-draft";
 
@@ -73,6 +75,15 @@ interface CheckInDraft {
   gender: "" | "male" | "female";
   skill: SkillLevelType | "";
   phone: string;
+}
+
+interface PendingPaymentData {
+  pendingPaymentId: string;
+  amount: number;
+  vietQR: string | null;
+  playerName: string;
+  skillLevel: string;
+  gender: string;
 }
 
 function readDraft(): CheckInDraft {
@@ -96,6 +107,7 @@ function clearDraft() {
 
 export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCheckInPanelProps) {
   const { t } = useTranslation();
+  const { on } = useSocket();
 
   const skillLabel = (level: SkillLevelType) => {
     const keys = {
@@ -158,13 +170,25 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
   } | null>(null);
   const [phoneDuplicate, setPhoneDuplicate] = useState<{ name: string } | null>(null);
   const phoneCheckAbortRef = useRef<AbortController | null>(null);
+  const paymentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pendingPayment, setPendingPayment] = useState<PendingPaymentData | null>(null);
+  const [paymentMode, setPaymentMode] = useState<"vietqr" | "cash">("vietqr");
+  const [paymentLoading, setPaymentLoading] = useState(false);
+
+  const clearPaymentTimer = useCallback(() => {
+    if (paymentTimerRef.current) {
+      clearTimeout(paymentTimerRef.current);
+      paymentTimerRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     return () => {
       if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
       phoneCheckAbortRef.current?.abort();
+      clearPaymentTimer();
     };
-  }, []);
+  }, [clearPaymentTimer]);
 
   /** After 8+ digits, check DB for an existing player on this number (digits-only match). */
   useEffect(() => {
@@ -207,6 +231,49 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
       ac.abort();
     };
   }, [phone]);
+
+  useEffect(() => {
+    const offConfirmed = on("payment:confirmed", (data: unknown) => {
+      const d = data as { pendingPaymentId: string; playerName: string; queueNumber: number };
+      if (!pendingPayment || d.pendingPaymentId !== pendingPayment.pendingPaymentId) return;
+      clearPaymentTimer();
+      setPendingPayment(null);
+      setPaymentLoading(false);
+      setAddFaceConfirmation({
+        displayName: d.playerName || pendingPayment.playerName,
+        queueNumber: d.queueNumber,
+        queuePosition: undefined,
+        skillLevel: pendingPayment.skillLevel,
+        gender: pendingPayment.gender,
+        totalSessions: undefined,
+        enrollmentWarning: null,
+      });
+      setName("");
+      setGender("");
+      setSkill("");
+      setPhone("");
+      clearDraft();
+      setCapturedFace(null);
+      setFaceQuality(null);
+      setPhoneDuplicate(null);
+      onAdded();
+    });
+
+    const offCancelled = on("payment:cancelled", (data: unknown) => {
+      const d = data as { pendingPaymentId: string };
+      if (!pendingPayment || d.pendingPaymentId !== pendingPayment.pendingPaymentId) return;
+      clearPaymentTimer();
+      setPendingPayment(null);
+      setPaymentLoading(false);
+      setPaymentMode("vietqr");
+      setErr(t("tablet.checkInScanner.payCancelledHint"));
+    });
+
+    return () => {
+      offConfirmed();
+      offCancelled();
+    };
+  }, [on, pendingPayment, clearPaymentTimer, onAdded, setName, setGender, setSkill, setPhone, t]);
 
   const stopFaceCamera = useCallback(() => {
     const stream = faceStreamRef.current;
@@ -264,113 +331,44 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
       setErr("Please capture a face photo first");
       return;
     }
-    
-    const forceAdd = faceQuality?.overall === "poor";
+    const phoneTrimmed = phone.trim();
+    if (!phoneTrimmed) {
+      setErr(t("tablet.checkInScanner.enterPhonePrompt"));
+      return;
+    }
 
     setLoading(true);
     try {
-      const phoneTrimmed = phone.trim();
       const imageBase64 = capturedFace.split(",")[1]; // Remove data URL prefix
-
       const res = await api.post<{
-        success: boolean;
-        player: { id: string; name: string; gender: string; skillLevel: string };
-        queueNumber?: number;
-        queuePosition?: number;
-        totalSessions?: number;
-        qualityCheck?: {
-          overall: "good" | "fair" | "poor";
-          checks: {
-            faceDetected: boolean;
-            lighting: "good" | "fair" | "poor";
-            focus: "good" | "fair" | "poor";
-            size: "good" | "fair" | "poor";
-          };
-          message: string;
-          canForce: boolean;
-        };
-        requiresRetake?: boolean;
-        faceEnrollment?: {
-          success: boolean;
-          awsFaceId?: string;
-          error?: string;
-        };
-      }>("/api/queue/staff-add-walk-in-with-face", {
+        pendingPaymentId: string;
+        playerId: string;
+        amount: number;
+        vietQR: string | null;
+        playerName: string;
+      }>("/api/kiosk/register", {
         venueId,
         name: trimmed,
         gender,
         skillLevel: skill,
-        ...(phoneTrimmed ? { phone: phoneTrimmed } : {}),
         imageBase64,
-        ...(forceAdd ? { forceAdd: true } : {}),
+        phone: phoneTrimmed,
       });
-
-      if (res.requiresRetake && res.qualityCheck && !forceAdd) {
-        setFaceQuality(res.qualityCheck);
-        setErr(res.qualityCheck.message);
-        return;
-      }
-
-      if (res.faceEnrollment?.success) {
-        console.log(
-          "[StaffFace] Profile saved; AWS IndexFaces ok — kiosk can match:",
-          res.faceEnrollment.awsFaceId
-        );
-      } else if (res.faceEnrollment && !res.faceEnrollment.success) {
-        console.warn("[StaffFace] AWS enrollment failed:", res.faceEnrollment.error);
-      }
-
-      if (res.player) {
-        const qn = res.queueNumber;
-        if (qn != null && qn > 0) {
-          const enrollWarn =
-            res.faceEnrollment && !res.faceEnrollment.success
-              ? t("staff.checkIn.faceEnrollmentWarningShort", {
-                  error: res.faceEnrollment.error ?? "",
-                })
-              : null;
-          setAddFaceConfirmation({
-            displayName: res.player.name,
-            queueNumber: qn,
-            queuePosition: res.queuePosition,
-            skillLevel: res.player.skillLevel,
-            gender: res.player.gender,
-            totalSessions: res.totalSessions,
-            enrollmentWarning: enrollWarn,
-          });
-        } else {
-          if (res.faceEnrollment && !res.faceEnrollment.success) {
-            showFlash(
-              `${res.player.name} added to queue — face NOT enrolled in AWS (kiosk won’t recognize). ${res.faceEnrollment.error ?? ""}`
-            );
-          } else {
-            showFlash(t("staff.checkIn.addedFlash", { name: res.player.name }));
-          }
-        }
-        setRecent((prev) => {
-          const next = [
-            {
-              id: res.player.id,
-              name: res.player.name,
-              gender: res.player.gender,
-              skillLevel: res.player.skillLevel,
-              queueNumber: res.queueNumber,
-            },
-            ...prev.filter((p) => p.id !== res.player.id),
-          ];
-          return next.slice(0, 5);
-        });
-      }
-
-      setName("");
-      setGender("");
-      setSkill("");
-      setPhone("");
-      clearDraft();
-      setPhoneDuplicate(null);
-      setCapturedFace(null);
-      setFaceQuality(null);
-      onAdded();
+      setPendingPayment({
+        pendingPaymentId: res.pendingPaymentId,
+        amount: res.amount,
+        vietQR: res.vietQR,
+        playerName: res.playerName,
+        skillLevel: skill,
+        gender,
+      });
+      setPaymentMode("vietqr");
+      clearPaymentTimer();
+      paymentTimerRef.current = setTimeout(() => {
+        setPendingPayment(null);
+        setPaymentMode("vietqr");
+        setErr(t("tablet.checkInScanner.payTimeoutHint"));
+      }, PAYMENT_TIMEOUT_MS);
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -379,55 +377,7 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
   };
 
   const submit = async () => {
-    setErr("");
-    const trimmed = name.trim();
-    if (!trimmed || !gender || !skill) {
-      setErr(t("staff.checkIn.requiredFields"));
-      return;
-    }
-    if (queueNamesLower.includes(trimmed.toLowerCase())) {
-      setErr(duplicateNameMsg);
-      return;
-    }
-    setLoading(true);
-    try {
-      const phoneTrimmed = phone.trim();
-      const res = await api.post<{
-        success: boolean;
-        player: { id: string; name: string; gender: string; skillLevel: string };
-      }>("/api/queue/staff-add-walk-in", {
-        venueId,
-        name: trimmed,
-        gender,
-        skillLevel: skill,
-        ...(phoneTrimmed ? { phone: phoneTrimmed } : {}),
-      });
-      if (res.player) {
-        showFlash(t("staff.checkIn.addedFlash", { name: res.player.name }));
-        setRecent((prev) => {
-          const next = [
-            {
-              id: res.player.id,
-              name: res.player.name,
-              gender: res.player.gender,
-              skillLevel: res.player.skillLevel,
-            },
-            ...prev.filter((p) => p.id !== res.player.id),
-          ];
-          return next.slice(0, 5);
-        });
-      }
-      setName("");
-      setGender("");
-      setSkill("");
-      setPhone("");
-      clearDraft();
-      onAdded();
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
+    setErr(t("staff.checkIn.captureFace"));
   };
 
   const mapCameraError = (errorMessage: string) => {
@@ -787,6 +737,21 @@ ${test.error ? `Error: ${test.error}` : ''}
     }
   };
 
+  const switchPaymentToCash = useCallback(async () => {
+    if (!pendingPayment) return;
+    setPaymentLoading(true);
+    try {
+      await api.post("/api/kiosk/cash-payment", {
+        pendingPaymentId: pendingPayment.pendingPaymentId,
+      });
+      setPaymentMode("cash");
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setPaymentLoading(false);
+    }
+  }, [pendingPayment]);
+
   return (
     <div className="mx-auto w-full max-w-md space-y-6 max-sm:space-y-2">
       <div
@@ -919,7 +884,7 @@ ${test.error ? `Error: ${test.error}` : ''}
 
         <div>
           <label className="mb-1.5 block text-xs font-medium text-neutral-400 max-sm:mb-1">
-            {t("staff.checkIn.phoneOptional")}
+            {t("tablet.checkInScanner.regPhone")}
           </label>
           <input
             type="tel"
@@ -1128,6 +1093,7 @@ ${test.error ? `Error: ${test.error}` : ''}
                   loading ||
                   testSeedLoading ||
                   !name.trim() ||
+                  !phone.trim() ||
                   !gender ||
                   !skill ||
                   showDuplicateWarning ||
@@ -1303,6 +1269,47 @@ ${test.error ? `Error: ${test.error}` : ''}
                     {t("staff.dashboard.cancel")}
                   </button>
                 </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {pendingPayment && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 p-5 text-center">
+            <h3 className="text-xl font-bold text-white">{t("tablet.checkInScanner.payTitle", { name: pendingPayment.playerName })}</h3>
+            {paymentMode === "vietqr" ? (
+              <>
+                {pendingPayment.vietQR ? (
+                  <div className="mx-auto mt-4 w-fit rounded-xl bg-white p-2">
+                    <img src={pendingPayment.vietQR} alt="VietQR" className="h-56 w-56 object-contain" />
+                  </div>
+                ) : (
+                  <p className="mt-4 text-sm text-amber-300">QR unavailable - switch to cash payment.</p>
+                )}
+                <p className="mt-4 text-3xl font-bold text-green-400">
+                  {pendingPayment.amount.toLocaleString("vi-VN")} VND
+                </p>
+                <p className="mt-2 text-sm text-neutral-400">{t("tablet.checkInScanner.payWaitingForStaff")}</p>
+                <button
+                  type="button"
+                  disabled={paymentLoading}
+                  onClick={() => void switchPaymentToCash()}
+                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-amber-700/40 py-3 font-semibold text-amber-200 hover:bg-amber-700/60 disabled:opacity-50"
+                >
+                  {paymentLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  {t("tablet.checkInScanner.payByCash")}
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="mt-6 text-lg text-neutral-200">
+                  {t("tablet.checkInScanner.payCashTitle", {
+                    amount: `${pendingPayment.amount.toLocaleString("vi-VN")} VND`,
+                  })}
+                </p>
+                <p className="mt-2 text-sm text-neutral-400">{t("tablet.checkInScanner.payWaitingForStaff")}</p>
               </>
             )}
           </div>

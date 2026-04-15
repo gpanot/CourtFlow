@@ -17,12 +17,17 @@ import {
 } from "lucide-react";
 import { KioskConfirmationScreen } from "@/components/kiosk-confirmation-screen";
 import { CameraCapture, type CameraCaptureHandle } from "@/components/camera-capture";
+import { useSocket } from "@/hooks/use-socket";
 
 type KioskState =
   | "idle"
   | "detecting"
   | "processing"
   | "confirmed"
+  | "payment_waiting"
+  | "payment_cash"
+  | "payment_timeout"
+  | "payment_cancelled"
   | "success"
   | "error"
   | "no_face"
@@ -39,10 +44,16 @@ const COOLDOWN_MS = 2000;
 const PROCESSING_TIMEOUT_MS = 10000;
 const CAMERA_REMOUNT_MS = 50;
 const FACE_FAIL_THRESHOLD = 3;
+const PAYMENT_TIMEOUT_MS = 3 * 60 * 1000;
+const PAYMENT_TIMEOUT_RESET_MS = 15_000;
+const PAYMENT_CANCELLED_RESET_MS = 10_000;
 
 type ProcessFaceResponse = {
   success: boolean;
   resultType: string;
+  pendingPaymentId?: string;
+  amount?: number;
+  vietQR?: string | null;
   displayName?: string;
   queueNumber?: number;
   queuePosition?: number;
@@ -50,7 +61,15 @@ type ProcessFaceResponse = {
   totalSessions?: number;
   isReturning?: boolean;
   alreadyCheckedIn?: boolean;
+  playerName?: string;
   error?: string;
+};
+
+type PaymentData = {
+  pendingPaymentId: string;
+  amount: number;
+  vietQR: string | null;
+  playerName: string;
 };
 
 type PhoneLookupResponse = {
@@ -81,10 +100,12 @@ function skillLabelFromKey(level: string, t: (k: string) => string): string {
 
 export function FaceKioskTab({ venueId, hasSession = true }: FaceKioskTabProps) {
   const { t } = useTranslation();
+  const { on } = useSocket();
 
   const cameraRef = useRef<CameraCaptureHandle>(null);
   const cooldownRef = useRef<NodeJS.Timeout | null>(null);
   const processingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const paymentTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [state, setState] = useState<KioskState>("idle");
   const [error, setError] = useState<string>("");
   const [resultData, setResultData] = useState<{
@@ -104,6 +125,15 @@ export function FaceKioskTab({ venueId, hasSession = true }: FaceKioskTabProps) 
   const [phoneConfirmLoading, setPhoneConfirmLoading] = useState(false);
   const [phonePreview, setPhonePreview] = useState<PhoneLookupResponse | null>(null);
   const [phoneFormError, setPhoneFormError] = useState("");
+  const [payment, setPayment] = useState<PaymentData | null>(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+
+  const clearPaymentTimer = useCallback(() => {
+    if (paymentTimerRef.current) {
+      clearTimeout(paymentTimerRef.current);
+      paymentTimerRef.current = null;
+    }
+  }, []);
 
   const handleCameraError = useCallback((msg: string) => {
     setError(msg);
@@ -134,7 +164,7 @@ export function FaceKioskTab({ venueId, hasSession = true }: FaceKioskTabProps) 
     };
 
     try {
-      const response = await api.post<ProcessFaceResponse>("/api/kiosk/process-face", {
+      const response = await api.post<ProcessFaceResponse>("/api/kiosk/checkin-payment", {
         venueId,
         imageBase64,
       });
@@ -144,7 +174,29 @@ export function FaceKioskTab({ venueId, hasSession = true }: FaceKioskTabProps) 
         processingTimeoutRef.current = null;
       }
 
+      if (response.pendingPaymentId) {
+        clearPaymentTimer();
+        setPayment({
+          pendingPaymentId: response.pendingPaymentId,
+          amount: response.amount || 0,
+          vietQR: response.vietQR || null,
+          playerName: response.playerName || response.displayName || "",
+        });
+        setState("payment_waiting");
+        cameraRef.current?.stopCamera();
+        paymentTimerRef.current = setTimeout(() => {
+          setState("payment_timeout");
+          clearPaymentTimer();
+          cooldownRef.current = setTimeout(() => {
+            setPayment(null);
+            setState("idle");
+          }, PAYMENT_TIMEOUT_RESET_MS);
+        }, PAYMENT_TIMEOUT_MS);
+        return;
+      }
+
       if (response.success) {
+
         if (response.resultType === "matched" || response.resultType === "checked_in") {
           setConsecutiveFailures(0);
           setResultData({
@@ -173,6 +225,12 @@ export function FaceKioskTab({ venueId, hasSession = true }: FaceKioskTabProps) 
           });
           setState("confirmed");
           cameraRef.current?.stopCamera();
+          return;
+        }
+
+        if (response.resultType === "needs_registration") {
+          bumpFailure();
+          setState("needs_registration");
           return;
         }
 
@@ -216,7 +274,7 @@ export function FaceKioskTab({ venueId, hasSession = true }: FaceKioskTabProps) 
     }
 
     scheduleCooldownReset();
-  }, [venueId, t]);
+  }, [venueId, t, clearPaymentTimer]);
 
   const openPhoneCheckIn = useCallback(() => {
     setPhoneFlow("enter");
@@ -281,34 +339,36 @@ export function FaceKioskTab({ venueId, hasSession = true }: FaceKioskTabProps) 
     setPhoneFormError("");
     setPhoneConfirmLoading(true);
     try {
-      const response = await api.post<ProcessFaceResponse>("/api/kiosk/phone-check-in", {
+      const response = await api.post<ProcessFaceResponse>("/api/kiosk/checkin-payment", {
         venueId,
-        phase: "confirm",
         playerId: pid,
       });
+      setPhoneFlow(null);
+      setPhonePreview(null);
+      setPhoneInput("");
+      setConsecutiveFailures(0);
 
-      if ((response.resultType === "matched" || response.resultType === "checked_in") && response.success) {
-        setConsecutiveFailures(0);
-        setPhoneFlow(null);
-        setPhonePreview(null);
-        setPhoneInput("");
-        setResultData({
-          displayName: response.displayName,
-          queueNumber: response.queueNumber,
-          skillLevel: response.skillLevel,
-          totalSessions: response.totalSessions,
-          isReturning: response.isReturning ?? true,
-          alreadyCheckedIn: false,
+      if (response.pendingPaymentId) {
+        clearPaymentTimer();
+        setPayment({
+          pendingPaymentId: response.pendingPaymentId,
+          amount: response.amount || 0,
+          vietQR: response.vietQR || null,
+          playerName: response.playerName || phonePreview?.player.name || "",
         });
-        setState("confirmed");
+        setState("payment_waiting");
+        paymentTimerRef.current = setTimeout(() => {
+          setState("payment_timeout");
+          clearPaymentTimer();
+          cooldownRef.current = setTimeout(() => {
+            setPayment(null);
+            setState("idle");
+          }, PAYMENT_TIMEOUT_RESET_MS);
+        }, PAYMENT_TIMEOUT_MS);
         return;
       }
 
       if (response.resultType === "already_checked_in" && response.success) {
-        setConsecutiveFailures(0);
-        setPhoneFlow(null);
-        setPhonePreview(null);
-        setPhoneInput("");
         setResultData({
           displayName: response.displayName,
           queueNumber: response.queueNumber,
@@ -322,7 +382,7 @@ export function FaceKioskTab({ venueId, hasSession = true }: FaceKioskTabProps) 
         return;
       }
 
-      setPhoneFormError(t("staff.kiosk.phoneConfirmError"));
+      setPhoneFormError(response.error || t("staff.kiosk.phoneConfirmError"));
     } catch (e) {
       const msg =
         e instanceof Error ? e.message : t("staff.kiosk.phoneConfirmError");
@@ -330,9 +390,62 @@ export function FaceKioskTab({ venueId, hasSession = true }: FaceKioskTabProps) 
     } finally {
       setPhoneConfirmLoading(false);
     }
-  }, [phonePreview, venueId, t]);
+  }, [phonePreview, venueId, t, clearPaymentTimer]);
+
+  const switchToCash = useCallback(async () => {
+    if (!payment) return;
+    setPaymentLoading(true);
+    try {
+      await api.post("/api/kiosk/cash-payment", {
+        pendingPaymentId: payment.pendingPaymentId,
+      });
+      setState("payment_cash");
+    } catch (e) {
+      setPhoneFormError(e instanceof Error ? e.message : t("staff.kiosk.phoneConfirmError"));
+    } finally {
+      setPaymentLoading(false);
+    }
+  }, [payment, t]);
+
+  useEffect(() => {
+    const offConfirmed = on("payment:confirmed", (data: unknown) => {
+      const d = data as { pendingPaymentId: string; playerName: string; queueNumber: number };
+      if (!payment || d.pendingPaymentId !== payment.pendingPaymentId) return;
+      if (state !== "payment_waiting" && state !== "payment_cash") return;
+      clearPaymentTimer();
+      setConsecutiveFailures(0);
+      setResultData({
+        displayName: d.playerName || payment.playerName,
+        queueNumber: d.queueNumber,
+        isReturning: true,
+        alreadyCheckedIn: false,
+      });
+      setState("confirmed");
+      setPayment(null);
+    });
+
+    const offCancelled = on("payment:cancelled", (data: unknown) => {
+      const d = data as { pendingPaymentId: string };
+      if (!payment || d.pendingPaymentId !== payment.pendingPaymentId) return;
+      if (state !== "payment_waiting" && state !== "payment_cash") return;
+      clearPaymentTimer();
+      setState("payment_cancelled");
+      cooldownRef.current = setTimeout(() => {
+        setPayment(null);
+        setState("idle");
+      }, PAYMENT_CANCELLED_RESET_MS);
+    });
+
+    return () => {
+      offConfirmed();
+      offCancelled();
+    };
+  }, [on, payment, state, clearPaymentTimer]);
 
   const handleScanNext = useCallback(async () => {
+    clearPaymentTimer();
+    setPayment(null);
+    setPaymentLoading(false);
     setResultData({});
     setConsecutiveFailures(0);
     setPhoneFlow(null);
@@ -343,7 +456,7 @@ export function FaceKioskTab({ venueId, hasSession = true }: FaceKioskTabProps) 
     await new Promise((r) => setTimeout(r, CAMERA_REMOUNT_MS));
     const ok = await cameraRef.current?.startCamera();
     if (!ok) setIsKioskActive(false);
-  }, []);
+  }, [clearPaymentTimer]);
 
   const startFaceDetection = useCallback(() => {
     setState("detecting");
@@ -376,6 +489,9 @@ export function FaceKioskTab({ venueId, hasSession = true }: FaceKioskTabProps) 
       setPhonePreview(null);
       setPhoneInput("");
       setPhoneFormError("");
+      setPayment(null);
+      setPaymentLoading(false);
+      clearPaymentTimer();
       if (cooldownRef.current) clearTimeout(cooldownRef.current);
       if (processingTimeoutRef.current) clearTimeout(processingTimeoutRef.current);
     } else {
@@ -383,8 +499,9 @@ export function FaceKioskTab({ venueId, hasSession = true }: FaceKioskTabProps) 
       setState("idle");
       setConsecutiveFailures(0);
       setPhoneFlow(null);
+      setPayment(null);
     }
-  }, [isKioskActive]);
+  }, [isKioskActive, clearPaymentTimer]);
 
   useEffect(() => {
     if (!isKioskActive || state !== "idle" || phoneFlow !== null) return;
@@ -398,8 +515,9 @@ export function FaceKioskTab({ venueId, hasSession = true }: FaceKioskTabProps) 
       cameraRef.current?.stopCamera();
       if (cooldownRef.current) clearTimeout(cooldownRef.current);
       if (processingTimeoutRef.current) clearTimeout(processingTimeoutRef.current);
+      clearPaymentTimer();
     };
-  }, []);
+  }, [clearPaymentTimer]);
 
   const getStateMessage = () => {
     switch (state) {
@@ -413,6 +531,13 @@ export function FaceKioskTab({ venueId, hasSession = true }: FaceKioskTabProps) 
         return t("staff.kiosk.checkingIn");
       case "confirmed":
         return "";
+      case "payment_waiting":
+      case "payment_cash":
+        return t("tablet.checkInScanner.payWaitingForStaff");
+      case "payment_timeout":
+        return t("tablet.checkInScanner.payTimeout");
+      case "payment_cancelled":
+        return t("tablet.checkInScanner.payCancelled");
       case "success":
         return resultData.displayName
           ? t("staff.kiosk.welcomeBack", { name: resultData.displayName })
@@ -442,6 +567,12 @@ export function FaceKioskTab({ venueId, hasSession = true }: FaceKioskTabProps) 
         return "text-blue-300";
       case "confirmed":
         return "text-neutral-400";
+      case "payment_waiting":
+      case "payment_cash":
+        return "text-neutral-300";
+      case "payment_timeout":
+      case "payment_cancelled":
+        return "text-red-400";
       case "success":
         return "text-green-400";
       case "already_checked_in":
@@ -548,7 +679,62 @@ export function FaceKioskTab({ venueId, hasSession = true }: FaceKioskTabProps) 
 
         {isKioskActive && (
           <>
-            {state === "confirmed" ? (
+            {state === "payment_waiting" && payment ? (
+              <div className="flex w-full max-w-md flex-col gap-4 rounded-xl border border-neutral-800 bg-neutral-900 p-6 text-center">
+                <h3 className="text-xl font-semibold text-white">{t("tablet.checkInScanner.payReturningTitle")}</h3>
+                {payment.vietQR ? (
+                  <div className="mx-auto rounded-2xl bg-white p-3">
+                    <img src={payment.vietQR} alt="VietQR" className="w-60 max-w-[70vw] object-contain" />
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border-2 border-dashed border-neutral-600 bg-neutral-950 p-6 text-center">
+                    <p className="text-sm text-neutral-400">QR unavailable - pay by cash below</p>
+                  </div>
+                )}
+                <p className="text-3xl font-bold text-green-400">
+                  {payment.amount.toLocaleString("vi-VN")} VND
+                </p>
+                <p className="text-sm text-neutral-400">{t("tablet.checkInScanner.payWaitingForStaff")}</p>
+                <button
+                  type="button"
+                  disabled={paymentLoading}
+                  onClick={() => void switchToCash()}
+                  className="flex items-center justify-center gap-2 rounded-lg bg-amber-700/40 py-3 font-medium text-amber-200 hover:bg-amber-700/60 disabled:opacity-50"
+                >
+                  {paymentLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
+                  {t("tablet.checkInScanner.payByCash")}
+                </button>
+              </div>
+            ) : state === "payment_cash" && payment ? (
+              <div className="flex w-full max-w-md flex-col gap-4 rounded-xl border border-neutral-800 bg-neutral-900 p-6 text-center">
+                <h3 className="text-xl font-semibold text-white">
+                  {t("tablet.checkInScanner.payCashTitle", {
+                    amount: `${payment.amount.toLocaleString("vi-VN")} VND`,
+                  })}
+                </h3>
+                <p className="text-sm text-neutral-400">{t("tablet.checkInScanner.payWaitingForStaff")}</p>
+              </div>
+            ) : state === "payment_timeout" ? (
+              <div className="flex w-full max-w-md flex-col gap-4 rounded-xl border border-red-500/30 bg-red-950/30 p-6 text-center">
+                <h3 className="text-xl font-semibold text-red-300">{t("tablet.checkInScanner.payTimeout")}</h3>
+                <p className="text-sm text-neutral-300">{t("tablet.checkInScanner.payTimeoutHint")}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPayment(null);
+                    setState("idle");
+                  }}
+                  className="rounded-lg bg-green-600 py-3 font-medium text-white hover:bg-green-500"
+                >
+                  {t("tablet.checkInScanner.tryAgain")}
+                </button>
+              </div>
+            ) : state === "payment_cancelled" ? (
+              <div className="flex w-full max-w-md flex-col gap-4 rounded-xl border border-red-500/30 bg-red-950/30 p-6 text-center">
+                <h3 className="text-xl font-semibold text-red-300">{t("tablet.checkInScanner.payCancelled")}</h3>
+                <p className="text-sm text-neutral-300">{t("tablet.checkInScanner.payCancelledHint")}</p>
+              </div>
+            ) : state === "confirmed" ? (
               <div className="flex min-h-0 w-full max-w-2xl flex-1 self-center sm:self-auto">
                 <KioskConfirmationScreen
                   displayName={resultData.displayName ?? "Player"}
