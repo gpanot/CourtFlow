@@ -19,7 +19,7 @@ import {
 } from "@/components/staff-queue-player-display";
 import { QueuePanel, type QueueEntryData, type StaffQueueCourtGroup } from "@/components/queue-panel";
 import { cn } from "@/lib/cn";
-import { Plus, X, Users, LayoutGrid, AlertTriangle, User, UserPlus, Wrench, RotateCcw, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, Calendar, Loader2, Target, Play, Check, ListPlus, Camera, Search } from "lucide-react";
+import { Plus, X, Users, LayoutGrid, AlertTriangle, User, UserPlus, Wrench, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, Calendar, Loader2, Target, Play, Check, ListPlus, Camera, Search, CreditCard } from "lucide-react";
 import { MIN_GROUP_SIZE, MAX_GROUP_SIZE, COURT_PLAYER_COUNT } from "@/lib/constants";
 import { QRCodeSVG } from "qrcode.react";
 import { SessionSummary } from "./session-summary";
@@ -28,8 +28,10 @@ import { StaffWaitingPicker } from "@/components/staff-waiting-picker";
 import { FaceKioskTab } from "@/components/face-kiosk-tab";
 import { StaffPlayerSearchOverlay } from "@/components/staff-player-search-overlay";
 import { RankBottomSheet } from "@/components/rank-bottom-sheet";
+import { PendingPaymentsSheet } from "@/components/pending-payments-sheet";
 import { canCourtAcceptManualAssign } from "@/lib/court-manual-assign";
 import { playerNameWithCheckIn } from "@/lib/player-display";
+import { useCourtAssignmentAttention } from "@/hooks/use-court-assignment-attention";
 
 function genderLabelForDialog(g: string, t: TFunction) {
   if (g === "male") return t("staff.dashboard.labelsGenderMale");
@@ -147,7 +149,7 @@ export function StaffDashboard() {
     detail: string;
     waitingPlayers: { name: string; gender: string; skillLevel: string }[];
   } | null>(null);
-  const [confirmStartGame, setConfirmStartGame] = useState<{ courtId: string; courtLabel: string; step: 1 | 2 } | null>(null);
+  const [confirmStartGame, setConfirmStartGame] = useState<{ courtId: string; courtLabel: string } | null>(null);
   const [confirmReplace, setConfirmReplace] = useState<{
     courtId: string;
     courtLabel: string;
@@ -161,6 +163,11 @@ export function StaffDashboard() {
     removePlayerId: string;
     removePlayerName: string;
   } | null>(null);
+  const [queueReplacePicker, setQueueReplacePicker] = useState<{
+    removePlayerId: string;
+    removePlayerName: string;
+    removeJoinedAt: string;
+  } | null>(null);
   const [replaceBusy, setReplaceBusy] = useState(false);
   const [closedSessionId, setClosedSessionId] = useState<string | null>(null);
   const [viewingSessionId, setViewingSessionId] = useState<string | null>(null);
@@ -170,7 +177,10 @@ export function StaffDashboard() {
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [playerSearchOpen, setPlayerSearchOpen] = useState(false);
   const [rankSheetCourt, setRankSheetCourt] = useState<CourtData | null>(null);
+  const [paymentsSheetOpen, setPaymentsSheetOpen] = useState(false);
+  const [pendingPaymentCount, setPendingPaymentCount] = useState(0);
   const { on } = useSocket();
+  useCourtAssignmentAttention(courts);
 
   const rankingBannerCourts = useMemo(
     () =>
@@ -233,16 +243,31 @@ export function StaffDashboard() {
     const offQueue = on("queue:updated", () => fetchState());
     const offSession = on("session:updated", () => fetchState());
     const offRankings = on("rankings:updated", () => fetchState());
+    const fetchPaymentCount = () => {
+      api.get<unknown[]>(`/api/staff/pending-payments?venueId=${venueId}`)
+        .then((data) => setPendingPaymentCount(data.length))
+        .catch(() => {});
+    };
+    const offPaymentNew = on("payment:new", fetchPaymentCount);
+    const offPaymentConfirmed = on("payment:confirmed", fetchPaymentCount);
+    const offPaymentCancelled = on("payment:cancelled", fetchPaymentCount);
 
-    // Poll every 30s so time-based eligibility (ranking banner) stays current
+    fetchPaymentCount();
+
+    // Poll every 30s for queue state + every 5s for payment badge
     const poll = setInterval(() => fetchState(), 30_000);
+    const paymentPoll = setInterval(fetchPaymentCount, 5_000);
 
     return () => {
       offCourt();
       offQueue();
       offSession();
       offRankings();
+      offPaymentNew();
+      offPaymentConfirmed();
+      offPaymentCancelled();
       clearInterval(poll);
+      clearInterval(paymentPoll);
     };
   }, [venueId, on, fetchState]);
 
@@ -276,16 +301,6 @@ export function StaffDashboard() {
       const closingId = session.id;
       await api.post(`/api/sessions/${closingId}/close`);
       setClosedSessionId(closingId);
-    } catch (e) {
-      alert((e as Error).message);
-    }
-  };
-
-  const handleEndGame = async (courtId: string) => {
-    try {
-      await api.post(`/api/courts/${courtId}/end-game`);
-      setSelectedCourt(null);
-      await fetchState();
     } catch (e) {
       alert((e as Error).message);
     }
@@ -426,6 +441,15 @@ export function StaffDashboard() {
         await api.patch(`/api/players/${playerId}`, { skillLevel: data.skillLevel });
       } else if (action === "edit_player" && typeof data?.name === "string" && typeof data?.gender === "string") {
         await api.patch(`/api/players/${playerId}`, { name: data.name.trim(), gender: data.gender });
+      } else if (action === "replace_in_queue") {
+        const removeJoinedAt =
+          typeof data?.joinedAt === "string" ? data.joinedAt : new Date().toISOString();
+        setQueueReplacePicker({
+          removePlayerId: playerId,
+          removePlayerName: _playerName,
+          removeJoinedAt,
+        });
+        return;
       }
       await fetchState();
     } catch (e) {
@@ -552,6 +576,20 @@ export function StaffDashboard() {
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-700/40 text-neutral-200 hover:bg-neutral-600/50 hover:text-white transition-colors"
           >
             <Search className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setPaymentsSheetOpen(true)}
+            aria-label={t("staff.dashboard.pendingPaymentsAria")}
+            title={t("staff.dashboard.pendingPaymentsAria")}
+            className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-700/40 text-neutral-200 transition-colors hover:bg-neutral-600/50 hover:text-white"
+          >
+            <CreditCard className="h-5 w-5" />
+            {pendingPaymentCount > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                {pendingPaymentCount}
+              </span>
+            )}
           </button>
           <button
             type="button"
@@ -787,6 +825,15 @@ export function StaffDashboard() {
         />
       )}
 
+      {venueId && (
+        <PendingPaymentsSheet
+          open={paymentsSheetOpen}
+          venueId={venueId}
+          onClose={() => setPaymentsSheetOpen(false)}
+          onCountChange={setPendingPaymentCount}
+        />
+      )}
+
       {playerSearchOpen && venueId && (
         <StaffPlayerSearchOverlay
           venueId={venueId}
@@ -844,6 +891,7 @@ export function StaffDashboard() {
           maxSelectable={1}
           pickerPurpose="replace"
           replacedPlayerName={replaceManualPicker.removePlayerName}
+          replacedPlayerId={replaceManualPicker.removePlayerId}
           courtRoster={courts.find((c) => c.id === replaceManualPicker.courtId)?.players ?? []}
           translationI18n={staffI18n}
           onCancel={() => setReplaceManualPicker(null)}
@@ -851,6 +899,35 @@ export function StaffDashboard() {
             const rid = playerIds[0];
             if (!rid) return;
             await handleReplacePlayer(replaceManualPicker.courtId, replaceManualPicker.removePlayerId, rid);
+          }}
+        />
+      )}
+
+      {queueReplacePicker && (
+        <StaffWaitingPicker
+          entries={soloWaitingQueueEntries.filter((e) => e.playerId !== queueReplacePicker.removePlayerId)}
+          courtLabel={t("staff.dashboard.tabQueue")}
+          maxSelectable={1}
+          pickerPurpose="replace"
+          replacedPlayerName={queueReplacePicker.removePlayerName}
+          replacedPlayerId={queueReplacePicker.removePlayerId}
+          replacedJoinedAt={queueReplacePicker.removeJoinedAt}
+          translationI18n={staffI18n}
+          onCancel={() => setQueueReplacePicker(null)}
+          onConfirm={async (playerIds) => {
+            const replacementPlayerId = playerIds[0];
+            if (!replacementPlayerId || !venueId) return;
+            try {
+              await api.post("/api/queue/staff-replace", {
+                venueId,
+                removePlayerId: queueReplacePicker.removePlayerId,
+                replacementPlayerId,
+              });
+              setQueueReplacePicker(null);
+              await fetchState();
+            } catch (e) {
+              alert((e as Error).message);
+            }
           }}
         />
       )}
@@ -931,12 +1008,11 @@ export function StaffDashboard() {
                     onClick={() => setConfirmStartGame({
                       courtId: selectedCourt.id,
                       courtLabel: selectedCourt.label,
-                      step: 1,
                     })}
-                    className="w-full rounded-xl bg-green-600 py-5 text-lg font-bold text-white transition-colors hover:bg-green-500 flex items-center justify-center gap-2"
+                    className="w-full rounded-xl bg-neutral-700 py-5 text-lg font-bold text-white transition-colors hover:bg-neutral-600 flex items-center justify-center gap-2"
                   >
-                    <RotateCcw className="h-5 w-5" />
-                    {t("staff.dashboard.startNewGame")}
+                    <Wrench className="h-5 w-5" />
+                    {t("staff.dashboard.setIdle")}
                   </button>
                 )}
 
@@ -1275,68 +1351,42 @@ export function StaffDashboard() {
         </div>
       )}
 
-      {/* Confirm Start New Game — 2-step */}
+      {/* Confirm Empty Court */}
       {confirmStartGame && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setConfirmStartGame(null)}>
           <div
             className="w-full max-w-sm rounded-2xl border border-neutral-700 bg-neutral-900 p-6"
             onClick={(e) => e.stopPropagation()}
           >
-            {confirmStartGame.step === 1 ? (
-              <>
-                <div className="mb-4 flex flex-col items-center gap-3 text-center">
-                  <div className="rounded-full bg-green-600/20 p-3">
-                    <RotateCcw className="h-6 w-6 text-green-400" />
-                  </div>
-                  <h3 className="text-lg font-bold">{t("staff.dashboard.endGameTitle", { label: confirmStartGame.courtLabel })}</h3>
-                  <p className="text-sm text-neutral-400">
-                    {t("staff.dashboard.endGameBody")}
-                  </p>
-                </div>
-                <div className="flex flex-col gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setConfirmStartGame({ ...confirmStartGame, step: 2 })}
-                    className="w-full rounded-xl bg-green-600 py-3 font-semibold text-white hover:bg-green-500"
-                  >
-                    {t("staff.dashboard.startNewGameAutoFill")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const courtId = confirmStartGame.courtId;
-                      setConfirmStartGame(null);
-                      await handleSetMaintenance(courtId);
-                    }}
-                    className="w-full rounded-xl bg-neutral-800 py-3 font-medium text-neutral-200 hover:bg-neutral-700"
-                  >
-                    {t("staff.dashboard.setIdle")}
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="mb-4 flex flex-col items-center gap-3 text-center">
-                  <div className="rounded-full bg-amber-600/20 p-3">
-                    <AlertTriangle className="h-6 w-6 text-amber-400" />
-                  </div>
-                  <h3 className="text-lg font-bold">{t("staff.dashboard.areYouSure")}</h3>
-                  <p className="text-sm text-neutral-400">
-                    {t("staff.dashboard.startNewGameConfirmBody", { label: confirmStartGame.courtLabel })}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await handleEndGame(confirmStartGame.courtId);
-                    setConfirmStartGame(null);
-                  }}
-                  className="w-full rounded-xl bg-green-600 py-3 font-semibold text-white hover:bg-green-500"
-                >
-                  {t("staff.dashboard.yesStartNewGame")}
-                </button>
-              </>
-            )}
+            <div className="mb-4 flex flex-col items-center gap-3 text-center">
+              <div className="rounded-full bg-amber-600/20 p-3">
+                <AlertTriangle className="h-6 w-6 text-amber-400" />
+              </div>
+              <h3 className="text-lg font-bold">{t("staff.dashboard.setIdleTitle", { label: confirmStartGame.courtLabel })}</h3>
+              <p className="text-sm text-neutral-400">
+                {t("staff.dashboard.setIdleBody2")}
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={async () => {
+                  const courtId = confirmStartGame.courtId;
+                  setConfirmStartGame(null);
+                  await handleSetMaintenance(courtId);
+                }}
+                className="flex-1 rounded-xl bg-red-600 py-3 font-semibold text-white hover:bg-red-500"
+              >
+                {t("staff.dashboard.yesSetIdle")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmStartGame(null)}
+                className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
+              >
+                {t("staff.dashboard.cancel")}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -7,7 +7,16 @@ export type StaffWaitingPickerRow = {
   isGroup: boolean;
   groupSize: number;
   position: number;
-  allPlayers: { id: string; name: string; skillLevel?: string; gender?: string }[];
+  allPlayers: {
+    id: string;
+    name: string;
+    skillLevel?: string;
+    gender?: string;
+    avatar?: string;
+    avatarPhotoPath?: string | null;
+    facePhotoPath?: string | null;
+    queueNumber?: number;
+  }[];
 };
 
 /**
@@ -18,6 +27,7 @@ export function buildStaffWaitingPickerRows(entries: QueueEntryData[], limit = 5
   const waitingSorted = [...entries]
     .filter((e) => e.status === "waiting")
     .sort((a, b) => new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime());
+  const entryByPlayerId = new Map(waitingSorted.map((e) => [e.playerId, e]));
 
   const seenGroup = new Set<string>();
   let position = 0;
@@ -35,18 +45,29 @@ export function buildStaffWaitingPickerRows(entries: QueueEntryData[], limit = 5
 
     const allPlayers =
       entry.groupId && entry.group && groupSize > 0
-        ? groupMembers.map((m) => ({
-            id: m.player.id,
-            name: m.player.name,
-            skillLevel: m.player.skillLevel,
-            gender: m.player.gender,
-          }))
+        ? groupMembers.map((m) => {
+            const qe = entryByPlayerId.get(m.player.id);
+            return {
+              id: m.player.id,
+              name: m.player.name,
+              skillLevel: m.player.skillLevel,
+              gender: m.player.gender,
+              avatar: m.player.avatar,
+              avatarPhotoPath: m.player.avatarPhotoPath,
+              facePhotoPath: m.player.facePhotoPath,
+              queueNumber: qe?.queueNumber,
+            };
+          })
         : [
             {
               id: entry.playerId,
               name: entry.player.name,
               skillLevel: entry.player.skillLevel,
               gender: entry.player.gender,
+              avatar: entry.player.avatar,
+              avatarPhotoPath: entry.player.avatarPhotoPath,
+              facePhotoPath: entry.player.facePhotoPath,
+              queueNumber: entry.queueNumber,
             },
           ];
 

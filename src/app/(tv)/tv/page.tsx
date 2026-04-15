@@ -15,6 +15,7 @@ import { TvReactionOverlay } from "@/components/tv-reaction-overlay";
 import { resolveTvLocale, tvI18n } from "@/i18n/tv-i18n";
 import { TvQueueStrip } from "@/components/tv-queue-strip";
 import { TvQueueJoinAnnouncement } from "@/components/tv-queue-join-announcement";
+import { useCourtAssignmentAttention } from "@/hooks/use-court-assignment-attention";
 
 type VenueTvSettings = { logoSpin?: boolean; tvLocale?: string };
 
@@ -38,6 +39,7 @@ export default function TVDisplayPage() {
   const [tvLayout, setTvLayout] = useState<TvLayoutMode>("legacy");
   const tvRootRef = useRef<HTMLDivElement>(null);
   const { on } = useSocket();
+  useCourtAssignmentAttention(state.courts);
 
   useEffect(() => {
     const interval = setInterval(() => setClock(new Date()), 1000);

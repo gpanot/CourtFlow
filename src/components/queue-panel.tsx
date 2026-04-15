@@ -81,6 +81,7 @@ type PlayerAction =
   | "end_session"
   | "change_level"
   | "assign_to_court"
+  | "replace_in_queue"
   | "edit_player";
 
 export interface CourtInfo {
@@ -430,6 +431,7 @@ export function QueuePanel({
 
   let staffMainRows: StaffDisplayRow[] = displayEntries;
   let staffWaitingRows: StaffDisplayRow[] = [];
+  let staffWaitingBatches: StaffDisplayRow[][] = [];
   let staffOnCourtRows: StaffDisplayRow[] = [];
   let onCourtChunks: { courtId: string; label: string; rows: StaffDisplayRow[] }[] = [];
   let staffBreakRows = onBreakStaffEntries;
@@ -463,11 +465,13 @@ export function QueuePanel({
           })
         );
       }
+      staffWaitingBatches = partitionDisplayRowsIntoBalancedBatches(staffWaitingRows);
       if (staffQueuePositionSourceEntries != null) {
         const posByKey = staffWaitingPositionByRowKeyFromEntries(staffQueuePositionSourceEntries);
         staffWaitingRows = staffWaitingRows.map((r) =>
           r.entry.status === "waiting" && posByKey.has(r.key) ? { ...r, position: posByKey.get(r.key)! } : r
         );
+        staffWaitingBatches = partitionDisplayRowsIntoBalancedBatches(staffWaitingRows);
       }
       staffOnCourtRows = [...staffOnCourtRows].sort((a, b) => compareStaffOnCourtRows(a, b, playerIdToCourt, sortMode));
       staffMainRows = [...staffWaitingRows, ...staffOnCourtRows];
@@ -639,22 +643,31 @@ export function QueuePanel({
                   count: staffWaitingRows.reduce((n, r) => n + staffRowVisiblePlayerCount(r), 0),
                 })}
               </h4>
-              <div className="flex flex-col gap-1">
-                {staffWaitingRows.map(({ key, entry, isGroup, groupSize, position: pos, allPlayers }) => (
-                  <QueueRow
-                    key={key}
-                    entry={entry}
-                    isGroup={isGroup}
-                    groupSize={groupSize}
-                    position={pos}
-                    allPlayers={allPlayers}
-                    isTV={isTV}
-                    isNextUp={pos != null && pos <= 4}
-                    onPlayerAction={onPlayerAction}
-                    onDissolveGroup={onDissolveGroup}
-                    isWarmupManual={isWarmupManual}
-                    courts={courts}
-                  />
+              <div className="flex flex-col gap-2">
+                {staffWaitingBatches.map((batch, batchIndex) => (
+                  <div
+                    key={`waiting-batch-${batchIndex}`}
+                    className="rounded-xl border border-green-500/30 bg-green-950/10 p-1.5"
+                  >
+                    <div className="flex flex-col gap-1">
+                      {batch.map(({ key, entry, isGroup, groupSize, position: pos, allPlayers }) => (
+                        <QueueRow
+                          key={key}
+                          entry={entry}
+                          isGroup={isGroup}
+                          groupSize={groupSize}
+                          position={pos}
+                          allPlayers={allPlayers}
+                          isTV={isTV}
+                          isNextUp={pos != null && pos <= 4}
+                          onPlayerAction={onPlayerAction}
+                          onDissolveGroup={onDissolveGroup}
+                          isWarmupManual={isWarmupManual}
+                          courts={courts}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             </section>
@@ -1164,6 +1177,8 @@ function QueueRow({
       {/* Action menu */}
       {menuOpen && selectedPlayer && onPlayerAction && (
         <PlayerActionMenu
+          entryStatus={entry.status}
+          queueJoinedAt={entry.joinedAt}
           playerName={selectedPlayer.name}
           playerGender={selectedPlayer.gender}
           currentLevel={selectedPlayer.skillLevel}
@@ -1240,6 +1255,8 @@ const editGenderLabel: Record<(typeof EDIT_GENDERS)[number], string> = {
 };
 
 function PlayerActionMenu({
+  entryStatus,
+  queueJoinedAt,
   playerName,
   playerGender,
   currentLevel,
@@ -1250,6 +1267,8 @@ function PlayerActionMenu({
   courts,
   hideRemoveFromQueue,
 }: {
+  entryStatus: string;
+  queueJoinedAt: string;
   playerName: string;
   playerGender?: string;
   currentLevel?: string;
@@ -1575,6 +1594,24 @@ function PlayerActionMenu({
               <StaffQueueSkillTag level={currentLevel} />
             )}
           </button>
+          {!hideRemoveFromQueue && (
+            <button
+              type="button"
+              onClick={() => onAction("replace_in_queue", { joinedAt: queueJoinedAt })}
+              className={cn(
+                "flex w-full items-center gap-3 rounded-xl bg-neutral-800 px-4 py-3.5 text-left font-medium text-white hover:bg-neutral-700 transition-colors",
+                entryStatus !== "waiting" && "hidden"
+              )}
+            >
+              <Users className="h-5 w-5 text-emerald-400 shrink-0" />
+              <div>
+                <span>Replace in Queue</span>
+                <p className="text-xs text-neutral-400 font-normal">
+                  Pick another waiting player to take this queue spot
+                </p>
+              </div>
+            </button>
+          )}
           {!hideRemoveFromQueue && (
             <button
               type="button"

@@ -3,11 +3,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import staffI18n from "@/i18n/staff-i18n";
-import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
+import { GripVertical, Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { api, ApiRequestError } from "@/lib/api-client";
 import type { CourtData } from "@/components/court-card";
 import { PlayerAvatarThumb } from "@/components/player-avatar-thumb";
+import { closestCenter, DndContext, type DragEndEvent, KeyboardSensor, MouseSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 const positionStyles = [
   "border-amber-500/60 bg-amber-950/30",
@@ -56,13 +59,26 @@ export function RankBottomSheet({
     setErr(null);
   }, [open, courtIdsKey, court]);
 
-  const move = useCallback((index: number, dir: -1 | 1) => {
+  const sensors = useSensors(
+    useSensor(MouseSensor, {
+      activationConstraint: { distance: 6 },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 120, tolerance: 8 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
     setOrderedIds((prev) => {
-      const j = index + dir;
-      if (j < 0 || j >= prev.length) return prev;
-      const next = [...prev];
-      [next[index], next[j]] = [next[j]!, next[index]!];
-      return next;
+      const oldIndex = prev.indexOf(String(active.id));
+      const newIndex = prev.indexOf(String(over.id));
+      if (oldIndex < 0 || newIndex < 0) return prev;
+      return arrayMove(prev, oldIndex, newIndex);
     });
   }, []);
 
@@ -114,68 +130,27 @@ export function RankBottomSheet({
           {t("staff.dashboard.ranking.sheetHint")}
         </p>
 
-        <ol className="mt-4 space-y-2">
-          {orderedIds.map((pid, index) => {
-            const p = byId.get(pid);
-            if (!p) return null;
-            const pos = index + 1;
-            return (
-              <li
-                key={pid}
-                className={cn(
-                  "flex items-center gap-3 rounded-xl border-2 px-3 py-2.5",
-                  positionStyles[index] ?? positionStyles[3]
-                )}
-              >
-                <span className="w-6 shrink-0 text-center text-sm font-bold tabular-nums text-neutral-300">
-                  {pos}
-                </span>
-                <PlayerAvatarThumb avatarPhotoPath={p.avatarPhotoPath} facePhotoPath={p.facePhotoPath} avatar={p.avatar} sizeClass="h-10 w-10" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="truncate font-medium text-white">{p.name}</span>
-                    {p.queueNumber != null && (
-                      <span className="shrink-0 text-xs text-blue-400">#{p.queueNumber}</span>
-                    )}
-                    <span
-                      className={cn(
-                        "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase",
-                        skillBadgeClass(p.skillLevel)
-                      )}
-                    >
-                      {p.skillLevel.slice(0, 3)}
-                    </span>
-                  </div>
-                  {p.rankingScore != null && (
-                    <p className="mt-0.5 text-[11px] text-neutral-500 tabular-nums">
-                      {t("staff.dashboard.ranking.internalScore", { score: p.rankingScore })}
-                    </p>
-                  )}
-                </div>
-                <div className="flex shrink-0 flex-col gap-0.5">
-                  <button
-                    type="button"
-                    disabled={index === 0 || saving}
-                    onClick={() => move(index, -1)}
-                    className="rounded-md p-1 text-neutral-400 hover:bg-neutral-800 hover:text-white disabled:opacity-30"
-                    aria-label="Move up"
-                  >
-                    <ChevronUp className="h-5 w-5" />
-                  </button>
-                  <button
-                    type="button"
-                    disabled={index === orderedIds.length - 1 || saving}
-                    onClick={() => move(index, 1)}
-                    className="rounded-md p-1 text-neutral-400 hover:bg-neutral-800 hover:text-white disabled:opacity-30"
-                    aria-label="Move down"
-                  >
-                    <ChevronDown className="h-5 w-5" />
-                  </button>
-                </div>
-              </li>
-            );
-          })}
-        </ol>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={orderedIds} strategy={verticalListSortingStrategy}>
+            <ol className="mt-4 space-y-2">
+              {orderedIds.map((pid, index) => {
+                const p = byId.get(pid);
+                if (!p) return null;
+                return (
+                  <RankSortableRow
+                    key={pid}
+                    id={pid}
+                    index={index}
+                    player={p}
+                    disabled={saving || success}
+                    dragHandleAria={t("staff.dashboard.ranking.dragHandleAria", { name: p.name })}
+                    internalScoreLabel={t("staff.dashboard.ranking.internalScore", { score: p.rankingScore ?? 0 })}
+                  />
+                );
+              })}
+            </ol>
+          </SortableContext>
+        </DndContext>
 
         {err && <p className="mt-3 text-center text-sm text-red-400">{err}</p>}
         {success && (
@@ -203,5 +178,83 @@ export function RankBottomSheet({
         </div>
       </div>
     </div>
+  );
+}
+
+function RankSortableRow({
+  id,
+  index,
+  player,
+  disabled,
+  dragHandleAria,
+  internalScoreLabel,
+}: {
+  id: string;
+  index: number;
+  player: CourtData["players"][number];
+  disabled: boolean;
+  dragHandleAria: string;
+  internalScoreLabel: string;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+    disabled,
+  });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "flex items-center gap-3 rounded-xl border-2 px-3 py-2.5 touch-none",
+        positionStyles[index] ?? positionStyles[3],
+        disabled ? "cursor-default" : "cursor-grab active:cursor-grabbing",
+        isDragging && "opacity-80 shadow-lg"
+      )}
+      aria-label={dragHandleAria}
+      {...attributes}
+      {...listeners}
+    >
+      <span className="w-6 shrink-0 text-center text-sm font-bold tabular-nums text-neutral-300">
+        {index + 1}
+      </span>
+      <PlayerAvatarThumb
+        avatarPhotoPath={player.avatarPhotoPath}
+        facePhotoPath={player.facePhotoPath}
+        avatar={player.avatar}
+        sizeClass="h-10 w-10"
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="truncate font-medium text-white">{player.name}</span>
+          {player.queueNumber != null && (
+            <span className="shrink-0 text-xs text-blue-400">#{player.queueNumber}</span>
+          )}
+          <span
+            className={cn(
+              "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase",
+              skillBadgeClass(player.skillLevel)
+            )}
+          >
+            {player.skillLevel.slice(0, 3)}
+          </span>
+        </div>
+        {player.rankingScore != null && (
+          <p className="mt-0.5 text-[11px] text-neutral-500 tabular-nums">
+            {internalScoreLabel}
+          </p>
+        )}
+      </div>
+      <span
+        className="rounded-md p-1 text-neutral-400"
+        aria-hidden="true"
+      >
+        <GripVertical className="h-5 w-5" />
+      </span>
+    </li>
   );
 }

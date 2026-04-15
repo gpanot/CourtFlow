@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslation } from "react-i18next";
+import type { i18n as I18nInstance } from "i18next";
 import { ArrowRight, Check, Monitor, ScanLine } from "lucide-react";
 import { cn } from "@/lib/cn";
 
@@ -19,6 +20,8 @@ export interface KioskConfirmationScreenProps {
   gender?: "male" | "female" | string;
   /** Shown under pills on staff flow when AWS enrollment failed. */
   enrollmentWarning?: string | null;
+  /** Optional i18n instance override (used by TV tablet flow). */
+  translationI18n?: I18nInstance;
 }
 
 const BG = "#0e0e0e";
@@ -30,16 +33,6 @@ const AMBER_WRISTBAND = "#fbbf24";
 /** Scales with viewport so mobile fits one screen; still reads large on tablet/desktop */
 const SESSION_NUMBER_CLASS =
   "font-bold tabular-nums leading-none text-[clamp(2.75rem,min(28vmin,18svh),6rem)]";
-
-function skillLabelKey(level: string): string | null {
-  const map: Record<string, string> = {
-    beginner: "staff.checkIn.skillBeginner",
-    intermediate: "staff.checkIn.skillIntermediate",
-    advanced: "staff.checkIn.skillAdvanced",
-    pro: "staff.checkIn.skillPro",
-  };
-  return map[level] ?? null;
-}
 
 export function KioskConfirmationScreen({
   displayName,
@@ -53,38 +46,75 @@ export function KioskConfirmationScreen({
   mode = "kiosk",
   gender,
   enrollmentWarning,
+  translationI18n,
 }: KioskConfirmationScreenProps) {
-  const { t } = useTranslation();
+  const { t } = useTranslation("translation", { i18n: translationI18n });
   const isStaff = mode === "staff";
   const tr = (
     key: string,
     fallback: string,
-    options?: Record<string, string | number>
+    options?: Record<string, string | number>,
+    fallbackKey?: string
   ) => {
     const value = t(key, options);
-    return value && value !== key ? value : fallback;
+    if (value && value !== key) return value;
+    if (fallbackKey) {
+      const fallbackValue = t(fallbackKey, options);
+      if (fallbackValue && fallbackValue !== fallbackKey) return fallbackValue;
+    }
+    return fallback;
   };
 
-  const skillDisplay =
-    skillLevel && skillLabelKey(skillLevel)
-      ? tr(skillLabelKey(skillLevel)!, skillLevel)
-      : skillLevel
-        ? skillLevel
-        : "—";
+  const skillDisplay = (() => {
+    if (!skillLevel) return "—";
+    const normalized = skillLevel.toLowerCase();
+    const map: Record<string, { tabletKey: string; staffKey: string; fallback: string }> = {
+      beginner: {
+        tabletKey: "tablet.confirmation.skillBeginner",
+        staffKey: "staff.checkIn.skillBeginner",
+        fallback: "Beginner",
+      },
+      intermediate: {
+        tabletKey: "tablet.confirmation.skillIntermediate",
+        staffKey: "staff.checkIn.skillIntermediate",
+        fallback: "Intermediate",
+      },
+      advanced: {
+        tabletKey: "tablet.confirmation.skillAdvanced",
+        staffKey: "staff.checkIn.skillAdvanced",
+        fallback: "Advanced",
+      },
+      pro: {
+        tabletKey: "tablet.confirmation.skillPro",
+        staffKey: "staff.checkIn.skillPro",
+        fallback: "Pro",
+      },
+    };
+    const config = map[normalized];
+    if (!config) return skillLevel;
+    return tr(config.tabletKey, config.fallback, undefined, config.staffKey);
+  })();
 
   const queuePill = tr(
-    "staff.kiosk.confirmHeadToTv",
-    "When ready to play -> walk to the TV screen and scan your face"
+    "tablet.confirmation.headToTv",
+    "When ready to play -> walk to the TV screen and scan your face",
+    undefined,
+    "staff.kiosk.confirmHeadToTv"
   );
 
   const sessionsDisplay =
     totalSessions != null && totalSessions >= 0 ? String(totalSessions) : "—";
 
   const headerLabel = alreadyCheckedIn
-    ? tr("staff.kiosk.confirmAlreadyCheckedIn", "Already checked in")
+    ? tr(
+        "tablet.confirmation.alreadyCheckedIn",
+        "Already checked in",
+        undefined,
+        "staff.kiosk.confirmAlreadyCheckedIn"
+      )
     : isReturning
-      ? tr("staff.kiosk.confirmWelcomeBack", "Welcome back")
-      : tr("staff.kiosk.confirmWelcome", "Welcome");
+      ? tr("tablet.confirmation.welcomeBack", "Welcome back", undefined, "staff.kiosk.confirmWelcomeBack")
+      : tr("tablet.confirmation.welcome", "Welcome", undefined, "staff.kiosk.confirmWelcome");
 
   const showSessionNumber =
     !alreadyCheckedIn && queueNumber != null && queueNumber > 0;
@@ -204,7 +234,7 @@ export function KioskConfirmationScreen({
               </div>
               <p
                 className={cn(
-                  "mb-0.5 text-xs font-semibold uppercase tracking-wide sm:text-sm",
+                  "mb-0.5 text-base font-bold uppercase tracking-wide sm:text-xl",
                   alreadyCheckedIn ? "text-amber-400" : "text-green-400"
                 )}
               >
@@ -216,7 +246,12 @@ export function KioskConfirmationScreen({
               {alreadyCheckedIn && queueNumber != null && queueNumber > 0 && (
                 <div className="mt-2 flex shrink-0 flex-col items-center py-1 sm:mt-4 sm:py-2">
                   <p className="mb-0.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-neutral-500 sm:text-xs sm:tracking-[0.2em]">
-                    {tr("staff.kiosk.confirmSessionNumberLabel", "SESSION NUMBER")}
+                    {tr(
+                      "tablet.confirmation.sessionNumberLabel",
+                      "SESSION NUMBER",
+                      undefined,
+                      "staff.kiosk.confirmSessionNumberLabel"
+                    )}
                   </p>
                   <p className={SESSION_NUMBER_CLASS} style={{ color: GREEN }}>
                     {queueNumber}
@@ -228,7 +263,12 @@ export function KioskConfirmationScreen({
             {showSessionNumber ? (
               <div className="flex shrink-0 flex-col items-center py-1 sm:py-2">
                 <p className="mb-0.5 text-[9px] font-semibold uppercase tracking-[0.15em] text-neutral-500 sm:text-xs sm:tracking-[0.2em]">
-                  {tr("staff.kiosk.confirmSessionNumberLabel", "SESSION NUMBER")}
+                  {tr(
+                    "tablet.confirmation.sessionNumberLabel",
+                    "SESSION NUMBER",
+                    undefined,
+                    "staff.kiosk.confirmSessionNumberLabel"
+                  )}
                 </p>
                 <p className={SESSION_NUMBER_CLASS} style={{ color: GREEN }}>
                   {queueNumber}
@@ -244,7 +284,7 @@ export function KioskConfirmationScreen({
                 style={{ backgroundColor: PILL_BG }}
               >
                 <span className="text-[9px] font-medium uppercase tracking-wide text-neutral-500 sm:text-xs">
-                  {tr("staff.kiosk.confirmLevel", "Level")}
+                  {tr("tablet.confirmation.level", "Level", undefined, "staff.kiosk.confirmLevel")}
                 </span>
                 <span className="px-0.5 text-[10px] font-semibold leading-tight text-white sm:text-sm">
                   {skillDisplay}
@@ -255,7 +295,7 @@ export function KioskConfirmationScreen({
                 style={{ backgroundColor: PILL_BG }}
               >
                 <span className="text-[9px] font-medium uppercase tracking-wide text-neutral-500 sm:text-xs">
-                  {tr("staff.kiosk.confirmSessions", "Sessions")}
+                  {tr("tablet.confirmation.sessions", "Sessions", undefined, "staff.kiosk.confirmSessions")}
                 </span>
                 <span className="text-[10px] font-semibold leading-tight text-white sm:text-sm">
                   {sessionsDisplay}
@@ -267,7 +307,7 @@ export function KioskConfirmationScreen({
               className="rounded-xl px-3 py-3 sm:px-5 sm:py-4"
               style={{ backgroundColor: PILL_BG }}
             >
-              <p className="flex items-center justify-center gap-2 text-sm font-medium text-green-400 sm:text-base">
+              <p className="flex items-center justify-center gap-2 text-lg font-semibold text-green-400 sm:text-2xl">
                 <Monitor className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" aria-hidden />
                 {queuePill}
               </p>
@@ -301,10 +341,15 @@ export function KioskConfirmationScreen({
           >
             <span className="flex items-center gap-2 text-sm font-semibold sm:text-base" style={{ color: GREEN }}>
               <ScanLine className="h-4 w-4 shrink-0" aria-hidden />
-              {tr("staff.kiosk.confirmScanNext", "Scan next player")}
+              {tr("tablet.confirmation.scanNext", "Scan next player", undefined, "staff.kiosk.confirmScanNext")}
             </span>
             <span className="text-[10px] text-neutral-500 sm:text-xs">
-              {tr("staff.kiosk.confirmCameraOffHint", "Camera off - tap to activate")}
+              {tr(
+                "tablet.confirmation.cameraOffHint",
+                "Camera off - tap to activate",
+                undefined,
+                "staff.kiosk.confirmCameraOffHint"
+              )}
             </span>
           </button>
         )}

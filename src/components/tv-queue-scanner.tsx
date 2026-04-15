@@ -1,9 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api-client";
 import { CameraCapture, type CameraCaptureHandle } from "@/components/camera-capture";
 import { cn } from "@/lib/cn";
+import { TvTabletLanguageToggle } from "@/components/tv-tablet-language-toggle";
+import { tvI18n } from "@/i18n/tv-i18n";
+import { useSuccessChime } from "@/hooks/use-success-chime";
 
 type ScanState =
   | "idle"
@@ -45,6 +49,8 @@ interface TvQueueScannerProps {
 }
 
 export function TvQueueScanner({ venueId }: TvQueueScannerProps) {
+  const { t } = useTranslation("translation", { i18n: tvI18n });
+  const { unlockChime, playSuccessChime } = useSuccessChime();
   const cameraRef = useRef<CameraCaptureHandle>(null);
   const resetTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [state, setState] = useState<ScanState>("idle");
@@ -103,11 +109,15 @@ export function TvQueueScanner({ venueId }: TvQueueScannerProps) {
         error: data.error,
       });
 
+      if (scanState === "joined") {
+        playSuccessChime();
+      }
+
       if (scanState !== "not_recognised") {
         scheduleReset(RESULT_DISPLAY_MS[scanState] ?? 3000);
       }
     },
-    [scheduleReset]
+    [playSuccessChime, scheduleReset]
   );
 
   const beginFaceScan = useCallback(() => {
@@ -120,9 +130,10 @@ export function TvQueueScanner({ venueId }: TvQueueScannerProps) {
     setNumberInput("");
     setScanPhase("adjust");
     setRetrySecondsLeft(null);
+    unlockChime();
     stateRef.current = "scanning";
     setState("scanning");
-  }, []);
+  }, [unlockChime]);
 
   // Up to MAX_FACE_ATTEMPTS face captures per session; short idle between not_recognised results.
   useEffect(() => {
@@ -216,6 +227,7 @@ export function TvQueueScanner({ venueId }: TvQueueScannerProps) {
   const handleNumberSubmit = useCallback(async () => {
     const num = parseInt(numberInput, 10);
     if (!num || num < 1) return;
+    unlockChime();
     setNumberLoading(true);
     try {
       const res = await api.post<{
@@ -240,7 +252,7 @@ export function TvQueueScanner({ venueId }: TvQueueScannerProps) {
     } finally {
       setNumberLoading(false);
     }
-  }, [venueId, numberInput, handleScanResult]);
+  }, [venueId, numberInput, handleScanResult, unlockChime]);
 
   const onCameraError = useCallback(
     (msg: string) => {
@@ -273,10 +285,10 @@ export function TvQueueScanner({ venueId }: TvQueueScannerProps) {
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-4">
           <p className="text-center text-lg text-neutral-300">
             {scanPhase === "between_retries"
-              ? "No match yet — adjust your cap or glasses if needed"
+              ? t("tablet.tvQueueScanner.scanNoMatch")
               : scanPhase === "adjust"
-                ? "Adjust your face in the frame — scanning starts in a moment"
-                : "Hold still — scanning now"}
+                ? t("tablet.tvQueueScanner.scanAdjust")
+                : t("tablet.tvQueueScanner.scanHoldStill")}
           </p>
           {/* Same width as 16:9 preview, twice the height (8:9 box). Preview mirrored horizontally for display only; capture uses the raw stream. */}
           <div className="relative w-full max-w-2xl overflow-hidden rounded-2xl border-2 border-green-600/40 bg-black shadow-lg shadow-green-900/20 aspect-[8/9]">
@@ -289,7 +301,7 @@ export function TvQueueScanner({ venueId }: TvQueueScannerProps) {
             />
             {scanPhase === "between_retries" && retrySecondsLeft != null && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/55 px-4 text-center">
-                <p className="text-2xl font-semibold text-white">Next scan in</p>
+                <p className="text-2xl font-semibold text-white">{t("tablet.tvQueueScanner.nextScanIn")}</p>
                 <p className="mt-2 text-5xl font-bold tabular-nums text-green-400">{retrySecondsLeft}</p>
               </div>
             )}
@@ -297,34 +309,37 @@ export function TvQueueScanner({ venueId }: TvQueueScannerProps) {
           {cameraError ? (
             <p className="text-center text-sm text-red-400">{cameraError}</p>
           ) : scanPhase === "between_retries" ? (
-            <p className="text-sm text-amber-200/90">We&apos;ll try again automatically — get ready in frame</p>
+            <p className="text-sm text-amber-200/90">{t("tablet.tvQueueScanner.retryAuto")}</p>
           ) : scanPhase === "capturing" ? (
             <div className="flex items-center gap-3 text-neutral-400">
               <div className="h-5 w-5 animate-spin rounded-full border-2 border-neutral-600 border-t-green-500" />
-              <span>Scanning…</span>
+              <span>{t("tablet.tvQueueScanner.scanning")}</span>
             </div>
           ) : (
-            <p className="text-sm text-neutral-500">Camera ready</p>
+            <p className="text-sm text-neutral-500">{t("tablet.tvQueueScanner.cameraReady")}</p>
           )}
         </div>
       )}
 
       {state === "idle" && (
         <div className="flex flex-1 flex-col items-center justify-center gap-8 px-8 text-center">
+          <div className="absolute right-6 top-6 z-20">
+            <TvTabletLanguageToggle />
+          </div>
           <div className="h-32 w-32 rounded-full border-4 border-green-500/40" />
           <div className="space-y-2">
-            <h1 className="text-4xl font-bold text-white">Ready to play?</h1>
-            <p className="text-xl text-neutral-400">Tap below when you want to join the queue</p>
+            <h1 className="text-4xl font-bold text-white">{t("tablet.tvQueueScanner.readyTitle")}</h1>
+            <p className="text-xl text-neutral-400">{t("tablet.tvQueueScanner.readyHint")}</p>
           </div>
           <button
             type="button"
             onClick={beginFaceScan}
             className="w-full max-w-lg rounded-3xl bg-green-600 px-8 py-7 text-2xl font-bold text-white shadow-lg shadow-green-900/40 transition-colors hover:bg-green-500 active:scale-[0.99] min-h-[3.75rem] sm:min-h-[4.5rem] sm:px-12 sm:py-8 sm:text-3xl"
           >
-            Scan To Join
+            {t("tablet.tvQueueScanner.scanToJoin")}
           </button>
           <p className="max-w-md text-sm text-neutral-600">
-            Check in at the entrance first if you haven&apos;t already. The front camera will scan your face.
+            {t("tablet.tvQueueScanner.checkInFirstHint")}
           </p>
         </div>
       )}
@@ -339,11 +354,11 @@ export function TvQueueScanner({ venueId }: TvQueueScannerProps) {
           )}
           {result.queuePosition != null && (
             <p className="text-2xl text-green-300">
-              #{result.queuePosition} in queue
+              {t("tablet.tvQueueScanner.queuePosition", { count: result.queuePosition })}
             </p>
           )}
           {result.playerName && (
-            <p className="text-xl text-white">Welcome, {result.playerName}!</p>
+            <p className="text-xl text-white">{t("tablet.tvQueueScanner.welcomeName", { name: result.playerName })}</p>
           )}
         </div>
       )}
@@ -354,14 +369,14 @@ export function TvQueueScanner({ venueId }: TvQueueScannerProps) {
             <span className="text-3xl">✓</span>
           </div>
           <h2 className="text-3xl font-bold text-amber-300">
-            You&apos;re already in the queue
+            {t("tablet.tvQueueScanner.alreadyInQueue")}
           </h2>
           {result.queuePosition != null && (
             <p className="text-xl text-amber-200">
-              #{result.queuePosition} ahead of you
+              {t("tablet.tvQueueScanner.aheadOfYou", { count: result.queuePosition })}
             </p>
           )}
-          <p className="text-lg text-neutral-400">No need to scan again</p>
+          <p className="text-lg text-neutral-400">{t("tablet.tvQueueScanner.noNeedScan")}</p>
         </div>
       )}
 
@@ -371,9 +386,9 @@ export function TvQueueScanner({ venueId }: TvQueueScannerProps) {
             <span className="text-3xl">🏓</span>
           </div>
           <h2 className="text-3xl font-bold text-blue-300">
-            You&apos;re on {result.courtLabel ?? "a court"}
+            {t("tablet.tvQueueScanner.playingOn", { court: result.courtLabel ?? t("tablet.tvQueueScanner.aCourt") })}
           </h2>
-          <p className="text-lg text-neutral-400">Finish your game first!</p>
+          <p className="text-lg text-neutral-400">{t("tablet.tvQueueScanner.finishGameFirst")}</p>
         </div>
       )}
 
@@ -383,28 +398,31 @@ export function TvQueueScanner({ venueId }: TvQueueScannerProps) {
             <span className="text-3xl">!</span>
           </div>
           <h2 className="text-3xl font-bold text-red-300">
-            Check in first
+            {t("tablet.tvQueueScanner.checkInFirst")}
           </h2>
           <p className="text-lg text-neutral-400">
-            Head to the entrance tablet to check in, then come back here
+            {t("tablet.tvQueueScanner.goToEntrance")}
           </p>
         </div>
       )}
 
       {state === "not_recognised" && (
         <div className="flex flex-1 flex-col items-center justify-center gap-6 px-8 text-center">
+          <div className="absolute right-6 top-6 z-20">
+            <TvTabletLanguageToggle />
+          </div>
           <h2 className="text-2xl font-bold text-neutral-200">
-            Face not recognised
+            {t("tablet.tvQueueScanner.faceNotRecognized")}
           </h2>
           <p className="text-lg text-neutral-400">
-            We tried a few times — enter your wristband number, or scan your face again
+            {t("tablet.tvQueueScanner.faceRetryHint")}
           </p>
           <button
             type="button"
             onClick={beginFaceScan}
             className="w-full max-w-lg rounded-3xl bg-green-600 px-8 py-7 text-2xl font-bold text-white transition-colors hover:bg-green-500 active:scale-[0.99] min-h-[3.75rem] sm:min-h-[4.5rem] sm:px-12 sm:py-8 sm:text-3xl"
           >
-            Scan To Join
+            {t("tablet.tvQueueScanner.scanToJoin")}
           </button>
           <div className="flex flex-wrap items-center justify-center gap-3">
             <input
@@ -424,7 +442,7 @@ export function TvQueueScanner({ venueId }: TvQueueScannerProps) {
               onClick={() => void handleNumberSubmit()}
               className="rounded-xl bg-neutral-700 px-6 py-3 text-lg font-semibold text-white hover:bg-neutral-600 disabled:opacity-50"
             >
-              {numberLoading ? "..." : "Join by number"}
+              {numberLoading ? "..." : t("tablet.tvQueueScanner.joinByNumber")}
             </button>
           </div>
         </div>

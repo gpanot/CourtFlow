@@ -1,9 +1,10 @@
 /**
- * Check in existing bot players (+1900xxxx phones) for the open session at MM Pickleball
+ * Check in existing bot players (+1900xxxx / +1555xxxx phones) for the open
+ * session at MM Pickleball
  * (or COURTFLOW_VENUE_ID). Sets gender mix; creates/updates QueueEntry as on_break only
  * (checked in — not in the waiting queue).
  *
- * Usage: npx tsx scripts/check-in-bots.ts [count] [menPercent]
+ * Usage: npx tsx scripts/check-in-bots.ts [count] [menPercent] [phonePrefix]
  * Example: npx tsx scripts/check-in-bots.ts 40 60
  */
 
@@ -30,6 +31,7 @@ async function getNextQueueNumber(sessionId: string): Promise<number> {
 async function main() {
   const count = parseInt(process.argv[2] || "40", 10);
   const menPercent = parseFloat(process.argv[3] || process.env.COURTFLOW_BOT_MEN_PERCENT || "60");
+  const prefixArg = process.argv[4] || process.env.COURTFLOW_BOT_PHONE_PREFIX || "";
 
   const venueIdEnv = process.env.COURTFLOW_VENUE_ID?.trim();
   let venue = venueIdEnv
@@ -61,20 +63,44 @@ async function main() {
   }
 
   const men = Math.round((count * menPercent) / 100);
+  const candidatePrefixes = prefixArg
+    ? [prefixArg]
+    : ["+1900", "+1555"];
+
+  let botPlayers: Array<{ id: string; name: string; phone: string; gender: string | null }> = [];
+  let selectedPrefix = "";
+  for (const prefix of candidatePrefixes) {
+    const rows = await prisma.player.findMany({
+      where: { phone: { startsWith: prefix } },
+      select: { id: true, name: true, phone: true, gender: true },
+      orderBy: { phone: "asc" },
+      take: count,
+    });
+    if (rows.length >= count) {
+      botPlayers = rows;
+      selectedPrefix = prefix;
+      break;
+    }
+    if (rows.length > botPlayers.length) {
+      botPlayers = rows;
+      selectedPrefix = prefix;
+    }
+  }
+
   console.log(`Venue: ${venue.name} (${venue.id})`);
   console.log(`Session: ${session.id}`);
   console.log(`Check-in ${count} bots: ~${menPercent}% men → ${men} male, ${count - men} female\n`);
+  console.log(`Bot source: ${selectedPrefix || "n/a"} (${botPlayers.length} players found)\n`);
 
   let ok = 0;
   let missing = 0;
   let court = 0;
 
   for (let i = 0; i < count; i++) {
-    const phone = `+1900${String(i).padStart(4, "0")}`;
-    const player = await prisma.player.findUnique({ where: { phone } });
+    const player = botPlayers[i];
 
     if (!player) {
-      console.log(`  ✗ ${phone} — no player in DB (run seed-bots or register first)`);
+      console.log(`  ✗ index ${i} — no bot player in DB for prefix ${selectedPrefix || candidatePrefixes[0]}`);
       missing++;
       continue;
     }

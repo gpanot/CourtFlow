@@ -16,6 +16,7 @@ import { SessionRecapScreen } from "./session-recap";
 import { LogOut } from "lucide-react";
 import { isPushSupported, subscribeToPush, getNotificationPermission, usePwaStandalone } from "@/lib/push-client";
 import { NotificationCard } from "./notification-card";
+import { useCourtAssignmentAttention } from "@/hooks/use-court-assignment-attention";
 
 import { PlayerAvatarThumb } from "@/components/player-avatar-thumb";
 import { PlayerIdentityHeader } from "@/components/player-identity-header";
@@ -55,6 +56,12 @@ interface TodayPlayer {
   facePhotoPath?: string | null;
   avatarPhotoPath?: string | null;
   avatar?: string | null;
+}
+
+interface AssignmentSoundCourtState {
+  status: string;
+  assignment: { id: string } | null;
+  players: { id: string }[];
 }
 
 type PlayerView = "home" | "queue" | "assigned" | "playing" | "profile" | "session_recap";
@@ -98,6 +105,7 @@ export function PlayerHome() {
   const [venueLogoutConfirmOpen, setVenueLogoutConfirmOpen] = useState(false);
   const [playerMe, setPlayerMe] = useState<PlayerMeData | null>(null);
   const [todaysPlayers, setTodaysPlayers] = useState<TodayPlayer[]>([]);
+  const [courtsForAttention, setCourtsForAttention] = useState<AssignmentSoundCourtState[]>([]);
   const [courtBanner, setCourtBanner] = useState<string | null>(null);
   const [notifDismissed, setNotifDismissed] = useState(false);
   const [tvModalOpen, setTvModalOpen] = useState(false);
@@ -106,6 +114,7 @@ export function PlayerHome() {
   const suppressAutoViewRef = useRef(false);
   const manuallyLeftRef = useRef(false);
   const { on } = useSocket();
+  useCourtAssignmentAttention(courtsForAttention);
   const pwaStandalone = usePwaStandalone();
 
   suppressAutoViewRef.current = showProfile;
@@ -188,6 +197,13 @@ export function PlayerHome() {
         session: { id: string } | null;
         queue?: { id: string; playerId: string; player: { name: string; facePhotoPath?: string | null; avatarPhotoPath?: string | null; avatar?: string | null } }[];
       }>(`/api/courts/state?venueId=${selectedVenue}`);
+      setCourtsForAttention(
+        courtsState.courts.map((c) => ({
+          status: c.status,
+          assignment: c.assignment ? { id: c.assignment.id } : null,
+          players: c.players.map((p) => ({ id: p.id })),
+        }))
+      );
 
       if (courtsState.queue) {
         setTodaysPlayers(

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api-client";
+import { CourtFlowLogo } from "@/components/courtflow-logo";
 
 export default function TvQueueVenueSelect() {
   const router = useRouter();
@@ -18,7 +19,10 @@ export default function TvQueueVenueSelect() {
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-black p-8">
-      <h1 className="text-4xl font-bold text-green-500">CourtFlow</h1>
+      <div className="mb-2 flex flex-col items-center gap-2 text-center">
+        <CourtFlowLogo asLink={false} size="small" dark />
+        <p className="text-sm text-neutral-300">More gameplay, more fun</p>
+      </div>
       <p className="text-xl text-neutral-400">Tablet — Select venue</p>
       <div className="grid gap-3">
         {venues.map((v) => (

@@ -5,7 +5,6 @@ import type { i18n as I18nInstance } from "i18next";
 import { useTranslation } from "react-i18next";
 import { ChevronLeft, Link, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { GenderIcon } from "@/components/gender-icon";
 import type { QueueEntryData } from "@/components/queue-panel";
 import {
   buildStaffWaitingPickerRows,
@@ -23,6 +22,9 @@ import {
 } from "@/lib/staff-queue-filter-utils";
 import { StaffQueueFilterBar } from "@/components/staff-queue-filter-bar";
 import { playerNameWithCheckIn } from "@/lib/player-display";
+import { PlayerAvatarThumb } from "@/components/player-avatar-thumb";
+import { staffQueueGenderNameClass } from "@/components/staff-queue-player-display";
+import { isValidPickleballGenderMixForFour } from "@/lib/pickleball-gender";
 
 const skillLevelMeta: Record<string, { label: string }> = {
   beginner: { label: "Beginner" },
@@ -71,6 +73,10 @@ interface StaffWaitingPickerProps {
   pickerPurpose?: "court_assign" | "replace";
   /** Player being replaced (shown in title when pickerPurpose is replace). */
   replacedPlayerName?: string;
+  /** Player id being replaced (used to build recommendation context). */
+  replacedPlayerId?: string;
+  /** Original joinedAt of replaced queue player (queue replace mode). */
+  replacedJoinedAt?: string;
   /** Players already on this court (compact roster below the header). */
   courtRoster?: StaffWaitingPickerCourtPlayer[];
 }
@@ -84,6 +90,8 @@ export function StaffWaitingPicker({
   translationI18n,
   pickerPurpose = "court_assign",
   replacedPlayerName,
+  replacedPlayerId,
+  replacedJoinedAt,
   courtRoster = [],
 }: StaffWaitingPickerProps) {
   const { t } = useTranslation("translation", translationI18n ? { i18n: translationI18n } : undefined);
@@ -108,6 +116,64 @@ export function StaffWaitingPicker({
     }
     return [...filtered].sort((a, b) => a.position - b.position);
   }, [fifoRows, genderFilter, skillFilter, sortMode]);
+
+  const recommendedRows = useMemo(() => {
+    if (!isReplace || fifoRows.length === 0) return [] as StaffWaitingPickerRow[];
+
+    // Queue replace: simulate taking the replaced player's original queue slot,
+    // then validate the resulting top 4 with existing gender + skill rules.
+    if (courtRoster.length === 0 && replacedJoinedAt) {
+      const replacedTs = new Date(replacedJoinedAt).getTime();
+      const scored = fifoRows
+        .map((candidateRow) => {
+          const candidate = candidateRow.allPlayers[0];
+          if (!candidate) return null;
+
+          const simulated = fifoRows
+            .map((row) => ({
+              row,
+              ts:
+                row.key === candidateRow.key
+                  ? replacedTs
+                  : new Date(row.entry.joinedAt).getTime(),
+            }))
+            .sort((a, b) => {
+              if (a.ts !== b.ts) return a.ts - b.ts;
+              return a.row.position - b.row.position;
+            });
+
+          const topFour = simulated.slice(0, 4).map((x) => x.row);
+          if (topFour.length < 4) return null;
+          if (!topFour.some((r) => r.key === candidateRow.key)) return null;
+
+          const genders = topFour.map((r) => r.allPlayers[0]?.gender ?? "");
+          if (!isValidPickleballGenderMixForFour(genders)) return null;
+
+          return {
+            row: candidateRow,
+            score: candidateRow.position,
+          };
+        })
+        .filter((x): x is { row: StaffWaitingPickerRow; score: number } => x != null)
+        .sort((a, b) => a.score - b.score)
+        .map((x) => x.row);
+
+      return (scored.length > 0 ? scored : fifoRows).slice(0, 2);
+    }
+
+    // On-court replace: candidate + 3 remaining on court must satisfy the same 4-player gender rules.
+    const rosterWithoutReplaced = courtRoster.filter((p) => p.id !== replacedPlayerId);
+    if (rosterWithoutReplaced.length >= 4) return fifoRows.slice(0, 2);
+    const valid = fifoRows.filter((row) => {
+      const candidate = row.allPlayers[0];
+      if (!candidate) return false;
+      const combined = [...rosterWithoutReplaced, candidate];
+      if (combined.length !== 4) return false;
+      const genders = combined.map((p) => p.gender ?? "");
+      return isValidPickleballGenderMixForFour(genders);
+    });
+    return (valid.length > 0 ? valid : fifoRows).slice(0, 2);
+  }, [isReplace, fifoRows, courtRoster, replacedPlayerId, replacedJoinedAt]);
 
   const genderMixAlert = useMemo(
     () => (isReplace ? null : getManualPickerGenderMixAlert(selected, fifoRows, courtRoster)),
@@ -180,8 +246,7 @@ export function StaffWaitingPicker({
                 className="flex min-w-0 flex-col gap-0.5 rounded-lg border border-neutral-800/90 bg-neutral-900/60 px-1.5 py-1"
               >
                 <div className="flex min-w-0 items-center gap-1">
-                  <GenderIcon gender={p.gender} className="h-3.5 w-3.5 shrink-0 opacity-100" />
-                  <span className="min-w-0 truncate text-[11px] font-medium leading-tight text-neutral-100">
+                  <span className={cn("min-w-0 truncate text-[11px] font-medium leading-tight", staffQueueGenderNameClass(p.gender))}>
                     {playerNameWithCheckIn(p.name, p.queueNumber)}
                   </span>
                 </div>
@@ -226,6 +291,55 @@ export function StaffWaitingPicker({
           </p>
         )}
       </div>
+
+      {isReplace && recommendedRows.length > 0 && (
+        <div className="shrink-0 border-b border-emerald-900/40 bg-emerald-950/10 px-3 py-2">
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-300">
+            Recommended
+          </p>
+          <div className="space-y-1.5">
+            {recommendedRows.map((row) => {
+              const p = row.allPlayers[0];
+              if (!p) return null;
+              const isOn = selected.has(p.id);
+              const disabled = !isOn && atCap;
+              return (
+                <button
+                  key={`recommended-${row.key}`}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => onToggle(p.id)}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-lg border px-2 py-1.5 text-left",
+                    isOn
+                      ? "border-emerald-500 bg-emerald-900/30"
+                      : "border-emerald-800/40 bg-neutral-900/60 hover:bg-neutral-800",
+                    disabled && "opacity-40 cursor-not-allowed"
+                  )}
+                >
+                  <span className="w-6 shrink-0 text-center text-xs font-semibold tabular-nums text-emerald-300">
+                    #{row.position}
+                  </span>
+                  <PlayerAvatarThumb
+                    avatarPhotoPath={p.avatarPhotoPath}
+                    facePhotoPath={p.facePhotoPath}
+                    avatar={p.avatar}
+                    sizeClass="h-7 w-7"
+                    textFallbackClassName="text-sm"
+                  />
+                  <span className={cn("min-w-0 flex-1 truncate text-sm font-medium", staffQueueGenderNameClass(p.gender))}>
+                    {p.name}
+                    {p.queueNumber != null && (
+                      <span className="ml-1.5 shrink-0 font-semibold tabular-nums text-blue-400">#{p.queueNumber}</span>
+                    )}
+                  </span>
+                  <SkillTag level={p.skillLevel} />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <StaffQueueFilterBar
         translationI18n={translationI18n}
@@ -301,8 +415,19 @@ function PickerRow({
           className={checkboxClass}
         />
         <span className="font-bold text-neutral-500 tabular-nums text-base w-6 shrink-0 text-center">#{row.position}</span>
-        <GenderIcon gender={p.gender} className="h-4 w-4 shrink-0" />
-        <span className="flex-1 min-w-0 text-sm font-medium truncate">{p.name}</span>
+        <PlayerAvatarThumb
+          avatarPhotoPath={p.avatarPhotoPath}
+          facePhotoPath={p.facePhotoPath}
+          avatar={p.avatar}
+          sizeClass="h-7 w-7"
+          textFallbackClassName="text-sm"
+        />
+        <span className={cn("flex-1 min-w-0 text-sm font-medium truncate", staffQueueGenderNameClass(p.gender))}>
+          {p.name}
+          {p.queueNumber != null && (
+            <span className="ml-1.5 shrink-0 font-semibold tabular-nums text-blue-400">#{p.queueNumber}</span>
+          )}
+        </span>
         <SkillTag level={p.skillLevel} />
       </label>
     );
@@ -341,8 +466,19 @@ function PickerRow({
                 className={checkboxClass}
               />
               <span className="w-6 shrink-0" aria-hidden />
-              <GenderIcon gender={p.gender} className="h-4 w-4 shrink-0" />
-              <span className="flex-1 min-w-0 text-sm font-medium truncate">{p.name}</span>
+              <PlayerAvatarThumb
+                avatarPhotoPath={p.avatarPhotoPath}
+                facePhotoPath={p.facePhotoPath}
+                avatar={p.avatar}
+                sizeClass="h-7 w-7"
+                textFallbackClassName="text-sm"
+              />
+              <span className={cn("flex-1 min-w-0 text-sm font-medium truncate", staffQueueGenderNameClass(p.gender))}>
+                {p.name}
+                {p.queueNumber != null && (
+                  <span className="ml-1.5 shrink-0 font-semibold tabular-nums text-blue-400">#{p.queueNumber}</span>
+                )}
+              </span>
               <SkillTag level={p.skillLevel} />
             </label>
           );
