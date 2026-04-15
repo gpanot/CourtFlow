@@ -24,7 +24,7 @@ type AssignmentSoundOption = {
 };
 
 const SOUND_STORAGE_KEY = "courtflow-assignment-sound-id";
-const DEFAULT_SOUND_ID: AssignmentAttentionSoundId = "checkout_ding";
+const DEFAULT_SOUND_ID: AssignmentAttentionSoundId = "notification_chime";
 
 export const ASSIGNMENT_ATTENTION_SOUND_OPTIONS: AssignmentSoundOption[] = [
   {

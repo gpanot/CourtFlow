@@ -572,7 +572,7 @@ export function StaffDashboard() {
   }
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-neutral-950 text-white">
+    <div className="flex h-dvh flex-col overflow-hidden bg-neutral-950 pt-[env(safe-area-inset-top)] text-white">
       {/* Header */}
       <header className="flex items-center gap-3 border-b border-neutral-800 px-4 py-3">
         <button
@@ -1865,7 +1865,7 @@ function CreateGroupModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950 text-white">
+    <div className="fixed inset-0 z-50 flex flex-col bg-neutral-950 pt-[env(safe-area-inset-top)] text-white">
       <header className="flex items-center gap-3 border-b border-neutral-800 px-4 py-3">
         <button
           onClick={onClose}
@@ -2202,7 +2202,7 @@ function SessionHistoryPanel({
   };
 
   return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-neutral-950 text-white">
+    <div className="flex h-dvh flex-col overflow-hidden bg-neutral-950 pt-[env(safe-area-inset-top)] text-white">
       <header className="flex items-center gap-3 border-b border-neutral-800 px-4 py-3">
         <button
           onClick={onClose}

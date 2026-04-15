@@ -26,7 +26,7 @@ export default function StaffProfilePage() {
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [installManualHint, setInstallManualHint] = useState(false);
   const [assignmentSoundId, setAssignmentSoundId] =
-    useState<AssignmentAttentionSoundId>("checkout_ding");
+    useState<AssignmentAttentionSoundId>("notification_chime");
   const [previewingSoundId, setPreviewingSoundId] =
     useState<AssignmentAttentionSoundId | null>(null);
   const { isAndroid, installed, canPrompt, promptInstall } = usePwaInstall();
@@ -180,7 +180,7 @@ export default function StaffProfilePage() {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-neutral-950 text-white">
+    <div className="flex min-h-dvh flex-col bg-neutral-950 pt-[env(safe-area-inset-top)] text-white">
       <header className="flex items-center gap-3 border-b border-neutral-800 px-4 py-3">
         <button
           type="button"
