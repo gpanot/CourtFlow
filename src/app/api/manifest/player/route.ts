@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const BASE_MANIFEST = {
+  id: "/player",
   name: "CourtFlow",
   short_name: "CourtFlow",
   description: "Pickleball Court Management System",
+  scope: "/",
   display: "standalone" as const,
   background_color: "#0a0a0a",
   theme_color: "#16a34a",

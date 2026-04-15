@@ -1,4 +1,14 @@
+import type { Metadata } from "next";
 import { PlayerI18nProvider } from "./player-i18n-provider";
+
+export const metadata: Metadata = {
+  manifest: "/api/manifest/player",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "CourtFlow Player",
+  },
+};
 
 export default function PlayerLayout({ children }: { children: React.ReactNode }) {
   return (

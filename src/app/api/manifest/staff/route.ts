@@ -24,7 +24,7 @@ export async function GET() {
   return NextResponse.json(STAFF_MANIFEST, {
     headers: {
       "Content-Type": "application/manifest+json",
-      "Cache-Control": "public, max-age=3600",
+      "Cache-Control": "no-store",
     },
   });
 }
