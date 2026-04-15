@@ -45,6 +45,7 @@ type StaffPlayerSearchOverlayProps = {
       | "end_session"
       | "change_level"
       | "assign_to_court"
+      | "replace_in_queue"
       | "edit_player",
     data?: Record<string, unknown>
   ) => void | Promise<void>;

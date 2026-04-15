@@ -308,7 +308,7 @@ export function StaffWaitingPicker({
                   key={`recommended-${row.key}`}
                   type="button"
                   disabled={disabled}
-                  onClick={() => onToggle(p.id)}
+                  onClick={() => toggle(p.id)}
                   className={cn(
                     "flex w-full items-center gap-2 rounded-lg border px-2 py-1.5 text-left",
                     isOn
