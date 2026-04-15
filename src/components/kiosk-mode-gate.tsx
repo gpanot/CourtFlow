@@ -229,16 +229,16 @@ export function KioskModeGate({ venueId, children }: KioskModeGateProps) {
     return (
       <div className="relative h-full w-full">
         {children(mode)}
-        {/* Staff: large tap target; 5 quick taps opens PIN then mode selection */}
+        {/* Staff escape trigger: small fixed bottom-right button */}
         <button
           type="button"
           onClick={handleEscapeTap}
-          className="absolute bottom-2 right-2 z-50 flex min-h-[88px] min-w-[88px] items-center justify-center rounded-2xl border border-neutral-800/80 bg-black/50 p-6 text-neutral-500 shadow-sm backdrop-blur-sm transition-colors hover:border-neutral-600 hover:bg-black/65 hover:text-neutral-400 active:bg-black/75"
+          className="fixed bottom-3 right-3 z-50 flex h-10 w-10 items-center justify-center rounded-full border border-neutral-700/80 bg-black/60 text-neutral-500 transition-colors hover:border-neutral-500 hover:bg-black/75 hover:text-neutral-300 active:bg-black/80"
           aria-label="Staff: tap five times quickly to change tablet mode"
           title="Staff: tap 5 times to change mode"
         >
           <MoreHorizontal
-            className="h-8 w-8 shrink-0 opacity-80"
+            className="h-4 w-4 shrink-0 opacity-80"
             strokeWidth={2}
             aria-hidden
           />

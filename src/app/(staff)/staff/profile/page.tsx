@@ -40,6 +40,14 @@ export default function StaffProfilePage() {
   const [payError, setPayError] = useState("");
   const [qrExpanded, setQrExpanded] = useState(false);
 
+  const handleBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.push("/staff");
+  };
+
   useEffect(() => {
     setAssignmentSoundId(getStoredAssignmentSoundId());
   }, []);
@@ -176,7 +184,7 @@ export default function StaffProfilePage() {
       <header className="flex items-center gap-3 border-b border-neutral-800 px-4 py-3">
         <button
           type="button"
-          onClick={() => router.push("/staff")}
+          onClick={handleBack}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-neutral-400 hover:bg-neutral-700 transition-colors"
         >
           <ArrowLeft className="h-5 w-5" />

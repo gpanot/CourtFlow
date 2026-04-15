@@ -14,13 +14,14 @@ export async function POST(request: NextRequest) {
       venueId: string;
       imageBase64: string;
       name: string;
+      phone: string;
       gender: "male" | "female" | "other";
       skillLevel: "beginner" | "intermediate" | "advanced";
     }>(request);
 
-    const { venueId, imageBase64, name, gender, skillLevel } = body;
-    if (!venueId?.trim() || !imageBase64?.trim() || !name?.trim() || !gender || !skillLevel) {
-      return error("venueId, imageBase64, name, gender, and skillLevel are required", 400);
+    const { venueId, imageBase64, name, phone, gender, skillLevel } = body;
+    if (!venueId?.trim() || !imageBase64?.trim() || !name?.trim() || !phone?.trim() || !gender || !skillLevel) {
+      return error("venueId, imageBase64, name, phone, gender, and skillLevel are required", 400);
     }
 
     const session = await prisma.session.findFirst({
@@ -36,10 +37,24 @@ export async function POST(request: NextRequest) {
 
     const amount = session.sessionFee;
 
+    // Prevent duplicate face registration: check if this face is already enrolled
+    const faceCheck = await faceRecognitionService.recognizeFace(imageBase64);
+    if (faceCheck.resultType === "matched" && faceCheck.playerId) {
+      return error("This face is already registered. Please use Check In instead.", 409);
+    }
+
+    // Check if phone number already exists
+    const existingPlayer = await prisma.player.findUnique({
+      where: { phone: phone.trim() },
+    });
+    if (existingPlayer) {
+      return error("This phone number is already registered. Please use Check In instead.", 409);
+    }
+
     const player = await prisma.player.create({
       data: {
         name: name.trim(),
-        phone: `kiosk-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        phone: phone.trim(),
         gender,
         skillLevel,
       },

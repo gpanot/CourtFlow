@@ -34,6 +34,7 @@ type KioskStep =
   | "payment_cash"
   | "payment_timeout"
   | "payment_cancelled"
+  | "existing_user"
   | "confirmed"
   | "already_checked_in";
 
@@ -70,6 +71,8 @@ interface PaymentData {
   isNew: boolean;
 }
 
+type VenueTabletSettings = { logoSpin?: boolean };
+
 /* ─── Constants ───────────────────────────────────────────── */
 const CONFIRMED_DISPLAY_MS = 8000;
 const ALREADY_DISPLAY_MS = 8000;
@@ -79,7 +82,6 @@ const CAPTURE_POLL_MS = 120;
 const CAPTURE_MAX_ATTEMPTS = 45;
 const MAX_FACE_ATTEMPTS = 3;
 const RETRY_IDLE_MS = 2000;
-const FACE_FAIL_THRESHOLD = 3;
 const INACTIVITY_RESET_MS = 45_000;
 const PAYMENT_TIMEOUT_MS = 3 * 60 * 1000;
 const PAYMENT_CANCELLED_RESET_MS = 10_000;
@@ -107,7 +109,6 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
 
   const [step, setStep] = useState<KioskStep>("home");
   const [result, setResult] = useState<CheckInResult>({});
-  const [consecutiveFailures, setConsecutiveFailures] = useState(0);
   const [scanPhase, setScanPhase] = useState<"adjust" | "capturing" | "between_retries">("adjust");
   const [retrySecondsLeft, setRetrySecondsLeft] = useState<number | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -124,8 +125,10 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
 
   const [regImage, setRegImage] = useState<string | null>(null);
   const [regName, setRegName] = useState("");
+  const [regPhone, setRegPhone] = useState("");
   const [regGender, setRegGender] = useState<"male" | "female" | null>(null);
   const [regLevel, setRegLevel] = useState<"beginner" | "intermediate" | "advanced" | null>(null);
+  const [regFaceChecking, setRegFaceChecking] = useState(false);
   const [regLoading, setRegLoading] = useState(false);
 
   const [payment, setPayment] = useState<PaymentData | null>(null);
@@ -133,6 +136,8 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
 
   const [cachedCheckIn, setCachedCheckIn] = useState<CheckInResult | null>(null);
   const [venueName, setVenueName] = useState("");
+  const [venueLogoUrl, setVenueLogoUrl] = useState<string | null>(null);
+  const [venueLogoSpin, setVenueLogoSpin] = useState(false);
 
   /* ─── Helpers ──────────────────────────────────── */
   const goTo = useCallback((s: KioskStep) => {
@@ -164,15 +169,16 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
     setWristbandError("");
     setRegImage(null);
     setRegName("");
+    setRegPhone("");
     setRegGender(null);
     setRegLevel(null);
+    setRegFaceChecking(false);
     setPayment(null);
     setPaymentLoading(false);
   }, [clearTimers, goTo]);
 
   const fullReset = useCallback(() => {
     resetToHome();
-    setConsecutiveFailures(0);
   }, [resetToHome]);
 
   const scheduleReset = useCallback(
@@ -184,7 +190,14 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
   );
 
   useEffect(() => {
-    api.get<{ name: string }>(`/api/venues/${venueId}`).then((v) => setVenueName(v.name)).catch(() => {});
+    api
+      .get<{ name: string; logoUrl?: string | null; settings?: VenueTabletSettings }>(`/api/venues/${venueId}`)
+      .then((v) => {
+        setVenueName(v.name);
+        setVenueLogoUrl(v.logoUrl ?? null);
+        setVenueLogoSpin(!!v.settings?.logoSpin);
+      })
+      .catch(() => {});
   }, [venueId]);
 
   useEffect(() => {
@@ -281,7 +294,6 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
         if (res.resultType === "needs_registration") {
           cameraRef.current?.stopCamera();
           goTo("needs_registration");
-          setConsecutiveFailures((c) => c + 1);
           return;
         }
         if (res.resultType === "already_checked_in") {
@@ -423,7 +435,6 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
       if (!cancelled && stepRef.current === "scanning") {
         cameraRef.current?.stopCamera();
         goTo("no_face");
-        setConsecutiveFailures((c) => c + 1);
         scheduleReset(ERROR_DISPLAY_MS);
       }
     })();
@@ -523,18 +534,38 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
     goTo("reg_face_capture");
   }, [clearTimers, unlockChime, goTo]);
 
-  const captureRegFace = useCallback(() => {
+  const captureRegFace = useCallback(async () => {
     const frame = cameraRef.current?.captureFrame();
-    if (frame) {
+    if (!frame || regFaceChecking) return;
+    setRegFaceChecking(true);
+    try {
+      const check = await api.post<{ existing: boolean; playerName?: string | null }>(
+        "/api/kiosk/check-existing-face",
+        { imageBase64: frame }
+      );
+      if (check.existing) {
+        cameraRef.current?.stopCamera();
+        goTo("existing_user");
+        scheduleReset(2200);
+        return;
+      }
+
       setRegImage(frame);
       cameraRef.current?.stopCamera();
       goTo("reg_face_preview");
+    } catch {
+      cameraRef.current?.stopCamera();
+      goTo("error");
+      setResult({ error: "Could not verify face. Please try again." });
+      scheduleReset(ERROR_DISPLAY_MS);
+    } finally {
+      setRegFaceChecking(false);
     }
-  }, [goTo]);
+  }, [goTo, regFaceChecking, scheduleReset]);
 
   /* ─── Registration: submit form ─────────────── */
   const handleRegSubmit = useCallback(async () => {
-    if (!regName.trim() || !regGender || !regLevel || !regImage) return;
+    if (!regName.trim() || !regPhone.trim() || !regGender || !regLevel || !regImage) return;
     setRegLoading(true);
     try {
       const res = await api.post<{
@@ -547,6 +578,7 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
         venueId,
         imageBase64: regImage,
         name: regName.trim(),
+        phone: regPhone.trim(),
         gender: regGender,
         skillLevel: regLevel,
       });
@@ -566,13 +598,20 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
         }
       }, PAYMENT_TIMEOUT_MS);
     } catch (e) {
-      goTo("error");
-      setResult({ error: e instanceof Error ? e.message : "Registration failed" });
-      scheduleReset(ERROR_DISPLAY_MS);
+      const msg = e instanceof Error ? e.message : "Registration failed";
+      const isDuplicate = msg.includes("already registered");
+      if (isDuplicate) {
+        goTo("needs_registration");
+        setResult({ error: msg });
+      } else {
+        goTo("error");
+        setResult({ error: msg });
+      }
+      scheduleReset(isDuplicate ? 8000 : ERROR_DISPLAY_MS);
     } finally {
       setRegLoading(false);
     }
-  }, [regName, regGender, regLevel, regImage, venueId, goTo, scheduleReset, resetToHome]);
+  }, [regName, regPhone, regGender, regLevel, regImage, venueId, goTo, scheduleReset, resetToHome]);
 
   /* ─── Payment: switch to cash ───────────────── */
   const switchToCash = useCallback(async () => {
@@ -601,8 +640,6 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
     [scheduleReset, goTo]
   );
 
-  const showPhoneFallback = consecutiveFailures >= FACE_FAIL_THRESHOLD;
-
   const bgColor =
     ({
       home: "bg-black",
@@ -623,6 +660,7 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
       payment_cash: "bg-black",
       payment_timeout: "bg-red-950",
       payment_cancelled: "bg-red-950",
+      existing_user: "bg-amber-950",
     } as Record<string, string>)[step] ?? "bg-black";
 
   return (
@@ -630,10 +668,21 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
 
       {/* ── HOME ─────────────────────────────────── */}
       {step === "home" && (
-        <div className="flex flex-1 flex-col items-center justify-center gap-8 px-8 text-center">
+        <div className="flex flex-1 flex-col items-center justify-center gap-7 px-8 pb-10 text-center">
           <div className="absolute right-6 top-6 z-20">
             <TvTabletLanguageToggle />
           </div>
+          {venueLogoUrl && (
+            <div
+              className={cn(
+                "h-24 w-24 shrink-0 overflow-hidden rounded-full border-2 border-neutral-800 bg-neutral-900",
+                venueLogoSpin && "animate-flip-y"
+              )}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={venueLogoUrl} alt={venueName || "Venue logo"} className="h-full w-full object-cover" />
+            </div>
+          )}
           {venueName && (
             <p className="text-lg font-medium text-neutral-400">{venueName}</p>
           )}
@@ -661,12 +710,6 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
               </div>
             </button>
           </div>
-          {showPhoneFallback && (
-            <button type="button" onClick={openPhoneFlow} className="flex items-center gap-2 text-blue-400 hover:text-blue-300">
-              <Smartphone className="h-5 w-5" />
-              {t("tablet.checkInScanner.checkInWithPhone")}
-            </button>
-          )}
         </div>
       )}
 
@@ -754,23 +797,37 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
         </div>
       )}
 
+      {step === "existing_user" && (
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
+          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-amber-700">
+            <span className="text-3xl">!</span>
+          </div>
+          <h2 className="text-3xl font-bold text-amber-200">{t("tablet.checkInScanner.regExistingUserTitle")}</h2>
+          <p className="text-lg text-neutral-300">{t("tablet.checkInScanner.regExistingUserHint")}</p>
+        </div>
+      )}
+
       {/* ── NEEDS REGISTRATION ──────────────────── */}
       {step === "needs_registration" && (
         <div className="flex flex-1 flex-col items-center justify-center gap-6 px-8 text-center">
+          <button
+            type="button"
+            onClick={resetToHome}
+            className="absolute left-6 top-6 z-20 rounded-full p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white"
+            aria-label="Back"
+          >
+            <ArrowLeft className="h-6 w-6" />
+          </button>
           <div className="absolute right-6 top-6 z-20"><TvTabletLanguageToggle /></div>
           <h2 className="text-2xl font-bold text-neutral-200">{t("tablet.checkInScanner.faceNotRecognized")}</h2>
           <p className="text-lg text-neutral-400">{t("tablet.checkInScanner.faceNotRecognizedHint")}</p>
           <button type="button" onClick={beginFaceScan} className="w-full max-w-lg rounded-3xl bg-green-600 px-8 py-7 text-2xl font-bold text-white transition-colors hover:bg-green-500 active:scale-[0.99]">
             {t("tablet.checkInScanner.scanAgain")}
           </button>
-          <div className="flex flex-wrap items-center justify-center gap-3">
+          <div className="flex items-center justify-center">
             <button type="button" onClick={openPhoneFlow} className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-lg font-semibold text-white hover:bg-blue-500">
               <Smartphone className="h-5 w-5" />
               {t("tablet.checkInScanner.checkInWithPhone")}
-            </button>
-            <button type="button" onClick={openWristbandFlow} className="flex items-center gap-2 rounded-xl bg-neutral-700 px-6 py-3 text-lg font-semibold text-white hover:bg-neutral-600">
-              <Hash className="h-5 w-5" />
-              {t("tablet.checkInScanner.enterWristband")}
             </button>
           </div>
         </div>
@@ -892,8 +949,10 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
             <CameraCapture ref={cameraRef} active onError={onCameraError} className="h-full w-full" videoClassName="h-full w-full object-cover [transform:scaleX(-1)]" />
           </div>
           <button type="button" onClick={captureRegFace}
-            className="rounded-2xl bg-green-600 px-10 py-4 text-xl font-bold text-white hover:bg-green-500 active:scale-[0.98]">
-            📸
+            disabled={regFaceChecking}
+            className="flex items-center gap-2 rounded-2xl bg-green-600 px-10 py-4 text-xl font-bold text-white hover:bg-green-500 active:scale-[0.98] disabled:opacity-60">
+            {regFaceChecking && <Loader2 className="h-5 w-5 animate-spin" />}
+            {regFaceChecking ? t("tablet.checkInScanner.scanning") : "📸"}
           </button>
           <button type="button" onClick={resetToHome} className="text-sm text-neutral-500 hover:text-neutral-300">
             <ArrowLeft className="mr-1 inline h-4 w-4" />
@@ -904,14 +963,14 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
 
       {/* ── REGISTRATION: FACE PREVIEW ──────────── */}
       {step === "reg_face_preview" && regImage && (
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 p-4">
-          <h2 className="text-2xl font-bold text-green-400">{t("tablet.checkInScanner.regGotPhoto")}</h2>
-          <div className="h-40 w-40 overflow-hidden rounded-full border-4 border-green-600/60">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-5 p-4">
+          <h2 className="text-3xl font-bold text-green-400">{t("tablet.checkInScanner.regGotPhoto")}</h2>
+          <div className="h-56 w-56 overflow-hidden rounded-full border-4 border-green-600/70 shadow-[0_0_40px_rgba(34,197,94,0.2)] sm:h-64 sm:w-64">
             <img src={`data:image/jpeg;base64,${regImage}`} alt="" className="h-full w-full object-cover [transform:scaleX(-1)]" />
           </div>
-          <div className="flex gap-4">
+          <div className="mt-1 flex w-full max-w-md gap-3">
             <button type="button" onClick={() => goTo("reg_form")}
-              className="rounded-2xl bg-green-600 px-8 py-4 text-xl font-bold text-white hover:bg-green-500">
+              className="flex-1 rounded-2xl bg-green-600 px-6 py-4 text-xl font-bold text-white hover:bg-green-500">
               {t("tablet.checkInScanner.regLooksGood")} →
             </button>
             <button type="button" onClick={() => { setRegImage(null); goTo("reg_face_capture"); }}
@@ -924,50 +983,90 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
 
       {/* ── REGISTRATION: FORM ──────────────────── */}
       {step === "reg_form" && (
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-5 p-6">
-          <div className="w-full max-w-md space-y-5">
+        <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4 pb-8 sm:items-center sm:py-6">
+          <div className="w-full max-w-md space-y-4 rounded-xl border border-neutral-800 bg-neutral-900/40 p-4">
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <label className="mb-1.5 block text-xs font-medium text-neutral-400">
+                  {t("tablet.checkInScanner.regName")}
+                </label>
+                <input
+                  type="text"
+                  value={regName}
+                  onChange={(e) => setRegName(e.target.value)}
+                  placeholder={t("tablet.checkInScanner.regNamePlaceholder")}
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-base text-white placeholder:text-neutral-500 focus:border-green-500 focus:outline-none"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-neutral-400">{t("tablet.checkInScanner.regGender")}</p>
+                <div className="flex gap-1.5">
+                  {(["male", "female"] as const).map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setRegGender(g)}
+                      className={cn(
+                        "flex h-10 w-12 items-center justify-center rounded-lg border-2 text-xs font-bold tracking-wide transition-colors",
+                        regGender === g
+                          ? g === "male"
+                            ? "border-blue-500 bg-blue-600/20 text-blue-400"
+                            : "border-pink-500 bg-pink-600/20 text-pink-400"
+                          : "border-neutral-600 bg-neutral-950/80 text-neutral-400 hover:border-neutral-500"
+                      )}
+                      title={t(`tablet.checkInScanner.reg${g === "male" ? "Male" : "Female"}`)}
+                    >
+                      {g === "male" ? "M" : "F"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-neutral-400">{t("tablet.checkInScanner.regName")}</label>
-              <input type="text" value={regName} onChange={(e) => setRegName(e.target.value)}
-                placeholder={t("tablet.checkInScanner.regNamePlaceholder")}
-                className="w-full rounded-xl border border-neutral-700 bg-neutral-900 px-4 py-4 text-xl text-white placeholder:text-neutral-600 focus:border-green-500 focus:outline-none"
-                autoFocus
+              <label className="mb-1.5 block text-xs font-medium text-neutral-400">
+                {t("tablet.checkInScanner.regPhone")}
+              </label>
+              <input
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                value={regPhone}
+                onChange={(e) => setRegPhone(e.target.value)}
+                placeholder={t("tablet.checkInScanner.regPhonePlaceholder")}
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-base text-white placeholder:text-neutral-500 focus:border-green-500 focus:outline-none"
               />
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-neutral-400">{t("tablet.checkInScanner.regGender")}</label>
-              <div className="flex gap-3">
-                {(["male", "female"] as const).map((g) => (
-                  <button key={g} type="button" onClick={() => setRegGender(g)}
-                    className={cn("flex-1 rounded-xl py-3 text-lg font-semibold transition-colors",
-                      regGender === g ? "bg-green-600 text-white" : "bg-neutral-800 text-neutral-300 hover:bg-neutral-700"
-                    )}>
-                    {t(`tablet.checkInScanner.reg${g === "male" ? "Male" : "Female"}`)}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-neutral-400">{t("tablet.checkInScanner.regLevel")}</label>
-              <div className="space-y-2">
+              <p className="mb-1.5 text-xs font-medium text-neutral-400">{t("tablet.checkInScanner.regLevel")}</p>
+              <div className="grid grid-cols-3 gap-1.5">
                 {(["beginner", "intermediate", "advanced"] as const).map((lvl) => (
-                  <button key={lvl} type="button" onClick={() => setRegLevel(lvl)}
-                    className={cn("flex w-full items-center justify-between rounded-xl px-4 py-3 text-left transition-colors",
-                      regLevel === lvl ? "bg-green-600 text-white" : "bg-neutral-800 text-neutral-300 hover:bg-neutral-700"
-                    )}>
-                    <span className="font-semibold">{t(`tablet.checkInScanner.reg${lvl.charAt(0).toUpperCase() + lvl.slice(1)}`)}</span>
-                    <span className="text-sm opacity-70">{t(`tablet.checkInScanner.reg${lvl.charAt(0).toUpperCase() + lvl.slice(1)}Desc`)}</span>
+                  <button
+                    key={lvl}
+                    type="button"
+                    onClick={() => setRegLevel(lvl)}
+                    className={cn(
+                      "rounded-lg border-2 px-2 py-2 text-center text-xs font-semibold transition-colors",
+                      regLevel === lvl
+                        ? "border-green-500 bg-green-600/20 text-white"
+                        : "border-neutral-700 bg-neutral-900 text-neutral-300 hover:border-neutral-500"
+                    )}
+                  >
+                    {t(`tablet.checkInScanner.reg${lvl.charAt(0).toUpperCase() + lvl.slice(1)}`)}
                   </button>
                 ))}
               </div>
             </div>
 
-            <button type="button" disabled={!regName.trim() || !regGender || !regLevel || regLoading}
+            <button
+              type="button"
+              disabled={!regName.trim() || !regPhone.trim() || !regGender || !regLevel || regLoading}
               onClick={() => void handleRegSubmit()}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-green-600 py-4 text-xl font-bold text-white transition-colors hover:bg-green-500 disabled:opacity-40">
-              {regLoading && <Loader2 className="h-5 w-5 animate-spin" />}
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-3 text-base font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-40"
+            >
+              {regLoading && <Loader2 className="h-4 w-4 animate-spin" />}
               {t("tablet.checkInScanner.regNext")} →
             </button>
           </div>

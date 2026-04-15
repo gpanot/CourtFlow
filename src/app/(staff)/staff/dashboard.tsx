@@ -19,7 +19,7 @@ import {
 } from "@/components/staff-queue-player-display";
 import { QueuePanel, type QueueEntryData, type StaffQueueCourtGroup } from "@/components/queue-panel";
 import { cn } from "@/lib/cn";
-import { Plus, X, Users, LayoutGrid, AlertTriangle, User, UserPlus, Wrench, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, Calendar, Loader2, Target, Play, Check, ListPlus, Camera, Search, CreditCard } from "lucide-react";
+import { Plus, X, Users, LayoutGrid, AlertTriangle, User, UserPlus, Wrench, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, Calendar, Loader2, Target, Play, Check, ListPlus, Search, CreditCard } from "lucide-react";
 import { MIN_GROUP_SIZE, MAX_GROUP_SIZE, COURT_PLAYER_COUNT } from "@/lib/constants";
 import { QRCodeSVG } from "qrcode.react";
 import { SessionSummary } from "./session-summary";
@@ -28,10 +28,14 @@ import { StaffWaitingPicker } from "@/components/staff-waiting-picker";
 import { FaceKioskTab } from "@/components/face-kiosk-tab";
 import { StaffPlayerSearchOverlay } from "@/components/staff-player-search-overlay";
 import { RankBottomSheet } from "@/components/rank-bottom-sheet";
-import { PendingPaymentsSheet } from "@/components/pending-payments-sheet";
+import { PendingPaymentsPanel } from "@/components/pending-payments-panel";
 import { canCourtAcceptManualAssign } from "@/lib/court-manual-assign";
 import { playerNameWithCheckIn } from "@/lib/player-display";
 import { useCourtAssignmentAttention } from "@/hooks/use-court-assignment-attention";
+import {
+  playAssignmentAttentionSound,
+  primeAssignmentSoundAudio,
+} from "@/lib/assignment-attention-sound";
 
 function genderLabelForDialog(g: string, t: TFunction) {
   if (g === "male") return t("staff.dashboard.labelsGenderMale");
@@ -102,10 +106,10 @@ interface VenueData {
   courts: { id: string; label: string; activeInSession: boolean }[];
 }
 
-type Tab = "courts" | "checkin" | "queue" | "qr" | "kiosk";
+type Tab = "courts" | "checkin" | "queue" | "qr" | "payment";
 
 const STAFF_TAB_KEY = "courtflow-staff-tab";
-const VALID_TABS: Tab[] = ["courts", "checkin", "queue", "qr", "kiosk"];
+const VALID_TABS: Tab[] = ["courts", "checkin", "queue", "qr", "payment"];
 
 function readPersistedTab(): Tab {
   try {
@@ -177,10 +181,20 @@ export function StaffDashboard() {
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [playerSearchOpen, setPlayerSearchOpen] = useState(false);
   const [rankSheetCourt, setRankSheetCourt] = useState<CourtData | null>(null);
-  const [paymentsSheetOpen, setPaymentsSheetOpen] = useState(false);
+  const [checkInMode, setCheckInMode] = useState<"new" | "existing">("new");
   const [pendingPaymentCount, setPendingPaymentCount] = useState(0);
   const { on } = useSocket();
   useCourtAssignmentAttention(courts);
+
+  useEffect(() => {
+    const unlock = () => void primeAssignmentSoundAudio();
+    window.addEventListener("pointerdown", unlock, { passive: true });
+    window.addEventListener("keydown", unlock, { passive: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
 
   const rankingBannerCourts = useMemo(
     () =>
@@ -204,6 +218,7 @@ export function StaffDashboard() {
     const tabParam = searchParams.get("tab");
     if (tabParam === "checkin" || tabParam === "add") setTab("checkin");
     if (tabParam === "qr") setTab("qr");
+    if (tabParam === "payment") setTab("payment");
   }, [searchParams, setTab]);
 
   useEffect(() => {
@@ -248,7 +263,10 @@ export function StaffDashboard() {
         .then((data) => setPendingPaymentCount(data.length))
         .catch(() => {});
     };
-    const offPaymentNew = on("payment:new", fetchPaymentCount);
+    const offPaymentNew = on("payment:new", () => {
+      fetchPaymentCount();
+      void playAssignmentAttentionSound();
+    });
     const offPaymentConfirmed = on("payment:confirmed", fetchPaymentCount);
     const offPaymentCancelled = on("payment:cancelled", fetchPaymentCount);
 
@@ -425,7 +443,8 @@ export function StaffDashboard() {
       | "end_session"
       | "change_level"
       | "assign_to_court"
-      | "edit_player",
+      | "edit_player"
+      | "replace_in_queue",
     data?: Record<string, unknown>
   ) => {
     try {
@@ -579,20 +598,6 @@ export function StaffDashboard() {
           </button>
           <button
             type="button"
-            onClick={() => setPaymentsSheetOpen(true)}
-            aria-label={t("staff.dashboard.pendingPaymentsAria")}
-            title={t("staff.dashboard.pendingPaymentsAria")}
-            className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-700/40 text-neutral-200 transition-colors hover:bg-neutral-600/50 hover:text-white"
-          >
-            <CreditCard className="h-5 w-5" />
-            {pendingPaymentCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-                {pendingPaymentCount}
-              </span>
-            )}
-          </button>
-          <button
-            type="button"
             onClick={() => setTab("qr")}
             aria-label={t("staff.dashboard.tabQr")}
             title={t("staff.dashboard.tabQr")}
@@ -647,14 +652,16 @@ export function StaffDashboard() {
         </button>
         <button
           type="button"
-          onClick={() => setTab("kiosk")}
+          onClick={() => setTab("payment")}
           className={cn(
             "flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 min-w-0 max-sm:gap-0",
-            tab === "kiosk" ? "border-b-2 border-blue-500 text-white" : "text-neutral-400"
+            tab === "payment" ? "border-b-2 border-blue-500 text-white" : "text-neutral-400"
           )}
         >
-          <Camera className="h-4 w-4 shrink-0 max-sm:hidden" aria-hidden />
-          <span className="truncate">{t("staff.dashboard.tabKiosk")}</span>
+          <CreditCard className="h-4 w-4 shrink-0 max-sm:hidden" aria-hidden />
+          <span className="truncate">
+            {t("staff.dashboard.tabPayment", { count: pendingPaymentCount })}
+          </span>
         </button>
       </div>
 
@@ -662,13 +669,13 @@ export function StaffDashboard() {
       <main
         className={cn(
           "flex-1 min-h-0 p-4",
-          tab === "kiosk" && venueId
+          tab === "payment" && venueId
             ? "flex flex-col overflow-hidden max-sm:p-2 sm:p-4"
             : "overflow-y-auto",
           session && tab === "checkin" && "max-sm:p-2 max-sm:pt-2 max-sm:pb-3"
         )}
       >
-        {!session && !showOpenSession && tab !== "qr" && tab !== "kiosk" && (
+        {!session && !showOpenSession && tab !== "qr" && tab !== "payment" && (
           <div className="flex h-64 flex-col items-center justify-center gap-3 text-center px-2">
             <p className="text-lg text-neutral-500">{t("staff.dashboard.noActiveSession")}</p>
             {tab === "courts" ? (
@@ -782,7 +789,44 @@ export function StaffDashboard() {
 
         {session && venueId && (
           <div className={tab === "checkin" ? undefined : "hidden"}>
-            <StaffCheckInPanel venueId={venueId} queueNamesLower={queueUsedNamesLower} onAdded={fetchState} />
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-2 rounded-xl border border-neutral-800 bg-neutral-900/40 p-1">
+                <button
+                  type="button"
+                  onClick={() => setCheckInMode("new")}
+                  className={cn(
+                    "rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                    checkInMode === "new"
+                      ? "bg-blue-600 text-white"
+                      : "text-neutral-300 hover:bg-neutral-800"
+                  )}
+                >
+                  {t("staff.dashboard.checkInModeNewPlayer")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCheckInMode("existing")}
+                  className={cn(
+                    "rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                    checkInMode === "existing"
+                      ? "bg-blue-600 text-white"
+                      : "text-neutral-300 hover:bg-neutral-800"
+                  )}
+                >
+                  {t("staff.dashboard.checkInModeExistingPlayer")}
+                </button>
+              </div>
+
+              {checkInMode === "new" ? (
+                <StaffCheckInPanel
+                  venueId={venueId}
+                  queueNamesLower={queueUsedNamesLower}
+                  onAdded={fetchState}
+                />
+              ) : (
+                <FaceKioskTab venueId={venueId} hasSession={!!session} />
+              )}
+            </div>
           </div>
         )}
 
@@ -807,8 +851,11 @@ export function StaffDashboard() {
           <QRCodeTab venueId={venueId} venueName={venue?.name} hasSession={!!session} t={t} />
         )}
 
-        {tab === "kiosk" && venueId && (
-          <FaceKioskTab venueId={venueId} hasSession={!!session} />
+        {tab === "payment" && venueId && (
+          <PendingPaymentsPanel
+            venueId={venueId}
+            onCountChange={setPendingPaymentCount}
+          />
         )}
 
       </main>
@@ -822,15 +869,6 @@ export function StaffDashboard() {
           onSaved={() => {
             void fetchState();
           }}
-        />
-      )}
-
-      {venueId && (
-        <PendingPaymentsSheet
-          open={paymentsSheetOpen}
-          venueId={venueId}
-          onClose={() => setPaymentsSheetOpen(false)}
-          onCountChange={setPendingPaymentCount}
         />
       )}
 

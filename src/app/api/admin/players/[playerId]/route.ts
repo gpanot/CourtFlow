@@ -104,6 +104,7 @@ export async function DELETE(
       data: { matchedPlayerId: null },
     });
 
+    await prisma.pendingPayment.deleteMany({ where: { playerId } });
     await prisma.pushSubscription.deleteMany({ where: { playerId } });
     await prisma.playerRanking.deleteMany({ where: { playerId } });
     await prisma.queueEntry.deleteMany({ where: { playerId } });

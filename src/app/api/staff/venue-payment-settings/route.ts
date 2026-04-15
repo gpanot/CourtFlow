@@ -21,16 +21,24 @@ export async function GET(request: NextRequest) {
     });
     if (!venue) return error("Venue not found", 404);
 
-    const session = await prisma.session.findFirst({
+    const openSession = await prisma.session.findFirst({
       where: { venueId, status: "open" },
+      orderBy: { openedAt: "desc" },
       select: { sessionFee: true },
     });
+    const latestClosedSession = openSession
+      ? null
+      : await prisma.session.findFirst({
+          where: { venueId, status: "closed" },
+          orderBy: { openedAt: "desc" },
+          select: { sessionFee: true },
+        });
 
     return json({
       bankName: venue.bankName || "",
       bankAccount: venue.bankAccount || "",
       bankOwnerName: venue.bankOwnerName || "",
-      sessionFee: session?.sessionFee ?? 0,
+      sessionFee: openSession?.sessionFee ?? latestClosedSession?.sessionFee ?? 0,
     });
   } catch (e) {
     return error((e as Error).message, 500);
@@ -67,12 +75,21 @@ export async function PATCH(request: NextRequest) {
     }
 
     if (body.sessionFee !== undefined && body.sessionFee >= 0) {
-      const session = await prisma.session.findFirst({
+      const openSession = await prisma.session.findFirst({
         where: { venueId, status: "open" },
+        orderBy: { openedAt: "desc" },
+        select: { id: true },
       });
-      if (session) {
+      const targetSession =
+        openSession ??
+        (await prisma.session.findFirst({
+          where: { venueId, status: "closed" },
+          orderBy: { openedAt: "desc" },
+          select: { id: true },
+        }));
+      if (targetSession) {
         await prisma.session.update({
-          where: { id: session.id },
+          where: { id: targetSession.id },
           data: { sessionFee: body.sessionFee },
         });
       }

@@ -51,10 +51,17 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    const latestSession = await prisma.session.findFirst({
+      where: { venueId },
+      orderBy: { openedAt: "desc" },
+      select: { sessionFee: true },
+    });
+
     const session = await prisma.session.create({
       data: {
         venueId,
         staffId: auth.id,
+        sessionFee: latestSession?.sessionFee ?? 0,
         gameTypeMix: gameTypeMix ?? undefined,
         warmupMode: warmupMode ?? "manual",
         type: type ?? "open_play",
