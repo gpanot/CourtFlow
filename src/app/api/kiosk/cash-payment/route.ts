@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
 
     emitToVenue(payment.venueId, "payment:new", {
       pendingPaymentId: updated.id,
-      playerName: payment.player.name,
+      playerName: payment.player?.name ?? "Unknown",
       amount: updated.amount,
       paymentMethod: "cash",
       type: updated.type,

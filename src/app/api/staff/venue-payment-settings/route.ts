@@ -17,9 +17,10 @@ export async function GET(request: NextRequest) {
 
     const venue = await prisma.venue.findUnique({
       where: { id: venueId },
-      select: { bankName: true, bankAccount: true, bankOwnerName: true },
+      select: { bankName: true, bankAccount: true, bankOwnerName: true, settings: true },
     });
     if (!venue) return error("Venue not found", 404);
+    const settings = (venue.settings ?? {}) as Record<string, unknown>;
 
     const openSession = await prisma.session.findFirst({
       where: { venueId, status: "open" },
@@ -39,6 +40,8 @@ export async function GET(request: NextRequest) {
       bankAccount: venue.bankAccount || "",
       bankOwnerName: venue.bankOwnerName || "",
       sessionFee: openSession?.sessionFee ?? latestClosedSession?.sessionFee ?? 0,
+      autoApprovalPhone: typeof settings.autoApprovalPhone === "string" ? settings.autoApprovalPhone : "",
+      autoApprovalCCCD: typeof settings.autoApprovalCCCD === "string" ? settings.autoApprovalCCCD : "",
     });
   } catch (e) {
     return error((e as Error).message, 500);
@@ -54,6 +57,8 @@ export async function PATCH(request: NextRequest) {
       bankAccount?: string;
       bankOwnerName?: string;
       sessionFee?: number;
+      autoApprovalPhone?: string;
+      autoApprovalCCCD?: string;
     }>(request);
 
     const { venueId } = body;
@@ -70,8 +75,30 @@ export async function PATCH(request: NextRequest) {
     if (body.bankAccount !== undefined) venueUpdate.bankAccount = body.bankAccount || null;
     if (body.bankOwnerName !== undefined) venueUpdate.bankOwnerName = body.bankOwnerName || null;
 
+    const hasAutoApprovalPayload =
+      body.autoApprovalPhone !== undefined || body.autoApprovalCCCD !== undefined;
+    if (hasAutoApprovalPayload) {
+      const venue = await prisma.venue.findUnique({
+        where: { id: venueId },
+        select: { settings: true },
+      });
+      const currentSettings = (venue?.settings ?? {}) as Record<string, unknown>;
+      venueUpdate.settings = {
+        ...currentSettings,
+        ...(body.autoApprovalPhone !== undefined
+          ? { autoApprovalPhone: body.autoApprovalPhone.trim() || null }
+          : {}),
+        ...(body.autoApprovalCCCD !== undefined
+          ? { autoApprovalCCCD: body.autoApprovalCCCD.trim() || null }
+          : {}),
+      };
+    }
+
     if (Object.keys(venueUpdate).length > 0) {
-      await prisma.venue.update({ where: { id: venueId }, data: venueUpdate });
+      await prisma.venue.update({
+        where: { id: venueId },
+        data: venueUpdate,
+      });
     }
 
     if (body.sessionFee !== undefined && body.sessionFee >= 0) {

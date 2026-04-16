@@ -7,10 +7,10 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import { Monitor, MoreHorizontal, UserCheck } from "lucide-react";
+import { Monitor, MoreHorizontal, UserCheck, CreditCard } from "lucide-react";
 import { cn } from "@/lib/cn";
 
-export type KioskMode = "entrance" | "tv";
+export type KioskMode = "entrance" | "tv" | "courtpay";
 
 const KIOSK_PIN = "0000";
 const ESCAPE_TAP_COUNT = 5;
@@ -159,6 +159,19 @@ function ModeSelector({
             </p>
           </div>
         </button>
+        <button
+          type="button"
+          onClick={() => onSelect("courtpay")}
+          className="flex items-center gap-5 rounded-2xl border-2 border-purple-600/40 bg-purple-900/40 p-6 text-left hover:bg-purple-900/60 active:scale-[0.99]"
+        >
+          <CreditCard className="h-10 w-10 shrink-0 text-purple-400" />
+          <div>
+            <p className="text-xl font-bold text-white">CourtPay Check-in</p>
+            <p className="text-sm text-neutral-400">
+              Phone-based check-in with payment &amp; subscriptions
+            </p>
+          </div>
+        </button>
       </div>
     </div>
   );
@@ -175,7 +188,7 @@ export function KioskModeGate({ venueId, children }: KioskModeGateProps) {
 
   useEffect(() => {
     const saved = localStorage.getItem(storageKey);
-    if (saved === "entrance" || saved === "tv") {
+    if (saved === "entrance" || saved === "tv" || saved === "courtpay") {
       setMode(saved);
       setPhase("locked");
     } else {

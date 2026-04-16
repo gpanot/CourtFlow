@@ -106,6 +106,13 @@ enum BookingStatus {
   no_show
 }
 
+enum SubscriptionStatus {
+  active
+  exhausted
+  expired
+  cancelled
+}
+
 model Venue {
   id                 String    @id @default(cuid())
   name               String
@@ -123,17 +130,20 @@ model Venue {
   bankOwnerName      String?   @map("bank_owner_name")
   createdAt          DateTime  @default(now()) @map("created_at")
 
-  courts          Court[]
-  sessions        Session[]
-  staff           StaffMember[]
-  auditLogs       AuditLog[]
-  membershipTiers MembershipTier[]
-  memberships     Membership[]
-  bookings        Booking[]
-  courtBlocks     CourtBlock[]
-  coachPackages   CoachPackage[]
-  coachLessons    CoachLesson[]
-  pendingPayments PendingPayment[]
+  courts               Court[]
+  sessions             Session[]
+  staff                StaffMember[]
+  auditLogs            AuditLog[]
+  membershipTiers      MembershipTier[]
+  memberships          Membership[]
+  bookings             Booking[]
+  courtBlocks          CourtBlock[]
+  coachPackages        CoachPackage[]
+  coachLessons         CoachLesson[]
+  pendingPayments      PendingPayment[]
+  checkInPlayers       CheckInPlayer[]
+  subscriptionPackages SubscriptionPackage[]
+  checkInRecords       CheckInRecord[]
 
   @@map("venues")
 }
@@ -588,25 +598,29 @@ model FaceAttempt {
 }
 
 model PendingPayment {
-  id            String    @id @default(cuid())
-  venueId       String    @map("venue_id")
-  sessionId     String    @map("session_id")
-  playerId      String    @map("player_id")
-  amount        Int
-  paymentMethod String    @default("vietqr") @map("payment_method")
-  type          String    // "checkin" | "registration"
-  status        String    @default("pending") // "pending" | "confirmed" | "cancelled" | "expired"
-  createdAt     DateTime  @default(now()) @map("created_at")
-  expiresAt     DateTime  @map("expires_at")
-  confirmedAt   DateTime? @map("confirmed_at")
-  confirmedBy   String?   @map("confirmed_by")
+  id              String    @id @default(cuid())
+  venueId         String    @map("venue_id")
+  sessionId       String?   @map("session_id")
+  playerId        String?   @map("player_id")
+  checkInPlayerId String?   @map("check_in_player_id")
+  paymentRef      String?   @unique @map("payment_ref")
+  amount          Int
+  paymentMethod   String    @default("vietqr") @map("payment_method")
+  type            String    // "checkin" | "registration" | "subscription"
+  status          String    @default("pending") // "pending" | "confirmed" | "cancelled" | "expired"
+  createdAt       DateTime  @default(now()) @map("created_at")
+  expiresAt       DateTime  @map("expires_at")
+  confirmedAt     DateTime? @map("confirmed_at")
+  confirmedBy     String?   @map("confirmed_by")
 
-  venue   Venue   @relation(fields: [venueId], references: [id])
-  session Session @relation(fields: [sessionId], references: [id])
-  player  Player  @relation(fields: [playerId], references: [id])
+  venue         Venue          @relation(fields: [venueId], references: [id])
+  session       Session?       @relation(fields: [sessionId], references: [id])
+  player        Player?        @relation(fields: [playerId], references: [id])
+  checkInPlayer CheckInPlayer? @relation(fields: [checkInPlayerId], references: [id])
 
   @@index([venueId, status])
   @@index([sessionId])
+  @@index([paymentRef])
   @@map("pending_payments")
 }
 
@@ -618,4 +632,93 @@ model KioskDevice {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("kiosk_devices")
+}
+
+// ─── CourtPay Module ─────────────────────────────────────────
+
+model CheckInPlayer {
+  id         String   @id @default(cuid())
+  venueId    String   @map("venue_id")
+  name       String
+  phone      String
+  gender     String?
+  skillLevel String?  @map("skill_level")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  venue         Venue                @relation(fields: [venueId], references: [id])
+  subscriptions PlayerSubscription[]
+  payments      PendingPayment[]
+  checkIns      CheckInRecord[]
+
+  @@unique([phone, venueId])
+  @@index([venueId])
+  @@map("check_in_players")
+}
+
+model SubscriptionPackage {
+  id           String   @id @default(cuid())
+  venueId      String   @map("venue_id")
+  name         String
+  sessions     Int?
+  durationDays Int      @map("duration_days")
+  price        Int
+  perks        String?
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  venue         Venue                @relation(fields: [venueId], references: [id])
+  subscriptions PlayerSubscription[]
+
+  @@index([venueId, isActive])
+  @@map("subscription_packages")
+}
+
+model PlayerSubscription {
+  id                String             @id @default(cuid())
+  playerId          String             @map("player_id")
+  packageId         String             @map("package_id")
+  venueId           String             @map("venue_id")
+  status            SubscriptionStatus @default(active)
+  sessionsRemaining Int?               @map("sessions_remaining")
+  activatedAt       DateTime           @default(now()) @map("activated_at")
+  expiresAt         DateTime           @map("expires_at")
+  paymentRef        String?            @map("payment_ref")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+
+  player  CheckInPlayer       @relation(fields: [playerId], references: [id])
+  package SubscriptionPackage @relation(fields: [packageId], references: [id])
+  usages  SubscriptionUsage[]
+
+  @@index([playerId, status])
+  @@index([venueId, status])
+  @@map("player_subscriptions")
+}
+
+model SubscriptionUsage {
+  id             String   @id @default(cuid())
+  subscriptionId String   @map("subscription_id")
+  checkedInAt    DateTime @default(now()) @map("checked_in_at")
+
+  subscription PlayerSubscription @relation(fields: [subscriptionId], references: [id])
+
+  @@index([subscriptionId])
+  @@map("subscription_usages")
+}
+
+model CheckInRecord {
+  id          String   @id @default(cuid())
+  playerId    String   @map("player_id")
+  venueId     String   @map("venue_id")
+  checkedInAt DateTime @default(now()) @map("checked_in_at")
+  paymentId   String?  @map("payment_id")
+  source      String   // "vietqr" | "cash" | "subscription"
+
+  player CheckInPlayer @relation(fields: [playerId], references: [id])
+  venue  Venue         @relation(fields: [venueId], references: [id])
+
+  @@index([venueId, checkedInAt])
+  @@index([playerId])
+  @@map("check_in_records")
 }

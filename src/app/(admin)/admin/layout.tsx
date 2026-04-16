@@ -6,7 +6,7 @@ import { useSessionStore } from "@/stores/session-store";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
-import { LayoutDashboard, MapPin, Users, UserCircle, BarChart3, Monitor, Banknote, Crown, CalendarDays, GraduationCap, LogOut, Menu, X } from "lucide-react";
+import { LayoutDashboard, MapPin, Users, UserCircle, BarChart3, Monitor, Banknote, Crown, CalendarDays, GraduationCap, LogOut, Menu, X, CreditCard } from "lucide-react";
 import { SetupWizardBanner } from "@/components/setup-wizard-banner";
 
 const navItems = [
@@ -14,6 +14,7 @@ const navItems = [
   { href: "/admin/live", label: "Live Sessions", icon: Monitor },
   { href: "/admin/venues", label: "Venues", icon: MapPin },
   { href: "/admin/memberships", label: "Memberships", icon: Crown },
+  { href: "/admin/courtpay", label: "CourtPay", icon: CreditCard },
   { href: "/admin/bookings", label: "Bookings", icon: CalendarDays },
   { href: "/admin/coaching", label: "Coaching", icon: GraduationCap },
   { href: "/admin/staff", label: "Staff", icon: Users },

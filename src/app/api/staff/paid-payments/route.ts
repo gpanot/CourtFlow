@@ -14,12 +14,19 @@ export async function GET(request: NextRequest) {
       where: { venueId, status: "open" },
       select: { id: true, sessionFee: true },
     });
-    if (!session) return json({ payments: [], summary: { playerCount: 0, totalRevenue: 0 } });
+    const paymentScope = session
+      ? [{ sessionId: session.id }, { checkInPlayerId: { not: null } }]
+      : [{ checkInPlayerId: { not: null } }];
 
     const payments = await prisma.pendingPayment.findMany({
-      where: { sessionId: session.id, status: "confirmed" },
+      where: {
+        venueId,
+        status: "confirmed",
+        OR: paymentScope,
+      },
       include: {
         player: { select: { id: true, name: true, skillLevel: true, facePhotoPath: true } },
+        checkInPlayer: { select: { id: true, name: true, skillLevel: true } },
       },
       orderBy: { confirmedAt: "desc" },
     });

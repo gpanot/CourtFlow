@@ -13,13 +13,20 @@ interface PendingPaymentItem {
   amount: number;
   paymentMethod: string;
   type: string;
+  checkInPlayerId: string | null;
+  confirmedBy: string | null;
   createdAt: string;
   player: {
     id: string;
     name: string;
     skillLevel: string;
     facePhotoPath: string | null;
-  };
+  } | null;
+  checkInPlayer: {
+    id: string;
+    name: string;
+    skillLevel: string | null;
+  } | null;
 }
 
 interface PaidPaymentItem {
@@ -27,6 +34,8 @@ interface PaidPaymentItem {
   amount: number;
   paymentMethod: string;
   type: string;
+  checkInPlayerId: string | null;
+  confirmedBy: string | null;
   createdAt: string;
   confirmedAt: string | null;
   player: {
@@ -34,7 +43,12 @@ interface PaidPaymentItem {
     name: string;
     skillLevel: string;
     facePhotoPath: string | null;
-  };
+  } | null;
+  checkInPlayer: {
+    id: string;
+    name: string;
+    skillLevel: string | null;
+  } | null;
 }
 
 interface PaidSummary {
@@ -58,6 +72,36 @@ function formatTimestamp(dateStr: string | null): string {
   if (!dateStr) return "—";
   const d = new Date(dateStr);
   return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+}
+
+function getDisplayPlayer(payment: PendingPaymentItem | PaidPaymentItem) {
+  if (payment.player) {
+    return {
+      name: payment.player.name,
+      skillLevel: payment.player.skillLevel,
+    };
+  }
+  if (payment.checkInPlayer) {
+    return {
+      name: payment.checkInPlayer.name,
+      skillLevel: payment.checkInPlayer.skillLevel ?? "—",
+    };
+  }
+  return { name: "Unknown", skillLevel: "—" };
+}
+
+function getFlowTag(payment: PendingPaymentItem | PaidPaymentItem) {
+  return payment.checkInPlayerId ? "CourtPay" : "Self";
+}
+
+function getApprovalTag(payment: PendingPaymentItem | PaidPaymentItem, isPaid: boolean) {
+  if (isPaid) {
+    return payment.confirmedBy === "sepay" ? "SePay" : "Manual";
+  }
+  if (payment.paymentMethod === "cash") {
+    return "Manual";
+  }
+  return "SePay/Manual";
 }
 
 const POLL_INTERVAL_MS = 5_000;
@@ -242,6 +286,9 @@ export function PendingPaymentsPanel({
                 const waitTime = formatWaitTime(p.createdAt);
                 const waitMs = Date.now() - new Date(p.createdAt).getTime();
                 const isUrgent = waitMs > 2 * 60 * 1000;
+                const player = getDisplayPlayer(p);
+                const flowTag = getFlowTag(p);
+                const approvalTag = getApprovalTag(p, false);
 
                 return (
                   <div key={p.id} className="px-4 py-3 space-y-2">
@@ -249,7 +296,7 @@ export function PendingPaymentsPanel({
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-white truncate">
-                            {p.player.name}
+                            {player.name}
                           </span>
                           <span
                             className={cn(
@@ -262,6 +309,12 @@ export function PendingPaymentsPanel({
                             {isCash
                               ? t("staff.dashboard.paymentMethodCash")
                               : t("staff.dashboard.paymentMethodQR")}
+                          </span>
+                          <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase bg-fuchsia-600/20 text-fuchsia-300">
+                            {flowTag}
+                          </span>
+                          <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase bg-emerald-600/20 text-emerald-300">
+                            {approvalTag}
                           </span>
                         </div>
                         <div className="mt-0.5 flex items-center gap-2 text-xs text-neutral-400">
@@ -335,6 +388,9 @@ export function PendingPaymentsPanel({
               {paidPayments.map((p) => {
                 const isCash = p.paymentMethod === "cash";
                 const isNew = p.type === "registration";
+                const player = getDisplayPlayer(p);
+                const flowTag = getFlowTag(p);
+                const approvalTag = getApprovalTag(p, true);
 
                 return (
                   <div key={p.id} className="flex items-center gap-3 px-4 py-3">
@@ -344,7 +400,7 @@ export function PendingPaymentsPanel({
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-white truncate">
-                          {p.player.name}
+                          {player.name}
                         </span>
                         <span
                           className={cn(
@@ -357,6 +413,12 @@ export function PendingPaymentsPanel({
                           {isCash
                             ? t("staff.dashboard.paymentMethodCash")
                             : t("staff.dashboard.paymentMethodQR")}
+                        </span>
+                        <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase bg-fuchsia-600/20 text-fuchsia-300">
+                          {flowTag}
+                        </span>
+                        <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase bg-emerald-600/20 text-emerald-300">
+                          {approvalTag}
                         </span>
                       </div>
                       <div className="mt-0.5 flex items-center gap-2 text-xs text-neutral-500">

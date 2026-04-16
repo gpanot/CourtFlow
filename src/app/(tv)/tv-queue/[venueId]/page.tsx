@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { TvQueueScanner } from "@/components/tv-queue-scanner";
 import { SelfCheckInScanner } from "@/components/self-check-in-scanner";
+import { CourtPayKiosk } from "@/modules/courtpay/components/CourtPayKiosk";
 import { KioskModeGate } from "@/components/kiosk-mode-gate";
 import { CourtFlowLogo } from "@/components/courtflow-logo";
 import { resolveTvLocale, tvI18n } from "@/i18n/tv-i18n";
@@ -33,7 +34,9 @@ export default function TvQueuePage() {
             <span className="text-sm font-medium text-neutral-300">{t("tagline")}</span>
           </header>
           <div className="min-h-0 flex-1">
-            {mode === "entrance" ? (
+            {mode === "courtpay" ? (
+              <CourtPayKiosk venueId={venueId} />
+            ) : mode === "entrance" ? (
               <SelfCheckInScanner venueId={venueId} />
             ) : (
               <TvQueueScanner venueId={venueId} />

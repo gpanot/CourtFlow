@@ -18,6 +18,20 @@ export async function POST(request: NextRequest) {
     if (!payment) return error("Payment not found", 404);
     if (payment.status !== "pending") return error("Payment is no longer pending", 400);
 
+    // CourtPay payments may not have sessionId/playerId — just confirm and return
+    if (!payment.sessionId || !payment.playerId) {
+      await prisma.pendingPayment.update({
+        where: { id: pendingPaymentId },
+        data: { status: "confirmed", confirmedAt: new Date(), confirmedBy: auth.id },
+      });
+      emitToVenue(payment.venueId, "payment:confirmed", {
+        pendingPaymentId,
+        paymentRef: payment.paymentRef,
+        playerName: payment.player?.name ?? payment.checkInPlayerId ?? "Unknown",
+      });
+      return json({ queueNumber: null, playerName: payment.player?.name ?? "Unknown" });
+    }
+
     const existingEntry = await prisma.queueEntry.findUnique({
       where: {
         sessionId_playerId: {
@@ -76,7 +90,7 @@ export async function POST(request: NextRequest) {
 
     emitToVenue(payment.venueId, "payment:confirmed", {
       pendingPaymentId,
-      playerName: payment.player.name,
+      playerName: payment.player?.name ?? "Unknown",
       queueNumber,
     });
 

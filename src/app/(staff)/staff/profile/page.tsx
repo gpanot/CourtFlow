@@ -6,7 +6,8 @@ import { useTranslation } from "react-i18next";
 import { useSessionStore } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { StaffLanguageToggle } from "../staff-language-toggle";
-import { ArrowLeft, User, History, ChevronRight, LogOut, Phone, Download, Play, Volume2, CreditCard, Loader2, Check } from "lucide-react";
+import { ArrowLeft, User, History, ChevronRight, LogOut, Phone, Download, Play, Volume2, CreditCard, Loader2, Check, Package, BarChart3 } from "lucide-react";
+import Link from "next/link";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 import {
   ASSIGNMENT_ATTENTION_SOUND_OPTIONS,
@@ -35,6 +36,8 @@ export default function StaffProfilePage() {
   const [payBankName, setPayBankName] = useState("");
   const [payBankAccount, setPayBankAccount] = useState("");
   const [payBankOwnerName, setPayBankOwnerName] = useState("");
+  const [payAutoApprovalPhone, setPayAutoApprovalPhone] = useState("");
+  const [payAutoApprovalCCCD, setPayAutoApprovalCCCD] = useState("");
   const [paySaving, setPaySaving] = useState(false);
   const [paySaved, setPaySaved] = useState(false);
   const [payError, setPayError] = useState("");
@@ -62,7 +65,14 @@ export default function StaffProfilePage() {
       const [venueRes, meRes, payRes] = await Promise.allSettled([
         api.get<{ name: string }>(`/api/venues/${venueId}`),
         api.get<{ name: string; phone: string }>("/api/auth/staff-me"),
-        api.get<{ sessionFee: number; bankName: string; bankAccount: string; bankOwnerName: string }>(
+        api.get<{
+          sessionFee: number;
+          bankName: string;
+          bankAccount: string;
+          bankOwnerName: string;
+          autoApprovalPhone?: string;
+          autoApprovalCCCD?: string;
+        }>(
           `/api/staff/venue-payment-settings?venueId=${venueId}`
         ),
       ]);
@@ -77,6 +87,8 @@ export default function StaffProfilePage() {
         setPayBankName(payRes.value.bankName || "");
         setPayBankAccount(payRes.value.bankAccount || "");
         setPayBankOwnerName(payRes.value.bankOwnerName || "");
+        setPayAutoApprovalPhone(payRes.value.autoApprovalPhone || "");
+        setPayAutoApprovalCCCD(payRes.value.autoApprovalCCCD || "");
       }
       setProfileLoaded(true);
     })();
@@ -105,6 +117,8 @@ export default function StaffProfilePage() {
         bankName: payBankName,
         bankAccount: payBankAccount,
         bankOwnerName: payBankOwnerName,
+        autoApprovalPhone: payAutoApprovalPhone,
+        autoApprovalCCCD: payAutoApprovalCCCD,
       });
       setPaySaved(true);
       setTimeout(() => setPaySaved(false), 2500);
@@ -252,6 +266,31 @@ export default function StaffProfilePage() {
           <StaffLanguageToggle />
         </div>
 
+        {/* CourtPay menu items */}
+        <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 overflow-hidden">
+          <Link
+            href="/staff/subscriptions"
+            className="flex items-center justify-between px-4 py-3.5 hover:bg-neutral-800/50 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <Package className="h-4 w-4 text-purple-400" />
+              <span className="text-sm font-medium text-neutral-200">Subscriptions</span>
+            </div>
+            <ChevronRight className="h-4 w-4 text-neutral-600" />
+          </Link>
+          <div className="border-t border-neutral-800" />
+          <Link
+            href="/staff/dashboard/boss"
+            className="flex items-center justify-between px-4 py-3.5 hover:bg-neutral-800/50 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <BarChart3 className="h-4 w-4 text-purple-400" />
+              <span className="text-sm font-medium text-neutral-200">Boss Dashboard</span>
+            </div>
+            <ChevronRight className="h-4 w-4 text-neutral-600" />
+          </Link>
+        </div>
+
         <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 px-4 py-3 space-y-2">
           <div className="flex items-center gap-2">
             <CreditCard className="h-4 w-4 text-green-400" />
@@ -299,6 +338,39 @@ export default function StaffProfilePage() {
                 placeholder="Account name"
                 className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm text-white placeholder:text-neutral-600 focus:border-green-500 focus:outline-none"
               />
+            </div>
+          </div>
+
+          <div className="rounded-md border border-fuchsia-900/40 bg-fuchsia-950/20 px-2.5 py-2 space-y-2">
+            <p className="text-[11px] font-medium text-fuchsia-300">
+              {t("staff.profile.autoApprovalSectionTitle")}
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="mb-0.5 block text-[11px] text-neutral-500">
+                  {t("staff.profile.autoApprovalPhone")}
+                </label>
+                <input
+                  type="tel"
+                  inputMode="tel"
+                  value={payAutoApprovalPhone}
+                  onChange={(e) => setPayAutoApprovalPhone(e.target.value)}
+                  placeholder={t("staff.profile.autoApprovalPhonePlaceholder")}
+                  className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm text-white placeholder:text-neutral-600 focus:border-fuchsia-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="mb-0.5 block text-[11px] text-neutral-500">
+                  {t("staff.profile.autoApprovalCCCD")}
+                </label>
+                <input
+                  type="text"
+                  value={payAutoApprovalCCCD}
+                  onChange={(e) => setPayAutoApprovalCCCD(e.target.value)}
+                  placeholder={t("staff.profile.autoApprovalCCCDPlaceholder")}
+                  className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm text-white placeholder:text-neutral-600 focus:border-fuchsia-500 focus:outline-none"
+                />
+              </div>
             </div>
           </div>
 
@@ -350,49 +422,40 @@ export default function StaffProfilePage() {
             <Volume2 className="h-4 w-4 text-blue-400" />
             <div>
               <p className="text-sm font-medium text-neutral-200">{t("staff.profile.assignmentSoundTitle")}</p>
-              <p className="text-xs text-neutral-500">{t("staff.profile.assignmentSoundDesc")}</p>
             </div>
           </div>
-          <div className="space-y-2">
-            {ASSIGNMENT_ATTENTION_SOUND_OPTIONS.map((opt) => {
-              const selected = assignmentSoundId === opt.id;
-              const isPreviewing = previewingSoundId === opt.id;
-              return (
-                <div
-                  key={opt.id}
-                  className={selected
-                    ? "flex items-center justify-between gap-3 rounded-lg border border-blue-500/50 bg-blue-600/10 px-3 py-2"
-                    : "flex items-center justify-between gap-3 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2"}
-                >
-                  <button
-                    type="button"
-                    onClick={() => handleSelectSound(opt.id)}
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                  >
-                    <div
-                      className={
-                        selected
-                          ? "h-4 w-4 shrink-0 rounded-full border-2 border-blue-400 bg-blue-500"
-                          : "h-4 w-4 shrink-0 rounded-full border-2 border-neutral-600"
-                      }
-                    />
-                    <span className={selected ? "truncate text-sm font-medium text-blue-200" : "truncate text-sm text-neutral-200"}>
-                      {opt.name}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handlePreviewSound(opt.id)}
-                    className={isPreviewing
-                      ? "rounded-md bg-green-600/30 px-2 py-1 text-green-300"
-                      : "rounded-md bg-neutral-800 px-2 py-1 text-neutral-300 hover:bg-neutral-700"}
-                    aria-label={t("staff.profile.previewSoundAria", { name: opt.name })}
-                  >
-                    <Play className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              );
-            })}
+          <div className="flex items-center gap-2">
+            <select
+              value={assignmentSoundId}
+              onChange={(e) =>
+                handleSelectSound(e.target.value as AssignmentAttentionSoundId)
+              }
+              className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+              aria-label={t("staff.profile.assignmentSoundTitle")}
+            >
+              {ASSIGNMENT_ATTENTION_SOUND_OPTIONS.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => void handlePreviewSound(assignmentSoundId)}
+              className={
+                previewingSoundId === assignmentSoundId
+                  ? "rounded-md bg-green-600/30 px-2.5 py-2 text-green-300"
+                  : "rounded-md bg-neutral-800 px-2.5 py-2 text-neutral-300 hover:bg-neutral-700"
+              }
+              aria-label={t("staff.profile.previewSoundAria", {
+                name:
+                  ASSIGNMENT_ATTENTION_SOUND_OPTIONS.find(
+                    (opt) => opt.id === assignmentSoundId
+                  )?.name ?? assignmentSoundId,
+              })}
+            >
+              <Play className="h-3.5 w-3.5" />
+            </button>
           </div>
         </div>
 

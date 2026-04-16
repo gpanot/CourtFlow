@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
       data: { status: "cancelled" },
     });
 
-    if (payment.type === "registration") {
+    if (payment.type === "registration" && payment.playerId) {
       const hasOtherEntries = await prisma.queueEntry.count({
         where: { playerId: payment.playerId },
       });

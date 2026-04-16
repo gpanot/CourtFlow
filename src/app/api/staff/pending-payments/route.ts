@@ -14,20 +14,30 @@ export async function GET(request: NextRequest) {
       where: { venueId, status: "open" },
       select: { id: true },
     });
-    if (!session) return json([]);
+    const paymentScope = session
+      ? [{ sessionId: session.id }, { checkInPlayerId: { not: null } }]
+      : [{ checkInPlayerId: { not: null } }];
 
     await prisma.pendingPayment.updateMany({
       where: {
-        sessionId: session.id,
+        venueId,
         status: "pending",
         expiresAt: { lt: new Date() },
+        OR: paymentScope,
       },
       data: { status: "expired" },
     });
 
     const payments = await prisma.pendingPayment.findMany({
-      where: { sessionId: session.id, status: "pending" },
-      include: { player: { select: { id: true, name: true, skillLevel: true, facePhotoPath: true } } },
+      where: {
+        venueId,
+        status: "pending",
+        OR: paymentScope,
+      },
+      include: {
+        player: { select: { id: true, name: true, skillLevel: true, facePhotoPath: true } },
+        checkInPlayer: { select: { id: true, name: true, skillLevel: true } },
+      },
       orderBy: { createdAt: "asc" },
     });
 
