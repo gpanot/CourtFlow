@@ -1,0 +1,23 @@
+---
+description: Prevent Prisma migration drift between local and production
+globs: "prisma/**"
+alwaysApply: false
+---
+
+# Prisma Production Safety
+
+When Prisma schema changes are introduced, avoid `db push`-only workflows for production.
+
+## Required Workflow
+
+- Create a migration in `prisma/migrations/` for every schema change that impacts production.
+- Prefer `prisma migrate dev` to generate migrations; use hand-written SQL only when needed.
+- Before deployment, run `prisma migrate status` against the production `DATABASE_URL`.
+- If production was hotfixed manually, add an idempotent migration (`IF NOT EXISTS` / guarded `DO $$ ... $$`) so migration history catches up safely.
+- Deploy with `prisma migrate deploy` on production, never `prisma migrate dev`.
+
+## Verification Checklist
+
+- `prisma migrate status` reports expected pending/applied migrations.
+- `prisma migrate deploy` succeeds on production.
+- `prisma migrate diff --from-url <prod> --to-schema-datamodel prisma/schema.prisma --script` has no unexpected drift.
