@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
-import { useSessionStore } from "@/stores/session-store";
+import { useSessionStore, useHasHydrated } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { StaffLanguageToggle } from "../staff-language-toggle";
 import { ArrowLeft, User, History, ChevronRight, LogOut, Phone, Download, Play, Volume2, CreditCard, Loader2, Check, Package, BarChart3 } from "lucide-react";
@@ -21,6 +21,7 @@ import { VIETQR_BANKS, buildVietQRUrl } from "@/lib/vietqr";
 export default function StaffProfilePage() {
   const { t } = useTranslation();
   const router = useRouter();
+  const hydrated = useHasHydrated();
   const { token, staffId, venueId, staffName, staffPhone, setAuth, clearAuth } = useSessionStore();
   const [venueName, setVenueName] = useState<string | undefined>();
   const [profileLoaded, setProfileLoaded] = useState(false);
@@ -45,25 +46,6 @@ export default function StaffProfilePage() {
 
   const handleBack = () => {
     if (typeof window !== "undefined") {
-      const traceId = `trace-${Date.now()}`;
-      sessionStorage.setItem("cf_staff_return_home", "1");
-      sessionStorage.setItem(
-        "cf_staff_return_home_trace",
-        JSON.stringify({
-          traceId,
-          at: new Date().toISOString(),
-          from: "/staff/profile",
-          token: !!token,
-          staffId: !!staffId,
-          venueId: !!venueId,
-        })
-      );
-      console.info("[StaffNavDebug] Profile back -> set return_home flag", {
-        traceId,
-        token: !!token,
-        staffId: !!staffId,
-        venueId: !!venueId,
-      });
       window.location.assign("/staff");
       return;
     }
@@ -75,6 +57,7 @@ export default function StaffProfilePage() {
   }, []);
 
   useEffect(() => {
+    if (!hydrated) return;
     if (!token || !staffId || !venueId) {
       router.replace("/staff");
       return;
@@ -114,7 +97,7 @@ export default function StaffProfilePage() {
     return () => {
       cancelled = true;
     };
-  }, [token, staffId, venueId, router, setAuth]);
+  }, [hydrated, token, staffId, venueId, router, setAuth]);
 
   const displayName = staffName?.trim() || t("staff.profile.staffFallback");
   const displayPhone = (staffPhone ?? "").trim() || "—";
@@ -168,7 +151,7 @@ export default function StaffProfilePage() {
     }
   };
 
-  if (!token || !staffId || !venueId) {
+  if (!hydrated || !token || !staffId || !venueId) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-neutral-950">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
@@ -480,7 +463,14 @@ export default function StaffProfilePage() {
 
         <button
           type="button"
-          onClick={() => router.push("/staff?history=1")}
+          onClick={() => {
+            if (typeof window !== "undefined") {
+              sessionStorage.setItem("cf_staff_open_history", "1");
+              window.location.assign("/staff");
+              return;
+            }
+            router.push("/staff");
+          }}
           className="flex w-full items-center justify-between rounded-xl bg-neutral-800 px-4 py-3.5 hover:bg-neutral-700 transition-colors"
         >
           <div className="flex items-center gap-3">

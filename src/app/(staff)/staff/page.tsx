@@ -44,45 +44,32 @@ export default function StaffPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const pending = sessionStorage.getItem("cf_staff_return_home") === "1";
-    const traceRaw = sessionStorage.getItem("cf_staff_return_home_trace");
-    returnHomePendingRef.current = pending;
-    console.info("[StaffNavDebug] Staff page mount", {
-      pendingReturnHome: pending,
-      trace: traceRaw,
-    });
+    returnHomePendingRef.current =
+      sessionStorage.getItem("cf_staff_return_home") === "1";
   }, []);
 
   useEffect(() => {
     if (returnHomePendingRef.current) {
-      console.info("[StaffNavDebug] Return-home pending check", {
-        token: !!token,
-        staffId: !!staffId,
-        venueId: !!venueId,
-        role,
-      });
       if (token && staffId && venueId) {
         setShowRoleChoice(false);
         setShowOtherApps(false);
         returnHomePendingRef.current = false;
         if (typeof window !== "undefined") {
           sessionStorage.removeItem("cf_staff_return_home");
-          sessionStorage.removeItem("cf_staff_return_home_trace");
         }
-        console.info("[StaffNavDebug] Return-home consumed -> open StaffDashboard");
         return;
       }
-      // Wait for session hydration instead of falling back to role-choice.
+      return;
+    }
+
+    // Already fully authenticated with a venue — go straight to dashboard,
+    // don't show role-choice again (user already picked in this session).
+    if (token && staffId && venueId) {
+      setShowRoleChoice(false);
       return;
     }
 
     if (token && staffId && (role === "superadmin" || role === "staff")) {
-      console.info("[StaffNavDebug] Show role-choice screen", {
-        token: !!token,
-        staffId: !!staffId,
-        venueId: !!venueId,
-        role,
-      });
       setShowRoleChoice(true);
     }
   }, [token, staffId, role, venueId]);

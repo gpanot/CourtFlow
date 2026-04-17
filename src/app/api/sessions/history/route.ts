@@ -32,8 +32,36 @@ export async function GET(request: NextRequest) {
       playerCount: s._count.queueEntries,
       gameCount: s._count.courtAssignments,
     }));
+    const sessionsWithPayments = await Promise.all(
+      result.map(async (s) => {
+        const periodEnd = s.closedAt ? new Date(s.closedAt) : new Date();
+        const periodStart = new Date(s.openedAt);
+        const payments = await prisma.pendingPayment.findMany({
+          where: {
+            venueId,
+            status: "confirmed",
+            OR: [
+              { sessionId: s.id },
+              {
+                checkInPlayerId: { not: null },
+                confirmedAt: {
+                  gte: periodStart,
+                  lte: periodEnd,
+                },
+              },
+            ],
+          },
+          select: { amount: true },
+        });
+        return {
+          ...s,
+          paymentCount: payments.length,
+          paymentRevenue: payments.reduce((sum, p) => sum + p.amount, 0),
+        };
+      })
+    );
 
-    return json(result);
+    return json(sessionsWithPayments);
   } catch (e) {
     return error((e as Error).message, 500);
   }

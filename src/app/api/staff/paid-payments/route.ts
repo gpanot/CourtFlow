@@ -12,11 +12,24 @@ export async function GET(request: NextRequest) {
 
     const session = await prisma.session.findFirst({
       where: { venueId, status: "open" },
-      select: { id: true, sessionFee: true },
+      select: { id: true, openedAt: true },
     });
-    const paymentScope = session
-      ? [{ sessionId: session.id }, { checkInPlayerId: { not: null } }]
-      : [{ checkInPlayerId: { not: null } }];
+    // Paid tab must show only the ongoing session's confirmed payments.
+    // If no open session exists, return empty paid list.
+    if (!session) {
+      return json({
+        payments: [],
+        summary: { playerCount: 0, totalRevenue: 0 },
+      });
+    }
+
+    const paymentScope = [
+      { sessionId: session.id },
+      {
+        checkInPlayerId: { not: null },
+        confirmedAt: { gte: session.openedAt },
+      },
+    ];
 
     const payments = await prisma.pendingPayment.findMany({
       where: {

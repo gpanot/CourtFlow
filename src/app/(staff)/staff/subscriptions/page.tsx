@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useSessionStore } from "@/stores/session-store";
+import { useSessionStore, useHasHydrated } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { ArrowLeft, Plus, Sparkles, Loader2 } from "lucide-react";
@@ -40,6 +40,7 @@ type Tab = "packages" | "subscribers";
 
 export default function StaffSubscriptionsPage() {
   const router = useRouter();
+  const hydrated = useHasHydrated();
   const { token, venueId } = useSessionStore();
   const [tab, setTab] = useState<Tab>("packages");
   const [packages, setPackages] = useState<Package[]>([]);
@@ -82,10 +83,11 @@ export default function StaffSubscriptionsPage() {
   }, [venueId, search]);
 
   useEffect(() => {
+    if (!hydrated) return;
     if (!token) { router.replace("/staff"); return; }
     setLoading(true);
     Promise.all([fetchPackages(), fetchSubscribers()]).finally(() => setLoading(false));
-  }, [token, router, fetchPackages, fetchSubscribers]);
+  }, [hydrated, token, router, fetchPackages, fetchSubscribers]);
 
   const createDefaults = async () => {
     setCreatingDefaults(true);
@@ -125,7 +127,7 @@ export default function StaffSubscriptionsPage() {
     await fetchPackages();
   };
 
-  if (!token) return null;
+  if (!hydrated || !token) return null;
 
   const activePackages = packages.filter((p) => p.isActive);
 
@@ -135,7 +137,13 @@ export default function StaffSubscriptionsPage() {
       <div className="sticky top-0 z-30 border-b border-neutral-800 bg-neutral-950/95 backdrop-blur-sm px-4 py-3">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => router.back()}
+            onClick={() => {
+              if (typeof window !== "undefined") {
+                window.location.assign("/staff/profile");
+                return;
+              }
+              router.back();
+            }}
             className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-white"
           >
             <ArrowLeft className="h-5 w-5" />

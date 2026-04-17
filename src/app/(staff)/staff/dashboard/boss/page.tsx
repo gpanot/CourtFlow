@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { useSessionStore } from "@/stores/session-store";
+import { useSessionStore, useHasHydrated } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { ArrowLeft, Loader2, Users, DollarSign, Clock, TrendingUp } from "lucide-react";
@@ -57,6 +57,7 @@ function formatVND(amount: number) {
 
 export default function BossDashboardPage() {
   const router = useRouter();
+  const hydrated = useHasHydrated();
   const { token, venueId } = useSessionStore();
   const [tab, setTab] = useState<Tab>("today");
   const [todayData, setTodayData] = useState<TodayData | null>(null);
@@ -89,11 +90,12 @@ export default function BossDashboardPage() {
   }, [venueId, tab]);
 
   useEffect(() => {
+    if (!hydrated) return;
     if (!token) { router.replace("/staff"); return; }
     fetchData();
-  }, [token, router, fetchData]);
+  }, [hydrated, token, router, fetchData]);
 
-  if (!token) return null;
+  if (!hydrated || !token) return null;
 
   const sourceLabel = (s: string) => {
     if (s === "subscription") return "Subscription";
@@ -113,7 +115,13 @@ export default function BossDashboardPage() {
       <div className="sticky top-0 z-30 border-b border-neutral-800 bg-neutral-950/95 backdrop-blur-sm px-4 py-3">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => router.back()}
+            onClick={() => {
+              if (typeof window !== "undefined") {
+                window.location.assign("/staff/profile");
+                return;
+              }
+              router.back();
+            }}
             className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-white"
           >
             <ArrowLeft className="h-5 w-5" />

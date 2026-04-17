@@ -221,6 +221,13 @@ export function StaffDashboard() {
   }, [session]);
 
   useEffect(() => {
+    if (typeof window !== "undefined" && sessionStorage.getItem("cf_staff_open_history") === "1") {
+      sessionStorage.removeItem("cf_staff_open_history");
+      setShowHistory(true);
+    }
+  }, []);
+
+  useEffect(() => {
     const tabParam = searchParams.get("tab");
     if (tabParam === "checkin" || tabParam === "add") setTab("checkin");
     if (tabParam === "qr") setTab("qr");
@@ -230,9 +237,8 @@ export function StaffDashboard() {
   useEffect(() => {
     if (searchParams.get("history") === "1") {
       setShowHistory(true);
-      router.replace("/staff");
     }
-  }, [searchParams, router]);
+  }, [searchParams]);
 
   const fetchState = useCallback(async () => {
     if (!venueId) return undefined;
@@ -584,7 +590,13 @@ export function StaffDashboard() {
       <header className="flex items-center gap-3 border-b border-neutral-800 px-4 py-3">
         <button
           type="button"
-          onClick={() => router.push("/staff/profile")}
+          onClick={() => {
+            if (typeof window !== "undefined") {
+              window.location.assign("/staff/profile");
+              return;
+            }
+            router.push("/staff/profile");
+          }}
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 transition-colors"
         >
           <User className="h-5 w-5" />
@@ -2166,6 +2178,8 @@ interface SessionHistoryItem {
   closedAt: string | null;
   playerCount: number;
   gameCount: number;
+  paymentCount: number;
+  paymentRevenue: number;
 }
 
 function SessionHistoryPanel({
@@ -2198,6 +2212,8 @@ function SessionHistoryPanel({
   const formatTime = (dateStr: string) => {
     return new Date(dateStr).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
   };
+
+  const formatVndCompact = (amount: number) => `${amount.toLocaleString("vi-VN")} VND`;
 
   const getDuration = (openedAt: string, closedAt: string | null) => {
     if (!closedAt) return "—";
@@ -2260,6 +2276,10 @@ function SessionHistoryPanel({
                   <div className="text-right">
                     <p className="text-sm font-medium text-neutral-300">{s.gameCount}</p>
                     <p className="text-[10px] text-neutral-600">{t("staff.dashboard.historyGames")}</p>
+                  </div>
+                  <div className="text-right min-w-[88px]">
+                    <p className="text-sm font-medium text-emerald-300">{formatVndCompact(s.paymentRevenue)}</p>
+                    <p className="text-[10px] text-neutral-600">{s.paymentCount} paid</p>
                   </div>
                   <ChevronRight className="h-4 w-4 text-neutral-600" />
                 </div>
