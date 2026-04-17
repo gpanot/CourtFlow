@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 const ALLOWED_FILES = new Map<string, string>([
   ["202029__hykenfreak__notification-chime.mp3", "audio/mpeg"],
   ["415763__thebuilder15__doorbell-notification.mp3", "audio/mpeg"],
+  ["209578__zott820__cash-register-purchase.mp3", "audio/mpeg"],
 ]);
 
 export async function GET(

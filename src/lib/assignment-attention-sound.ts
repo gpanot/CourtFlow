@@ -5,7 +5,8 @@ export type AssignmentAttentionSoundId =
   | "airport_chime"
   | "front_desk_bell"
   | "notification_chime"
-  | "doorbell_notification";
+  | "doorbell_notification"
+  | "cash_register_purchase";
 
 type SynthTone = {
   freq: number;
@@ -68,6 +69,12 @@ export const ASSIGNMENT_ATTENTION_SOUND_OPTIONS: AssignmentSoundOption[] = [
     name: "Doorbell Notification",
     kind: "file",
     fileName: "415763__thebuilder15__doorbell-notification.mp3",
+  },
+  {
+    id: "cash_register_purchase",
+    name: "Cash Register Purchase",
+    kind: "file",
+    fileName: "209578__zott820__cash-register-purchase.mp3",
   },
 ];
 
