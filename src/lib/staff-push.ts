@@ -31,6 +31,10 @@ interface StaffPushPayload {
   data?: Record<string, string>;
 }
 
+export type StaffPushSendResult =
+  | { ok: true; targets: number; delivered: number }
+  | { ok: false; reason: "no_firebase" | "no_tokens"; targets: number };
+
 /**
  * Send a push notification to all active staff devices registered for a venue
  * that have pushNotificationsEnabled.
@@ -38,9 +42,9 @@ interface StaffPushPayload {
 export async function sendPushToVenueStaff(
   venueId: string,
   payload: StaffPushPayload
-) {
+): Promise<StaffPushSendResult> {
   const app = getFirebaseApp();
-  if (!app) return;
+  if (!app) return { ok: false, reason: "no_firebase", targets: 0 };
 
   const tokens = await prisma.staffPushToken.findMany({
     where: {
@@ -51,7 +55,7 @@ export async function sendPushToVenueStaff(
     select: { id: true, token: true },
   });
 
-  if (tokens.length === 0) return;
+  if (tokens.length === 0) return { ok: false, reason: "no_tokens", targets: 0 };
 
   const { getMessaging } = await import("firebase-admin/messaging");
   const messaging = getMessaging(app);
@@ -93,6 +97,9 @@ export async function sendPushToVenueStaff(
       where: { id: { in: staleIds } },
     });
   }
+
+  const delivered = results.filter((r) => r.status === "fulfilled").length;
+  return { ok: true, targets: tokens.length, delivered };
 }
 
 type PaymentPushEvent = "payment_new" | "payment_confirmed";
@@ -129,4 +136,18 @@ export function sendPaymentPushToStaff(
   void sendPushToVenueStaff(ctx.venueId, { title, body, data }).catch((err) =>
     console.warn("[StaffPush] dispatch error:", err)
   );
+}
+
+/** Manual test from `POST /api/staff/push/test`. */
+export async function sendStaffTestPush(venueId: string) {
+  return sendPushToVenueStaff(venueId, {
+    title: "CourtFlow test",
+    body: "If you see this, staff push notifications are working.",
+    data: {
+      event: "test",
+      venueId,
+      screen: "PaymentTab",
+      pendingPaymentId: "test",
+    },
+  });
 }
