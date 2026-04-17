@@ -26,7 +26,7 @@ import {
   CommonActions,
 } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { api } from "../../lib/api-client";
+import { api, ApiRequestError } from "../../lib/api-client";
 import { useAuthStore } from "../../stores/auth-store";
 import type { AppColors } from "../../theme/palettes";
 import { useAppColors } from "../../theme/use-app-colors";
@@ -364,9 +364,15 @@ export function StaffProfileScreen() {
       await api.post("/api/staff/push/preferences", {
         pushNotificationsEnabled: next,
       });
-    } catch {
+    } catch (err) {
       setPushEnabled(!next);
-      Alert.alert("Error", "Could not update push notification preference.");
+      const detail =
+        err instanceof ApiRequestError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Could not update push notification preference.";
+      Alert.alert("Error", detail);
     } finally {
       setPushToggling(false);
     }

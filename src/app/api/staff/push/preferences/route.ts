@@ -6,7 +6,12 @@ import { requireStaff } from "@/lib/auth";
 export async function POST(request: NextRequest) {
   try {
     const auth = requireStaff(request.headers);
-    const body = await parseBody<{ pushNotificationsEnabled: boolean }>(request);
+    let body: { pushNotificationsEnabled: boolean };
+    try {
+      body = await parseBody<{ pushNotificationsEnabled: boolean }>(request);
+    } catch {
+      return error("Invalid JSON body", 400);
+    }
 
     if (typeof body.pushNotificationsEnabled !== "boolean") {
       return error("pushNotificationsEnabled (boolean) is required", 400);

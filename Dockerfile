@@ -33,4 +33,4 @@ ENV HOSTNAME="0.0.0.0"
 # Railway mounts a persistent volume at /app/uploads. The volume is owned by
 # root, so the container runs as root to guarantee write access for face photos
 # and avatars. Sub-dirs are created at startup in case the volume is fresh.
-CMD ["sh", "-c", "mkdir -p /app/uploads/players /app/uploads/players/avatars && node server.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && mkdir -p /app/uploads/players /app/uploads/players/avatars && node server.js"]
