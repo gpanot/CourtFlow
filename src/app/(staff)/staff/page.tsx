@@ -33,6 +33,7 @@ export default function StaffPage() {
   const [loginVenues, setLoginVenues] = useState<StaffVenue[]>([]);
   const installPromptShownRef = useRef(false);
   const returnHomePendingRef = useRef(false);
+  const freshLoginChoiceRef = useRef(false);
   const router = useRouter();
 
   const handleShowOnboarding = () => {
@@ -62,14 +63,17 @@ export default function StaffPage() {
       return;
     }
 
-    // Already fully authenticated with a venue — go straight to dashboard,
-    // don't show role-choice again (user already picked in this session).
-    if (token && staffId && venueId) {
-      setShowRoleChoice(false);
-      return;
-    }
-
     if (token && staffId && (role === "superadmin" || role === "staff")) {
+      // Fresh login should always land on "Continue as...".
+      if (freshLoginChoiceRef.current) {
+        setShowRoleChoice(true);
+        return;
+      }
+      // Returning from sub-pages should open dashboard directly.
+      if (venueId) {
+        setShowRoleChoice(false);
+        return;
+      }
       setShowRoleChoice(true);
     }
   }, [token, staffId, role, venueId]);
@@ -136,6 +140,7 @@ export default function StaffPage() {
               {role === "superadmin" && (
                 <button
                   onClick={() => {
+                    freshLoginChoiceRef.current = false;
                     setShowRoleChoice(false);
                     setShowOtherApps(false);
                     router.replace(onboardingCompleted ? "/admin" : "/onboarding");
@@ -154,6 +159,7 @@ export default function StaffPage() {
 
               <button
                 onClick={() => {
+                  freshLoginChoiceRef.current = false;
                   setShowOtherApps(false);
                   if (venueId) {
                     setShowRoleChoice(false);
@@ -197,6 +203,7 @@ export default function StaffPage() {
 
           <button
             onClick={() => {
+              freshLoginChoiceRef.current = false;
               setShowRoleChoice(false);
               setShowOtherApps(false);
               setAuth({
@@ -266,6 +273,7 @@ export default function StaffPage() {
         };
       }>("/api/auth/staff-login", { phone, password });
 
+      freshLoginChoiceRef.current = true;
       clearAuth();
       setAuth({
         token: data.token,
