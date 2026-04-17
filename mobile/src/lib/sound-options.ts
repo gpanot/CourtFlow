@@ -31,7 +31,6 @@ export const SOUND_OPTIONS: SoundOption[] = [
 
 const STORAGE_KEY = "courtflow-payment-notification-sound-id";
 const LEGACY_STORAGE_KEY = "courtflow-assignment-sound-id";
-const HAPTIC_STORAGE_KEY = "courtflow-payment-notification-haptics-enabled";
 export const DEFAULT_SOUND_ID: SoundId = "cash_register_purchase";
 
 function isValidSoundId(raw: string | null): raw is SoundId {
@@ -57,23 +56,6 @@ export async function getStoredSoundId(): Promise<SoundId> {
 export async function setStoredSoundId(id: SoundId): Promise<void> {
   try {
     await SecureStore.setItemAsync(STORAGE_KEY, id);
-  } catch {
-    /* ignore */
-  }
-}
-
-export async function getStoredPaymentHapticsEnabled(): Promise<boolean> {
-  try {
-    const raw = await SecureStore.getItemAsync(HAPTIC_STORAGE_KEY);
-    return raw === "1";
-  } catch {
-    return false;
-  }
-}
-
-export async function setStoredPaymentHapticsEnabled(enabled: boolean): Promise<void> {
-  try {
-    await SecureStore.setItemAsync(HAPTIC_STORAGE_KEY, enabled ? "1" : "0");
   } catch {
     /* ignore */
   }

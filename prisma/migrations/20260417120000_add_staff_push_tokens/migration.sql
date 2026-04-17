@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS "staff_push_tokens" (
     "active" BOOLEAN NOT NULL DEFAULT true,
     "last_seen_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updated_at" TIMESTAMP(3) NOT NULL,
+    "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "staff_push_tokens_pkey" PRIMARY KEY ("id")
 );

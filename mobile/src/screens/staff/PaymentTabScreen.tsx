@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useLayoutEffect,
+} from "react";
 import {
   View,
   Text,
@@ -11,6 +17,8 @@ import {
   Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import type { MaterialTopTabNavigationProp } from "@react-navigation/material-top-tabs";
 import { api } from "../../lib/api-client";
 import { useAuthStore } from "../../stores/auth-store";
 import { useSocket } from "../../hooks/useSocket";
@@ -18,6 +26,7 @@ import { useAppColors } from "../../theme/use-app-colors";
 import type { AppColors } from "../../theme/palettes";
 import { resolveMediaUrl } from "../../lib/media-url";
 import type { PendingPayment, StaffPaidPaymentsResponse } from "../../types/api";
+import type { StaffTabParamList } from "../../navigation/types";
 
 type SubTab = "pending" | "paid";
 
@@ -191,6 +200,8 @@ export function PaymentTabScreen() {
   const venueId = useAuthStore((s) => s.venueId);
   const theme = useAppColors();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const navigation =
+    useNavigation<MaterialTopTabNavigationProp<StaffTabParamList>>();
 
   const [subTab, setSubTab] = useState<SubTab>("pending");
   const [pending, setPending] = useState<PendingPayment[]>([]);
@@ -246,6 +257,38 @@ export function PaymentTabScreen() {
     "payment:confirmed": () => fetchAll(),
     "payment:cancelled": () => fetchAll(),
   });
+
+  useLayoutEffect(() => {
+    const count = pending.length;
+    navigation.setOptions({
+      tabBarBadge:
+        count > 0
+          ? () => (
+              <View
+                style={{
+                  minWidth: 18,
+                  height: 18,
+                  paddingHorizontal: count > 9 ? 5 : 0,
+                  borderRadius: 10,
+                  backgroundColor: theme.red500,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text
+                  style={{
+                    color: "#fff",
+                    fontSize: 11,
+                    fontWeight: "700",
+                  }}
+                >
+                  {count > 99 ? "99+" : String(count)}
+                </Text>
+              </View>
+            )
+          : undefined,
+    });
+  }, [navigation, pending.length, theme.red500]);
 
   const handleConfirm = async (id: string) => {
     setActionId(id);

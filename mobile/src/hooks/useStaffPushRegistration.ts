@@ -6,21 +6,43 @@ import Constants from "expo-constants";
 import { api } from "../lib/api-client";
 import { useAuthStore } from "../stores/auth-store";
 
-async function getDevicePushToken(): Promise<string | null> {
+// Expo Go removes remote push since SDK 53. A dev build (expo-dev-client) is required.
+const IS_EXPO_GO = Constants.appOwnership === "expo";
+
+// ── debug helper ─────────────────────────────────────────────────────────────
+function dbg(msg: string, ...args: unknown[]) {
+  console.log(`[Push] ${msg}`, ...args);
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function getDevicePushToken(): Promise<string | null> {
+  dbg("isDevice:", Device.isDevice, "OS:", Platform.OS, "isExpoGo:", IS_EXPO_GO);
+
+  if (IS_EXPO_GO) {
+    dbg("⚠ Running in Expo Go — remote push (FCM) is NOT supported since SDK 53.");
+    dbg("  → Build a dev client: cd mobile && npx expo run:android");
+    return null;
+  }
+
   if (!Device.isDevice) {
-    console.warn("[Push] Must use physical device for push notifications");
+    dbg("⚠ Not a physical device — FCM tokens unavailable in emulators/simulators");
     return null;
   }
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
+  dbg("existing permission status:", existingStatus);
 
+  let finalStatus = existingStatus;
   if (existingStatus !== "granted") {
     const { status } = await Notifications.requestPermissionsAsync();
     finalStatus = status;
+    dbg("permission after request:", finalStatus);
   }
 
-  if (finalStatus !== "granted") return null;
+  if (finalStatus !== "granted") {
+    dbg("⚠ Permission denied — cannot get push token");
+    return null;
+  }
 
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync("courtpay_payments", {
@@ -29,17 +51,26 @@ async function getDevicePushToken(): Promise<string | null> {
       sound: "default",
       vibrationPattern: [0, 200, 100, 200],
     });
+    dbg("Android notification channel ensured");
   }
 
   const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+  dbg("EAS projectId from config:", projectId ?? "(not set — using native FCM token)");
 
   try {
     const tokenObj = await Notifications.getDevicePushTokenAsync();
+    dbg("✓ native FCM token obtained:", tokenObj.data.slice(0, 20) + "…");
     return tokenObj.data;
-  } catch {
+  } catch (nativeErr) {
+    dbg("native token failed:", nativeErr);
     if (projectId) {
-      const tokenObj = await Notifications.getExpoPushTokenAsync({ projectId });
-      return tokenObj.data;
+      try {
+        const tokenObj = await Notifications.getExpoPushTokenAsync({ projectId });
+        dbg("✓ Expo push token obtained:", tokenObj.data);
+        return tokenObj.data;
+      } catch (expoErr) {
+        dbg("Expo push token also failed:", expoErr);
+      }
     }
     return null;
   }
@@ -55,10 +86,17 @@ export function useStaffPushRegistration(pushEnabled: boolean) {
   const registeredTokenRef = useRef<string | null>(null);
 
   const register = useCallback(async () => {
-    if (!venueId || !token) return;
+    if (!venueId || !token) {
+      dbg("register skipped — venueId or token missing");
+      return;
+    }
+    dbg("starting registration for venueId:", venueId);
     try {
       const deviceToken = await getDevicePushToken();
-      if (!deviceToken) return;
+      if (!deviceToken) {
+        dbg("⚠ No device token — registration aborted");
+        return;
+      }
 
       await api.post("/api/staff/push/register", {
         token: deviceToken,
@@ -66,24 +104,28 @@ export function useStaffPushRegistration(pushEnabled: boolean) {
         platform: Platform.OS,
       });
       registeredTokenRef.current = deviceToken;
+      dbg("✓ Token registered with backend");
     } catch (err) {
-      console.warn("[Push] Registration failed:", err);
+      dbg("⚠ Registration failed:", err);
     }
   }, [venueId, token]);
 
   const unregister = useCallback(async () => {
     if (!registeredTokenRef.current) return;
+    dbg("unregistering token…");
     try {
       await api.post("/api/staff/push/unregister", {
         token: registeredTokenRef.current,
       });
-    } catch {
-      // best-effort
+      dbg("✓ Token unregistered");
+    } catch (err) {
+      dbg("unregister failed (best-effort):", err);
     }
     registeredTokenRef.current = null;
   }, []);
 
   useEffect(() => {
+    dbg("effect — pushEnabled:", pushEnabled, "venueId:", venueId, "hasToken:", !!token);
     if (pushEnabled && venueId && token) {
       void register();
     } else if (!pushEnabled && registeredTokenRef.current) {

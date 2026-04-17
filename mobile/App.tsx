@@ -36,9 +36,15 @@ export default function App() {
           | undefined;
         if (data?.screen === "PaymentTab") {
           const nav = navigationRef.current;
-          if (nav?.isReady()) {
-            nav.navigate("StaffStack" as never);
-          }
+          if (!nav?.isReady()) return;
+          // Navigate into StaffStack → StaffTabs → PaymentTab
+          nav.navigate(
+            "StaffStack" as never,
+            {
+              screen: "StaffTabs",
+              params: { screen: "PaymentTab" },
+            } as never
+          );
         }
       }
     );

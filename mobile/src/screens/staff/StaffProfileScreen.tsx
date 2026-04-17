@@ -36,9 +36,7 @@ import {
   SOUND_OPTIONS,
   DEFAULT_SOUND_ID,
   getStoredSoundId,
-  getStoredPaymentHapticsEnabled,
   setStoredSoundId,
-  setStoredPaymentHapticsEnabled,
   type SoundId,
 } from "../../lib/sound-options";
 import { playPaymentNotificationSound } from "../../lib/play-payment-notification-sound";
@@ -341,12 +339,13 @@ export function StaffProfileScreen() {
   const [payError, setPayError] = useState("");
 
   const [soundId, setSoundId] = useState<SoundId>(DEFAULT_SOUND_ID);
-  const [hapticsEnabled, setHapticsEnabled] = useState(false);
   const [bankModalOpen, setBankModalOpen] = useState(false);
   const [bankSearch, setBankSearch] = useState("");
 
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushToggling, setPushToggling] = useState(false);
+  const [pushTesting, setPushTesting] = useState(false);
+  const [pushDebugLog, setPushDebugLog] = useState<string[]>([]);
 
   useStaffPushRegistration(pushEnabled);
 
@@ -378,13 +377,63 @@ export function StaffProfileScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    void Promise.all([getStoredSoundId(), getStoredPaymentHapticsEnabled()]).then(
-      ([storedSoundId, storedHaptics]) => {
-        setSoundId(storedSoundId);
-        setHapticsEnabled(storedHaptics);
+  const handleTestPush = useCallback(async () => {
+    if (!venueId) return;
+    const log: string[] = [];
+    const addLog = (msg: string) => {
+      console.log(`[PushTest] ${msg}`);
+      log.push(msg);
+    };
+
+    setPushTesting(true);
+    setPushDebugLog([]);
+
+    try {
+      addLog("Checking device push token…");
+      const { getDevicePushToken } = await import(
+        "../../hooks/useStaffPushRegistration"
+      );
+      const deviceToken = await getDevicePushToken();
+      if (deviceToken) {
+        addLog(`Token: ${deviceToken.slice(0, 22)}…`);
+      } else {
+        addLog("⚠ No device token (see Expo terminal for details)");
       }
-    );
+
+      addLog("Calling POST /api/staff/push/test…");
+      const res = await api.post<{
+        ok: boolean;
+        reason?: string;
+        message?: string;
+        targets?: number;
+        delivered?: number;
+      }>("/api/staff/push/test", { venueId });
+
+      addLog(`ok: ${res.ok}`);
+      if (res.ok) {
+        addLog(`targets: ${res.targets}  delivered: ${res.delivered}`);
+        addLog(res.message ?? "");
+      } else {
+        addLog(`reason: ${res.reason}`);
+        addLog(res.message ?? "");
+      }
+    } catch (err) {
+      const detail =
+        err instanceof ApiRequestError
+          ? `HTTP ${err.status}: ${err.message}`
+          : err instanceof Error
+            ? err.message
+            : String(err);
+      addLog(`ERROR: ${detail}`);
+      console.error("[PushTest] error:", err);
+    } finally {
+      setPushTesting(false);
+      setPushDebugLog(log);
+    }
+  }, [venueId]);
+
+  useEffect(() => {
+    void getStoredSoundId().then(setSoundId);
   }, []);
 
   const loadSettings = useCallback(async () => {
@@ -434,14 +483,6 @@ export function StaffProfileScreen() {
     await setStoredSoundId(id);
     await playPaymentNotificationSound(id);
   };
-
-  const handleToggleHaptics = useCallback(
-    async (enabled: boolean) => {
-      setHapticsEnabled(enabled);
-      await setStoredPaymentHapticsEnabled(enabled);
-    },
-    []
-  );
 
   const handleLogout = () => {
     Alert.alert("Log Out", "Are you sure you want to log out?", [
@@ -757,6 +798,52 @@ export function StaffProfileScreen() {
             thumbColor="#ffffff"
           />
         </View>
+
+        <TouchableOpacity
+          style={[
+            styles.saveBtn,
+            { backgroundColor: theme.blue500, marginTop: 4 },
+            (!pushEnabled || pushTesting) && styles.disabledBtn,
+          ]}
+          onPress={() => {
+            void handleTestPush();
+          }}
+          disabled={!pushEnabled || pushTesting}
+          activeOpacity={0.7}
+        >
+          {pushTesting ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <>
+              <Ionicons name="paper-plane-outline" size={15} color="#fff" />
+              <Text style={styles.saveBtnText}>Send Test Notification</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        {pushDebugLog.length > 0 && (
+          <View
+            style={{
+              marginTop: 8,
+              backgroundColor: theme.inputBg,
+              borderRadius: 8,
+              padding: 10,
+              borderWidth: 1,
+              borderColor: theme.borderLight,
+              gap: 2,
+            }}
+          >
+            {pushDebugLog.map((line, i) => (
+              <Text
+                key={i}
+                style={{ fontSize: 11, fontFamily: "monospace", color: theme.textSecondary }}
+                selectable
+              >
+                {line}
+              </Text>
+            ))}
+          </View>
+        )}
       </View>
 
       {/* Payment Notifications */}
@@ -796,22 +883,6 @@ export function StaffProfileScreen() {
               <Text style={styles.soundOptionLabel}>{opt.name}</Text>
             </TouchableOpacity>
           ))}
-        </View>
-        <View style={styles.hapticRow}>
-          <View style={styles.hapticLabelWrap}>
-            <Text style={styles.hapticTitle}>Haptic feedback</Text>
-            <Text style={styles.hapticSub}>
-              3 short vibrations with sound for new pending payments only.
-            </Text>
-          </View>
-          <Switch
-            value={hapticsEnabled}
-            onValueChange={(next) => {
-              void handleToggleHaptics(next);
-            }}
-            trackColor={{ false: theme.borderLight, true: theme.blue500 }}
-            thumbColor="#ffffff"
-          />
         </View>
       </View>
 
