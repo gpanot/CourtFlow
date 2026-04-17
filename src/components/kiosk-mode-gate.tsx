@@ -209,12 +209,28 @@ export function KioskModeGate({ venueId, children }: KioskModeGateProps) {
   }, [storageKey]);
 
   const selectMode = useCallback(
-    (m: KioskMode) => {
+    async (m: KioskMode) => {
+      try {
+        const res = await fetch(`/api/courts/state?venueId=${venueId}`, { cache: "no-store" });
+        const data = (await res.json()) as { session: { status?: string } | null };
+        const hasOpenSession =
+          !!data.session &&
+          data.session.status !== "closed" &&
+          data.session.status !== "ended";
+        if (!hasOpenSession) {
+          window.alert("Staff need to open a session first");
+          return;
+        }
+      } catch {
+        window.alert("Staff need to open a session first");
+        return;
+      }
+
       localStorage.setItem(storageKey, m);
       setMode(m);
       setPhase("locked");
     },
-    [storageKey]
+    [storageKey, venueId]
   );
 
   const handleEscapeTap = useCallback(() => {

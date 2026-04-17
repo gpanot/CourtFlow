@@ -8,6 +8,7 @@ import { CourtFlowLogo } from "@/components/courtflow-logo";
 export default function TvQueueVenueSelect() {
   const router = useRouter();
   const [venues, setVenues] = useState<{ id: string; name: string }[]>([]);
+  const [liveByVenueId, setLiveByVenueId] = useState<Record<string, boolean>>({});
 
   const handleBack = () => {
     router.push("/staff");
@@ -19,6 +20,34 @@ export default function TvQueueVenueSelect() {
       .then(setVenues)
       .catch(console.error);
   }, []);
+
+  useEffect(() => {
+    if (venues.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const checks = await Promise.all(
+        venues.map(async (venue) => {
+          try {
+            const state = await api.get<{ session: { status?: string } | null }>(
+              `/api/courts/state?venueId=${venue.id}`
+            );
+            const isLive =
+              !!state.session &&
+              state.session.status !== "closed" &&
+              state.session.status !== "ended";
+            return [venue.id, isLive] as const;
+          } catch {
+            return [venue.id, false] as const;
+          }
+        })
+      );
+      if (cancelled) return;
+      setLiveByVenueId(Object.fromEntries(checks));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [venues]);
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-black p-8">
@@ -32,9 +61,15 @@ export default function TvQueueVenueSelect() {
           <button
             key={v.id}
             onClick={() => router.push(`/tv-queue/${v.id}`)}
-            className="rounded-xl bg-neutral-800 px-8 py-4 text-2xl font-semibold text-white hover:bg-neutral-700"
+            className="flex items-center gap-3 rounded-xl bg-neutral-800 px-8 py-4 text-2xl font-semibold text-white hover:bg-neutral-700"
           >
-            {v.name}
+            {liveByVenueId[v.id] && (
+              <span
+                aria-hidden
+                className="h-3 w-3 rounded-full bg-green-400 shadow-[0_0_10px_rgba(74,222,128,0.9)] animate-pulse"
+              />
+            )}
+            <span>{v.name}</span>
           </button>
         ))}
         {venues.length === 0 && (

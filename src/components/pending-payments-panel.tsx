@@ -123,6 +123,7 @@ export function PendingPaymentsPanel({
   const [loading, setLoading] = useState(false);
   const [paidLoading, setPaidLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [expandedPhotoPaymentId, setExpandedPhotoPaymentId] = useState<string | null>(null);
   const tickRef = useRef<NodeJS.Timeout | null>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const [, setTick] = useState(0);
@@ -289,9 +290,39 @@ export function PendingPaymentsPanel({
                 const player = getDisplayPlayer(p);
                 const flowTag = getFlowTag(p);
                 const approvalTag = getApprovalTag(p, false);
+                const recognitionPhoto = p.player?.facePhotoPath?.trim() || null;
+                const photoExpanded = expandedPhotoPaymentId === p.id;
 
                 return (
                   <div key={p.id} className="px-4 py-3 space-y-2">
+                    {recognitionPhoto && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedPhotoPaymentId((prev) => (prev === p.id ? null : p.id))
+                        }
+                        className={cn(
+                          "overflow-hidden rounded-lg border border-neutral-700 bg-black/40 transition-all",
+                          photoExpanded ? "w-full" : "w-14"
+                        )}
+                        aria-label={
+                          photoExpanded
+                            ? `Collapse recognition photo for ${player.name}`
+                            : `Expand recognition photo for ${player.name}`
+                        }
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={recognitionPhoto}
+                          alt={`${player.name} recognition`}
+                          className={cn(
+                            "w-full object-cover object-center transition-all",
+                            photoExpanded ? "h-44" : "h-14"
+                          )}
+                        />
+                      </button>
+                    )}
+
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
