@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { useSessionStore } from "@/stores/session-store";
@@ -9,6 +9,7 @@ import { StaffDashboard } from "./dashboard";
 import Link from "next/link";
 import { Shield, Clipboard, Grid3X3, Phone, Lock, Eye, EyeOff } from "lucide-react";
 import { CourtFlowLogo } from "@/components/courtflow-logo";
+import { usePwaInstall } from "@/hooks/use-pwa-install";
 
 interface StaffVenue {
   id: string;
@@ -18,6 +19,7 @@ interface StaffVenue {
 export default function StaffPage() {
   const { t } = useTranslation();
   const { token, staffId, venueId, role, onboardingCompleted, setAuth, clearAuth } = useSessionStore();
+  const { isAndroid, installed, canPrompt, promptInstall } = usePwaInstall();
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(true);
@@ -28,6 +30,7 @@ export default function StaffPage() {
   const [showRoleChoice, setShowRoleChoice] = useState(false);
   const [showOtherApps, setShowOtherApps] = useState(false);
   const [loginVenues, setLoginVenues] = useState<StaffVenue[]>([]);
+  const installPromptShownRef = useRef(false);
   const router = useRouter();
 
   const handleShowOnboarding = () => {
@@ -42,6 +45,14 @@ export default function StaffPage() {
       setShowRoleChoice(true);
     }
   }, [token, staffId, role]);
+
+  useEffect(() => {
+    if (token || staffId || venueId || showRoleChoice) return;
+    if (!isAndroid || installed || !canPrompt) return;
+    if (installPromptShownRef.current) return;
+    installPromptShownRef.current = true;
+    void promptInstall().catch(() => {});
+  }, [token, staffId, venueId, showRoleChoice, isAndroid, installed, canPrompt, promptInstall]);
 
   if (token && staffId && venueId && !showRoleChoice && !showOtherApps) {
     return <StaffDashboard />;
