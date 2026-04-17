@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
+import { sendPaymentPushToStaff } from "@/lib/staff-push";
 import { faceRecognitionService } from "@/lib/face-recognition";
 
 export async function POST(request: NextRequest) {
@@ -28,6 +29,13 @@ export async function POST(request: NextRequest) {
         pendingPaymentId,
         paymentRef: payment.paymentRef,
         playerName: payment.player?.name ?? payment.checkInPlayerId ?? "Unknown",
+      });
+      sendPaymentPushToStaff("payment_confirmed", {
+        venueId: payment.venueId,
+        pendingPaymentId,
+        playerName: payment.player?.name ?? payment.checkInPlayerId ?? "Unknown",
+        amount: payment.amount,
+        paymentMethod: payment.paymentMethod,
       });
       return json({ queueNumber: null, playerName: payment.player?.name ?? "Unknown" });
     }
@@ -92,6 +100,13 @@ export async function POST(request: NextRequest) {
       pendingPaymentId,
       playerName: payment.player?.name ?? "Unknown",
       queueNumber,
+    });
+    sendPaymentPushToStaff("payment_confirmed", {
+      venueId: payment.venueId,
+      pendingPaymentId,
+      playerName: payment.player?.name ?? "Unknown",
+      amount: payment.amount,
+      paymentMethod: payment.paymentMethod,
     });
 
     const allEntries = await prisma.queueEntry.findMany({

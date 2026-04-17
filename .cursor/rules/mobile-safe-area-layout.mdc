@@ -1,0 +1,30 @@
+---
+description: Ensure mobile screens always respect status bar and safe-area insets
+globs: "mobile/src/**/*.tsx"
+alwaysApply: false
+---
+
+# Mobile Safe-Area Layout
+
+When building or editing React Native screens, always account for device safe areas (status bar, notch, dynamic island, gesture area).
+
+## Required
+
+- Use `useSafeAreaInsets()` from `react-native-safe-area-context` in screen-level components.
+- Apply top inset spacing when content can reach the top edge (forms, headers, camera flows, full-screen cards).
+- Add bottom inset spacing for fixed footer buttons / CTAs to avoid overlap with gesture areas.
+- If a top bar is hidden for a flow step, add compensating top padding to the screen content.
+- Do not hardcode only `paddingTop: 0` or rely on a single device simulation.
+
+## Example
+
+```tsx
+const insets = useSafeAreaInsets();
+
+<ScrollView
+  contentContainerStyle={[
+    styles.content,
+    { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 },
+  ]}
+/>
+```

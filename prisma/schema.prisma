@@ -219,6 +219,8 @@ model StaffMember {
   coachPhoto          String?   @map("coach_photo")
   createdAt           DateTime  @default(now()) @map("created_at")
 
+  pushNotificationsEnabled Boolean @default(false) @map("push_notifications_enabled")
+
   venues        Venue[]
   auditLogs     AuditLog[]
   sessions      Session[]
@@ -227,6 +229,7 @@ model StaffMember {
   coachPackages CoachPackage[]
   coachLessons  CoachLesson[]
   playerRankings PlayerRanking[]
+  pushTokens    StaffPushToken[]
 
   @@map("staff_members")
 }
@@ -705,6 +708,25 @@ model SubscriptionUsage {
 
   @@index([subscriptionId])
   @@map("subscription_usages")
+}
+
+model StaffPushToken {
+  id         String   @id @default(cuid())
+  staffId    String   @map("staff_id")
+  venueId    String   @map("venue_id")
+  token      String
+  platform   String   @default("android")
+  deviceId   String?  @map("device_id")
+  active     Boolean  @default(true)
+  lastSeenAt DateTime @default(now()) @map("last_seen_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  staff StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, token])
+  @@index([venueId, active])
+  @@map("staff_push_tokens")
 }
 
 model CheckInRecord {

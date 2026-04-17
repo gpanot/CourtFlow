@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "213014660866",
+    "project_id": "courtflow-de995",
+    "storage_bucket": "courtflow-de995.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:213014660866:android:0e29c491cb9ac1d595a41b",
+        "android_client_info": {
+          "package_name": "com.courtpay.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCsnRDM7ozWsX-LwpNS2zh2CFOh5QQQD5Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

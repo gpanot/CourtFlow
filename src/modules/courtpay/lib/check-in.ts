@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { buildVietQRUrl } from "@/lib/vietqr";
 import { emitToVenue } from "@/lib/socket-server";
+import { sendPaymentPushToStaff } from "@/lib/staff-push";
 import { generatePaymentRef } from "./payment-reference";
 import { getActiveSubscription, activateSubscription, deductSession } from "./subscription";
 import type { IdentifyResult, PaymentResult } from "../types";
@@ -101,6 +102,15 @@ export async function createCheckInPayment(
   }
 
   emitToVenue(input.venueId, "payment:new", {
+    pendingPaymentId: pending.id,
+    playerName: checkInPlayer?.name ?? "Unknown",
+    amount: input.amount,
+    paymentMethod: "vietqr",
+    type: input.type,
+  });
+
+  sendPaymentPushToStaff("payment_new", {
+    venueId: input.venueId,
     pendingPaymentId: pending.id,
     playerName: checkInPlayer?.name ?? "Unknown",
     amount: input.amount,

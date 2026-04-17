@@ -14,8 +14,8 @@ export async function GET(req: Request) {
     }
 
     const since = new Date();
-    since.setDate(since.getDate() - days);
-    since.setHours(0, 0, 0, 0);
+    since.setUTCDate(since.getUTCDate() - days);
+    since.setUTCHours(0, 0, 0, 0);
 
     const payments = await prisma.pendingPayment.findMany({
       where: {

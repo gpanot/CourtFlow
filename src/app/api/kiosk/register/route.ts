@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { faceRecognitionService } from "@/lib/face-recognition";
 import { emitToVenue } from "@/lib/socket-server";
+import { sendPaymentPushToStaff } from "@/lib/staff-push";
 import { buildVietQRUrl } from "@/lib/vietqr";
 import { persistPlayerCheckInFacePhoto } from "@/lib/persist-player-check-in-photo";
 
@@ -94,6 +95,15 @@ export async function POST(request: NextRequest) {
     });
 
     emitToVenue(venueId, "payment:new", {
+      pendingPaymentId: pendingPayment.id,
+      playerName: player.name,
+      amount,
+      paymentMethod: "vietqr",
+      type: "registration",
+    });
+
+    sendPaymentPushToStaff("payment_new", {
+      venueId,
       pendingPaymentId: pendingPayment.id,
       playerName: player.name,
       amount,

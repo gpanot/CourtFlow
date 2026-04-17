@@ -12,8 +12,10 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "venueId required" }, { status: 400 });
     }
 
+    // DELETE soft-deactivates (`isActive: false`). List only active packages so
+    // removed rows do not still appear (and do not stack with create-defaults).
     const packages = await prisma.subscriptionPackage.findMany({
-      where: { venueId },
+      where: { venueId, isActive: true },
       orderBy: { createdAt: "asc" },
       include: {
         _count: {

@@ -7,7 +7,7 @@ import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { ArrowLeft, Loader2, Users, DollarSign, Clock, TrendingUp } from "lucide-react";
 
-type Tab = "today" | "history" | "sessions";
+type Tab = "today" | "history" | "subscriptions";
 
 interface TodayData {
   checkInsToday: number;
@@ -21,6 +21,20 @@ interface TodayData {
     checkedInAt: string;
     source: string;
   }[];
+  courtSessionsToday: {
+    id: string;
+    status: string;
+    openedAt: string;
+    closedAt: string | null;
+    queuePlayers: number;
+  }[];
+  currentCourtSession: {
+    id: string;
+    status: string;
+    openedAt: string;
+    closedAt: string | null;
+    queuePlayers: number;
+  } | null;
 }
 
 interface HistoryData {
@@ -79,7 +93,7 @@ export default function BossDashboardPage() {
           `/api/courtpay/staff/boss/history?venueId=${venueId}`
         );
         setHistoryData(data);
-      } else if (tab === "sessions") {
+      } else if (tab === "subscriptions") {
         const data = await api.get<SessionData>(
           `/api/courtpay/staff/boss/sessions?venueId=${venueId}`
         );
@@ -130,18 +144,25 @@ export default function BossDashboardPage() {
         </div>
 
         <div className="mt-3 flex gap-1">
-          {(["today", "history", "sessions"] as Tab[]).map((t) => (
+          {(
+            [
+              { id: "today" as const, label: "Today" },
+              { id: "history" as const, label: "History" },
+              { id: "subscriptions" as const, label: "Subscriptions" },
+            ] as const
+          ).map(({ id, label }) => (
             <button
-              key={t}
-              onClick={() => setTab(t)}
+              key={id}
+              type="button"
+              onClick={() => setTab(id)}
               className={cn(
-                "flex-1 rounded-lg py-2 text-sm font-medium capitalize transition-colors",
-                tab === t
+                "flex-1 rounded-lg py-2 text-sm font-medium transition-colors",
+                tab === id
                   ? "bg-purple-600/20 text-purple-400"
                   : "text-neutral-400 hover:text-white"
               )}
             >
-              {t}
+              {label}
             </button>
           ))}
         </div>
@@ -157,7 +178,7 @@ export default function BossDashboardPage() {
             <div className="grid grid-cols-2 gap-3 mb-6">
               <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
                 <div className="flex items-center gap-2 text-neutral-400 text-xs mb-1">
-                  <Users className="h-3.5 w-3.5" /> Check-ins
+                  <Users className="h-3.5 w-3.5" /> Kiosk check-ins
                 </div>
                 <p className="text-2xl font-bold">{todayData.checkInsToday}</p>
               </div>
@@ -185,12 +206,65 @@ export default function BossDashboardPage() {
               </div>
             </div>
 
-            <h3 className="text-sm font-medium text-neutral-300 mb-3">
-              Recent Check-ins
+            <h3 className="text-sm font-medium text-neutral-300 mb-1">
+              Court sessions (UTC day)
             </h3>
+            <p className="text-xs text-neutral-500 mb-3">
+              Same &ldquo;session&rdquo; as the staff Session tab (queue / courts). Times use UTC calendar day to match History charts.
+            </p>
+            {todayData.currentCourtSession ? (
+              <div className="mb-4 rounded-lg border border-green-700/50 bg-green-950/30 px-3 py-2.5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-green-400">
+                  Open now
+                </p>
+                <p className="text-sm text-neutral-200 mt-1">
+                  {todayData.currentCourtSession.queuePlayers} in queue · opened{" "}
+                  {new Date(todayData.currentCourtSession.openedAt).toLocaleString()}
+                </p>
+              </div>
+            ) : null}
+            {todayData.courtSessionsToday.length === 0 && !todayData.currentCourtSession ? (
+              <p className="text-neutral-500 text-sm py-4 text-center mb-6">
+                No court sessions opened on this UTC day.
+              </p>
+            ) : todayData.courtSessionsToday.filter(
+                (s) => s.id !== todayData.currentCourtSession?.id
+              ).length > 0 ? (
+              <div className="space-y-2 mb-6">
+                {todayData.courtSessionsToday
+                  .filter((s) => s.id !== todayData.currentCourtSession?.id)
+                  .map((s) => (
+                  <div
+                    key={s.id}
+                    className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2"
+                  >
+                    <div>
+                      <p className="text-xs text-neutral-500">{s.status}</p>
+                      <p className="text-sm text-neutral-300">
+                        {s.queuePlayers} queue · {new Date(s.openedAt).toLocaleTimeString()}
+                      </p>
+                    </div>
+                    {s.closedAt ? (
+                      <span className="text-xs text-neutral-500">Closed</span>
+                    ) : (
+                      <span className="text-xs text-green-400">Open</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mb-6" />
+            )}
+
+            <h3 className="text-sm font-medium text-neutral-300 mb-1">
+              CourtPay check-ins
+            </h3>
+            <p className="text-xs text-neutral-500 mb-3">
+              Kiosk / subscription check-in records (not the same as court sessions above).
+            </p>
             {todayData.recentCheckIns.length === 0 ? (
               <p className="text-neutral-500 text-sm py-8 text-center">
-                No check-ins today
+                No CourtPay check-ins for this UTC day
               </p>
             ) : (
               <div className="space-y-2">
@@ -230,7 +304,10 @@ export default function BossDashboardPage() {
           <div>
             {historyData.dailyRevenue.length > 0 && (
               <div className="mb-6 space-y-2">
-                <h3 className="text-sm font-medium text-neutral-300">Daily Revenue</h3>
+                <h3 className="text-sm font-medium text-neutral-300">Daily revenue (UTC)</h3>
+                <p className="text-xs text-neutral-500 mb-2">
+                  Each row is payments grouped by confirmation date in UTC (same as Today).
+                </p>
                 {historyData.dailyRevenue.slice(0, 7).map((d) => (
                   <div
                     key={d.date}
@@ -279,8 +356,11 @@ export default function BossDashboardPage() {
               ))}
             </div>
           </div>
-        ) : tab === "sessions" && sessionData ? (
+        ) : tab === "subscriptions" && sessionData ? (
           <div className="space-y-2">
+            <p className="text-xs text-neutral-500 mb-3">
+              Player subscription packages (CourtPay). This is not the staff &ldquo;Session&rdquo; tab (court / queue).
+            </p>
             {sessionData.subscriptions.length === 0 ? (
               <p className="text-neutral-500 text-sm py-8 text-center">
                 No subscriptions yet

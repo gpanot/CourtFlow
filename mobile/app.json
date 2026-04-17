@@ -1,0 +1,53 @@
+{
+  "expo": {
+    "name": "CourtPay",
+    "slug": "courtpay",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/courtflow-mark.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/courtflow-mark.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#052e16"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.courtpay.app",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        }
+      }
+    },
+    "android": {
+      "usesCleartextTraffic": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/courtflow-mark.png",
+        "backgroundColor": "#052e16"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.courtpay.app",
+      "googleServicesFile": "./google-services.json"
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-web-browser",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow CourtPay to use the camera for face check-in."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/courtflow-mark.png",
+          "color": "#052e16",
+          "defaultChannel": "courtpay_payments"
+        }
+      ]
+    ]
+  }
+}

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { emitToVenue } from "@/lib/socket-server";
+import { sendPaymentPushToStaff } from "@/lib/staff-push";
 import { extractPaymentRef, isSubscriptionRef } from "./payment-reference";
 import { activateSubscription } from "./subscription";
 import type { SepayWebhookPayload } from "../types";
@@ -106,6 +107,14 @@ export async function processSepayWebhook(
     paymentId: pending.id,
     paymentRef: ref,
     playerId: pending.checkInPlayerId,
+  });
+
+  sendPaymentPushToStaff("payment_confirmed", {
+    venueId: pending.venueId,
+    pendingPaymentId: pending.id,
+    playerName: pending.checkInPlayer?.name ?? "Unknown",
+    amount: pending.amount,
+    paymentMethod: "vietqr",
   });
 
   return { matched: true, paymentId: pending.id };

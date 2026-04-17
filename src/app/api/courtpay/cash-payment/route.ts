@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { emitToVenue } from "@/lib/socket-server";
+import { sendPaymentPushToStaff } from "@/lib/staff-push";
 
 /**
  * POST /api/courtpay/cash-payment
@@ -40,6 +41,15 @@ export async function POST(req: Request) {
     });
 
     emitToVenue(payment.venueId, "payment:new", {
+      pendingPaymentId: payment.id,
+      playerName: payment.checkInPlayer?.name ?? "Unknown",
+      amount: payment.amount,
+      paymentMethod: "cash",
+      type: payment.type,
+    });
+
+    sendPaymentPushToStaff("payment_new", {
+      venueId: payment.venueId,
       pendingPaymentId: payment.id,
       playerName: payment.checkInPlayer?.name ?? "Unknown",
       amount: payment.amount,

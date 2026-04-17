@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { faceRecognitionService } from "@/lib/face-recognition";
 import { emitToVenue } from "@/lib/socket-server";
+import { sendPaymentPushToStaff } from "@/lib/staff-push";
 import { buildVietQRUrl } from "@/lib/vietqr";
 
 const PAYMENT_TIMEOUT_MS = 3 * 60 * 1000;
@@ -150,6 +151,15 @@ export async function POST(request: NextRequest) {
     });
 
     emitToVenue(venueId, "payment:new", {
+      pendingPaymentId: pendingPayment.id,
+      playerName,
+      amount,
+      paymentMethod: "vietqr",
+      type: "checkin",
+    });
+
+    sendPaymentPushToStaff("payment_new", {
+      venueId,
       pendingPaymentId: pendingPayment.id,
       playerName,
       amount,

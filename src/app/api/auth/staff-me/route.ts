@@ -9,10 +9,20 @@ export async function GET(request: NextRequest) {
     const payload = requireStaff(request.headers);
     const staff = await prisma.staffMember.findUnique({
       where: { id: payload.id },
-      select: { name: true, phone: true },
+      select: {
+        name: true,
+        phone: true,
+        pushNotificationsEnabled: true,
+        venues: { select: { id: true, name: true } },
+      },
     });
     if (!staff) return error("Staff not found", 404);
-    return json({ name: staff.name, phone: staff.phone });
+    return json({
+      name: staff.name,
+      phone: staff.phone,
+      pushNotificationsEnabled: staff.pushNotificationsEnabled,
+      venues: staff.venues,
+    });
   } catch (e) {
     const msg = (e as Error).message;
     if (msg === "Missing authorization token" || msg === "Invalid or expired token") {
