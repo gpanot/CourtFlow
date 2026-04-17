@@ -19,7 +19,7 @@ import {
 } from "@/components/staff-queue-player-display";
 import { QueuePanel, type QueueEntryData, type StaffQueueCourtGroup } from "@/components/queue-panel";
 import { cn } from "@/lib/cn";
-import { Plus, X, Users, LayoutGrid, AlertTriangle, User, UserPlus, Wrench, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, Calendar, Loader2, Target, Play, Check, ListPlus, Search, CreditCard } from "lucide-react";
+import { Plus, X, Users, LayoutGrid, AlertTriangle, User, UserPlus, Wrench, QrCode, Tv, ChevronRight, ArrowLeft, Repeat, Calendar, Loader2, Target, Play, Check, ListPlus, Search, CreditCard, Moon, Sun } from "lucide-react";
 import { MIN_GROUP_SIZE, MAX_GROUP_SIZE, COURT_PLAYER_COUNT } from "@/lib/constants";
 import { QRCodeSVG } from "qrcode.react";
 import { SessionSummary } from "./session-summary";
@@ -36,6 +36,12 @@ import {
   playAssignmentAttentionSound,
   primeAssignmentSoundAudio,
 } from "@/lib/assignment-attention-sound";
+import {
+  applyThemeMode,
+  getStoredThemeMode,
+  setStoredThemeMode,
+  type ThemeMode,
+} from "@/lib/theme-mode";
 
 function genderLabelForDialog(g: string, t: TFunction) {
   if (g === "male") return t("staff.dashboard.labelsGenderMale");
@@ -134,6 +140,7 @@ export function StaffDashboard() {
   const [session, setSession] = useState<SessionData | null>(null);
   const [courts, setCourts] = useState<CourtData[]>([]);
   const [queue, setQueue] = useState<QueueEntryData[]>([]);
+  const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
   const [tab, setTabRaw] = useState<Tab>(readPersistedTab);
   const tabRef = useRef(tab);
 
@@ -200,6 +207,12 @@ export function StaffDashboard() {
       window.removeEventListener("pointerdown", unlock);
       window.removeEventListener("keydown", unlock);
     };
+  }, []);
+
+  useEffect(() => {
+    const mode = getStoredThemeMode();
+    setThemeMode(mode);
+    applyThemeMode(mode);
   }, []);
 
   const rankingBannerCourts = useMemo(
@@ -614,6 +627,20 @@ export function StaffDashboard() {
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-700/40 text-neutral-200 hover:bg-neutral-600/50 hover:text-white transition-colors"
           >
             <Search className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const nextMode: ThemeMode = themeMode === "dark" ? "light" : "dark";
+              setThemeMode(nextMode);
+              applyThemeMode(nextMode);
+              setStoredThemeMode(nextMode);
+            }}
+            aria-label={themeMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            title={themeMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-700/40 text-neutral-200 hover:bg-neutral-600/50 hover:text-white transition-colors"
+          >
+            {themeMode === "dark" ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
           </button>
           <button
             type="button"

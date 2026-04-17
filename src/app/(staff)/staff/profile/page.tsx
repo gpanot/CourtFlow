@@ -16,17 +16,13 @@ import {
   setStoredAssignmentSoundId,
   type AssignmentAttentionSoundId,
 } from "@/lib/assignment-attention-sound";
+import {
+  applyThemeMode,
+  getStoredThemeMode,
+  setStoredThemeMode,
+  type ThemeMode,
+} from "@/lib/theme-mode";
 import { VIETQR_BANKS, buildVietQRUrl } from "@/lib/vietqr";
-
-const THEME_STORAGE_KEY = "courtflow-theme-mode";
-type ThemeMode = "dark" | "light";
-
-function applyThemeMode(mode: ThemeMode) {
-  if (typeof document === "undefined") return;
-  const root = document.documentElement;
-  if (mode === "light") root.classList.add("cf-theme-light");
-  else root.classList.remove("cf-theme-light");
-}
 
 export default function StaffProfilePage() {
   const { t } = useTranslation();
@@ -72,9 +68,7 @@ export default function StaffProfilePage() {
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    const nextMode: ThemeMode = stored === "light" ? "light" : "dark";
+    const nextMode = getStoredThemeMode();
     setThemeMode(nextMode);
     applyThemeMode(nextMode);
   }, []);
@@ -151,9 +145,7 @@ export default function StaffProfilePage() {
     const nextMode: ThemeMode = themeMode === "dark" ? "light" : "dark";
     setThemeMode(nextMode);
     applyThemeMode(nextMode);
-    if (typeof window !== "undefined") {
-      localStorage.setItem(THEME_STORAGE_KEY, nextMode);
-    }
+    setStoredThemeMode(nextMode);
   };
 
   const handleSavePaymentSettings = async () => {

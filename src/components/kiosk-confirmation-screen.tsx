@@ -39,7 +39,6 @@ export function KioskConfirmationScreen({
   queueNumber,
   queuePosition,
   skillLevel,
-  totalSessions,
   isReturning = true,
   alreadyCheckedIn = false,
   onScanNext,
@@ -101,9 +100,6 @@ export function KioskConfirmationScreen({
     undefined,
     "staff.kiosk.confirmHeadToTv"
   );
-
-  const sessionsDisplay =
-    totalSessions != null && totalSessions >= 0 ? String(totalSessions) : "—";
 
   const headerLabel = alreadyCheckedIn
     ? tr(
@@ -278,29 +274,13 @@ export function KioskConfirmationScreen({
               <div className="min-h-0 shrink-0" aria-hidden />
             ) : null}
 
-            <div className="grid w-full min-w-0 grid-cols-3 gap-1.5 sm:gap-3">
-              <div
-                className="flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 py-2 text-center sm:gap-1 sm:px-3 sm:py-3"
-                style={{ backgroundColor: PILL_BG }}
-              >
-                <span className="text-[9px] font-medium uppercase tracking-wide text-neutral-500 sm:text-xs">
-                  {tr("tablet.confirmation.level", "Level", undefined, "staff.kiosk.confirmLevel")}
-                </span>
-                <span className="px-0.5 text-[10px] font-semibold leading-tight text-white sm:text-sm">
-                  {skillDisplay}
-                </span>
-              </div>
-              <div
-                className="flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 py-2 text-center sm:gap-1 sm:px-3 sm:py-3"
-                style={{ backgroundColor: PILL_BG }}
-              >
-                <span className="text-[9px] font-medium uppercase tracking-wide text-neutral-500 sm:text-xs">
-                  {tr("tablet.confirmation.sessions", "Sessions", undefined, "staff.kiosk.confirmSessions")}
-                </span>
-                <span className="text-[10px] font-semibold leading-tight text-white sm:text-sm">
-                  {sessionsDisplay}
-                </span>
-              </div>
+            <div
+              className="rounded-xl px-3 py-4 text-center sm:px-5 sm:py-5"
+              style={{ backgroundColor: PILL_BG }}
+            >
+              <p className="text-3xl font-extrabold tracking-wide text-green-400 sm:text-5xl">
+                HAVE FUN TODAY!
+              </p>
             </div>
 
             <div
