@@ -2,13 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { api } from "@/lib/api-client";
 import { CourtFlowLogo } from "@/components/courtflow-logo";
 
 export default function TvQueueVenueSelect() {
   const router = useRouter();
   const [venues, setVenues] = useState<{ id: string; name: string }[]>([]);
+
+  const handleBack = () => {
+    router.push("/staff");
+  };
 
   useEffect(() => {
     api
@@ -38,9 +41,13 @@ export default function TvQueueVenueSelect() {
           <p className="text-neutral-500">Loading venues...</p>
         )}
       </div>
-      <Link href="/" className="text-sm text-neutral-500 hover:text-neutral-300">
-        ← Home
-      </Link>
+      <button
+        type="button"
+        onClick={handleBack}
+        className="text-sm text-neutral-500 transition-colors hover:text-neutral-300"
+      >
+        ← Back
+      </button>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import {
   useRef,
   type ReactNode,
 } from "react";
+import { useRouter } from "next/navigation";
 import { Monitor, MoreHorizontal, UserCheck, CreditCard } from "lucide-react";
 import { cn } from "@/lib/cn";
 
@@ -120,8 +121,10 @@ function PinPad({
 
 function ModeSelector({
   onSelect,
+  onBack,
 }: {
   onSelect: (mode: KioskMode) => void;
+  onBack: () => void;
 }) {
   return (
     <div className="flex h-dvh w-screen flex-col items-center justify-center gap-8 bg-black p-8">
@@ -173,11 +176,20 @@ function ModeSelector({
           </div>
         </button>
       </div>
+
+      <button
+        type="button"
+        onClick={onBack}
+        className="text-sm text-neutral-500 transition-colors hover:text-neutral-300"
+      >
+        ← Back to Venues
+      </button>
     </div>
   );
 }
 
 export function KioskModeGate({ venueId, children }: KioskModeGateProps) {
+  const router = useRouter();
   const [mode, setMode] = useState<KioskMode | null>(null);
   const [phase, setPhase] = useState<"loading" | "pin" | "select" | "locked">(
     "loading"
@@ -190,9 +202,9 @@ export function KioskModeGate({ venueId, children }: KioskModeGateProps) {
     const saved = localStorage.getItem(storageKey);
     if (saved === "entrance" || saved === "tv" || saved === "courtpay") {
       setMode(saved);
-      setPhase("locked");
+      setPhase("select");
     } else {
-      setPhase("pin");
+      setPhase("select");
     }
   }, [storageKey]);
 
@@ -235,7 +247,7 @@ export function KioskModeGate({ venueId, children }: KioskModeGateProps) {
   }
 
   if (phase === "select") {
-    return <ModeSelector onSelect={selectMode} />;
+    return <ModeSelector onSelect={selectMode} onBack={() => router.push("/tv-queue")} />;
   }
 
   if (phase === "locked" && mode) {

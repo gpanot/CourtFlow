@@ -6,7 +6,8 @@ import { useTranslation } from "react-i18next";
 import { useSessionStore } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { StaffDashboard } from "./dashboard";
-import { Shield, Clipboard, Phone, Lock, Eye, EyeOff } from "lucide-react";
+import Link from "next/link";
+import { Shield, Clipboard, Grid3X3, Phone, Lock, Eye, EyeOff } from "lucide-react";
 import { CourtFlowLogo } from "@/components/courtflow-logo";
 
 interface StaffVenue {
@@ -25,16 +26,24 @@ export default function StaffPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [pendingVenues, setPendingVenues] = useState<StaffVenue[] | null>(null);
   const [showRoleChoice, setShowRoleChoice] = useState(false);
+  const [showOtherApps, setShowOtherApps] = useState(false);
   const [loginVenues, setLoginVenues] = useState<StaffVenue[]>([]);
   const router = useRouter();
 
+  const handleShowOnboarding = () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("cf_onboarding_complete");
+    }
+    router.push("/?onboarding=1");
+  };
+
   useEffect(() => {
-    if (token && staffId && role === "superadmin") {
+    if (token && staffId && (role === "superadmin" || role === "staff")) {
       setShowRoleChoice(true);
     }
   }, [token, staffId, role]);
 
-  if (token && staffId && venueId && !showRoleChoice) {
+  if (token && staffId && venueId && !showRoleChoice && !showOtherApps) {
     return <StaffDashboard />;
   }
 
@@ -50,49 +59,102 @@ export default function StaffPage() {
             </div>
           </div>
 
-          <div className="space-y-3">
-            <button
-              onClick={() => {
-                setShowRoleChoice(false);
-                router.replace(onboardingCompleted ? "/admin" : "/onboarding");
-              }}
-              className="group flex w-full items-center gap-4 rounded-2xl border border-purple-500/20 bg-purple-500/5 p-4 text-left transition-all hover:border-purple-500/40 hover:bg-purple-500/10"
-            >
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-purple-500/15 transition-colors group-hover:bg-purple-500/25">
-                <Shield className="h-5 w-5 text-purple-400" />
-              </div>
-              <div className="min-w-0">
-                <p className="font-semibold text-white">{t("staff.login.adminDashboard")}</p>
-                <p className="text-xs text-neutral-400">{t("staff.login.adminDashboardDesc")}</p>
-              </div>
-            </button>
+          {showOtherApps ? (
+            <div className="space-y-3">
+              <p className="text-center text-xs text-neutral-500">{t("staff.login.otherAppsDesc")}</p>
+              <Link
+                href="/player"
+                className="block rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm font-medium text-neutral-200 transition-colors hover:border-neutral-700 hover:bg-neutral-800"
+              >
+                {t("staff.login.playerApp")}
+              </Link>
+              <Link
+                href="/tv"
+                className="block rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm font-medium text-neutral-200 transition-colors hover:border-neutral-700 hover:bg-neutral-800"
+              >
+                {t("staff.login.tvDisplay")}
+              </Link>
+              <Link
+                href="/tv-queue"
+                className="block rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm font-medium text-neutral-200 transition-colors hover:border-neutral-700 hover:bg-neutral-800"
+              >
+                {t("staff.login.tvTablet")}
+              </Link>
+              <button
+                onClick={() => setShowOtherApps(false)}
+                className="w-full rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm font-medium text-neutral-300 transition-colors hover:border-neutral-700 hover:bg-neutral-800"
+              >
+                {t("staff.login.backToDashboards")}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {role === "superadmin" && (
+                <button
+                  onClick={() => {
+                    setShowRoleChoice(false);
+                    setShowOtherApps(false);
+                    router.replace(onboardingCompleted ? "/admin" : "/onboarding");
+                  }}
+                  className="group flex w-full items-center gap-4 rounded-2xl border border-purple-500/20 bg-purple-500/5 p-4 text-left transition-all hover:border-purple-500/40 hover:bg-purple-500/10"
+                >
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-purple-500/15 transition-colors group-hover:bg-purple-500/25">
+                    <Shield className="h-5 w-5 text-purple-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-white">{t("staff.login.adminDashboard")}</p>
+                    <p className="text-xs text-neutral-400">{t("staff.login.adminDashboardDesc")}</p>
+                  </div>
+                </button>
+              )}
 
-            <button
-              onClick={() => {
-                setShowRoleChoice(false);
-                if (loginVenues.length === 1) {
-                  setAuth({ venueId: loginVenues[0].id });
-                } else if (loginVenues.length > 1) {
-                  setPendingVenues(loginVenues);
-                } else {
-                  setErr(t("staff.login.noVenueCreateAdmin"));
-                }
-              }}
-              className="group flex w-full items-center gap-4 rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 text-left transition-all hover:border-blue-500/40 hover:bg-blue-500/10"
-            >
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-500/15 transition-colors group-hover:bg-blue-500/25">
-                <Clipboard className="h-5 w-5 text-blue-400" />
-              </div>
-              <div className="min-w-0">
-                <p className="font-semibold text-white">{t("staff.login.staffDashboard")}</p>
-                <p className="text-xs text-neutral-400">{t("staff.login.staffDashboardDesc")}</p>
-              </div>
-            </button>
-          </div>
+              <button
+                onClick={() => {
+                  setShowOtherApps(false);
+                  if (venueId) {
+                    setShowRoleChoice(false);
+                    return;
+                  }
+                  if (loginVenues.length === 1) {
+                    setAuth({ venueId: loginVenues[0].id });
+                    setShowRoleChoice(false);
+                  } else if (loginVenues.length > 1) {
+                    setPendingVenues(loginVenues);
+                    setShowRoleChoice(false);
+                  } else {
+                    setErr(t("staff.login.noVenueCreateAdmin"));
+                  }
+                }}
+                className="group flex w-full items-center gap-4 rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4 text-left transition-all hover:border-blue-500/40 hover:bg-blue-500/10"
+              >
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-500/15 transition-colors group-hover:bg-blue-500/25">
+                  <Clipboard className="h-5 w-5 text-blue-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-white">{t("staff.login.staffDashboard")}</p>
+                  <p className="text-xs text-neutral-400">{t("staff.login.staffDashboardDesc")}</p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setShowOtherApps(true)}
+                className="group flex w-full items-center gap-4 rounded-2xl border border-neutral-700/70 bg-neutral-900/70 p-4 text-left transition-all hover:border-neutral-600 hover:bg-neutral-800/80"
+              >
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-neutral-800 transition-colors group-hover:bg-neutral-700">
+                  <Grid3X3 className="h-5 w-5 text-neutral-300" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-white">{t("staff.login.otherApps")}</p>
+                  <p className="text-xs text-neutral-400">{t("staff.login.otherAppsDesc")}</p>
+                </div>
+              </button>
+            </div>
+          )}
 
           <button
             onClick={() => {
               setShowRoleChoice(false);
+              setShowOtherApps(false);
               setAuth({
                 token: null,
                 staffId: null,
@@ -171,6 +233,7 @@ export default function StaffPage() {
         onboardingCompleted: data.staff.onboardingCompleted,
         rememberMe,
       });
+      setLoginVenues(data.staff.venues);
 
       if (data.staff.role === "superadmin") {
         if (!data.staff.onboardingCompleted) {
@@ -182,10 +245,9 @@ export default function StaffPage() {
         return;
       }
 
-      if (!data.staff.venueId && data.staff.venues.length > 1) {
-        setPendingVenues(data.staff.venues);
-      } else if (!data.staff.venueId && data.staff.venues.length === 0) {
-        setErr(t("staff.login.noVenueAssigned"));
+      setShowRoleChoice(true);
+      if (!data.staff.venueId && data.staff.venues.length === 0) {
+        setErr(t("staff.login.noVenueCreateAdmin"));
       }
     } catch (e) {
       const msg = (e as Error).message;
@@ -280,6 +342,14 @@ export default function StaffPage() {
             </button>
           </form>
         </div>
+
+        <button
+          type="button"
+          onClick={handleShowOnboarding}
+          className="mx-auto mt-4 block text-xs text-neutral-500 transition-colors hover:text-neutral-300"
+        >
+          View onboarding
+        </button>
 
       </div>
     </div>

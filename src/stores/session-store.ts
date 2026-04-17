@@ -56,6 +56,7 @@ export const useSessionStore = create<SessionStore>()(
           sessionStorage.removeItem(SESSION_ALIVE_KEY);
           try {
             localStorage.removeItem(PERSIST_KEY);
+            localStorage.removeItem("cf_onboarding_complete");
           } catch {
             /* ignore */
           }
