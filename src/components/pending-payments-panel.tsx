@@ -68,10 +68,16 @@ function formatVND(amount: number): string {
   return amount.toLocaleString("vi-VN") + " VND";
 }
 
-function formatTimestamp(dateStr: string | null): string {
+function formatDateTime(dateStr: string | null): string {
   if (!dateStr) return "—";
   const d = new Date(dateStr);
-  return d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function getDisplayPlayer(payment: PendingPaymentItem | PaidPaymentItem) {
@@ -426,7 +432,7 @@ export function PendingPaymentsPanel({
                 const photoExpanded = expandedPhotoPaymentId === p.id;
 
                 return (
-                  <div key={p.id} className="px-4 py-3 space-y-2">
+                  <div key={p.id} className="px-4 py-3">
                     {recognitionPhoto && (
                       <button
                         type="button"
@@ -435,7 +441,7 @@ export function PendingPaymentsPanel({
                         }
                         className={cn(
                           "overflow-hidden rounded-lg border border-neutral-700 bg-black/40 transition-all",
-                          photoExpanded ? "w-full" : "w-14"
+                          photoExpanded ? "mb-2 w-full" : "w-14 shrink-0"
                         )}
                         aria-label={
                           photoExpanded
@@ -455,10 +461,7 @@ export function PendingPaymentsPanel({
                       </button>
                     )}
 
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-600/20">
-                        <Check className="h-4 w-4 text-green-400" />
-                      </div>
+                    <div className={cn("gap-3", photoExpanded ? "flex flex-col" : "flex items-start")}>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-white truncate">
@@ -492,10 +495,8 @@ export function PendingPaymentsPanel({
                           <span className="text-neutral-600">&middot;</span>
                           <span>{formatVND(p.amount)}</span>
                         </div>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <p className="text-sm font-medium tabular-nums text-neutral-300">
-                          {formatTimestamp(p.confirmedAt)}
+                        <p className="mt-0.5 text-xs text-neutral-500">
+                          {formatDateTime(p.confirmedAt)}
                         </p>
                       </div>
                     </div>
