@@ -10,6 +10,7 @@ import Link from "next/link";
 import { Shield, Clipboard, Grid3X3, Phone, Lock, Eye, EyeOff } from "lucide-react";
 import { CourtFlowLogo } from "@/components/courtflow-logo";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
+import { StaffTopBar } from "@/components/staff-top-bar";
 
 interface StaffVenue {
   id: string;
@@ -18,7 +19,7 @@ interface StaffVenue {
 
 export default function StaffPage() {
   const { t } = useTranslation();
-  const { token, staffId, venueId, role, onboardingCompleted, setAuth, clearAuth } = useSessionStore();
+  const { token, staffId, staffName, venueId, role, onboardingCompleted, setAuth, clearAuth } = useSessionStore();
   const { isAndroid, installed, canPrompt, promptInstall } = usePwaInstall();
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
@@ -60,13 +61,18 @@ export default function StaffPage() {
 
   if (showRoleChoice) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-neutral-950 p-6">
-        <div className="w-full max-w-sm space-y-8">
+      <div className="min-h-dvh bg-neutral-950">
+        <StaffTopBar />
+        <div className="mx-auto flex w-full max-w-sm flex-col items-center justify-center space-y-8 p-6">
           <div className="flex flex-col items-center gap-4">
-            <CourtFlowLogo size="large" dark asLink={false} />
+            <div className="inline-flex items-center rounded-full border border-green-500/30 bg-green-500/10 px-4 py-1.5">
+              <p className="text-sm font-medium text-green-300">
+                Welcome back {staffName?.trim() || "Staff"}
+              </p>
+            </div>
             <div className="text-center">
-              <h1 className="text-xl font-semibold text-white">{t("staff.login.continueAs")}</h1>
-              <p className="mt-1 text-sm text-neutral-400">{t("staff.login.chooseHow")}</p>
+              <h1 className="text-3xl font-bold tracking-tight text-white">{t("staff.login.continueAs")}</h1>
+              <p className="mt-2 text-base text-neutral-300">{t("staff.login.chooseHow")}</p>
             </div>
           </div>
 
