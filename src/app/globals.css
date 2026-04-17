@@ -1,17 +1,79 @@
 @import "tailwindcss";
 
-/* Lightweight global light mode: invert dark UI and re-invert media/icons. */
-html.cf-theme-light body {
-  background: #f5f5f5;
-  color: #0a0a0a;
-  filter: invert(1) hue-rotate(180deg);
+/* Native light palette overrides for utility-heavy dark UI. */
+html.cf-theme-light {
+  color-scheme: light;
 }
 
-html.cf-theme-light img,
-html.cf-theme-light video,
-html.cf-theme-light canvas,
-html.cf-theme-light svg {
-  filter: invert(1) hue-rotate(180deg);
+html.cf-theme-light body {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+html.cf-theme-light .bg-neutral-950 {
+  background-color: #f8fafc !important;
+}
+
+html.cf-theme-light .bg-neutral-900,
+html.cf-theme-light .bg-neutral-900\/50,
+html.cf-theme-light .bg-neutral-900\/70,
+html.cf-theme-light .bg-neutral-900\/40 {
+  background-color: #ffffff !important;
+}
+
+html.cf-theme-light .bg-neutral-800,
+html.cf-theme-light .bg-neutral-800\/50,
+html.cf-theme-light .bg-neutral-800\/40 {
+  background-color: #f1f5f9 !important;
+}
+
+html.cf-theme-light .bg-neutral-700,
+html.cf-theme-light .bg-neutral-700\/40 {
+  background-color: #e2e8f0 !important;
+}
+
+html.cf-theme-light .bg-black\/40,
+html.cf-theme-light .bg-black\/60 {
+  background-color: rgba(15, 23, 42, 0.08) !important;
+}
+
+html.cf-theme-light .border-neutral-900,
+html.cf-theme-light .border-neutral-800,
+html.cf-theme-light .border-neutral-800\/70,
+html.cf-theme-light .border-neutral-700,
+html.cf-theme-light .border-neutral-700\/70,
+html.cf-theme-light .border-neutral-600 {
+  border-color: #dbe3ef !important;
+}
+
+html.cf-theme-light .text-white {
+  color: #0f172a !important;
+}
+
+html.cf-theme-light .text-neutral-200,
+html.cf-theme-light .text-neutral-300 {
+  color: #1e293b !important;
+}
+
+html.cf-theme-light .text-neutral-400,
+html.cf-theme-light .text-neutral-500 {
+  color: #475569 !important;
+}
+
+html.cf-theme-light .text-neutral-600 {
+  color: #64748b !important;
+}
+
+html.cf-theme-light .hover\:bg-neutral-800:hover,
+html.cf-theme-light .hover\:bg-neutral-800\/50:hover,
+html.cf-theme-light .hover\:bg-neutral-800\/80:hover,
+html.cf-theme-light .hover\:bg-neutral-700:hover {
+  background-color: #e2e8f0 !important;
+}
+
+html.cf-theme-light .hover\:border-neutral-700:hover,
+html.cf-theme-light .hover\:border-neutral-600:hover {
+  border-color: #c7d2e3 !important;
 }
 
 /* Lock document scroll in standalone / PWA; player shell is position:fixed (see player/layout.tsx). */
