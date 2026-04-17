@@ -32,6 +32,7 @@ export default function StaffPage() {
   const [showOtherApps, setShowOtherApps] = useState(false);
   const [loginVenues, setLoginVenues] = useState<StaffVenue[]>([]);
   const installPromptShownRef = useRef(false);
+  const returnHomePendingRef = useRef(false);
   const router = useRouter();
 
   const handleShowOnboarding = () => {
@@ -42,10 +43,49 @@ export default function StaffPage() {
   };
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    const pending = sessionStorage.getItem("cf_staff_return_home") === "1";
+    const traceRaw = sessionStorage.getItem("cf_staff_return_home_trace");
+    returnHomePendingRef.current = pending;
+    console.info("[StaffNavDebug] Staff page mount", {
+      pendingReturnHome: pending,
+      trace: traceRaw,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (returnHomePendingRef.current) {
+      console.info("[StaffNavDebug] Return-home pending check", {
+        token: !!token,
+        staffId: !!staffId,
+        venueId: !!venueId,
+        role,
+      });
+      if (token && staffId && venueId) {
+        setShowRoleChoice(false);
+        setShowOtherApps(false);
+        returnHomePendingRef.current = false;
+        if (typeof window !== "undefined") {
+          sessionStorage.removeItem("cf_staff_return_home");
+          sessionStorage.removeItem("cf_staff_return_home_trace");
+        }
+        console.info("[StaffNavDebug] Return-home consumed -> open StaffDashboard");
+        return;
+      }
+      // Wait for session hydration instead of falling back to role-choice.
+      return;
+    }
+
     if (token && staffId && (role === "superadmin" || role === "staff")) {
+      console.info("[StaffNavDebug] Show role-choice screen", {
+        token: !!token,
+        staffId: !!staffId,
+        venueId: !!venueId,
+        role,
+      });
       setShowRoleChoice(true);
     }
-  }, [token, staffId, role]);
+  }, [token, staffId, role, venueId]);
 
   useEffect(() => {
     if (token || staffId || venueId || showRoleChoice) return;

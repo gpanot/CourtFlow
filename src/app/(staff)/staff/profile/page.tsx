@@ -44,8 +44,27 @@ export default function StaffProfilePage() {
   const [qrExpanded, setQrExpanded] = useState(false);
 
   const handleBack = () => {
-    if (typeof window !== "undefined" && window.history.length > 1) {
-      router.back();
+    if (typeof window !== "undefined") {
+      const traceId = `trace-${Date.now()}`;
+      sessionStorage.setItem("cf_staff_return_home", "1");
+      sessionStorage.setItem(
+        "cf_staff_return_home_trace",
+        JSON.stringify({
+          traceId,
+          at: new Date().toISOString(),
+          from: "/staff/profile",
+          token: !!token,
+          staffId: !!staffId,
+          venueId: !!venueId,
+        })
+      );
+      console.info("[StaffNavDebug] Profile back -> set return_home flag", {
+        traceId,
+        token: !!token,
+        staffId: !!staffId,
+        venueId: !!venueId,
+      });
+      window.location.assign("/staff");
       return;
     }
     router.push("/staff");

@@ -422,50 +422,82 @@ export function PendingPaymentsPanel({
                 const player = getDisplayPlayer(p);
                 const flowTag = getFlowTag(p);
                 const approvalTag = getApprovalTag(p, true);
+                const recognitionPhoto = p.player?.facePhotoPath?.trim() || null;
+                const photoExpanded = expandedPhotoPaymentId === p.id;
 
                 return (
-                  <div key={p.id} className="flex items-center gap-3 px-4 py-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-600/20">
-                      <Check className="h-4 w-4 text-green-400" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-white truncate">
-                          {player.name}
-                        </span>
-                        <span
+                  <div key={p.id} className="px-4 py-3 space-y-2">
+                    {recognitionPhoto && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setExpandedPhotoPaymentId((prev) => (prev === p.id ? null : p.id))
+                        }
+                        className={cn(
+                          "overflow-hidden rounded-lg border border-neutral-700 bg-black/40 transition-all",
+                          photoExpanded ? "w-full" : "w-14"
+                        )}
+                        aria-label={
+                          photoExpanded
+                            ? `Collapse recognition photo for ${player.name}`
+                            : `Expand recognition photo for ${player.name}`
+                        }
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={recognitionPhoto}
+                          alt={`${player.name} recognition`}
                           className={cn(
-                            "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase",
-                            isCash
-                              ? "bg-amber-600/20 text-amber-300"
-                              : "bg-blue-600/20 text-blue-300"
+                            "w-full object-cover object-center transition-all",
+                            photoExpanded ? "h-44" : "h-14"
                           )}
-                        >
-                          {isCash
-                            ? t("staff.dashboard.paymentMethodCash")
-                            : t("staff.dashboard.paymentMethodQR")}
-                        </span>
-                        <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase bg-fuchsia-600/20 text-fuchsia-300">
-                          {flowTag}
-                        </span>
-                        <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase bg-emerald-600/20 text-emerald-300">
-                          {approvalTag}
-                        </span>
+                        />
+                      </button>
+                    )}
+
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-600/20">
+                        <Check className="h-4 w-4 text-green-400" />
                       </div>
-                      <div className="mt-0.5 flex items-center gap-2 text-xs text-neutral-500">
-                        <span>
-                          {isNew
-                            ? t("staff.dashboard.paymentTypeRegistration")
-                            : t("staff.dashboard.paymentTypeCheckin")}
-                        </span>
-                        <span className="text-neutral-600">&middot;</span>
-                        <span>{formatVND(p.amount)}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-white truncate">
+                            {player.name}
+                          </span>
+                          <span
+                            className={cn(
+                              "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase",
+                              isCash
+                                ? "bg-amber-600/20 text-amber-300"
+                                : "bg-blue-600/20 text-blue-300"
+                            )}
+                          >
+                            {isCash
+                              ? t("staff.dashboard.paymentMethodCash")
+                              : t("staff.dashboard.paymentMethodQR")}
+                          </span>
+                          <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase bg-fuchsia-600/20 text-fuchsia-300">
+                            {flowTag}
+                          </span>
+                          <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase bg-emerald-600/20 text-emerald-300">
+                            {approvalTag}
+                          </span>
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-2 text-xs text-neutral-500">
+                          <span>
+                            {isNew
+                              ? t("staff.dashboard.paymentTypeRegistration")
+                              : t("staff.dashboard.paymentTypeCheckin")}
+                          </span>
+                          <span className="text-neutral-600">&middot;</span>
+                          <span>{formatVND(p.amount)}</span>
+                        </div>
                       </div>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p className="text-sm font-medium tabular-nums text-neutral-300">
-                        {formatTimestamp(p.confirmedAt)}
-                      </p>
+                      <div className="shrink-0 text-right">
+                        <p className="text-sm font-medium tabular-nums text-neutral-300">
+                          {formatTimestamp(p.confirmedAt)}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 );
