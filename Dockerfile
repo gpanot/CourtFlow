@@ -17,8 +17,6 @@ RUN npm run build
 FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
@@ -27,10 +25,12 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/prisma ./prisma
-RUN mkdir -p /app/uploads/players && chown -R nextjs:nodejs /app/uploads
-USER nextjs
+COPY --from=builder /app/sounds ./sounds
+RUN mkdir -p /app/uploads/players /app/uploads/players/avatars
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
-# Migrations run in Railway release phase (railway.toml). Container start only runs the server.
-CMD ["node", "server.js"]
+# Railway mounts a persistent volume at /app/uploads. The volume is owned by
+# root, so the container runs as root to guarantee write access for face photos
+# and avatars. Sub-dirs are created at startup in case the volume is fresh.
+CMD ["sh", "-c", "mkdir -p /app/uploads/players /app/uploads/players/avatars && node server.js"]

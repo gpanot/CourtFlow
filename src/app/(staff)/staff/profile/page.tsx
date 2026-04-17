@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { useSessionStore, useHasHydrated } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { StaffLanguageToggle } from "../staff-language-toggle";
-import { ArrowLeft, User, History, ChevronRight, LogOut, Phone, Download, Play, Volume2, CreditCard, Loader2, Check, Package, BarChart3 } from "lucide-react";
+import { ArrowLeft, User, History, ChevronRight, LogOut, Phone, Download, Play, Volume2, CreditCard, Loader2, Check, Package, BarChart3, Moon, Sun } from "lucide-react";
 import Link from "next/link";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 import {
@@ -17,6 +17,16 @@ import {
   type AssignmentAttentionSoundId,
 } from "@/lib/assignment-attention-sound";
 import { VIETQR_BANKS, buildVietQRUrl } from "@/lib/vietqr";
+
+const THEME_STORAGE_KEY = "courtflow-theme-mode";
+type ThemeMode = "dark" | "light";
+
+function applyThemeMode(mode: ThemeMode) {
+  if (typeof document === "undefined") return;
+  const root = document.documentElement;
+  if (mode === "light") root.classList.add("cf-theme-light");
+  else root.classList.remove("cf-theme-light");
+}
 
 export default function StaffProfilePage() {
   const { t } = useTranslation();
@@ -43,6 +53,7 @@ export default function StaffProfilePage() {
   const [paySaved, setPaySaved] = useState(false);
   const [payError, setPayError] = useState("");
   const [qrExpanded, setQrExpanded] = useState(false);
+  const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
   const [buildInfo, setBuildInfo] = useState<{
     commitSha: string | null;
     buildTimestamp: string | null;
@@ -58,6 +69,14 @@ export default function StaffProfilePage() {
 
   useEffect(() => {
     setAssignmentSoundId(getStoredAssignmentSoundId());
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = localStorage.getItem(THEME_STORAGE_KEY);
+    const nextMode: ThemeMode = stored === "light" ? "light" : "dark";
+    setThemeMode(nextMode);
+    applyThemeMode(nextMode);
   }, []);
 
   useEffect(() => {
@@ -126,6 +145,15 @@ export default function StaffProfilePage() {
   const handleSelectSound = (id: AssignmentAttentionSoundId) => {
     setAssignmentSoundId(id);
     setStoredAssignmentSoundId(id);
+  };
+
+  const toggleThemeMode = () => {
+    const nextMode: ThemeMode = themeMode === "dark" ? "light" : "dark";
+    setThemeMode(nextMode);
+    applyThemeMode(nextMode);
+    if (typeof window !== "undefined") {
+      localStorage.setItem(THEME_STORAGE_KEY, nextMode);
+    }
   };
 
   const handleSavePaymentSettings = async () => {
@@ -297,6 +325,18 @@ export default function StaffProfilePage() {
         <div className="flex items-center justify-between rounded-xl border border-neutral-800 bg-neutral-900/50 px-4 py-3">
           <span className="text-sm font-medium text-neutral-200">{t("staff.profile.language")}</span>
           <StaffLanguageToggle />
+        </div>
+
+        <div className="flex items-center justify-between rounded-xl border border-neutral-800 bg-neutral-900/50 px-4 py-3">
+          <span className="text-sm font-medium text-neutral-200">Theme</span>
+          <button
+            type="button"
+            onClick={toggleThemeMode}
+            className="inline-flex items-center gap-2 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-200 hover:bg-neutral-800 transition-colors"
+          >
+            {themeMode === "dark" ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
+            {themeMode === "dark" ? "Dark" : "Light"}
+          </button>
         </div>
 
         {/* CourtPay menu items */}

@@ -36,6 +36,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="bg-neutral-950 text-white antialiased">
+        <script
+          dangerouslySetInnerHTML={{
+            __html: "(function(){try{var key='courtflow-theme-mode';var mode=localStorage.getItem(key);var root=document.documentElement;if(mode==='light'){root.classList.add('cf-theme-light');}else{root.classList.remove('cf-theme-light');}}catch(e){}})();",
+          }}
+        />
         {children}
         <script
           dangerouslySetInnerHTML={{

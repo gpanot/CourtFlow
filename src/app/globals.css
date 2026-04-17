@@ -1,5 +1,19 @@
 @import "tailwindcss";
 
+/* Lightweight global light mode: invert dark UI and re-invert media/icons. */
+html.cf-theme-light body {
+  background: #f5f5f5;
+  color: #0a0a0a;
+  filter: invert(1) hue-rotate(180deg);
+}
+
+html.cf-theme-light img,
+html.cf-theme-light video,
+html.cf-theme-light canvas,
+html.cf-theme-light svg {
+  filter: invert(1) hue-rotate(180deg);
+}
+
 /* Lock document scroll in standalone / PWA; player shell is position:fixed (see player/layout.tsx). */
 html:has(#player-app-shell),
 body:has(#player-app-shell) {
