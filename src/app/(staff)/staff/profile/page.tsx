@@ -43,6 +43,10 @@ export default function StaffProfilePage() {
   const [paySaved, setPaySaved] = useState(false);
   const [payError, setPayError] = useState("");
   const [qrExpanded, setQrExpanded] = useState(false);
+  const [buildInfo, setBuildInfo] = useState<{
+    commitSha: string | null;
+    buildTimestamp: string | null;
+  } | null>(null);
 
   const handleBack = () => {
     if (typeof window !== "undefined") {
@@ -54,6 +58,23 @@ export default function StaffProfilePage() {
 
   useEffect(() => {
     setAssignmentSoundId(getStoredAssignmentSoundId());
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await api.get<{ commitSha: string | null; buildTimestamp: string | null }>(
+          "/api/app-build"
+        );
+        if (!cancelled) setBuildInfo(data);
+      } catch {
+        if (!cancelled) setBuildInfo(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -141,6 +162,16 @@ export default function StaffProfilePage() {
       description: "Preview",
     });
   }, [payBankName, payBankAccount, payBankOwnerName, paySessionFee]);
+
+  const buildTimestampLabel = useMemo(() => {
+    const raw = buildInfo?.buildTimestamp;
+    if (!raw) return "unknown";
+    const parsed = new Date(raw);
+    if (Number.isNaN(parsed.getTime())) return raw;
+    return parsed.toLocaleString();
+  }, [buildInfo?.buildTimestamp]);
+
+  const commitShort = buildInfo?.commitSha ? buildInfo.commitSha.slice(0, 7) : "unknown";
 
   const handlePreviewSound = async (id: AssignmentAttentionSoundId) => {
     setPreviewingSoundId(id);
@@ -493,6 +524,11 @@ export default function StaffProfilePage() {
           <LogOut className="h-5 w-5" />
           {t("staff.profile.logOut")}
         </button>
+
+        <div className="space-y-0.5 text-center text-[11px] text-neutral-600">
+          <p>Build commit: {commitShort}</p>
+          <p>Build time: {buildTimestampLabel}</p>
+        </div>
       </main>
     </div>
   );
