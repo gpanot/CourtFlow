@@ -20,6 +20,21 @@ import type { AppColors } from "../../theme/palettes";
 import type { Session, CourtsState, SessionHistoryRow } from "../../types/api";
 import type { StaffStackParamList } from "../../navigation/types";
 
+function isToday(dateStr: string): boolean {
+  const d = new Date(dateStr);
+  const now = new Date();
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
+}
+
+function sessionDateLabel(openedAt: string): string {
+  const dateStr = new Date(openedAt).toLocaleDateString();
+  return isToday(openedAt) ? `Today — ${dateStr}` : dateStr;
+}
+
 function createStyles(t: AppColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: t.bg },
@@ -130,7 +145,7 @@ export function SessionTabScreen() {
   const openDetail = (row: SessionHistoryRow) => {
     navigation.navigate("StaffSessionDetail", {
       sessionId: row.id,
-      date: new Date(row.openedAt).toLocaleDateString(),
+      date: sessionDateLabel(row.openedAt),
       openedAt: row.openedAt,
       closedAt: row.closedAt ?? null,
     });
@@ -168,7 +183,11 @@ export function SessionTabScreen() {
         <View style={styles.statusCard}>
           <View style={styles.statusRow}>
             <View style={[styles.statusDot, { backgroundColor: isOpen ? theme.green500 : theme.subtle }]} />
-            <Text style={styles.statusText}>{isOpen ? "Session Open" : "No Active Session"}</Text>
+            <Text style={styles.statusText}>
+              {isOpen
+                ? `Session Open${session?.openedAt && isToday(session.openedAt) ? " — Today" : ""}`
+                : "No Active Session"}
+            </Text>
           </View>
 
           {session && isOpen && (
@@ -207,7 +226,7 @@ export function SessionTabScreen() {
             {sessionHistory.map((s) => (
               <TouchableOpacity key={s.id} style={styles.historyCard} onPress={() => openDetail(s)} activeOpacity={0.7}>
                 <View style={styles.historyRow}>
-                  <Text style={styles.historyDate}>{new Date(s.openedAt).toLocaleDateString()}</Text>
+                  <Text style={styles.historyDate}>{sessionDateLabel(s.openedAt)}</Text>
                   <View style={[styles.historyBadge, { backgroundColor: "rgba(115,115,115,0.13)" }]}>
                     <Text style={[styles.historyBadgeText, { color: theme.subtle }]}>closed</Text>
                   </View>
