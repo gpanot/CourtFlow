@@ -11,6 +11,8 @@ import {
   Pressable,
   Keyboard,
   Modal,
+  Animated,
+  Easing,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,6 +20,7 @@ import { ScanFace, UserPlus } from "lucide-react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { StatusBar } from "expo-status-bar";
 import { api } from "../../lib/api-client";
+import { ENV } from "../../config/env";
 import { useAuthStore } from "../../stores/auth-store";
 import { useSocket } from "../../hooks/useSocket";
 import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
@@ -30,6 +33,20 @@ import { CourtFlowKioskTopBar } from "../../components/CourtFlowKioskTopBar";
 import type { SubscriptionPackage } from "../../types/api";
 import type { CheckInScannerStringKey } from "../../lib/tablet-check-in-strings";
 import type { TabletStackScreenProps } from "../../navigation/types";
+
+function resolveVenueMediaUrl(url: string | null | undefined): string | null {
+  if (!url || typeof url !== "string") return null;
+  const trimmed = url.trim();
+  if (
+    /^https?:\/\//i.test(trimmed) ||
+    trimmed.startsWith("data:") ||
+    trimmed.startsWith("file:")
+  ) {
+    return trimmed;
+  }
+  const base = ENV.API_BASE_URL.replace(/\/$/, "");
+  return `${base}${trimmed.startsWith("/") ? trimmed : `/${trimmed}`}`;
+}
 
 // CourtPay fuchsia theme — mirrors PWA fuchsia/pink palette
 const FUCHSIA = {
@@ -115,8 +132,21 @@ export function CourtPayCheckInScreen({
   navigation,
 }: TabletStackScreenProps<"CourtPayCheckIn">) {
   const venueId = useAuthStore((s) => s.venueId);
+  const venues = useAuthStore((s) => s.venues);
   const insets = useSafeAreaInsets();
   const { locale, toggleLocale, t } = useTabletKioskLocale();
+  const [venueApiName, setVenueApiName] = useState("");
+  const [venueLogoPath, setVenueLogoPath] = useState<string | null>(null);
+  const [venueLogoSpin, setVenueLogoSpin] = useState(false);
+  const logoSpinValue = useRef(new Animated.Value(0)).current;
+  const logoSpinLoopRef = useRef<Animated.CompositeAnimation | null>(null);
+
+  const venueName =
+    venueApiName.trim() ||
+    (venueId ? venues.find((v) => v.id === venueId)?.name : "") ||
+    "";
+
+  const resolvedLogoUri = resolveVenueMediaUrl(venueLogoPath);
   const [step, setStep] = useState<Step>("home");
   const [phoneInput, setPhoneInput] = useState("");
   const [phoneError, setPhoneError] = useState("");
@@ -147,6 +177,69 @@ export function CourtPayCheckInScreen({
   const regCameraRef = useRef<CameraView | null>(null);
   const regCameraReady = useRef(false);
   const [permission, requestPermission] = useCameraPermissions();
+
+  // ── Venue info (logo + name) ──────────────────────────────────────────────
+  useEffect(() => {
+    if (!venueId) return;
+    let cancelled = false;
+    void api
+      .get<{ name?: string; logoUrl?: string | null; settings?: unknown }>(
+        `/api/venues/${venueId}`
+      )
+      .then((v) => {
+        if (cancelled) return;
+        if (typeof v.name === "string") setVenueApiName(v.name);
+        setVenueLogoPath(typeof v.logoUrl === "string" ? v.logoUrl : null);
+        const st = v.settings as { logoSpin?: boolean } | undefined;
+        setVenueLogoSpin(!!st?.logoSpin);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [venueId]);
+
+  // ── Logo spin animation ───────────────────────────────────────────────────
+  useEffect(() => {
+    logoSpinLoopRef.current?.stop();
+    logoSpinLoopRef.current = null;
+
+    const shouldAnimate = step === "home" && venueLogoSpin && !!resolvedLogoUri;
+    if (!shouldAnimate) {
+      logoSpinValue.setValue(0);
+      return;
+    }
+
+    logoSpinValue.setValue(0);
+    const loop = Animated.loop(
+      Animated.timing(logoSpinValue, {
+        toValue: 1,
+        duration: 6000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    logoSpinLoopRef.current = loop;
+    loop.start();
+
+    return () => {
+      loop.stop();
+      if (logoSpinLoopRef.current === loop) {
+        logoSpinLoopRef.current = null;
+      }
+    };
+  }, [step, venueLogoSpin, resolvedLogoUri, logoSpinValue]);
+
+  const logoAnimatedStyle = venueLogoSpin
+    ? {
+        transform: [
+          {
+            rotate: logoSpinValue.interpolate({
+              inputRange: [0, 1],
+              outputRange: ["0deg", "360deg"],
+            }),
+          },
+        ],
+      }
+    : undefined;
 
   // ── Packages ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -610,6 +703,30 @@ export function CourtPayCheckInScreen({
       case "home":
         return (
           <View style={styles.homeRoot}>
+            {resolvedLogoUri ? (
+              venueLogoSpin ? (
+                <Animated.View style={[styles.venueLogoCircle, logoAnimatedStyle]}>
+                  <Image
+                    source={{ uri: resolvedLogoUri }}
+                    style={styles.venueLogoImageFixed}
+                    resizeMode="cover"
+                    accessibilityLabel={venueName || "Venue logo"}
+                  />
+                </Animated.View>
+              ) : (
+                <View style={styles.venueLogoCircle}>
+                  <Image
+                    source={{ uri: resolvedLogoUri }}
+                    style={styles.venueLogoImageFixed}
+                    resizeMode="cover"
+                    accessibilityLabel={venueName || "Venue logo"}
+                  />
+                </View>
+              )
+            ) : null}
+            {venueName ? (
+              <Text style={styles.venueNameMuted}>{venueName}</Text>
+            ) : null}
             <View style={styles.homeActionsWide}>
               <TouchableOpacity
                 style={styles.homeCardPrimary}
@@ -1289,6 +1406,23 @@ const styles = StyleSheet.create({
     gap: 28,
     paddingBottom: 40,
     paddingHorizontal: 8,
+  },
+  venueLogoImageFixed: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+  },
+  venueLogoCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    overflow: "hidden",
+  },
+  venueNameMuted: {
+    fontSize: 18,
+    fontWeight: "500",
+    color: "#a3a3a3",
+    textAlign: "center",
   },
   homeActionsWide: { width: "100%", maxWidth: 520, gap: 16 },
   homeCardPrimary: {
