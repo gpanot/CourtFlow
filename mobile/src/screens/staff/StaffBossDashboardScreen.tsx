@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,8 @@ import {
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  TextInput,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -17,8 +19,10 @@ import { useAppColors } from "../../theme/use-app-colors";
 import type { AppColors } from "../../theme/palettes";
 import type { StaffStackParamList } from "../../navigation/types";
 import type { SessionHistoryRow } from "../../types/api";
+import { resolveMediaUrl } from "../../lib/media-url";
 
-type Tab = "today" | "history" | "subscriptions";
+type Tab = "today" | "history" | "subscriptions" | "players";
+type GenderFilter = "all" | "male" | "female";
 
 interface TodayData {
   checkInsToday: number;
@@ -75,6 +79,34 @@ interface SessionData {
     expiresAt: string;
     lastCheckedIn: string | null;
   }[];
+}
+
+interface PlayerRow {
+  id: string;
+  source: "self" | "courtpay";
+  name: string;
+  phone: string;
+  gender: string | null;
+  skillLevel: string | null;
+  facePhotoPath: string | null;
+  avatarPhotoPath: string | null;
+  rankingScore: number | null;
+  checkInCount: number;
+  lastSeenAt: string | null;
+  registeredAt: string;
+  venueName: string;
+}
+
+interface PlayersData {
+  players: PlayerRow[];
+  stats: {
+    totalPlayers: number;
+    totalSelf: number;
+    totalCourtPay: number;
+    newThisWeek: number;
+    maleCount: number;
+    femaleCount: number;
+  };
 }
 
 function formatVND(amount: number) {
@@ -247,6 +279,138 @@ function createStyles(t: AppColors) {
     subCardBadgeExpiredText: { fontSize: 10, fontWeight: "700", color: "#f87171" },
     subCardChevron: { paddingLeft: 8 },
 
+    // ── Players tab ──────────────────────────────────────────────────────────
+    playerFilterRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      marginBottom: 10,
+      flexWrap: "wrap",
+    },
+    filterChip: {
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.card,
+    },
+    filterChipActive: {
+      borderColor: t.purple400,
+      backgroundColor: "rgba(147,51,234,0.15)",
+    },
+    filterChipText: { fontSize: 12, fontWeight: "600", color: t.muted },
+    filterChipTextActive: { color: t.purple400 },
+    searchIconBtn: {
+      marginLeft: "auto" as never,
+      padding: 6,
+    },
+    searchContainer: {
+      flexDirection: "row",
+      alignItems: "center",
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.card,
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      marginBottom: 10,
+    },
+    searchInput: {
+      flex: 1,
+      fontSize: 14,
+      color: t.text,
+      padding: 0,
+    },
+
+    playerCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.card,
+      padding: 10,
+      marginBottom: 8,
+      gap: 10,
+    },
+    playerAvatarWrap: {
+      width: 46,
+      height: 46,
+      borderRadius: 23,
+      overflow: "hidden",
+    },
+    playerAvatar: { width: 46, height: 46 },
+    playerAvatarFallback: {
+      width: 46,
+      height: 46,
+      borderRadius: 23,
+      backgroundColor: "rgba(147,51,234,0.2)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    playerAvatarInitials: {
+      fontSize: 18,
+      fontWeight: "700",
+      color: t.purple400,
+    },
+    playerCardMain: { flex: 1, minWidth: 0, gap: 2 },
+    playerCardNameRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+    },
+    playerCardName: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: t.text,
+      flexShrink: 1,
+    },
+    playerCardGender: { fontSize: 13, color: t.muted },
+    playerCardPhone: { fontSize: 12, color: t.muted },
+    playerCardTagRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      flexWrap: "wrap",
+      marginTop: 3,
+    },
+    playerTagVenue: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 2,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 6,
+      backgroundColor: "rgba(115,115,115,0.12)",
+    },
+    playerTagVenueText: { fontSize: 10, color: t.muted },
+    playerTagSource: {
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 6,
+    },
+    playerTagSourceCP: { backgroundColor: "rgba(245,158,11,0.18)" },
+    playerTagSourceSelf: { backgroundColor: "rgba(37,99,235,0.15)" },
+    playerTagSourceText: { fontSize: 10, fontWeight: "700" },
+    playerTagSourceTextCP: { color: "#f59e0b" },
+    playerTagSourceTextSelf: { color: t.blue400 },
+    playerTagSkill: {
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 6,
+      backgroundColor: "rgba(147,51,234,0.12)",
+    },
+    playerTagSkillText: { fontSize: 10, color: t.purple400 },
+    playerCardLastSeen: { fontSize: 11, color: t.subtle, marginTop: 2 },
+    playerCardRight: { alignItems: "center", minWidth: 44 },
+    playerCardCheckinCount: {
+      fontSize: 20,
+      fontWeight: "700",
+      color: t.text,
+    },
+    playerCardCheckinLabel: { fontSize: 10, color: t.muted },
+
     // ── History payment card ─────────────────────────────────────────────────
     payCard: {
       borderRadius: 10,
@@ -287,6 +451,11 @@ export function StaffBossDashboardScreen() {
   const [historyData, setHistoryData] = useState<HistoryData | null>(null);
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
   const [sessionHistory, setSessionHistory] = useState<SessionHistoryRow[]>([]);
+  const [playersData, setPlayersData] = useState<PlayersData | null>(null);
+  const [genderFilter, setGenderFilter] = useState<GenderFilter>("all");
+  const [playerSearch, setPlayerSearch] = useState("");
+  const [searchVisible, setSearchVisible] = useState(false);
+  const searchRef = useRef<TextInput>(null);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -323,6 +492,11 @@ export function StaffBossDashboardScreen() {
           `/api/courtpay/staff/boss/sessions?venueId=${venueId}`
         );
         setSessionData(data);
+      } else if (tab === "players") {
+        const data = await api.get<PlayersData>(
+          `/api/courtpay/staff/boss/players?venueId=${venueId}`
+        );
+        setPlayersData(data);
       }
     } catch {
       /* ignore */
@@ -343,7 +517,8 @@ export function StaffBossDashboardScreen() {
           [
             { id: "today" as const, label: "Today" },
             { id: "history" as const, label: "History" },
-            { id: "subscriptions" as const, label: "Subscriptions" },
+            { id: "subscriptions" as const, label: "Subs" },
+            { id: "players" as const, label: "Players" },
           ] as const
         ).map(({ id, label }) => (
           <TouchableOpacity
@@ -551,6 +726,208 @@ export function StaffBossDashboardScreen() {
                   );
                 })
               )}
+            </>
+          )}
+          {tab === "players" && (
+            <>
+              {/* KPI stats */}
+              {playersData && (
+                <View style={styles.grid}>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statLabel}>Total players</Text>
+                    <Text style={styles.statValue}>{playersData.stats.totalPlayers}</Text>
+                  </View>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statLabel}>New this week</Text>
+                    <Text style={[styles.statValue, styles.statPurple]}>
+                      {playersData.stats.newThisWeek}
+                    </Text>
+                  </View>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statLabel}>Self check-in</Text>
+                    <Text style={styles.statValue}>{playersData.stats.totalSelf}</Text>
+                  </View>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statLabel}>CourtPay</Text>
+                    <Text style={[styles.statValue, styles.statYellow]}>
+                      {playersData.stats.totalCourtPay}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Filter + search bar */}
+              <View style={styles.playerFilterRow}>
+                {(["all", "male", "female"] as GenderFilter[]).map((g) => {
+                  const count =
+                    g === "all"
+                      ? playersData?.stats.totalPlayers ?? 0
+                      : g === "male"
+                      ? playersData?.stats.maleCount ?? 0
+                      : playersData?.stats.femaleCount ?? 0;
+                  return (
+                    <TouchableOpacity
+                      key={g}
+                      style={[
+                        styles.filterChip,
+                        genderFilter === g && styles.filterChipActive,
+                      ]}
+                      onPress={() => setGenderFilter(g)}
+                    >
+                      <Text
+                        style={[
+                          styles.filterChipText,
+                          genderFilter === g && styles.filterChipTextActive,
+                        ]}
+                      >
+                        {g.charAt(0).toUpperCase() + g.slice(1)} ({count})
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+                <TouchableOpacity
+                  style={styles.searchIconBtn}
+                  onPress={() => {
+                    setSearchVisible((v) => {
+                      if (!v) setTimeout(() => searchRef.current?.focus(), 100);
+                      return !v;
+                    });
+                    if (searchVisible) setPlayerSearch("");
+                  }}
+                >
+                  <Ionicons
+                    name={searchVisible ? "close" : "search"}
+                    size={18}
+                    color={theme.muted}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              {searchVisible && (
+                <View style={styles.searchContainer}>
+                  <Ionicons name="search" size={14} color={theme.muted} style={{ marginRight: 6 }} />
+                  <TextInput
+                    ref={searchRef}
+                    style={styles.searchInput}
+                    placeholder="Search by name or phone…"
+                    placeholderTextColor={theme.muted}
+                    value={playerSearch}
+                    onChangeText={setPlayerSearch}
+                    autoCapitalize="none"
+                    returnKeyType="search"
+                  />
+                  {playerSearch.length > 0 && (
+                    <TouchableOpacity onPress={() => setPlayerSearch("")}>
+                      <Ionicons name="close-circle" size={16} color={theme.muted} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+
+              {/* Player list */}
+              {!playersData ? (
+                <ActivityIndicator color={theme.purple400} style={{ marginTop: 24 }} />
+              ) : (() => {
+                const q = playerSearch.toLowerCase().trim();
+                const filtered = playersData.players.filter((p) => {
+                  const matchGender =
+                    genderFilter === "all" ||
+                    p.gender?.toLowerCase() === genderFilter;
+                  const matchSearch =
+                    !q ||
+                    p.name.toLowerCase().includes(q) ||
+                    (p.phone ?? "").includes(q);
+                  return matchGender && matchSearch;
+                });
+
+                if (filtered.length === 0) {
+                  return (
+                    <Text style={styles.empty}>No players found.</Text>
+                  );
+                }
+
+                return filtered.map((p) => {
+                  const photoUri = resolveMediaUrl(p.avatarPhotoPath ?? p.facePhotoPath ?? null);
+                  const initials = p.name.trim().charAt(0).toUpperCase();
+                  const isCourtPay = p.source === "courtpay";
+                  const genderIcon =
+                    p.gender?.toLowerCase() === "female" ? "♀" : p.gender?.toLowerCase() === "male" ? "♂" : "?";
+
+                  return (
+                    <View key={`${p.source}-${p.id}`} style={styles.playerCard}>
+                      {/* Avatar */}
+                      <View style={styles.playerAvatarWrap}>
+                        {photoUri ? (
+                          <Image
+                            source={{ uri: photoUri }}
+                            style={styles.playerAvatar}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View style={styles.playerAvatarFallback}>
+                            <Text style={styles.playerAvatarInitials}>{initials}</Text>
+                          </View>
+                        )}
+                      </View>
+
+                      {/* Main info */}
+                      <View style={styles.playerCardMain}>
+                        <View style={styles.playerCardNameRow}>
+                          <Text style={styles.playerCardName} numberOfLines={1}>
+                            {p.name}
+                          </Text>
+                          <Text style={styles.playerCardGender}>{genderIcon}</Text>
+                        </View>
+                        <Text style={styles.playerCardPhone}>{p.phone}</Text>
+                        <View style={styles.playerCardTagRow}>
+                          {/* Venue tag */}
+                          <View style={styles.playerTagVenue}>
+                            <Ionicons name="location-outline" size={10} color={theme.muted} />
+                            <Text style={styles.playerTagVenueText} numberOfLines={1}>
+                              {p.venueName}
+                            </Text>
+                          </View>
+                          {/* Source badge */}
+                          <View style={[styles.playerTagSource, isCourtPay ? styles.playerTagSourceCP : styles.playerTagSourceSelf]}>
+                            <Text style={[styles.playerTagSourceText, isCourtPay ? styles.playerTagSourceTextCP : styles.playerTagSourceTextSelf]}>
+                              {isCourtPay ? "CourtPay" : "Self"}
+                            </Text>
+                          </View>
+                          {/* Skill level */}
+                          {p.skillLevel && (
+                            <View style={styles.playerTagSkill}>
+                              <Text style={styles.playerTagSkillText}>
+                                {p.skillLevel.charAt(0).toUpperCase() + p.skillLevel.slice(1)}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                        {p.lastSeenAt && (
+                          <Text style={styles.playerCardLastSeen}>
+                            Last seen: {formatDateShort(p.lastSeenAt)}
+                          </Text>
+                        )}
+                      </View>
+
+                      {/* Right: check-in count */}
+                      {isCourtPay && (
+                        <View style={styles.playerCardRight}>
+                          <Text style={styles.playerCardCheckinCount}>{p.checkInCount}</Text>
+                          <Text style={styles.playerCardCheckinLabel}>check-ins</Text>
+                        </View>
+                      )}
+                      {!isCourtPay && p.rankingScore != null && (
+                        <View style={styles.playerCardRight}>
+                          <Text style={[styles.playerCardCheckinCount, styles.statPurple]}>
+                            {p.rankingScore}
+                          </Text>
+                          <Text style={styles.playerCardCheckinLabel}>rating</Text>
+                        </View>
+                      )}
+                    </View>
+                  );
+                });
+              })()}
             </>
           )}
         </ScrollView>
