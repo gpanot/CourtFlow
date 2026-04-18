@@ -19,6 +19,7 @@ export type StaffStackParamList = {
   StaffSubscriptions: undefined;
   StaffBossDashboard: undefined;
   StaffSessionDetail: { sessionId: string; date: string; openedAt: string; closedAt: string | null };
+  BossSubscriptionDetail: { subscriptionId: string };
 };
 
 export type StaffTabParamList = {

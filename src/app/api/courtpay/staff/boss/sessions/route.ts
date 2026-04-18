@@ -18,6 +18,7 @@ export async function GET(req: Request) {
         player: true,
         package: true,
         _count: { select: { usages: true } },
+        usages: { orderBy: { checkedInAt: "desc" }, take: 1 },
       },
       orderBy: { createdAt: "desc" },
       take: 100,
@@ -35,6 +36,7 @@ export async function GET(req: Request) {
         usageCount: s._count.usages,
         activatedAt: s.activatedAt,
         expiresAt: s.expiresAt,
+        lastCheckedIn: s.usages[0]?.checkedInAt ?? null,
       })),
     });
   } catch (err: unknown) {

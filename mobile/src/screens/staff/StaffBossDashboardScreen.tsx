@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -71,11 +72,40 @@ interface SessionData {
     usageCount: number;
     activatedAt: string;
     expiresAt: string;
+    lastCheckedIn: string | null;
   }[];
 }
 
 function formatVND(amount: number) {
   return new Intl.NumberFormat("vi-VN").format(amount);
+}
+
+function formatDateShort(dateStr: string | null | undefined): string {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function formatDateTime(dateStr: string | null | undefined): string {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString(undefined, {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function isToday(dateStr: string | null | undefined): boolean {
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  const now = new Date();
+  return d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
 }
 
 function sourceLabel(s: string) {
@@ -160,6 +190,58 @@ function createStyles(t: AppColors) {
     badgeText: { fontSize: 10, fontWeight: "700", color: t.blue400 },
     empty: { textAlign: "center", color: t.muted, paddingVertical: 24, fontSize: 14 },
     time: { fontSize: 10, color: t.subtle, marginTop: 4, textAlign: "right" },
+
+    // ── Subscription card ────────────────────────────────────────────────────
+    subCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.card,
+      padding: 12,
+      marginBottom: 8,
+    },
+    subCardMain: { flex: 1, minWidth: 0, gap: 2 },
+    subCardName: { fontSize: 14, fontWeight: "700", color: t.text },
+    subCardPkg: { fontSize: 12, fontWeight: "600", color: "#a855f7", marginTop: 1 },
+    subCardMeta: { fontSize: 11, color: t.muted },
+    subCardBadge: {
+      paddingHorizontal: 7,
+      paddingVertical: 2,
+      borderRadius: 6,
+      alignSelf: "flex-start",
+      marginTop: 3,
+    },
+    subCardBadgeActive: { backgroundColor: "rgba(22,163,74,0.18)" },
+    subCardBadgeExpired: { backgroundColor: "rgba(239,68,68,0.15)" },
+    subCardBadgeActiveText: { fontSize: 10, fontWeight: "700", color: "#4ade80" },
+    subCardBadgeExpiredText: { fontSize: 10, fontWeight: "700", color: "#f87171" },
+    subCardChevron: { paddingLeft: 8 },
+
+    // ── History payment card ─────────────────────────────────────────────────
+    payCard: {
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.card,
+      padding: 12,
+      marginBottom: 8,
+    },
+    payCardNameRow: { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
+    payCardName: { fontSize: 14, fontWeight: "700", color: t.text, flexShrink: 1 },
+    payBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+    payBadgeCash: { backgroundColor: "rgba(245,158,11,0.2)" },
+    payBadgeCashText: { fontSize: 10, fontWeight: "700", color: t.amber400 },
+    payBadgeQr: { backgroundColor: "rgba(37,99,235,0.2)" },
+    payBadgeQrText: { fontSize: 10, fontWeight: "700", color: t.blue400 },
+    payBadgeSub: { backgroundColor: "rgba(168,85,247,0.18)" },
+    payBadgeSubText: { fontSize: 10, fontWeight: "700", color: "#a855f7" },
+    payCardRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 6 },
+    payCardMeta: { fontSize: 12, color: t.muted },
+    payCardAmount: { fontSize: 15, fontWeight: "700", color: "#a855f7" },
+    payCardRef: { fontSize: 11, color: t.subtle, marginTop: 3 },
+    payCardDate: { fontSize: 11, color: t.subtle, marginTop: 2 },
   });
 }
 
@@ -172,6 +254,7 @@ export function StaffBossDashboardScreen() {
 
   const [tab, setTab] = useState<Tab>("today");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [todayData, setTodayData] = useState<TodayData | null>(null);
   const [historyData, setHistoryData] = useState<HistoryData | null>(null);
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
@@ -212,6 +295,7 @@ export function StaffBossDashboardScreen() {
       /* ignore */
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [venueId, tab]);
 
@@ -226,7 +310,7 @@ export function StaffBossDashboardScreen() {
           [
             { id: "today" as const, label: "Today" },
             { id: "history" as const, label: "History" },
-            { id: "subscriptions" as const, label: "Subs" },
+            { id: "subscriptions" as const, label: "Subscriptions" },
           ] as const
         ).map(({ id, label }) => (
           <TouchableOpacity
@@ -244,7 +328,16 @@ export function StaffBossDashboardScreen() {
           <ActivityIndicator color={theme.purple400} />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.body}>
+        <ScrollView
+          contentContainerStyle={styles.body}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => { setRefreshing(true); void fetchData(); }}
+              tintColor={theme.purple400}
+            />
+          }
+        >
           {tab === "today" && todayData && (
             <>
               <View style={styles.grid}>
@@ -349,16 +442,18 @@ export function StaffBossDashboardScreen() {
             <>
               {historyData.dailyRevenue.length > 0 && (
                 <>
-                  <Text style={styles.sectionTitle}>Daily revenue (UTC, last 7)</Text>
-                  {historyData.dailyRevenue.slice(0, 7).map((d) => (
+                  <Text style={styles.sectionTitle}>Daily revenue (all today's payments)</Text>
+                  {historyData.dailyRevenue.map((d) => (
                     <View key={d.date} style={styles.row}>
-                      <Text style={styles.rowSub}>{d.date}</Text>
-                      <View style={{ alignItems: "flex-end" }}>
-                        <Text style={[styles.rowTitle, styles.statPurple]}>
-                          {formatVND(d.total)} VND
+                      <View style={styles.rowMain}>
+                        <Text style={styles.rowTitle}>
+                          {isToday(d.date + "T00:00:00") ? `Today — ${d.date}` : d.date}
                         </Text>
                         <Text style={styles.rowSub}>{d.count} payments</Text>
                       </View>
+                      <Text style={[styles.rowTitle, styles.statPurple]}>
+                        {formatVND(d.total)} VND
+                      </Text>
                     </View>
                   ))}
                 </>
@@ -369,54 +464,99 @@ export function StaffBossDashboardScreen() {
               {historyData.payments.length === 0 ? (
                 <Text style={styles.empty}>No payments</Text>
               ) : (
-                historyData.payments.slice(0, 20).map((p) => (
-                  <View key={p.id} style={styles.row}>
-                    <View style={styles.rowMain}>
-                      <Text style={styles.rowTitle}>{p.playerName}</Text>
-                      <Text style={styles.rowSub}>
-                        {p.type} · {p.paymentMethod}
-                      </Text>
+                historyData.payments.map((p) => {
+                  const isCash = p.paymentMethod === "cash";
+                  const isSub = p.type === "subscription";
+                  return (
+                    <View key={p.id} style={styles.payCard}>
+                      <View style={styles.payCardNameRow}>
+                        <Text style={styles.payCardName} numberOfLines={1}>{p.playerName}</Text>
+                        {isSub ? (
+                          <View style={[styles.payBadge, styles.payBadgeSub]}>
+                            <Text style={styles.payBadgeSubText}>SUB</Text>
+                          </View>
+                        ) : (
+                          <View style={[styles.payBadge, isCash ? styles.payBadgeCash : styles.payBadgeQr]}>
+                            <Text style={isCash ? styles.payBadgeCashText : styles.payBadgeQrText}>
+                              {isCash ? "CASH" : "QR"}
+                            </Text>
+                          </View>
+                        )}
+                        <View style={[styles.payBadge, styles.payBadgeQr, { backgroundColor: "rgba(112,26,117,0.15)" }]}>
+                          <Text style={[styles.payBadgeQrText, { color: "#c026d3" }]}>CourtPay</Text>
+                        </View>
+                      </View>
+                      <View style={styles.payCardRow}>
+                        <Text style={styles.payCardMeta}>{p.type}</Text>
+                        <Text style={styles.payCardAmount}>{formatVND(p.amount)} VND</Text>
+                      </View>
                       {p.paymentRef ? (
-                        <Text style={[styles.rowSub, { fontFamily: "monospace" }]}>
-                          {p.paymentRef}
-                        </Text>
+                        <Text style={styles.payCardRef}>{p.paymentRef}</Text>
                       ) : null}
+                      <Text style={styles.payCardDate}>{formatDateTime(p.confirmedAt)}</Text>
                     </View>
-                    <Text style={[styles.rowTitle, styles.statPurple]}>
-                      {formatVND(p.amount)}
-                    </Text>
-                  </View>
-                ))
+                  );
+                })
               )}
             </>
           )}
 
           {tab === "subscriptions" && sessionData && (
             <>
-              <Text style={styles.hint}>
-                Player packages (CourtPay). Not the staff Session tab.
-              </Text>
               {sessionData.subscriptions.length === 0 ? (
                 <Text style={styles.empty}>No subscriptions yet</Text>
               ) : (
-                sessionData.subscriptions.map((s) => (
-                  <View key={s.id} style={styles.row}>
-                    <View style={styles.rowMain}>
-                      <Text style={styles.rowTitle}>{s.playerName}</Text>
-                      <Text style={styles.rowSub}>{s.playerPhone}</Text>
-                      <Text style={[styles.rowSub, { color: theme.purple400 }]}>
-                        {s.packageName}
-                      </Text>
-                      <Text style={styles.rowSub}>
-                        {s.status} ·{" "}
-                        {s.totalSessions === null
-                          ? "Unlimited"
-                          : `${s.sessionsRemaining ?? 0}/${s.totalSessions ?? 0} left`}{" "}
-                        · {s.usageCount} used
-                      </Text>
-                    </View>
-                  </View>
-                ))
+                sessionData.subscriptions.map((s) => {
+                  const isActive = s.status === "active";
+                  const sessionsLabel =
+                    s.totalSessions === null
+                      ? `Unlimited · ${s.usageCount} used`
+                      : `${s.sessionsRemaining ?? 0}/${s.totalSessions} left · ${s.usageCount} used`;
+                  return (
+                    <TouchableOpacity
+                      key={s.id}
+                      style={styles.subCard}
+                      activeOpacity={0.7}
+                      onPress={() =>
+                        navigation.navigate("BossSubscriptionDetail", {
+                          subscriptionId: s.id,
+                        })
+                      }
+                    >
+                      <View style={styles.subCardMain}>
+                        <Text style={styles.subCardName} numberOfLines={1}>{s.playerName}</Text>
+                        <Text style={styles.subCardPkg}>{s.packageName}</Text>
+                        <Text style={styles.subCardMeta}>{s.playerPhone}</Text>
+                        <Text style={styles.subCardMeta}>{sessionsLabel}</Text>
+                        <Text style={styles.subCardMeta}>
+                          Purchased: {formatDateShort(s.activatedAt)}
+                          {s.lastCheckedIn
+                            ? `  ·  Last in: ${formatDateShort(s.lastCheckedIn)}`
+                            : "  ·  No check-ins"}
+                        </Text>
+                        <View
+                          style={[
+                            styles.subCardBadge,
+                            isActive ? styles.subCardBadgeActive : styles.subCardBadgeExpired,
+                          ]}
+                        >
+                          <Text
+                            style={
+                              isActive
+                                ? styles.subCardBadgeActiveText
+                                : styles.subCardBadgeExpiredText
+                            }
+                          >
+                            {s.status.toUpperCase()}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={styles.subCardChevron}>
+                        <Ionicons name="chevron-forward" size={16} color={theme.muted} />
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })
               )}
             </>
           )}
