@@ -63,6 +63,13 @@ interface HistoryData {
     paymentRef: string | null;
   }[];
   dailyRevenue: { date: string; total: number; count: number }[];
+  revenueSummary?: {
+    today: { total: number; count: number };
+    yesterday: { total: number; count: number };
+    thisWeek: { total: number; count: number };
+    thisMonth: { total: number; count: number };
+    allTime: { total: number; count: number };
+  };
 }
 
 interface SessionData {
@@ -90,8 +97,8 @@ interface PlayerRow {
   skillLevel: string | null;
   facePhotoPath: string | null;
   avatarPhotoPath: string | null;
-  rankingScore: number | null;
   checkInCount: number;
+  avgReturnDays: number | null;
   lastSeenAt: string | null;
   registeredAt: string;
   venueName: string;
@@ -101,12 +108,24 @@ interface PlayersData {
   players: PlayerRow[];
   stats: {
     totalPlayers: number;
-    totalSelf: number;
-    totalCourtPay: number;
     newThisWeek: number;
+    activeSubscriptions: number;
+    venueAvgReturn: number | null;
     maleCount: number;
     femaleCount: number;
   };
+}
+
+interface RevenueBucket {
+  total: number;
+  count: number;
+}
+interface RevenueSummary {
+  today: RevenueBucket;
+  yesterday: RevenueBucket;
+  thisWeek: RevenueBucket;
+  thisMonth: RevenueBucket;
+  allTime: RevenueBucket;
 }
 
 function formatVND(amount: number) {
@@ -278,6 +297,49 @@ function createStyles(t: AppColors) {
     subCardBadgeActiveText: { fontSize: 10, fontWeight: "700", color: "#4ade80" },
     subCardBadgeExpiredText: { fontSize: 10, fontWeight: "700", color: "#f87171" },
     subCardChevron: { paddingLeft: 8 },
+
+    // ── Revenue summary card (History tab) ───────────────────────────────────
+    revenueSummaryCard: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.card,
+      padding: 14,
+      marginBottom: 16,
+    },
+    revenueSummaryTitle: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: t.textSecondary,
+      marginBottom: 10,
+      letterSpacing: 0.3,
+    },
+    revenueSummaryRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingVertical: 7,
+      borderTopWidth: 1,
+      borderTopColor: t.border,
+    },
+    revenueSummaryLabel: {
+      fontSize: 13,
+      fontWeight: "600",
+      color: t.text,
+    },
+    revenueSummaryRight: {
+      alignItems: "flex-end",
+      gap: 1,
+    },
+    revenueSummaryAmount: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: t.text,
+    },
+    revenueSummaryCount: {
+      fontSize: 11,
+      color: t.muted,
+    },
 
     // ── Players tab ──────────────────────────────────────────────────────────
     playerFilterRow: {
@@ -613,6 +675,34 @@ export function StaffBossDashboardScreen() {
 
           {tab === "history" && historyData && (
             <>
+              {/* Revenue summary card */}
+              {historyData.revenueSummary && (() => {
+                const rs = historyData.revenueSummary;
+                const rows: { label: string; bucket: RevenueBucket; highlight?: boolean }[] = [
+                  { label: "Today", bucket: rs.today, highlight: true },
+                  { label: "Yesterday", bucket: rs.yesterday },
+                  { label: "This week", bucket: rs.thisWeek },
+                  { label: "This month", bucket: rs.thisMonth },
+                  { label: "All time", bucket: rs.allTime },
+                ];
+                return (
+                  <View style={styles.revenueSummaryCard}>
+                    <Text style={styles.revenueSummaryTitle}>Revenue summary</Text>
+                    {rows.map(({ label, bucket, highlight }) => (
+                      <View key={label} style={styles.revenueSummaryRow}>
+                        <Text style={styles.revenueSummaryLabel}>{label}</Text>
+                        <View style={styles.revenueSummaryRight}>
+                          <Text style={[styles.revenueSummaryAmount, highlight && styles.statPurple]}>
+                            {formatVND(bucket.total)} VND
+                          </Text>
+                          <Text style={styles.revenueSummaryCount}>{bucket.count} pmts</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                );
+              })()}
+
               {historyData.dailyRevenue.length > 0 && (
                 <>
                   <Text style={styles.sectionTitle}>Daily revenue (all today's payments)</Text>
@@ -744,13 +834,15 @@ export function StaffBossDashboardScreen() {
                     </Text>
                   </View>
                   <View style={styles.statCard}>
-                    <Text style={styles.statLabel}>Self check-in</Text>
-                    <Text style={styles.statValue}>{playersData.stats.totalSelf}</Text>
+                    <Text style={styles.statLabel}>With subscription</Text>
+                    <Text style={styles.statValue}>{playersData.stats.activeSubscriptions}</Text>
                   </View>
                   <View style={styles.statCard}>
-                    <Text style={styles.statLabel}>CourtPay</Text>
+                    <Text style={styles.statLabel}>Avg return (days)</Text>
                     <Text style={[styles.statValue, styles.statYellow]}>
-                      {playersData.stats.totalCourtPay}
+                      {playersData.stats.venueAvgReturn != null
+                        ? playersData.stats.venueAvgReturn
+                        : "—"}
                     </Text>
                   </View>
                 </View>
@@ -909,21 +1001,13 @@ export function StaffBossDashboardScreen() {
                         )}
                       </View>
 
-                      {/* Right: check-in count */}
-                      {isCourtPay && (
-                        <View style={styles.playerCardRight}>
-                          <Text style={styles.playerCardCheckinCount}>{p.checkInCount}</Text>
-                          <Text style={styles.playerCardCheckinLabel}>check-ins</Text>
-                        </View>
-                      )}
-                      {!isCourtPay && p.rankingScore != null && (
-                        <View style={styles.playerCardRight}>
-                          <Text style={[styles.playerCardCheckinCount, styles.statPurple]}>
-                            {p.rankingScore}
-                          </Text>
-                          <Text style={styles.playerCardCheckinLabel}>rating</Text>
-                        </View>
-                      )}
+                      {/* Right: avg return days */}
+                      <View style={styles.playerCardRight}>
+                        <Text style={[styles.playerCardCheckinCount, p.avgReturnDays != null ? styles.statYellow : undefined]}>
+                          {p.avgReturnDays != null ? p.avgReturnDays : "—"}
+                        </Text>
+                        <Text style={styles.playerCardCheckinLabel}>avg return d</Text>
+                      </View>
                     </View>
                   );
                 });

@@ -9,8 +9,22 @@ import { requireStaff } from "@/lib/auth";
  * - Self Check-In players (Player table, joined via queueEntries → session → venueId)
  * - CourtPay players (CheckInPlayer table, joined via venueId directly)
  *
- * Also returns 4 KPI stats for the boss stats grid.
+ * Per player: avgReturnDays (average gap between consecutive check-ins).
+ * Stats: totalPlayers, newThisWeek, activeSubscriptions, avgReturnDays (venue-wide).
  */
+
+/** Average gap in days between consecutive sorted dates. Returns null if < 2 visits. */
+function calcAvgReturnDays(dates: Date[]): number | null {
+  if (dates.length < 2) return null;
+  const sorted = [...dates].sort((a, b) => a.getTime() - b.getTime());
+  let totalMs = 0;
+  for (let i = 1; i < sorted.length; i++) {
+    totalMs += sorted[i].getTime() - sorted[i - 1].getTime();
+  }
+  const avgMs = totalMs / (sorted.length - 1);
+  return Math.round((avgMs / 86_400_000) * 10) / 10; // 1 decimal place
+}
+
 export async function GET(req: Request) {
   try {
     const staff = requireStaff(req.headers);
@@ -23,8 +37,9 @@ export async function GET(req: Request) {
 
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const now = new Date();
 
-    const [selfPlayers, courtPayPlayers, venueName] = await Promise.all([
+    const [selfPlayers, courtPayPlayers, venueName, activeSubscriptions] = await Promise.all([
       // Self Check-In players who have ever joined a queue in this venue
       prisma.player.findMany({
         where: {
@@ -39,12 +54,10 @@ export async function GET(req: Request) {
           skillLevel: true,
           facePhotoPath: true,
           avatarPhotoPath: true,
-          rankingScore: true,
           createdAt: true,
           queueEntries: {
             where: { session: { venueId } },
-            orderBy: { joinedAt: "desc" },
-            take: 1,
+            orderBy: { joinedAt: "asc" },
             select: { joinedAt: true },
           },
         },
@@ -62,8 +75,7 @@ export async function GET(req: Request) {
           skillLevel: true,
           createdAt: true,
           checkIns: {
-            orderBy: { checkedInAt: "desc" },
-            take: 1,
+            orderBy: { checkedInAt: "asc" },
             select: { checkedInAt: true },
           },
           _count: { select: { checkIns: true } },
@@ -71,47 +83,68 @@ export async function GET(req: Request) {
         take: 500,
       }),
       prisma.venue.findUnique({ where: { id: venueId }, select: { name: true } }),
+      // Active subscriptions for this venue
+      prisma.playerSubscription.count({
+        where: {
+          venueId,
+          status: "active",
+          expiresAt: { gte: now },
+        },
+      }),
     ]);
 
     const vname = venueName?.name ?? venueId;
 
-    // Build unified player list
+    // Build unified player list with avg return days
     const players = [
-      ...selfPlayers.map((p) => ({
-        id: p.id,
-        source: "self" as const,
-        name: p.name,
-        phone: p.phone,
-        gender: p.gender ?? null,
-        skillLevel: p.skillLevel ?? null,
-        facePhotoPath: p.facePhotoPath ?? null,
-        avatarPhotoPath: p.avatarPhotoPath ?? null,
-        rankingScore: p.rankingScore,
-        checkInCount: 0, // Self players don't use CheckInRecord
-        lastSeenAt: p.queueEntries[0]?.joinedAt?.toISOString() ?? null,
-        registeredAt: p.createdAt.toISOString(),
-        venueName: vname,
-      })),
-      ...courtPayPlayers.map((p) => ({
-        id: p.id,
-        source: "courtpay" as const,
-        name: p.name,
-        phone: p.phone,
-        gender: p.gender ?? null,
-        skillLevel: p.skillLevel ?? null,
-        photoUrl: null, // CheckInPlayer has no photo field
-        rankingScore: null,
-        checkInCount: p._count.checkIns,
-        lastSeenAt: p.checkIns[0]?.checkedInAt?.toISOString() ?? null,
-        registeredAt: p.createdAt.toISOString(),
-        venueName: vname,
-      })),
+      ...selfPlayers.map((p) => {
+        const dates = p.queueEntries.map((e) => new Date(e.joinedAt));
+        const avgReturn = calcAvgReturnDays(dates);
+        const lastSeenAt = dates.length > 0
+          ? dates[dates.length - 1].toISOString()
+          : null;
+        return {
+          id: p.id,
+          source: "self" as const,
+          name: p.name,
+          phone: p.phone,
+          gender: p.gender ?? null,
+          skillLevel: p.skillLevel ?? null,
+          facePhotoPath: p.facePhotoPath ?? null,
+          avatarPhotoPath: p.avatarPhotoPath ?? null,
+          checkInCount: dates.length,
+          avgReturnDays: avgReturn,
+          lastSeenAt,
+          registeredAt: p.createdAt.toISOString(),
+          venueName: vname,
+        };
+      }),
+      ...courtPayPlayers.map((p) => {
+        const dates = p.checkIns.map((c) => new Date(c.checkedInAt));
+        const avgReturn = calcAvgReturnDays(dates);
+        const lastSeenAt = dates.length > 0
+          ? dates[dates.length - 1].toISOString()
+          : null;
+        return {
+          id: p.id,
+          source: "courtpay" as const,
+          name: p.name,
+          phone: p.phone,
+          gender: p.gender ?? null,
+          skillLevel: p.skillLevel ?? null,
+          facePhotoPath: null,
+          avatarPhotoPath: null,
+          checkInCount: p._count.checkIns,
+          avgReturnDays: avgReturn,
+          lastSeenAt,
+          registeredAt: p.createdAt.toISOString(),
+          venueName: vname,
+        };
+      }),
     ];
 
     // KPI stats
     const totalPlayers = players.length;
-    const totalSelf = selfPlayers.length;
-    const totalCourtPay = courtPayPlayers.length;
     const newThisWeek = players.filter(
       (p) => new Date(p.registeredAt) >= sevenDaysAgo
     ).length;
@@ -122,13 +155,22 @@ export async function GET(req: Request) {
       (p) => p.gender?.toLowerCase() === "female"
     ).length;
 
+    // Venue-wide avg return: median of all per-player avgReturnDays that are non-null
+    const allAvgs = players
+      .map((p) => p.avgReturnDays)
+      .filter((v): v is number => v !== null);
+    const venueAvgReturn =
+      allAvgs.length > 0
+        ? Math.round((allAvgs.reduce((a, b) => a + b, 0) / allAvgs.length) * 10) / 10
+        : null;
+
     return NextResponse.json({
       players,
       stats: {
         totalPlayers,
-        totalSelf,
-        totalCourtPay,
         newThisWeek,
+        activeSubscriptions,
+        venueAvgReturn,
         maleCount,
         femaleCount,
       },
