@@ -264,6 +264,14 @@ export function PaymentTabScreen() {
     "payment:new": () => fetchPending(),
     "payment:confirmed": () => fetchAll(),
     "payment:cancelled": () => fetchAll(),
+    "session:updated": (data: unknown) => {
+      const d = data as { session?: { status?: string } };
+      if (d?.session?.status === "closed") {
+        setPending([]);
+        setPaid([]);
+        setPaidSummary({ playerCount: 0, totalRevenue: 0 });
+      }
+    },
   });
 
   useLayoutEffect(() => {
