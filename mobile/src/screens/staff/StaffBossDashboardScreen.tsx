@@ -20,6 +20,7 @@ import type { AppColors } from "../../theme/palettes";
 import type { StaffStackParamList } from "../../navigation/types";
 import type { SessionHistoryRow } from "../../types/api";
 import { resolveMediaUrl } from "../../lib/media-url";
+import { SubscribersList } from "../../components/SubscribersList";
 
 type Tab = "today" | "history" | "subscriptions" | "players";
 type GenderFilter = "all" | "male" | "female";
@@ -767,64 +768,11 @@ export function StaffBossDashboardScreen() {
             </>
           )}
 
-          {tab === "subscriptions" && sessionData && (
-            <>
-              {sessionData.subscriptions.length === 0 ? (
-                <Text style={styles.empty}>No subscriptions yet</Text>
-              ) : (
-                sessionData.subscriptions.map((s) => {
-                  const isActive = s.status === "active";
-                  const sessionsLabel =
-                    s.totalSessions === null
-                      ? `Unlimited · ${s.usageCount} used`
-                      : `${s.sessionsRemaining ?? 0}/${s.totalSessions} left · ${s.usageCount} used`;
-                  return (
-                    <TouchableOpacity
-                      key={s.id}
-                      style={styles.subCard}
-                      activeOpacity={0.7}
-                      onPress={() =>
-                        navigation.navigate("BossSubscriptionDetail", {
-                          subscriptionId: s.id,
-                        })
-                      }
-                    >
-                      <View style={styles.subCardMain}>
-                        <Text style={styles.subCardName} numberOfLines={1}>{s.playerName}</Text>
-                        <Text style={styles.subCardPkg}>{s.packageName}</Text>
-                        <Text style={styles.subCardMeta}>{s.playerPhone}</Text>
-                        <Text style={styles.subCardMeta}>{sessionsLabel}</Text>
-                        <Text style={styles.subCardMeta}>
-                          Purchased: {formatDateShort(s.activatedAt)}
-                          {s.lastCheckedIn
-                            ? `  ·  Last in: ${formatDateShort(s.lastCheckedIn)}`
-                            : "  ·  No check-ins"}
-                        </Text>
-                        <View
-                          style={[
-                            styles.subCardBadge,
-                            isActive ? styles.subCardBadgeActive : styles.subCardBadgeExpired,
-                          ]}
-                        >
-                          <Text
-                            style={
-                              isActive
-                                ? styles.subCardBadgeActiveText
-                                : styles.subCardBadgeExpiredText
-                            }
-                          >
-                            {s.status.toUpperCase()}
-                          </Text>
-                        </View>
-                      </View>
-                      <View style={styles.subCardChevron}>
-                        <Ionicons name="chevron-forward" size={16} color={theme.muted} />
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })
-              )}
-            </>
+          {tab === "subscriptions" && (
+            <SubscribersList
+              externalData={sessionData?.subscriptions}
+              externalLoading={loading}
+            />
           )}
           {tab === "players" && (
             <>

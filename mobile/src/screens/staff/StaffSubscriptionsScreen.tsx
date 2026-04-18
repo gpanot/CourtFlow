@@ -26,6 +26,7 @@ import { useAuthStore } from "../../stores/auth-store";
 import { useAppColors } from "../../theme/use-app-colors";
 import type { AppColors } from "../../theme/palettes";
 import type { StaffStackParamList } from "../../navigation/types";
+import { SubscribersList } from "../../components/SubscribersList";
 
 type Tab = "packages" | "subscribers";
 
@@ -38,19 +39,6 @@ interface PackageRow {
   perks: string | null;
   isActive: boolean;
   _count: { subscriptions: number };
-}
-
-interface SubscriberRow {
-  id: string;
-  playerName: string;
-  playerPhone: string;
-  packageName: string;
-  status: string;
-  sessionsRemaining: number | null;
-  totalSessions: number | null;
-  usageCount: number;
-  activatedAt: string;
-  expiresAt: string;
 }
 
 function formatVND(n: number) {
@@ -202,9 +190,7 @@ export function StaffSubscriptionsScreen() {
 
   const [tab, setTab] = useState<Tab>("packages");
   const [packages, setPackages] = useState<PackageRow[]>([]);
-  const [subscribers, setSubscribers] = useState<SubscriberRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
   const [defaultsBanner, setDefaultsBanner] = useState("");
   const [creatingDefaults, setCreatingDefaults] = useState(false);
   const [showForm, setShowForm] = useState(false);
@@ -235,47 +221,14 @@ export function StaffSubscriptionsScreen() {
     setPackages(data.packages ?? []);
   }, [venueId]);
 
-  const fetchSubscribers = useCallback(async () => {
-    if (!venueId) return;
-    const params = new URLSearchParams({ venueId });
-    if (search.trim()) params.set("search", search.trim());
-    const raw = await api.get<{
-      subscribers: Array<{
-        id: string;
-        status: string;
-        sessionsRemaining: number | null;
-        activatedAt: string;
-        expiresAt: string;
-        player: { name: string; phone: string };
-        package: { name: string; sessions: number | null };
-        _count?: { usages: number };
-      }>;
-    }>(`/api/courtpay/staff/subscribers?${params.toString()}`);
-    const list = (raw.subscribers ?? []).map((s) => ({
-      id: s.id,
-      playerName: s.player.name,
-      playerPhone: s.player.phone,
-      packageName: s.package.name,
-      status: s.status,
-      sessionsRemaining: s.sessionsRemaining,
-      totalSessions: s.package.sessions,
-      usageCount: s._count?.usages ?? 0,
-      activatedAt: s.activatedAt,
-      expiresAt: s.expiresAt,
-    }));
-    setSubscribers(list);
-  }, [venueId, search]);
-
   useEffect(() => {
     if (!venueId) {
       setLoading(false);
       return;
     }
     setLoading(true);
-    Promise.all([fetchPackages(), fetchSubscribers()]).finally(() =>
-      setLoading(false)
-    );
-  }, [venueId, fetchPackages, fetchSubscribers]);
+    fetchPackages().finally(() => setLoading(false));
+  }, [venueId, fetchPackages]);
 
   const openCreate = () => {
     setEditing(null);
@@ -494,36 +447,7 @@ export function StaffSubscriptionsScreen() {
               )}
             </>
           ) : (
-            <>
-              <TextInput
-                style={styles.search}
-                placeholder="Search by name or phone..."
-                placeholderTextColor={theme.dimmed}
-                value={search}
-                onChangeText={setSearch}
-              />
-              {subscribers.length === 0 ? (
-                <Text style={styles.empty}>
-                  {search.trim() ? "No subscribers found" : "No subscribers yet"}
-                </Text>
-              ) : (
-                subscribers.map((s) => (
-                  <View key={s.id} style={styles.subCard}>
-                    <Text style={styles.subName}>{s.playerName}</Text>
-                    <Text style={styles.subPhone}>{s.playerPhone}</Text>
-                    <Text style={styles.subPkg}>{s.packageName}</Text>
-                    <Text style={styles.subStatus}>
-                      {s.status}
-                      {s.totalSessions === null
-                        ? " · Unlimited"
-                        : ` · ${s.sessionsRemaining ?? 0}/${s.totalSessions ?? 0} left`}
-                      {" · "}
-                      {s.usageCount} used
-                    </Text>
-                  </View>
-                ))
-              )}
-            </>
+            <SubscribersList showSearch />
           )}
         </ScrollView>
       )}
