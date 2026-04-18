@@ -6,12 +6,14 @@ import {
   FlatList,
   ActivityIndicator,
   TouchableOpacity,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import type { NativeStackNavigationProp, RouteProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "../../lib/api-client";
+import { resolveMediaUrl } from "../../lib/media-url";
 import { useAppColors } from "../../theme/use-app-colors";
 import type { AppColors } from "../../theme/palettes";
 import type { StaffStackParamList } from "../../navigation/types";
@@ -27,6 +29,7 @@ interface SubscriptionDetail {
   totalSessions: number | null;
   activatedAt: string;
   expiresAt: string;
+  facePhotoPath?: string | null;
   usages: { id: string; checkedInAt: string }[];
 }
 
@@ -82,6 +85,34 @@ function createStyles(t: AppColors) {
       padding: 16,
       gap: 6,
     },
+
+    // Avatar — compact circle; tap to expand to full-width
+    avatarCompact: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      overflow: "hidden",
+      alignSelf: "flex-start",
+      marginBottom: 8,
+    },
+    avatarExpanded: {
+      width: "100%",
+      height: 260,
+      borderRadius: 12,
+      overflow: "hidden",
+      marginBottom: 8,
+    },
+    avatarImage: { width: "100%", height: "100%" },
+    initialsBox: {
+      width: "100%",
+      height: "100%",
+      backgroundColor: "rgba(168,85,247,0.18)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    initialsText: { fontSize: 22, fontWeight: "800", color: "#a855f7" },
+    initialsTextLg: { fontSize: 72, fontWeight: "800", color: "#a855f7" },
+
     playerName: { fontSize: 18, fontWeight: "800", color: t.text },
     playerPhone: { fontSize: 13, color: t.muted },
     packageRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 },
@@ -182,6 +213,7 @@ export function BossSubscriptionDetailScreen() {
   const [detail, setDetail] = useState<SubscriptionDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [avatarExpanded, setAvatarExpanded] = useState(false);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -240,10 +272,31 @@ export function BossSubscriptionDetailScreen() {
   const fillRatio =
     total != null && total > 0 ? Math.max(0, Math.min(1, (total - (remaining ?? 0)) / total)) : 0;
 
+  const avatarUri = resolveMediaUrl(detail.facePhotoPath ?? null);
+  const initials = detail.playerName.trim().charAt(0).toUpperCase();
+
   const renderHeader = () => (
     <>
       {/* Summary card */}
       <View style={styles.summaryCard}>
+
+        {/* Avatar — tap to expand/collapse */}
+        <TouchableOpacity
+          style={avatarExpanded ? styles.avatarExpanded : styles.avatarCompact}
+          onPress={() => setAvatarExpanded((v) => !v)}
+          activeOpacity={0.85}
+        >
+          {avatarUri ? (
+            <Image source={{ uri: avatarUri }} style={styles.avatarImage} resizeMode="cover" />
+          ) : (
+            <View style={styles.initialsBox}>
+              <Text style={avatarExpanded ? styles.initialsTextLg : styles.initialsText}>
+                {initials}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
         <Text style={styles.playerName}>{detail.playerName}</Text>
         <Text style={styles.playerPhone}>{detail.playerPhone}</Text>
 

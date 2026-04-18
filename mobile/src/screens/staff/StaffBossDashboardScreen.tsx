@@ -16,6 +16,7 @@ import { useAuthStore } from "../../stores/auth-store";
 import { useAppColors } from "../../theme/use-app-colors";
 import type { AppColors } from "../../theme/palettes";
 import type { StaffStackParamList } from "../../navigation/types";
+import type { SessionHistoryRow } from "../../types/api";
 
 type Tab = "today" | "history" | "subscriptions";
 
@@ -108,6 +109,11 @@ function isToday(dateStr: string | null | undefined): boolean {
     d.getDate() === now.getDate();
 }
 
+function sessionDateLabel(openedAt: string): string {
+  const dateStr = new Date(openedAt).toLocaleDateString();
+  return isToday(openedAt) ? `Today — ${dateStr}` : dateStr;
+}
+
 function sourceLabel(s: string) {
   if (s === "subscription") return "Subscription";
   if (s === "cash") return "Cash";
@@ -191,6 +197,28 @@ function createStyles(t: AppColors) {
     empty: { textAlign: "center", color: t.muted, paddingVertical: 24, fontSize: 14 },
     time: { fontSize: 10, color: t.subtle, marginTop: 4, textAlign: "right" },
 
+    // ── Session history card (reused in Today + History) ──────────────────────
+    sessionCard: {
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.card,
+      padding: 12,
+      marginBottom: 8,
+    },
+    sessionCardRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 3 },
+    sessionCardDate: { fontSize: 14, fontWeight: "600", color: t.text },
+    sessionCardBadge: {
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 6,
+      backgroundColor: "rgba(115,115,115,0.13)",
+    },
+    sessionCardBadgeText: { fontSize: 11, fontWeight: "600", color: t.subtle },
+    sessionCardFee: { fontSize: 12, color: t.muted },
+    sessionCardTime: { fontSize: 11, color: t.subtle, marginTop: 2 },
+    sessionCardChevron: { position: "absolute", right: 12, top: "50%" },
+
     // ── Subscription card ────────────────────────────────────────────────────
     subCard: {
       flexDirection: "row",
@@ -258,6 +286,7 @@ export function StaffBossDashboardScreen() {
   const [todayData, setTodayData] = useState<TodayData | null>(null);
   const [historyData, setHistoryData] = useState<HistoryData | null>(null);
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
+  const [sessionHistory, setSessionHistory] = useState<SessionHistoryRow[]>([]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -276,15 +305,19 @@ export function StaffBossDashboardScreen() {
     setLoading(true);
     try {
       if (tab === "today") {
-        const data = await api.get<TodayData>(
-          `/api/courtpay/staff/boss/today?venueId=${venueId}`
-        );
+        const [data, sessions] = await Promise.all([
+          api.get<TodayData>(`/api/courtpay/staff/boss/today?venueId=${venueId}`),
+          api.get<SessionHistoryRow[]>(`/api/sessions/history?venueId=${venueId}`),
+        ]);
         setTodayData(data);
+        setSessionHistory(Array.isArray(sessions) ? sessions : []);
       } else if (tab === "history") {
-        const data = await api.get<HistoryData>(
-          `/api/courtpay/staff/boss/history?venueId=${venueId}`
-        );
+        const [data, sessions] = await Promise.all([
+          api.get<HistoryData>(`/api/courtpay/staff/boss/history?venueId=${venueId}`),
+          api.get<SessionHistoryRow[]>(`/api/sessions/history?venueId=${venueId}`),
+        ]);
         setHistoryData(data);
+        setSessionHistory(Array.isArray(sessions) ? sessions : []);
       } else if (tab === "subscriptions") {
         const data = await api.get<SessionData>(
           `/api/courtpay/staff/boss/sessions?venueId=${venueId}`
@@ -362,79 +395,44 @@ export function StaffBossDashboardScreen() {
                   </Text>
                 </View>
               </View>
-              <Text style={styles.sectionTitle}>Court sessions (UTC day)</Text>
-              <Text style={styles.hint}>
-                Same session as the staff Session tab (queue). UTC day matches History.
-              </Text>
-              {todayData.currentCourtSession ? (
-                <View style={styles.openBanner}>
-                  <Text style={styles.openBannerTitle}>Open now</Text>
-                  <Text style={styles.openBannerSub}>
-                    {todayData.currentCourtSession.queuePlayers} in queue ·{" "}
-                    {new Date(todayData.currentCourtSession.openedAt).toLocaleString()}
-                  </Text>
-                </View>
-              ) : null}
+
+              {/* Today's court sessions — same cards as Session tab */}
+              <Text style={styles.sectionTitle}>Today's sessions</Text>
               {(() => {
-                const list =
-                  todayData.courtSessionsToday?.filter(
-                    (s) => s.id !== todayData.currentCourtSession?.id
-                  ) ?? [];
-                if (
-                  list.length === 0 &&
-                  !todayData.currentCourtSession
-                ) {
-                  return (
-                    <Text style={[styles.empty, { marginBottom: 16 }]}>
-                      No court sessions opened on this UTC day.
-                    </Text>
-                  );
+                const todaySessions = sessionHistory.filter((s) => isToday(s.openedAt));
+                if (todaySessions.length === 0) {
+                  return <Text style={styles.empty}>No sessions today.</Text>;
                 }
-                if (list.length === 0) return null;
-                return (
-                  <View style={{ marginBottom: 16 }}>
-                    {list.map((s) => (
-                      <View key={s.id} style={styles.row}>
-                        <View style={styles.rowMain}>
-                          <Text style={styles.rowSub}>{s.status}</Text>
-                          <Text style={styles.rowTitle}>
-                            {s.queuePlayers} in queue ·{" "}
-                            {new Date(s.openedAt).toLocaleTimeString()}
-                          </Text>
-                        </View>
-                        <Text style={styles.rowSub}>
-                          {s.closedAt ? "Closed" : "Open"}
-                        </Text>
-                      </View>
-                    ))}
-                  </View>
-                );
-              })()}
-              <Text style={styles.sectionTitle}>CourtPay check-ins</Text>
-              <Text style={styles.hint}>
-                Kiosk / subscription records (not court sessions).
-              </Text>
-              {todayData.recentCheckIns.length === 0 ? (
-                <Text style={styles.empty}>No CourtPay check-ins (UTC day)</Text>
-              ) : (
-                todayData.recentCheckIns.map((ci) => (
-                  <View key={ci.id} style={styles.row}>
-                    <View style={styles.rowMain}>
-                      <Text style={styles.rowTitle}>{ci.playerName}</Text>
-                      <Text style={styles.rowSub}>{ci.playerPhone}</Text>
-                      <View style={styles.badge}>
-                        <Text style={styles.badgeText}>{sourceLabel(ci.source)}</Text>
+                return todaySessions.map((s) => (
+                  <TouchableOpacity
+                    key={s.id}
+                    style={styles.sessionCard}
+                    activeOpacity={0.7}
+                    onPress={() =>
+                      navigation.navigate("StaffSessionDetail", {
+                        sessionId: s.id,
+                        date: sessionDateLabel(s.openedAt),
+                        openedAt: s.openedAt,
+                        closedAt: s.closedAt ?? null,
+                      })
+                    }
+                  >
+                    <View style={styles.sessionCardRow}>
+                      <Text style={styles.sessionCardDate}>{sessionDateLabel(s.openedAt)}</Text>
+                      <View style={styles.sessionCardBadge}>
+                        <Text style={styles.sessionCardBadgeText}>closed</Text>
                       </View>
                     </View>
-                    <Text style={styles.time}>
-                      {new Date(ci.checkedInAt).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                    <Text style={styles.sessionCardFee}>
+                      Revenue: {s.paymentRevenue?.toLocaleString() ?? "0"} VND · {s.paymentCount ?? 0} payments
                     </Text>
-                  </View>
-                ))
-              )}
+                    <Text style={styles.sessionCardTime}>
+                      {new Date(s.openedAt).toLocaleTimeString()}
+                      {s.closedAt ? ` — ${new Date(s.closedAt).toLocaleTimeString()}` : ""}
+                    </Text>
+                  </TouchableOpacity>
+                ));
+              })()}
             </>
           )}
 
@@ -458,45 +456,40 @@ export function StaffBossDashboardScreen() {
                   ))}
                 </>
               )}
-              <Text style={[styles.sectionTitle, { marginTop: 12 }]}>
-                Recent payments
-              </Text>
-              {historyData.payments.length === 0 ? (
-                <Text style={styles.empty}>No payments</Text>
+
+              <Text style={[styles.sectionTitle, { marginTop: 12 }]}>Past sessions</Text>
+              {sessionHistory.length === 0 ? (
+                <Text style={styles.empty}>No past sessions.</Text>
               ) : (
-                historyData.payments.map((p) => {
-                  const isCash = p.paymentMethod === "cash";
-                  const isSub = p.type === "subscription";
-                  return (
-                    <View key={p.id} style={styles.payCard}>
-                      <View style={styles.payCardNameRow}>
-                        <Text style={styles.payCardName} numberOfLines={1}>{p.playerName}</Text>
-                        {isSub ? (
-                          <View style={[styles.payBadge, styles.payBadgeSub]}>
-                            <Text style={styles.payBadgeSubText}>SUB</Text>
-                          </View>
-                        ) : (
-                          <View style={[styles.payBadge, isCash ? styles.payBadgeCash : styles.payBadgeQr]}>
-                            <Text style={isCash ? styles.payBadgeCashText : styles.payBadgeQrText}>
-                              {isCash ? "CASH" : "QR"}
-                            </Text>
-                          </View>
-                        )}
-                        <View style={[styles.payBadge, styles.payBadgeQr, { backgroundColor: "rgba(112,26,117,0.15)" }]}>
-                          <Text style={[styles.payBadgeQrText, { color: "#c026d3" }]}>CourtPay</Text>
-                        </View>
+                sessionHistory.map((s) => (
+                  <TouchableOpacity
+                    key={s.id}
+                    style={styles.sessionCard}
+                    activeOpacity={0.7}
+                    onPress={() =>
+                      navigation.navigate("StaffSessionDetail", {
+                        sessionId: s.id,
+                        date: sessionDateLabel(s.openedAt),
+                        openedAt: s.openedAt,
+                        closedAt: s.closedAt ?? null,
+                      })
+                    }
+                  >
+                    <View style={styles.sessionCardRow}>
+                      <Text style={styles.sessionCardDate}>{sessionDateLabel(s.openedAt)}</Text>
+                      <View style={styles.sessionCardBadge}>
+                        <Text style={styles.sessionCardBadgeText}>closed</Text>
                       </View>
-                      <View style={styles.payCardRow}>
-                        <Text style={styles.payCardMeta}>{p.type}</Text>
-                        <Text style={styles.payCardAmount}>{formatVND(p.amount)} VND</Text>
-                      </View>
-                      {p.paymentRef ? (
-                        <Text style={styles.payCardRef}>{p.paymentRef}</Text>
-                      ) : null}
-                      <Text style={styles.payCardDate}>{formatDateTime(p.confirmedAt)}</Text>
                     </View>
-                  );
-                })
+                    <Text style={styles.sessionCardFee}>
+                      Revenue: {s.paymentRevenue?.toLocaleString() ?? "0"} VND · {s.paymentCount ?? 0} payments
+                    </Text>
+                    <Text style={styles.sessionCardTime}>
+                      {new Date(s.openedAt).toLocaleTimeString()}
+                      {s.closedAt ? ` — ${new Date(s.closedAt).toLocaleTimeString()}` : ""}
+                    </Text>
+                  </TouchableOpacity>
+                ))
               )}
             </>
           )}
