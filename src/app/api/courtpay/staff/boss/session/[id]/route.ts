@@ -23,6 +23,12 @@ export async function GET(
       return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
     }
 
+    // Cross-reference the CheckInPlayer phone against the Player table to get photo
+    const linkedPlayer = await prisma.player.findFirst({
+      where: { phone: subscription.player.phone },
+      select: { facePhotoPath: true, avatarPhotoPath: true },
+    });
+
     return NextResponse.json({
       subscription: {
         id: subscription.id,
@@ -35,6 +41,7 @@ export async function GET(
         totalSessions: subscription.package.sessions,
         activatedAt: subscription.activatedAt,
         expiresAt: subscription.expiresAt,
+        facePhotoPath: linkedPlayer?.avatarPhotoPath ?? linkedPlayer?.facePhotoPath ?? null,
         usages: subscription.usages.map((u) => ({
           id: u.id,
           checkedInAt: u.checkedInAt,
