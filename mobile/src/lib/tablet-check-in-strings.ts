@@ -108,7 +108,25 @@ const CHECK_IN_SCANNER_EN = {
   "scanToPay": "Scan to Pay",
   "waitingForPayment": "Waiting for payment…",
   "welcomeExclaim": "Welcome!",
-  "kioskTagline": "More gameplay, more fun"
+  "kioskTagline": "More gameplay, more fun",
+  "loginStaffLogin": "Staff Login",
+  "loginPhonePlaceholder": "Phone number",
+  "loginPasswordPlaceholder": "Password",
+  "loginSignIn": "Sign In",
+  "loginViewOnboarding": "View onboarding",
+  "loginError": "Error",
+  "loginErrorDetail": "Please enter phone and password",
+  "loginFailed": "Login Failed",
+  "subOfferWelcomeBack": "Welcome back, {{name}}!",
+  "subOfferWelcomeNew": "Welcome to the club, {{name}}!",
+  "subOfferSubtitleReturning": "Save with a package today?",
+  "subOfferSubtitleNew": "Want to save with a package?",
+  "subOfferSessions": "sessions",
+  "subOfferDays": "days",
+  "subOfferUnlimited": "Unlimited",
+  "subOfferContinue": "Continue",
+  "subOfferSkip": "Skip — pay today only",
+  "subOfferChoosePackage": "Choose package (optional)"
 } as const;
 
 const CHECK_IN_SCANNER_VI = {
@@ -216,7 +234,25 @@ const CHECK_IN_SCANNER_VI = {
   "scanToPay": "Quét để thanh toán",
   "waitingForPayment": "Đang chờ thanh toán…",
   "welcomeExclaim": "Chào mừng!",
-  "kioskTagline": "Nhiều trận hơn, nhiều niềm vui hơn"
+  "kioskTagline": "Nhiều trận hơn, nhiều niềm vui hơn",
+  "loginStaffLogin": "Đăng nhập nhân viên",
+  "loginPhonePlaceholder": "Số điện thoại",
+  "loginPasswordPlaceholder": "Mật khẩu",
+  "loginSignIn": "Đăng nhập",
+  "loginViewOnboarding": "Xem hướng dẫn",
+  "loginError": "Lỗi",
+  "loginErrorDetail": "Vui lòng nhập số điện thoại và mật khẩu",
+  "loginFailed": "Đăng nhập thất bại",
+  "subOfferWelcomeBack": "Chào mừng trở lại, {{name}}!",
+  "subOfferWelcomeNew": "Chào mừng đến câu lạc bộ, {{name}}!",
+  "subOfferSubtitleReturning": "Tiết kiệm với gói hôm nay?",
+  "subOfferSubtitleNew": "Muốn tiết kiệm với gói chơi?",
+  "subOfferSessions": "buổi",
+  "subOfferDays": "ngày",
+  "subOfferUnlimited": "Không giới hạn",
+  "subOfferContinue": "Tiếp tục",
+  "subOfferSkip": "Bỏ qua — chỉ trả hôm nay",
+  "subOfferChoosePackage": "Chọn gói (tùy chọn)"
 } as const;
 
 export const TABLET_ARIA: Record<TabletKioskLocale, { switchToEnglishAria: string; switchToVietnameseAria: string }> = {

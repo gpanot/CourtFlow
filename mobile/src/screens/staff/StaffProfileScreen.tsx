@@ -302,6 +302,16 @@ function createProfileStyles(t: AppColors) {
       backgroundColor: "rgba(220,38,38,0.15)",
     },
     logoutText: { color: t.red400, fontSize: 15, fontWeight: "600" },
+    roleBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+      height: 48,
+      borderRadius: 12,
+      backgroundColor: "rgba(37,99,235,0.12)",
+    },
+    roleBtnText: { color: t.blue400, fontSize: 15, fontWeight: "600" },
   });
 }
 
@@ -910,6 +920,20 @@ export function StaffProfileScreen() {
       >
         <Ionicons name="log-out-outline" size={20} color={theme.red400} />
         <Text style={styles.logoutText}>Log Out</Text>
+      </TouchableOpacity>
+
+      {/* Go to Role / Tablet */}
+      <TouchableOpacity
+        style={styles.roleBtn}
+        onPress={() => {
+          navigation.dispatch(
+            CommonActions.reset({ index: 0, routes: [{ name: "ContinueAs" as never }] })
+          );
+        }}
+        activeOpacity={0.7}
+      >
+        <Ionicons name="swap-horizontal-outline" size={20} color={theme.blue400} />
+        <Text style={styles.roleBtnText}>Go to Role / Tablet</Text>
       </TouchableOpacity>
     </ScrollView>
 

@@ -10,6 +10,7 @@ import {
   Platform,
   Alert,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../lib/api-client";
 import { useAuthStore } from "../../stores/auth-store";
@@ -17,6 +18,8 @@ import { C } from "../../theme/colors";
 import type { StaffLoginResponse } from "../../types/api";
 import type { RootStackScreenProps } from "../../navigation/types";
 import { mapStaffVenuesToVenues } from "../../lib/map-staff-venues";
+import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
+import { TabletLanguageToggle } from "../../components/TabletLanguageToggle";
 
 export function StaffLoginScreen({
   navigation,
@@ -26,6 +29,8 @@ export function StaffLoginScreen({
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const setAuth = useAuthStore((s) => s.setAuth);
+  const insets = useSafeAreaInsets();
+  const { locale, toggleLocale, t } = useTabletKioskLocale();
 
   const handleViewOnboarding = () => {
     // Force onboarding to open again from login.
@@ -35,7 +40,7 @@ export function StaffLoginScreen({
 
   const handleLogin = async () => {
     if (!phone.trim() || !password.trim()) {
-      Alert.alert("Error", "Please enter phone and password");
+      Alert.alert(t("loginError"), t("loginErrorDetail"));
       return;
     }
 
@@ -61,7 +66,7 @@ export function StaffLoginScreen({
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Login failed";
-      Alert.alert("Login Failed", message);
+      Alert.alert(t("loginFailed"), message);
     } finally {
       setLoading(false);
     }
@@ -72,9 +77,13 @@ export function StaffLoginScreen({
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
+      <View style={[styles.langToggle, { top: insets.top + 12 }]}>
+        <TabletLanguageToggle locale={locale} onToggle={toggleLocale} />
+      </View>
+
       <View style={styles.inner}>
         <Text style={styles.brand}>CourtPay</Text>
-        <Text style={styles.subtitle}>Staff Login</Text>
+        <Text style={styles.subtitle}>{t("loginStaffLogin")}</Text>
 
         <View style={styles.card}>
           <View style={styles.inputWrapper}>
@@ -86,7 +95,7 @@ export function StaffLoginScreen({
             />
             <TextInput
               style={styles.input}
-              placeholder="Phone number"
+              placeholder={t("loginPhonePlaceholder")}
               placeholderTextColor={C.dimmed}
               value={phone}
               onChangeText={setPhone}
@@ -105,7 +114,7 @@ export function StaffLoginScreen({
             />
             <TextInput
               style={[styles.input, { flex: 1 }]}
-              placeholder="Password"
+              placeholder={t("loginPasswordPlaceholder")}
               placeholderTextColor={C.dimmed}
               value={password}
               onChangeText={setPassword}
@@ -133,7 +142,7 @@ export function StaffLoginScreen({
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.loginBtnText}>Sign In</Text>
+              <Text style={styles.loginBtnText}>{t("loginSignIn")}</Text>
             )}
           </TouchableOpacity>
 
@@ -142,7 +151,7 @@ export function StaffLoginScreen({
             onPress={handleViewOnboarding}
             activeOpacity={0.7}
           >
-            <Text style={styles.onboardingLinkText}>View onboarding</Text>
+            <Text style={styles.onboardingLinkText}>{t("loginViewOnboarding")}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -154,6 +163,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: C.bg,
+  },
+  langToggle: {
+    position: "absolute",
+    right: 16,
+    zIndex: 10,
   },
   inner: {
     flex: 1,
