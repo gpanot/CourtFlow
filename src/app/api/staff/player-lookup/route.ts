@@ -30,14 +30,21 @@ export async function POST(request: NextRequest) {
     console.log("[Staff Player Lookup] players table result:", player?.id ?? "not found");
 
     if (player) {
+      // Fetch the full row to include photo paths
+      const fullPlayer = await prisma.player.findUnique({
+        where: { id: player.id },
+        select: { id: true, name: true, phone: true, skillLevel: true, facePhotoPath: true, avatarPhotoPath: true },
+      });
       return json({
         success: true,
         source: "player",
         player: {
-          id: player.id,
-          name: player.name,
-          phone: player.phone,
-          skillLevel: player.skillLevel ?? null,
+          id: fullPlayer?.id ?? player.id,
+          name: fullPlayer?.name ?? player.name,
+          phone: fullPlayer?.phone ?? player.phone,
+          skillLevel: fullPlayer?.skillLevel ?? null,
+          facePhotoPath: fullPlayer?.facePhotoPath ?? null,
+          avatarPhotoPath: fullPlayer?.avatarPhotoPath ?? null,
         },
       });
     }
@@ -75,6 +82,8 @@ export async function POST(request: NextRequest) {
           name: checkInPlayer.name,
           phone: checkInPlayer.phone,
           skillLevel: checkInPlayer.skill_level ?? null,
+          facePhotoPath: null,
+          avatarPhotoPath: null,
         },
       });
     }

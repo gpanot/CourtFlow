@@ -22,6 +22,7 @@ import {
 } from "../../components/SelfCheckInReturningFaceScanner";
 import { useAppColors } from "../../theme/use-app-colors";
 import type { AppColors } from "../../theme/palettes";
+import { resolveMediaUrl } from "../../lib/media-url";
 
 type Step = "form" | "awaiting_payment" | "success" | "error";
 type Mode = "new" | "existing";
@@ -31,6 +32,8 @@ interface ExistingPlayerPreview {
   name: string;
   phone: string;
   source?: "player" | "checkInPlayer";
+  facePhotoPath?: string | null;
+  avatarPhotoPath?: string | null;
 }
 
 interface PendingPaymentState {
@@ -400,22 +403,45 @@ export function CheckInTabScreen() {
             <Ionicons name="search" size={16} color={theme.blue500} />
             <Text style={styles.outlineBtnText}>Lookup by phone</Text>
           </TouchableOpacity>
-          {existingPreview ? (
-            <View style={styles.playerCard}>
-              <Ionicons name="person-circle" size={36} color={theme.blue500} />
-              <View style={styles.playerInfo}>
-                <Text style={styles.playerName}>{existingPreview.name}</Text>
-                <Text style={styles.playerPhone}>{existingPreview.phone}</Text>
+          {existingPreview ? (() => {
+            const photoUri = resolveMediaUrl(
+              existingPreview.avatarPhotoPath ?? existingPreview.facePhotoPath ?? null
+            );
+            return (
+              <View style={styles.playerCard}>
+                {photoUri ? (
+                  <Image
+                    source={{ uri: photoUri }}
+                    style={styles.playerAvatar}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={styles.playerAvatarFallback}>
+                    <Ionicons name="person" size={22} color={theme.muted} />
+                  </View>
+                )}
+                <View style={styles.playerInfo}>
+                  <Text style={styles.playerName}>{existingPreview.name}</Text>
+                  <Text style={styles.playerPhone}>{existingPreview.phone}</Text>
+                  {existingPreview.source === "checkInPlayer" && (
+                    <Text style={styles.playerSourceBadge}>CourtPay</Text>
+                  )}
+                </View>
+                <TouchableOpacity
+                  style={[styles.inlineCheckBtn, loading && styles.disabledBtn]}
+                  onPress={handleExistingPhoneCheckIn}
+                  disabled={loading}
+                  activeOpacity={0.7}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.inlineCheckBtnText}>Check In</Text>
+                  )}
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                style={styles.inlineCheckBtn}
-                onPress={handleExistingPhoneCheckIn}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.inlineCheckBtnText}>Check In</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
+            );
+          })() : null}
         </>
       ) : (
         <>
@@ -653,11 +679,14 @@ function createCheckInStyles(t: AppColors) {
     outlineBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 10, borderWidth: 1, borderColor: t.blue500, height: 42 },
     outlineBtnText: { color: t.blue500, fontSize: 14, fontWeight: "600" },
     playerCard: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: t.card, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: t.border },
+    playerAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: t.bg },
+    playerAvatarFallback: { width: 48, height: 48, borderRadius: 24, backgroundColor: t.inputBg, borderWidth: 1, borderColor: t.border, alignItems: "center", justifyContent: "center" },
     playerInfo: { flex: 1 },
     playerName: { fontSize: 15, fontWeight: "600", color: t.text },
     playerPhone: { fontSize: 13, color: t.muted, marginTop: 2 },
-    inlineCheckBtn: { borderRadius: 8, backgroundColor: t.blue600, paddingHorizontal: 12, height: 32, alignItems: "center", justifyContent: "center" },
-    inlineCheckBtnText: { color: "#fff", fontWeight: "700", fontSize: 12 },
+    playerSourceBadge: { fontSize: 11, fontWeight: "700", color: t.fuchsia300, marginTop: 2 },
+    inlineCheckBtn: { borderRadius: 8, backgroundColor: t.blue600, paddingHorizontal: 12, height: 36, alignItems: "center", justifyContent: "center", minWidth: 78 },
+    inlineCheckBtnText: { color: "#fff", fontWeight: "700", fontSize: 13 },
     paymentSection: { alignItems: "center", gap: 12 },
     paymentTitle: { fontSize: 20, fontWeight: "700", color: t.text },
     qrContainer: { alignItems: "center", backgroundColor: "#fff", borderRadius: 14, padding: 14 },
