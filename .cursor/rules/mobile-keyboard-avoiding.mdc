@@ -1,0 +1,78 @@
+---
+description: Prevent keyboard from covering inputs and buttons in React Native modals and scrollable forms
+globs: "mobile/src/**/*.tsx"
+alwaysApply: true
+---
+
+# Mobile Keyboard Avoiding
+
+The keyboard MUST never cover interactive inputs or action buttons. This is a recurring issue on Android especially with bottom-sheet modals.
+
+## The Correct Pattern for Bottom-Sheet Modals
+
+**WRONG — keyboard covers buttons:**
+```tsx
+// behavior="padding" + ScrollView with justifyContent="flex-end" = buttons stay under keyboard
+<KeyboardAvoidingView behavior="padding" style={{ flex: 1, justifyContent: "flex-end" }}>
+  <View style={modalCard}>
+    <ScrollView>...</ScrollView>
+    <Button /> {/* ← covered by keyboard on Android */}
+  </View>
+</KeyboardAvoidingView>
+```
+
+**CORRECT — always use this structure:**
+```tsx
+<Modal>
+  <KeyboardAvoidingView
+    style={{ flex: 1 }}
+    behavior={Platform.OS === "ios" ? "padding" : "height"}
+  >
+    {/* marginTop: "auto" pins the card to the bottom of available space */}
+    {/* When keyboard opens, behavior="height" shrinks the container */}
+    {/* The card shrinks too, making inner ScrollView scrollable */}
+    <View style={[styles.modalCard, { marginTop: "auto" }]}>
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 24 }}
+      >
+        {/* All form fields AND action buttons go inside ScrollView */}
+        <TextInput ... />
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <Button label="Cancel" />
+          <Button label="Save" />
+        </View>
+      </ScrollView>
+    </View>
+  </KeyboardAvoidingView>
+</Modal>
+```
+
+## Rules
+
+- ALWAYS use `behavior={Platform.OS === "ios" ? "padding" : "height"}` — never use `behavior="padding"` on Android for modals.
+- ALWAYS put `marginTop: "auto"` on the modal card (not `justifyContent: "flex-end"` on the overlay).
+- ALWAYS place both inputs AND action buttons (Cancel / Save / Submit) INSIDE the `ScrollView` so they scroll into view.
+- NEVER place buttons outside the ScrollView if they are below form inputs.
+- For full-screen forms (not modals), wrap the entire screen in `KeyboardAvoidingView` with `behavior={Platform.OS === "ios" ? "padding" : undefined}` and use a `ScrollView` with `keyboardShouldPersistTaps="handled"` and a generous `paddingBottom` (at least 100).
+- Always import `Platform` from `react-native` when using platform-specific behavior.
+
+## Full-screen form pattern
+
+```tsx
+<KeyboardAvoidingView
+  style={{ flex: 1 }}
+  behavior={Platform.OS === "ios" ? "padding" : undefined}
+>
+  <ScrollView
+    keyboardShouldPersistTaps="handled"
+    contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
+  >
+    <TextInput ... />
+    <TouchableOpacity style={styles.submitBtn}>
+      <Text>Submit</Text>
+    </TouchableOpacity>
+  </ScrollView>
+</KeyboardAvoidingView>
+```

@@ -1,30 +1,55 @@
 ---
 description: Ensure mobile screens always respect status bar and safe-area insets
 globs: "mobile/src/**/*.tsx"
-alwaysApply: false
+alwaysApply: true
 ---
 
 # Mobile Safe-Area Layout
 
-When building or editing React Native screens, always account for device safe areas (status bar, notch, dynamic island, gesture area).
+Every React Native screen MUST account for device safe areas (status bar, notch, dynamic island, home gesture area). Failure to do so causes content to be hidden under the status bar or home indicator.
 
-## Required
+## Rules (MUST follow on every screen)
 
-- Use `useSafeAreaInsets()` from `react-native-safe-area-context` in screen-level components.
-- Apply top inset spacing when content can reach the top edge (forms, headers, camera flows, full-screen cards).
-- Add bottom inset spacing for fixed footer buttons / CTAs to avoid overlap with gesture areas.
-- If a top bar is hidden for a flow step, add compensating top padding to the screen content.
-- Do not hardcode only `paddingTop: 0` or rely on a single device simulation.
+- ALWAYS import `useSafeAreaInsets` from `react-native-safe-area-context` in any screen-level component.
+- ALWAYS apply `paddingTop: insets.top` (or `+ n` for extra breathing room) when the screen has no native navigation header (i.e., `headerShown: false` or standalone header components).
+- ALWAYS apply `paddingBottom: insets.bottom` for fixed footer buttons / CTAs so they don't overlap the gesture bar.
+- For screens that DO use a native React Navigation header (`headerShown: true`), the header already handles the top inset — do NOT add extra `paddingTop: insets.top` to the body content.
+- Never hardcode `paddingTop: 0` on a screen container.
+- Never rely only on Simulator/Emulator — test on real devices with notch or dynamic island.
 
-## Example
+## Example — screen without native header
 
 ```tsx
-const insets = useSafeAreaInsets();
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-<ScrollView
-  contentContainerStyle={[
-    styles.content,
-    { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 },
-  ]}
-/>
+export function MyScreen() {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <ScrollView
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 },
+      ]}
+    />
+  );
+}
+```
+
+## Example — screen WITH native header (headerShown: true)
+
+```tsx
+// No insets.top needed — the header already handles it
+export function MyScreen() {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View style={{ flex: 1 }}>
+      <FlatList
+        contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
+        ...
+      />
+    </View>
+  );
+}
 ```

@@ -15,6 +15,8 @@ import {
   TextInput,
   Modal,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -157,7 +159,6 @@ function createStyles(t: AppColors) {
     modalOverlay: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.55)",
-      justifyContent: "flex-end",
     },
     modalCard: {
       backgroundColor: t.bg,
@@ -166,7 +167,7 @@ function createStyles(t: AppColors) {
       borderWidth: 1,
       borderColor: t.border,
       padding: 20,
-      maxHeight: "90%",
+      marginTop: "auto" as unknown as number,
     },
     modalTitle: {
       fontSize: 17,
@@ -297,7 +298,7 @@ export function StaffSubscriptionsScreen() {
     );
     setFormUnlimited(pkg.sessions === null);
     setFormDays(String(pkg.durationDays || 30));
-    setFormPrice(String(pkg.price ?? ""));
+    setFormPrice(pkg.price ? String(pkg.price) : "");
     setFormPerks(pkg.perks || "");
     setShowForm(true);
   };
@@ -528,90 +529,105 @@ export function StaffSubscriptionsScreen() {
       )}
 
       <Modal visible={showForm} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>
-              {editing ? "Edit package" : "Create package"}
-            </Text>
-            <Text style={styles.label}>Package name</Text>
-            <TextInput
-              style={styles.input}
-              value={formName}
-              onChangeText={setFormName}
-              placeholder="e.g. Monthly Pass"
-              placeholderTextColor={theme.dimmed}
-            />
-            <Text style={styles.label}>Sessions included</Text>
-            <View style={styles.row}>
-              {!formUnlimited ? (
-                <TextInput
-                  style={[styles.input, { flex: 1, marginBottom: 0 }]}
-                  value={formSessions}
-                  onChangeText={setFormSessions}
-                  keyboardType="number-pad"
-                  placeholder="10"
-                  placeholderTextColor={theme.dimmed}
-                />
-              ) : null}
-              <TouchableOpacity
-                style={styles.row}
-                onPress={() => setFormUnlimited(!formUnlimited)}
-              >
-                <Ionicons
-                  name={formUnlimited ? "checkbox" : "square-outline"}
-                  size={22}
-                  color={theme.purple400}
-                />
-                <Text style={styles.checkLabel}>Unlimited</Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.label}>Valid for (days)</Text>
-            <TextInput
-              style={styles.input}
-              value={formDays}
-              onChangeText={setFormDays}
-              keyboardType="number-pad"
-            />
-            <Text style={styles.label}>Price (VND)</Text>
-            <TextInput
-              style={styles.input}
-              value={formPrice}
-              onChangeText={setFormPrice}
-              keyboardType="number-pad"
-            />
-            <Text style={styles.label}>Perks (optional)</Text>
-            <TextInput
-              style={[styles.input, { height: 72 }]}
-              value={formPerks}
-              onChangeText={setFormPerks}
-              multiline
-            />
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.btnGhost, styles.flex1]}
-                onPress={() => {
-                  setShowForm(false);
-                  setEditing(null);
-                }}
-              >
-                <Text style={[styles.btnGhostText, { textAlign: "center" }]}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.primaryBtn, styles.flex1, { marginBottom: 0 }]}
-                onPress={submitForm}
-                disabled={formSaving}
-              >
-                {formSaving ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.primaryBtnText}>Save</Text>
-                )}
-              </TouchableOpacity>
-            </View>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 24 }}
+            >
+              <Text style={styles.modalTitle}>
+                {editing ? "Edit package" : "Create package"}
+              </Text>
+              <Text style={styles.label}>Package name</Text>
+              <TextInput
+                style={styles.input}
+                value={formName}
+                onChangeText={setFormName}
+                placeholder="e.g. Monthly Pass"
+                placeholderTextColor={theme.dimmed}
+              />
+              <Text style={styles.label}>Sessions included</Text>
+              <View style={styles.row}>
+                {!formUnlimited ? (
+                  <TextInput
+                    style={[styles.input, { flex: 1, marginBottom: 0 }]}
+                    value={formSessions}
+                    onChangeText={setFormSessions}
+                    keyboardType="number-pad"
+                    placeholder="10"
+                    placeholderTextColor={theme.dimmed}
+                  />
+                ) : null}
+                <TouchableOpacity
+                  style={styles.row}
+                  onPress={() => setFormUnlimited(!formUnlimited)}
+                >
+                  <Ionicons
+                    name={formUnlimited ? "checkbox" : "square-outline"}
+                    size={22}
+                    color={theme.purple400}
+                  />
+                  <Text style={styles.checkLabel}>Unlimited</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.label}>Valid for (days)</Text>
+              <TextInput
+                style={styles.input}
+                value={formDays}
+                onChangeText={setFormDays}
+                keyboardType="number-pad"
+              />
+              <Text style={styles.label}>Price (VND)</Text>
+              <TextInput
+                style={styles.input}
+                value={
+                  formPrice
+                    ? parseInt(formPrice, 10).toLocaleString("vi-VN")
+                    : ""
+                }
+                onChangeText={(v) => setFormPrice(v.replace(/[^0-9]/g, ""))}
+                keyboardType="number-pad"
+                placeholder="150,000"
+                placeholderTextColor={theme.dimmed}
+              />
+              <Text style={styles.label}>Perks (optional)</Text>
+              <TextInput
+                style={[styles.input, { height: 72 }]}
+                value={formPerks}
+                onChangeText={setFormPerks}
+                multiline
+              />
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.btnGhost, styles.flex1]}
+                  onPress={() => {
+                    setShowForm(false);
+                    setEditing(null);
+                  }}
+                >
+                  <Text style={[styles.btnGhostText, { textAlign: "center" }]}>
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.primaryBtn, styles.flex1, { marginBottom: 0 }]}
+                  onPress={submitForm}
+                  disabled={formSaving}
+                >
+                  {formSaving ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.primaryBtnText}>Save</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

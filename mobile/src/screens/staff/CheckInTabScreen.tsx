@@ -2,6 +2,8 @@ import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,7 +20,8 @@ import {
   SelfCheckInReturningFaceScanner,
   type ReturningFrameResult,
 } from "../../components/SelfCheckInReturningFaceScanner";
-import { C } from "../../theme/colors";
+import { useAppColors } from "../../theme/use-app-colors";
+import type { AppColors } from "../../theme/palettes";
 
 type Step = "form" | "awaiting_payment" | "success" | "error";
 type Mode = "new" | "existing";
@@ -27,6 +30,7 @@ interface ExistingPlayerPreview {
   id: string;
   name: string;
   phone: string;
+  source?: "player" | "checkInPlayer";
 }
 
 interface PendingPaymentState {
@@ -38,6 +42,8 @@ interface PendingPaymentState {
 
 export function CheckInTabScreen() {
   const venueId = useAuthStore((s) => s.venueId);
+  const theme = useAppColors();
+  const styles = useMemo(() => createCheckInStyles(theme), [theme]);
 
   const [mode, setMode] = useState<Mode>("new");
   const [step, setStep] = useState<Step>("form");
@@ -86,20 +92,23 @@ export function CheckInTabScreen() {
   });
 
   const handleLookupByPhone = async () => {
-    if (!phone.trim() || !venueId) return;
+    if (!phone.trim()) return;
     setLoading(true);
     setError("");
+    console.log("[CheckIn] lookup phone:", phone.trim(), "venueId:", venueId);
     try {
       const data = await api.post<{
         success: boolean;
+        source: "player" | "checkInPlayer";
         player: ExistingPlayerPreview;
-      }>("/api/kiosk/phone-check-in", {
-        venueId,
-        phase: "lookup",
+      }>("/api/staff/player-lookup", {
         phone: phone.trim(),
+        venueId,
       });
-      setExistingPreview(data.player);
+      console.log("[CheckIn] lookup result:", JSON.stringify(data));
+      setExistingPreview({ ...data.player, source: data.source });
     } catch (err) {
+      console.error("[CheckIn] lookup error:", err instanceof Error ? err.message : err);
       setError(err instanceof Error ? err.message : "Could not find player");
     } finally {
       setLoading(false);
@@ -186,15 +195,20 @@ export function CheckInTabScreen() {
     setLoading(true);
     setError("");
     try {
+      // CourtPay players (CheckInPlayer) use the courtpay pay-session endpoint.
+      // Self check-in players (Player) use the kiosk checkin-payment endpoint.
+      const isCourtPay = existingPreview.source === "checkInPlayer";
       const data = await api.post<{
         pendingPaymentId?: string;
         amount?: number;
         vietQR?: string | null;
         paymentRef?: string;
-      }>("/api/kiosk/checkin-payment", {
-        venueId,
-        playerId: existingPreview.id,
-      });
+      }>(
+        isCourtPay ? "/api/courtpay/pay-session" : "/api/kiosk/checkin-payment",
+        isCourtPay
+          ? { playerId: existingPreview.id, venueCode: venueId }
+          : { venueId, playerId: existingPreview.id }
+      );
       const payment = toPendingPayment(data);
       if (payment) {
         setPendingPayment(payment);
@@ -372,7 +386,7 @@ export function CheckInTabScreen() {
           <TextInput
             style={styles.inputFull}
             placeholder="Phone number"
-            placeholderTextColor={C.dimmed}
+            placeholderTextColor={theme.dimmed}
             value={phone}
             onChangeText={setPhone}
             keyboardType="phone-pad"
@@ -383,12 +397,12 @@ export function CheckInTabScreen() {
             disabled={loading || !phone.trim()}
             activeOpacity={0.7}
           >
-            <Ionicons name="search" size={16} color={C.blue500} />
+            <Ionicons name="search" size={16} color={theme.blue500} />
             <Text style={styles.outlineBtnText}>Lookup by phone</Text>
           </TouchableOpacity>
           {existingPreview ? (
             <View style={styles.playerCard}>
-              <Ionicons name="person-circle" size={36} color={C.blue500} />
+              <Ionicons name="person-circle" size={36} color={theme.blue500} />
               <View style={styles.playerInfo}>
                 <Text style={styles.playerName}>{existingPreview.name}</Text>
                 <Text style={styles.playerPhone}>{existingPreview.phone}</Text>
@@ -431,14 +445,14 @@ export function CheckInTabScreen() {
           <TextInput
             style={styles.inputFull}
             placeholder="Player name"
-            placeholderTextColor={C.dimmed}
+            placeholderTextColor={theme.dimmed}
             value={name}
             onChangeText={setName}
           />
           <TextInput
             style={styles.inputFull}
             placeholder="Phone number"
-            placeholderTextColor={C.dimmed}
+            placeholderTextColor={theme.dimmed}
             value={phone}
             onChangeText={setPhone}
             keyboardType="phone-pad"
@@ -556,7 +570,7 @@ export function CheckInTabScreen() {
   const renderSuccess = () => (
     <View style={styles.resultSection}>
       <View style={styles.successCircle}>
-        <Ionicons name="checkmark" size={44} color={C.green500} />
+        <Ionicons name="checkmark" size={44} color={theme.green500} />
       </View>
       <Text style={styles.resultTitle}>Check-in Complete</Text>
       <TouchableOpacity
@@ -572,7 +586,7 @@ export function CheckInTabScreen() {
   const renderError = () => (
     <View style={styles.resultSection}>
       <View style={styles.errorCircle}>
-        <Ionicons name="warning-outline" size={40} color={C.red500} />
+        <Ionicons name="warning-outline" size={40} color={theme.red500} />
       </View>
       <Text style={styles.resultTitle}>Something went wrong</Text>
       <Text style={styles.errorText}>{error}</Text>
@@ -587,220 +601,77 @@ export function CheckInTabScreen() {
   );
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.scrollContent}
-      keyboardShouldPersistTaps="handled"
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior="padding"
+      keyboardVerticalOffset={Platform.OS === "ios" ? 96 : 0}
     >
-      {step === "form" ? renderForm() : null}
-      {step === "awaiting_payment" ? renderAwaitingPayment() : null}
-      {step === "success" ? renderSuccess() : null}
-      {step === "error" ? renderError() : null}
-    </ScrollView>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        {step === "form" ? renderForm() : null}
+        {step === "awaiting_payment" ? renderAwaitingPayment() : null}
+        {step === "success" ? renderSuccess() : null}
+        {step === "error" ? renderError() : null}
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg },
-  scrollContent: { padding: 16, paddingBottom: 40 },
-  section: { gap: 12 },
-
-  modeSwitch: {
-    flexDirection: "row",
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: C.border,
-    overflow: "hidden",
-  },
-  modeBtn: {
-    flex: 1,
-    height: 42,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: C.card,
-  },
-  modeBtnActive: { backgroundColor: C.blue600 },
-  modeBtnText: { color: C.muted, fontWeight: "600", fontSize: 14 },
-  modeBtnTextActive: { color: C.text },
-
-  inputFull: {
-    backgroundColor: C.card,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    height: 44,
-    color: C.text,
-    fontSize: 15,
-    borderWidth: 1,
-    borderColor: C.border,
-  },
-  row: { flexDirection: "row", gap: 8 },
-  choiceBtn: {
-    flex: 1,
-    height: 38,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: C.border,
-    backgroundColor: C.card,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  choiceBtnActive: {
-    borderColor: C.blue500,
-    backgroundColor: "rgba(37,99,235,0.15)",
-  },
-  choiceBtnText: { color: C.textSecondary, fontSize: 13, fontWeight: "600" },
-
-  divider: { flexDirection: "row", alignItems: "center", gap: 10 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: C.border },
-  dividerText: { color: C.subtle, fontSize: 12 },
-  qualityCard: {
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: C.border,
-    backgroundColor: C.card,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    gap: 5,
-  },
-  qualityTitle: {
-    color: C.textSecondary,
-    fontSize: 11,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-  },
-  qualityRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 6,
-  },
-  qualityIcon: {
-    color: C.green500,
-    fontSize: 11,
-    fontWeight: "800",
-    marginTop: 1,
-  },
-  qualityText: {
-    flex: 1,
-    color: C.muted,
-    fontSize: 11,
-    lineHeight: 14,
-  },
-  autoScanCard: {
-    gap: 8,
-    padding: 12,
-    backgroundColor: C.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: C.border,
-  },
-  autoScanTitle: { color: C.text, fontSize: 15, fontWeight: "700" },
-  autoScanHint: { color: C.muted, fontSize: 12 },
-  autoScannerWrap: {
-    marginTop: 4,
-    height: 460,
-    borderRadius: 12,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: C.border,
-    backgroundColor: C.bg,
-  },
-
-  primaryBtn: {
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: C.blue600,
-    height: 44,
-    borderRadius: 10,
-  },
-  primaryBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
-  disabledBtn: { opacity: 0.5 },
-
-  outlineBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: C.blue500,
-    height: 42,
-  },
-  outlineBtnText: { color: C.blue500, fontSize: 14, fontWeight: "600" },
-
-  playerCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: C.card,
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: C.border,
-  },
-  playerInfo: { flex: 1 },
-  playerName: { fontSize: 15, fontWeight: "600", color: C.text },
-  playerPhone: { fontSize: 13, color: C.muted, marginTop: 2 },
-  inlineCheckBtn: {
-    borderRadius: 8,
-    backgroundColor: C.blue600,
-    paddingHorizontal: 12,
-    height: 32,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  inlineCheckBtnText: { color: "#fff", fontWeight: "700", fontSize: 12 },
-
-  paymentSection: { alignItems: "center", gap: 12 },
-  paymentTitle: { fontSize: 20, fontWeight: "700", color: C.text },
-  qrContainer: {
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 14,
-    padding: 14,
-  },
-  qrImage: { width: 200, height: 200 },
-  paymentAmount: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: C.text,
-    textAlign: "center",
-  },
-  paymentRef: { fontSize: 13, color: C.subtle, textAlign: "center" },
-  cashBtn: {
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: C.amber400,
-    height: 44,
-    borderRadius: 10,
-    width: "100%",
-  },
-  cashBtnText: { color: C.bg, fontSize: 15, fontWeight: "700" },
-  cancelLink: { padding: 10 },
-  cancelLinkText: { color: C.muted, fontSize: 14 },
-
-  resultSection: { alignItems: "center", paddingTop: 50, gap: 14 },
-  successCircle: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: "rgba(34,197,94,0.13)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  errorCircle: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: "rgba(220,38,38,0.13)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  resultTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: C.text,
-    textAlign: "center",
-  },
-  errorText: { color: C.red400, textAlign: "center", fontSize: 13 },
-});
+function createCheckInStyles(t: AppColors) {
+  return StyleSheet.create({
+    container: { flex: 1, backgroundColor: t.bg },
+    scrollContent: { padding: 16, paddingBottom: 120 },
+    section: { gap: 12 },
+    modeSwitch: { flexDirection: "row", borderRadius: 10, borderWidth: 1, borderColor: t.border, overflow: "hidden" },
+    modeBtn: { flex: 1, height: 42, alignItems: "center", justifyContent: "center", backgroundColor: t.card },
+    modeBtnActive: { backgroundColor: t.blue600 },
+    modeBtnText: { color: t.muted, fontWeight: "600", fontSize: 14 },
+    modeBtnTextActive: { color: "#fff" },
+    inputFull: { backgroundColor: t.card, borderRadius: 10, paddingHorizontal: 14, height: 44, color: t.text, fontSize: 15, borderWidth: 1, borderColor: t.border },
+    row: { flexDirection: "row", gap: 8 },
+    choiceBtn: { flex: 1, height: 38, borderRadius: 8, borderWidth: 1, borderColor: t.border, backgroundColor: t.card, alignItems: "center", justifyContent: "center" },
+    choiceBtnActive: { borderColor: t.blue500, backgroundColor: "rgba(37,99,235,0.15)" },
+    choiceBtnText: { color: t.textSecondary, fontSize: 13, fontWeight: "600" },
+    divider: { flexDirection: "row", alignItems: "center", gap: 10 },
+    dividerLine: { flex: 1, height: 1, backgroundColor: t.border },
+    dividerText: { color: t.subtle, fontSize: 12 },
+    qualityCard: { borderRadius: 10, borderWidth: 1, borderColor: t.border, backgroundColor: t.card, paddingHorizontal: 10, paddingVertical: 9, gap: 5 },
+    qualityTitle: { color: t.textSecondary, fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.4 },
+    qualityRow: { flexDirection: "row", alignItems: "flex-start", gap: 6 },
+    qualityIcon: { color: t.green500, fontSize: 11, fontWeight: "800", marginTop: 1 },
+    qualityText: { flex: 1, color: t.muted, fontSize: 11, lineHeight: 14 },
+    autoScanCard: { gap: 8, padding: 12, backgroundColor: t.card, borderRadius: 12, borderWidth: 1, borderColor: t.border },
+    autoScanTitle: { color: t.text, fontSize: 15, fontWeight: "700" },
+    autoScanHint: { color: t.muted, fontSize: 12 },
+    autoScannerWrap: { marginTop: 4, height: 460, borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: t.border, backgroundColor: t.bg },
+    primaryBtn: { alignItems: "center", justifyContent: "center", backgroundColor: t.blue600, height: 44, borderRadius: 10 },
+    primaryBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+    disabledBtn: { opacity: 0.5 },
+    outlineBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 10, borderWidth: 1, borderColor: t.blue500, height: 42 },
+    outlineBtnText: { color: t.blue500, fontSize: 14, fontWeight: "600" },
+    playerCard: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: t.card, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: t.border },
+    playerInfo: { flex: 1 },
+    playerName: { fontSize: 15, fontWeight: "600", color: t.text },
+    playerPhone: { fontSize: 13, color: t.muted, marginTop: 2 },
+    inlineCheckBtn: { borderRadius: 8, backgroundColor: t.blue600, paddingHorizontal: 12, height: 32, alignItems: "center", justifyContent: "center" },
+    inlineCheckBtnText: { color: "#fff", fontWeight: "700", fontSize: 12 },
+    paymentSection: { alignItems: "center", gap: 12 },
+    paymentTitle: { fontSize: 20, fontWeight: "700", color: t.text },
+    qrContainer: { alignItems: "center", backgroundColor: "#fff", borderRadius: 14, padding: 14 },
+    qrImage: { width: 200, height: 200 },
+    paymentAmount: { fontSize: 22, fontWeight: "700", color: t.text, textAlign: "center" },
+    paymentRef: { fontSize: 13, color: t.subtle, textAlign: "center" },
+    cashBtn: { alignItems: "center", justifyContent: "center", backgroundColor: t.amber400, height: 44, borderRadius: 10, width: "100%" },
+    cashBtnText: { color: t.bg, fontSize: 15, fontWeight: "700" },
+    cancelLink: { padding: 10 },
+    cancelLinkText: { color: t.muted, fontSize: 14 },
+    resultSection: { alignItems: "center", paddingTop: 50, gap: 14 },
+    successCircle: { width: 88, height: 88, borderRadius: 44, backgroundColor: "rgba(34,197,94,0.13)", justifyContent: "center", alignItems: "center" },
+    errorCircle: { width: 88, height: 88, borderRadius: 44, backgroundColor: "rgba(220,38,38,0.13)", justifyContent: "center", alignItems: "center" },
+    resultTitle: { fontSize: 22, fontWeight: "700", color: t.text, textAlign: "center" },
+    errorText: { color: t.red400, textAlign: "center", fontSize: 13 },
+  });
+}

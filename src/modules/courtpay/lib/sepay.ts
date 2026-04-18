@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import { emitToVenue } from "@/lib/socket-server";
 import { sendPaymentPushToStaff } from "@/lib/staff-push";
 import { extractPaymentRef, isSubscriptionRef } from "./payment-reference";
-import { activateSubscription } from "./subscription";
+import { checkInSubscriber } from "./check-in";
 import type { SepayWebhookPayload } from "../types";
 
 /**
@@ -57,37 +57,27 @@ export async function processSepayWebhook(
   }
 
   if (isSubscriptionRef(ref)) {
-    // Find the packageId from metadata — stored in payment type context
-    // The pending payment for subscriptions stores the packageId in the type field as "subscription"
-    // We need to look up which package was selected. We store it via a convention:
-    // the paymentRef is unique, and we can look up the intent from the pending record.
-    // For now, check if there's a subscription that references this paymentRef
-    const existingSub = await prisma.playerSubscription.findFirst({
-      where: { paymentRef: ref },
+    // The subscription was pre-created on the kiosk (via activateSubscription).
+    // Now deduct 1 session for the current visit.
+    const activeSub = await prisma.playerSubscription.findFirst({
+      where: {
+        playerId: pending.checkInPlayerId,
+        status: "active",
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { activatedAt: "desc" },
     });
 
-    if (!existingSub) {
-      // Subscription was not pre-created — this happens if the kiosk creates
-      // the pending payment with packageId context. We'll need the packageId
-      // from the pending payment metadata. For the MVP, the kiosk flow
-      // pre-creates the subscription in "pending" state or stores packageId.
-      // For now, just record the check-in.
+    if (activeSub) {
+      await checkInSubscriber(pending.checkInPlayerId, pending.venueId, activeSub.id);
+    } else {
+      // Subscription not found — fall back to recording check-in without deduction
       await prisma.checkInRecord.create({
         data: {
           playerId: pending.checkInPlayerId,
           venueId: pending.venueId,
           paymentId: pending.id,
           source: "vietqr",
-        },
-      });
-    } else {
-      // Subscription already created (pre-activated on kiosk) — just record check-in
-      await prisma.checkInRecord.create({
-        data: {
-          playerId: pending.checkInPlayerId,
-          venueId: pending.venueId,
-          paymentId: pending.id,
-          source: "subscription",
         },
       });
     }

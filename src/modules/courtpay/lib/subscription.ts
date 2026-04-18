@@ -38,8 +38,9 @@ export async function getActiveSubscription(
 
 /**
  * Activate a subscription for a player. Creates a PlayerSubscription
- * with session count from the package and expiry based on durationDays.
- * First session is already included (sessionsRemaining = sessions - 1).
+ * with the full session count from the package and expiry based on durationDays.
+ * No session is deducted here — the caller is responsible for calling
+ * checkInSubscriber / deductSession for the current visit.
  */
 export async function activateSubscription(
   playerId: string,
@@ -54,8 +55,7 @@ export async function activateSubscription(
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + pkg.durationDays);
 
-  const sessionsRemaining =
-    pkg.sessions === null ? null : pkg.sessions - 1;
+  const sessionsRemaining = pkg.sessions === null ? null : pkg.sessions;
 
   const subscription = await prisma.playerSubscription.create({
     data: {
@@ -66,10 +66,6 @@ export async function activateSubscription(
       expiresAt,
       paymentRef,
     },
-  });
-
-  await prisma.subscriptionUsage.create({
-    data: { subscriptionId: subscription.id },
   });
 
   return subscription;

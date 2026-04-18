@@ -5,6 +5,7 @@ import { requireStaff } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
 import { sendPaymentPushToStaff } from "@/lib/staff-push";
 import { faceRecognitionService } from "@/lib/face-recognition";
+import { checkInSubscriber } from "@/modules/courtpay/lib/check-in";
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,30 +15,47 @@ export async function POST(request: NextRequest) {
 
     const payment = await prisma.pendingPayment.findUnique({
       where: { id: pendingPaymentId },
-      include: { player: true, session: true },
+      include: { player: true, session: true, checkInPlayer: true },
     });
     if (!payment) return error("Payment not found", 404);
     if (payment.status !== "pending") return error("Payment is no longer pending", 400);
 
-    // CourtPay payments may not have sessionId/playerId — just confirm and return
+    // CourtPay payments (no sessionId/playerId on the regular session)
     if (!payment.sessionId || !payment.playerId) {
       await prisma.pendingPayment.update({
         where: { id: pendingPaymentId },
         data: { status: "confirmed", confirmedAt: new Date(), confirmedBy: auth.id },
       });
+
+      // For subscription purchases: deduct 1 session for the current visit
+      if (payment.type === "subscription" && payment.checkInPlayerId) {
+        const activeSub = await prisma.playerSubscription.findFirst({
+          where: {
+            playerId: payment.checkInPlayerId,
+            status: "active",
+            expiresAt: { gt: new Date() },
+          },
+          orderBy: { activatedAt: "desc" },
+        });
+        if (activeSub) {
+          await checkInSubscriber(payment.checkInPlayerId, payment.venueId, activeSub.id);
+        }
+      }
+
+      const playerName = payment.checkInPlayer?.name ?? payment.checkInPlayerId ?? "Unknown";
       emitToVenue(payment.venueId, "payment:confirmed", {
         pendingPaymentId,
         paymentRef: payment.paymentRef,
-        playerName: payment.player?.name ?? payment.checkInPlayerId ?? "Unknown",
+        playerName,
       });
       sendPaymentPushToStaff("payment_confirmed", {
         venueId: payment.venueId,
         pendingPaymentId,
-        playerName: payment.player?.name ?? payment.checkInPlayerId ?? "Unknown",
+        playerName,
         amount: payment.amount,
         paymentMethod: payment.paymentMethod,
       });
-      return json({ queueNumber: null, playerName: payment.player?.name ?? "Unknown" });
+      return json({ queueNumber: null, playerName });
     }
 
     const existingEntry = await prisma.queueEntry.findUnique({

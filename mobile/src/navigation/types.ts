@@ -15,8 +15,10 @@ export type StaffStackParamList = {
   VenueSelect: undefined;
   StaffTabs: undefined;
   StaffProfile: undefined;
+  StaffPaymentSettings: undefined;
   StaffSubscriptions: undefined;
   StaffBossDashboard: undefined;
+  StaffSessionDetail: { sessionId: string; date: string; openedAt: string; closedAt: string | null };
 };
 
 export type StaffTabParamList = {

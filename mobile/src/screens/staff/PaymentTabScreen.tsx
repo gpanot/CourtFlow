@@ -130,7 +130,7 @@ function createStyles(t: AppColors) {
       borderColor: t.border,
       gap: 8,
     },
-    faceBtn: {
+    faceBtnSm: {
       alignSelf: "flex-start",
       borderRadius: 10,
       borderWidth: 1,
@@ -138,8 +138,16 @@ function createStyles(t: AppColors) {
       overflow: "hidden",
       backgroundColor: t.bg,
     },
+    faceBtnLg: {
+      alignSelf: "stretch",
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: t.border,
+      overflow: "hidden",
+      backgroundColor: t.bg,
+    },
     faceImgSm: { width: 56, height: 56 },
-    faceImgLg: { width: "100%", height: 160 },
+    faceImgLg: { width: "100%", height: 200 },
     nameRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 },
     cardName: { fontSize: 15, fontWeight: "700", color: t.text, flexShrink: 1 },
     badge: {
@@ -347,7 +355,7 @@ export function PaymentTabScreen() {
       <View style={styles.card}>
         {faceUri ? (
           <TouchableOpacity
-            style={styles.faceBtn}
+            style={expanded ? styles.faceBtnLg : styles.faceBtnSm}
             onPress={() =>
               setExpandedPhotoId((prev) => (prev === item.id ? null : item.id))
             }
@@ -446,7 +454,7 @@ export function PaymentTabScreen() {
       <View style={styles.card}>
         {faceUri ? (
           <TouchableOpacity
-            style={styles.faceBtn}
+            style={expanded ? styles.faceBtnLg : styles.faceBtnSm}
             onPress={() =>
               setExpandedPhotoId((prev) =>
                 prev === `paid-${item.id}` ? null : `paid-${item.id}`
