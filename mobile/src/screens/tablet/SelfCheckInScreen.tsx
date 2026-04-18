@@ -12,6 +12,7 @@ import {
   Animated,
   Easing,
   Keyboard,
+  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -159,6 +160,7 @@ export function SelfCheckInScreen({
   const [pendingPayment, setPendingPayment] = useState<PendingPaymentState | null>(
     null
   );
+  const [cashPending, setCashPending] = useState(false);
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const regCameraRef = useRef<CameraView | null>(null);
   const regCameraReady = useRef(false);
@@ -249,6 +251,7 @@ export function SelfCheckInScreen({
     setRegCheckingFace(false);
     setRegCaptureBusy(false);
     setPendingPayment(null);
+    setCashPending(false);
     setConfirmMessage(t("checkInComplete"));
     setError("");
     setLoading(false);
@@ -310,6 +313,7 @@ export function SelfCheckInScreen({
     "payment:confirmed": (data: unknown) => {
       const d = data as { pendingPaymentId?: string; playerName?: string };
       if (pendingPayment && d.pendingPaymentId === pendingPayment.id) {
+        setCashPending(false);
         setConfirmMessage(
           d.playerName ? `Welcome ${d.playerName}! You are checked in.` : "Payment confirmed."
         );
@@ -548,8 +552,8 @@ export function SelfCheckInScreen({
       await api.post("/api/kiosk/cash-payment", {
         pendingPaymentId: pendingPayment.id,
       });
-      setConfirmMessage(t("cashPaymentConfirmed"));
-      setStep("confirmed");
+      // Show overlay — staff must confirm. Socket payment:confirmed will resolve it.
+      setCashPending(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Cash payment failed");
       setStep("error");
@@ -1156,6 +1160,36 @@ export function SelfCheckInScreen({
         />
       ) : null}
       <View style={styles.container}>{renderStep()}</View>
+
+      {/* Cash waiting overlay — shown after player taps Pay by Cash, waits for staff confirm */}
+      <Modal visible={cashPending} transparent animationType="fade">
+        <View style={styles.cashOverlay}>
+          <View style={styles.cashOverlayCard}>
+            <View style={styles.cashOverlayIconRow}>
+              <Ionicons name="cash-outline" size={48} color="#f59e0b" />
+            </View>
+            <Text style={styles.cashOverlayTitle}>Cash Payment</Text>
+            <Text style={styles.cashOverlayHint}>
+              Please hand the cash to the staff.{"\n"}
+              Waiting for staff to confirm…
+            </Text>
+            <ActivityIndicator color="#f59e0b" style={{ marginVertical: 8 }} />
+            {pendingPayment ? (
+              <Text style={styles.cashOverlayAmount}>
+                {pendingPayment.amount.toLocaleString()} VND
+              </Text>
+            ) : null}
+            <TouchableOpacity
+              style={styles.cashOverlayCancel}
+              onPress={handleCancelPayment}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.cashOverlayCancelText}>Cancel — go back</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <TabletStaffEscape
         onVerified={() => navigation.navigate("TabletModeSelect")}
       />
@@ -1601,5 +1635,67 @@ const styles = StyleSheet.create({
     color: "#a3a3a3",
     marginTop: 8,
     marginBottom: 4,
+  },
+
+  // ── Cash waiting overlay ──────────────────────────────────────────────────
+  cashOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.82)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 24,
+  },
+  cashOverlayCard: {
+    width: "100%",
+    maxWidth: 420,
+    backgroundColor: "#1c1917",
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.35)",
+    padding: 32,
+    alignItems: "center",
+    gap: 12,
+  },
+  cashOverlayIconRow: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: "rgba(245,158,11,0.12)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  cashOverlayTitle: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: "#fff",
+    textAlign: "center",
+  },
+  cashOverlayHint: {
+    fontSize: 16,
+    color: "#a3a3a3",
+    textAlign: "center",
+    lineHeight: 24,
+  },
+  cashOverlayAmount: {
+    fontSize: 32,
+    fontWeight: "700",
+    color: "#f59e0b",
+    textAlign: "center",
+    marginVertical: 4,
+  },
+  cashOverlayCancel: {
+    marginTop: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#404040",
+  },
+  cashOverlayCancelText: {
+    color: "#a3a3a3",
+    fontSize: 15,
+    fontWeight: "500",
+    textAlign: "center",
   },
 });
