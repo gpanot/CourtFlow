@@ -518,6 +518,8 @@ export function StaffBossDashboardScreen() {
   const [playerSearch, setPlayerSearch] = useState("");
   const [searchVisible, setSearchVisible] = useState(false);
   const searchRef = useRef<TextInput>(null);
+  // Track which tabs have been fetched so we don't reload on re-visit
+  const loadedTabs = useRef(new Set<Tab>());
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -528,8 +530,13 @@ export function StaffBossDashboardScreen() {
     });
   }, [navigation, theme]);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (force = false) => {
     if (!venueId) {
+      setLoading(false);
+      return;
+    }
+    // Skip fetch if this tab was already loaded and it's not a forced refresh
+    if (!force && loadedTabs.current.has(tab)) {
       setLoading(false);
       return;
     }
@@ -560,6 +567,7 @@ export function StaffBossDashboardScreen() {
         );
         setPlayersData(data);
       }
+      loadedTabs.current.add(tab);
     } catch {
       /* ignore */
     } finally {
@@ -603,7 +611,7 @@ export function StaffBossDashboardScreen() {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={() => { setRefreshing(true); void fetchData(); }}
+              onRefresh={() => { setRefreshing(true); void fetchData(true); }}
               tintColor={theme.purple400}
             />
           }
