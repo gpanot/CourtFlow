@@ -72,6 +72,7 @@ export async function sendPushToVenueStaff(
         data: {
           ...payload.data,
           title: payload.title,
+          message: payload.body,
           body: payload.body,
           channelId: "courtpay_payments",
           sound: "default",
@@ -121,14 +122,15 @@ export function sendPaymentPushToStaff(
   event: PaymentPushEvent,
   ctx: PaymentPushContext
 ) {
-  const title =
-    event === "payment_new" ? "New Payment Pending" : "Payment Confirmed";
-
   const amountStr = ctx.amount.toLocaleString("en");
-  const body =
+  const detail = `${ctx.playerName} — ${amountStr} VND (${ctx.paymentMethod ?? "vietqr"})`;
+
+  const title =
     event === "payment_new"
-      ? `${ctx.playerName} — ${amountStr} VND (${ctx.paymentMethod ?? "vietqr"})`
-      : `${ctx.playerName} — ${amountStr} VND approved`;
+      ? `Approve Payment · ${detail}`
+      : `Payment Confirmed · ${detail}`;
+
+  const body = detail;
 
   const data: Record<string, string> = {
     event,
