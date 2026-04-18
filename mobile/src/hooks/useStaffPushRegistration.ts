@@ -1,47 +1,74 @@
 import { useEffect, useRef, useCallback } from "react";
-import { Platform } from "react-native";
+import { Platform, NativeModules } from "react-native";
 import * as Notifications from "expo-notifications";
 import * as Device from "expo-device";
 import Constants from "expo-constants";
 import { api } from "../lib/api-client";
 import { useAuthStore } from "../stores/auth-store";
 
-// Expo Go removes remote push since SDK 53. A dev build (expo-dev-client) is required.
 const IS_EXPO_GO = Constants.appOwnership === "expo";
 
-// ── debug helper ─────────────────────────────────────────────────────────────
+const MAX_RETRIES = 5;
+const INITIAL_DELAY_MS = 2_000;
+
 function dbg(msg: string, ...args: unknown[]) {
   console.log(`[Push] ${msg}`, ...args);
 }
-// ─────────────────────────────────────────────────────────────────────────────
 
-export async function getDevicePushToken(): Promise<string | null> {
-  dbg("isDevice:", Device.isDevice, "OS:", Platform.OS, "isExpoGo:", IS_EXPO_GO);
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+export interface PushTokenResult {
+  token: string | null;
+  error: string | null;
+  debug: string[];
+}
+
+export async function getDevicePushToken(): Promise<PushTokenResult> {
+  const debug: string[] = [];
+  const log = (msg: string) => {
+    dbg(msg);
+    debug.push(msg);
+  };
+
+  log(`Device: ${Device.manufacturer} ${Device.modelName} (Android ${Device.osVersion})`);
+  log(`isDevice: ${Device.isDevice}, OS: ${Platform.OS}`);
+  log(`appOwnership: ${Constants.appOwnership ?? "null (standalone)"}`);
+  log(`executionEnv: ${Constants.executionEnvironment}`);
 
   if (IS_EXPO_GO) {
-    dbg("⚠ Running in Expo Go — remote push (FCM) is NOT supported since SDK 53.");
-    dbg("  → Build a dev client: cd mobile && npx expo run:android");
-    return null;
+    const msg = "Expo Go — FCM not supported.";
+    log(msg);
+    return { token: null, error: msg, debug };
   }
 
-  if (!Device.isDevice) {
-    dbg("⚠ Not a physical device — FCM tokens unavailable in emulators/simulators");
-    return null;
+  // Check Google Play Services availability via native module
+  try {
+    const gps = NativeModules.RNGooglePlayServicesAvailability;
+    if (gps) {
+      log(`Google Play Services module found`);
+    } else {
+      log("No RNGooglePlayServicesAvailability module (expected in Expo)");
+    }
+  } catch {
+    log("Could not check Google Play Services module");
   }
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  dbg("existing permission status:", existingStatus);
+  log(`Permission status: ${existingStatus}`);
 
   let finalStatus = existingStatus;
   if (existingStatus !== "granted") {
     const { status } = await Notifications.requestPermissionsAsync();
     finalStatus = status;
-    dbg("permission after request:", finalStatus);
+    log(`Permission after request: ${finalStatus}`);
   }
 
   if (finalStatus !== "granted") {
-    dbg("⚠ Permission denied — cannot get push token");
-    return null;
+    const msg = "Notification permission denied.";
+    log(msg);
+    return { token: null, error: msg, debug };
   }
 
   if (Platform.OS === "android") {
@@ -51,29 +78,51 @@ export async function getDevicePushToken(): Promise<string | null> {
       sound: "default",
       vibrationPattern: [0, 200, 100, 200],
     });
-    dbg("Android notification channel ensured");
+    log("Notification channel created");
   }
 
-  const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-  dbg("EAS projectId from config:", projectId ?? "(not set — using native FCM token)");
+  // Register notification category with Confirm / Cancel action buttons.
+  // Works on Android; on iOS this controls lock-screen/banner actions.
+  await Notifications.setNotificationCategoryAsync("payment_new", [
+    {
+      identifier: "confirm_payment",
+      buttonTitle: "✓ Confirm",
+      options: { opensAppToForeground: false },
+    },
+    {
+      identifier: "cancel_payment",
+      buttonTitle: "✕ Cancel",
+      options: { opensAppToForeground: false, isDestructive: true },
+    },
+  ]);
+  log("Notification category 'payment_new' registered");
 
-  try {
-    const tokenObj = await Notifications.getDevicePushTokenAsync();
-    dbg("✓ native FCM token obtained:", tokenObj.data.slice(0, 20) + "…");
-    return tokenObj.data;
-  } catch (nativeErr) {
-    dbg("native token failed:", nativeErr);
-    if (projectId) {
-      try {
-        const tokenObj = await Notifications.getExpoPushTokenAsync({ projectId });
-        dbg("✓ Expo push token obtained:", tokenObj.data);
-        return tokenObj.data;
-      } catch (expoErr) {
-        dbg("Expo push token also failed:", expoErr);
-      }
+  // Retry loop — SERVICE_NOT_AVAILABLE is transient after fresh install
+  let lastErr = "";
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      log(`getDevicePushTokenAsync() attempt ${attempt}/${MAX_RETRIES}…`);
+      const tokenObj = await Notifications.getDevicePushTokenAsync();
+      log(`✓ FCM token: ${tokenObj.data.slice(0, 30)}…`);
+      return { token: tokenObj.data, error: null, debug };
+    } catch (err: unknown) {
+      lastErr = err instanceof Error ? err.message : String(err);
+      log(`✗ Attempt ${attempt} failed: ${lastErr}`);
+
+      const isRetryable =
+        lastErr.includes("SERVICE_NOT_AVAILABLE") ||
+        lastErr.includes("INTERNAL_ERROR") ||
+        lastErr.includes("TOO_MANY_REGISTRATIONS");
+
+      if (!isRetryable || attempt === MAX_RETRIES) break;
+
+      const delayMs = INITIAL_DELAY_MS * Math.pow(2, attempt - 1);
+      log(`  Retrying in ${delayMs / 1000}s…`);
+      await sleep(delayMs);
     }
-    return null;
   }
+
+  return { token: null, error: `FCM failed after ${MAX_RETRIES} attempts: ${lastErr}`, debug };
 }
 
 /**
@@ -91,22 +140,21 @@ export function useStaffPushRegistration(pushEnabled: boolean) {
       return;
     }
     dbg("starting registration for venueId:", venueId);
+    const result = await getDevicePushToken();
+    if (!result.token) {
+      dbg("⚠ No device token — registration aborted:", result.error);
+      return;
+    }
     try {
-      const deviceToken = await getDevicePushToken();
-      if (!deviceToken) {
-        dbg("⚠ No device token — registration aborted");
-        return;
-      }
-
       await api.post("/api/staff/push/register", {
-        token: deviceToken,
+        token: result.token,
         venueId,
         platform: Platform.OS,
       });
-      registeredTokenRef.current = deviceToken;
+      registeredTokenRef.current = result.token;
       dbg("✓ Token registered with backend");
     } catch (err) {
-      dbg("⚠ Registration failed:", err);
+      dbg("⚠ Registration API call failed:", err);
     }
   }, [venueId, token]);
 

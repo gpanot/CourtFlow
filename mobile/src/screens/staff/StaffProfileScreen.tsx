@@ -399,18 +399,35 @@ export function StaffProfileScreen() {
     setPushDebugLog([]);
 
     try {
-      addLog("Checking device push token…");
+      addLog("── Getting FCM token ──");
       const { getDevicePushToken } = await import(
         "../../hooks/useStaffPushRegistration"
       );
-      const deviceToken = await getDevicePushToken();
-      if (deviceToken) {
-        addLog(`Token: ${deviceToken.slice(0, 22)}…`);
+      const result = await getDevicePushToken();
+
+      // Show every debug line from the token acquisition
+      result.debug.forEach((line) => addLog(`  ${line}`));
+
+      if (result.token) {
+        addLog(`✓ Token OK: ${result.token.slice(0, 22)}…`);
+
+        // Auto-register the token with backend if we got one
+        addLog("Registering token with backend…");
+        try {
+          await api.post("/api/staff/push/register", {
+            token: result.token,
+            venueId,
+            platform: "android",
+          });
+          addLog("✓ Token registered");
+        } catch (regErr) {
+          addLog(`⚠ Register failed: ${regErr instanceof Error ? regErr.message : String(regErr)}`);
+        }
       } else {
-        addLog("⚠ No device token (see Expo terminal for details)");
+        addLog(`✗ NO TOKEN: ${result.error}`);
       }
 
-      addLog("Calling POST /api/staff/push/test…");
+      addLog("── Sending test push ──");
       const res = await api.post<{
         ok: boolean;
         reason?: string;
@@ -809,27 +826,29 @@ export function StaffProfileScreen() {
           />
         </View>
 
-        <TouchableOpacity
-          style={[
-            styles.saveBtn,
-            { backgroundColor: theme.blue500, marginTop: 4 },
-            (!pushEnabled || pushTesting) && styles.disabledBtn,
-          ]}
-          onPress={() => {
-            void handleTestPush();
-          }}
-          disabled={!pushEnabled || pushTesting}
-          activeOpacity={0.7}
-        >
-          {pushTesting ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <>
-              <Ionicons name="paper-plane-outline" size={15} color="#fff" />
-              <Text style={styles.saveBtnText}>Send Test Notification</Text>
-            </>
-          )}
-        </TouchableOpacity>
+        {false && (
+          <TouchableOpacity
+            style={[
+              styles.saveBtn,
+              { backgroundColor: theme.blue500, marginTop: 4 },
+              (!pushEnabled || pushTesting) && styles.disabledBtn,
+            ]}
+            onPress={() => {
+              void handleTestPush();
+            }}
+            disabled={!pushEnabled || pushTesting}
+            activeOpacity={0.7}
+          >
+            {pushTesting ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <Ionicons name="paper-plane-outline" size={15} color="#fff" />
+                <Text style={styles.saveBtnText}>Send Test Notification</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
 
         {pushDebugLog.length > 0 && (
           <View

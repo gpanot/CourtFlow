@@ -558,6 +558,26 @@ export function SelfCheckInScreen({
     }
   };
 
+  const handleCancelPayment = async () => {
+    if (!pendingPayment) {
+      resetToHome();
+      return;
+    }
+    // Await with a 4s timeout so the kiosk always resets even on slow networks,
+    // but the DB is updated before the kiosk screen clears.
+    try {
+      await Promise.race([
+        api.post("/api/kiosk/cancel-payment", { pendingPaymentId: pendingPayment.id }),
+        new Promise<void>((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), 4000)
+        ),
+      ]);
+    } catch {
+      // Best-effort — reset kiosk regardless
+    }
+    resetToHome();
+  };
+
   const renderStep = () => {
     switch (step) {
       case "home":
@@ -1060,7 +1080,7 @@ export function SelfCheckInScreen({
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.cancelBtn}
-              onPress={resetToHome}
+              onPress={handleCancelPayment}
             >
               <Text style={styles.cancelText}>{t("cancel")}</Text>
             </TouchableOpacity>
@@ -1365,10 +1385,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    backgroundColor: "#3b82f6",
+    backgroundColor: "#16a34a",
     height: 56,
     borderRadius: 14,
     marginTop: 8,
+    minWidth: 220,
+    paddingHorizontal: 24,
+    alignSelf: "stretch",
   },
   primaryBtnText: { color: "#fff", fontSize: 18, fontWeight: "600" },
   disabledBtn: { opacity: 0.5 },
@@ -1397,7 +1420,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     height: 42,
   },
-  selectBtnActive: { borderColor: "#3b82f6", backgroundColor: "#1e40af55" },
+  selectBtnActive: { borderColor: "#16a34a", backgroundColor: "rgba(22,163,74,0.18)" },
   selectBtnText: { color: "#fff", fontSize: 13, fontWeight: "600" },
   errorText: { color: "#f87171", textAlign: "center", fontSize: 14 },
   playerCard: {

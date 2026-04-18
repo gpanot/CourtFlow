@@ -76,10 +76,19 @@ interface PendingPaymentState {
   playerName: string;
 }
 
+interface ActiveSubInfo {
+  id: string;
+  packageName: string;
+  sessionsRemaining: number | null;
+  daysRemaining: number;
+  isUnlimited: boolean;
+  status: string;
+}
+
 interface CourtPayCheckinResponse {
   resultType?: string;
   player?: CheckInPlayerLite;
-  activeSubscription?: unknown;
+  activeSubscription?: ActiveSubInfo | null;
   error?: string;
 }
 
@@ -112,6 +121,7 @@ export function CourtPayCheckInScreen({
   const [phoneError, setPhoneError] = useState("");
   const [phoneLoading, setPhoneLoading] = useState(false);
   const [phonePreview, setPhonePreview] = useState<CheckInPlayerLite | null>(null);
+  const [phoneActiveSub, setPhoneActiveSub] = useState<ActiveSubInfo | null>(null);
   const [name, setName] = useState("");
   const [gender, setGender] = useState<"male" | "female" | null>(null);
   const [skillLevel, setSkillLevel] = useState<
@@ -167,6 +177,7 @@ export function CourtPayCheckInScreen({
     setPhoneInput("");
     setPhoneError("");
     setPhonePreview(null);
+    setPhoneActiveSub(null);
     setName("");
     setGender(null);
     setSkillLevel(null);
@@ -278,14 +289,23 @@ export function CourtPayCheckInScreen({
   );
 
   // ── Subscription routing ──────────────────────────────────────────────────
-  // In CourtPay, always show the subscription offer when packages are available,
-  // regardless of the subscriptions_enabled feature flag (CourtPay is always a payment flow).
+  // If player has an active subscription with sessions left → auto-check-in (skip offer + payment).
+  // If no active sub (or exhausted/expired) → show subscription_offer when packages exist.
   const goToSubscriptionOrPay = useCallback(
-    (targetPlayer: CheckInPlayerLite, newPlayer: boolean) => {
-      const active = packages.filter((p) => p.active);
+    (targetPlayer: CheckInPlayerLite, newPlayer: boolean, activeSub?: ActiveSubInfo | null) => {
       setPlayer(targetPlayer);
       setIsNewPlayer(newPlayer);
-      if (active.length > 0) {
+
+      // Active subscription with sessions remaining → auto-check-in
+      if (activeSub && activeSub.status === "active" &&
+          (activeSub.isUnlimited || (activeSub.sessionsRemaining !== null && activeSub.sessionsRemaining > 0))) {
+        void doPaySession(targetPlayer, undefined);
+        return;
+      }
+
+      // No active sub → show package offer if packages exist
+      const activePkgs = packages.filter((p) => p.active);
+      if (activePkgs.length > 0) {
         setStep("subscription_offer");
       } else {
         void doPaySession(targetPlayer, undefined);
@@ -318,9 +338,9 @@ export function CourtPayCheckInScreen({
           setStep("error");
           return "done";
         }
-        // Face-checkin returns { resultType: "matched", player: { id, name, phone } }
+        // Face-checkin returns { resultType: "matched", player: { id, name, phone }, activeSubscription }
         if (data.resultType === "matched" && data.player) {
-          goToSubscriptionOrPay(data.player, false);
+          goToSubscriptionOrPay(data.player, false, data.activeSubscription);
           return "done";
         }
         return "continue_scan";
@@ -338,17 +358,20 @@ export function CourtPayCheckInScreen({
     if (!phoneInput.trim() || !venueId) return;
     setPhoneLoading(true);
     setPhoneError("");
+    setPhoneActiveSub(null);
     restartIdleTimer();
     try {
       const res = await api.post<{
         found: boolean;
         player: CheckInPlayerLite | null;
+        activeSubscription?: ActiveSubInfo | null;
       }>("/api/courtpay/identify", {
         venueCode: venueId,
         phone: phoneInput.trim(),
       });
       if (res.found && res.player) {
         setPhonePreview(res.player);
+        setPhoneActiveSub(res.activeSubscription ?? null);
         setStep("phone_preview");
       } else {
         setPhoneError("No player found with this phone number");
@@ -362,7 +385,7 @@ export function CourtPayCheckInScreen({
 
   const handlePhoneConfirm = () => {
     if (!phonePreview) return;
-    goToSubscriptionOrPay(phonePreview, false);
+    goToSubscriptionOrPay(phonePreview, false, phoneActiveSub);
   };
 
   // ── Registration face capture ─────────────────────────────────────────────
@@ -421,6 +444,7 @@ export function CourtPayCheckInScreen({
         vietQR?: string | null;
         checkedIn?: boolean;
         free?: boolean;
+        subscription?: ActiveSubInfo | null;
       }>("/api/courtpay/pay-session", {
         venueCode: venueId,
         playerId: targetPlayer.id,
@@ -428,10 +452,17 @@ export function CourtPayCheckInScreen({
       });
 
       if (res.checkedIn || res.free) {
+        const sub = res.subscription;
+        let subHint = "";
+        if (sub && sub.isUnlimited) {
+          subHint = `\nUnlimited pass · ${sub.daysRemaining} days left`;
+        } else if (sub && sub.sessionsRemaining !== null) {
+          subHint = `\n${sub.sessionsRemaining} session${sub.sessionsRemaining !== 1 ? "s" : ""} remaining · ${sub.daysRemaining} days left`;
+        }
         setConfirmMessage(
-          isNewPlayer
+          (isNewPlayer
             ? `Welcome to the club, ${targetPlayer.name}!`
-            : `Welcome back, ${targetPlayer.name}!`
+            : `Welcome back, ${targetPlayer.name}!`) + subHint
         );
         setStep("confirmed");
         return;
@@ -529,6 +560,26 @@ export function CourtPayCheckInScreen({
     } else {
       void handleRegisterAndPay();
     }
+  };
+
+  const handleCancelPayment = async () => {
+    if (!pendingPayment) {
+      resetToHome();
+      return;
+    }
+    // Await with a 4s timeout so the kiosk always resets even on slow networks,
+    // but the DB is updated before the kiosk screen clears.
+    try {
+      await Promise.race([
+        api.post("/api/kiosk/cancel-payment", { pendingPaymentId: pendingPayment.id }),
+        new Promise<void>((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), 4000)
+        ),
+      ]);
+    } catch {
+      // Best-effort — reset kiosk regardless
+    }
+    resetToHome();
   };
 
   const handleCash = async () => {
@@ -1098,7 +1149,7 @@ export function CourtPayCheckInScreen({
               <Ionicons name="cash-outline" size={18} color="#fff" />
               <Text style={styles.cashText}>{t("payByCash")}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.cancelBtn} onPress={resetToHome}>
+            <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelPayment}>
               <Text style={styles.cancelText}>{t("cancel")}</Text>
             </TouchableOpacity>
           </View>
