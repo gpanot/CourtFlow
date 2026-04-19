@@ -37,7 +37,7 @@ export async function GET(req: Request) {
           name: venue.name,
           billingStatus: venue.billingStatus,
           thisWeekEstimate: usage?.estimatedTotal ?? 0,
-          thisWeekCheckins: usage?.totalCheckins ?? 0,
+          thisWeekPayments: usage?.totalPayments ?? usage?.totalCheckins ?? 0,
           latestInvoiceStatus: latestInvoice?.status ?? null,
           outstandingAmount: outstanding._sum.totalAmount ?? 0,
         };

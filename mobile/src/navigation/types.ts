@@ -21,6 +21,7 @@ export type StaffStackParamList = {
   StaffBossDashboard: undefined;
   StaffSessionHistory: undefined;
   StaffSessionDetail: { sessionId: string; date: string; openedAt: string; closedAt: string | null };
+  StaffBillingWeekPayments: { venueId: string; weekStart: string; weekEnd: string };
   BossSubscriptionDetail: { subscriptionId: string };
 };
 

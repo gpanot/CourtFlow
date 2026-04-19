@@ -40,7 +40,12 @@ export async function GET(
     return NextResponse.json({
       venue,
       rates,
-      currentWeek: usage,
+      currentWeek: usage
+        ? {
+            ...usage,
+            totalPayments: usage.totalPayments ?? usage.totalCheckins,
+          }
+        : null,
       invoices,
     });
   } catch (err: unknown) {

@@ -4,6 +4,10 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import {
+  CourtPayBillingPaymentCard,
+  type CourtPayBillingPaymentCardData,
+} from "@/components/courtpay-billing-payment-card";
+import {
   Loader2,
   Save,
   ChevronRight,
@@ -49,7 +53,7 @@ interface VenueOverview {
   name: string;
   billingStatus: string;
   thisWeekEstimate: number;
-  thisWeekCheckins: number;
+  thisWeekPayments: number;
   latestInvoiceStatus: string | null;
   outstandingAmount: number;
 }
@@ -75,8 +79,10 @@ interface VenueDetail {
     sepayAddon: number;
   } | null;
   currentWeek: {
-    totalCheckins: number;
+    totalPayments: number;
     estimatedTotal: number;
+    weekStart: string;
+    weekEnd: string;
   } | null;
   invoices: {
     id: string;
@@ -89,6 +95,18 @@ interface VenueDetail {
     paidAt: string | null;
     confirmedBy: string | null;
   }[];
+}
+
+interface WeeklyPaymentsResponse {
+  invoiceId: string;
+  payments: CourtPayBillingPaymentCardData[];
+  summary: {
+    totalPayments: number;
+    totalAmount: number;
+    sepayPayments: number;
+    cancelledPayments: number;
+    subscriptionPayments: number;
+  };
 }
 
 function formatVND(n: number) {
@@ -114,6 +132,18 @@ export default function CourtPayBillingPage() {
   } | null>(null);
   const [ratesSaving, setRatesSaving] = useState(false);
   const [markingPaid, setMarkingPaid] = useState<string | null>(null);
+  const [expandedInvoiceId, setExpandedInvoiceId] = useState<string | null>(null);
+  const [invoicePayments, setInvoicePayments] = useState<
+    Record<string, WeeklyPaymentsResponse>
+  >({});
+  const [loadingInvoicePayments, setLoadingInvoicePayments] = useState<string | null>(
+    null
+  );
+  const [currentWeekPayments, setCurrentWeekPayments] = useState<WeeklyPaymentsResponse | null>(
+    null
+  );
+  const [currentWeekOpen, setCurrentWeekOpen] = useState(false);
+  const [currentWeekLoading, setCurrentWeekLoading] = useState(false);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -159,9 +189,15 @@ export default function CourtPayBillingPage() {
     if (selectedVenueId === venueId) {
       setSelectedVenueId(null);
       setVenueDetail(null);
+      setExpandedInvoiceId(null);
+      setCurrentWeekOpen(false);
       return;
     }
     setSelectedVenueId(venueId);
+    setExpandedInvoiceId(null);
+    setInvoicePayments({});
+    setCurrentWeekPayments(null);
+    setCurrentWeekOpen(false);
     setVenueLoading(true);
     try {
       const data = await api.get<VenueDetail>(
@@ -179,6 +215,26 @@ export default function CourtPayBillingPage() {
       console.error(e);
     }
     setVenueLoading(false);
+  };
+
+  const toggleCurrentWeekPayments = async () => {
+    if (!selectedVenueId || !venueDetail?.currentWeek) return;
+    if (currentWeekOpen) {
+      setCurrentWeekOpen(false);
+      return;
+    }
+    setCurrentWeekOpen(true);
+    if (currentWeekPayments) return;
+    setCurrentWeekLoading(true);
+    try {
+      const data = await api.get<WeeklyPaymentsResponse>(
+        `/api/admin/billing/venue/${selectedVenueId}/week-payments?weekStart=${venueDetail.currentWeek.weekStart}&weekEnd=${venueDetail.currentWeek.weekEnd}`
+      );
+      setCurrentWeekPayments(data);
+    } catch (e) {
+      console.error(e);
+    }
+    setCurrentWeekLoading(false);
   };
 
   const saveRates = async () => {
@@ -225,6 +281,26 @@ export default function CourtPayBillingPage() {
       console.error(e);
     }
     setMarkingPaid(null);
+  };
+
+  const toggleInvoicePayments = async (invoiceId: string) => {
+    if (!selectedVenueId) return;
+    if (expandedInvoiceId === invoiceId) {
+      setExpandedInvoiceId(null);
+      return;
+    }
+    setExpandedInvoiceId(invoiceId);
+    if (invoicePayments[invoiceId]) return;
+    setLoadingInvoicePayments(invoiceId);
+    try {
+      const data = await api.get<WeeklyPaymentsResponse>(
+        `/api/admin/billing/venue/${selectedVenueId}/invoices/${invoiceId}/payments`
+      );
+      setInvoicePayments((prev) => ({ ...prev, [invoiceId]: data }));
+    } catch (e) {
+      console.error(e);
+    }
+    setLoadingInvoicePayments(null);
   };
 
   if (loading) {
@@ -297,7 +373,7 @@ export default function CourtPayBillingPage() {
               <h4 className="text-sm font-medium text-neutral-400">Default rates</h4>
               <div>
                 <label className="text-xs text-neutral-500 mb-1 block">
-                  Base rate per check-in (VND)
+                  Base rate per payment (VND)
                 </label>
                 <input
                   type="number"
@@ -329,7 +405,7 @@ export default function CourtPayBillingPage() {
               </div>
               <div>
                 <label className="text-xs text-neutral-500 mb-1 block">
-                  SePay auto-payment add-on (VND)
+                  SePay-confirmed add-on (VND)
                 </label>
                 <input
                   type="number"
@@ -406,7 +482,7 @@ export default function CourtPayBillingPage() {
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm">{v.name}</p>
                     <p className="text-xs text-neutral-500 mt-0.5">
-                      {v.thisWeekCheckins} check-ins this week
+                      {v.thisWeekPayments} payments this week
                     </p>
                   </div>
                   <div className="flex items-center gap-4">
@@ -559,12 +635,47 @@ export default function CourtPayBillingPage() {
                               Current week
                             </h5>
                             <p className="text-sm">
-                              {venueDetail.currentWeek.totalCheckins} check-ins ·{" "}
+                              {venueDetail.currentWeek.totalPayments} payments ·{" "}
                               <span className="text-purple-400 font-medium">
                                 {formatVND(venueDetail.currentWeek.estimatedTotal)} VND
                               </span>{" "}
                               est.
                             </p>
+                            <button
+                              onClick={toggleCurrentWeekPayments}
+                              className="mt-2 text-xs text-purple-400 hover:text-purple-300"
+                            >
+                              {currentWeekOpen ? "Hide" : "Show"} payment details
+                            </button>
+                            {currentWeekOpen && (
+                              <div className="mt-3 space-y-2">
+                                {currentWeekLoading ? (
+                                  <div className="flex justify-center py-3">
+                                    <Loader2 className="h-4 w-4 animate-spin text-neutral-500" />
+                                  </div>
+                                ) : currentWeekPayments ? (
+                                  <>
+                                    <p className="text-xs text-neutral-500">
+                                      {currentWeekPayments.summary.totalPayments} payments ·{" "}
+                                      {formatVND(currentWeekPayments.summary.totalAmount)} VND
+                                    </p>
+                                    {currentWeekPayments.payments.length === 0 ? (
+                                      <p className="text-xs text-neutral-600">
+                                        No payments for this week.
+                                      </p>
+                                    ) : (
+                                      currentWeekPayments.payments.map((payment) => (
+                                        <CourtPayBillingPaymentCard key={payment.id} payment={payment} />
+                                      ))
+                                    )}
+                                  </>
+                                ) : (
+                                  <p className="text-xs text-red-400">
+                                    Could not load weekly payment details.
+                                  </p>
+                                )}
+                              </div>
+                            )}
                           </div>
                         )}
 
@@ -579,50 +690,78 @@ export default function CourtPayBillingPage() {
                             </p>
                           ) : (
                             venueDetail.invoices.map((inv) => (
-                              <div
-                                key={inv.id}
-                                className="flex items-center justify-between text-sm py-2 border-b border-neutral-800 last:border-0"
-                              >
-                                <div>
-                                  <span className="text-neutral-300">
+                              <div key={inv.id} className="border-b border-neutral-800 last:border-0 py-2">
+                                <div className="flex items-center justify-between text-sm">
+                                  <button
+                                    onClick={() => toggleInvoicePayments(inv.id)}
+                                    className="text-left hover:text-white text-neutral-300"
+                                  >
                                     {new Date(inv.weekStartDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
                                     {" – "}
                                     {new Date(inv.weekEndDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                                  </span>
-                                  {inv.paymentRef && (
-                                    <span className="ml-2 text-[10px] font-mono text-neutral-600">
-                                      {inv.paymentRef}
+                                    {inv.paymentRef && (
+                                      <span className="ml-2 text-[10px] font-mono text-neutral-600">
+                                        {inv.paymentRef}
+                                      </span>
+                                    )}
+                                  </button>
+                                  <div className="flex items-center gap-3">
+                                    <span className="font-medium text-purple-400">
+                                      {formatVND(inv.totalAmount)}
                                     </span>
-                                  )}
+                                    {inv.status === "paid" ? (
+                                      <span className="text-xs text-green-400">
+                                        ✓ Paid
+                                        {inv.confirmedBy === "manual_admin" && " (manual)"}
+                                      </span>
+                                    ) : (
+                                      <button
+                                        onClick={() => markPaid(inv.id)}
+                                        disabled={markingPaid === inv.id}
+                                        className={cn(
+                                          "text-xs px-2 py-1 rounded",
+                                          inv.status === "overdue"
+                                            ? "bg-amber-900/30 text-amber-400 hover:bg-amber-900/50"
+                                            : "bg-yellow-900/20 text-yellow-400 hover:bg-yellow-900/40"
+                                        )}
+                                      >
+                                        {markingPaid === inv.id ? (
+                                          <Loader2 className="h-3 w-3 animate-spin inline" />
+                                        ) : (
+                                          "Mark paid"
+                                        )}
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
-                                <div className="flex items-center gap-3">
-                                  <span className="font-medium text-purple-400">
-                                    {formatVND(inv.totalAmount)}
-                                  </span>
-                                  {inv.status === "paid" ? (
-                                    <span className="text-xs text-green-400">
-                                      ✓ Paid
-                                      {inv.confirmedBy === "manual_admin" && " (manual)"}
-                                    </span>
-                                  ) : (
-                                    <button
-                                      onClick={() => markPaid(inv.id)}
-                                      disabled={markingPaid === inv.id}
-                                      className={cn(
-                                        "text-xs px-2 py-1 rounded",
-                                        inv.status === "overdue"
-                                          ? "bg-amber-900/30 text-amber-400 hover:bg-amber-900/50"
-                                          : "bg-yellow-900/20 text-yellow-400 hover:bg-yellow-900/40"
-                                      )}
-                                    >
-                                      {markingPaid === inv.id ? (
-                                        <Loader2 className="h-3 w-3 animate-spin inline" />
-                                      ) : (
-                                        "Mark paid"
-                                      )}
-                                    </button>
-                                  )}
-                                </div>
+                                {expandedInvoiceId === inv.id && (
+                                  <div className="mt-3 space-y-2">
+                                    {loadingInvoicePayments === inv.id ? (
+                                      <div className="flex justify-center py-4">
+                                        <Loader2 className="h-4 w-4 animate-spin text-neutral-500" />
+                                      </div>
+                                    ) : invoicePayments[inv.id] ? (
+                                      <>
+                                        <p className="text-xs text-neutral-500">
+                                          {invoicePayments[inv.id].summary.totalPayments} payments ·{" "}
+                                          {formatVND(invoicePayments[inv.id].summary.totalAmount)} VND ·{" "}
+                                          {invoicePayments[inv.id].summary.sepayPayments} SePay
+                                        </p>
+                                        {invoicePayments[inv.id].payments.length === 0 ? (
+                                          <p className="text-xs text-neutral-600">No payments for this week.</p>
+                                        ) : (
+                                          invoicePayments[inv.id].payments.map((payment) => (
+                                            <CourtPayBillingPaymentCard key={payment.id} payment={payment} />
+                                          ))
+                                        )}
+                                      </>
+                                    ) : (
+                                      <p className="text-xs text-red-400">
+                                        Could not load weekly payment details.
+                                      </p>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             ))
                           )}

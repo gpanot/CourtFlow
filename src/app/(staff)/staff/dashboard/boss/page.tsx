@@ -7,6 +7,10 @@ import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { ArrowLeft, Loader2, Users, DollarSign, Clock, TrendingUp, Receipt, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
 import { useSocket } from "@/hooks/use-socket";
+import {
+  CourtPayBillingPaymentCard,
+  type CourtPayBillingPaymentCardData,
+} from "@/components/courtpay-billing-payment-card";
 
 type Tab = "today" | "history" | "subscriptions" | "billing";
 
@@ -67,6 +71,9 @@ interface SessionData {
 }
 
 interface BillingCurrentData {
+  totalPayments?: number;
+  subscriptionPayments?: number;
+  sepayPayments?: number;
   totalCheckins: number;
   subscriptionCheckins: number;
   sepayCheckins: number;
@@ -77,6 +84,17 @@ interface BillingCurrentData {
   weekStart: string;
   weekEnd: string;
   rates: { baseRate: number; subAddon: number; sepayAddon: number };
+}
+
+interface WeeklyPaymentsData {
+  payments: CourtPayBillingPaymentCardData[];
+  summary: {
+    totalPayments: number;
+    totalAmount: number;
+    sepayPayments: number;
+    cancelledPayments: number;
+    subscriptionPayments: number;
+  };
 }
 
 interface BillingInvoiceRow {
@@ -133,6 +151,9 @@ export default function BossDashboardPage() {
   const [showQR, setShowQR] = useState<string | null>(null);
   const [justPaid, setJustPaid] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [weekPayments, setWeekPayments] = useState<WeeklyPaymentsData | null>(null);
+  const [weekPaymentsOpen, setWeekPaymentsOpen] = useState(false);
+  const [weekPaymentsLoading, setWeekPaymentsLoading] = useState(false);
   const { on, emit } = useSocket();
 
   const fetchData = useCallback(async () => {
@@ -155,6 +176,8 @@ export default function BossDashboardPage() {
         );
         setSessionData(data);
       } else if (tab === "billing") {
+        setWeekPayments(null);
+        setWeekPaymentsOpen(false);
         const [current, invoicesRes] = await Promise.all([
           api.get<BillingCurrentData>(
             `/api/staff/boss-dashboard/billing/current?venueId=${venueId}`
@@ -215,6 +238,26 @@ export default function BossDashboardPage() {
       );
       setSelectedInvoice(data);
     } catch (e) { console.error(e); }
+  };
+
+  const handleToggleWeekPayments = async () => {
+    if (!venueId || !billingCurrent) return;
+    if (weekPaymentsOpen) {
+      setWeekPaymentsOpen(false);
+      return;
+    }
+    setWeekPaymentsOpen(true);
+    if (weekPayments) return;
+    setWeekPaymentsLoading(true);
+    try {
+      const data = await api.get<WeeklyPaymentsData>(
+        `/api/staff/boss-dashboard/billing/week-payments?venueId=${venueId}&weekStart=${billingCurrent.weekStart}&weekEnd=${billingCurrent.weekEnd}`
+      );
+      setWeekPayments(data);
+    } catch (e) {
+      console.error(e);
+    }
+    setWeekPaymentsLoading(false);
   };
 
   if (!hydrated || !token) return null;
@@ -506,7 +549,10 @@ export default function BossDashboardPage() {
           <div className="space-y-6">
             {/* Current week live counter */}
             {billingCurrent && (
-              <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+              <button
+                className="w-full rounded-xl border border-neutral-800 bg-neutral-900 p-4 text-left"
+                onClick={handleToggleWeekPayments}
+              >
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-medium">This week</h3>
                   <span className="text-xs text-neutral-500">
@@ -518,8 +564,8 @@ export default function BossDashboardPage() {
 
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-neutral-400">Check-ins</span>
-                    <span>{billingCurrent.totalCheckins}</span>
+                    <span className="text-neutral-400">Payments</span>
+                    <span>{billingCurrent.totalPayments ?? billingCurrent.totalCheckins}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-neutral-400">
@@ -528,11 +574,11 @@ export default function BossDashboardPage() {
                     <span>{formatVND(billingCurrent.baseAmount)} VND</span>
                   </div>
 
-                  {billingCurrent.subscriptionCheckins > 0 && (
+                  {(billingCurrent.subscriptionPayments ?? billingCurrent.subscriptionCheckins) > 0 && (
                     <>
                       <div className="flex justify-between">
-                        <span className="text-neutral-400">Subscriptions</span>
-                        <span>{billingCurrent.subscriptionCheckins}</span>
+                        <span className="text-neutral-400">Subscription payments</span>
+                        <span>{billingCurrent.subscriptionPayments ?? billingCurrent.subscriptionCheckins}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-neutral-400">
@@ -543,11 +589,11 @@ export default function BossDashboardPage() {
                     </>
                   )}
 
-                  {billingCurrent.sepayCheckins > 0 && (
+                  {(billingCurrent.sepayPayments ?? billingCurrent.sepayCheckins) > 0 && (
                     <>
                       <div className="flex justify-between">
-                        <span className="text-neutral-400">Auto payments</span>
-                        <span>{billingCurrent.sepayCheckins}</span>
+                        <span className="text-neutral-400">SePay confirmed</span>
+                        <span>{billingCurrent.sepayPayments ?? billingCurrent.sepayCheckins}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-neutral-400">
@@ -565,9 +611,33 @@ export default function BossDashboardPage() {
                 </div>
 
                 <p className="text-[10px] text-neutral-600 mt-3">
-                  Base: {formatVND(billingCurrent.rates.baseRate)}đ · Sub: +{formatVND(billingCurrent.rates.subAddon)}đ · Auto pay: +{formatVND(billingCurrent.rates.sepayAddon)}đ per check-in
+                  Tap to view weekly payment details. Base: {formatVND(billingCurrent.rates.baseRate)}đ · Sub: +{formatVND(billingCurrent.rates.subAddon)}đ · SePay: +{formatVND(billingCurrent.rates.sepayAddon)}đ per payment
                 </p>
-              </div>
+                {weekPaymentsOpen && (
+                  <div className="mt-4 space-y-2 border-t border-neutral-800 pt-3">
+                    {weekPaymentsLoading ? (
+                      <div className="flex justify-center py-4">
+                        <Loader2 className="h-4 w-4 animate-spin text-neutral-500" />
+                      </div>
+                    ) : weekPayments ? (
+                      <>
+                        <p className="text-xs text-neutral-500">
+                          {weekPayments.summary.totalPayments} payments · {formatVND(weekPayments.summary.totalAmount)} VND · {weekPayments.summary.sepayPayments} SePay
+                        </p>
+                        {weekPayments.payments.length === 0 ? (
+                          <p className="text-xs text-neutral-600">No payments this week.</p>
+                        ) : (
+                          weekPayments.payments.map((payment) => (
+                            <CourtPayBillingPaymentCard key={payment.id} payment={payment} />
+                          ))
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-xs text-red-400">Could not load week payments.</p>
+                    )}
+                  </div>
+                )}
+              </button>
             )}
 
             {/* Pending / overdue invoices */}
@@ -605,7 +675,7 @@ export default function BossDashboardPage() {
                         {" – "}
                         {new Date(inv.weekEndDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                       </p>
-                      <p className="text-sm mb-1">{inv.totalCheckins} check-ins</p>
+                      <p className="text-sm mb-1">{inv.totalCheckins} payments</p>
                       <p className="text-lg font-bold text-purple-400 mb-3">{formatVND(inv.totalAmount)} VND</p>
 
                       <button
@@ -688,7 +758,7 @@ export default function BossDashboardPage() {
                               Week {new Date(selectedInvoice.weekStartDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                             </p>
                             <div className="flex justify-between">
-                              <span className="text-neutral-400">Total check-ins</span>
+                              <span className="text-neutral-400">Total payments</span>
                               <span>{selectedInvoice.totalCheckins}</span>
                             </div>
                             <div className="flex justify-between">

@@ -122,6 +122,9 @@ interface PlayersData {
 }
 
 interface BillingCurrentData {
+  totalPayments?: number;
+  subscriptionPayments?: number;
+  sepayPayments?: number;
   totalCheckins: number;
   subscriptionCheckins: number;
   sepayCheckins: number;
@@ -1073,7 +1076,18 @@ export function StaffBossDashboardScreen() {
             <>
               {/* Current week live counter */}
               {billingCurrent && (
-                <View style={{ borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.card, padding: 14, marginBottom: 16 }}>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    if (!venueId) return;
+                    navigation.navigate("StaffBillingWeekPayments", {
+                      venueId,
+                      weekStart: billingCurrent.weekStart,
+                      weekEnd: billingCurrent.weekEnd,
+                    });
+                  }}
+                  style={{ borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.card, padding: 14, marginBottom: 16 }}
+                >
                   <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 10 }}>
                     <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>This week</Text>
                     <Text style={{ fontSize: 12, color: theme.muted }}>
@@ -1085,8 +1099,10 @@ export function StaffBossDashboardScreen() {
 
                   <View style={{ gap: 6 }}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                      <Text style={{ fontSize: 13, color: theme.muted }}>Check-ins</Text>
-                      <Text style={{ fontSize: 13, color: theme.text }}>{billingCurrent.totalCheckins}</Text>
+                      <Text style={{ fontSize: 13, color: theme.muted }}>Payments</Text>
+                      <Text style={{ fontSize: 13, color: theme.text }}>
+                        {billingCurrent.totalPayments ?? billingCurrent.totalCheckins}
+                      </Text>
                     </View>
                     <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                       <Text style={{ fontSize: 13, color: theme.muted }}>
@@ -1094,11 +1110,13 @@ export function StaffBossDashboardScreen() {
                       </Text>
                       <Text style={{ fontSize: 13, color: theme.text }}>{formatVND(billingCurrent.baseAmount)} VND</Text>
                     </View>
-                    {billingCurrent.subscriptionCheckins > 0 && (
+                    {(billingCurrent.subscriptionPayments ?? billingCurrent.subscriptionCheckins) > 0 && (
                       <>
                         <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                          <Text style={{ fontSize: 13, color: theme.muted }}>Subscriptions</Text>
-                          <Text style={{ fontSize: 13, color: theme.text }}>{billingCurrent.subscriptionCheckins}</Text>
+                          <Text style={{ fontSize: 13, color: theme.muted }}>Subscription payments</Text>
+                          <Text style={{ fontSize: 13, color: theme.text }}>
+                            {billingCurrent.subscriptionPayments ?? billingCurrent.subscriptionCheckins}
+                          </Text>
                         </View>
                         <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                           <Text style={{ fontSize: 13, color: theme.muted }}>
@@ -1108,11 +1126,13 @@ export function StaffBossDashboardScreen() {
                         </View>
                       </>
                     )}
-                    {billingCurrent.sepayCheckins > 0 && (
+                    {(billingCurrent.sepayPayments ?? billingCurrent.sepayCheckins) > 0 && (
                       <>
                         <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                          <Text style={{ fontSize: 13, color: theme.muted }}>Auto payments</Text>
-                          <Text style={{ fontSize: 13, color: theme.text }}>{billingCurrent.sepayCheckins}</Text>
+                          <Text style={{ fontSize: 13, color: theme.muted }}>SePay confirmed</Text>
+                          <Text style={{ fontSize: 13, color: theme.text }}>
+                            {billingCurrent.sepayPayments ?? billingCurrent.sepayCheckins}
+                          </Text>
                         </View>
                         <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                           <Text style={{ fontSize: 13, color: theme.muted }}>
@@ -1129,9 +1149,9 @@ export function StaffBossDashboardScreen() {
                   </View>
 
                   <Text style={{ fontSize: 10, color: theme.subtle, marginTop: 8 }}>
-                    Base: {formatVND(billingCurrent.rates.baseRate)}đ · Sub: +{formatVND(billingCurrent.rates.subAddon)}đ · Auto pay: +{formatVND(billingCurrent.rates.sepayAddon)}đ per check-in
+                    Tap card to view weekly payments. Base: {formatVND(billingCurrent.rates.baseRate)}đ · Sub: +{formatVND(billingCurrent.rates.subAddon)}đ · SePay: +{formatVND(billingCurrent.rates.sepayAddon)}đ per payment
                   </Text>
-                </View>
+                </TouchableOpacity>
               )}
 
               {/* Pending / overdue invoices */}
@@ -1164,7 +1184,7 @@ export function StaffBossDashboardScreen() {
                           {" – "}
                           {new Date(inv.weekEndDate).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
                         </Text>
-                        <Text style={{ fontSize: 13, color: theme.text, marginBottom: 2 }}>{inv.totalCheckins} check-ins</Text>
+                        <Text style={{ fontSize: 13, color: theme.text, marginBottom: 2 }}>{inv.totalCheckins} payments</Text>
                         <Text style={{ fontSize: 18, fontWeight: "700", color: theme.purple400, marginBottom: 12 }}>{formatVND(inv.totalAmount)} VND</Text>
 
                         <TouchableOpacity
@@ -1266,7 +1286,7 @@ export function StaffBossDashboardScreen() {
                               Week {new Date(selectedInvoice.weekStartDate).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
                             </Text>
                             <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                              <Text style={{ fontSize: 12, color: theme.muted }}>Total check-ins</Text>
+                              <Text style={{ fontSize: 12, color: theme.muted }}>Total payments</Text>
                               <Text style={{ fontSize: 12, color: theme.text }}>{selectedInvoice.totalCheckins}</Text>
                             </View>
                             <View style={{ flexDirection: "row", justifyContent: "space-between" }}>

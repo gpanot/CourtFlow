@@ -5,7 +5,7 @@ const { mockPrisma } = vi.hoisted(() => ({
   mockPrisma: {
     venueBillingRate: { findUnique: vi.fn() },
     billingConfig: { findUnique: vi.fn() },
-    checkInRecord: { findMany: vi.fn() },
+    pendingPayment: { findMany: vi.fn() },
     billingInvoice: {
       findUnique: vi.fn(),
       create: vi.fn(),
@@ -25,29 +25,44 @@ import {
 } from "./billing";
 
 // ─── Helper ─────────────────────────────────────────────────────────────────
-function makeCheckIn(overrides: {
+function makePayment(overrides: {
   id?: string;
-  playerId?: string;
-  source?: string;
-  hasActiveSub?: boolean;
+  checkInPlayerId?: string;
+  paymentMethod?: string;
+  type?: string;
+  status?: string;
+  confirmedBy?: string | null;
 }): {
   id: string;
-  playerId: string;
-  checkedInAt: Date;
-  paymentId: string | null;
-  source: string;
-  player: { subscriptions: { id: string; status: string }[] };
+  checkInPlayerId: string;
+  amount: number;
+  paymentRef: string | null;
+  paymentMethod: string;
+  type: string;
+  status: string;
+  confirmedAt: Date;
+  confirmedBy: string | null;
+  cancelReason: string | null;
+  cancelledAt: Date | null;
+  checkInPlayer: { id: string; name: string; phone: string; skillLevel: string | null };
 } {
   return {
-    id: overrides.id ?? "ci-1",
-    playerId: overrides.playerId ?? "p-1",
-    checkedInAt: new Date("2026-04-14T10:00:00Z"),
-    paymentId: null,
-    source: overrides.source ?? "cash",
-    player: {
-      subscriptions: overrides.hasActiveSub
-        ? [{ id: "sub-1", status: "active" }]
-        : [],
+    id: overrides.id ?? "pp-1",
+    checkInPlayerId: overrides.checkInPlayerId ?? "cp-1",
+    amount: 50000,
+    paymentRef: "REF-1",
+    paymentMethod: overrides.paymentMethod ?? "cash",
+    type: overrides.type ?? "checkin",
+    status: overrides.status ?? "confirmed",
+    confirmedAt: new Date("2026-04-14T10:00:00Z"),
+    confirmedBy: overrides.confirmedBy ?? "manual_staff",
+    cancelReason: null,
+    cancelledAt: null,
+    checkInPlayer: {
+      id: overrides.checkInPlayerId ?? "cp-1",
+      name: "Player One",
+      phone: "0909000001",
+      skillLevel: null,
     },
   };
 }
@@ -132,7 +147,7 @@ describe("generateWeeklyInvoice", () => {
   const weekEnd = new Date("2026-04-19T23:59:59.999Z");
 
   function setupMocks(
-    checkIns: ReturnType<typeof makeCheckIn>[],
+    payments: ReturnType<typeof makePayment>[],
     existingInvoice?: object | null
   ) {
     mockPrisma.billingInvoice.findUnique.mockResolvedValue(existingInvoice ?? null);
@@ -141,7 +156,7 @@ describe("generateWeeklyInvoice", () => {
       id: "default",
       ...DEFAULT_RATES,
     });
-    mockPrisma.checkInRecord.findMany.mockResolvedValue(checkIns);
+    mockPrisma.pendingPayment.findMany.mockResolvedValue(payments);
     mockPrisma.venue.findUniqueOrThrow.mockResolvedValue({
       id: "v-1",
       name: "MM Pickleball",
@@ -159,7 +174,7 @@ describe("generateWeeklyInvoice", () => {
   });
 
   it("generates correct payment ref format CF-BILL-MMPI-2026W16", async () => {
-    setupMocks([makeCheckIn({ source: "cash" })]);
+    setupMocks([makePayment({ paymentMethod: "cash", confirmedBy: "manual_staff" })]);
     const created = { id: "inv-1", status: "pending", totalAmount: 5000 };
     mockPrisma.billingInvoice.create.mockResolvedValue(created);
 
@@ -176,7 +191,7 @@ describe("generateWeeklyInvoice", () => {
       id: "default",
       ...DEFAULT_RATES,
     });
-    mockPrisma.checkInRecord.findMany.mockResolvedValue([]);
+    mockPrisma.pendingPayment.findMany.mockResolvedValue([]);
     mockPrisma.venue.findUniqueOrThrow.mockResolvedValue({
       id: "v-2",
       name: "Saigon Padel Club",
@@ -190,7 +205,7 @@ describe("generateWeeklyInvoice", () => {
   });
 
   it("sets status=paid immediately when totalAmount is zero", async () => {
-    setupMocks([]); // no check-ins
+    setupMocks([]); // no payments
     mockPrisma.billingInvoice.create.mockResolvedValue({ id: "inv-zero", status: "paid", totalAmount: 0 });
 
     await generateWeeklyInvoice("v-1", weekStart, weekEnd);
@@ -200,8 +215,8 @@ describe("generateWeeklyInvoice", () => {
     expect(createCall.data.totalAmount).toBe(0);
   });
 
-  it("bills cash-only check-in at base rate only", async () => {
-    setupMocks([makeCheckIn({ source: "cash" })]);
+  it("bills cash-only payment at base rate only", async () => {
+    setupMocks([makePayment({ paymentMethod: "cash", confirmedBy: "manual_staff" })]);
     mockPrisma.billingInvoice.create.mockResolvedValue({ id: "inv-cash", totalAmount: 5000 });
 
     await generateWeeklyInvoice("v-1", weekStart, weekEnd);
@@ -216,8 +231,8 @@ describe("generateWeeklyInvoice", () => {
     expect(data.totalAmount).toBe(5000);
   });
 
-  it("adds sepay addon for vietqr source check-in", async () => {
-    setupMocks([makeCheckIn({ source: "vietqr" })]);
+  it("adds sepay addon only for sepay-confirmed payment", async () => {
+    setupMocks([makePayment({ paymentMethod: "vietqr", confirmedBy: "sepay" })]);
     mockPrisma.billingInvoice.create.mockResolvedValue({ id: "inv-vietqr", totalAmount: 6000 });
 
     await generateWeeklyInvoice("v-1", weekStart, weekEnd);
@@ -228,8 +243,8 @@ describe("generateWeeklyInvoice", () => {
     expect(data.totalAmount).toBe(6000); // 5000 + 1000
   });
 
-  it("adds subscription addon for player with active subscription", async () => {
-    setupMocks([makeCheckIn({ source: "cash", hasActiveSub: true })]);
+  it("adds subscription addon for subscription payment", async () => {
+    setupMocks([makePayment({ paymentMethod: "subscription", type: "checkin" })]);
     mockPrisma.billingInvoice.create.mockResolvedValue({ id: "inv-sub", totalAmount: 6000 });
 
     await generateWeeklyInvoice("v-1", weekStart, weekEnd);
@@ -240,8 +255,8 @@ describe("generateWeeklyInvoice", () => {
     expect(data.totalAmount).toBe(6000); // 5000 + 1000
   });
 
-  it("charges all three addons for vietqr + active subscription", async () => {
-    setupMocks([makeCheckIn({ source: "vietqr", hasActiveSub: true })]);
+  it("charges all three addons for sepay-confirmed subscription payment", async () => {
+    setupMocks([makePayment({ paymentMethod: "subscription", type: "checkin", confirmedBy: "sepay" })]);
     mockPrisma.billingInvoice.create.mockResolvedValue({ id: "inv-all", totalAmount: 7000 });
 
     await generateWeeklyInvoice("v-1", weekStart, weekEnd);
@@ -253,16 +268,15 @@ describe("generateWeeklyInvoice", () => {
     expect(data.totalAmount).toBe(7000); // 5000 + 1000 + 1000
   });
 
-  it("excludes subscription_free check-ins from billing", async () => {
-    // The DB query itself filters out subscription_free via source: { not: "subscription_free" }
-    // We simulate by returning no records (as the DB would)
+  it("queries only confirmed/cancelled courtpay payments in week range", async () => {
     setupMocks([]);
     mockPrisma.billingInvoice.create.mockResolvedValue({ id: "inv-free", totalAmount: 0 });
 
     await generateWeeklyInvoice("v-1", weekStart, weekEnd);
 
-    const whereClause = mockPrisma.checkInRecord.findMany.mock.calls[0][0].where;
-    expect(whereClause.source).toEqual({ not: "subscription_free" });
+    const whereClause = mockPrisma.pendingPayment.findMany.mock.calls[0][0].where;
+    expect(whereClause.checkInPlayerId).toEqual({ not: null });
+    expect(whereClause.status).toEqual({ in: ["confirmed", "cancelled"] });
   });
 
   it("uses custom venue billing rates when configured", async () => {
@@ -272,8 +286,8 @@ describe("generateWeeklyInvoice", () => {
       subscriptionAddon: 2000,
       sepayAddon: 500,
     });
-    mockPrisma.checkInRecord.findMany.mockResolvedValue([
-      makeCheckIn({ source: "vietqr", hasActiveSub: true }),
+    mockPrisma.pendingPayment.findMany.mockResolvedValue([
+      makePayment({ paymentMethod: "subscription", type: "checkin", confirmedBy: "sepay" }),
     ]);
     mockPrisma.venue.findUniqueOrThrow.mockResolvedValue({ id: "v-1", name: "MM Pickleball" });
     mockPrisma.billingInvoice.create.mockResolvedValue({ id: "inv-custom", totalAmount: 10500 });
@@ -291,7 +305,9 @@ describe("generateWeeklyInvoice", () => {
     mockPrisma.billingInvoice.findUnique.mockResolvedValue(null);
     mockPrisma.venueBillingRate.findUnique.mockResolvedValue(null);
     mockPrisma.billingConfig.findUnique.mockResolvedValue(null); // no config in DB
-    mockPrisma.checkInRecord.findMany.mockResolvedValue([makeCheckIn({ source: "cash" })]);
+    mockPrisma.pendingPayment.findMany.mockResolvedValue([
+      makePayment({ paymentMethod: "cash", confirmedBy: "manual_staff" }),
+    ]);
     mockPrisma.venue.findUniqueOrThrow.mockResolvedValue({ id: "v-1", name: "MM Pickleball" });
     mockPrisma.billingInvoice.create.mockResolvedValue({ id: "inv-fallback", totalAmount: 5000 });
 
@@ -314,14 +330,21 @@ describe("getCurrentWeekUsage", () => {
       id: "default",
       ...DEFAULT_RATES,
     });
-    mockPrisma.checkInRecord.findMany.mockResolvedValue([
-      makeCheckIn({ source: "cash" }),
-      makeCheckIn({ id: "ci-2", playerId: "p-2", source: "vietqr", hasActiveSub: true }),
+    mockPrisma.pendingPayment.findMany.mockResolvedValue([
+      makePayment({ paymentMethod: "cash", confirmedBy: "manual_staff" }),
+      makePayment({
+        id: "pp-2",
+        checkInPlayerId: "cp-2",
+        paymentMethod: "subscription",
+        type: "checkin",
+        confirmedBy: "sepay",
+      }),
     ]);
 
     const result = await getCurrentWeekUsage("v-1");
 
     expect(result.totalCheckins).toBe(2);
+    expect(result.totalPayments).toBe(2);
     expect(result.subscriptionCheckins).toBe(1);
     expect(result.sepayCheckins).toBe(1);
     // 5000 (cash) + 7000 (vietqr+sub) = 12000

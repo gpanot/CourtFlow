@@ -70,45 +70,57 @@ async function getBillingRates(venueId: string) {
 
 interface CheckInWithRelations {
   id: string;
-  playerId: string;
-  checkedInAt: Date;
-  paymentId: string | null;
-  source: string;
-  player: {
-    subscriptions: { id: string; status: string }[];
-  };
+  checkInPlayerId: string | null;
+  amount: number;
+  paymentRef: string | null;
+  paymentMethod: string;
+  type: string;
+  status: string;
+  confirmedAt: Date | null;
+  confirmedBy: string | null;
+  cancelReason: string | null;
+  cancelledAt: Date | null;
+  checkInPlayer: {
+    id: string;
+    name: string;
+    phone: string;
+    skillLevel: string | null;
+  } | null;
 }
 
-async function getCheckInsForPeriod(
+async function getBillablePaymentsForPeriod(
   venueId: string,
   weekStart: Date,
   weekEnd: Date
 ) {
-  return prisma.checkInRecord.findMany({
+  return prisma.pendingPayment.findMany({
     where: {
       venueId,
-      checkedInAt: { gte: weekStart, lte: weekEnd },
-      source: { not: "subscription_free" },
+      checkInPlayerId: { not: null },
+      status: { in: ["confirmed", "cancelled"] },
+      confirmedAt: { gte: weekStart, lte: weekEnd },
     },
     include: {
-      player: {
-        include: {
-          subscriptions: {
-            where: { status: "active" },
-          },
+      checkInPlayer: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          skillLevel: true,
         },
       },
     },
+    orderBy: { confirmedAt: "desc" },
   });
 }
 
 function computeLineItems(
-  checkIns: CheckInWithRelations[],
+  payments: CheckInWithRelations[],
   rates: { baseRate: number; subAddon: number; sepayAddon: number }
 ) {
-  let totalCheckins = 0;
-  let subscriptionCheckins = 0;
-  let sepayCheckins = 0;
+  let totalPayments = 0;
+  let subscriptionPayments = 0;
+  let sepayPayments = 0;
   let totalAmount = 0;
   const lineItems: {
     checkInRecordId: string;
@@ -120,26 +132,31 @@ function computeLineItems(
     lineTotal: number;
   }[] = [];
 
-  for (const checkIn of checkIns) {
-    totalCheckins++;
+  for (const payment of payments) {
+    if (!payment.checkInPlayerId || !payment.confirmedAt) continue;
+    totalPayments++;
 
-    const hasSubscription = checkIn.player.subscriptions.length > 0;
+    const isSubscriptionPayment =
+      payment.paymentMethod === "subscription" ||
+      payment.type === "subscription" ||
+      payment.type === "subscription_renewal";
 
-    // SePay-confirmed if source is vietqr (all vietqr payments go through SePay)
-    const isSepayPayment = checkIn.source === "vietqr";
+    // SePay add-on applies only when webhook confirmed this payment.
+    const isSepayPayment = payment.confirmedBy === "sepay";
 
-    const subAmount = hasSubscription ? rates.subAddon : 0;
+    const subAmount = isSubscriptionPayment ? rates.subAddon : 0;
     const sepayAmount = isSepayPayment ? rates.sepayAddon : 0;
     const lineTotal = rates.baseRate + subAmount + sepayAmount;
 
-    if (hasSubscription) subscriptionCheckins++;
-    if (isSepayPayment) sepayCheckins++;
+    if (isSubscriptionPayment) subscriptionPayments++;
+    if (isSepayPayment) sepayPayments++;
     totalAmount += lineTotal;
 
     lineItems.push({
-      checkInRecordId: checkIn.id,
-      playerId: checkIn.playerId,
-      checkedInAt: checkIn.checkedInAt,
+      // Keep schema-compatible field name; now references PendingPayment.id.
+      checkInRecordId: payment.id,
+      playerId: payment.checkInPlayerId,
+      checkedInAt: payment.confirmedAt,
       baseRate: rates.baseRate,
       subscriptionAddon: subAmount,
       sepayAddon: sepayAmount,
@@ -148,9 +165,9 @@ function computeLineItems(
   }
 
   return {
-    totalCheckins,
-    subscriptionCheckins,
-    sepayCheckins,
+    totalPayments,
+    subscriptionPayments,
+    sepayPayments,
     totalAmount,
     lineItems,
   };
@@ -167,8 +184,8 @@ export async function generateWeeklyInvoice(
   if (existing) return existing;
 
   const rates = await getBillingRates(venueId);
-  const checkIns = await getCheckInsForPeriod(venueId, weekStart, weekEnd);
-  const computed = computeLineItems(checkIns, rates);
+  const payments = await getBillablePaymentsForPeriod(venueId, weekStart, weekEnd);
+  const computed = computeLineItems(payments, rates);
 
   const weekNum = getWeekNumber(weekStart);
   const year = weekStart.getFullYear();
@@ -182,12 +199,12 @@ export async function generateWeeklyInvoice(
       venueId,
       weekStartDate: weekStart,
       weekEndDate: weekEnd,
-      totalCheckins: computed.totalCheckins,
-      subscriptionCheckins: computed.subscriptionCheckins,
-      sepayCheckins: computed.sepayCheckins,
-      baseAmount: computed.totalCheckins * rates.baseRate,
-      subscriptionAmount: computed.subscriptionCheckins * rates.subAddon,
-      sepayAmount: computed.sepayCheckins * rates.sepayAddon,
+      totalCheckins: computed.totalPayments,
+      subscriptionCheckins: computed.subscriptionPayments,
+      sepayCheckins: computed.sepayPayments,
+      baseAmount: computed.totalPayments * rates.baseRate,
+      subscriptionAmount: computed.subscriptionPayments * rates.subAddon,
+      sepayAmount: computed.sepayPayments * rates.sepayAddon,
       totalAmount: computed.totalAmount,
       status: computed.totalAmount === 0 ? "paid" : "pending",
       paymentRef: ref,
@@ -202,19 +219,74 @@ export async function generateWeeklyInvoice(
 export async function getCurrentWeekUsage(venueId: string) {
   const { weekStart, weekEnd } = getWeekBounds();
   const rates = await getBillingRates(venueId);
-  const checkIns = await getCheckInsForPeriod(venueId, weekStart, weekEnd);
-  const computed = computeLineItems(checkIns, rates);
+  const payments = await getBillablePaymentsForPeriod(venueId, weekStart, weekEnd);
+  const computed = computeLineItems(payments, rates);
 
   return {
-    totalCheckins: computed.totalCheckins,
-    subscriptionCheckins: computed.subscriptionCheckins,
-    sepayCheckins: computed.sepayCheckins,
-    baseAmount: computed.totalCheckins * rates.baseRate,
-    subscriptionAmount: computed.subscriptionCheckins * rates.subAddon,
-    sepayAmount: computed.sepayCheckins * rates.sepayAddon,
+    totalPayments: computed.totalPayments,
+    subscriptionPayments: computed.subscriptionPayments,
+    sepayPayments: computed.sepayPayments,
+    // Backward compatible keys for existing clients.
+    totalCheckins: computed.totalPayments,
+    subscriptionCheckins: computed.subscriptionPayments,
+    sepayCheckins: computed.sepayPayments,
+    baseAmount: computed.totalPayments * rates.baseRate,
+    subscriptionAmount: computed.subscriptionPayments * rates.subAddon,
+    sepayAmount: computed.sepayPayments * rates.sepayAddon,
     estimatedTotal: computed.totalAmount,
     weekStart,
     weekEnd,
     rates,
+  };
+}
+
+export async function getBillablePaymentsForWeek(
+  venueId: string,
+  weekStart: Date,
+  weekEnd: Date
+) {
+  const payments = await getBillablePaymentsForPeriod(venueId, weekStart, weekEnd);
+  const list = payments
+    .filter(
+      (
+        p
+      ): p is CheckInWithRelations & {
+        checkInPlayer: NonNullable<CheckInWithRelations["checkInPlayer"]>;
+        confirmedAt: Date;
+      } => Boolean(p.checkInPlayer && p.confirmedAt)
+    )
+    .map((p) => ({
+      id: p.id,
+      checkInPlayerId: p.checkInPlayerId!,
+      playerName: p.checkInPlayer.name,
+      playerPhone: p.checkInPlayer.phone,
+      playerSkillLevel: p.checkInPlayer.skillLevel,
+      amount: p.amount,
+      paymentRef: p.paymentRef,
+      paymentMethod: p.paymentMethod,
+      type: p.type,
+      status: p.status,
+      confirmedAt: p.confirmedAt,
+      confirmedBy: p.confirmedBy,
+      cancelReason: p.cancelReason,
+      cancelledAt: p.cancelledAt,
+    }));
+
+  return {
+    payments: list,
+    summary: {
+      totalPayments: list.length,
+      totalAmount: list.reduce((sum, p) => sum + p.amount, 0),
+      sepayPayments: list.filter((p) => p.confirmedBy === "sepay").length,
+      cancelledPayments: list.filter((p) => p.status === "cancelled").length,
+      subscriptionPayments: list.filter(
+        (p) =>
+          p.paymentMethod === "subscription" ||
+          p.type === "subscription" ||
+          p.type === "subscription_renewal"
+      ).length,
+    },
+    weekStart,
+    weekEnd,
   };
 }
