@@ -33,7 +33,6 @@ export type StaffTabParamList = {
 export type TabletStackParamList = {
   TabletVenueSelect: undefined;
   TabletModeSelect: undefined;
-  SelfCheckIn: undefined;
   CourtPayCheckIn: undefined;
 };
 

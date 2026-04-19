@@ -36,7 +36,7 @@ export function TabletModeSelectScreen({
   const [pinInput, setPinInput] = useState("");
 
   const checkSessionAndNavigate = async (
-    mode: "SelfCheckIn" | "CourtPayCheckIn"
+    mode: "CourtPayCheckIn"
   ) => {
     if (!venueId) return;
     setLoading(true);

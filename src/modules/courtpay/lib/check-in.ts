@@ -3,7 +3,7 @@ import { buildVietQRUrl } from "@/lib/vietqr";
 import { emitToVenue } from "@/lib/socket-server";
 import { sendPaymentPushToStaff } from "@/lib/staff-push";
 import { generatePaymentRef } from "./payment-reference";
-import { getActiveSubscription, activateSubscription, deductSession } from "./subscription";
+import { getActiveSubscription, deductSession } from "./subscription";
 import type { IdentifyResult, PaymentResult } from "../types";
 
 /**
@@ -124,56 +124,6 @@ export async function createCheckInPayment(
     vietQR,
     paymentRef,
   };
-}
-
-/**
- * Process a confirmed payment: create CheckInRecord and handle subscription.
- */
-export async function processConfirmedPayment(pendingPaymentId: string) {
-  const pending = await prisma.pendingPayment.findUniqueOrThrow({
-    where: { id: pendingPaymentId },
-    include: { checkInPlayer: true },
-  });
-
-  if (!pending.checkInPlayerId) {
-    throw new Error("Payment is not linked to a CheckInPlayer");
-  }
-
-  await prisma.pendingPayment.update({
-    where: { id: pendingPaymentId },
-    data: { status: "confirmed", confirmedAt: new Date() },
-  });
-
-  const activeSub = await getActiveSubscription(pending.checkInPlayerId);
-
-  if (pending.type === "subscription") {
-    // Nothing more — subscription was activated when payment was created or
-    // will be activated by the webhook handler directly
-  }
-
-  if (activeSub) {
-    await deductSession(activeSub.id);
-    await prisma.checkInRecord.create({
-      data: {
-        playerId: pending.checkInPlayerId,
-        venueId: pending.venueId,
-        paymentId: pendingPaymentId,
-        source: "subscription",
-      },
-    });
-  } else {
-    const source = pending.paymentMethod === "cash" ? "cash" : "vietqr";
-    await prisma.checkInRecord.create({
-      data: {
-        playerId: pending.checkInPlayerId,
-        venueId: pending.venueId,
-        paymentId: pendingPaymentId,
-        source,
-      },
-    });
-  }
-
-  return pending;
 }
 
 /**

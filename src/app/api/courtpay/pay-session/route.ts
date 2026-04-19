@@ -35,8 +35,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Player not found" }, { status: 404 });
     }
 
-    // Prevent double check-in: if the player already checked in during the current
-    // open session (or today if no session), reject gracefully.
     const openSession = await prisma.session.findFirst({
       where: { venueId: venue.id, status: "open" },
       select: { id: true, openedAt: true, sessionFee: true },
@@ -60,7 +58,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // Also prevent if there is already a pending or confirmed payment for this session
     const existingPayment = await prisma.pendingPayment.findFirst({
       where: {
         checkInPlayerId: playerId,
@@ -76,7 +73,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // Check for active subscription (auto check-in, skip payment)
+    // ── Active subscription (no package purchase) → auto check-in, amount = 0 ──
     const activeSub = await getActiveSubscription(playerId);
     if (activeSub && !packageId) {
       await checkInSubscriber(playerId, venue.id, activeSub.id);
@@ -92,7 +89,10 @@ export async function POST(req: Request) {
       });
     }
 
-    // Subscribing to a package
+    // ── Buying a new package ────────────────────────────────────────────────
+    // Activate the subscription, deduct 1 session for the current visit,
+    // and check the player in immediately. If the package costs money, a
+    // background payment is created for billing — it does NOT gate check-in.
     if (packageId) {
       const pkg = await prisma.subscriptionPackage.findFirst({
         where: { id: packageId, venueId: venue.id, isActive: true },
@@ -101,23 +101,36 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Package not found" }, { status: 404 });
       }
 
-      const payment = await createCheckInPayment({
-        venueId: venue.id,
-        playerId,
-        amount: pkg.price,
-        type: "subscription",
-        packageId,
-      });
+      const sub = await activateSubscription(playerId, packageId, venue.id, null);
+      await checkInSubscriber(playerId, venue.id, sub.id);
+      const updated = await getActiveSubscription(playerId);
 
-      await activateSubscription(playerId, packageId, venue.id, payment.paymentRef);
+      if (pkg.price > 0) {
+        const payment = await createCheckInPayment({
+          venueId: venue.id,
+          playerId,
+          amount: pkg.price,
+          type: "subscription",
+          packageId,
+        });
+        // Link payment ref to the subscription for reconciliation
+        await prisma.playerSubscription.update({
+          where: { id: sub.id },
+          data: { paymentRef: payment.paymentRef },
+        });
+      }
 
       return NextResponse.json({
-        ...payment,
-        checkedIn: false,
+        pendingPaymentId: null,
+        amount: 0,
+        vietQR: null,
+        paymentRef: null,
+        subscription: updated,
+        checkedIn: true,
       });
     }
 
-    // Session-only payment: use openSession fetched above for the duplicate check.
+    // ── Session-only payment (no subscription) ──────────────────────────────
     const settings = venue.settings as Record<string, unknown>;
     const sessionFee =
       openSession?.sessionFee ?? (settings?.sessionFee as number) ?? 0;

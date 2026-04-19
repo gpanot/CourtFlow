@@ -4,7 +4,6 @@ import type { TabletStackParamList } from "./types";
 
 import { TabletVenueSelectScreen } from "../screens/tablet/TabletVenueSelectScreen";
 import { TabletModeSelectScreen } from "../screens/tablet/TabletModeSelectScreen";
-import { SelfCheckInScreen } from "../screens/tablet/SelfCheckInScreen";
 import { CourtPayCheckInScreen } from "../screens/tablet/CourtPayCheckInScreen";
 
 const Stack = createNativeStackNavigator<TabletStackParamList>();
@@ -19,11 +18,6 @@ export function TabletNavigator() {
       <Stack.Screen
         name="TabletModeSelect"
         component={TabletModeSelectScreen}
-      />
-      <Stack.Screen
-        name="SelfCheckIn"
-        component={SelfCheckInScreen}
-        options={{ gestureEnabled: false }}
       />
       <Stack.Screen
         name="CourtPayCheckIn"

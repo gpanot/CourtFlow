@@ -390,24 +390,13 @@ export function CourtPayCheckInScreen({
   // ── WebSocket ─────────────────────────────────────────────────────────────
   useSocket(venueId, {
     "payment:confirmed": (data: unknown) => {
-      const d = data as {
-        pendingPaymentId?: string;
-        playerName?: string;
-        subscription?: ActiveSubInfo | null;
-      };
+      const d = data as { pendingPaymentId?: string; playerName?: string };
       if (pendingPayment && d.pendingPaymentId === pendingPayment.id) {
         setCashPending(false);
-        const sub = d.subscription;
-        let subHint = "";
-        if (sub && sub.isUnlimited) {
-          subHint = `\nUnlimited pass · ${sub.daysRemaining} days left`;
-        } else if (sub && sub.sessionsRemaining !== null) {
-          subHint = `\n${sub.sessionsRemaining} session${sub.sessionsRemaining !== 1 ? "s" : ""} remaining · ${sub.daysRemaining} days left`;
-        }
         setConfirmMessage(
-          (d.playerName
+          d.playerName
             ? `Welcome ${d.playerName}! Payment confirmed.`
-            : "Payment confirmed.") + subHint
+            : "Payment confirmed."
         );
         setStep("confirmed");
       }
@@ -673,6 +662,8 @@ export function CourtPayCheckInScreen({
         amount?: number;
         paymentRef?: string | null;
         vietQR?: string | null;
+        checkedIn?: boolean;
+        subscription?: ActiveSubInfo | null;
       }>("/api/courtpay/register", {
         venueCode: venueId,
         name: name.trim(),
@@ -690,7 +681,17 @@ export function CourtPayCheckInScreen({
       };
       setPlayer(registeredPlayer);
 
-      if (reg.pendingPaymentId) {
+      if (reg.checkedIn) {
+        const sub = reg.subscription;
+        let subHint = "";
+        if (sub && sub.isUnlimited) {
+          subHint = `\nUnlimited pass · ${sub.daysRemaining} days left`;
+        } else if (sub && sub.sessionsRemaining !== null) {
+          subHint = `\n${sub.sessionsRemaining} session${sub.sessionsRemaining !== 1 ? "s" : ""} remaining · ${sub.daysRemaining} days left`;
+        }
+        setConfirmMessage(`Welcome to the club, ${registeredPlayer.name}!` + subHint);
+        setStep("confirmed");
+      } else if (reg.pendingPaymentId) {
         setPendingPayment({
           id: reg.pendingPaymentId,
           amount: reg.amount ?? 0,
@@ -704,7 +705,6 @@ export function CourtPayCheckInScreen({
         setStep("confirmed");
       }
     } catch (err) {
-      // 409 already_checked_in → show friendly confirmation screen
       if (err instanceof Error && err.message === "already_checked_in") {
         setConfirmMessage(`${name.trim()} is already checked in for this session.`);
         setStep("confirmed");
