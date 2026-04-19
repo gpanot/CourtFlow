@@ -843,7 +843,7 @@ export function StaffBossDashboardScreen() {
 
           {tab === "subscriptions" && (
             <SubscribersList
-              externalData={sessionData?.subscriptions}
+              externalData={sessionData?.subscriptions ?? []}
               externalLoading={loading}
             />
           )}
