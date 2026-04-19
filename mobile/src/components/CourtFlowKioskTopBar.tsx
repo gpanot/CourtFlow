@@ -1,7 +1,9 @@
 import React from "react";
-import { View, Text, Image, StyleSheet } from "react-native";
+import { View, Text, Image, StyleSheet, TouchableOpacity } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { TabletLanguageToggle } from "./TabletLanguageToggle";
 import type { TabletKioskLocale } from "../lib/tablet-kiosk-locale";
+import type { ThemeMode } from "../stores/theme-store";
 
 const COURTFLOW_MARK = require("../../assets/courtflow-mark.png");
 
@@ -10,6 +12,9 @@ type Props = {
   tagline: string;
   locale: TabletKioskLocale;
   onToggleLocale: () => void;
+  /** When provided, renders a sun/moon toggle on the left side. */
+  themeMode?: ThemeMode;
+  onToggleTheme?: () => void;
 };
 
 /** Matches PWA `tv-queue/[venueId]/page.tsx` header (CourtFlowLogo + tagline). */
@@ -18,22 +23,56 @@ export function CourtFlowKioskTopBar({
   tagline,
   locale,
   onToggleLocale,
+  themeMode,
+  onToggleTheme,
 }: Props) {
+  const isLight = themeMode === "light";
+
   return (
-    <View style={[styles.wrap, { paddingTop: topInset + 10 }]}>
+    <View
+      style={[
+        styles.wrap,
+        { paddingTop: topInset + 10 },
+        isLight && styles.wrapLight,
+      ]}
+    >
       <View style={styles.row}>
-        <View style={styles.sideSlotLeft} />
+        <View style={styles.sideSlotLeft}>
+          {onToggleTheme != null && themeMode != null ? (
+            <TouchableOpacity
+              onPress={onToggleTheme}
+              style={[styles.themeBtn, isLight && styles.themeBtnLight]}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={
+                isLight ? "Switch to dark mode" : "Switch to light mode"
+              }
+            >
+              <Ionicons
+                name={isLight ? "moon-outline" : "sunny-outline"}
+                size={20}
+                color={isLight ? "#334155" : "#facc15"}
+              />
+            </TouchableOpacity>
+          ) : null}
+        </View>
         <View style={styles.brandBlock}>
           <Image
             source={COURTFLOW_MARK}
             style={styles.mark}
             accessibilityIgnoresInvertColors
           />
-          <Text style={styles.brandWord} accessibilityRole="header">
+          <Text
+            style={[styles.brandWord, isLight && styles.brandWordLight]}
+            accessibilityRole="header"
+          >
             CourtFlow
           </Text>
           {tagline.trim().length > 0 ? (
-            <Text style={styles.tagline} numberOfLines={2}>
+            <Text
+              style={[styles.tagline, isLight && styles.taglineLight]}
+              numberOfLines={2}
+            >
               {tagline}
             </Text>
           ) : null}
@@ -54,6 +93,10 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     paddingHorizontal: 16,
   },
+  wrapLight: {
+    backgroundColor: "rgba(255,255,255,0.92)",
+    borderBottomColor: "#e2e8f0",
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -61,11 +104,24 @@ const styles = StyleSheet.create({
   },
   sideSlotLeft: {
     width: 52,
+    alignItems: "flex-start",
+    justifyContent: "center",
   },
   sideSlotRight: {
     width: 52,
     alignItems: "flex-end",
     justifyContent: "center",
+  },
+  themeBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  themeBtnLight: {
+    backgroundColor: "rgba(15,23,42,0.08)",
   },
   brandBlock: {
     flex: 1,
@@ -86,6 +142,9 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#22c55e",
   },
+  brandWordLight: {
+    color: "#15803d",
+  },
   tagline: {
     fontSize: 14,
     fontWeight: "500",
@@ -93,5 +152,8 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     maxWidth: "100%",
     textAlign: "center",
+  },
+  taglineLight: {
+    color: "#475569",
   },
 });

@@ -33,9 +33,14 @@ export async function generatePaymentRef(
 
 /**
  * Extracts payment reference from SePay content/description string.
- * Looks for CF-SUB-XXXXXX or CF-SES-XXXXXX patterns.
+ * Matches CF-SUB-XXXXXX (subscription), CF-SES-XXXXXX (session),
+ * or CF-BILL-XXXX-YYYYWnn (billing invoice) references.
  */
 export function extractPaymentRef(content: string): string | null {
+  // Billing invoice refs: CF-BILL-ABCD-2026W16
+  const billMatch = content.match(/CF-BILL-[A-Z0-9]{1,8}-\d{4}W\d{1,2}/);
+  if (billMatch) return billMatch[0];
+  // Session / subscription refs: CF-SUB-XXXXXX or CF-SES-XXXXXX
   const match = content.match(/CF-(SUB|SES)-[A-Z0-9]{6,8}/);
   return match ? match[0] : null;
 }

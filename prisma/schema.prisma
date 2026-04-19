@@ -130,6 +130,8 @@ model Venue {
   bankOwnerName      String?   @map("bank_owner_name")
   createdAt          DateTime  @default(now()) @map("created_at")
 
+  billingStatus String @default("active") @map("billing_status")
+
   courts               Court[]
   sessions             Session[]
   staff                StaffMember[]
@@ -144,6 +146,8 @@ model Venue {
   checkInPlayers       CheckInPlayer[]
   subscriptionPackages SubscriptionPackage[]
   checkInRecords       CheckInRecord[]
+  billingRate          VenueBillingRate?
+  billingInvoices      BillingInvoice[]
 
   @@map("venues")
 }
@@ -747,4 +751,77 @@ model CheckInRecord {
   @@index([venueId, checkedInAt])
   @@index([playerId])
   @@map("check_in_records")
+}
+
+// ─── Billing Module ─────────────────────────────────────────
+
+model BillingConfig {
+  id                String   @id @default("default")
+  bankBin           String   @default("") @map("bank_bin")
+  bankAccount       String   @default("") @map("bank_account")
+  bankOwner         String   @default("") @map("bank_owner")
+  defaultBaseRate   Int      @default(5000) @map("default_base_rate")
+  defaultSubAddon   Int      @default(1000) @map("default_sub_addon")
+  defaultSepayAddon Int      @default(1000) @map("default_sepay_addon")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@map("billing_config")
+}
+
+model VenueBillingRate {
+  id                 String   @id @default(cuid())
+  venueId            String   @unique @map("venue_id")
+  baseRatePerCheckin Int      @default(5000) @map("base_rate_per_checkin")
+  subscriptionAddon  Int      @default(1000) @map("subscription_addon")
+  sepayAddon         Int      @default(1000) @map("sepay_addon")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  venue Venue @relation(fields: [venueId], references: [id])
+
+  @@map("venue_billing_rates")
+}
+
+model BillingInvoice {
+  id                   String    @id @default(cuid())
+  venueId              String    @map("venue_id")
+  weekStartDate        DateTime  @map("week_start_date")
+  weekEndDate          DateTime  @map("week_end_date")
+  totalCheckins        Int       @default(0) @map("total_checkins")
+  subscriptionCheckins Int       @default(0) @map("subscription_checkins")
+  sepayCheckins        Int       @default(0) @map("sepay_checkins")
+  baseAmount           Int       @default(0) @map("base_amount")
+  subscriptionAmount   Int       @default(0) @map("subscription_amount")
+  sepayAmount          Int       @default(0) @map("sepay_amount")
+  totalAmount          Int       @default(0) @map("total_amount")
+  status               String    @default("pending") // "pending" | "paid" | "overdue"
+  paymentRef           String?   @unique @map("payment_ref")
+  paidAt               DateTime? @map("paid_at")
+  confirmedBy          String?   @map("confirmed_by") // "sepay" | "manual_admin"
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  venue     Venue             @relation(fields: [venueId], references: [id])
+  lineItems BillingLineItem[]
+
+  @@unique([venueId, weekStartDate])
+  @@index([venueId, status])
+  @@map("billing_invoices")
+}
+
+model BillingLineItem {
+  id              String   @id @default(cuid())
+  invoiceId       String   @map("invoice_id")
+  checkInRecordId String   @map("check_in_record_id")
+  playerId        String   @map("player_id")
+  checkedInAt     DateTime @map("checked_in_at")
+  baseRate        Int      @map("base_rate")
+  subscriptionAddon Int    @default(0) @map("subscription_addon")
+  sepayAddon      Int      @default(0) @map("sepay_addon")
+  lineTotal       Int      @map("line_total")
+
+  invoice BillingInvoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
+  @@map("billing_line_items")
 }

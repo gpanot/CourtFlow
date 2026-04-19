@@ -24,6 +24,7 @@ import { StatusBar } from "expo-status-bar";
 import { BlurView } from "expo-blur";
 import { CourtPayLiquidBackdrop } from "../../components/courtpay/CourtPayLiquidBackdrop";
 import { LiquidGlassSurface } from "../../components/courtpay/LiquidGlassSurface";
+import { CourtPayStatusCard } from "../../components/courtpay/CourtPayStatusCard";
 import { api } from "../../lib/api-client";
 import { ENV } from "../../config/env";
 import { useAuthStore } from "../../stores/auth-store";
@@ -1428,50 +1429,31 @@ export function CourtPayCheckInScreen({
       // ── ALREADY PAID ───────────────────────────────────────────────────────
       case "already_paid":
         return (
-          <LiquidGlassSurface style={styles.flowGlassPanel} accent="amber">
-            <View style={styles.flowGlassPanelInner}>
-              {faceBase64 ? (
-                <View style={styles.regCircleOuter}>
-                  <Image
-                    source={{ uri: `data:image/jpeg;base64,${faceBase64}` }}
-                    style={styles.regPreviewImage}
-                    resizeMode="cover"
-                  />
-                </View>
-              ) : (
-                <Ionicons name="checkmark-circle-outline" size={72} color="#f59e0b" />
-              )}
-              <Text style={[styles.formTitle, { color: "#f59e0b" }]}>
-                {alreadyPaidPlayer?.name ?? "Player"} already paid
-              </Text>
-              <Text style={styles.heroSubtitle}>
-                {alreadyPaidStatus === "pending"
-                  ? "Payment is pending confirmation — no new payment needed."
-                  : "This player has already paid for this session."}
-              </Text>
-              <TouchableOpacity style={styles.primaryBtn} onPress={resetToHome}>
-                <Text style={styles.primaryBtnText}>{t("backToHome")}</Text>
-              </TouchableOpacity>
-            </View>
-          </LiquidGlassSurface>
+          <CourtPayStatusCard
+            variant="already_paid"
+            playerName={alreadyPaidPlayer?.name}
+            subtitle={
+              alreadyPaidStatus === "pending"
+                ? "Payment is pending confirmation — no new payment needed."
+                : "This player has already paid for this session."
+            }
+            faceBase64={faceBase64}
+            onPrimaryAction={resetToHome}
+            primaryLabel={t("backToHome")}
+          />
         );
 
       // ── EXISTING USER ──────────────────────────────────────────────────────
       case "existing_user":
         return (
-          <LiquidGlassSurface style={styles.flowGlassPanel} accent="amber">
-            <View style={styles.flowGlassPanelInner}>
-              <Ionicons name="person-circle-outline" size={64} color="#f59e0b" />
-              <Text style={styles.formTitle}>{t("regExistingUserTitle")}</Text>
-              <Text style={styles.heroSubtitle}>{t("regExistingUserHint")}</Text>
-              {confirmMessage ? (
-                <Text style={styles.heroSubtitle}>{confirmMessage}</Text>
-              ) : null}
-              <TouchableOpacity style={styles.primaryBtn} onPress={resetToHome}>
-                <Text style={styles.primaryBtnText}>{t("backToHome")}</Text>
-              </TouchableOpacity>
-            </View>
-          </LiquidGlassSurface>
+          <CourtPayStatusCard
+            variant="existing_user"
+            playerName={t("regExistingUserTitle")}
+            subtitle={confirmMessage || t("regExistingUserHint")}
+            faceBase64={faceBase64}
+            onPrimaryAction={resetToHome}
+            primaryLabel={t("backToHome")}
+          />
         );
 
       // ── ERROR ──────────────────────────────────────────────────────────────

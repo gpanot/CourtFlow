@@ -17,6 +17,50 @@ export function validateSepayWebhook(
   return provided === secret || provided === `Bearer ${secret}`;
 }
 
+async function handleBillingPayment(
+  payload: SepayWebhookPayload,
+  ref: string
+): Promise<{ matched: boolean; paymentId?: string }> {
+  const invoice = await prisma.billingInvoice.findUnique({
+    where: { paymentRef: ref },
+  });
+
+  if (!invoice || (invoice.status !== "pending" && invoice.status !== "overdue")) {
+    return { matched: false };
+  }
+
+  const tolerance = 5000;
+  if (
+    payload.transferAmount < invoice.totalAmount - tolerance
+  ) {
+    return { matched: false };
+  }
+
+  await prisma.billingInvoice.update({
+    where: { id: invoice.id },
+    data: {
+      status: "paid",
+      paidAt: new Date(),
+      confirmedBy: "sepay",
+    },
+  });
+
+  // Restore venue if it was suspended
+  await prisma.venue.updateMany({
+    where: { id: invoice.venueId, billingStatus: "suspended" },
+    data: { billingStatus: "active" },
+  });
+
+  emitToVenue(invoice.venueId, "billing:invoice_paid", {
+    invoiceId: invoice.id,
+    venueId: invoice.venueId,
+    amount: invoice.totalAmount,
+    weekStartDate: invoice.weekStartDate,
+  });
+
+  return { matched: true, paymentId: invoice.id };
+}
+
 /**
  * Process a SePay webhook payload: match payment, confirm, and activate subscription if applicable.
  * Returns true if a payment was matched and processed.
@@ -27,6 +71,10 @@ export async function processSepayWebhook(
   const ref = extractPaymentRef(payload.content);
   if (!ref) {
     return { matched: false };
+  }
+
+  if (ref.startsWith("CF-BILL-")) {
+    return handleBillingPayment(payload, ref);
   }
 
   const pending = await prisma.pendingPayment.findUnique({

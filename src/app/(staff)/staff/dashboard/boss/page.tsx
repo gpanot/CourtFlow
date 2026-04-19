@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation";
 import { useSessionStore, useHasHydrated } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { ArrowLeft, Loader2, Users, DollarSign, Clock, TrendingUp } from "lucide-react";
+import { ArrowLeft, Loader2, Users, DollarSign, Clock, TrendingUp, Receipt, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
+import { useSocket } from "@/hooks/use-socket";
 
-type Tab = "today" | "history" | "subscriptions";
+type Tab = "today" | "history" | "subscriptions" | "billing";
 
 interface TodayData {
   checkInsToday: number;
@@ -65,6 +66,54 @@ interface SessionData {
   }[];
 }
 
+interface BillingCurrentData {
+  totalCheckins: number;
+  subscriptionCheckins: number;
+  sepayCheckins: number;
+  baseAmount: number;
+  subscriptionAmount: number;
+  sepayAmount: number;
+  estimatedTotal: number;
+  weekStart: string;
+  weekEnd: string;
+  rates: { baseRate: number; subAddon: number; sepayAddon: number };
+}
+
+interface BillingInvoiceRow {
+  id: string;
+  weekStartDate: string;
+  weekEndDate: string;
+  totalCheckins: number;
+  totalAmount: number;
+  status: string;
+  paymentRef: string | null;
+  paidAt: string | null;
+}
+
+interface InvoiceDetail {
+  id: string;
+  weekStartDate: string;
+  weekEndDate: string;
+  totalCheckins: number;
+  subscriptionCheckins: number;
+  sepayCheckins: number;
+  baseAmount: number;
+  subscriptionAmount: number;
+  sepayAmount: number;
+  totalAmount: number;
+  status: string;
+  paymentRef: string | null;
+  paidAt: string | null;
+  confirmedBy: string | null;
+}
+
+interface QRData {
+  qrUrl: string | null;
+  amount: number;
+  reference: string;
+  status: string;
+}
+
 function formatVND(amount: number) {
   return new Intl.NumberFormat("vi-VN").format(amount);
 }
@@ -77,7 +126,14 @@ export default function BossDashboardPage() {
   const [todayData, setTodayData] = useState<TodayData | null>(null);
   const [historyData, setHistoryData] = useState<HistoryData | null>(null);
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
+  const [billingCurrent, setBillingCurrent] = useState<BillingCurrentData | null>(null);
+  const [billingInvoices, setBillingInvoices] = useState<BillingInvoiceRow[]>([]);
+  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceDetail | null>(null);
+  const [qrData, setQrData] = useState<QRData | null>(null);
+  const [showQR, setShowQR] = useState<string | null>(null);
+  const [justPaid, setJustPaid] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const { on, emit } = useSocket();
 
   const fetchData = useCallback(async () => {
     if (!venueId) return;
@@ -98,6 +154,17 @@ export default function BossDashboardPage() {
           `/api/courtpay/staff/boss/sessions?venueId=${venueId}`
         );
         setSessionData(data);
+      } else if (tab === "billing") {
+        const [current, invoicesRes] = await Promise.all([
+          api.get<BillingCurrentData>(
+            `/api/staff/boss-dashboard/billing/current?venueId=${venueId}`
+          ),
+          api.get<{ invoices: BillingInvoiceRow[] }>(
+            `/api/staff/boss-dashboard/billing/invoices?venueId=${venueId}`
+          ),
+        ]);
+        setBillingCurrent(current);
+        setBillingInvoices(invoicesRes.invoices);
       }
     } catch (e) { console.error(e); }
     setLoading(false);
@@ -108,6 +175,47 @@ export default function BossDashboardPage() {
     if (!token) { router.replace("/staff"); return; }
     fetchData();
   }, [hydrated, token, router, fetchData]);
+
+  useEffect(() => {
+    if (!venueId) return;
+    emit("join:venue", venueId);
+    const off = on("billing:invoice_paid", (...args: unknown[]) => {
+      const data = args[0] as { invoiceId?: string } | undefined;
+      if (data?.invoiceId) setJustPaid(data.invoiceId);
+      setShowQR(null);
+      setQrData(null);
+      fetchData();
+    });
+    return off;
+  }, [venueId, on, emit, fetchData]);
+
+  const handleShowQR = async (invoiceId: string) => {
+    if (showQR === invoiceId) {
+      setShowQR(null);
+      setQrData(null);
+      return;
+    }
+    try {
+      const data = await api.get<QRData>(
+        `/api/staff/boss-dashboard/billing/invoices/${invoiceId}/qr`
+      );
+      setQrData(data);
+      setShowQR(invoiceId);
+    } catch (e) { console.error(e); }
+  };
+
+  const handleInvoiceDetail = async (invoiceId: string) => {
+    if (selectedInvoice?.id === invoiceId) {
+      setSelectedInvoice(null);
+      return;
+    }
+    try {
+      const data = await api.get<InvoiceDetail>(
+        `/api/staff/boss-dashboard/billing/invoices/${invoiceId}`
+      );
+      setSelectedInvoice(data);
+    } catch (e) { console.error(e); }
+  };
 
   if (!hydrated || !token) return null;
 
@@ -148,7 +256,8 @@ export default function BossDashboardPage() {
             [
               { id: "today" as const, label: "Today" },
               { id: "history" as const, label: "History" },
-              { id: "subscriptions" as const, label: "Subscriptions" },
+              { id: "subscriptions" as const, label: "Subs" },
+              { id: "billing" as const, label: "Billing" },
             ] as const
           ).map(({ id, label }) => (
             <button
@@ -391,6 +500,239 @@ export default function BossDashboardPage() {
                   </div>
                 </div>
               ))
+            )}
+          </div>
+        ) : tab === "billing" ? (
+          <div className="space-y-6">
+            {/* Current week live counter */}
+            {billingCurrent && (
+              <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-medium">This week</h3>
+                  <span className="text-xs text-neutral-500">
+                    {new Date(billingCurrent.weekStart).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                    {" → "}
+                    {new Date(billingCurrent.weekEnd).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-neutral-400">Check-ins</span>
+                    <span>{billingCurrent.totalCheckins}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-neutral-400">
+                      Base (×{formatVND(billingCurrent.rates.baseRate)})
+                    </span>
+                    <span>{formatVND(billingCurrent.baseAmount)} VND</span>
+                  </div>
+
+                  {billingCurrent.subscriptionCheckins > 0 && (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-neutral-400">Subscriptions</span>
+                        <span>{billingCurrent.subscriptionCheckins}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-neutral-400">
+                          Add-on (×{formatVND(billingCurrent.rates.subAddon)})
+                        </span>
+                        <span>{formatVND(billingCurrent.subscriptionAmount)} VND</span>
+                      </div>
+                    </>
+                  )}
+
+                  {billingCurrent.sepayCheckins > 0 && (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-neutral-400">Auto payments</span>
+                        <span>{billingCurrent.sepayCheckins}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-neutral-400">
+                          Add-on (×{formatVND(billingCurrent.rates.sepayAddon)})
+                        </span>
+                        <span>{formatVND(billingCurrent.sepayAmount)} VND</span>
+                      </div>
+                    </>
+                  )}
+
+                  <div className="border-t border-neutral-800 pt-2 flex justify-between font-medium">
+                    <span>Estimated total</span>
+                    <span className="text-purple-400">{formatVND(billingCurrent.estimatedTotal)} VND</span>
+                  </div>
+                </div>
+
+                <p className="text-[10px] text-neutral-600 mt-3">
+                  Base: {formatVND(billingCurrent.rates.baseRate)}đ · Sub: +{formatVND(billingCurrent.rates.subAddon)}đ · Auto pay: +{formatVND(billingCurrent.rates.sepayAddon)}đ per check-in
+                </p>
+              </div>
+            )}
+
+            {/* Pending / overdue invoices */}
+            {billingInvoices
+              .filter((inv) => inv.status === "pending" || inv.status === "overdue")
+              .map((inv) => (
+                <div
+                  key={inv.id}
+                  className={cn(
+                    "rounded-xl border p-4",
+                    justPaid === inv.id
+                      ? "border-green-600 bg-green-950/30"
+                      : inv.status === "overdue"
+                        ? "border-amber-700/60 bg-amber-950/20"
+                        : "border-yellow-700/40 bg-yellow-950/10"
+                  )}
+                >
+                  {justPaid === inv.id ? (
+                    <div className="flex items-center gap-2 text-green-400">
+                      <CheckCircle2 className="h-5 w-5" />
+                      <span className="font-medium">Payment received — thank you!</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">
+                            {inv.status === "overdue" ? "Invoice overdue" : "Invoice due"}
+                          </span>
+                          <span>{inv.status === "overdue" ? "⚠️" : "⏳"}</span>
+                        </div>
+                      </div>
+                      <p className="text-sm text-neutral-400 mb-1">
+                        Week {new Date(inv.weekStartDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                        {" – "}
+                        {new Date(inv.weekEndDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                      </p>
+                      <p className="text-sm mb-1">{inv.totalCheckins} check-ins</p>
+                      <p className="text-lg font-bold text-purple-400 mb-3">{formatVND(inv.totalAmount)} VND</p>
+
+                      <button
+                        onClick={() => handleShowQR(inv.id)}
+                        className={cn(
+                          "w-full rounded-lg py-2.5 text-sm font-medium transition-colors",
+                          showQR === inv.id
+                            ? "bg-neutral-800 text-neutral-300"
+                            : "bg-purple-600 text-white hover:bg-purple-500"
+                        )}
+                      >
+                        {showQR === inv.id ? (
+                          <span className="flex items-center justify-center gap-1">Hide QR <ChevronUp className="h-4 w-4" /></span>
+                        ) : (
+                          <span className="flex items-center justify-center gap-1">Pay now — scan QR <ChevronDown className="h-4 w-4" /></span>
+                        )}
+                      </button>
+
+                      {showQR === inv.id && qrData && (
+                        <div className="mt-4 text-center space-y-3">
+                          {qrData.qrUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={qrData.qrUrl}
+                              alt="VietQR payment code"
+                              className="mx-auto w-64 h-64 rounded-lg bg-white p-2"
+                            />
+                          ) : (
+                            <p className="text-sm text-red-400">Could not generate QR code</p>
+                          )}
+                          <p className="text-sm text-neutral-300">
+                            Amount: <span className="font-medium">{formatVND(qrData.amount)} VND</span>
+                          </p>
+                          <p className="text-xs font-mono text-neutral-500">
+                            Ref: {qrData.reference}
+                          </p>
+                          <p className="text-xs text-neutral-600">
+                            Payment confirmed automatically once received
+                          </p>
+                          <div className="flex items-center justify-center gap-2 text-xs text-purple-400">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Waiting for payment...
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              ))}
+
+            {/* Invoice history */}
+            {billingInvoices.filter((inv) => inv.status === "paid").length > 0 && (
+              <div>
+                <h3 className="text-sm font-medium text-neutral-300 mb-3">Invoice history</h3>
+                <div className="space-y-2">
+                  {billingInvoices
+                    .filter((inv) => inv.status === "paid")
+                    .map((inv) => (
+                      <div key={inv.id}>
+                        <button
+                          onClick={() => handleInvoiceDetail(inv.id)}
+                          className="w-full flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-left hover:bg-neutral-800/80 transition-colors"
+                        >
+                          <div>
+                            <p className="text-sm">
+                              Week {new Date(inv.weekStartDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                              {" – "}
+                              {new Date(inv.weekEndDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium text-purple-400">{formatVND(inv.totalAmount)} VND</span>
+                            <span className="text-xs text-green-400">✓ Paid</span>
+                          </div>
+                        </button>
+
+                        {selectedInvoice?.id === inv.id && (
+                          <div className="mt-1 rounded-lg border border-neutral-800 bg-neutral-900/50 px-4 py-3 space-y-2 text-sm">
+                            <p className="text-neutral-300 font-medium mb-2">
+                              Week {new Date(selectedInvoice.weekStartDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                            </p>
+                            <div className="flex justify-between">
+                              <span className="text-neutral-400">Total check-ins</span>
+                              <span>{selectedInvoice.totalCheckins}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-neutral-400">Base charges</span>
+                              <span>{formatVND(selectedInvoice.baseAmount)} VND</span>
+                            </div>
+                            {selectedInvoice.subscriptionAmount > 0 && (
+                              <div className="flex justify-between">
+                                <span className="text-neutral-400">Subscription add-on</span>
+                                <span>{formatVND(selectedInvoice.subscriptionAmount)} VND</span>
+                              </div>
+                            )}
+                            {selectedInvoice.sepayAmount > 0 && (
+                              <div className="flex justify-between">
+                                <span className="text-neutral-400">SePay add-on</span>
+                                <span>{formatVND(selectedInvoice.sepayAmount)} VND</span>
+                              </div>
+                            )}
+                            <div className="border-t border-neutral-800 pt-2 flex justify-between font-medium">
+                              <span>Total</span>
+                              <span className="text-purple-400">{formatVND(selectedInvoice.totalAmount)} VND</span>
+                            </div>
+                            {selectedInvoice.paidAt && (
+                              <p className="text-xs text-neutral-500 pt-1">
+                                Paid: {new Date(selectedInvoice.paidAt).toLocaleString()}
+                              </p>
+                            )}
+                            {selectedInvoice.paymentRef && (
+                              <p className="text-xs font-mono text-neutral-600">
+                                Ref: {selectedInvoice.paymentRef}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {billingInvoices.length === 0 && !billingCurrent && (
+              <p className="text-neutral-500 text-sm py-8 text-center">
+                No billing data yet
+              </p>
             )}
           </div>
         ) : null}

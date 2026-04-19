@@ -30,9 +30,13 @@ export async function POST(request: NextRequest) {
 
     const venue = await prisma.venue.findUnique({
       where: { id: venueId },
-      select: { name: true, bankName: true, bankAccount: true, bankOwnerName: true },
+      select: { name: true, bankName: true, bankAccount: true, bankOwnerName: true, billingStatus: true },
     });
     if (!venue) return error("Venue not found", 404);
+
+    if (venue.billingStatus === "suspended") {
+      return error("Service paused. Please contact your venue admin.", 403);
+    }
 
     let playerId: string | null = null;
     let playerName = "";

@@ -115,6 +115,7 @@ interface GameTypeMixStats {
 interface VenueData {
   id: string;
   name: string;
+  billingStatus?: string;
   courts: { id: string; label: string; activeInSession: boolean }[];
 }
 
@@ -658,6 +659,16 @@ export function StaffDashboard() {
           </button>
         </div>
       </header>
+
+      {/* Billing suspension banner */}
+      {venue?.billingStatus === "suspended" && (
+        <div className="flex items-center gap-2 bg-amber-900/30 border-b border-amber-700/50 px-4 py-2.5">
+          <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+          <p className="text-xs text-amber-300">
+            Account suspended due to unpaid invoice. Ask your venue admin to pay in the Billing tab to restore service.
+          </p>
+        </div>
+      )}
 
       {/* Tab bar */}
       <div className="flex border-b border-neutral-800">

@@ -24,6 +24,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Venue not found" }, { status: 404 });
     }
 
+    if (venue.billingStatus === "suspended") {
+      return NextResponse.json(
+        { error: "Service paused. Please contact your venue admin.", code: "VENUE_SUSPENDED" },
+        { status: 403 }
+      );
+    }
+
     const existingCheckIn = await prisma.checkInPlayer.findUnique({
       where: { phone_venueId: { phone: phone.trim(), venueId: venue.id } },
     });
