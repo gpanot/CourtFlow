@@ -1,14 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockPrisma, mockRecognizeFace, mockGetActiveSubscription } = vi.hoisted(() => {
+const { mockPrisma, mockRecognizeFace, mockGetActiveSubscription, mockGetLatestSubscription } = vi.hoisted(() => {
   return {
     mockPrisma: {
       venue: { findUnique: vi.fn() },
+      session: { findFirst: vi.fn() },
+      pendingPayment: { findFirst: vi.fn() },
       player: { findFirst: vi.fn(), findUnique: vi.fn() },
       checkInPlayer: { findUnique: vi.fn(), create: vi.fn() },
     },
     mockRecognizeFace: vi.fn(),
     mockGetActiveSubscription: vi.fn(),
+    mockGetLatestSubscription: vi.fn(),
   };
 });
 
@@ -24,6 +27,7 @@ vi.mock("@/lib/face-recognition", () => ({
 
 vi.mock("@/modules/courtpay/lib/subscription", () => ({
   getActiveSubscription: mockGetActiveSubscription,
+  getLatestSubscription: mockGetLatestSubscription,
 }));
 
 import { POST } from "./route";
@@ -31,6 +35,8 @@ import { POST } from "./route";
 describe("POST /api/courtpay/face-checkin", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPrisma.session.findFirst.mockResolvedValue(null);
+    mockPrisma.pendingPayment.findFirst.mockResolvedValue(null);
   });
 
   it("returns 400 when payload is missing", async () => {
@@ -88,6 +94,14 @@ describe("POST /api/courtpay/face-checkin", () => {
       daysRemaining: 21,
       isUnlimited: false,
     });
+    mockGetLatestSubscription.mockResolvedValue({
+      id: "sub-1",
+      packageName: "Regular",
+      sessionsRemaining: 7,
+      daysRemaining: 21,
+      isUnlimited: false,
+      status: "active",
+    });
 
     const req = new Request("http://localhost/api/courtpay/face-checkin", {
       method: "POST",
@@ -122,6 +136,7 @@ describe("POST /api/courtpay/face-checkin", () => {
       phone: "0911111111",
     });
     mockGetActiveSubscription.mockResolvedValue(null);
+    mockGetLatestSubscription.mockResolvedValue(null);
 
     const req = new Request("http://localhost/api/courtpay/face-checkin", {
       method: "POST",

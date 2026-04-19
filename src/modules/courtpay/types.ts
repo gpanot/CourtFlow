@@ -32,6 +32,7 @@ export interface IdentifyResult {
   found: boolean;
   player: { id: string; name: string; phone: string } | null;
   activeSubscription: ActiveSubscriptionInfo | null;
+  latestSubscription: ActiveSubscriptionInfo | null;
 }
 
 export interface PaymentResult {

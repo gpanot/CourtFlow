@@ -10,7 +10,7 @@ import { emitToVenue } from "@/lib/socket-server";
 
 export async function POST(req: Request) {
   try {
-    const { venueCode, playerId, packageId } = await req.json();
+    const { venueCode, playerId, packageId, skipSessionDeduction } = await req.json();
 
     if (!venueCode || !playerId) {
       return NextResponse.json(
@@ -124,7 +124,7 @@ export async function POST(req: Request) {
         venueId: venue.id,
         playerId,
         amount: pkg.price,
-        type: "subscription",
+        type: skipSessionDeduction ? "subscription_renewal" : "subscription",
         packageId,
       });
 

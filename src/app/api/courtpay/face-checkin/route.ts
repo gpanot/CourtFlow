@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { faceRecognitionService } from "@/lib/face-recognition";
-import { getActiveSubscription } from "@/modules/courtpay/lib/subscription";
+import { getActiveSubscription, getLatestSubscription } from "@/modules/courtpay/lib/subscription";
 
 /**
  * POST /api/courtpay/face-checkin
@@ -125,6 +125,7 @@ async function bridgeToCheckInPlayer(
   }
 
   const activeSub = await getActiveSubscription(checkInPlayer.id);
+  const latestSub = await getLatestSubscription(checkInPlayer.id);
 
   return NextResponse.json({
     resultType: "matched",
@@ -134,5 +135,6 @@ async function bridgeToCheckInPlayer(
       phone: checkInPlayer.phone,
     },
     activeSubscription: activeSub,
+    latestSubscription: latestSub,
   });
 }

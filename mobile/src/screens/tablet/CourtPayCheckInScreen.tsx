@@ -68,6 +68,7 @@ type Step =
   | "reg_face_preview"
   | "reg_form"
   | "subscription_offer"
+  | "subscription_exhausted_offer"
   | "awaiting_payment"
   | "confirmed"
   | "existing_user"
@@ -103,6 +104,7 @@ interface CourtPayCheckinResponse {
   resultType?: string;
   player?: CheckInPlayerLite;
   activeSubscription?: ActiveSubInfo | null;
+  latestSubscription?: ActiveSubInfo | null;
   alreadyPaidStatus?: string;
   error?: string;
 }
@@ -114,6 +116,7 @@ function formatVND(amount: number) {
 const IDLE_TIMEOUT_MS = 30_000;
 const REG_FACE_CIRCLE = 260;
 const CONFIRMED_AUTO_HOME_SEC = 10;
+const EXHAUSTED_OFFER_AUTO_HOME_SEC = 30;
 // Steps where idle timer must NOT fire (active user interaction or timed auto-reset)
 const NO_IDLE_TIMEOUT_STEPS: Step[] = [
   "home",
@@ -123,6 +126,7 @@ const NO_IDLE_TIMEOUT_STEPS: Step[] = [
   "reg_face_preview",
   "reg_form",
   "subscription_offer",
+  "subscription_exhausted_offer",
   "awaiting_payment",
   "already_paid",
 ];
@@ -192,14 +196,17 @@ export function CourtPayCheckInScreen({
   const [loading, setLoading] = useState(false);
   const [cashPending, setCashPending] = useState(false);
   const [confirmedSeconds, setConfirmedSeconds] = useState(CONFIRMED_AUTO_HOME_SEC);
+  const [exhaustedOfferSeconds, setExhaustedOfferSeconds] = useState(EXHAUSTED_OFFER_AUTO_HOME_SEC);
   const [error, setError] = useState("");
   const [confirmMessage, setConfirmMessage] = useState("");
   const [confirmedSubInfo, setConfirmedSubInfo] = useState<ActiveSubInfo | null>(null);
+  const [exhaustedSubInfo, setExhaustedSubInfo] = useState<ActiveSubInfo | null>(null);
   const [alreadyPaidPlayer, setAlreadyPaidPlayer] = useState<CheckInPlayerLite | null>(null);
   const [alreadyPaidStatus, setAlreadyPaidStatus] = useState<string>("");
 
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const confirmedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const exhaustedOfferIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const regCameraRef = useRef<CameraView | null>(null);
   const regCameraReady = useRef(false);
   const [permission, requestPermission] = useCameraPermissions();
@@ -313,6 +320,10 @@ export function CourtPayCheckInScreen({
       clearInterval(confirmedIntervalRef.current);
       confirmedIntervalRef.current = null;
     }
+    if (exhaustedOfferIntervalRef.current) {
+      clearInterval(exhaustedOfferIntervalRef.current);
+      exhaustedOfferIntervalRef.current = null;
+    }
     regCameraReady.current = false;
     setStep("home");
     setPhoneInput("");
@@ -334,7 +345,9 @@ export function CourtPayCheckInScreen({
     setError("");
     setConfirmMessage("");
     setConfirmedSubInfo(null);
+    setExhaustedSubInfo(null);
     setConfirmedSeconds(CONFIRMED_AUTO_HOME_SEC);
+    setExhaustedOfferSeconds(EXHAUSTED_OFFER_AUTO_HOME_SEC);
   }, []);
 
   // ── Idle timer ────────────────────────────────────────────────────────────
@@ -390,6 +403,36 @@ export function CourtPayCheckInScreen({
     };
   }, [step, resetToHome]);
 
+  // ── Exhausted-offer countdown ──────────────────────────────────────────────
+  useEffect(() => {
+    if (step !== "subscription_exhausted_offer") {
+      if (exhaustedOfferIntervalRef.current) {
+        clearInterval(exhaustedOfferIntervalRef.current);
+        exhaustedOfferIntervalRef.current = null;
+      }
+      return;
+    }
+    setExhaustedOfferSeconds(EXHAUSTED_OFFER_AUTO_HOME_SEC);
+    let sec = EXHAUSTED_OFFER_AUTO_HOME_SEC;
+    exhaustedOfferIntervalRef.current = setInterval(() => {
+      sec -= 1;
+      setExhaustedOfferSeconds(sec);
+      if (sec <= 0) {
+        if (exhaustedOfferIntervalRef.current) {
+          clearInterval(exhaustedOfferIntervalRef.current);
+          exhaustedOfferIntervalRef.current = null;
+        }
+        resetToHome();
+      }
+    }, 1000);
+    return () => {
+      if (exhaustedOfferIntervalRef.current) {
+        clearInterval(exhaustedOfferIntervalRef.current);
+        exhaustedOfferIntervalRef.current = null;
+      }
+    };
+  }, [step, resetToHome]);
+
   // ── WebSocket ─────────────────────────────────────────────────────────────
   useSocket(venueId, {
     "payment:confirmed": (data: unknown) => {
@@ -436,24 +479,45 @@ export function CourtPayCheckInScreen({
 
   // ── Subscription routing ──────────────────────────────────────────────────
   // If player has an active subscription with sessions left → auto-check-in (skip offer + payment).
-  // If no active sub (or exhausted/expired) → show subscription_offer when packages exist.
+  // If latest subscription is exhausted (0 sessions) → show renewal offer with KPI + packages.
+  // Otherwise → regular subscription offer when packages exist.
   const goToSubscriptionOrPay = useCallback(
-    (targetPlayer: CheckInPlayerLite, newPlayer: boolean, activeSub?: ActiveSubInfo | null) => {
+    (
+      targetPlayer: CheckInPlayerLite,
+      newPlayer: boolean,
+      activeSub?: ActiveSubInfo | null,
+      latestSub?: ActiveSubInfo | null
+    ) => {
       setPlayer(targetPlayer);
       setIsNewPlayer(newPlayer);
 
       // Active subscription with sessions remaining → auto-check-in
       if (activeSub && activeSub.status === "active" &&
           (activeSub.isUnlimited || (activeSub.sessionsRemaining !== null && activeSub.sessionsRemaining > 0))) {
+        setExhaustedSubInfo(null);
         void doPaySession(targetPlayer, undefined);
+        return;
+      }
+
+      const shouldShowExhaustedOffer =
+        !!latestSub &&
+        latestSub.status === "exhausted" &&
+        !latestSub.isUnlimited &&
+        (latestSub.sessionsRemaining ?? 0) <= 0;
+      if (shouldShowExhaustedOffer) {
+        setExhaustedSubInfo(latestSub);
+        setSelectedPkg(null);
+        setStep("subscription_exhausted_offer");
         return;
       }
 
       // No active sub → show package offer if packages exist and feature is enabled
       const activePkgs = packages.filter((p) => p.active);
       if (activePkgs.length > 0 && showSubscriptionsInFlow) {
+        setExhaustedSubInfo(null);
         setStep("subscription_offer");
       } else {
+        setExhaustedSubInfo(null);
         void doPaySession(targetPlayer, undefined);
       }
     },
@@ -494,7 +558,12 @@ export function CourtPayCheckInScreen({
         }
         // Face-checkin returns { resultType: "matched", player: { id, name, phone }, activeSubscription }
         if (data.resultType === "matched" && data.player) {
-          goToSubscriptionOrPay(data.player, false, data.activeSubscription);
+          goToSubscriptionOrPay(
+            data.player,
+            false,
+            data.activeSubscription,
+            data.latestSubscription
+          );
           return "done";
         }
         return "continue_scan";
@@ -513,12 +582,14 @@ export function CourtPayCheckInScreen({
     setPhoneLoading(true);
     setPhoneError("");
     setPhoneActiveSub(null);
+    setExhaustedSubInfo(null);
     restartIdleTimer();
     try {
       const res = await api.post<{
         found: boolean;
         player: CheckInPlayerLite | null;
         activeSubscription?: ActiveSubInfo | null;
+        latestSubscription?: ActiveSubInfo | null;
       }>("/api/courtpay/identify", {
         venueCode: venueId,
         phone: phoneInput.trim(),
@@ -526,6 +597,7 @@ export function CourtPayCheckInScreen({
       if (res.found && res.player) {
         setPhonePreview(res.player);
         setPhoneActiveSub(res.activeSubscription ?? null);
+        setExhaustedSubInfo(res.latestSubscription ?? null);
         setStep("phone_preview");
       } else {
         setPhoneError("No player found with this phone number");
@@ -539,7 +611,7 @@ export function CourtPayCheckInScreen({
 
   const handlePhoneConfirm = () => {
     if (!phonePreview) return;
-    goToSubscriptionOrPay(phonePreview, false, phoneActiveSub);
+    goToSubscriptionOrPay(phonePreview, false, phoneActiveSub, exhaustedSubInfo);
   };
 
   // ── Registration face capture ─────────────────────────────────────────────
@@ -588,7 +660,11 @@ export function CourtPayCheckInScreen({
   };
 
   // ── Payment ───────────────────────────────────────────────────────────────
-  const doPaySession = async (targetPlayer: CheckInPlayerLite, packageId?: string) => {
+  const doPaySession = async (
+    targetPlayer: CheckInPlayerLite,
+    packageId?: string,
+    options?: { skipSessionDeduction?: boolean }
+  ) => {
     setLoading(true);
     try {
       const res = await api.post<{
@@ -603,6 +679,7 @@ export function CourtPayCheckInScreen({
         venueCode: venueId,
         playerId: targetPlayer.id,
         packageId,
+        skipSessionDeduction: options?.skipSessionDeduction === true,
       });
 
       if (res.checkedIn || res.free) {
@@ -712,8 +789,11 @@ export function CourtPayCheckInScreen({
 
   const handleSubscriptionContinue = () => {
     if (!selectedPkg) return;
+    const isExhaustedRenewal = step === "subscription_exhausted_offer";
     if (player) {
-      void doPaySession(player, selectedPkg);
+      void doPaySession(player, selectedPkg, {
+        skipSessionDeduction: isExhaustedRenewal,
+      });
     } else {
       void handleRegisterAndPay(selectedPkg);
     }
@@ -1436,6 +1516,135 @@ export function CourtPayCheckInScreen({
         );
       }
 
+      // ── SUBSCRIPTION EXHAUSTED OFFER ───────────────────────────────────────
+      case "subscription_exhausted_offer": {
+        const playerName = player?.name ?? phonePreview?.name ?? "player";
+        const daysLeft = exhaustedSubInfo?.daysRemaining ?? 0;
+        return (
+          <View style={{ flex: 1 }}>
+            <TouchableOpacity
+              style={[styles.subOfferBack, { top: insets.top + 12 }]}
+              onPress={resetToHome}
+              hitSlop={12}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="arrow-back" size={26} color="#a3a3a3" />
+            </TouchableOpacity>
+            <ScrollView
+              contentContainerStyle={styles.subOfferScroll}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.exhaustedHero}>
+                <View style={[styles.successCircle, dyn.successCircle, styles.exhaustedSuccessCircle]}>
+                  <Ionicons name="checkmark" size={42} color={CP.text} />
+                </View>
+                <Text style={styles.exhaustedTitle}>Welcome back, {playerName}!</Text>
+                <Text style={styles.exhaustedSubtitle}>
+                  Your package is finished. Pick a package to continue now.
+                </Text>
+                <View style={styles.exhaustedKpiRow}>
+                  <LiquidGlassSurface style={styles.exhaustedKpiCard} tintColor={CP.glassOverlay}>
+                    <View style={styles.exhaustedKpiInner}>
+                      <Ionicons name="ticket-outline" size={18} color={CP.primaryLight} />
+                      <Text style={[styles.exhaustedKpiValue, { color: CP.text }]}>0</Text>
+                      <Text style={styles.exhaustedKpiLabel}>Sessions Left</Text>
+                    </View>
+                  </LiquidGlassSurface>
+                  <LiquidGlassSurface style={styles.exhaustedKpiCard} tintColor={CP.glassOverlay}>
+                    <View style={styles.exhaustedKpiInner}>
+                      <Ionicons name="calendar-outline" size={18} color={CP.primaryLight} />
+                      <Text style={[styles.exhaustedKpiValue, { color: CP.text }]}>{daysLeft}</Text>
+                      <Text style={styles.exhaustedKpiLabel}>Days Left</Text>
+                    </View>
+                  </LiquidGlassSurface>
+                </View>
+                <Text style={styles.exhaustedCountdownText}>
+                  Returning to menu in {exhaustedOfferSeconds}s...
+                </Text>
+              </View>
+
+              <View style={styles.subOfferList}>
+                {activePackages.map((pkg) => {
+                  const isSelected = selectedPkg === pkg.id;
+                  return (
+                    <TouchableOpacity
+                      key={pkg.id}
+                      onPress={() => setSelectedPkg(pkg.id)}
+                      activeOpacity={0.85}
+                    >
+                      <LiquidGlassSurface
+                        style={[
+                          styles.pkgGlass,
+                          isSelected && styles.pkgGlassSelected,
+                        ]}
+                        accent={isSelected ? "green" : "none"}
+                        intensity={
+                          Platform.OS === "ios"
+                            ? isSelected
+                              ? 52
+                              : 40
+                            : isSelected
+                              ? 88
+                              : 72
+                        }
+                      >
+                        <View style={styles.pkgBadgeStack}>
+                          {pkg.isBestChoice && (
+                            <View style={[styles.pkgBestChoiceTag, dyn.pkgBestChoiceTag]}>
+                              <Text style={styles.pkgBestChoiceText}>Best Choice</Text>
+                            </View>
+                          )}
+                          {pkg.discountPct != null && pkg.discountPct > 0 && (
+                            <View style={styles.pkgDiscountBadge}>
+                              <Text style={styles.pkgDiscountBadgeText}>
+                                Save {pkg.discountPct}%
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={[styles.pkgName, { marginRight: 80 }]}>{pkg.name}</Text>
+                        <Text style={styles.pkgMeta}>
+                          {pkg.sessions === null ? "Unlimited" : `${pkg.sessions} sessions`}
+                          {pkg.durationDays ? ` · ${pkg.durationDays} days` : ""}
+                        </Text>
+                        <Text style={styles.pkgPrice}>
+                          {pkg.price === 0 ? "—" : formatVND(pkg.price)}
+                        </Text>
+                      </LiquidGlassSurface>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.primaryBtn,
+                  { width: "100%" },
+                  selectedPkg ? dyn.primaryBtn : undefined,
+                  (!selectedPkg || loading) && styles.disabledBtn,
+                ]}
+                onPress={handleSubscriptionContinue}
+                disabled={!selectedPkg || loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#fff" />
+                ) : selectedPkg ? (
+                  <Text style={styles.primaryBtnText}>Continue</Text>
+                ) : null}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={resetToHome}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.cancelText}>Next time</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        );
+      }
+
       // ── AWAITING PAYMENT ───────────────────────────────────────────────────
       case "awaiting_payment":
         return (
@@ -2138,6 +2347,61 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   cashText: { color: "#fbbf24", fontSize: 16, fontWeight: "600" },
+
+  // ── EXHAUSTED OFFER ────────────────────────────────────────────────────────
+  exhaustedHero: { width: "100%", alignItems: "center", marginBottom: 16 },
+  exhaustedSuccessCircle: { width: 92, height: 92, borderRadius: 46 },
+  exhaustedTitle: {
+    fontSize: 36,
+    lineHeight: 42,
+    fontWeight: "800",
+    color: "#fff",
+    textAlign: "center",
+    marginTop: 8,
+  },
+  exhaustedSubtitle: {
+    fontSize: 15,
+    color: "#a3a3a3",
+    textAlign: "center",
+    marginTop: 8,
+    marginBottom: 12,
+  },
+  exhaustedKpiRow: {
+    width: "100%",
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 8,
+  },
+  exhaustedKpiCard: {
+    flex: 1,
+    borderRadius: 18,
+    ...(Platform.OS === "ios"
+      ? ({ borderCurve: "continuous" } as const)
+      : null),
+  },
+  exhaustedKpiInner: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    alignItems: "flex-start",
+    minHeight: 104,
+    justifyContent: "space-between",
+  },
+  exhaustedKpiValue: {
+    fontSize: 34,
+    lineHeight: 36,
+    fontWeight: "700",
+  },
+  exhaustedKpiLabel: {
+    fontSize: 12,
+    color: "#cbd5e1",
+    fontWeight: "600",
+  },
+  exhaustedCountdownText: {
+    fontSize: 14,
+    color: "#94a3b8",
+    textAlign: "center",
+    marginTop: 4,
+  },
 
   // ── CONFIRMED ─────────────────────────────────────────────────────────────
   confirmedScroll: {

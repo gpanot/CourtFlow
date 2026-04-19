@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import { emitToVenue } from "@/lib/socket-server";
 import { sendPaymentPushToStaff } from "@/lib/staff-push";
-import { extractPaymentRef, isSubscriptionRef } from "./payment-reference";
+import { extractPaymentRef } from "./payment-reference";
 import { checkInSubscriber } from "./check-in";
 import { getActiveSubscription } from "./subscription";
 import type { SepayWebhookPayload } from "../types";
@@ -106,7 +106,7 @@ export async function processSepayWebhook(
   }
 
   let updatedSub: Awaited<ReturnType<typeof getActiveSubscription>> = null;
-  if (isSubscriptionRef(ref)) {
+  if (pending.type === "subscription") {
     // Package purchase: after payment confirmation, check-in now and deduct 1 session.
     const activeSub = await prisma.playerSubscription.findFirst({
       where: {
@@ -135,6 +135,17 @@ export async function processSepayWebhook(
         },
       });
     }
+    updatedSub = await getActiveSubscription(pending.checkInPlayerId);
+  } else if (pending.type === "subscription_renewal") {
+    // Renewal flow: do not consume a session from the new package.
+    await prisma.checkInRecord.create({
+      data: {
+        playerId: pending.checkInPlayerId,
+        venueId: pending.venueId,
+        paymentId: pending.id,
+        source: "subscription",
+      },
+    });
     updatedSub = await getActiveSubscription(pending.checkInPlayerId);
   } else {
     await prisma.checkInRecord.create({

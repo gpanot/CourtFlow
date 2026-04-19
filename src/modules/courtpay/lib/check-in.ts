@@ -3,7 +3,7 @@ import { buildVietQRUrl } from "@/lib/vietqr";
 import { emitToVenue } from "@/lib/socket-server";
 import { sendPaymentPushToStaff } from "@/lib/staff-push";
 import { generatePaymentRef } from "./payment-reference";
-import { getActiveSubscription, deductSession } from "./subscription";
+import { getActiveSubscription, getLatestSubscription, deductSession } from "./subscription";
 import type { IdentifyResult, PaymentResult } from "../types";
 
 /**
@@ -18,15 +18,17 @@ export async function identifyPlayer(
   });
 
   if (!player) {
-    return { found: false, player: null, activeSubscription: null };
+    return { found: false, player: null, activeSubscription: null, latestSubscription: null };
   }
 
   const activeSubscription = await getActiveSubscription(player.id);
+  const latestSubscription = await getLatestSubscription(player.id);
 
   return {
     found: true,
     player: { id: player.id, name: player.name, phone: player.phone },
     activeSubscription,
+    latestSubscription,
   };
 }
 
@@ -55,7 +57,7 @@ interface CreatePaymentInput {
   venueId: string;
   playerId: string;
   amount: number;
-  type: "checkin" | "subscription";
+  type: "checkin" | "subscription" | "subscription_renewal";
   packageId?: string;
 }
 
@@ -63,7 +65,7 @@ interface CreateConfirmedPaymentInput {
   venueId: string;
   playerId: string;
   amount: number;
-  type: "checkin" | "subscription";
+  type: "checkin" | "subscription" | "subscription_renewal";
   paymentMethod?: string;
   confirmedBy?: string;
 }
@@ -78,7 +80,10 @@ export async function createCheckInPayment(
     where: { id: input.venueId },
   });
 
-  const refType = input.type === "subscription" ? "subscription" : "session";
+  const refType =
+    input.type === "subscription" || input.type === "subscription_renewal"
+      ? "subscription"
+      : "session";
   const paymentRef = await generatePaymentRef(refType as "subscription" | "session");
 
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
@@ -142,7 +147,10 @@ export async function createCheckInPayment(
 export async function createConfirmedCheckInPayment(
   input: CreateConfirmedPaymentInput
 ) {
-  const refType = input.type === "subscription" ? "subscription" : "session";
+  const refType =
+    input.type === "subscription" || input.type === "subscription_renewal"
+      ? "subscription"
+      : "session";
   const paymentRef = await generatePaymentRef(refType as "subscription" | "session");
   const now = new Date();
   const expiresAt = new Date(now.getTime() + 15 * 60 * 1000);

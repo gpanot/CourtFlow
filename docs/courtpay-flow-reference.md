@@ -93,6 +93,24 @@ Expected result:
 - No new payment.
 - No additional deduction.
 
+### 6) Returning player with exhausted package (0 sessions, still valid days)
+
+1. Face/phone match succeeds.
+2. Kiosk shows exhausted-renewal screen:
+   - welcome header
+   - KPI cards: `0 sessions left` and remaining days
+   - package cards immediately visible
+   - `Next time` CTA with 30s auto-return timer
+3. If player selects a package and taps Continue, kiosk opens payment screen.
+4. Staff/SePay confirms payment.
+5. New package is active for the player.
+6. Current visit is confirmed without deducting a session from this newly purchased package.
+
+Expected result:
+- Renewal flow is fast-path from exhausted screen to package payment.
+- Timer applies only on exhausted-offer screen; no timer while awaiting payment.
+- Newly activated package keeps full session balance after this flow.
+
 ---
 
 ## Confirmation Sources

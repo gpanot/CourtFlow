@@ -37,6 +37,38 @@ export async function getActiveSubscription(
 }
 
 /**
+ * Returns the latest subscription record for a player (any status), or null.
+ * Useful for kiosk UX when an exhausted plan still has validity days left.
+ */
+export async function getLatestSubscription(
+  playerId: string
+): Promise<ActiveSubscriptionInfo | null> {
+  const sub = await prisma.playerSubscription.findFirst({
+    where: { playerId },
+    include: { package: true },
+    orderBy: { activatedAt: "desc" },
+  });
+
+  if (!sub) return null;
+
+  const daysRemaining = Math.max(
+    0,
+    Math.ceil(
+      (sub.expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+    )
+  );
+
+  return {
+    id: sub.id,
+    packageName: sub.package.name,
+    sessionsRemaining: sub.sessionsRemaining,
+    daysRemaining,
+    isUnlimited: sub.package.sessions === null,
+    status: sub.status,
+  };
+}
+
+/**
  * Activate a subscription for a player. Creates a PlayerSubscription
  * with the full session count from the package and expiry based on durationDays.
  * No session is deducted here — the caller is responsible for calling

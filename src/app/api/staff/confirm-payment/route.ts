@@ -49,6 +49,18 @@ export async function POST(request: NextRequest) {
             );
           }
           updatedSub = await getActiveSubscription(payment.checkInPlayerId);
+        } else if (payment.type === "subscription_renewal") {
+          // Renewal flow: activate package after payment, but do not consume a session.
+          // We only create the check-in record for this visit.
+          await prisma.checkInRecord.create({
+            data: {
+              playerId: payment.checkInPlayerId,
+              venueId: payment.venueId,
+              paymentId: pendingPaymentId,
+              source: "subscription",
+            },
+          });
+          updatedSub = await getActiveSubscription(payment.checkInPlayerId);
         } else {
           // Single-session (checkin) payment: create a CheckInRecord on confirmation.
           const source = payment.paymentMethod === "cash" ? "cash" : "vietqr";
