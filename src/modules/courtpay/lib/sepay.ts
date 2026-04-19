@@ -118,7 +118,12 @@ export async function processSepayWebhook(
     });
 
     if (activeSub) {
-      await checkInSubscriber(pending.checkInPlayerId, pending.venueId, activeSub.id);
+      await checkInSubscriber(
+        pending.checkInPlayerId,
+        pending.venueId,
+        activeSub.id,
+        pending.createdAt
+      );
     } else {
       // Fallback (should be rare): still record the paid check-in.
       await prisma.checkInRecord.create({

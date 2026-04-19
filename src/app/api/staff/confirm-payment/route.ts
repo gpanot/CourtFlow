@@ -41,7 +41,12 @@ export async function POST(request: NextRequest) {
             orderBy: { activatedAt: "desc" },
           });
           if (activeSub) {
-            await checkInSubscriber(payment.checkInPlayerId, payment.venueId, activeSub.id);
+            await checkInSubscriber(
+              payment.checkInPlayerId,
+              payment.venueId,
+              activeSub.id,
+              payment.createdAt
+            );
           }
           updatedSub = await getActiveSubscription(payment.checkInPlayerId);
         } else {

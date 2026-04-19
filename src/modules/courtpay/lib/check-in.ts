@@ -129,21 +129,27 @@ export async function createCheckInPayment(
 /**
  * Check in a subscriber (skip payment, deduct session, record check-in).
  * Returns the existing record without deducting again if the player already
- * checked in during the current calendar day at this venue.
+ * checked in at this venue since `dedupeSince` (or start of day by default).
  */
 export async function checkInSubscriber(
   playerId: string,
   venueId: string,
-  subscriptionId: string
+  subscriptionId: string,
+  dedupeSince?: Date
 ) {
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
+  const since = dedupeSince
+    ? new Date(dedupeSince)
+    : (() => {
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+        return startOfDay;
+      })();
 
   const existingToday = await prisma.checkInRecord.findFirst({
     where: {
       playerId,
       venueId,
-      checkedInAt: { gte: startOfDay },
+      checkedInAt: { gte: since },
     },
   });
 

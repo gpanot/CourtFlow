@@ -76,7 +76,7 @@ export async function POST(req: Request) {
     // ── Active subscription (no package purchase) → auto check-in, amount = 0 ──
     const activeSub = await getActiveSubscription(playerId);
     if (activeSub && !packageId) {
-      await checkInSubscriber(playerId, venue.id, activeSub.id);
+      await checkInSubscriber(playerId, venue.id, activeSub.id, sessionStart);
 
       const updated = await getActiveSubscription(playerId);
       return NextResponse.json({

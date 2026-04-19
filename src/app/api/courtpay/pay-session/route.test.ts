@@ -71,7 +71,9 @@ describe("POST /api/courtpay/pay-session", () => {
   });
 
   it("skips payment for active subscriber", async () => {
+    const openedAt = new Date("2026-04-20T10:00:00.000Z");
     mockPrisma.venue.findFirst.mockResolvedValue({ id: "v1", settings: {} });
+    mockPrisma.session.findFirst.mockResolvedValue({ openedAt, sessionFee: 0 });
     mockPrisma.checkInPlayer.findUnique.mockResolvedValue({ id: "p1", venueId: "v1" });
     mockGetActiveSubscription.mockResolvedValue({
       id: "sub-1",
@@ -92,7 +94,7 @@ describe("POST /api/courtpay/pay-session", () => {
 
     expect(res.status).toBe(200);
     expect(body.checkedIn).toBe(true);
-    expect(mockCheckInSubscriber).toHaveBeenCalledWith("p1", "v1", "sub-1");
+    expect(mockCheckInSubscriber).toHaveBeenCalledWith("p1", "v1", "sub-1", openedAt);
   });
 
   it("creates subscription payment and waits for confirmation when package is selected", async () => {
