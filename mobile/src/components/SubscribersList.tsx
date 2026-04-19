@@ -17,10 +17,11 @@ import {
   ActivityIndicator,
   TextInput,
   FlatList,
+  RefreshControl,
   type ListRenderItem,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { api } from "../lib/api-client";
 import { useAuthStore } from "../stores/auth-store";
@@ -126,6 +127,7 @@ export function SubscribersList({
   const [search, setSearch] = useState("");
   const [internalData, setInternalData] = useState<SubscriberRow[]>([]);
   const [internalLoading, setInternalLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
@@ -199,6 +201,20 @@ export function SubscribersList({
     if (!isSelfManaged || loadingMore || !hasMore || internalLoading) return;
     void fetchPage(page + 1, search, false);
   };
+
+  const handleRefresh = useCallback(() => {
+    if (!isSelfManaged) return;
+    setRefreshing(true);
+    void fetchPage(0, search, true).finally(() => setRefreshing(false));
+  }, [isSelfManaged, fetchPage, search]);
+
+  // When coming back from subscription detail, re-fetch current list
+  useFocusEffect(
+    useCallback(() => {
+      if (!isSelfManaged) return;
+      void fetchPage(0, search, true);
+    }, [isSelfManaged, fetchPage, search])
+  );
 
   // ── Derived values ─────────────────────────────────────────────────────────
   const loading = isSelfManaged ? internalLoading : (externalLoading ?? false);
@@ -380,7 +396,13 @@ export function SubscribersList({
         ListFooterComponent={listFooter}
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.3}
-        scrollEnabled={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={theme.purple400}
+          />
+        }
       />
     </>
   );

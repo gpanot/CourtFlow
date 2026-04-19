@@ -113,7 +113,7 @@ function formatVND(amount: number) {
 
 const IDLE_TIMEOUT_MS = 30_000;
 const REG_FACE_CIRCLE = 260;
-const CONFIRMED_AUTO_HOME_SEC = 5;
+const CONFIRMED_AUTO_HOME_SEC = 10;
 // Steps where idle timer must NOT fire (active user interaction or timed auto-reset)
 const NO_IDLE_TIMEOUT_STEPS: Step[] = [
   "home",
@@ -194,6 +194,7 @@ export function CourtPayCheckInScreen({
   const [confirmedSeconds, setConfirmedSeconds] = useState(CONFIRMED_AUTO_HOME_SEC);
   const [error, setError] = useState("");
   const [confirmMessage, setConfirmMessage] = useState("");
+  const [confirmedSubInfo, setConfirmedSubInfo] = useState<ActiveSubInfo | null>(null);
   const [alreadyPaidPlayer, setAlreadyPaidPlayer] = useState<CheckInPlayerLite | null>(null);
   const [alreadyPaidStatus, setAlreadyPaidStatus] = useState<string>("");
 
@@ -332,6 +333,7 @@ export function CourtPayCheckInScreen({
     setLoading(false);
     setError("");
     setConfirmMessage("");
+    setConfirmedSubInfo(null);
     setConfirmedSeconds(CONFIRMED_AUTO_HOME_SEC);
   }, []);
 
@@ -399,17 +401,8 @@ export function CourtPayCheckInScreen({
       if (pendingPayment && d.pendingPaymentId === pendingPayment.id) {
         setCashPending(false);
         const sub = d.subscription;
-        let subHint = "";
-        if (sub && sub.isUnlimited) {
-          subHint = `\nUnlimited pass · ${sub.daysRemaining} days left`;
-        } else if (sub && sub.sessionsRemaining !== null) {
-          subHint = `\n${sub.sessionsRemaining} session${sub.sessionsRemaining !== 1 ? "s" : ""} remaining · ${sub.daysRemaining} days left`;
-        }
-        setConfirmMessage(
-          (d.playerName
-            ? `Welcome ${d.playerName}! Payment confirmed.`
-            : "Payment confirmed.") + subHint
-        );
+        setConfirmedSubInfo(sub ?? null);
+        setConfirmMessage("Payment confirmed.");
         setStep("confirmed");
       }
     },
@@ -614,17 +607,8 @@ export function CourtPayCheckInScreen({
 
       if (res.checkedIn || res.free) {
         const sub = res.subscription;
-        let subHint = "";
-        if (sub && sub.isUnlimited) {
-          subHint = `\nUnlimited pass · ${sub.daysRemaining} days left`;
-        } else if (sub && sub.sessionsRemaining !== null) {
-          subHint = `\n${sub.sessionsRemaining} session${sub.sessionsRemaining !== 1 ? "s" : ""} remaining · ${sub.daysRemaining} days left`;
-        }
-        setConfirmMessage(
-          (isNewPlayer
-            ? `Welcome to the club, ${targetPlayer.name}!`
-            : `Welcome back, ${targetPlayer.name}!`) + subHint
-        );
+        setConfirmedSubInfo(sub ?? null);
+        setConfirmMessage("Check-in confirmed.");
         setStep("confirmed");
         return;
       }
@@ -637,19 +621,18 @@ export function CourtPayCheckInScreen({
           qrUrl: res.vietQR ?? null,
           playerName: targetPlayer.name,
         });
+        setConfirmedSubInfo(null);
         setStep("awaiting_payment");
         return;
       }
 
-      setConfirmMessage(
-        isNewPlayer
-          ? `Welcome to the club, ${targetPlayer.name}!`
-          : `Welcome back, ${targetPlayer.name}!`
-      );
+      setConfirmedSubInfo(null);
+      setConfirmMessage("Check-in confirmed.");
       setStep("confirmed");
     } catch (err) {
       // 409 already_checked_in → show friendly confirmation screen instead of error
       if (err instanceof Error && err.message === "already_checked_in") {
+        setConfirmedSubInfo(null);
         setConfirmMessage(`${targetPlayer.name} is already checked in for this session.`);
         setStep("confirmed");
         return;
@@ -695,13 +678,8 @@ export function CourtPayCheckInScreen({
 
       if (reg.checkedIn) {
         const sub = reg.subscription;
-        let subHint = "";
-        if (sub && sub.isUnlimited) {
-          subHint = `\nUnlimited pass · ${sub.daysRemaining} days left`;
-        } else if (sub && sub.sessionsRemaining !== null) {
-          subHint = `\n${sub.sessionsRemaining} session${sub.sessionsRemaining !== 1 ? "s" : ""} remaining · ${sub.daysRemaining} days left`;
-        }
-        setConfirmMessage(`Welcome to the club, ${registeredPlayer.name}!` + subHint);
+        setConfirmedSubInfo(sub ?? null);
+        setConfirmMessage("Check-in confirmed.");
         setStep("confirmed");
       } else if (reg.pendingPaymentId) {
         setPendingPayment({
@@ -711,13 +689,16 @@ export function CourtPayCheckInScreen({
           qrUrl: reg.vietQR ?? null,
           playerName: registeredPlayer.name,
         });
+        setConfirmedSubInfo(null);
         setStep("awaiting_payment");
       } else {
-        setConfirmMessage(`Welcome to the club, ${registeredPlayer.name}!`);
+        setConfirmedSubInfo(null);
+        setConfirmMessage("Check-in confirmed.");
         setStep("confirmed");
       }
     } catch (err) {
       if (err instanceof Error && err.message === "already_checked_in") {
+        setConfirmedSubInfo(null);
         setConfirmMessage(`${name.trim()} is already checked in for this session.`);
         setStep("confirmed");
         return;
@@ -1486,7 +1467,7 @@ export function CourtPayCheckInScreen({
               </View>
 
               <TouchableOpacity style={styles.cashBtn} onPress={handleCash}>
-                <Ionicons name="cash-outline" size={18} color="#fff" />
+                <Ionicons name="cash-outline" size={18} color="#fbbf24" />
                 <Text style={styles.cashText}>{t("payByCash")}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelPayment}>
@@ -1563,6 +1544,28 @@ export function CourtPayCheckInScreen({
                   </Text>
                   {confirmMessage ? (
                     <Text style={styles.successSub}>{confirmMessage}</Text>
+                  ) : null}
+                  {confirmedSubInfo ? (
+                    <View style={styles.confirmedKpiRow}>
+                      <LiquidGlassSurface style={styles.confirmedKpiCard} tintColor={CP.glassOverlay}>
+                        <View style={styles.confirmedKpiInner}>
+                          <Ionicons name="ticket-outline" size={22} color={CP.primaryLight} />
+                          <Text style={[styles.confirmedKpiValue, { color: CP.text }]}>
+                            {confirmedSubInfo.isUnlimited ? "∞" : String(confirmedSubInfo.sessionsRemaining ?? 0)}
+                          </Text>
+                          <Text style={styles.confirmedKpiLabel}>Sessions{"\n"}Remaining</Text>
+                        </View>
+                      </LiquidGlassSurface>
+                      <LiquidGlassSurface style={styles.confirmedKpiCard} tintColor={CP.glassOverlay}>
+                        <View style={styles.confirmedKpiInner}>
+                          <Ionicons name="calendar-outline" size={22} color={CP.primaryLight} />
+                          <Text style={[styles.confirmedKpiValue, { color: CP.text }]}>
+                            {confirmedSubInfo.daysRemaining}
+                          </Text>
+                          <Text style={styles.confirmedKpiLabel}>Days{"\n"}Left</Text>
+                        </View>
+                      </LiquidGlassSurface>
+                    </View>
                   ) : null}
                   <Text style={styles.confirmedCountdown}>
                     {t("returningToMenu", { seconds: confirmedSeconds })}
@@ -2129,12 +2132,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: "#f59e0b",
-    height: 52,
-    borderRadius: 14,
-    paddingHorizontal: 32,
+    backgroundColor: "transparent",
+    height: 40,
+    borderRadius: 12,
+    paddingHorizontal: 8,
   },
-  cashText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+  cashText: { color: "#fbbf24", fontSize: 16, fontWeight: "600" },
 
   // ── CONFIRMED ─────────────────────────────────────────────────────────────
   confirmedScroll: {
@@ -2173,6 +2176,36 @@ const styles = StyleSheet.create({
   },
   successTitle: { fontSize: 28, fontWeight: "800", color: "#fff", textAlign: "center" },
   successSub: { fontSize: 16, color: "#a3a3a3", textAlign: "center" },
+  confirmedKpiRow: {
+    width: "100%",
+    flexDirection: "row",
+    gap: 12,
+  },
+  confirmedKpiCard: {
+    flex: 1,
+    borderRadius: 22,
+    ...(Platform.OS === "ios"
+      ? ({ borderCurve: "continuous" } as const)
+      : null),
+  },
+  confirmedKpiInner: {
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    minHeight: 144,
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  confirmedKpiValue: {
+    fontSize: 56,
+    lineHeight: 60,
+    fontWeight: "700",
+  },
+  confirmedKpiLabel: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: "#cbd5e1",
+    fontWeight: "600",
+  },
   confirmedCountdown: {
     fontSize: 15,
     color: "#94a3b8",

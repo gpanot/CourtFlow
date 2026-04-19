@@ -41,8 +41,11 @@ function getDisplayPlayer(p: PendingPayment): { name: string; skillLevel: string
 }
 
 function getFacePreviewUri(p: PendingPayment): string | null {
-  const raw = p.player?.facePhotoPath?.trim();
-  return resolveMediaUrl(raw || null);
+  const rawPlayer = p.player?.facePhotoPath?.trim();
+  if (rawPlayer) return resolveMediaUrl(rawPlayer);
+  const rawCourtPay = p.facePhotoUrl?.trim();
+  if (rawCourtPay) return resolveMediaUrl(rawCourtPay);
+  return null;
 }
 
 function getFlowTag(p: PendingPayment): "CourtPay" | "Self" {
@@ -66,9 +69,18 @@ function formatDateTime(dateStr: string | null | undefined): string {
 }
 
 function getPaymentFilter(p: PendingPayment): Filter {
-  if (p.type === "subscription") return "subscription";
+  if (p.paymentMethod === "subscription" || p.type === "subscription") return "subscription";
   if (p.paymentMethod === "cash") return "cash";
   return "qr";
+}
+
+function getMethodBadge(paymentMethod: string): {
+  label: string;
+  kind: "cash" | "qr" | "subscription";
+} {
+  if (paymentMethod === "cash") return { label: "CASH", kind: "cash" };
+  if (paymentMethod === "subscription") return { label: "SUB", kind: "subscription" };
+  return { label: "QR", kind: "qr" };
 }
 
 function createStyles(t: AppColors) {
@@ -154,6 +166,7 @@ function createStyles(t: AppColors) {
     metaLine: { fontSize: 12, color: t.muted },
     waitLine: { fontSize: 12, color: t.subtle },
     skillMuted: { fontSize: 12, color: t.subtle, marginTop: 1 },
+    subLeftLine: { fontSize: 12, color: t.green400, marginTop: 2, fontWeight: "600" },
     emptyText: { color: t.subtle, textAlign: "center", marginTop: 40, fontSize: 14 },
     errorBox: { alignItems: "center", marginTop: 40, gap: 8, paddingHorizontal: 24 },
     errorText: { fontSize: 13, color: t.red500, textAlign: "center" },
@@ -224,10 +237,16 @@ export function SessionDetailScreen() {
   const renderItem = ({ item }: { item: PendingPayment }) => {
     const player = getDisplayPlayer(item);
     const faceUri = getFacePreviewUri(item);
-    const isCash = item.paymentMethod === "cash";
-    const isSub = item.type === "subscription";
+    const methodBadge = getMethodBadge(item.paymentMethod);
+    const isSub = methodBadge.kind === "subscription" || item.type === "subscription";
     const isNew = item.type === "registration";
     const expanded = expandedPhotoId === item.id;
+    const sub = item.subscriptionInfo;
+    const subLeftText = sub
+      ? sub.isUnlimited
+        ? `Subscription left: Unlimited (${sub.daysRemaining} days)`
+        : `Subscription left: ${sub.sessionsRemaining ?? 0} sessions (${sub.daysRemaining} days)`
+      : null;
 
     return (
       <View style={styles.card}>
@@ -247,17 +266,28 @@ export function SessionDetailScreen() {
 
         <View style={styles.nameRow}>
           <Text style={styles.cardName} numberOfLines={1}>{player.name}</Text>
-          {isSub ? (
-            <View style={[styles.badge, styles.badgeSub]}>
-              <Text style={styles.badgeSubText}>SUB</Text>
-            </View>
-          ) : (
-            <View style={[styles.badge, isCash ? styles.badgeCash : styles.badgeQr]}>
-              <Text style={isCash ? styles.badgeCashText : styles.badgeQrText}>
-                {isCash ? "CASH" : "QR"}
-              </Text>
-            </View>
-          )}
+          <View
+            style={[
+              styles.badge,
+              methodBadge.kind === "cash"
+                ? styles.badgeCash
+                : methodBadge.kind === "subscription"
+                  ? styles.badgeSub
+                  : styles.badgeQr,
+            ]}
+          >
+            <Text
+              style={
+                methodBadge.kind === "cash"
+                  ? styles.badgeCashText
+                  : methodBadge.kind === "subscription"
+                    ? styles.badgeSubText
+                    : styles.badgeQrText
+              }
+            >
+              {methodBadge.label}
+            </Text>
+          </View>
           <View style={[styles.badge, styles.badgeFlow]}>
             <Text style={styles.badgeFlowText}>{getFlowTag(item)}</Text>
           </View>
@@ -272,6 +302,7 @@ export function SessionDetailScreen() {
         <Text style={styles.metaLine}>
           {isSub ? "Subscription" : isNew ? "Registration" : "Check-in"} · {formatVND(item.amount)}
         </Text>
+        {subLeftText ? <Text style={styles.subLeftLine}>{subLeftText}</Text> : null}
         <Text style={styles.waitLine}>{formatDateTime(item.confirmedAt)}</Text>
       </View>
     );

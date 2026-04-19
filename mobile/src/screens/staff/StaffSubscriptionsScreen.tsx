@@ -310,6 +310,7 @@ function createStyles(t: AppColors) {
     toggleTextWrap: { flex: 1 },
     toggleTitle: { fontSize: 14, fontWeight: "600", color: t.text },
     toggleDesc: { fontSize: 12, color: t.muted, marginTop: 2, lineHeight: 16 },
+    subscribersWrap: { flex: 1, padding: 16, paddingBottom: 0 },
   });
 }
 
@@ -475,10 +476,10 @@ export function StaffSubscriptionsScreen() {
       // Build 3 default packages from the session fee:
       //   Starter  : 5 sessions,  5% off
       //   Regular  : 10 sessions, 10% off
-      //   Unlimited: unlimited,   20% off (price based on 30 days)
+      //   Unlimited: unlimited,   40% off (price based on 90 days)
       const starterPrice = roundPrice(sessionFee * 5 * (1 - 0.05));
       const regularPrice = roundPrice(sessionFee * 10 * (1 - 0.10));
-      const unlimitedPrice = roundPrice(sessionFee * 30 * (1 - 0.20));
+      const unlimitedPrice = roundPrice(sessionFee * 90 * (1 - 0.40));
 
       const defaultPackages = [
         {
@@ -500,18 +501,26 @@ export function StaffSubscriptionsScreen() {
           isBestChoice: true,
         },
         {
-          name: "Unlimited",
+          name: "3 Months Unlimited",
           sessions: null,
-          durationDays: 30,
+          durationDays: 90,
           price: unlimitedPrice,
           perks: "",
-          discountPct: 20,
+          discountPct: 40,
           isBestChoice: false,
         },
       ];
 
       for (const pkg of defaultPackages) {
         await api.post("/api/courtpay/staff/packages", { venueId, ...pkg });
+      }
+
+      if (!showSubscriptionsInFlow) {
+        await api.patch("/api/staff/venue-payment-settings", {
+          venueId,
+          showSubscriptionsInFlow: true,
+        });
+        setShowSubscriptionsInFlow(true);
       }
 
       setDefaultsBanner(
@@ -568,6 +577,13 @@ export function StaffSubscriptionsScreen() {
         });
       } else {
         await api.post("/api/courtpay/staff/packages", body);
+        if (!showSubscriptionsInFlow) {
+          await api.patch("/api/staff/venue-payment-settings", {
+            venueId,
+            showSubscriptionsInFlow: true,
+          });
+          setShowSubscriptionsInFlow(true);
+        }
       }
       setShowForm(false);
       setEditing(null);
@@ -641,7 +657,7 @@ export function StaffSubscriptionsScreen() {
         <View style={{ paddingTop: 40 }}>
           <ActivityIndicator color={theme.purple400} />
         </View>
-      ) : (
+      ) : tab === "packages" ? (
         <ScrollView contentContainerStyle={styles.body}>
           {defaultsBanner ? (
             <View style={styles.banner}>
@@ -649,8 +665,7 @@ export function StaffSubscriptionsScreen() {
             </View>
           ) : null}
 
-          {tab === "packages" ? (
-            <>
+          <>
               {/* ── CourtPay flow toggle ──────────────────────────────── */}
               <View style={styles.toggleCard}>
                 <View style={styles.toggleTextWrap}>
@@ -745,10 +760,16 @@ export function StaffSubscriptionsScreen() {
                 </>
               )}
             </>
-          ) : (
-            <SubscribersList showSearch />
-          )}
         </ScrollView>
+      ) : (
+        <View style={styles.subscribersWrap}>
+          {defaultsBanner ? (
+            <View style={styles.banner}>
+              <Text style={styles.bannerText}>{defaultsBanner}</Text>
+            </View>
+          ) : null}
+          <SubscribersList showSearch />
+        </View>
       )}
 
       {/* ── Create / Edit Modal ───────────────────────────────────────────── */}

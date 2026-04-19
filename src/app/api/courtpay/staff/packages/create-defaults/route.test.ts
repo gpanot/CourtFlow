@@ -8,6 +8,10 @@ const { mockRequireStaff, mockPrisma } = vi.hoisted(() => {
         count: vi.fn(),
         create: vi.fn(),
       },
+      venue: {
+        findUnique: vi.fn(),
+        update: vi.fn(),
+      },
       $transaction: vi.fn(),
     },
   };
@@ -62,10 +66,12 @@ describe("POST /api/courtpay/staff/packages/create-defaults", () => {
   it("creates starter, regular, unlimited packages when none exist", async () => {
     mockRequireStaff.mockReturnValue({ id: "staff-1", venueId: "venue-1" });
     mockPrisma.subscriptionPackage.count.mockResolvedValue(0);
+    mockPrisma.venue.findUnique.mockResolvedValue({ settings: {} });
+    mockPrisma.venue.update.mockResolvedValue({});
     mockPrisma.subscriptionPackage.create
       .mockResolvedValueOnce({ id: "p1", name: "Starter" })
       .mockResolvedValueOnce({ id: "p2", name: "Regular" })
-      .mockResolvedValueOnce({ id: "p3", name: "Unlimited" });
+      .mockResolvedValueOnce({ id: "p3", name: "3 Months Unlimited" });
     mockPrisma.$transaction.mockImplementation(async (ops: Promise<unknown>[]) => Promise.all(ops));
 
     const req = new Request("http://localhost/api/courtpay/staff/packages/create-defaults", {
@@ -88,6 +94,8 @@ describe("POST /api/courtpay/staff/packages/create-defaults", () => {
         durationDays: 60,
         price: 0,
         perks: null,
+        discountPct: 5,
+        isBestChoice: false,
       },
     });
     expect(mockPrisma.subscriptionPackage.create).toHaveBeenNthCalledWith(2, {
@@ -98,17 +106,25 @@ describe("POST /api/courtpay/staff/packages/create-defaults", () => {
         durationDays: 90,
         price: 0,
         perks: null,
+        discountPct: 10,
+        isBestChoice: true,
       },
     });
     expect(mockPrisma.subscriptionPackage.create).toHaveBeenNthCalledWith(3, {
       data: {
         venueId: "venue-1",
-        name: "Unlimited",
+        name: "3 Months Unlimited",
         sessions: null,
-        durationDays: 30,
+        durationDays: 90,
         price: 0,
         perks: null,
+        discountPct: 40,
+        isBestChoice: false,
       },
+    });
+    expect(mockPrisma.venue.update).toHaveBeenCalledWith({
+      where: { id: "venue-1" },
+      data: { settings: { showSubscriptionsInFlow: true } },
     });
   });
 });

@@ -5,7 +5,7 @@ import { requireStaff } from "@/lib/auth";
 const DEFAULT_PACKAGES = [
   { name: "Starter",   sessions: 5,    durationDays: 60, price: 0, perks: null, discountPct: 5,  isBestChoice: false },
   { name: "Regular",   sessions: 10,   durationDays: 90, price: 0, perks: null, discountPct: 10, isBestChoice: true  },
-  { name: "Unlimited", sessions: null, durationDays: 30, price: 0, perks: null, discountPct: 20, isBestChoice: false },
+  { name: "3 Months Unlimited", sessions: null, durationDays: 90, price: 0, perks: null, discountPct: 40, isBestChoice: false },
 ];
 
 export async function POST(req: Request) {
@@ -36,6 +36,21 @@ export async function POST(req: Request) {
         })
       )
     );
+
+    const venue = await prisma.venue.findUnique({
+      where: { id: venueId },
+      select: { settings: true },
+    });
+    const currentSettings = (venue?.settings ?? {}) as Record<string, unknown>;
+    await prisma.venue.update({
+      where: { id: venueId },
+      data: {
+        settings: {
+          ...currentSettings,
+          showSubscriptionsInFlow: true,
+        },
+      },
+    });
 
     return NextResponse.json({ packages: created }, { status: 201 });
   } catch (err: unknown) {
