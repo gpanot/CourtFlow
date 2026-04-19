@@ -247,30 +247,26 @@ export async function getBillablePaymentsForWeek(
 ) {
   const payments = await getBillablePaymentsForPeriod(venueId, weekStart, weekEnd);
   const list = payments
-    .filter(
-      (
-        p
-      ): p is CheckInWithRelations & {
-        checkInPlayer: NonNullable<CheckInWithRelations["checkInPlayer"]>;
-        confirmedAt: Date;
-      } => Boolean(p.checkInPlayer && p.confirmedAt)
-    )
-    .map((p) => ({
-      id: p.id,
-      checkInPlayerId: p.checkInPlayerId!,
-      playerName: p.checkInPlayer.name,
-      playerPhone: p.checkInPlayer.phone,
-      playerSkillLevel: p.checkInPlayer.skillLevel,
-      amount: p.amount,
-      paymentRef: p.paymentRef,
-      paymentMethod: p.paymentMethod,
-      type: p.type,
-      status: p.status,
-      confirmedAt: p.confirmedAt,
-      confirmedBy: p.confirmedBy,
-      cancelReason: p.cancelReason,
-      cancelledAt: p.cancelledAt,
-    }));
+    .map((p) => {
+      if (!p.checkInPlayer || !p.confirmedAt || !p.checkInPlayerId) return null;
+      return {
+        id: p.id,
+        checkInPlayerId: p.checkInPlayerId,
+        playerName: p.checkInPlayer.name,
+        playerPhone: p.checkInPlayer.phone,
+        playerSkillLevel: p.checkInPlayer.skillLevel,
+        amount: p.amount,
+        paymentRef: p.paymentRef,
+        paymentMethod: p.paymentMethod,
+        type: p.type,
+        status: p.status,
+        confirmedAt: p.confirmedAt,
+        confirmedBy: p.confirmedBy,
+        cancelReason: p.cancelReason,
+        cancelledAt: p.cancelledAt,
+      };
+    })
+    .filter((p): p is NonNullable<typeof p> => p !== null);
 
   return {
     payments: list,
