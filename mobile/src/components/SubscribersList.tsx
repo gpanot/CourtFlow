@@ -1,15 +1,14 @@
 /**
  * SubscribersList
  *
- * Reusable component rendering the full CourtPay subscriber list with:
+ * Reusable component rendering the CourtPay subscriber list with:
  * - Enhanced subscription cards (name, package, phone, sessions, dates, status badge)
  * - Tap to navigate to BossSubscriptionDetail
  * - Optional search bar (enabled when showSearch={true})
- * - Fetches its own data when `externalData` is not provided
- * - Accepts `externalData` + `externalLoading` for cases where the parent
- *   already owns the data (e.g. Boss Dashboard tab)
+ * - Self-managed mode: fetches paginated data (30 per page) with infinite scroll
+ * - External mode: accepts `externalData` + `externalLoading` (e.g. Boss Dashboard tab)
  */
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -17,6 +16,8 @@ import {
   StyleSheet,
   ActivityIndicator,
   TextInput,
+  FlatList,
+  type ListRenderItem,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -26,6 +27,8 @@ import { useAuthStore } from "../stores/auth-store";
 import { useAppColors } from "../theme/use-app-colors";
 import type { AppColors } from "../theme/palettes";
 import type { StaffStackParamList } from "../navigation/types";
+
+const PAGE_SIZE = 30;
 
 export interface SubscriberRow {
   id: string;
@@ -42,7 +45,7 @@ export interface SubscriberRow {
 }
 
 interface Props {
-  /** If provided, the component uses this data instead of fetching. */
+  /** If provided, the component uses this data instead of fetching (no pagination). */
   externalData?: SubscriberRow[];
   externalLoading?: boolean;
   /** Show the inline search input (useful when the parent has no search). */
@@ -101,6 +104,7 @@ function createStyles(t: AppColors) {
     subCardBadgeActiveText: { fontSize: 10, fontWeight: "700", color: "#4ade80" },
     subCardBadgeExpiredText: { fontSize: 10, fontWeight: "700", color: "#f87171" },
     subCardChevron: { paddingLeft: 8 },
+    loadingMore: { paddingVertical: 16, alignItems: "center" },
   });
 }
 
@@ -116,33 +120,44 @@ export function SubscribersList({
   const theme = useAppColors();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
+  const isSelfManaged = externalData === undefined;
+
+  // ── Self-managed pagination state ──────────────────────────────────────────
   const [search, setSearch] = useState("");
   const [internalData, setInternalData] = useState<SubscriberRow[]>([]);
   const [internalLoading, setInternalLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  // debounce search to avoid spamming the API
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const isSelfManaged = externalData === undefined;
-
-  const fetchSubscribers = useCallback(async () => {
-    if (!venueId || !isSelfManaged) return;
-    setInternalLoading(true);
-    try {
-      const params = new URLSearchParams({ venueId });
-      if (search.trim()) params.set("search", search.trim());
-      const raw = await api.get<{
-        subscribers: Array<{
-          id: string;
-          status: string;
-          sessionsRemaining: number | null;
-          activatedAt: string;
-          expiresAt: string;
-          player: { name: string; phone: string };
-          package: { name: string; sessions: number | null };
-          _count?: { usages: number };
-          lastCheckedIn?: string | null;
-        }>;
-      }>(`/api/courtpay/staff/subscribers?${params.toString()}`);
-      setInternalData(
-        (raw.subscribers ?? []).map((s) => ({
+  const fetchPage = useCallback(
+    async (pageIndex: number, searchTerm: string, replace: boolean) => {
+      if (!venueId || !isSelfManaged) return;
+      if (replace) setInternalLoading(true);
+      else setLoadingMore(true);
+      try {
+        const params = new URLSearchParams({
+          venueId,
+          limit: String(PAGE_SIZE),
+          offset: String(pageIndex * PAGE_SIZE),
+        });
+        if (searchTerm.trim()) params.set("search", searchTerm.trim());
+        const raw = await api.get<{
+          subscribers: Array<{
+            id: string;
+            status: string;
+            sessionsRemaining: number | null;
+            activatedAt: string;
+            expiresAt: string;
+            player: { name: string; phone: string };
+            package: { name: string; sessions: number | null };
+            _count?: { usages: number };
+            lastCheckedIn?: string | null;
+          }>;
+        }>(`/api/courtpay/staff/subscribers?${params.toString()}`);
+        const rows = (raw.subscribers ?? []).map((s) => ({
           id: s.id,
           playerName: s.player.name,
           playerPhone: s.player.phone,
@@ -154,23 +169,186 @@ export function SubscribersList({
           activatedAt: s.activatedAt,
           expiresAt: s.expiresAt,
           lastCheckedIn: s.lastCheckedIn ?? null,
-        }))
-      );
-    } catch {
-      /* ignore */
-    } finally {
-      setInternalLoading(false);
-    }
-  }, [venueId, isSelfManaged, search]);
+        }));
+        setHasMore(rows.length === PAGE_SIZE);
+        setInternalData((prev) => (replace ? rows : [...prev, ...rows]));
+        setPage(pageIndex);
+      } catch {
+        /* ignore */
+      } finally {
+        setInternalLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [venueId, isSelfManaged]
+  );
 
+  // Initial load + search change
   useEffect(() => {
-    void fetchSubscribers();
-  }, [fetchSubscribers]);
+    if (!isSelfManaged) return;
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      void fetchPage(0, search, true);
+    }, 300);
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, [search, isSelfManaged, fetchPage]);
 
+  const handleLoadMore = () => {
+    if (!isSelfManaged || loadingMore || !hasMore || internalLoading) return;
+    void fetchPage(page + 1, search, false);
+  };
+
+  // ── Derived values ─────────────────────────────────────────────────────────
   const loading = isSelfManaged ? internalLoading : (externalLoading ?? false);
   const data = isSelfManaged ? internalData : (externalData ?? []);
 
-  if (loading) {
+  // ── Render helpers ─────────────────────────────────────────────────────────
+  const renderItem: ListRenderItem<SubscriberRow> = useCallback(
+    ({ item: s }) => {
+      const isActive = s.status === "active";
+      const sessionsLabel =
+        s.totalSessions === null
+          ? `Unlimited · ${s.usageCount} used`
+          : `${s.sessionsRemaining ?? 0}/${s.totalSessions} left · ${s.usageCount} used`;
+
+      return (
+        <TouchableOpacity
+          style={styles.subCard}
+          activeOpacity={0.7}
+          onPress={() =>
+            navigation.navigate("BossSubscriptionDetail", {
+              subscriptionId: s.id,
+            })
+          }
+        >
+          <View style={styles.subCardMain}>
+            <Text style={styles.subCardName} numberOfLines={1}>
+              {s.playerName}
+            </Text>
+            <Text style={styles.subCardPkg}>{s.packageName}</Text>
+            <Text style={styles.subCardMeta}>{s.playerPhone}</Text>
+            <Text style={styles.subCardMeta}>{sessionsLabel}</Text>
+            <Text style={styles.subCardMeta}>
+              Purchased: {formatDateShort(s.activatedAt)}
+              {s.lastCheckedIn
+                ? `  ·  Last in: ${formatDateShort(s.lastCheckedIn)}`
+                : "  ·  No check-ins"}
+            </Text>
+            <View
+              style={[
+                styles.subCardBadge,
+                isActive ? styles.subCardBadgeActive : styles.subCardBadgeExpired,
+              ]}
+            >
+              <Text
+                style={
+                  isActive
+                    ? styles.subCardBadgeActiveText
+                    : styles.subCardBadgeExpiredText
+                }
+              >
+                {s.status.toUpperCase()}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.subCardChevron}>
+            <Ionicons name="chevron-forward" size={16} color={theme.muted} />
+          </View>
+        </TouchableOpacity>
+      );
+    },
+    [styles, theme, navigation]
+  );
+
+  const listFooter = useMemo(() => {
+    if (!isSelfManaged) return null;
+    if (loadingMore)
+      return (
+        <View style={styles.loadingMore}>
+          <ActivityIndicator color={theme.purple400} />
+        </View>
+      );
+    return null;
+  }, [isSelfManaged, loadingMore, styles, theme]);
+
+  // ── External data mode: plain list (no pagination) ────────────────────────
+  if (!isSelfManaged) {
+    if (loading) {
+      return (
+        <View style={{ paddingVertical: 32 }}>
+          <ActivityIndicator color={theme.purple400} />
+        </View>
+      );
+    }
+    return (
+      <>
+        {data.length === 0 ? (
+          <Text style={styles.empty}>
+            {emptyLabel ?? "No subscribers yet"}
+          </Text>
+        ) : (
+          data.map((s) => {
+            const isActive = s.status === "active";
+            const sessionsLabel =
+              s.totalSessions === null
+                ? `Unlimited · ${s.usageCount} used`
+                : `${s.sessionsRemaining ?? 0}/${s.totalSessions} left · ${s.usageCount} used`;
+            return (
+              <TouchableOpacity
+                key={s.id}
+                style={styles.subCard}
+                activeOpacity={0.7}
+                onPress={() =>
+                  navigation.navigate("BossSubscriptionDetail", {
+                    subscriptionId: s.id,
+                  })
+                }
+              >
+                <View style={styles.subCardMain}>
+                  <Text style={styles.subCardName} numberOfLines={1}>
+                    {s.playerName}
+                  </Text>
+                  <Text style={styles.subCardPkg}>{s.packageName}</Text>
+                  <Text style={styles.subCardMeta}>{s.playerPhone}</Text>
+                  <Text style={styles.subCardMeta}>{sessionsLabel}</Text>
+                  <Text style={styles.subCardMeta}>
+                    Purchased: {formatDateShort(s.activatedAt)}
+                    {s.lastCheckedIn
+                      ? `  ·  Last in: ${formatDateShort(s.lastCheckedIn)}`
+                      : "  ·  No check-ins"}
+                  </Text>
+                  <View
+                    style={[
+                      styles.subCardBadge,
+                      isActive ? styles.subCardBadgeActive : styles.subCardBadgeExpired,
+                    ]}
+                  >
+                    <Text
+                      style={
+                        isActive
+                          ? styles.subCardBadgeActiveText
+                          : styles.subCardBadgeExpiredText
+                      }
+                    >
+                      {s.status.toUpperCase()}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.subCardChevron}>
+                  <Ionicons name="chevron-forward" size={16} color={theme.muted} />
+                </View>
+              </TouchableOpacity>
+            );
+          })
+        )}
+      </>
+    );
+  }
+
+  // ── Self-managed mode: FlatList with pagination ───────────────────────────
+  if (loading && data.length === 0) {
     return (
       <View style={{ paddingVertical: 32 }}>
         <ActivityIndicator color={theme.purple400} />
@@ -190,67 +368,20 @@ export function SubscribersList({
           autoCapitalize="none"
         />
       )}
-
-      {data.length === 0 ? (
-        <Text style={styles.empty}>
-          {emptyLabel ?? (search.trim() ? "No subscribers found" : "No subscribers yet")}
-        </Text>
-      ) : (
-        data.map((s) => {
-          const isActive = s.status === "active";
-          const sessionsLabel =
-            s.totalSessions === null
-              ? `Unlimited · ${s.usageCount} used`
-              : `${s.sessionsRemaining ?? 0}/${s.totalSessions} left · ${s.usageCount} used`;
-
-          return (
-            <TouchableOpacity
-              key={s.id}
-              style={styles.subCard}
-              activeOpacity={0.7}
-              onPress={() =>
-                navigation.navigate("BossSubscriptionDetail", {
-                  subscriptionId: s.id,
-                })
-              }
-            >
-              <View style={styles.subCardMain}>
-                <Text style={styles.subCardName} numberOfLines={1}>
-                  {s.playerName}
-                </Text>
-                <Text style={styles.subCardPkg}>{s.packageName}</Text>
-                <Text style={styles.subCardMeta}>{s.playerPhone}</Text>
-                <Text style={styles.subCardMeta}>{sessionsLabel}</Text>
-                <Text style={styles.subCardMeta}>
-                  Purchased: {formatDateShort(s.activatedAt)}
-                  {s.lastCheckedIn
-                    ? `  ·  Last in: ${formatDateShort(s.lastCheckedIn)}`
-                    : "  ·  No check-ins"}
-                </Text>
-                <View
-                  style={[
-                    styles.subCardBadge,
-                    isActive ? styles.subCardBadgeActive : styles.subCardBadgeExpired,
-                  ]}
-                >
-                  <Text
-                    style={
-                      isActive
-                        ? styles.subCardBadgeActiveText
-                        : styles.subCardBadgeExpiredText
-                    }
-                  >
-                    {s.status.toUpperCase()}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.subCardChevron}>
-                <Ionicons name="chevron-forward" size={16} color={theme.muted} />
-              </View>
-            </TouchableOpacity>
-          );
-        })
-      )}
+      <FlatList
+        data={data}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        ListEmptyComponent={
+          <Text style={styles.empty}>
+            {emptyLabel ?? (search.trim() ? "No subscribers found" : "No subscribers yet")}
+          </Text>
+        }
+        ListFooterComponent={listFooter}
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.3}
+        scrollEnabled={false}
+      />
     </>
   );
 }

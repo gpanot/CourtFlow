@@ -20,8 +20,16 @@ export function TabletNavigator() {
         name="TabletModeSelect"
         component={TabletModeSelectScreen}
       />
-      <Stack.Screen name="SelfCheckIn" component={SelfCheckInScreen} />
-      <Stack.Screen name="CourtPayCheckIn" component={CourtPayCheckInScreen} />
+      <Stack.Screen
+        name="SelfCheckIn"
+        component={SelfCheckInScreen}
+        options={{ gestureEnabled: false }}
+      />
+      <Stack.Screen
+        name="CourtPayCheckIn"
+        component={CourtPayCheckInScreen}
+        options={{ gestureEnabled: false }}
+      />
     </Stack.Navigator>
   );
 }

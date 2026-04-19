@@ -92,7 +92,11 @@ export function SessionTabScreen() {
     if (!venueId) return;
     try {
       const data = await api.get<SessionHistoryRow[]>(`/api/sessions/history?venueId=${venueId}`);
-      setSessionHistory(Array.isArray(data) ? data.slice(0, 10) : []);
+      // Show only today's sessions
+      const todayOnly = Array.isArray(data)
+        ? data.filter((s) => isToday(s.openedAt))
+        : [];
+      setSessionHistory(todayOnly);
     } catch { /* silent */ }
   }, [venueId]);
 
@@ -222,7 +226,7 @@ export function SessionTabScreen() {
 
         {sessionHistory.length > 0 && (
           <View style={styles.historySection}>
-            <Text style={styles.historyTitle}>Recent Sessions</Text>
+            <Text style={styles.historyTitle}>Today's Sessions</Text>
             {sessionHistory.map((s) => (
               <TouchableOpacity key={s.id} style={styles.historyCard} onPress={() => openDetail(s)} activeOpacity={0.7}>
                 <View style={styles.historyRow}>

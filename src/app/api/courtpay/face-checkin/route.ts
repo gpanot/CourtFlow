@@ -91,6 +91,39 @@ async function bridgeToCheckInPlayer(
     });
   }
 
+  // Check if the player has already paid (confirmed payment) or has a pending
+  // payment in the current session. Return a dedicated resultType so the kiosk
+  // can display a clear warning instead of silently passing through.
+  const openSession = await prisma.session.findFirst({
+    where: { venueId, status: "open" },
+    select: { id: true, openedAt: true },
+  });
+  const sessionStart = openSession?.openedAt ?? (() => {
+    const d = new Date(); d.setHours(0, 0, 0, 0); return d;
+  })();
+
+  const existingPayment = await prisma.pendingPayment.findFirst({
+    where: {
+      checkInPlayerId: checkInPlayer.id,
+      venueId,
+      status: { in: ["pending", "confirmed"] },
+      createdAt: { gte: sessionStart },
+    },
+    select: { status: true },
+  });
+
+  if (existingPayment) {
+    return NextResponse.json({
+      resultType: "already_paid",
+      alreadyPaidStatus: existingPayment.status,
+      player: {
+        id: checkInPlayer.id,
+        name: checkInPlayer.name,
+        phone: checkInPlayer.phone,
+      },
+    });
+  }
+
   const activeSub = await getActiveSubscription(checkInPlayer.id);
 
   return NextResponse.json({

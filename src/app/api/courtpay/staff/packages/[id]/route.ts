@@ -20,6 +20,8 @@ export async function PUT(
         ...(body.price !== undefined && { price: body.price }),
         ...(body.perks !== undefined && { perks: body.perks?.trim() || null }),
         ...(body.isActive !== undefined && { isActive: body.isActive }),
+        ...(body.discountPct !== undefined && { discountPct: body.discountPct }),
+        ...(body.isBestChoice !== undefined && { isBestChoice: body.isBestChoice }),
       },
     });
 

@@ -13,6 +13,7 @@ import {
   Easing,
   Keyboard,
   Modal,
+  BackHandler,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -168,6 +169,12 @@ export function SelfCheckInScreen({
     null
   );
   const [permission, requestPermission] = useCameraPermissions();
+
+  // ── Block OS back button / swipe-back on this kiosk screen ─────────────────
+  useEffect(() => {
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => true);
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     if (!venueId) return;

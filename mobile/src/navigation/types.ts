@@ -17,7 +17,9 @@ export type StaffStackParamList = {
   StaffProfile: undefined;
   StaffPaymentSettings: undefined;
   StaffSubscriptions: undefined;
+  StaffDashboard: undefined;
   StaffBossDashboard: undefined;
+  StaffSessionHistory: undefined;
   StaffSessionDetail: { sessionId: string; date: string; openedAt: string; closedAt: string | null };
   BossSubscriptionDetail: { subscriptionId: string };
 };

@@ -18,6 +18,14 @@ const RETRY_IDLE_MS = 2000;
 
 const CIRCLE_SIZE = 280;
 
+const COURTPAY_ACCENT = {
+  circleBorder: "rgba(192,38,211,0.5)",
+  circleShadow: "#701a75",
+  link: "#e879f9",
+  primary: "#c026d3",
+  spinner: "#d946ef",
+};
+
 type ScanPhase = "adjust" | "capturing" | "between_retries";
 
 export type ReturningFrameResult = "continue_scan" | "done";
@@ -47,6 +55,8 @@ type Props = {
   onCameraNotReady: () => void;
   onUsePhone: () => void;
   onBack: () => void;
+  /** CourtPay kiosk: fuchsia chrome instead of green. */
+  accent?: "default" | "courtpay";
 };
 
 function sleep(ms: number) {
@@ -62,7 +72,9 @@ export function SelfCheckInReturningFaceScanner({
   onCameraNotReady,
   onUsePhone,
   onBack,
+  accent = "default",
 }: Props) {
+  const isCourtPay = accent === "courtpay";
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView | null>(null);
   const cameraReadyRef = useRef(false);
@@ -153,7 +165,10 @@ export function SelfCheckInReturningFaceScanner({
   if (!permission) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color="#22c55e" size="large" />
+        <ActivityIndicator
+          color={isCourtPay ? COURTPAY_ACCENT.spinner : "#22c55e"}
+          size="large"
+        />
       </View>
     );
   }
@@ -163,7 +178,10 @@ export function SelfCheckInReturningFaceScanner({
       <View style={styles.center}>
         <Text style={styles.title}>{copy.allowCameraTitle}</Text>
         <Text style={styles.subtitle}>{copy.allowCameraHint}</Text>
-        <TouchableOpacity style={styles.primaryBtn} onPress={requestPermission}>
+        <TouchableOpacity
+          style={[styles.primaryBtn, isCourtPay && styles.primaryBtnCourtPay]}
+          onPress={requestPermission}
+        >
           <Text style={styles.primaryBtnText}>{copy.allowCameraCta}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.textBtn} onPress={onBack}>
@@ -184,7 +202,15 @@ export function SelfCheckInReturningFaceScanner({
     <View style={styles.root}>
       <Text style={styles.hint}>{hint}</Text>
 
-      <View style={styles.circleOuter}>
+      <View
+        style={[
+          styles.circleOuter,
+          isCourtPay && {
+            borderColor: COURTPAY_ACCENT.circleBorder,
+            shadowColor: COURTPAY_ACCENT.circleShadow,
+          },
+        ]}
+      >
         <View style={styles.circleClip}>
           <CameraView
             ref={cameraRef}
@@ -204,7 +230,9 @@ export function SelfCheckInReturningFaceScanner({
 
       {scanPhase === "capturing" ? (
         <View style={styles.statusRow}>
-          <ActivityIndicator color="#22c55e" />
+          <ActivityIndicator
+            color={isCourtPay ? COURTPAY_ACCENT.spinner : "#22c55e"}
+          />
           <Text style={styles.statusText}>{copy.scanning}</Text>
         </View>
       ) : scanPhase === "between_retries" ? (
@@ -216,8 +244,16 @@ export function SelfCheckInReturningFaceScanner({
       )}
 
       <TouchableOpacity style={styles.linkRow} onPress={onUsePhone}>
-        <Ionicons name="call-outline" size={18} color="#3b82f6" />
-        <Text style={styles.linkText}>{copy.checkInWithPhone}</Text>
+        <Ionicons
+          name="call-outline"
+          size={18}
+          color={isCourtPay ? COURTPAY_ACCENT.link : "#3b82f6"}
+        />
+        <Text
+          style={[styles.linkText, isCourtPay && styles.linkTextCourtPay]}
+        >
+          {copy.checkInWithPhone}
+        </Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.textBtn} onPress={onBack}>
@@ -330,5 +366,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  primaryBtnCourtPay: {
+    backgroundColor: COURTPAY_ACCENT.primary,
+  },
   primaryBtnText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+  linkTextCourtPay: {
+    color: COURTPAY_ACCENT.link,
+  },
 });

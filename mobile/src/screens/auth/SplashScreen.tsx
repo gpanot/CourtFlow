@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import { useAuthStore } from "../../stores/auth-store";
+import { usePinStore } from "../../stores/pin-store";
 import { C } from "../../theme/colors";
 import type { RootStackScreenProps } from "../../navigation/types";
 
@@ -9,13 +10,15 @@ export function SplashScreen({
 }: RootStackScreenProps<"Splash">) {
   const hydrate = useAuthStore((s) => s.hydrate);
   const hydrated = useAuthStore((s) => s.hydrated);
+  const hydratePin = usePinStore((s) => s.hydrate);
   const token = useAuthStore((s) => s.token);
   const onboardingSeen = useAuthStore((s) => s.onboardingSeen);
   const venueId = useAuthStore((s) => s.venueId);
 
   useEffect(() => {
     hydrate();
-  }, [hydrate]);
+    hydratePin();
+  }, [hydrate, hydratePin]);
 
   useEffect(() => {
     if (!hydrated) return;

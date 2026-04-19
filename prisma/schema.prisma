@@ -615,6 +615,8 @@ model PendingPayment {
   expiresAt       DateTime  @map("expires_at")
   confirmedAt     DateTime? @map("confirmed_at")
   confirmedBy     String?   @map("confirmed_by")
+  cancelReason    String?   @map("cancel_reason") // "refunded" | "mistake" — set when a confirmed payment is voided
+  cancelledAt     DateTime? @map("cancelled_at")
 
   venue         Venue          @relation(fields: [venueId], references: [id])
   session       Session?       @relation(fields: [sessionId], references: [id])
@@ -667,6 +669,8 @@ model SubscriptionPackage {
   price        Int
   perks        String?
   isActive     Boolean  @default(true) @map("is_active")
+  discountPct  Int?     @map("discount_pct")
+  isBestChoice Boolean  @default(false) @map("is_best_choice")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 

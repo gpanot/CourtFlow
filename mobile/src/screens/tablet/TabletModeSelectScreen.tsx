@@ -106,27 +106,12 @@ export function TabletModeSelectScreen({
       <View style={styles.cards}>
         <TouchableOpacity
           style={styles.card}
-          onPress={() => checkSessionAndNavigate("SelfCheckIn")}
-          disabled={loading}
-          activeOpacity={0.7}
-        >
-          <View style={styles.cardIconGreen}>
-            <Ionicons name="scan-outline" size={32} color={C.green400} />
-          </View>
-          <Text style={styles.cardTitle}>Self Check-in</Text>
-          <Text style={styles.cardDesc}>
-            Players check themselves in via face or phone
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.card}
           onPress={() => checkSessionAndNavigate("CourtPayCheckIn")}
           disabled={loading}
           activeOpacity={0.7}
         >
-          <View style={styles.cardIconBlue}>
-            <Ionicons name="card-outline" size={32} color={C.blue400} />
+          <View style={styles.cardIconFuchsia}>
+            <Ionicons name="card-outline" size={32} color="#c026d3" />
           </View>
           <Text style={styles.cardTitle}>CourtPay Check-in</Text>
           <Text style={styles.cardDesc}>
@@ -180,20 +165,11 @@ const styles = StyleSheet.create({
     borderColor: C.border,
     alignItems: "center",
   },
-  cardIconGreen: {
+  cardIconFuchsia: {
     width: 64,
     height: 64,
     borderRadius: 16,
-    backgroundColor: "rgba(34,197,94,0.13)",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 14,
-  },
-  cardIconBlue: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    backgroundColor: "rgba(37,99,235,0.13)",
+    backgroundColor: "rgba(192,38,211,0.13)",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 14,

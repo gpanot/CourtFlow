@@ -42,6 +42,7 @@ export async function GET(request: NextRequest) {
       sessionFee: openSession?.sessionFee ?? latestClosedSession?.sessionFee ?? 0,
       autoApprovalPhone: typeof settings.autoApprovalPhone === "string" ? settings.autoApprovalPhone : "",
       autoApprovalCCCD: typeof settings.autoApprovalCCCD === "string" ? settings.autoApprovalCCCD : "",
+      showSubscriptionsInFlow: settings.showSubscriptionsInFlow !== false, // default true
     });
   } catch (e) {
     return error((e as Error).message, 500);
@@ -59,6 +60,7 @@ export async function PATCH(request: NextRequest) {
       sessionFee?: number;
       autoApprovalPhone?: string;
       autoApprovalCCCD?: string;
+      showSubscriptionsInFlow?: boolean;
     }>(request);
 
     const { venueId } = body;
@@ -75,9 +77,11 @@ export async function PATCH(request: NextRequest) {
     if (body.bankAccount !== undefined) venueUpdate.bankAccount = body.bankAccount || null;
     if (body.bankOwnerName !== undefined) venueUpdate.bankOwnerName = body.bankOwnerName || null;
 
-    const hasAutoApprovalPayload =
-      body.autoApprovalPhone !== undefined || body.autoApprovalCCCD !== undefined;
-    if (hasAutoApprovalPayload) {
+    const hasSettingsPayload =
+      body.autoApprovalPhone !== undefined ||
+      body.autoApprovalCCCD !== undefined ||
+      body.showSubscriptionsInFlow !== undefined;
+    if (hasSettingsPayload) {
       const venue = await prisma.venue.findUnique({
         where: { id: venueId },
         select: { settings: true },
@@ -90,6 +94,9 @@ export async function PATCH(request: NextRequest) {
           : {}),
         ...(body.autoApprovalCCCD !== undefined
           ? { autoApprovalCCCD: body.autoApprovalCCCD.trim() || null }
+          : {}),
+        ...(body.showSubscriptionsInFlow !== undefined
+          ? { showSubscriptionsInFlow: body.showSubscriptionsInFlow }
           : {}),
       };
     }

@@ -34,21 +34,54 @@ export async function GET(request: NextRequest) {
     const payments = await prisma.pendingPayment.findMany({
       where: {
         venueId,
-        status: "confirmed",
-        OR: paymentScope,
+        OR: [
+          { status: "confirmed", OR: paymentScope },
+          { status: "cancelled", cancelReason: { not: null }, OR: paymentScope },
+        ],
       },
       include: {
         player: { select: { id: true, name: true, skillLevel: true, facePhotoPath: true } },
-        checkInPlayer: { select: { id: true, name: true, skillLevel: true } },
+        checkInPlayer: { select: { id: true, name: true, skillLevel: true, phone: true } },
       },
       orderBy: { confirmedAt: "desc" },
     });
 
-    const playerCount = payments.length;
-    const totalRevenue = payments.reduce((sum, p) => sum + p.amount, 0);
+    // For CourtPay payments (checkInPlayerId set, no player), attach face photo via phone lookup
+    const courtPayPhones = [
+      ...new Set(
+        payments
+          .filter((p) => p.checkInPlayerId && !p.playerId && p.checkInPlayer?.phone)
+          .map((p) => p.checkInPlayer!.phone)
+      ),
+    ];
+    const linkedPlayers =
+      courtPayPhones.length > 0
+        ? await prisma.player.findMany({
+            where: { phone: { in: courtPayPhones } },
+            select: { phone: true, facePhotoPath: true, avatarPhotoPath: true },
+          })
+        : [];
+    const faceByPhone = new Map(
+      linkedPlayers.map((p) => [
+        p.phone,
+        p.avatarPhotoPath ?? p.facePhotoPath ?? null,
+      ])
+    );
+
+    const enriched = payments.map((p) => {
+      if (p.checkInPlayerId && !p.playerId && p.checkInPlayer?.phone) {
+        const face = faceByPhone.get(p.checkInPlayer.phone) ?? null;
+        return { ...p, facePhotoUrl: face };
+      }
+      return p;
+    });
+
+    const confirmed = enriched.filter((p) => p.status === "confirmed");
+    const playerCount = confirmed.length;
+    const totalRevenue = confirmed.reduce((sum, p) => sum + p.amount, 0);
 
     return json({
-      payments,
+      payments: enriched,
       summary: { playerCount, totalRevenue },
     });
   } catch (e) {

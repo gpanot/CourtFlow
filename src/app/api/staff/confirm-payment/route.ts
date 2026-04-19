@@ -27,18 +27,33 @@ export async function POST(request: NextRequest) {
         data: { status: "confirmed", confirmedAt: new Date(), confirmedBy: auth.id },
       });
 
-      // For subscription purchases: deduct 1 session for the current visit
-      if (payment.type === "subscription" && payment.checkInPlayerId) {
-        const activeSub = await prisma.playerSubscription.findFirst({
-          where: {
-            playerId: payment.checkInPlayerId,
-            status: "active",
-            expiresAt: { gt: new Date() },
-          },
-          orderBy: { activatedAt: "desc" },
-        });
-        if (activeSub) {
-          await checkInSubscriber(payment.checkInPlayerId, payment.venueId, activeSub.id);
+      if (payment.checkInPlayerId) {
+        if (payment.type === "subscription") {
+          // Subscription purchase: deduct 1 session for the current visit
+          const activeSub = await prisma.playerSubscription.findFirst({
+            where: {
+              playerId: payment.checkInPlayerId,
+              status: "active",
+              expiresAt: { gt: new Date() },
+            },
+            orderBy: { activatedAt: "desc" },
+          });
+          if (activeSub) {
+            // checkInSubscriber already dedupes by day and creates a CheckInRecord
+            await checkInSubscriber(payment.checkInPlayerId, payment.venueId, activeSub.id);
+          }
+        } else {
+          // Single-session (checkin) payment: create a CheckInRecord so duplicate
+          // check-in detection works correctly on the next attempt.
+          const source = payment.paymentMethod === "cash" ? "cash" : "vietqr";
+          await prisma.checkInRecord.create({
+            data: {
+              playerId: payment.checkInPlayerId,
+              venueId: payment.venueId,
+              paymentId: pendingPaymentId,
+              source,
+            },
+          });
         }
       }
 

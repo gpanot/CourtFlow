@@ -22,6 +22,10 @@ export interface SubscriptionPackageData {
   price: number;
   perks: string | null;
   isActive: boolean;
+  /** Discount percentage shown on the package card (0–99, integer) */
+  discountPct?: number | null;
+  /** Whether this package is highlighted as "Best Choice" */
+  isBestChoice?: boolean;
 }
 
 export interface ActiveSubscriptionInfo {

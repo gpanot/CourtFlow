@@ -17,6 +17,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Switch,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -27,6 +28,7 @@ import { useAppColors } from "../../theme/use-app-colors";
 import type { AppColors } from "../../theme/palettes";
 import type { StaffStackParamList } from "../../navigation/types";
 import { SubscribersList } from "../../components/SubscribersList";
+import type { VenuePaymentSettings } from "../../types/api";
 
 type Tab = "packages" | "subscribers";
 
@@ -39,10 +41,59 @@ interface PackageRow {
   perks: string | null;
   isActive: boolean;
   _count: { subscriptions: number };
+  discountPct?: number | null;
+  isBestChoice?: boolean;
 }
 
 function formatVND(n: number) {
   return new Intl.NumberFormat("vi-VN").format(n) + " VND";
+}
+
+/**
+ * Format a number in the compact Vietnamese style: 320.000 or 1.540.000
+ * We just use vi-VN locale which uses dots as thousands separator.
+ */
+function roundPrice(raw: number): number {
+  // Round to nearest 10,000 VND
+  return Math.round(raw / 10000) * 10000;
+}
+
+/**
+ * Calculate discount % based on sessions × sessionFee (or days × sessionFee for unlimited).
+ * Returns an integer 1–99, or null if it can't be computed.
+ */
+function calcDiscount(
+  price: number,
+  sessionFee: number,
+  sessions: number | null,
+  days: number,
+  unlimited: boolean
+): number | null {
+  if (!sessionFee || !price) return null;
+  const full = unlimited ? sessionFee * days : sessionFee * (sessions ?? 0);
+  if (full <= 0) return null;
+  const pct = Math.round((1 - price / full) * 100);
+  return pct > 0 && pct <= 99 ? pct : null;
+}
+
+/**
+ * Build the auto-hint text shown below the Discount field, e.g.
+ *   "auto: 90.000 × 5 = 450.000"
+ */
+function discountHintText(
+  sessionFee: number,
+  sessions: number | null,
+  days: number,
+  unlimited: boolean
+): string | null {
+  if (!sessionFee) return null;
+  const qty = unlimited ? days : (sessions ?? 0);
+  if (!qty) return null;
+  const total = sessionFee * qty;
+  const fmtFee = sessionFee.toLocaleString("vi-VN");
+  const fmtTotal = total.toLocaleString("vi-VN");
+  const label = unlimited ? "days" : "sessions";
+  return `auto: ${fmtFee} × ${qty} ${label} = ${fmtTotal}`;
 }
 
 function createStyles(t: AppColors) {
@@ -77,6 +128,8 @@ function createStyles(t: AppColors) {
     },
     bannerText: { color: t.green400, fontSize: 13 },
     empty: { textAlign: "center", color: t.muted, marginTop: 40, fontSize: 15 },
+
+    // ── Package card ────────────────────────────────────────────────────────
     pkgCard: {
       borderRadius: 12,
       borderWidth: 1,
@@ -85,7 +138,27 @@ function createStyles(t: AppColors) {
       padding: 14,
       marginBottom: 10,
     },
-    pkgTitle: { fontSize: 16, fontWeight: "700", color: t.text },
+    pkgHeaderRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      flexWrap: "wrap",
+    },
+    pkgTitle: { fontSize: 16, fontWeight: "700", color: t.text, flex: 1 },
+    bestChoiceTag: {
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 12,
+      backgroundColor: "#c026d3",
+    },
+    bestChoiceTagText: { fontSize: 10, fontWeight: "700", color: "#fff" },
+    discountTag: {
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: 12,
+      backgroundColor: "rgba(22,163,74,0.18)",
+    },
+    discountTagText: { fontSize: 10, fontWeight: "700", color: "#4ade80" },
     pkgMeta: { fontSize: 13, color: t.muted, marginTop: 4 },
     pkgRow: {
       flexDirection: "row",
@@ -122,32 +195,9 @@ function createStyles(t: AppColors) {
     primaryBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
     linkBtn: { alignItems: "center", paddingVertical: 8 },
     linkText: { color: t.muted, fontSize: 13 },
-    search: {
-      borderWidth: 1,
-      borderColor: t.border,
-      borderRadius: 10,
-      paddingHorizontal: 12,
-      height: 42,
-      color: t.text,
-      marginBottom: 12,
-      backgroundColor: t.inputBg,
-    },
-    subCard: {
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: t.border,
-      backgroundColor: t.card,
-      padding: 12,
-      marginBottom: 8,
-    },
-    subName: { fontSize: 15, fontWeight: "600", color: t.text },
-    subPhone: { fontSize: 12, color: t.muted, marginTop: 2 },
-    subPkg: { fontSize: 12, color: t.purple400, marginTop: 4 },
-    subStatus: { fontSize: 11, color: t.subtle, marginTop: 4 },
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: "rgba(0,0,0,0.55)",
-    },
+
+    // ── Form modal ──────────────────────────────────────────────────────────
+    modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)" },
     modalCard: {
       backgroundColor: t.bg,
       borderTopLeftRadius: 16,
@@ -164,6 +214,48 @@ function createStyles(t: AppColors) {
       marginBottom: 14,
     },
     label: { fontSize: 12, color: t.muted, marginBottom: 4 },
+
+    // ── Package name + Best Choice inline row ───────────────────────────────
+    nameRow: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      gap: 10,
+      marginBottom: 12,
+    },
+    nameInputWrap: { flex: 1 },
+    nameInput: {
+      borderWidth: 1,
+      borderColor: t.border,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      height: 40,
+      color: t.text,
+      backgroundColor: t.inputBg,
+    },
+    bestChoiceBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+      height: 40,
+      paddingHorizontal: 10,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.inputBg,
+    },
+    bestChoiceBtnActive: {
+      borderColor: "#c026d3",
+      backgroundColor: "rgba(192,38,211,0.12)",
+    },
+    bestChoiceBtnText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: t.muted,
+    },
+    bestChoiceBtnTextActive: { color: "#c026d3" },
+
+    // ── Sessions row ───────────────────────────────────────────────────────
+    row: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 },
     input: {
       borderWidth: 1,
       borderColor: t.border,
@@ -174,10 +266,50 @@ function createStyles(t: AppColors) {
       marginBottom: 12,
       backgroundColor: t.inputBg,
     },
-    row: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 },
     checkLabel: { color: t.textSecondary, fontSize: 14 },
+
+    // ── Price + Discount aligned row ───────────────────────────────────────
+    priceDiscountRow: {
+      flexDirection: "row",
+      gap: 10,
+      marginBottom: 12,
+    },
+    priceWrap: { flex: 2 },
+    discountWrap: { flex: 1 },
+    fieldInput: {
+      borderWidth: 1,
+      borderColor: t.border,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      height: 40,
+      color: t.text,
+      backgroundColor: t.inputBg,
+    },
+    discountHint: {
+      fontSize: 10,
+      color: t.subtle,
+      marginTop: 4,
+      lineHeight: 14,
+    },
+
     modalActions: { flexDirection: "row", gap: 10, marginTop: 8 },
     flex1: { flex: 1 },
+
+    // ── CourtPay flow toggle card ──────────────────────────────────────────
+    toggleCard: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.card,
+      padding: 14,
+      marginBottom: 14,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    toggleTextWrap: { flex: 1 },
+    toggleTitle: { fontSize: 14, fontWeight: "600", color: t.text },
+    toggleDesc: { fontSize: 12, color: t.muted, marginTop: 2, lineHeight: 16 },
   });
 }
 
@@ -196,12 +328,22 @@ export function StaffSubscriptionsScreen() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<PackageRow | null>(null);
 
+  // Session fee for discount calculation
+  const [sessionFee, setSessionFee] = useState<number>(0);
+  // Whether packages are shown in the CourtPay check-in flow
+  const [showSubscriptionsInFlow, setShowSubscriptionsInFlow] = useState(true);
+  const [toggleSaving, setToggleSaving] = useState(false);
+
+  // Form fields
   const [formName, setFormName] = useState("");
   const [formSessions, setFormSessions] = useState("");
   const [formUnlimited, setFormUnlimited] = useState(false);
   const [formDays, setFormDays] = useState("30");
   const [formPrice, setFormPrice] = useState("");
   const [formPerks, setFormPerks] = useState("");
+  const [formDiscountPct, setFormDiscountPct] = useState("");
+  const [formDiscountManual, setFormDiscountManual] = useState(false);
+  const [formBestChoice, setFormBestChoice] = useState(false);
   const [formSaving, setFormSaving] = useState(false);
 
   useLayoutEffect(() => {
@@ -221,14 +363,59 @@ export function StaffSubscriptionsScreen() {
     setPackages(data.packages ?? []);
   }, [venueId]);
 
+  const fetchSessionFee = useCallback(async () => {
+    if (!venueId) return;
+    try {
+      const data = await api.get<VenuePaymentSettings>(
+        `/api/staff/venue-payment-settings?venueId=${venueId}`
+      );
+      setSessionFee(data.sessionFee ?? 0);
+      setShowSubscriptionsInFlow(data.showSubscriptionsInFlow !== false);
+    } catch {
+      // non-fatal
+    }
+  }, [venueId]);
+
+  const handleToggleSubscriptionsInFlow = useCallback(async (value: boolean) => {
+    if (!venueId) return;
+    setShowSubscriptionsInFlow(value);
+    setToggleSaving(true);
+    try {
+      await api.patch("/api/staff/venue-payment-settings", {
+        venueId,
+        showSubscriptionsInFlow: value,
+      });
+    } catch {
+      // Revert on failure
+      setShowSubscriptionsInFlow(!value);
+      Alert.alert("Error", "Could not save setting. Please try again.");
+    } finally {
+      setToggleSaving(false);
+    }
+  }, [venueId]);
+
   useEffect(() => {
     if (!venueId) {
       setLoading(false);
       return;
     }
     setLoading(true);
-    fetchPackages().finally(() => setLoading(false));
-  }, [venueId, fetchPackages]);
+    Promise.all([fetchPackages(), fetchSessionFee()]).finally(() =>
+      setLoading(false)
+    );
+  }, [venueId, fetchPackages, fetchSessionFee]);
+
+  // ── Auto-calculate discount ──────────────────────────────────────────────
+  // Recompute whenever price, sessions, days, or unlimited flag change,
+  // unless the user has manually typed a discount value.
+  useEffect(() => {
+    if (formDiscountManual) return;
+    const price = Number(formPrice) || 0;
+    const sessions = formUnlimited ? null : Number(formSessions) || null;
+    const days = Number(formDays) || 0;
+    const pct = calcDiscount(price, sessionFee, sessions, days, formUnlimited);
+    setFormDiscountPct(pct != null ? String(pct) : "");
+  }, [formPrice, formSessions, formDays, formUnlimited, sessionFee, formDiscountManual]);
 
   const openCreate = () => {
     setEditing(null);
@@ -238,6 +425,9 @@ export function StaffSubscriptionsScreen() {
     setFormDays("30");
     setFormPrice("");
     setFormPerks("");
+    setFormDiscountPct("");
+    setFormDiscountManual(false);
+    setFormBestChoice(false);
     setShowForm(true);
   };
 
@@ -253,6 +443,9 @@ export function StaffSubscriptionsScreen() {
     setFormDays(String(pkg.durationDays || 30));
     setFormPrice(pkg.price ? String(pkg.price) : "");
     setFormPerks(pkg.perks || "");
+    setFormDiscountPct(pkg.discountPct != null ? String(pkg.discountPct) : "");
+    setFormDiscountManual(pkg.discountPct != null);
+    setFormBestChoice(pkg.isBestChoice ?? false);
     setShowForm(true);
   };
 
@@ -261,14 +454,71 @@ export function StaffSubscriptionsScreen() {
       Alert.alert("Venue", "Select a venue from the staff dashboard first.");
       return;
     }
+    // Guard: session fee must be set
+    if (!sessionFee || sessionFee <= 0) {
+      Alert.alert(
+        "No Session Price set up",
+        "There is no Session Price set up, go to Payment Settings first.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Open Payment Settings",
+            onPress: () => navigation.navigate("StaffPaymentSettings"),
+          },
+        ]
+      );
+      return;
+    }
+
     setCreatingDefaults(true);
     try {
-      await api.post("/api/courtpay/staff/packages/create-defaults", {
-        venueId,
-      });
-      setDefaultsBanner("3 packages created — set your prices");
+      // Build 3 default packages from the session fee:
+      //   Starter  : 5 sessions,  5% off
+      //   Regular  : 10 sessions, 10% off
+      //   Unlimited: unlimited,   20% off (price based on 30 days)
+      const starterPrice = roundPrice(sessionFee * 5 * (1 - 0.05));
+      const regularPrice = roundPrice(sessionFee * 10 * (1 - 0.10));
+      const unlimitedPrice = roundPrice(sessionFee * 30 * (1 - 0.20));
+
+      const defaultPackages = [
+        {
+          name: "Starter",
+          sessions: 5,
+          durationDays: 60,
+          price: starterPrice,
+          perks: "",
+          discountPct: 5,
+          isBestChoice: false,
+        },
+        {
+          name: "Regular",
+          sessions: 10,
+          durationDays: 90,
+          price: regularPrice,
+          perks: "",
+          discountPct: 10,
+          isBestChoice: true,
+        },
+        {
+          name: "Unlimited",
+          sessions: null,
+          durationDays: 30,
+          price: unlimitedPrice,
+          perks: "",
+          discountPct: 20,
+          isBestChoice: false,
+        },
+      ];
+
+      for (const pkg of defaultPackages) {
+        await api.post("/api/courtpay/staff/packages", { venueId, ...pkg });
+      }
+
+      setDefaultsBanner(
+        `3 packages created — prices based on ${formatVND(sessionFee)} session fee`
+      );
       await fetchPackages();
-      setTimeout(() => setDefaultsBanner(""), 5000);
+      setTimeout(() => setDefaultsBanner(""), 6000);
     } catch (e) {
       Alert.alert("Error", e instanceof Error ? e.message : "Failed");
     } finally {
@@ -290,6 +540,10 @@ export function StaffSubscriptionsScreen() {
       Alert.alert("Validation", "Sessions required, or enable Unlimited");
       return;
     }
+    const discountPctNum = formDiscountPct.trim()
+      ? Math.min(99, Math.max(0, Math.round(Number(formDiscountPct))))
+      : null;
+
     setFormSaving(true);
     try {
       const body = {
@@ -299,6 +553,8 @@ export function StaffSubscriptionsScreen() {
         durationDays: Number(formDays),
         price: Number(formPrice) || 0,
         perks: formPerks.trim() || "",
+        discountPct: discountPctNum,
+        isBestChoice: formBestChoice,
       };
       if (editing) {
         await api.put(`/api/courtpay/staff/packages/${editing.id}`, {
@@ -307,6 +563,8 @@ export function StaffSubscriptionsScreen() {
           durationDays: body.durationDays,
           price: body.price,
           perks: body.perks,
+          discountPct: body.discountPct,
+          isBestChoice: body.isBestChoice,
         });
       } else {
         await api.post("/api/courtpay/staff/packages", body);
@@ -346,8 +604,18 @@ export function StaffSubscriptionsScreen() {
 
   const activePackages = packages.filter((p) => p.isActive);
 
+  // ── Hint text for discount field ─────────────────────────────────────────
+  const formSessionsNum = formUnlimited ? null : Number(formSessions) || null;
+  const hint = discountHintText(
+    sessionFee,
+    formSessionsNum,
+    Number(formDays) || 0,
+    formUnlimited
+  );
+
   return (
     <View style={styles.screen}>
+      {/* ── Tabs ─────────────────────────────────────────────────────────── */}
       <View style={styles.headerTabs}>
         <TouchableOpacity
           style={[styles.tab, tab === "packages" && styles.tabOn]}
@@ -383,6 +651,23 @@ export function StaffSubscriptionsScreen() {
 
           {tab === "packages" ? (
             <>
+              {/* ── CourtPay flow toggle ──────────────────────────────── */}
+              <View style={styles.toggleCard}>
+                <View style={styles.toggleTextWrap}>
+                  <Text style={styles.toggleTitle}>Show in CourtPay check-in</Text>
+                  <Text style={styles.toggleDesc}>
+                    When off, players go directly to single-session payment and skip the packages screen.
+                  </Text>
+                </View>
+                <Switch
+                  value={showSubscriptionsInFlow}
+                  onValueChange={(v) => void handleToggleSubscriptionsInFlow(v)}
+                  disabled={toggleSaving}
+                  trackColor={{ false: theme.borderLight, true: theme.purple400 }}
+                  thumbColor="#ffffff"
+                />
+              </View>
+
               {activePackages.length === 0 ? (
                 <View>
                   <Text style={styles.empty}>No packages yet</Text>
@@ -417,7 +702,21 @@ export function StaffSubscriptionsScreen() {
                   </TouchableOpacity>
                   {packages.map((pkg) => (
                     <View key={pkg.id} style={styles.pkgCard}>
-                      <Text style={styles.pkgTitle}>{pkg.name}</Text>
+                      <View style={styles.pkgHeaderRow}>
+                        <Text style={styles.pkgTitle}>{pkg.name}</Text>
+                        {pkg.isBestChoice && (
+                          <View style={styles.bestChoiceTag}>
+                            <Text style={styles.bestChoiceTagText}>Best Choice</Text>
+                          </View>
+                        )}
+                        {pkg.discountPct != null && pkg.discountPct > 0 && (
+                          <View style={styles.discountTag}>
+                            <Text style={styles.discountTagText}>
+                              Save {pkg.discountPct}%
+                            </Text>
+                          </View>
+                        )}
+                      </View>
                       <Text style={styles.pkgMeta}>
                         {pkg.sessions === null
                           ? "Unlimited sessions"
@@ -452,6 +751,7 @@ export function StaffSubscriptionsScreen() {
         </ScrollView>
       )}
 
+      {/* ── Create / Edit Modal ───────────────────────────────────────────── */}
       <Modal visible={showForm} animationType="slide" transparent>
         <KeyboardAvoidingView
           style={styles.modalOverlay}
@@ -466,21 +766,54 @@ export function StaffSubscriptionsScreen() {
               <Text style={styles.modalTitle}>
                 {editing ? "Edit package" : "Create package"}
               </Text>
+
+              {/* ── Package name + Best Choice (inline) ─────────────────── */}
               <Text style={styles.label}>Package name</Text>
-              <TextInput
-                style={styles.input}
-                value={formName}
-                onChangeText={setFormName}
-                placeholder="e.g. Monthly Pass"
-                placeholderTextColor={theme.dimmed}
-              />
+              <View style={styles.nameRow}>
+                <View style={styles.nameInputWrap}>
+                  <TextInput
+                    style={styles.nameInput}
+                    value={formName}
+                    onChangeText={setFormName}
+                    placeholder="e.g. Monthly Pass"
+                    placeholderTextColor={theme.dimmed}
+                  />
+                </View>
+                <TouchableOpacity
+                  style={[
+                    styles.bestChoiceBtn,
+                    formBestChoice && styles.bestChoiceBtnActive,
+                  ]}
+                  onPress={() => setFormBestChoice((v) => !v)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={formBestChoice ? "star" : "star-outline"}
+                    size={14}
+                    color={formBestChoice ? "#c026d3" : theme.muted}
+                  />
+                  <Text
+                    style={[
+                      styles.bestChoiceBtnText,
+                      formBestChoice && styles.bestChoiceBtnTextActive,
+                    ]}
+                  >
+                    Best Choice
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* ── Sessions ──────────────────────────────────────────── */}
               <Text style={styles.label}>Sessions included</Text>
               <View style={styles.row}>
                 {!formUnlimited ? (
                   <TextInput
                     style={[styles.input, { flex: 1, marginBottom: 0 }]}
                     value={formSessions}
-                    onChangeText={setFormSessions}
+                    onChangeText={(v) => {
+                      setFormSessions(v.replace(/[^0-9]/g, ""));
+                      setFormDiscountManual(false);
+                    }}
                     keyboardType="number-pad"
                     placeholder="10"
                     placeholderTextColor={theme.dimmed}
@@ -488,7 +821,10 @@ export function StaffSubscriptionsScreen() {
                 ) : null}
                 <TouchableOpacity
                   style={styles.row}
-                  onPress={() => setFormUnlimited(!formUnlimited)}
+                  onPress={() => {
+                    setFormUnlimited(!formUnlimited);
+                    setFormDiscountManual(false);
+                  }}
                 >
                   <Ionicons
                     name={formUnlimited ? "checkbox" : "square-outline"}
@@ -498,26 +834,68 @@ export function StaffSubscriptionsScreen() {
                   <Text style={styles.checkLabel}>Unlimited</Text>
                 </TouchableOpacity>
               </View>
+
+              {/* ── Duration ──────────────────────────────────────────── */}
               <Text style={styles.label}>Valid for (days)</Text>
               <TextInput
                 style={styles.input}
                 value={formDays}
-                onChangeText={setFormDays}
+                onChangeText={(v) => {
+                  setFormDays(v.replace(/[^0-9]/g, ""));
+                  setFormDiscountManual(false);
+                }}
                 keyboardType="number-pad"
               />
-              <Text style={styles.label}>Price (VND)</Text>
-              <TextInput
-                style={styles.input}
-                value={
-                  formPrice
-                    ? parseInt(formPrice, 10).toLocaleString("vi-VN")
-                    : ""
-                }
-                onChangeText={(v) => setFormPrice(v.replace(/[^0-9]/g, ""))}
-                keyboardType="number-pad"
-                placeholder="150,000"
-                placeholderTextColor={theme.dimmed}
-              />
+
+              {/* ── Price + Discount % (properly aligned) ─────────────── */}
+              <View style={styles.priceDiscountRow}>
+                {/* Price column */}
+                <View style={styles.priceWrap}>
+                  <Text style={styles.label}>Price (VND)</Text>
+                  <TextInput
+                    style={styles.fieldInput}
+                    value={
+                      formPrice
+                        ? parseInt(formPrice, 10).toLocaleString("vi-VN")
+                        : ""
+                    }
+                    onChangeText={(v) => {
+                      setFormPrice(v.replace(/[^0-9]/g, ""));
+                      setFormDiscountManual(false);
+                    }}
+                    keyboardType="number-pad"
+                    placeholder="150.000"
+                    placeholderTextColor={theme.dimmed}
+                  />
+                </View>
+
+                {/* Discount column */}
+                <View style={styles.discountWrap}>
+                  <Text style={styles.label}>Discount (%)</Text>
+                  <TextInput
+                    style={styles.fieldInput}
+                    value={formDiscountPct}
+                    onChangeText={(v) => {
+                      const clean = v.replace(/[^0-9]/g, "").slice(0, 2);
+                      setFormDiscountPct(clean);
+                      setFormDiscountManual(true);
+                    }}
+                    keyboardType="number-pad"
+                    placeholder="0"
+                    placeholderTextColor={theme.dimmed}
+                    maxLength={2}
+                  />
+                </View>
+              </View>
+
+              {/* Hint under the price/discount row */}
+              {hint && !formDiscountManual && (
+                <Text style={[styles.discountHint, { marginTop: -8, marginBottom: 12 }]}>
+                  {hint}
+                </Text>
+              )}
+
+              {/* ── Perks ─────────────────────────────────────────────── */}
               <Text style={styles.label}>Perks (optional)</Text>
               <TextInput
                 style={[styles.input, { height: 72 }]}
@@ -525,6 +903,8 @@ export function StaffSubscriptionsScreen() {
                 onChangeText={setFormPerks}
                 multiline
               />
+
+              {/* ── Actions ───────────────────────────────────────────── */}
               <View style={styles.modalActions}>
                 <TouchableOpacity
                   style={[styles.btnGhost, styles.flex1]}

@@ -28,6 +28,47 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Player not found" }, { status: 404 });
     }
 
+    // Prevent double check-in: if the player already checked in during the current
+    // open session (or today if no session), reject gracefully.
+    const openSession = await prisma.session.findFirst({
+      where: { venueId: venue.id, status: "open" },
+      select: { id: true, openedAt: true, sessionFee: true },
+    });
+
+    const sessionStart = openSession?.openedAt ?? (() => {
+      const d = new Date(); d.setHours(0, 0, 0, 0); return d;
+    })();
+
+    const alreadyCheckedIn = await prisma.checkInRecord.findFirst({
+      where: {
+        playerId,
+        venueId: venue.id,
+        checkedInAt: { gte: sessionStart },
+      },
+    });
+    if (alreadyCheckedIn) {
+      return NextResponse.json(
+        { error: "already_checked_in", alreadyCheckedIn: true, playerName: player.name },
+        { status: 409 }
+      );
+    }
+
+    // Also prevent if there is already a pending or confirmed payment for this session
+    const existingPayment = await prisma.pendingPayment.findFirst({
+      where: {
+        checkInPlayerId: playerId,
+        venueId: venue.id,
+        status: { in: ["pending", "confirmed"] },
+        createdAt: { gte: sessionStart },
+      },
+    });
+    if (existingPayment) {
+      return NextResponse.json(
+        { error: "already_checked_in", alreadyCheckedIn: true, playerName: player.name },
+        { status: 409 }
+      );
+    }
+
     // Check for active subscription (auto check-in, skip payment)
     const activeSub = await getActiveSubscription(playerId);
     if (activeSub && !packageId) {
@@ -69,11 +110,7 @@ export async function POST(req: Request) {
       });
     }
 
-    // Session-only payment: align with Self Check-In by using open session fee first.
-    const openSession = await prisma.session.findFirst({
-      where: { venueId: venue.id, status: "open" },
-      select: { sessionFee: true },
-    });
+    // Session-only payment: use openSession fetched above for the duplicate check.
     const settings = venue.settings as Record<string, unknown>;
     const sessionFee =
       openSession?.sessionFee ?? (settings?.sessionFee as number) ?? 0;

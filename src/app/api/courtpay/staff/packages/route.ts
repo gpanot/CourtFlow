@@ -38,7 +38,7 @@ export async function POST(req: Request) {
   try {
     const staff = requireStaff(req.headers);
     const body = await req.json();
-    const { venueId: bodyVenueId, name, sessions, durationDays, price, perks } = body;
+    const { venueId: bodyVenueId, name, sessions, durationDays, price, perks, discountPct, isBestChoice } = body;
     const venueId = bodyVenueId || staff.venueId;
 
     if (!venueId || !name || durationDays === undefined || price === undefined) {
@@ -56,6 +56,8 @@ export async function POST(req: Request) {
         durationDays,
         price,
         perks: perks?.trim() || null,
+        discountPct: discountPct ?? null,
+        isBestChoice: isBestChoice ?? false,
       },
     });
 

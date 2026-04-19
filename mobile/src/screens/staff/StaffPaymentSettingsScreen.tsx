@@ -219,15 +219,6 @@ export function StaffPaymentSettingsScreen() {
   const theme = useAppColors();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerStyle: { backgroundColor: theme.bg },
-      headerTintColor: theme.text,
-      headerTitleStyle: { color: theme.text },
-      headerShadowVisible: false,
-    });
-  }, [navigation, theme.bg, theme.text]);
-
   // ── Payment settings state ──
   const [settings, setSettings] = useState<VenuePaymentSettings>({
     sessionFee: 0,
@@ -237,6 +228,7 @@ export function StaffPaymentSettingsScreen() {
     autoApprovalPhone: "",
     autoApprovalCCCD: "",
   });
+  const [savedSettings, setSavedSettings] = useState<VenuePaymentSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -272,6 +264,7 @@ export function StaffPaymentSettingsScreen() {
         `/api/staff/venue-payment-settings?venueId=${venueId}`
       );
       setSettings(data);
+      setSavedSettings(data);
     } catch {
       /* use defaults */
     } finally {
@@ -287,7 +280,7 @@ export function StaffPaymentSettingsScreen() {
   const updateField = (field: keyof VenuePaymentSettings, value: string | number) =>
     setSettings((s) => ({ ...s, [field]: value }));
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (!venueId) return;
     setSaving(true);
     setPayError("");
@@ -303,13 +296,68 @@ export function StaffPaymentSettingsScreen() {
         autoApprovalCCCD: settings.autoApprovalCCCD,
       });
       setSaved(true);
+      setSavedSettings({ ...settings });
       setTimeout(() => setSaved(false), 2500);
     } catch (err) {
       setPayError(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
     }
-  };
+  }, [venueId, settings]);
+
+  // ── Dirty detection & header Save button ──────────────────────────────────
+  const isDirty = useMemo(() => {
+    if (!savedSettings) return false;
+    return (
+      settings.sessionFee !== savedSettings.sessionFee ||
+      settings.bankName !== savedSettings.bankName ||
+      settings.bankAccount !== savedSettings.bankAccount ||
+      settings.bankOwnerName !== savedSettings.bankOwnerName ||
+      (settings.autoApprovalPhone ?? "") !== (savedSettings.autoApprovalPhone ?? "") ||
+      (settings.autoApprovalCCCD ?? "") !== (savedSettings.autoApprovalCCCD ?? "")
+    );
+  }, [settings, savedSettings]);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerStyle: { backgroundColor: theme.bg },
+      headerTintColor: theme.text,
+      headerTitleStyle: { color: theme.text },
+      headerShadowVisible: false,
+      headerRight: () =>
+        loading ? null : (
+          <TouchableOpacity
+            onPress={() => void handleSave()}
+            disabled={!isDirty || saving}
+            activeOpacity={0.8}
+            style={{
+              paddingHorizontal: 14,
+              paddingVertical: 6,
+              borderRadius: 8,
+              backgroundColor: isDirty ? "#16a34a" : "transparent",
+              marginRight: 4,
+              minWidth: 64,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color={isDirty ? "#fff" : theme.dimmed} />
+            ) : (
+              <Text
+                style={{
+                  fontSize: 14,
+                  fontWeight: "700",
+                  color: isDirty ? "#fff" : theme.dimmed,
+                }}
+              >
+                {saved ? "Saved ✓" : "Save"}
+              </Text>
+            )}
+          </TouchableOpacity>
+        ),
+    });
+  }, [navigation, theme, isDirty, saving, saved, loading, handleSave]);
 
   const handleTogglePush = useCallback(async (next: boolean) => {
     setPushEnabled(next);
@@ -488,24 +536,6 @@ export function StaffPaymentSettingsScreen() {
                 )}
 
                 {payError ? <Text style={styles.errorText}>{payError}</Text> : null}
-
-                <TouchableOpacity
-                  style={[styles.saveBtn, saving && styles.disabledBtn]}
-                  onPress={handleSave}
-                  disabled={saving}
-                  activeOpacity={0.7}
-                >
-                  {saving ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : saved ? (
-                    <>
-                      <Ionicons name="checkmark" size={16} color="#fff" />
-                      <Text style={styles.saveBtnText}>Saved</Text>
-                    </>
-                  ) : (
-                    <Text style={styles.saveBtnText}>Save Settings</Text>
-                  )}
-                </TouchableOpacity>
               </>
             )}
           </View>

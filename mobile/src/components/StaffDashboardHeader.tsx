@@ -89,12 +89,16 @@ export function StaffDashboardHeader() {
           <Ionicons name="person" size={18} color={theme.blue400} />
         </TouchableOpacity>
 
-        <View style={styles.titleBlock}>
+        <TouchableOpacity
+          style={styles.titleBlock}
+          onPress={() => nav.navigate("StaffProfile")}
+          activeOpacity={0.7}
+        >
           <Text style={styles.title}>Staff Dashboard</Text>
           <Text style={styles.venue} numberOfLines={1}>
             {venueName}
           </Text>
-        </View>
+        </TouchableOpacity>
 
         <View style={styles.actions}>
           <TouchableOpacity style={styles.actionBtn} onPress={toggleTheme} activeOpacity={0.7}>
@@ -103,9 +107,6 @@ export function StaffDashboardHeader() {
               size={18}
               color={theme.amber400}
             />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7}>
-            <Ionicons name="search" size={18} color={theme.textSecondary} />
           </TouchableOpacity>
         </View>
       </View>

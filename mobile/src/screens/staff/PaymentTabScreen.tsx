@@ -15,6 +15,8 @@ import {
   Alert,
   RefreshControl,
   Image,
+  Modal,
+  Pressable,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -50,8 +52,13 @@ function getDisplayPlayer(p: PendingPayment): {
 }
 
 function getFacePreviewUri(p: PendingPayment): string | null {
-  const raw = p.player?.facePhotoPath?.trim();
-  return resolveMediaUrl(raw || null);
+  // Self check-in (linked Player with face photo)
+  const rawPlayer = p.player?.facePhotoPath?.trim();
+  if (rawPlayer) return resolveMediaUrl(rawPlayer);
+  // CourtPay flow (face photo resolved from Player via phone by the API)
+  const rawCourtPay = p.facePhotoUrl?.trim();
+  if (rawCourtPay) return resolveMediaUrl(rawCourtPay);
+  return null;
 }
 
 function getFlowTag(p: PendingPayment): "CourtPay" | "Self" {
@@ -201,6 +208,119 @@ function createStyles(t: AppColors) {
       fontSize: 14,
     },
     skillMuted: { fontSize: 12, color: t.subtle, marginTop: 2 },
+    dotsBtn: {
+      padding: 4,
+      borderRadius: 8,
+    },
+    menuOverlay: {
+      flex: 1,
+    },
+    menuCard: {
+      position: "absolute",
+      right: 24,
+      backgroundColor: t.card,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: t.border,
+      paddingVertical: 4,
+      minWidth: 140,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.25,
+      shadowRadius: 8,
+      elevation: 8,
+    },
+    menuItem: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+    },
+    menuItemText: { fontSize: 14, fontWeight: "600", color: t.red400 },
+    cancelModalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.55)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    cancelModalCard: {
+      backgroundColor: t.card,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: t.border,
+      padding: 24,
+      width: "85%",
+      maxWidth: 340,
+    },
+    cancelModalTitle: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: t.text,
+      textAlign: "center",
+      marginBottom: 20,
+    },
+    cancelModalBtn: {
+      paddingVertical: 12,
+      borderRadius: 10,
+      alignItems: "center",
+      marginBottom: 10,
+    },
+    cancelModalBtnRefund: {
+      backgroundColor: "rgba(245,158,11,0.15)",
+      borderWidth: 1,
+      borderColor: "rgba(245,158,11,0.4)",
+    },
+    cancelModalBtnMistake: {
+      backgroundColor: "rgba(239,68,68,0.12)",
+      borderWidth: 1,
+      borderColor: "rgba(239,68,68,0.35)",
+    },
+    cancelModalBtnFreePass: {
+      backgroundColor: "rgba(147,51,234,0.12)",
+      borderWidth: 1,
+      borderColor: "rgba(147,51,234,0.35)",
+    },
+    cancelModalBtnRefundText: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: t.amber400,
+    },
+    cancelModalBtnMistakeText: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: t.red400,
+    },
+    cancelModalBtnFreePassText: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: t.purple400,
+    },
+    cancelModalDismiss: {
+      paddingVertical: 10,
+      alignItems: "center",
+    },
+    cancelModalDismissText: { fontSize: 14, color: t.muted },
+    cancelledTag: {
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 6,
+      backgroundColor: "rgba(239,68,68,0.15)",
+    },
+    cancelledTagText: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: t.red400,
+    },
+    cancelledAmount: {
+      fontSize: 13,
+      fontWeight: "700",
+      color: t.red400,
+      marginTop: 2,
+    },
+    cardCancelled: {
+      opacity: 0.7,
+    },
   });
 }
 
@@ -222,6 +342,10 @@ export function PaymentTabScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [actionId, setActionId] = useState<string | null>(null);
   const [expandedPhotoId, setExpandedPhotoId] = useState<string | null>(null);
+  const [menuPaymentId, setMenuPaymentId] = useState<string | null>(null);
+  const [menuY, setMenuY] = useState(0);
+  const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   const fetchPending = useCallback(async () => {
     if (!venueId) return;
@@ -320,6 +444,26 @@ export function PaymentTabScreen() {
       );
     } finally {
       setActionId(null);
+    }
+  };
+
+  const handleCancelPaid = async (reason: "refunded" | "mistake" | "free_pass") => {
+    if (!cancelTargetId) return;
+    setCancelling(true);
+    try {
+      await api.post("/api/staff/cancel-paid-payment", {
+        pendingPaymentId: cancelTargetId,
+        reason,
+      });
+      setCancelTargetId(null);
+      await fetchAll();
+    } catch (err) {
+      Alert.alert(
+        "Error",
+        err instanceof Error ? err.message : "Failed to cancel payment"
+      );
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -457,9 +601,10 @@ export function PaymentTabScreen() {
     const isCash = item.paymentMethod === "cash";
     const isNew = item.type === "registration";
     const expanded = expandedPhotoId === `paid-${item.id}`;
+    const isCancelled = !!item.cancelReason;
 
     return (
-      <View style={styles.card}>
+      <View style={[styles.card, isCancelled && styles.cardCancelled]}>
         {faceUri ? (
           <TouchableOpacity
             style={expanded ? styles.faceBtnLg : styles.faceBtnSm}
@@ -477,27 +622,78 @@ export function PaymentTabScreen() {
             />
           </TouchableOpacity>
         ) : null}
-        <View style={styles.nameRow}>
-          <Text style={styles.cardName} numberOfLines={1}>
-            {player.name}
-          </Text>
-          <View style={[styles.badge, isCash ? styles.badgeCash : styles.badgeQr]}>
-            <Text style={isCash ? styles.badgeCashText : styles.badgeQrText}>
-              {isCash ? "CASH" : "QR"}
-            </Text>
+        <View style={styles.topRow}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={styles.nameRow}>
+              <Text style={styles.cardName} numberOfLines={1}>
+                {player.name}
+              </Text>
+              <View style={[styles.badge, isCash ? styles.badgeCash : styles.badgeQr]}>
+                <Text style={isCash ? styles.badgeCashText : styles.badgeQrText}>
+                  {isCash ? "CASH" : "QR"}
+                </Text>
+              </View>
+              <View style={[styles.badge, styles.badgeFlow]}>
+                <Text style={styles.badgeFlowText}>{getFlowTag(item)}</Text>
+              </View>
+              <View style={[styles.badge, styles.badgeApr]}>
+                <Text style={styles.badgeAprText}>
+                  {item.confirmedBy === "sepay" ? "SEPAY" : "MANUAL"}
+                </Text>
+              </View>
+              {isCancelled && (
+                <View style={styles.cancelledTag}>
+                  <Text style={styles.cancelledTagText}>
+                    CANCELLED
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
-          <View style={[styles.badge, styles.badgeFlow]}>
-            <Text style={styles.badgeFlowText}>{getFlowTag(item)}</Text>
-          </View>
-          <View style={[styles.badge, styles.badgeApr]}>
-            <Text style={styles.badgeAprText}>
-              {item.confirmedBy === "sepay" ? "SEPAY" : "MANUAL"}
-            </Text>
-          </View>
+          {!isCancelled && (
+            <TouchableOpacity
+              style={styles.dotsBtn}
+              onPress={(e) => {
+                const target = e.currentTarget as unknown as {
+                  measure?: (
+                    cb: (
+                      x: number,
+                      y: number,
+                      w: number,
+                      h: number,
+                      px: number,
+                      py: number
+                    ) => void
+                  ) => void;
+                };
+                if (target.measure) {
+                  target.measure((_x, _y, _w, h, _px, py) => {
+                    setMenuY(py + h);
+                    setMenuPaymentId(item.id);
+                  });
+                } else {
+                  setMenuY(200);
+                  setMenuPaymentId(item.id);
+                }
+              }}
+              activeOpacity={0.6}
+            >
+              <Ionicons
+                name="ellipsis-vertical"
+                size={18}
+                color={theme.muted}
+              />
+            </TouchableOpacity>
+          )}
         </View>
         <Text style={styles.metaLine}>
           {isNew ? "Registration" : "Check-in"} · {formatVND(item.amount)}
         </Text>
+        {isCancelled && (
+          <Text style={styles.cancelledAmount}>
+            -{formatVND(item.amount)} ({item.cancelReason})
+          </Text>
+        )}
         <Text style={styles.waitLine}>
           {formatDateTime(item.confirmedAt)}
         </Text>
@@ -583,7 +779,7 @@ export function PaymentTabScreen() {
           data={paid}
           keyExtractor={(p) => p.id}
           renderItem={renderPaidItem}
-          extraData={expandedPhotoId}
+          extraData={[expandedPhotoId, menuPaymentId]}
           contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl
@@ -600,6 +796,95 @@ export function PaymentTabScreen() {
           }
         />
       )}
+
+      {/* ── 3-dots dropdown menu ──────────────────────────────────────── */}
+      <Modal
+        visible={menuPaymentId !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMenuPaymentId(null)}
+      >
+        <Pressable
+          style={styles.menuOverlay}
+          onPress={() => setMenuPaymentId(null)}
+        >
+          <View style={[styles.menuCard, { top: menuY }]}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                const id = menuPaymentId;
+                setMenuPaymentId(null);
+                if (id) setCancelTargetId(id);
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="close-circle-outline" size={18} color={theme.red400} />
+              <Text style={styles.menuItemText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ── Cancel reason modal ───────────────────────────────────────── */}
+      <Modal
+        visible={cancelTargetId !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !cancelling && setCancelTargetId(null)}
+      >
+        <View style={styles.cancelModalOverlay}>
+          <View style={styles.cancelModalCard}>
+            <Text style={styles.cancelModalTitle}>Cancel payment?</Text>
+
+            <TouchableOpacity
+              style={[styles.cancelModalBtn, styles.cancelModalBtnRefund]}
+              onPress={() => void handleCancelPaid("refunded")}
+              disabled={cancelling}
+              activeOpacity={0.7}
+            >
+              {cancelling ? (
+                <ActivityIndicator color={theme.amber400} size="small" />
+              ) : (
+                <Text style={styles.cancelModalBtnRefundText}>Refunded</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.cancelModalBtn, styles.cancelModalBtnMistake]}
+              onPress={() => void handleCancelPaid("mistake")}
+              disabled={cancelling}
+              activeOpacity={0.7}
+            >
+              {cancelling ? (
+                <ActivityIndicator color={theme.red400} size="small" />
+              ) : (
+                <Text style={styles.cancelModalBtnMistakeText}>Mistake</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.cancelModalBtn, styles.cancelModalBtnFreePass]}
+              onPress={() => void handleCancelPaid("free_pass")}
+              disabled={cancelling}
+              activeOpacity={0.7}
+            >
+              {cancelling ? (
+                <ActivityIndicator color={theme.purple400} size="small" />
+              ) : (
+                <Text style={styles.cancelModalBtnFreePassText}>Free Pass</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelModalDismiss}
+              onPress={() => setCancelTargetId(null)}
+              disabled={cancelling}
+            >
+              <Text style={styles.cancelModalDismissText}>Go back</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

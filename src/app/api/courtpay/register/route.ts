@@ -28,6 +28,38 @@ export async function POST(req: Request) {
       where: { phone_venueId: { phone: phone.trim(), venueId: venue.id } },
     });
     if (existingCheckIn) {
+      // Check if already checked in this session
+      const openSession = await prisma.session.findFirst({
+        where: { venueId: venue.id, status: "open" },
+        select: { openedAt: true },
+      });
+      const sessionStart = openSession?.openedAt ?? (() => {
+        const d = new Date(); d.setHours(0, 0, 0, 0); return d;
+      })();
+      const alreadyCheckedIn = await prisma.checkInRecord.findFirst({
+        where: { playerId: existingCheckIn.id, venueId: venue.id, checkedInAt: { gte: sessionStart } },
+      });
+      if (alreadyCheckedIn) {
+        return NextResponse.json(
+          { error: "already_checked_in", alreadyCheckedIn: true, playerName: existingCheckIn.name },
+          { status: 409 }
+        );
+      }
+      // Also block if they have a pending or confirmed payment this session
+      const existingPayment = await prisma.pendingPayment.findFirst({
+        where: {
+          checkInPlayerId: existingCheckIn.id,
+          venueId: venue.id,
+          status: { in: ["pending", "confirmed"] },
+          createdAt: { gte: sessionStart },
+        },
+      });
+      if (existingPayment) {
+        return NextResponse.json(
+          { error: "already_checked_in", alreadyCheckedIn: true, playerName: existingCheckIn.name },
+          { status: 409 }
+        );
+      }
       return NextResponse.json(
         { error: "Player already registered", playerId: existingCheckIn.id },
         { status: 409 }

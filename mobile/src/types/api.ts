@@ -68,6 +68,7 @@ export interface PendingPaymentCheckInPlayer {
   id: string;
   name: string;
   skillLevel: string | null;
+  phone?: string;
 }
 
 export interface CourtsState {
@@ -100,6 +101,8 @@ export interface PendingPayment {
   expiresAt: string | null;
   confirmedAt: string | null;
   confirmedBy: string | null;
+  cancelReason: string | null;
+  cancelledAt: string | null;
   /** Linked Player — has face photo; prefer for display when present (matches staff PWA). */
   player?: PendingPaymentPlayer | null;
   checkInPlayer?: PendingPaymentCheckInPlayer | null;
@@ -138,15 +141,22 @@ export interface VenuePaymentSettings {
   bankOwnerName: string;
   autoApprovalPhone?: string;
   autoApprovalCCCD?: string;
+  /** When false the CourtPay subscription offer screen is skipped entirely */
+  showSubscriptionsInFlow?: boolean;
 }
 
 export interface SubscriptionPackage {
   id: string;
   venueId: string;
   name: string;
-  sessions: number;
+  sessions: number | null;
+  durationDays?: number;
   price: number;
   active: boolean;
+  /** Discount percentage shown on the package card (0–99, integer) */
+  discountPct?: number | null;
+  /** Whether this package is highlighted as "Best Choice" */
+  isBestChoice?: boolean;
 }
 
 export interface FeatureFlags {

@@ -114,6 +114,10 @@ interface PlayersData {
     venueAvgReturn: number | null;
     maleCount: number;
     femaleCount: number;
+    /** avg check-in count per player – may come from API or computed client-side */
+    venueAvgCheckIns?: number | null;
+    /** % of players who returned in the last 15 days – may come from API */
+    returnRate15d?: number | null;
   };
 }
 
@@ -190,15 +194,15 @@ function createStyles(t: AppColors) {
     body: { padding: 16, paddingBottom: 40 },
     grid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 16 },
     statCard: {
-      width: "48%",
+      width: "47.5%",
       borderRadius: 12,
       borderWidth: 1,
       borderColor: t.border,
       backgroundColor: t.card,
-      padding: 14,
+      padding: 12,
     },
-    statLabel: { fontSize: 11, color: t.muted, marginBottom: 4 },
-    statValue: { fontSize: 22, fontWeight: "700", color: t.text },
+    statLabel: { fontSize: 11, color: t.muted, marginBottom: 2 },
+    statValue: { fontSize: 20, fontWeight: "700", color: t.text },
     statPurple: { color: t.purple400 },
     statYellow: { color: t.amber400 },
     sectionTitle: { fontSize: 13, fontWeight: "600", color: t.textSecondary, marginBottom: 4 },
@@ -704,7 +708,7 @@ export function StaffBossDashboardScreen() {
                           <Text style={[styles.revenueSummaryAmount, highlight && styles.statPurple]}>
                             {formatVND(bucket.total)} VND
                           </Text>
-                          <Text style={styles.revenueSummaryCount}>{bucket.count} pmts</Text>
+                          <Text style={styles.revenueSummaryCount}>{bucket.count} payments</Text>
                         </View>
                       </View>
                     ))}
@@ -776,7 +780,7 @@ export function StaffBossDashboardScreen() {
           )}
           {tab === "players" && (
             <>
-              {/* KPI stats */}
+              {/* KPI stats — 2×3 grid (2 columns, 3 rows) */}
               {playersData && (
                 <View style={styles.grid}>
                   <View style={styles.statCard}>
@@ -799,6 +803,35 @@ export function StaffBossDashboardScreen() {
                       {playersData.stats.venueAvgReturn != null
                         ? playersData.stats.venueAvgReturn
                         : "—"}
+                    </Text>
+                  </View>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statLabel}>Avg visits / player</Text>
+                    <Text style={[styles.statValue, styles.statYellow]}>
+                      {(() => {
+                        const apiAvg = playersData.stats.venueAvgCheckIns;
+                        if (apiAvg != null) return apiAvg.toFixed(1);
+                        if (playersData.players.length === 0) return "—";
+                        const total = playersData.players.reduce(
+                          (sum, p) => sum + p.checkInCount, 0
+                        );
+                        return (total / playersData.players.length).toFixed(1);
+                      })()}
+                    </Text>
+                  </View>
+                  <View style={styles.statCard}>
+                    <Text style={styles.statLabel}>Returned (15d) %</Text>
+                    <Text style={[styles.statValue, styles.statPurple]}>
+                      {(() => {
+                        const apiRate = playersData.stats.returnRate15d;
+                        if (apiRate != null) return `${apiRate.toFixed(0)}%`;
+                        if (playersData.players.length === 0) return "—";
+                        const cutoff = Date.now() - 15 * 24 * 60 * 60 * 1000;
+                        const returned = playersData.players.filter(
+                          (p) => p.lastSeenAt && new Date(p.lastSeenAt).getTime() >= cutoff
+                        ).length;
+                        return `${Math.round((returned / playersData.players.length) * 100)}%`;
+                      })()}
                     </Text>
                   </View>
                 </View>

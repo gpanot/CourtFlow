@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -6,11 +6,16 @@ import {
   FlatList,
   StyleSheet,
   ActivityIndicator,
+  Animated,
+  Easing,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { Venue } from "../types/api";
 import { C } from "../theme/colors";
+
+/** Optional per-venue session status to show indicator dots */
+export type VenueSessionStatus = "open" | "closed" | "unknown";
 
 interface Props {
   venues: Venue[];
@@ -18,6 +23,76 @@ interface Props {
   onSelect: (venue: Venue) => void;
   title?: string;
   onBack?: () => void;
+  /** Map of venueId → session status for showing coloured dots */
+  sessionStatuses?: Record<string, VenueSessionStatus>;
+}
+
+// ── Blinking dot for open sessions ───────────────────────────────────────────
+function BlinkingGreenDot() {
+  const opacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, {
+          toValue: 0.15,
+          duration: 700,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 700,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [opacity]);
+
+  return (
+    <Animated.View style={[styles.statusDot, styles.statusDotGreen, { opacity }]} />
+  );
+}
+
+// ── Static red dot for closed/no session ─────────────────────────────────────
+function RedDot() {
+  return <View style={[styles.statusDot, styles.statusDotRed]} />;
+}
+
+// ── Venue row with optional session dot ──────────────────────────────────────
+function VenueRow({
+  item,
+  onSelect,
+  sessionStatus,
+}: {
+  item: Venue;
+  onSelect: (v: Venue) => void;
+  sessionStatus?: VenueSessionStatus;
+}) {
+  return (
+    <TouchableOpacity
+      style={styles.card}
+      onPress={() => onSelect(item)}
+      activeOpacity={0.7}
+    >
+      <View style={styles.iconWrap}>
+        <Ionicons name="location-outline" size={22} color={C.blue500} />
+      </View>
+      <View style={styles.cardText}>
+        <Text style={styles.venueName}>{item.name}</Text>
+        {item.code ? <Text style={styles.venueCode}>{item.code}</Text> : null}
+      </View>
+      {sessionStatus != null && (
+        <View style={styles.dotWrap}>
+          {sessionStatus === "open" ? <BlinkingGreenDot /> : <RedDot />}
+        </View>
+      )}
+      <Ionicons name="chevron-forward" size={18} color={C.subtle} />
+    </TouchableOpacity>
+  );
 }
 
 export function VenueSelectList({
@@ -26,6 +101,7 @@ export function VenueSelectList({
   onSelect,
   title = "Select Venue",
   onBack,
+  sessionStatuses,
 }: Props) {
   const insets = useSafeAreaInsets();
 
@@ -59,22 +135,11 @@ export function VenueSelectList({
         keyExtractor={(v) => v.id}
         contentContainerStyle={styles.list}
         renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.card}
-            onPress={() => onSelect(item)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.iconWrap}>
-              <Ionicons name="location-outline" size={22} color={C.blue500} />
-            </View>
-            <View style={styles.cardText}>
-              <Text style={styles.venueName}>{item.name}</Text>
-              {item.code ? (
-                <Text style={styles.venueCode}>{item.code}</Text>
-              ) : null}
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={C.subtle} />
-          </TouchableOpacity>
+          <VenueRow
+            item={item}
+            onSelect={onSelect}
+            sessionStatus={sessionStatuses?.[item.id]}
+          />
         )}
         ListEmptyComponent={
           <Text style={styles.empty}>No venues assigned to your account.</Text>
@@ -85,6 +150,22 @@ export function VenueSelectList({
 }
 
 const styles = StyleSheet.create({
+  statusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 8,
+  },
+  statusDotGreen: {
+    backgroundColor: "#22c55e",
+  },
+  statusDotRed: {
+    backgroundColor: "#ef4444",
+  },
+  dotWrap: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
   container: {
     flex: 1,
     backgroundColor: C.bg,
