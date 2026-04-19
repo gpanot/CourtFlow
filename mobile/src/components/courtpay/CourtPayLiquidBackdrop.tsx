@@ -1,19 +1,25 @@
 import { View, StyleSheet, Platform, type ViewStyle } from "react-native";
-import type { ThemeMode } from "../../stores/theme-store";
+import { ACCENT_MAP, type ThemeMode, type CourtPayAccent } from "../../stores/theme-store";
 
 type Props = {
   mode?: ThemeMode;
+  accent?: CourtPayAccent;
 };
 
 /**
  * Ambient depth behind CourtPay glass surfaces — soft color wells, no blur (performance).
- * In light mode the base shifts to a pale lavender-white and orb opacities are reduced.
+ * The accent orb color matches the selected CourtPay accent; in light mode opacities are reduced.
  */
-export function CourtPayLiquidBackdrop({ mode = "dark" }: Props) {
+export function CourtPayLiquidBackdrop({ mode = "dark", accent = "green" }: Props) {
   const isLight = mode === "light";
+  const orbColor = ACCENT_MAP[accent].orbColor;
+  const baseColor = isLight ? ACCENT_MAP[accent].backdropBaseLight : ACCENT_MAP[accent].backdropBase;
+  const orbOpacity = isLight ? 0.55 : 0.85;
+  const orbOpacityDim = isLight ? 0.5 : 0.9;
+
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
-      <View style={[styles.base, isLight && styles.baseLight]} />
+      <View style={[styles.base, { backgroundColor: baseColor }]} />
       <View
         style={[
           styles.orb,
@@ -21,15 +27,16 @@ export function CourtPayLiquidBackdrop({ mode = "dark" }: Props) {
           isLight && styles.orbVioletLight,
         ]}
       />
+      {/* Dynamic accent orb */}
       <View
         style={[
           styles.orb,
-          styles.orbFuchsia,
-          isLight && styles.orbFuchsiaLight,
+          styles.orbAccent,
+          { backgroundColor: orbColor, opacity: orbOpacity },
         ]}
       />
       <View
-        style={[styles.orb, styles.orbBlue, isLight && styles.orbBlueLight]}
+        style={[styles.orb, styles.orbBlue, { opacity: orbOpacityDim }]}
       />
       <View
         style={[styles.vignette, isLight && styles.vignetteLight]}
@@ -48,9 +55,6 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "#030108",
   },
-  baseLight: {
-    backgroundColor: "#f0e8ff",
-  },
   orb: {
     ...orbBase,
   },
@@ -66,17 +70,11 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(124, 58, 237, 0.14)",
     opacity: 0.6,
   },
-  orbFuchsia: {
+  orbAccent: {
     width: 380,
     height: 380,
     bottom: -120,
     right: -80,
-    backgroundColor: "rgba(192, 38, 211, 0.2)",
-    opacity: 0.85,
-  },
-  orbFuchsiaLight: {
-    backgroundColor: "rgba(192, 38, 211, 0.12)",
-    opacity: 0.55,
   },
   orbBlue: {
     width: 320,
@@ -85,10 +83,6 @@ const styles = StyleSheet.create({
     left: "18%",
     backgroundColor: "rgba(59, 130, 246, 0.08)",
     opacity: 0.9,
-  },
-  orbBlueLight: {
-    backgroundColor: "rgba(59, 130, 246, 0.06)",
-    opacity: 0.5,
   },
   vignette: {
     ...StyleSheet.absoluteFillObject,

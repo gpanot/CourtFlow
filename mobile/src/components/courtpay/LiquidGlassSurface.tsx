@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { BlurView } from "expo-blur";
 
-export type LiquidGlassAccent = "none" | "fuchsia" | "amber";
+export type LiquidGlassAccent = "none" | "fuchsia" | "green" | "amber";
 
 type Props = {
   children: ReactNode;
@@ -16,6 +16,8 @@ type Props = {
   /** iOS: typical 28–55; Android blur is heavier, default bumped. */
   intensity?: number;
   accent?: LiquidGlassAccent;
+  /** Dynamic tint color — overrides named `accent` when provided. */
+  tintColor?: string;
 };
 
 export function LiquidGlassSurface({
@@ -23,7 +25,16 @@ export function LiquidGlassSurface({
   style,
   intensity = Platform.OS === "ios" ? 48 : 80,
   accent = "none",
+  tintColor,
 }: Props) {
+  const resolvedTint: string | null =
+    tintColor ?? (
+      accent === "fuchsia" ? "rgba(192, 38, 211, 0.11)" :
+      accent === "green"   ? "rgba(34, 197, 94, 0.10)" :
+      accent === "amber"   ? "rgba(245, 158, 11, 0.09)" :
+      null
+    );
+
   return (
     <View style={[styles.shell, style]}>
       <BlurView
@@ -31,11 +42,8 @@ export function LiquidGlassSurface({
         intensity={intensity}
         style={StyleSheet.absoluteFill}
       />
-      {accent === "fuchsia" ? (
-        <View style={styles.accentFuchsia} pointerEvents="none" />
-      ) : null}
-      {accent === "amber" ? (
-        <View style={styles.accentAmber} pointerEvents="none" />
+      {resolvedTint ? (
+        <View style={[styles.accentOverlay, { backgroundColor: resolvedTint }]} pointerEvents="none" />
       ) : null}
       <View style={styles.specular} pointerEvents="none" />
       <View style={styles.content}>{children}</View>
@@ -69,14 +77,8 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.28)",
     zIndex: 1,
   },
-  accentFuchsia: {
+  accentOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(192, 38, 211, 0.11)",
-    zIndex: 0,
-  },
-  accentAmber: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(245, 158, 11, 0.09)",
     zIndex: 0,
   },
 });

@@ -3,6 +3,7 @@ import { emitToVenue } from "@/lib/socket-server";
 import { sendPaymentPushToStaff } from "@/lib/staff-push";
 import { extractPaymentRef, isSubscriptionRef } from "./payment-reference";
 import { checkInSubscriber } from "./check-in";
+import { getActiveSubscription } from "./subscription";
 import type { SepayWebhookPayload } from "../types";
 
 /**
@@ -104,6 +105,7 @@ export async function processSepayWebhook(
     return { matched: true, paymentId: pending.id };
   }
 
+  let updatedSub: Awaited<ReturnType<typeof getActiveSubscription>> = null;
   if (isSubscriptionRef(ref)) {
     // The subscription was pre-created on the kiosk (via activateSubscription).
     // Now deduct 1 session for the current visit.
@@ -129,6 +131,8 @@ export async function processSepayWebhook(
         },
       });
     }
+    // Fetch updated subscription info to send to the kiosk
+    updatedSub = await getActiveSubscription(pending.checkInPlayerId);
   } else {
     // Session payment
     await prisma.checkInRecord.create({
@@ -142,9 +146,11 @@ export async function processSepayWebhook(
   }
 
   emitToVenue(pending.venueId, "payment:confirmed", {
-    paymentId: pending.id,
+    pendingPaymentId: pending.id,
     paymentRef: ref,
     playerId: pending.checkInPlayerId,
+    playerName: pending.checkInPlayer?.name ?? "Unknown",
+    subscription: updatedSub,
   });
 
   sendPaymentPushToStaff("payment_confirmed", {

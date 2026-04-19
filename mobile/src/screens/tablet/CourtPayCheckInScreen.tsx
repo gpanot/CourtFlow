@@ -28,6 +28,7 @@ import { CourtPayStatusCard } from "../../components/courtpay/CourtPayStatusCard
 import { api } from "../../lib/api-client";
 import { ENV } from "../../config/env";
 import { useAuthStore } from "../../stores/auth-store";
+import { useThemeStore, ACCENT_MAP } from "../../stores/theme-store";
 import { useSocket } from "../../hooks/useSocket";
 import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
 import {
@@ -54,19 +55,7 @@ function resolveVenueMediaUrl(url: string | null | undefined): string | null {
   return `${base}${trimmed.startsWith("/") ? trimmed : `/${trimmed}`}`;
 }
 
-// CourtPay fuchsia theme — mirrors PWA fuchsia/pink palette
-const FUCHSIA = {
-  primary: "#c026d3",
-  primaryLight: "#d946ef",
-  primaryDark: "#a21caf",
-  bg: "rgba(112,26,117,0.22)",
-  border: "rgba(192,38,211,0.45)",
-  text: "#e879f9",
-  scannerBorder: "rgba(192,38,211,0.45)",
-  pulseDot: "#c026d3",
-  amountText: "#e879f9",
-  successCircle: "rgba(192,38,211,0.15)",
-};
+// CP is resolved dynamically from useThemeStore inside the component.
 
 type Step =
   | "home"
@@ -128,6 +117,7 @@ const CONFIRMED_AUTO_HOME_SEC = 5;
 // Steps where idle timer must NOT fire (active user interaction or timed auto-reset)
 const NO_IDLE_TIMEOUT_STEPS: Step[] = [
   "home",
+  "scan_returning",
   "confirmed",
   "reg_face_capture",
   "reg_face_preview",
@@ -142,6 +132,27 @@ export function CourtPayCheckInScreen({
 }: TabletStackScreenProps<"CourtPayCheckIn">) {
   const venueId = useAuthStore((s) => s.venueId);
   const venues = useAuthStore((s) => s.venues);
+  const themeMode = useThemeStore((s) => s.mode);
+  const toggleTheme = useThemeStore((s) => s.toggleMode);
+  const accentKey = useThemeStore((s) => s.accent);
+  const CP = useMemo(() => ACCENT_MAP[accentKey], [accentKey]);
+  const dyn = useMemo(() => ({
+    primaryBtn:         { backgroundColor: CP.primary },
+    secondaryActionBtn: { borderColor: CP.primaryLight },
+    secondaryActionText:{ color: CP.primaryLight },
+    selectBtnActive:    { borderColor: CP.primary, backgroundColor: CP.bg },
+    scanAgainBig:       { backgroundColor: CP.primary },
+    phoneAltBtn:        { backgroundColor: CP.primaryDark },
+    confirmAccentBtn:   { backgroundColor: CP.primary },
+    regGotPhotoTitle:   { color: CP.text },
+    regCircleOuter:     { borderColor: CP.scannerBorder },
+    regShutterBtn:      { backgroundColor: CP.primary },
+    regLooksGoodBtn:    { backgroundColor: CP.primary },
+    pkgBestChoiceTag:   { backgroundColor: CP.primary },
+    amount:             { color: CP.amountText },
+    payPulseDot:        { backgroundColor: CP.pulseDot },
+    successCircle:      { backgroundColor: CP.successCircle },
+  }), [CP]);
   const insets = useSafeAreaInsets();
   const { locale, toggleLocale, t } = useTabletKioskLocale();
   const [venueApiName, setVenueApiName] = useState("");
@@ -379,13 +390,24 @@ export function CourtPayCheckInScreen({
   // ── WebSocket ─────────────────────────────────────────────────────────────
   useSocket(venueId, {
     "payment:confirmed": (data: unknown) => {
-      const d = data as { pendingPaymentId?: string; playerName?: string };
+      const d = data as {
+        pendingPaymentId?: string;
+        playerName?: string;
+        subscription?: ActiveSubInfo | null;
+      };
       if (pendingPayment && d.pendingPaymentId === pendingPayment.id) {
         setCashPending(false);
+        const sub = d.subscription;
+        let subHint = "";
+        if (sub && sub.isUnlimited) {
+          subHint = `\nUnlimited pass · ${sub.daysRemaining} days left`;
+        } else if (sub && sub.sessionsRemaining !== null) {
+          subHint = `\n${sub.sessionsRemaining} session${sub.sessionsRemaining !== 1 ? "s" : ""} remaining · ${sub.daysRemaining} days left`;
+        }
         setConfirmMessage(
-          d.playerName
+          (d.playerName
             ? `Welcome ${d.playerName}! Payment confirmed.`
-            : "Payment confirmed."
+            : "Payment confirmed.") + subHint
         );
         setStep("confirmed");
       }
@@ -791,12 +813,12 @@ export function CourtPayCheckInScreen({
                 }}
               >
                 <LiquidGlassSurface
-                  accent="fuchsia"
+                  tintColor={CP.glassOverlay}
                   style={styles.homeGlassCard}
                   intensity={Platform.OS === "ios" ? 50 : 88}
                 >
                   <View style={styles.homeGlassRow}>
-                    <ScanFace size={40} color={FUCHSIA.text} strokeWidth={2} />
+                    <ScanFace size={40} color={CP.text} strokeWidth={2} />
                     <View style={styles.homeCardTextCol}>
                       <Text style={styles.homeCardTitle}>{t("homeCheckIn")}</Text>
                       <Text style={styles.homeCardSub}>{t("homeCheckInSub")}</Text>
@@ -839,6 +861,7 @@ export function CourtPayCheckInScreen({
             venueId={venueId}
             active
             accent="courtpay"
+            courtpayAccent={accentKey}
             copy={returningScannerCopy}
             onSubmitFrame={submitReturningFrame}
             onExhaustedRetries={() => setStep("no_face")}
@@ -860,17 +883,17 @@ export function CourtPayCheckInScreen({
               <Text style={styles.formTitle}>{t("noFaceDetected")}</Text>
               <Text style={styles.heroSubtitle}>{t("lookAtCamera")}</Text>
               <TouchableOpacity
-                style={styles.primaryBtn}
+                style={[styles.primaryBtn, dyn.primaryBtn]}
                 onPress={() => setStep("scan_returning")}
               >
                 <Text style={styles.primaryBtnText}>{t("tryAgainGeneric")}</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.secondaryActionBtn}
+                style={[styles.secondaryActionBtn, dyn.secondaryActionBtn]}
                 onPress={() => setStep("phone_enter")}
               >
-                <Ionicons name="call-outline" size={18} color={FUCHSIA.primaryLight} />
-                <Text style={styles.secondaryActionText}>{t("usePhoneInstead")}</Text>
+                <Ionicons name="call-outline" size={18} color={CP.primaryLight} />
+                <Text style={[styles.secondaryActionText, dyn.secondaryActionText]}>{t("usePhoneInstead")}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.cancelBtn} onPress={resetToHome}>
                 <Text style={styles.cancelText}>{t("backToHome")}</Text>
@@ -896,14 +919,14 @@ export function CourtPayCheckInScreen({
                 <Text style={styles.formTitle}>{t("faceNotRecognized")}</Text>
                 <Text style={styles.heroSubtitle}>{t("faceNotRecognizedHint")}</Text>
                 <TouchableOpacity
-                  style={styles.scanAgainBig}
+                  style={[styles.scanAgainBig, dyn.scanAgainBig]}
                   onPress={() => setStep("scan_returning")}
                   activeOpacity={0.92}
                 >
                   <Text style={styles.scanAgainBigText}>{t("scanAgain")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={styles.phoneAltBtn}
+                  style={[styles.phoneAltBtn, dyn.phoneAltBtn]}
                   onPress={() => setStep("phone_enter")}
                   activeOpacity={0.9}
                 >
@@ -919,7 +942,7 @@ export function CourtPayCheckInScreen({
       case "phone_enter":
         return (
           <View style={styles.formContent}>
-            <LiquidGlassSurface style={styles.phoneGlass} accent="fuchsia">
+            <LiquidGlassSurface style={styles.phoneGlass} tintColor={CP.glassOverlay}>
               <View style={styles.phoneCardInner}>
                 <View style={styles.phoneCardHeader}>
                   <TouchableOpacity
@@ -946,7 +969,7 @@ export function CourtPayCheckInScreen({
                 />
                 {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
                 <TouchableOpacity
-                  style={[styles.primaryBtn, phoneLoading && styles.disabledBtn]}
+                  style={[styles.primaryBtn, dyn.primaryBtn, phoneLoading && styles.disabledBtn]}
                   onPress={handlePhoneLookup}
                   disabled={phoneLoading || !phoneInput.trim()}
                 >
@@ -965,7 +988,7 @@ export function CourtPayCheckInScreen({
       case "phone_preview":
         return (
           <View style={styles.formContent}>
-            <LiquidGlassSurface style={styles.phoneGlass} accent="fuchsia">
+            <LiquidGlassSurface style={styles.phoneGlass} tintColor={CP.glassOverlay}>
               <View style={styles.phoneCardInner}>
                 <View style={styles.phoneCardHeader}>
                   <TouchableOpacity
@@ -999,7 +1022,7 @@ export function CourtPayCheckInScreen({
                   ) : null}
                 </View>
                 <TouchableOpacity
-                  style={[styles.confirmFuchsiaBtn, loading && styles.disabledBtn]}
+                  style={[styles.confirmFuchsiaBtn, dyn.confirmAccentBtn, loading && styles.disabledBtn]}
                   onPress={handlePhoneConfirm}
                   disabled={loading}
                 >
@@ -1021,18 +1044,18 @@ export function CourtPayCheckInScreen({
         if (!permission) {
           return (
             <View style={styles.centerContent}>
-              <ActivityIndicator color={FUCHSIA.primary} size="large" />
+              <ActivityIndicator color={CP.primary} size="large" />
             </View>
           );
         }
         if (!permission.granted) {
           return (
-            <LiquidGlassSurface style={styles.flowGlassPanel} accent="fuchsia">
+            <LiquidGlassSurface style={styles.flowGlassPanel} tintColor={CP.glassOverlay}>
               <View style={[styles.flowGlassPanelInner, { paddingHorizontal: 8 }]}>
                 <Text style={styles.formTitle}>{t("cameraPermissionTitle")}</Text>
                 <Text style={styles.heroSubtitle}>{t("cameraPermissionHint")}</Text>
                 <TouchableOpacity
-                  style={styles.primaryBtn}
+                  style={[styles.primaryBtn, dyn.primaryBtn]}
                   onPress={() => void requestPermission()}
                 >
                   <Text style={styles.primaryBtnText}>{t("allowCameraCta")}</Text>
@@ -1058,7 +1081,7 @@ export function CourtPayCheckInScreen({
             <View style={[styles.centerContent, styles.regCaptureContent]}>
               <Text style={styles.regCaptureTitle}>{t("regTitle")}</Text>
               <Text style={styles.regCaptureHint}>{t("regFaceHint")}</Text>
-              <View style={styles.regCircleOuter}>
+              <View style={[styles.regCircleOuter, dyn.regCircleOuter]}>
                 <View style={styles.regCircleClip}>
                   <CameraView
                     ref={regCameraRef}
@@ -1072,7 +1095,7 @@ export function CourtPayCheckInScreen({
                 </View>
               </View>
               <TouchableOpacity
-                style={[styles.regShutterBtn, regCaptureBusy && styles.disabledBtn]}
+                style={[styles.regShutterBtn, dyn.regShutterBtn, regCaptureBusy && styles.disabledBtn]}
                 onPress={() => void captureRegistrationPhoto()}
                 disabled={regCaptureBusy}
                 activeOpacity={0.85}
@@ -1091,9 +1114,9 @@ export function CourtPayCheckInScreen({
       case "reg_face_preview":
         return (
           <View style={[styles.centerContent, { paddingHorizontal: 20 }]}>
-            <Text style={styles.regGotPhotoTitle}>{t("regGotPhoto")}</Text>
+            <Text style={[styles.regGotPhotoTitle, dyn.regGotPhotoTitle]}>{t("regGotPhoto")}</Text>
             {faceBase64 ? (
-              <View style={styles.regCircleOuter}>
+              <View style={[styles.regCircleOuter, dyn.regCircleOuter]}>
                 <Image
                   source={{ uri: `data:image/jpeg;base64,${faceBase64}` }}
                   style={styles.regPreviewImage}
@@ -1103,7 +1126,7 @@ export function CourtPayCheckInScreen({
             ) : null}
             <View style={styles.regPreviewActions}>
               <TouchableOpacity
-                style={[styles.regLooksGoodBtn, regCheckingFace && styles.disabledBtn]}
+                style={[styles.regLooksGoodBtn, dyn.regLooksGoodBtn, regCheckingFace && styles.disabledBtn]}
                 onPress={() => void handleCaptureRegistrationFace()}
                 disabled={regCheckingFace}
                 activeOpacity={0.85}
@@ -1184,13 +1207,13 @@ export function CourtPayCheckInScreen({
               <Text style={styles.regFormLabel}>{t("regGender")}</Text>
               <View style={styles.inlineRow}>
                 <TouchableOpacity
-                  style={[styles.selectBtn, gender === "male" && styles.selectBtnActive]}
+                  style={[styles.selectBtn, gender === "male" && styles.selectBtnActive, dyn.selectBtnActive]}
                   onPress={() => { Keyboard.dismiss(); setGender("male"); restartIdleTimer(); }}
                 >
                   <Text style={styles.selectBtnText}>{t("regMale")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.selectBtn, gender === "female" && styles.selectBtnActive]}
+                  style={[styles.selectBtn, gender === "female" && styles.selectBtnActive, dyn.selectBtnActive]}
                   onPress={() => { Keyboard.dismiss(); setGender("female"); restartIdleTimer(); }}
                 >
                   <Text style={styles.selectBtnText}>{t("regFemale")}</Text>
@@ -1207,7 +1230,7 @@ export function CourtPayCheckInScreen({
                 ).map(([lvl, labelKey]) => (
                   <TouchableOpacity
                     key={lvl}
-                    style={[styles.selectBtn, skillLevel === lvl && styles.selectBtnActive]}
+                    style={[styles.selectBtn, skillLevel === lvl && styles.selectBtnActive, dyn.selectBtnActive]}
                     onPress={() => { Keyboard.dismiss(); setSkillLevel(lvl); restartIdleTimer(); }}
                   >
                     <Text style={styles.selectBtnText}>
@@ -1217,7 +1240,7 @@ export function CourtPayCheckInScreen({
                 ))}
               </View>
               <TouchableOpacity
-                style={[styles.primaryBtn, loading && styles.disabledBtn]}
+                style={[styles.primaryBtn, dyn.primaryBtn, loading && styles.disabledBtn]}
                 onPress={() => {
                   setIsNewPlayer(true);
                   const active = packages.filter((p) => p.active);
@@ -1290,7 +1313,7 @@ export function CourtPayCheckInScreen({
                           styles.pkgGlass,
                           isSelected && styles.pkgGlassSelected,
                         ]}
-                        accent={isSelected ? "fuchsia" : "none"}
+                        accent={isSelected ? "green" : "none"}
                         intensity={
                           Platform.OS === "ios"
                             ? isSelected
@@ -1301,10 +1324,10 @@ export function CourtPayCheckInScreen({
                               : 72
                         }
                       >
-                      {/* Top-right badges: Best Choice (fuchsia) + Save X% (green), stacked */}
+                      {/* Top-right badges: Best Choice + Save X%, stacked */}
                       <View style={styles.pkgBadgeStack}>
                         {pkg.isBestChoice && (
-                          <View style={styles.pkgBestChoiceTag}>
+                          <View style={[styles.pkgBestChoiceTag, dyn.pkgBestChoiceTag]}>
                             <Text style={styles.pkgBestChoiceText}>Best Choice</Text>
                           </View>
                         )}
@@ -1336,7 +1359,8 @@ export function CourtPayCheckInScreen({
               <TouchableOpacity
                 style={[
                   styles.primaryBtn,
-                  { width: "100%", maxWidth: 400 },
+                  { width: "100%" },
+                  selectedPkg ? dyn.primaryBtn : undefined,
                   (!selectedPkg || loading) && styles.disabledBtn,
                 ]}
                 onPress={handleSubscriptionContinue}
@@ -1388,7 +1412,7 @@ export function CourtPayCheckInScreen({
       // ── AWAITING PAYMENT ───────────────────────────────────────────────────
       case "awaiting_payment":
         return (
-          <LiquidGlassSurface style={styles.payWaitGlass} accent="fuchsia">
+          <LiquidGlassSurface style={styles.payWaitGlass} tintColor={CP.glassOverlay}>
             <View style={styles.payWaitGlassInner}>
               <Text style={styles.formTitle}>
                 {pendingPayment?.playerName?.trim()
@@ -1405,13 +1429,13 @@ export function CourtPayCheckInScreen({
                   />
                 </View>
               ) : null}
-              <Text style={styles.amount}>
+              <Text style={[styles.amount, dyn.amount]}>
                 {formatVND(pendingPayment?.amount ?? 0)} VND
               </Text>
               <Text style={styles.ref}>{pendingPayment?.paymentRef}</Text>
 
               <View style={styles.payWaitingRow}>
-                <View style={styles.payPulseDot} />
+                <View style={[styles.payPulseDot, dyn.payPulseDot]} />
                 <Text style={styles.waitText}>{t("payWaitingForStaff")}</Text>
               </View>
 
@@ -1464,7 +1488,7 @@ export function CourtPayCheckInScreen({
               <Ionicons name="warning-outline" size={64} color="#ef4444" />
               <Text style={styles.formTitle}>{t("somethingWrong")}</Text>
               <Text style={styles.errorText}>{error || t("tryAgain")}</Text>
-              <TouchableOpacity style={styles.primaryBtn} onPress={resetToHome}>
+              <TouchableOpacity style={[styles.primaryBtn, dyn.primaryBtn]} onPress={resetToHome}>
                 <Text style={styles.primaryBtnText}>{t("tryAgainGeneric")}</Text>
               </TouchableOpacity>
             </View>
@@ -1479,10 +1503,10 @@ export function CourtPayCheckInScreen({
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.confirmedInner}>
-              <LiquidGlassSurface style={styles.confirmedGlass} accent="fuchsia">
+              <LiquidGlassSurface style={styles.confirmedGlass} tintColor={CP.glassOverlay}>
                 <View style={styles.confirmedGlassInner}>
-                  <View style={styles.successCircle}>
-                    <Ionicons name="checkmark" size={64} color={FUCHSIA.text} />
+                  <View style={[styles.successCircle, dyn.successCircle]}>
+                    <Ionicons name="checkmark" size={64} color={CP.text} />
                   </View>
                   <Text style={styles.successTitle}>
                     {isNewPlayer
@@ -1498,7 +1522,7 @@ export function CourtPayCheckInScreen({
                     {t("returningToMenu", { seconds: confirmedSeconds })}
                   </Text>
                   <TouchableOpacity
-                    style={[styles.primaryBtn, styles.primaryBtnWide]}
+                    style={[styles.primaryBtn, dyn.primaryBtn, styles.primaryBtnWide]}
                     onPress={resetToHome}
                     activeOpacity={0.85}
                   >
@@ -1513,15 +1537,22 @@ export function CourtPayCheckInScreen({
   };
 
   return (
-    <View style={styles.outer}>
-      <CourtPayLiquidBackdrop />
-      <StatusBar style="light" />
+    <View
+      style={[
+        styles.outer,
+        { backgroundColor: themeMode === "light" ? CP.backdropBaseLight : CP.backdropBase },
+      ]}
+    >
+      <CourtPayLiquidBackdrop mode={themeMode} accent={accentKey} />
+      <StatusBar style={themeMode === "light" ? "dark" : "light"} />
       {step === "home" ? (
         <CourtFlowKioskTopBar
           topInset={insets.top}
           tagline="CourtPay"
           locale={locale}
           onToggleLocale={toggleLocale}
+          themeMode={themeMode}
+          onToggleTheme={toggleTheme}
         />
       ) : null}
       <View style={styles.container} onTouchStart={restartIdleTimer}>
@@ -1645,7 +1676,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 10,
-    backgroundColor: FUCHSIA.primary,
+    backgroundColor: "transparent",
     height: 56,
     borderRadius: 14,
     marginTop: 8,
@@ -1662,11 +1693,11 @@ const styles = StyleSheet.create({
     gap: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: FUCHSIA.primaryLight,
+    borderColor: "transparent",
     height: 48,
     marginTop: 4,
   },
-  secondaryActionText: { color: FUCHSIA.primaryLight, fontSize: 15, fontWeight: "600" },
+  secondaryActionText: { color: "transparent", fontSize: 15, fontWeight: "600" },
   iconGhostBtn: { padding: 6, borderRadius: 10 },
   errorText: { color: "#f87171", textAlign: "center", fontSize: 14 },
   inlineRow: { flexDirection: "row", gap: 8 },
@@ -1680,7 +1711,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     height: 42,
   },
-  selectBtnActive: { borderColor: FUCHSIA.primary, backgroundColor: FUCHSIA.bg },
+  selectBtnActive: { borderColor: "transparent", backgroundColor: "transparent" },
   selectBtnText: { color: "#fff", fontSize: 13, fontWeight: "600" },
 
   flowGlassPanel: {
@@ -1715,7 +1746,7 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 520,
     borderRadius: 28,
-    backgroundColor: FUCHSIA.primary,
+    backgroundColor: "transparent",
     paddingVertical: 26,
     alignItems: "center",
     justifyContent: "center",
@@ -1726,7 +1757,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     borderRadius: 14,
-    backgroundColor: FUCHSIA.primaryDark,
+    backgroundColor: "transparent",
     paddingVertical: 14,
     paddingHorizontal: 22,
   },
@@ -1760,7 +1791,7 @@ const styles = StyleSheet.create({
   confirmFuchsiaBtn: {
     marginTop: 4,
     borderRadius: 10,
-    backgroundColor: FUCHSIA.primary,
+    backgroundColor: "transparent",
     paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
@@ -1791,7 +1822,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     paddingHorizontal: 12,
   },
-  regGotPhotoTitle: { fontSize: 30, fontWeight: "700", color: FUCHSIA.text, textAlign: "center" },
+  regGotPhotoTitle: { fontSize: 30, fontWeight: "700", color: "transparent", textAlign: "center" },
   bigInput: {
     backgroundColor: "rgba(255,255,255,0.06)",
     borderRadius: 14,
@@ -1807,7 +1838,7 @@ const styles = StyleSheet.create({
     height: REG_FACE_CIRCLE,
     borderRadius: REG_FACE_CIRCLE / 2,
     borderWidth: 4,
-    borderColor: FUCHSIA.scannerBorder,
+    borderColor: "transparent",
     overflow: "hidden",
     backgroundColor: "#000",
     alignSelf: "center",
@@ -1836,7 +1867,7 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: FUCHSIA.primary,
+    backgroundColor: "transparent",
     justifyContent: "center",
     alignItems: "center",
     marginTop: 12,
@@ -1851,7 +1882,7 @@ const styles = StyleSheet.create({
   },
   regLooksGoodBtn: {
     flex: 1,
-    backgroundColor: FUCHSIA.primary,
+    backgroundColor: "transparent",
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: "center",
@@ -1910,7 +1941,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 24,
+    paddingHorizontal: 8,
     paddingVertical: 48,
     /** Needed so `width: "100%"` children (packages, pay-today) resolve under `alignItems: "center"`. */
     width: "100%",
@@ -1927,7 +1958,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 8,
   },
-  subOfferList: { width: "100%", maxWidth: 400, marginTop: 24, gap: 12, marginBottom: 16 },
+  subOfferList: { width: "100%", marginTop: 24, gap: 12, marginBottom: 16 },
   pkgGlass: {
     borderRadius: 18,
     padding: 16,
@@ -1954,7 +1985,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 12,
-    backgroundColor: "#c026d3",
+    backgroundColor: "transparent",
   },
   pkgBestChoiceText: { fontSize: 11, fontWeight: "700", color: "#fff" },
   pkgDiscountBadge: {
@@ -1974,7 +2005,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     width: "100%",
-    maxWidth: 400,
     marginTop: 20,
     marginBottom: 4,
     gap: 10,
@@ -1985,7 +2015,6 @@ const styles = StyleSheet.create({
   // "Pay for Today Only" card at the bottom
   payTodayOuter: {
     width: "100%",
-    maxWidth: 400,
     alignSelf: "center",
     marginTop: 8,
   },
@@ -2043,10 +2072,10 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
   },
   qrImage: { width: 260, height: 260 },
-  amount: { fontSize: 36, fontWeight: "700", color: FUCHSIA.amountText },
+  amount: { fontSize: 36, fontWeight: "700", color: "transparent" },
   ref: { fontSize: 14, color: "#737373", fontFamily: "monospace" },
   payWaitingRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  payPulseDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: FUCHSIA.pulseDot },
+  payPulseDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: "transparent" },
   waitText: { color: "#a3a3a3", fontSize: 15 },
   cashBtn: {
     flexDirection: "row",
@@ -2091,7 +2120,7 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: FUCHSIA.successCircle,
+    backgroundColor: "transparent",
     justifyContent: "center",
     alignItems: "center",
   },

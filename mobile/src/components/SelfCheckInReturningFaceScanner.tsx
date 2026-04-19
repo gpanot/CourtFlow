@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
+import { ACCENT_MAP, type CourtPayAccent } from "../stores/theme-store";
 
 /** Aligned with PWA `self-check-in-scanner.tsx` */
 const CAMERA_WARMUP_MS = 1500;
@@ -17,14 +18,6 @@ const MAX_FACE_ATTEMPTS = 3;
 const RETRY_IDLE_MS = 2000;
 
 const CIRCLE_SIZE = 280;
-
-const COURTPAY_ACCENT = {
-  circleBorder: "rgba(192,38,211,0.5)",
-  circleShadow: "#701a75",
-  link: "#e879f9",
-  primary: "#c026d3",
-  spinner: "#d946ef",
-};
 
 type ScanPhase = "adjust" | "capturing" | "between_retries";
 
@@ -55,8 +48,9 @@ type Props = {
   onCameraNotReady: () => void;
   onUsePhone: () => void;
   onBack: () => void;
-  /** CourtPay kiosk: fuchsia chrome instead of green. */
+  /** CourtPay kiosk: branded accent from theme store. */
   accent?: "default" | "courtpay";
+  courtpayAccent?: CourtPayAccent;
 };
 
 function sleep(ms: number) {
@@ -73,8 +67,17 @@ export function SelfCheckInReturningFaceScanner({
   onUsePhone,
   onBack,
   accent = "default",
+  courtpayAccent = "green",
 }: Props) {
   const isCourtPay = accent === "courtpay";
+  const cpColors = useMemo(() => ACCENT_MAP[courtpayAccent], [courtpayAccent]);
+  const COURTPAY_ACCENT = {
+    circleBorder: cpColors.scannerBorder,
+    circleShadow: cpColors.primaryDark,
+    link: cpColors.text,
+    primary: cpColors.primary,
+    spinner: cpColors.primaryLight,
+  };
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView | null>(null);
   const cameraReadyRef = useRef(false);
@@ -179,7 +182,7 @@ export function SelfCheckInReturningFaceScanner({
         <Text style={styles.title}>{copy.allowCameraTitle}</Text>
         <Text style={styles.subtitle}>{copy.allowCameraHint}</Text>
         <TouchableOpacity
-          style={[styles.primaryBtn, isCourtPay && styles.primaryBtnCourtPay]}
+          style={[styles.primaryBtn, isCourtPay && { backgroundColor: COURTPAY_ACCENT.primary }]}
           onPress={requestPermission}
         >
           <Text style={styles.primaryBtnText}>{copy.allowCameraCta}</Text>
@@ -250,7 +253,7 @@ export function SelfCheckInReturningFaceScanner({
           color={isCourtPay ? COURTPAY_ACCENT.link : "#3b82f6"}
         />
         <Text
-          style={[styles.linkText, isCourtPay && styles.linkTextCourtPay]}
+          style={[styles.linkText, isCourtPay && { color: COURTPAY_ACCENT.link }]}
         >
           {copy.checkInWithPhone}
         </Text>
@@ -366,11 +369,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  primaryBtnCourtPay: {
-    backgroundColor: COURTPAY_ACCENT.primary,
-  },
   primaryBtnText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  linkTextCourtPay: {
-    color: COURTPAY_ACCENT.link,
-  },
 });
