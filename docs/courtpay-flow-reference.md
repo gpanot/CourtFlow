@@ -95,8 +95,8 @@ Expected result:
 
 ### 6) Returning player with exhausted package (0 sessions, still valid days)
 
-1. Face/phone match succeeds.
-2. Kiosk first shows exhausted-renewal welcome:
+1. Player checks in using their last available session (`1 -> 0`).
+2. On that same successful check-in, kiosk shows exhausted-renewal welcome:
    - welcome header
    - KPI cards: `0 sessions left` and remaining days
    - subtitle: "You are in but consider buying a new package for next time"
@@ -108,6 +108,7 @@ Expected result:
 6. Staff/SePay confirms payment.
 7. New package is active for the player.
 8. Current visit is confirmed without deducting a session from this newly purchased package.
+9. If player taps `Next time`, on the next session they follow the normal flow (no exhausted-renewal welcome repeat).
 
 Expected result:
 - Last-session check-in still produces a zero-amount paid row.
@@ -115,6 +116,7 @@ Expected result:
   - zero-amount check-in row
   - renewal package payment row
 - Newly activated package keeps full session balance after this flow.
+- Choosing `Next time` does not show the exhausted-renewal welcome again on the next session.
 
 ---
 

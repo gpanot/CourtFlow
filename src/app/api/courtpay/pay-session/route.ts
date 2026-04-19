@@ -5,7 +5,11 @@ import {
   createConfirmedCheckInPayment,
   checkInSubscriber,
 } from "@/modules/courtpay/lib/check-in";
-import { getActiveSubscription, activateSubscription } from "@/modules/courtpay/lib/subscription";
+import {
+  getActiveSubscription,
+  getLatestSubscription,
+  activateSubscription,
+} from "@/modules/courtpay/lib/subscription";
 import { emitToVenue } from "@/lib/socket-server";
 
 export async function POST(req: Request) {
@@ -121,6 +125,7 @@ export async function POST(req: Request) {
       await checkInSubscriber(playerId, venue.id, activeSub.id, sessionStart, autoPayment.id);
 
       const updated = await getActiveSubscription(playerId);
+      const latest = await getLatestSubscription(playerId);
       emitToVenue(venue.id, "payment:confirmed", {
         pendingPaymentId: autoPayment.id,
         paymentRef: autoPayment.paymentRef,
@@ -133,6 +138,7 @@ export async function POST(req: Request) {
         vietQR: null,
         paymentRef: autoPayment.paymentRef,
         subscription: updated,
+        latestSubscription: latest,
         checkedIn: true,
       });
     }

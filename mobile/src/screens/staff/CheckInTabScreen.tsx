@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -11,15 +11,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { CameraView, type CameraType, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../lib/api-client";
 import { useAuthStore } from "../../stores/auth-store";
 import { useSocket } from "../../hooks/useSocket";
 import { FaceCaptureCard } from "../../components/FaceCaptureCard";
-import {
-  SelfCheckInReturningFaceScanner,
-  type ReturningFrameResult,
-} from "../../components/SelfCheckInReturningFaceScanner";
 import { useAppColors } from "../../theme/use-app-colors";
 import type { AppColors } from "../../theme/palettes";
 import { resolveMediaUrl } from "../../lib/media-url";
@@ -43,6 +40,20 @@ interface PendingPaymentState {
   paymentRef: string;
 }
 
+type FaceQualityTier = "good" | "fair" | "poor";
+
+interface FaceQualityCheck {
+  overall: FaceQualityTier;
+  checks: {
+    faceDetected: boolean;
+    lighting: FaceQualityTier;
+    focus: FaceQualityTier;
+    size: FaceQualityTier;
+  };
+  message: string;
+  canForce: boolean;
+}
+
 export function CheckInTabScreen() {
   const venueId = useAuthStore((s) => s.venueId);
   const theme = useAppColors();
@@ -57,11 +68,18 @@ export function CheckInTabScreen() {
     "beginner" | "intermediate" | "advanced" | null
   >(null);
   const [faceBase64, setFaceBase64] = useState<string | null>(null);
+  const [faceQuality, setFaceQuality] = useState<FaceQualityCheck | null>(null);
+  const [faceQualityLoading, setFaceQualityLoading] = useState(false);
   const [existingPreview, setExistingPreview] =
     useState<ExistingPlayerPreview | null>(null);
   const [pendingPayment, setPendingPayment] =
     useState<PendingPaymentState | null>(null);
+  const [existingCameraPermission, requestExistingCameraPermission] = useCameraPermissions();
+  const existingCameraRef = useRef<CameraView | null>(null);
+  const [existingCameraFacing, setExistingCameraFacing] = useState<CameraType>("back");
+  const [existingCameraReady, setExistingCameraReady] = useState(false);
   const [existingCameraStarted, setExistingCameraStarted] = useState(false);
+  const [existingCaptureBusy, setExistingCaptureBusy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -72,9 +90,14 @@ export function CheckInTabScreen() {
     setGender(null);
     setSkillLevel(null);
     setFaceBase64(null);
+    setFaceQuality(null);
+    setFaceQualityLoading(false);
     setExistingPreview(null);
     setPendingPayment(null);
+    setExistingCameraFacing("back");
+    setExistingCameraReady(false);
     setExistingCameraStarted(false);
+    setExistingCaptureBusy(false);
     setLoading(false);
     setError("");
   }, []);
@@ -135,9 +158,89 @@ export function CheckInTabScreen() {
     };
   };
 
-  const submitExistingFrame = useCallback(
-    async (imageBase64: string): Promise<ReturningFrameResult> => {
-      if (!venueId) return "done";
+  useEffect(() => {
+    let cancelled = false;
+    if (!faceBase64) {
+      setFaceQuality(null);
+      setFaceQualityLoading(false);
+      return;
+    }
+    setFaceQuality(null);
+    setFaceQualityLoading(true);
+    void api
+      .post<{ qualityCheck?: FaceQualityCheck }>("/api/queue/analyze-face-quality", {
+        imageBase64: faceBase64,
+      })
+      .then((response) => {
+        if (cancelled) return;
+        if (response.qualityCheck) {
+          setFaceQuality(response.qualityCheck);
+        } else {
+          setFaceQuality({
+            overall: "fair",
+            checks: {
+              faceDetected: true,
+              lighting: "fair",
+              focus: "fair",
+              size: "fair",
+            },
+            message: "Photo captured. Quality assessment pending.",
+            canForce: true,
+          });
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setFaceQuality({
+          overall: "fair",
+          checks: {
+            faceDetected: true,
+            lighting: "fair",
+            focus: "fair",
+            size: "fair",
+          },
+          message: "Photo captured. Quality assessment pending.",
+          canForce: true,
+        });
+      })
+      .finally(() => {
+        if (!cancelled) setFaceQualityLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [faceBase64]);
+
+  const startExistingCamera = useCallback(async () => {
+    setError("");
+    if (!existingCameraPermission?.granted) {
+      const permission = await requestExistingCameraPermission();
+      if (!permission.granted) {
+        setError("Camera permission is required for face check-in.");
+        return;
+      }
+    }
+    setExistingCameraFacing("back");
+    setExistingCameraReady(false);
+    setExistingCameraStarted(true);
+  }, [existingCameraPermission?.granted, requestExistingCameraPermission]);
+
+  const handleExistingCapture = useCallback(async () => {
+    if (!venueId || !existingCameraRef.current || !existingCameraReady || existingCaptureBusy) {
+      return;
+    }
+    setExistingCaptureBusy(true);
+    setError("");
+    try {
+      const photo = await existingCameraRef.current.takePictureAsync({
+        quality: 0.7,
+        base64: true,
+      });
+      const imageBase64 = photo?.base64;
+      if (!imageBase64) {
+        setError("Capture failed. Please try again.");
+        return;
+      }
       setError("");
       try {
         const data = await api.post<{
@@ -155,41 +258,69 @@ export function CheckInTabScreen() {
         if (payment) {
           setPendingPayment(payment);
           setStep("awaiting_payment");
-          return "done";
+          setExistingCameraStarted(false);
+          return;
         }
         if (data.resultType === "already_checked_in") {
           setStep("success");
-          return "done";
+          setExistingCameraStarted(false);
+          return;
         }
         if (data.resultType === "needs_registration") {
           setError("Face not recognized. Use New Player flow.");
-          setExistingCameraStarted(false);
-          return "done";
+          return;
         }
         if (data.resultType === "no_face" || data.resultType === "multi_face") {
-          return "continue_scan";
+          setError("No clear face detected. Retake and keep one face centered.");
+          return;
         }
         if (data.error) {
           setError(data.error);
-          setExistingCameraStarted(false);
-          return "done";
+          return;
         }
         setStep("success");
-        return "done";
       } catch (err) {
         setError(err instanceof Error ? err.message : "Check-in failed");
-        setExistingCameraStarted(false);
-        return "done";
       }
-    },
-    [venueId]
-  );
+    } finally {
+      setExistingCaptureBusy(false);
+    }
+  }, [existingCameraReady, existingCaptureBusy, venueId]);
 
+  const stopExistingCamera = useCallback(() => {
+    setExistingCameraStarted(false);
+    setExistingCaptureBusy(false);
+    setExistingCameraReady(false);
+  }, []);
+
+  const toggleExistingCameraFacing = useCallback(() => {
+    setExistingCameraFacing((prev) => (prev === "back" ? "front" : "back"));
+  }, []);
+
+  const qualityTone = useMemo(() => {
+    if (!faceQuality) return "neutral";
+    if (faceQuality.overall === "good") return "good";
+    if (faceQuality.overall === "poor") return "poor";
+    return "fair";
+  }, [faceQuality]);
+
+  const canSubmitNewPlayer = useMemo(
+    () =>
+      !loading &&
+      !!faceBase64 &&
+      !faceQualityLoading &&
+      !!name.trim() &&
+      !!phone.trim() &&
+      !!gender &&
+      !!skillLevel &&
+      (faceQuality ? faceQuality.checks.faceDetected : true),
+    [faceBase64, faceQuality, faceQualityLoading, gender, loading, name, phone, skillLevel]
+  );
   const existingScannerHint = useMemo(
     () =>
       existingCameraStarted
-        ? "Align face in frame — check-in runs automatically."
-        : "Tap Start Camera. Face will be detected and checked in automatically.",
+        ? "Use Capture to check this face. Switch camera if needed."
+        : "Tap Start Camera to begin a manual face check-in.",
     [existingCameraStarted]
   );
 
@@ -291,7 +422,7 @@ export function CheckInTabScreen() {
           style={[styles.modeBtn, mode === "new" && styles.modeBtnActive]}
           onPress={() => {
             setMode("new");
-            setExistingCameraStarted(false);
+            stopExistingCamera();
             setError("");
             setExistingPreview(null);
           }}
@@ -312,7 +443,7 @@ export function CheckInTabScreen() {
             setMode("existing");
             setError("");
             setExistingPreview(null);
-            setExistingCameraStarted(false);
+            stopExistingCamera();
           }}
           activeOpacity={0.7}
         >
@@ -335,47 +466,56 @@ export function CheckInTabScreen() {
             {!existingCameraStarted ? (
               <TouchableOpacity
                 style={styles.primaryBtn}
-                onPress={() => {
-                  setError("");
-                  setExistingCameraStarted(true);
-                }}
+                onPress={() => void startExistingCamera()}
                 activeOpacity={0.7}
               >
                 <Text style={styles.primaryBtnText}>Start Camera</Text>
               </TouchableOpacity>
             ) : (
               <View style={styles.autoScannerWrap}>
-                <SelfCheckInReturningFaceScanner
-                  venueId={venueId}
-                  active
-                  copy={{
-                    noMatchYet: "No match yet — retrying...",
-                    positionFace: "Position your face in the frame",
-                    holdStill: "Hold still...",
-                    nextScanIn: "Next scan in",
-                    scanning: "Scanning...",
-                    retryAuto: "Will retry automatically",
-                    cameraReady: "Camera ready",
-                    cameraStarting: "Starting camera...",
-                    checkInWithPhone: "Use phone number instead",
-                    back: "Stop camera",
-                    allowCameraTitle: "Camera access",
-                    allowCameraHint:
-                      "Allow the camera for automatic face check-in.",
-                    allowCameraCta: "Allow Camera",
-                  }}
-                  onSubmitFrame={submitExistingFrame}
-                  onExhaustedRetries={() => {
-                    setError("No face detected. Try again or use phone fallback.");
-                    setExistingCameraStarted(false);
-                  }}
-                  onCameraNotReady={() => {
-                    setError("Camera not ready — try again.");
-                    setExistingCameraStarted(false);
-                  }}
-                  onUsePhone={() => setExistingCameraStarted(false)}
-                  onBack={() => setExistingCameraStarted(false)}
+                <CameraView
+                  ref={existingCameraRef}
+                  style={styles.existingCameraPreview}
+                  facing={existingCameraFacing}
+                  onCameraReady={() => setExistingCameraReady(true)}
                 />
+                <View style={styles.existingCameraActions}>
+                  <TouchableOpacity
+                    style={styles.existingIconBtn}
+                    onPress={toggleExistingCameraFacing}
+                    disabled={existingCaptureBusy}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="camera-reverse-outline" size={20} color="#fff" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.primaryBtn,
+                      styles.existingCaptureBtn,
+                      (!existingCameraReady || existingCaptureBusy) && styles.disabledBtn,
+                    ]}
+                    onPress={() => void handleExistingCapture()}
+                    disabled={!existingCameraReady || existingCaptureBusy}
+                    activeOpacity={0.7}
+                  >
+                    {existingCaptureBusy ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <>
+                        <Ionicons name="camera-outline" size={18} color="#fff" />
+                        <Text style={styles.primaryBtnText}>Capture</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.existingIconBtn}
+                    onPress={stopExistingCamera}
+                    disabled={existingCaptureBusy}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="close" size={20} color="#fff" />
+                  </TouchableOpacity>
+                </View>
               </View>
             )}
           </View>
@@ -452,20 +592,61 @@ export function CheckInTabScreen() {
             onChange={setFaceBase64}
           />
           {faceBase64 ? (
-            <View style={styles.qualityCard}>
+            <View
+              style={[
+                styles.qualityCard,
+                qualityTone === "good" && styles.qualityCardGood,
+                qualityTone === "fair" && styles.qualityCardFair,
+                qualityTone === "poor" && styles.qualityCardPoor,
+              ]}
+            >
               <Text style={styles.qualityTitle}>Photo quality (AWS Rekognition)</Text>
-              <View style={styles.qualityRow}>
-                <Text style={styles.qualityIcon}>✓</Text>
-                <Text style={styles.qualityText}>Face centered and fills most of the frame</Text>
-              </View>
-              <View style={styles.qualityRow}>
-                <Text style={styles.qualityIcon}>✓</Text>
-                <Text style={styles.qualityText}>Bright, even lighting (no strong backlight)</Text>
-              </View>
-              <View style={styles.qualityRow}>
-                <Text style={styles.qualityIcon}>✓</Text>
-                <Text style={styles.qualityText}>Sharp focus, neutral expression, no heavy occlusion</Text>
-              </View>
+              {faceQualityLoading ? (
+                <View style={styles.qualityLoadingRow}>
+                  <ActivityIndicator color={theme.blue500} size="small" />
+                  <Text style={styles.qualityText}>Analyzing photo quality...</Text>
+                </View>
+              ) : faceQuality ? (
+                <>
+                  <View style={styles.qualityRow}>
+                    <Text style={styles.qualityIcon}>
+                      {faceQuality.checks.faceDetected ? "✓" : "✕"}
+                    </Text>
+                    <Text style={styles.qualityText}>
+                      Face detected: {faceQuality.checks.faceDetected ? "Yes" : "No"}
+                    </Text>
+                  </View>
+                  <View style={styles.qualityRow}>
+                    <Text style={styles.qualityIcon}>
+                      {faceQuality.checks.size === "good" ? "✓" : faceQuality.checks.size === "fair" ? "!" : "✕"}
+                    </Text>
+                    <Text style={styles.qualityText}>
+                      Face size: {faceQuality.checks.size}
+                    </Text>
+                  </View>
+                  <View style={styles.qualityRow}>
+                    <Text style={styles.qualityIcon}>
+                      {faceQuality.checks.lighting === "good"
+                        ? "✓"
+                        : faceQuality.checks.lighting === "fair"
+                          ? "!"
+                          : "✕"}
+                    </Text>
+                    <Text style={styles.qualityText}>
+                      Lighting: {faceQuality.checks.lighting}
+                    </Text>
+                  </View>
+                  <View style={styles.qualityRow}>
+                    <Text style={styles.qualityIcon}>
+                      {faceQuality.checks.focus === "good" ? "✓" : faceQuality.checks.focus === "fair" ? "!" : "✕"}
+                    </Text>
+                    <Text style={styles.qualityText}>
+                      Focus: {faceQuality.checks.focus}
+                    </Text>
+                  </View>
+                  <Text style={styles.qualityMessage}>{faceQuality.message}</Text>
+                </>
+              ) : null}
             </View>
           ) : null}
           <TextInput
@@ -525,23 +706,10 @@ export function CheckInTabScreen() {
           <TouchableOpacity
             style={[
               styles.primaryBtn,
-              (loading ||
-                !faceBase64 ||
-                !name.trim() ||
-                !phone.trim() ||
-                !gender ||
-                !skillLevel) &&
-                styles.disabledBtn,
+              !canSubmitNewPlayer && styles.disabledBtn,
             ]}
             onPress={handleNewRegistration}
-            disabled={
-              loading ||
-              !faceBase64 ||
-              !name.trim() ||
-              !phone.trim() ||
-              !gender ||
-              !skillLevel
-            }
+            disabled={!canSubmitNewPlayer}
             activeOpacity={0.7}
           >
             {loading ? (
@@ -669,10 +837,19 @@ function createCheckInStyles(t: AppColors) {
     qualityRow: { flexDirection: "row", alignItems: "flex-start", gap: 6 },
     qualityIcon: { color: t.green500, fontSize: 11, fontWeight: "800", marginTop: 1 },
     qualityText: { flex: 1, color: t.muted, fontSize: 11, lineHeight: 14 },
+    qualityMessage: { color: t.text, fontSize: 12, lineHeight: 16, marginTop: 2 },
+    qualityLoadingRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+    qualityCardGood: { borderColor: t.green500 },
+    qualityCardFair: { borderColor: t.amber400 },
+    qualityCardPoor: { borderColor: t.red500 },
     autoScanCard: { gap: 8, padding: 12, backgroundColor: t.card, borderRadius: 12, borderWidth: 1, borderColor: t.border },
     autoScanTitle: { color: t.text, fontSize: 15, fontWeight: "700" },
     autoScanHint: { color: t.muted, fontSize: 12 },
-    autoScannerWrap: { marginTop: 4, height: 460, borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: t.border, backgroundColor: t.bg },
+    autoScannerWrap: { marginTop: 4, borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: t.border, backgroundColor: t.bg, gap: 10, paddingBottom: 10 },
+    existingCameraPreview: { width: "100%", height: 360, backgroundColor: "#000" },
+    existingCameraActions: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 10 },
+    existingCaptureBtn: { flex: 1 },
+    existingIconBtn: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: "#262626" },
     primaryBtn: { alignItems: "center", justifyContent: "center", backgroundColor: t.blue600, height: 44, borderRadius: 10 },
     primaryBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
     disabledBtn: { opacity: 0.5 },

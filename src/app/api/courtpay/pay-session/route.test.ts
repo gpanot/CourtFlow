@@ -6,6 +6,7 @@ const {
   mockCreateCheckInPayment,
   mockCreateConfirmedCheckInPayment,
   mockGetActiveSubscription,
+  mockGetLatestSubscription,
   mockActivateSubscription,
   mockEmitToVenue,
 } = vi.hoisted(() => {
@@ -23,6 +24,7 @@ const {
     mockCreateCheckInPayment: vi.fn(),
     mockCreateConfirmedCheckInPayment: vi.fn(),
     mockGetActiveSubscription: vi.fn(),
+    mockGetLatestSubscription: vi.fn(),
     mockActivateSubscription: vi.fn(),
     mockEmitToVenue: vi.fn(),
   };
@@ -40,6 +42,7 @@ vi.mock("@/modules/courtpay/lib/check-in", () => ({
 
 vi.mock("@/modules/courtpay/lib/subscription", () => ({
   getActiveSubscription: mockGetActiveSubscription,
+  getLatestSubscription: mockGetLatestSubscription,
   activateSubscription: mockActivateSubscription,
 }));
 
@@ -95,6 +98,14 @@ describe("POST /api/courtpay/pay-session", () => {
     mockCreateConfirmedCheckInPayment.mockResolvedValue({
       id: "pp-auto-1",
       paymentRef: "CF-SES-AUTO01",
+    });
+    mockGetLatestSubscription.mockResolvedValue({
+      id: "sub-1",
+      packageName: "Regular",
+      sessionsRemaining: 4,
+      daysRemaining: 30,
+      isUnlimited: false,
+      status: "active",
     });
 
     const req = new Request("http://localhost/api/courtpay/pay-session", {

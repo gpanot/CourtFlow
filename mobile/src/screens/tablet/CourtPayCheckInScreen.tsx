@@ -208,6 +208,7 @@ export function CourtPayCheckInScreen({
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const confirmedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const exhaustedOfferIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const exhaustedOfferScrollRef = useRef<ScrollView | null>(null);
   const regCameraRef = useRef<CameraView | null>(null);
   const regCameraReady = useRef(false);
   const [permission, requestPermission] = useCameraPermissions();
@@ -481,14 +482,12 @@ export function CourtPayCheckInScreen({
 
   // ── Subscription routing ──────────────────────────────────────────────────
   // If player has an active subscription with sessions left → auto-check-in (skip offer + payment).
-  // If latest subscription is exhausted (0 sessions) → show renewal offer with KPI + packages.
   // Otherwise → regular subscription offer when packages exist.
   const goToSubscriptionOrPay = useCallback(
     (
       targetPlayer: CheckInPlayerLite,
       newPlayer: boolean,
-      activeSub?: ActiveSubInfo | null,
-      latestSub?: ActiveSubInfo | null
+      activeSub?: ActiveSubInfo | null
     ) => {
       setPlayer(targetPlayer);
       setIsNewPlayer(newPlayer);
@@ -498,19 +497,6 @@ export function CourtPayCheckInScreen({
           (activeSub.isUnlimited || (activeSub.sessionsRemaining !== null && activeSub.sessionsRemaining > 0))) {
         setExhaustedSubInfo(null);
         void doPaySession(targetPlayer, undefined);
-        return;
-      }
-
-      const shouldShowExhaustedOffer =
-        !!latestSub &&
-        latestSub.status === "exhausted" &&
-        !latestSub.isUnlimited &&
-        (latestSub.sessionsRemaining ?? 0) <= 0;
-      if (shouldShowExhaustedOffer) {
-        setExhaustedSubInfo(latestSub);
-        setSelectedPkg(null);
-        setShowExhaustedPackages(false);
-        setStep("subscription_exhausted_offer");
         return;
       }
 
@@ -561,12 +547,7 @@ export function CourtPayCheckInScreen({
         }
         // Face-checkin returns { resultType: "matched", player: { id, name, phone }, activeSubscription }
         if (data.resultType === "matched" && data.player) {
-          goToSubscriptionOrPay(
-            data.player,
-            false,
-            data.activeSubscription,
-            data.latestSubscription
-          );
+          goToSubscriptionOrPay(data.player, false, data.activeSubscription);
           return "done";
         }
         return "continue_scan";
@@ -592,7 +573,6 @@ export function CourtPayCheckInScreen({
         found: boolean;
         player: CheckInPlayerLite | null;
         activeSubscription?: ActiveSubInfo | null;
-        latestSubscription?: ActiveSubInfo | null;
       }>("/api/courtpay/identify", {
         venueCode: venueId,
         phone: phoneInput.trim(),
@@ -600,7 +580,6 @@ export function CourtPayCheckInScreen({
       if (res.found && res.player) {
         setPhonePreview(res.player);
         setPhoneActiveSub(res.activeSubscription ?? null);
-        setExhaustedSubInfo(res.latestSubscription ?? null);
         setStep("phone_preview");
       } else {
         setPhoneError("No player found with this phone number");
@@ -614,7 +593,7 @@ export function CourtPayCheckInScreen({
 
   const handlePhoneConfirm = () => {
     if (!phonePreview) return;
-    goToSubscriptionOrPay(phonePreview, false, phoneActiveSub, exhaustedSubInfo);
+    goToSubscriptionOrPay(phonePreview, false, phoneActiveSub);
   };
 
   // ── Registration face capture ─────────────────────────────────────────────
@@ -678,6 +657,7 @@ export function CourtPayCheckInScreen({
         checkedIn?: boolean;
         free?: boolean;
         subscription?: ActiveSubInfo | null;
+        latestSubscription?: ActiveSubInfo | null;
       }>("/api/courtpay/pay-session", {
         venueCode: venueId,
         playerId: targetPlayer.id,
@@ -687,9 +667,24 @@ export function CourtPayCheckInScreen({
 
       if (res.checkedIn || res.free) {
         const sub = res.subscription;
-        setConfirmedSubInfo(sub ?? null);
-        setConfirmMessage("Check-in confirmed.");
-        setStep("confirmed");
+        const latestSub = res.latestSubscription;
+        const shouldShowExhaustedOffer =
+          !!latestSub &&
+          latestSub.status === "exhausted" &&
+          !latestSub.isUnlimited &&
+          (latestSub.sessionsRemaining ?? 0) <= 0;
+
+        if (shouldShowExhaustedOffer) {
+          setConfirmedSubInfo(null);
+          setExhaustedSubInfo(latestSub);
+          setShowExhaustedPackages(false);
+          setSelectedPkg(null);
+          setStep("subscription_exhausted_offer");
+        } else {
+          setConfirmedSubInfo(sub ?? null);
+          setConfirmMessage("Check-in confirmed.");
+          setStep("confirmed");
+        }
         return;
       }
 
@@ -1403,6 +1398,7 @@ export function CourtPayCheckInScreen({
             </TouchableOpacity>
 
             <ScrollView
+              ref={exhaustedOfferScrollRef}
               contentContainerStyle={styles.subOfferScroll}
               keyboardShouldPersistTaps="handled"
             >
@@ -1568,7 +1564,12 @@ export function CourtPayCheckInScreen({
                     </Text>
                     <TouchableOpacity
                       style={[styles.primaryBtn, dyn.primaryBtn, styles.primaryBtnWide]}
-                      onPress={() => setShowExhaustedPackages(true)}
+                      onPress={() => {
+                        setShowExhaustedPackages(true);
+                        setTimeout(() => {
+                          exhaustedOfferScrollRef.current?.scrollToEnd({ animated: true });
+                        }, 80);
+                      }}
                       activeOpacity={0.85}
                     >
                       <Text style={styles.primaryBtnText}>Show New Packages</Text>
