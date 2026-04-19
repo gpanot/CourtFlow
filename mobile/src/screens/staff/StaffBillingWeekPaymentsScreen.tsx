@@ -146,7 +146,7 @@ export function StaffBillingWeekPaymentsScreen() {
         <View style={styles.summary}>
           <Text style={styles.summaryTitle}>{data.summary.totalPayments} payments</Text>
           <Text style={styles.summaryText}>
-            {formatVND(data.summary.totalAmount)} VND · {data.summary.sepayPayments} SePay ·{" "}
+            {formatVND(data.summary.totalAmount)} VND · {data.summary.sepayPayments} Auto-Payment ·{" "}
             {data.summary.cancelledPayments} cancelled
           </Text>
         </View>
@@ -185,7 +185,7 @@ export function StaffBillingWeekPaymentsScreen() {
               </View>
               <View style={[styles.badge, { backgroundColor: "rgba(22,163,74,0.18)" }]}>
                 <Text style={[styles.badgeText, { color: theme.green400 }]}>
-                  {item.confirmedBy === "sepay" ? "SEPAY" : "MANUAL"}
+                  {item.confirmedBy === "sepay" ? "AUTO-PAYMENT" : "MANUAL"}
                 </Text>
               </View>
               {item.status === "cancelled" && (

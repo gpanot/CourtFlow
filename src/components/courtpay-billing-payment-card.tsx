@@ -31,7 +31,7 @@ export function CourtPayBillingPaymentCard({
 }: {
   payment: CourtPayBillingPaymentCardData;
 }) {
-  const approvalLabel = payment.confirmedBy === "sepay" ? "SEPAY" : "MANUAL";
+  const approvalLabel = payment.confirmedBy === "sepay" ? "AUTO-PAYMENT" : "MANUAL";
   return (
     <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
       <div className="flex items-start justify-between gap-3">

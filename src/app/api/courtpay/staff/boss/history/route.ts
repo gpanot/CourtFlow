@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireStaff } from "@/lib/auth";
+import { getWeekBounds } from "@/lib/billing";
 
 export async function GET(req: Request) {
   try {
@@ -21,8 +22,7 @@ export async function GET(req: Request) {
     const yesterdayStart = new Date(todayStart);
     yesterdayStart.setDate(yesterdayStart.getDate() - 1);
 
-    const weekStart = new Date(todayStart);
-    weekStart.setDate(weekStart.getDate() - weekStart.getDay()); // Sunday
+    const { weekStart, weekEnd } = getWeekBounds(now); // Monday -> Sunday
 
     const monthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
 
@@ -30,12 +30,16 @@ export async function GET(req: Request) {
     since.setDate(since.getDate() - days);
     since.setHours(0, 0, 0, 0);
 
-    // Fetch all confirmed payments for the venue (all time for "All" bucket)
+    // Fetch CourtPay billable payments for this venue.
+    // Keep this aligned with billing logic:
+    // - CourtPay only (checkInPlayerId not null)
+    // - include confirmed + cancelled (cancelled still went through)
     const [recentPayments, allPayments] = await Promise.all([
       prisma.pendingPayment.findMany({
         where: {
           venueId,
-          status: "confirmed",
+          checkInPlayerId: { not: null },
+          status: { in: ["confirmed", "cancelled"] },
           confirmedAt: { gte: since },
         },
         include: { checkInPlayer: true },
@@ -43,7 +47,11 @@ export async function GET(req: Request) {
       }),
       // Total all-time revenue
       prisma.pendingPayment.aggregate({
-        where: { venueId, status: "confirmed" },
+        where: {
+          venueId,
+          checkInPlayerId: { not: null },
+          status: { in: ["confirmed", "cancelled"] },
+        },
         _sum: { amount: true },
         _count: { id: true },
       }),
@@ -63,7 +71,9 @@ export async function GET(req: Request) {
 
     const todayBucket = bucket(todayStart);
     const yesterdayBucket = bucket(yesterdayStart, todayStart);
-    const weekBucket = bucket(weekStart);
+    // Use explicit week end so "This week" follows Monday -> Sunday window.
+    const weekExclusiveEnd = new Date(weekEnd.getTime() + 1);
+    const weekBucket = bucket(weekStart, weekExclusiveEnd);
     const monthBucket = bucket(monthStart);
 
     const revenueSummary = {

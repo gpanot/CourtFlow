@@ -4,13 +4,13 @@
  *
  * - PIN is stored in SecureStore (encrypted on device).
  * - `unlocked` is session-only (not persisted) — resets to false on logout.
- * - Default PIN is "1234" when none has been set yet.
+ * - Default PIN is "9897" when none has been set yet.
  */
 import { create } from "zustand";
 import * as SecureStore from "expo-secure-store";
 
 const PIN_KEY = "courtpay-boss-pin";
-const DEFAULT_PIN = "1234";
+const DEFAULT_PIN = "9897";
 
 interface PinState {
   /** Whether the boss menus are currently unlocked in this session */

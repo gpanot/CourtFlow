@@ -1129,7 +1129,7 @@ export function StaffBossDashboardScreen() {
                     {(billingCurrent.sepayPayments ?? billingCurrent.sepayCheckins) > 0 && (
                       <>
                         <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                          <Text style={{ fontSize: 13, color: theme.muted }}>SePay confirmed</Text>
+                          <Text style={{ fontSize: 13, color: theme.muted }}>Auto-payment confirmed</Text>
                           <Text style={{ fontSize: 13, color: theme.text }}>
                             {billingCurrent.sepayPayments ?? billingCurrent.sepayCheckins}
                           </Text>
@@ -1149,7 +1149,7 @@ export function StaffBossDashboardScreen() {
                   </View>
 
                   <Text style={{ fontSize: 10, color: theme.subtle, marginTop: 8 }}>
-                    Tap card to view weekly payments. Base: {formatVND(billingCurrent.rates.baseRate)}đ · Sub: +{formatVND(billingCurrent.rates.subAddon)}đ · SePay: +{formatVND(billingCurrent.rates.sepayAddon)}đ per payment
+                    Tap card to view weekly payments. Base: {formatVND(billingCurrent.rates.baseRate)}đ · Sub: +{formatVND(billingCurrent.rates.subAddon)}đ · Auto-Payment: +{formatVND(billingCurrent.rates.sepayAddon)}đ per payment
                   </Text>
                 </TouchableOpacity>
               )}
@@ -1301,7 +1301,7 @@ export function StaffBossDashboardScreen() {
                             )}
                             {selectedInvoice.sepayAmount > 0 && (
                               <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                                <Text style={{ fontSize: 12, color: theme.muted }}>SePay add-on</Text>
+                                <Text style={{ fontSize: 12, color: theme.muted }}>Auto-Payment add-on</Text>
                                 <Text style={{ fontSize: 12, color: theme.text }}>{formatVND(selectedInvoice.sepayAmount)} VND</Text>
                               </View>
                             )}

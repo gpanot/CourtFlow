@@ -592,7 +592,7 @@ export default function BossDashboardPage() {
                   {(billingCurrent.sepayPayments ?? billingCurrent.sepayCheckins) > 0 && (
                     <>
                       <div className="flex justify-between">
-                        <span className="text-neutral-400">SePay confirmed</span>
+                        <span className="text-neutral-400">Auto-payment confirmed</span>
                         <span>{billingCurrent.sepayPayments ?? billingCurrent.sepayCheckins}</span>
                       </div>
                       <div className="flex justify-between">
@@ -611,7 +611,7 @@ export default function BossDashboardPage() {
                 </div>
 
                 <p className="text-[10px] text-neutral-600 mt-3">
-                  Tap to view weekly payment details. Base: {formatVND(billingCurrent.rates.baseRate)}đ · Sub: +{formatVND(billingCurrent.rates.subAddon)}đ · SePay: +{formatVND(billingCurrent.rates.sepayAddon)}đ per payment
+                  Tap to view weekly payment details. Base: {formatVND(billingCurrent.rates.baseRate)}đ · Sub: +{formatVND(billingCurrent.rates.subAddon)}đ · Auto-Payment: +{formatVND(billingCurrent.rates.sepayAddon)}đ per payment
                 </p>
                 {weekPaymentsOpen && (
                   <div className="mt-4 space-y-2 border-t border-neutral-800 pt-3">
@@ -622,7 +622,7 @@ export default function BossDashboardPage() {
                     ) : weekPayments ? (
                       <>
                         <p className="text-xs text-neutral-500">
-                          {weekPayments.summary.totalPayments} payments · {formatVND(weekPayments.summary.totalAmount)} VND · {weekPayments.summary.sepayPayments} SePay
+                          {weekPayments.summary.totalPayments} payments · {formatVND(weekPayments.summary.totalAmount)} VND · {weekPayments.summary.sepayPayments} Auto-Payment
                         </p>
                         {weekPayments.payments.length === 0 ? (
                           <p className="text-xs text-neutral-600">No payments this week.</p>
@@ -773,7 +773,7 @@ export default function BossDashboardPage() {
                             )}
                             {selectedInvoice.sepayAmount > 0 && (
                               <div className="flex justify-between">
-                                <span className="text-neutral-400">SePay add-on</span>
+                                <span className="text-neutral-400">Auto-Payment add-on</span>
                                 <span>{formatVND(selectedInvoice.sepayAmount)} VND</span>
                               </div>
                             )}
