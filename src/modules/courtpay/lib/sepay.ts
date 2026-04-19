@@ -2,6 +2,8 @@ import { prisma } from "@/lib/db";
 import { emitToVenue } from "@/lib/socket-server";
 import { sendPaymentPushToStaff } from "@/lib/staff-push";
 import { extractPaymentRef, isSubscriptionRef } from "./payment-reference";
+import { checkInSubscriber } from "./check-in";
+import { getActiveSubscription } from "./subscription";
 import type { SepayWebhookPayload } from "../types";
 
 /**
@@ -103,11 +105,33 @@ export async function processSepayWebhook(
     return { matched: true, paymentId: pending.id };
   }
 
-  // Subscription payments: the player was already checked in and the session
-  // deducted at purchase time (pay-session / register). We only confirm the
-  // monetary payment here.
-  // Single-session payments: create a CheckInRecord on confirmation.
-  if (!isSubscriptionRef(ref)) {
+  let updatedSub: Awaited<ReturnType<typeof getActiveSubscription>> = null;
+  if (isSubscriptionRef(ref)) {
+    // Package purchase: after payment confirmation, check-in now and deduct 1 session.
+    const activeSub = await prisma.playerSubscription.findFirst({
+      where: {
+        playerId: pending.checkInPlayerId,
+        status: "active",
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { activatedAt: "desc" },
+    });
+
+    if (activeSub) {
+      await checkInSubscriber(pending.checkInPlayerId, pending.venueId, activeSub.id);
+    } else {
+      // Fallback (should be rare): still record the paid check-in.
+      await prisma.checkInRecord.create({
+        data: {
+          playerId: pending.checkInPlayerId,
+          venueId: pending.venueId,
+          paymentId: pending.id,
+          source: "vietqr",
+        },
+      });
+    }
+    updatedSub = await getActiveSubscription(pending.checkInPlayerId);
+  } else {
     await prisma.checkInRecord.create({
       data: {
         playerId: pending.checkInPlayerId,
@@ -123,6 +147,7 @@ export async function processSepayWebhook(
     paymentRef: ref,
     playerId: pending.checkInPlayerId,
     playerName: pending.checkInPlayer?.name ?? "Unknown",
+    subscription: updatedSub,
   });
 
   sendPaymentPushToStaff("payment_confirmed", {

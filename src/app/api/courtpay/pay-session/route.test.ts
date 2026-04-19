@@ -43,6 +43,8 @@ import { POST } from "./route";
 describe("POST /api/courtpay/pay-session", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPrisma.checkInRecord.findFirst.mockResolvedValue(null);
+    mockPrisma.pendingPayment.findFirst.mockResolvedValue(null);
   });
 
   it("returns 400 when required fields are missing", async () => {
@@ -93,19 +95,10 @@ describe("POST /api/courtpay/pay-session", () => {
     expect(mockCheckInSubscriber).toHaveBeenCalledWith("p1", "v1", "sub-1");
   });
 
-  it("activates subscription, deducts session, and checks in immediately when package is selected", async () => {
+  it("creates subscription payment and waits for confirmation when package is selected", async () => {
     mockPrisma.venue.findFirst.mockResolvedValue({ id: "v1", settings: {} });
     mockPrisma.checkInPlayer.findUnique.mockResolvedValue({ id: "p1", venueId: "v1" });
-    mockGetActiveSubscription
-      .mockResolvedValueOnce(null) // first call: no active sub
-      .mockResolvedValueOnce({     // second call: after activation
-        id: "sub-new",
-        packageName: "5 Sessions",
-        sessionsRemaining: 4,
-        daysRemaining: 30,
-        isUnlimited: false,
-        status: "active",
-      });
+    mockGetActiveSubscription.mockResolvedValue(null);
     mockPrisma.subscriptionPackage.findFirst.mockResolvedValue({
       id: "pkg-1",
       price: 900000,
@@ -127,11 +120,10 @@ describe("POST /api/courtpay/pay-session", () => {
     const body = await res.json();
 
     expect(res.status).toBe(200);
-    expect(body.checkedIn).toBe(true);
-    expect(body.subscription?.sessionsRemaining).toBe(4);
-    expect(mockActivateSubscription).toHaveBeenCalledWith("p1", "pkg-1", "v1", null);
-    expect(mockCheckInSubscriber).toHaveBeenCalledWith("p1", "v1", "sub-new");
-    expect(mockCreateCheckInPayment).toHaveBeenCalled();
+    expect(body.checkedIn).toBe(false);
+    expect(body.pendingPaymentId).toBe("pp-sub");
+    expect(mockActivateSubscription).toHaveBeenCalledWith("p1", "pkg-1", "v1", "CF-SUB-XYZ999");
+    expect(mockCheckInSubscriber).not.toHaveBeenCalled();
   });
 
   it("creates direct check-in when session fee is zero and no subscription", async () => {

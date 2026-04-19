@@ -5,6 +5,8 @@ import { requireStaff } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
 import { sendPaymentPushToStaff } from "@/lib/staff-push";
 import { faceRecognitionService } from "@/lib/face-recognition";
+import { checkInSubscriber } from "@/modules/courtpay/lib/check-in";
+import { getActiveSubscription } from "@/modules/courtpay/lib/subscription";
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,20 +28,34 @@ export async function POST(request: NextRequest) {
         data: { status: "confirmed", confirmedAt: new Date(), confirmedBy: auth.id },
       });
 
-      // Subscription payments: the player was already checked in and the session
-      // deducted at purchase time (pay-session / register). We only need to
-      // confirm the monetary payment here.
-      // Single-session payments: create a CheckInRecord on confirmation.
-      if (payment.checkInPlayerId && payment.type !== "subscription") {
-        const source = payment.paymentMethod === "cash" ? "cash" : "vietqr";
-        await prisma.checkInRecord.create({
-          data: {
-            playerId: payment.checkInPlayerId,
-            venueId: payment.venueId,
-            paymentId: pendingPaymentId,
-            source,
-          },
-        });
+      let updatedSub: Awaited<ReturnType<typeof getActiveSubscription>> = null;
+      if (payment.checkInPlayerId) {
+        if (payment.type === "subscription") {
+          // Package purchase: after payment confirmation, check-in now and deduct 1 session.
+          const activeSub = await prisma.playerSubscription.findFirst({
+            where: {
+              playerId: payment.checkInPlayerId,
+              status: "active",
+              expiresAt: { gt: new Date() },
+            },
+            orderBy: { activatedAt: "desc" },
+          });
+          if (activeSub) {
+            await checkInSubscriber(payment.checkInPlayerId, payment.venueId, activeSub.id);
+          }
+          updatedSub = await getActiveSubscription(payment.checkInPlayerId);
+        } else {
+          // Single-session (checkin) payment: create a CheckInRecord on confirmation.
+          const source = payment.paymentMethod === "cash" ? "cash" : "vietqr";
+          await prisma.checkInRecord.create({
+            data: {
+              playerId: payment.checkInPlayerId,
+              venueId: payment.venueId,
+              paymentId: pendingPaymentId,
+              source,
+            },
+          });
+        }
       }
 
       const playerName = payment.checkInPlayer?.name ?? payment.checkInPlayerId ?? "Unknown";
@@ -47,6 +63,7 @@ export async function POST(request: NextRequest) {
         pendingPaymentId,
         paymentRef: payment.paymentRef,
         playerName,
+        subscription: updatedSub,
       });
       sendPaymentPushToStaff("payment_confirmed", {
         venueId: payment.venueId,

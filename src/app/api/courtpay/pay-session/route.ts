@@ -90,9 +90,9 @@ export async function POST(req: Request) {
     }
 
     // ── Buying a new package ────────────────────────────────────────────────
-    // Activate the subscription, deduct 1 session for the current visit,
-    // and check the player in immediately. If the package costs money, a
-    // background payment is created for billing — it does NOT gate check-in.
+    // Keep the payment step (VietQR / cash). The subscription is activated
+    // before confirmation, but check-in + session deduction happen only when
+    // payment is confirmed by staff/webhook.
     if (packageId) {
       const pkg = await prisma.subscriptionPackage.findFirst({
         where: { id: packageId, venueId: venue.id, isActive: true },
@@ -101,32 +101,19 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Package not found" }, { status: 404 });
       }
 
-      const sub = await activateSubscription(playerId, packageId, venue.id, null);
-      await checkInSubscriber(playerId, venue.id, sub.id);
-      const updated = await getActiveSubscription(playerId);
+      const payment = await createCheckInPayment({
+        venueId: venue.id,
+        playerId,
+        amount: pkg.price,
+        type: "subscription",
+        packageId,
+      });
 
-      if (pkg.price > 0) {
-        const payment = await createCheckInPayment({
-          venueId: venue.id,
-          playerId,
-          amount: pkg.price,
-          type: "subscription",
-          packageId,
-        });
-        // Link payment ref to the subscription for reconciliation
-        await prisma.playerSubscription.update({
-          where: { id: sub.id },
-          data: { paymentRef: payment.paymentRef },
-        });
-      }
+      await activateSubscription(playerId, packageId, venue.id, payment.paymentRef);
 
       return NextResponse.json({
-        pendingPaymentId: null,
-        amount: 0,
-        vietQR: null,
-        paymentRef: null,
-        subscription: updated,
-        checkedIn: true,
+        ...payment,
+        checkedIn: false,
       });
     }
 

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { registerPlayer, createCheckInPayment, checkInSubscriber } from "@/modules/courtpay/lib/check-in";
-import { activateSubscription, getActiveSubscription } from "@/modules/courtpay/lib/subscription";
+import { registerPlayer, createCheckInPayment } from "@/modules/courtpay/lib/check-in";
+import { activateSubscription } from "@/modules/courtpay/lib/subscription";
 import { faceRecognitionService } from "@/lib/face-recognition";
 import { persistPlayerCheckInFacePhoto } from "@/lib/persist-player-check-in-photo";
 
@@ -142,33 +142,25 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Package not found" }, { status: 404 });
       }
 
-      const sub = await activateSubscription(player.id, packageId, venue.id, null);
-      await checkInSubscriber(player.id, venue.id, sub.id);
-      const updated = await getActiveSubscription(player.id);
+      const payment = await createCheckInPayment({
+        venueId: venue.id,
+        playerId: player.id,
+        amount: pkg.price,
+        type: "subscription",
+        packageId,
+      });
 
-      if (pkg.price > 0) {
-        const payment = await createCheckInPayment({
-          venueId: venue.id,
-          playerId: player.id,
-          amount: pkg.price,
-          type: "subscription",
-          packageId,
-        });
-        await prisma.playerSubscription.update({
-          where: { id: sub.id },
-          data: { paymentRef: payment.paymentRef },
-        });
-      }
+      await activateSubscription(
+        player.id,
+        packageId,
+        venue.id,
+        payment.paymentRef
+      );
 
       return NextResponse.json({
         playerId: player.id,
         playerName: player.name,
-        pendingPaymentId: null,
-        amount: 0,
-        vietQR: null,
-        paymentRef: null,
-        subscription: updated,
-        checkedIn: true,
+        ...payment,
       });
     }
 

@@ -390,13 +390,24 @@ export function CourtPayCheckInScreen({
   // ── WebSocket ─────────────────────────────────────────────────────────────
   useSocket(venueId, {
     "payment:confirmed": (data: unknown) => {
-      const d = data as { pendingPaymentId?: string; playerName?: string };
+      const d = data as {
+        pendingPaymentId?: string;
+        playerName?: string;
+        subscription?: ActiveSubInfo | null;
+      };
       if (pendingPayment && d.pendingPaymentId === pendingPayment.id) {
         setCashPending(false);
+        const sub = d.subscription;
+        let subHint = "";
+        if (sub && sub.isUnlimited) {
+          subHint = `\nUnlimited pass · ${sub.daysRemaining} days left`;
+        } else if (sub && sub.sessionsRemaining !== null) {
+          subHint = `\n${sub.sessionsRemaining} session${sub.sessionsRemaining !== 1 ? "s" : ""} remaining · ${sub.daysRemaining} days left`;
+        }
         setConfirmMessage(
-          d.playerName
+          (d.playerName
             ? `Welcome ${d.playerName}! Payment confirmed.`
-            : "Payment confirmed."
+            : "Payment confirmed.") + subHint
         );
         setStep("confirmed");
       }
