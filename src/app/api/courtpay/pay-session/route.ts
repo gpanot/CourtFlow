@@ -72,10 +72,39 @@ export async function POST(req: Request) {
       },
     });
     if (existingPayment) {
-      return NextResponse.json(
-        { error: "already_checked_in", alreadyCheckedIn: true, playerName: player.name },
-        { status: 409 }
-      );
+      const allowRenewalAfterZeroCheckIn =
+        !!skipSessionDeduction &&
+        !!packageId &&
+        existingPayment.type === "checkin" &&
+        existingPayment.amount === 0 &&
+        existingPayment.status === "confirmed";
+
+      if (allowRenewalAfterZeroCheckIn) {
+        // Allow one renewal purchase after the zero-amount check-in payment.
+        // Keep blocking if a renewal/subscription payment already exists this session.
+        const existingRenewalPayment = await prisma.pendingPayment.findFirst({
+          where: {
+            checkInPlayerId: playerId,
+            venueId: venue.id,
+            status: { in: ["pending", "confirmed"] },
+            createdAt: { gte: sessionStart },
+            type: { in: ["subscription", "subscription_renewal"] },
+          },
+        });
+        if (!existingRenewalPayment) {
+          // Continue to package purchase flow below.
+        } else {
+          return NextResponse.json(
+            { error: "already_checked_in", alreadyCheckedIn: true, playerName: player.name },
+            { status: 409 }
+          );
+        }
+      } else {
+        return NextResponse.json(
+          { error: "already_checked_in", alreadyCheckedIn: true, playerName: player.name },
+          { status: 409 }
+        );
+      }
     }
 
     // ── Active subscription (no package purchase) → auto check-in, amount = 0 ──

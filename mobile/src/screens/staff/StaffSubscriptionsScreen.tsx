@@ -31,6 +31,7 @@ import { SubscribersList } from "../../components/SubscribersList";
 import type { VenuePaymentSettings } from "../../types/api";
 
 type Tab = "packages" | "subscribers";
+const MAX_ACTIVE_PACKAGES = 3;
 
 interface PackageRow {
   id: string;
@@ -311,6 +312,11 @@ function createStyles(t: AppColors) {
     toggleTitle: { fontSize: 14, fontWeight: "600", color: t.text },
     toggleDesc: { fontSize: 12, color: t.muted, marginTop: 2, lineHeight: 16 },
     subscribersWrap: { flex: 1, padding: 16, paddingBottom: 0 },
+    limitHint: {
+      fontSize: 12,
+      color: t.amber400,
+      marginBottom: 10,
+    },
   });
 }
 
@@ -419,6 +425,13 @@ export function StaffSubscriptionsScreen() {
   }, [formPrice, formSessions, formDays, formUnlimited, sessionFee, formDiscountManual]);
 
   const openCreate = () => {
+    if (packages.filter((p) => p.isActive).length >= MAX_ACTIVE_PACKAGES) {
+      Alert.alert(
+        "Package limit reached",
+        `You can have up to ${MAX_ACTIVE_PACKAGES} active packages. Delete one before adding a new package.`
+      );
+      return;
+    }
     setEditing(null);
     setFormName("");
     setFormSessions("");
@@ -537,6 +550,13 @@ export function StaffSubscriptionsScreen() {
 
   const submitForm = async () => {
     if (!venueId) return;
+    if (!editing && activePackages.length >= MAX_ACTIVE_PACKAGES) {
+      Alert.alert(
+        "Package limit reached",
+        `You can have up to ${MAX_ACTIVE_PACKAGES} active packages.`
+      );
+      return;
+    }
     if (!formName.trim()) {
       Alert.alert("Validation", "Package name is required");
       return;
@@ -708,9 +728,15 @@ export function StaffSubscriptionsScreen() {
                 </View>
               ) : (
                 <>
+                  {activePackages.length >= MAX_ACTIVE_PACKAGES ? (
+                    <Text style={styles.limitHint}>
+                      Maximum {MAX_ACTIVE_PACKAGES} active packages reached.
+                    </Text>
+                  ) : null}
                   <TouchableOpacity
                     style={[styles.primaryBtn, { marginBottom: 14 }]}
                     onPress={openCreate}
+                    disabled={activePackages.length >= MAX_ACTIVE_PACKAGES}
                   >
                     <Ionicons name="add" size={18} color="#fff" />
                     <Text style={styles.primaryBtnText}>Add package</Text>

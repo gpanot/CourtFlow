@@ -96,19 +96,24 @@ Expected result:
 ### 6) Returning player with exhausted package (0 sessions, still valid days)
 
 1. Face/phone match succeeds.
-2. Kiosk shows exhausted-renewal screen:
+2. Kiosk first shows exhausted-renewal welcome:
    - welcome header
    - KPI cards: `0 sessions left` and remaining days
-   - package cards immediately visible
-   - `Next time` CTA with 30s auto-return timer
-3. If player selects a package and taps Continue, kiosk opens payment screen.
-4. Staff/SePay confirms payment.
-5. New package is active for the player.
-6. Current visit is confirmed without deducting a session from this newly purchased package.
+   - subtitle: "You are in but consider buying a new package for next time"
+   - `Show New Packages` + `Next time` CTAs
+   - 30s auto-return timer is active on this substep
+3. If player taps `Show New Packages`, kiosk reveals package cards and `Next time` at bottom.
+4. Timer stops once package cards are shown.
+5. If player selects a package and taps Continue, kiosk opens payment screen (no auto-return timer there).
+6. Staff/SePay confirms payment.
+7. New package is active for the player.
+8. Current visit is confirmed without deducting a session from this newly purchased package.
 
 Expected result:
-- Renewal flow is fast-path from exhausted screen to package payment.
-- Timer applies only on exhausted-offer screen; no timer while awaiting payment.
+- Last-session check-in still produces a zero-amount paid row.
+- If renewal is purchased and confirmed, Paid tab shows two rows for that player in the session:
+  - zero-amount check-in row
+  - renewal package payment row
 - Newly activated package keeps full session balance after this flow.
 
 ---

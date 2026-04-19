@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireStaff } from "@/lib/auth";
 
+const MAX_ACTIVE_PACKAGES = 3;
+
 export async function GET(req: Request) {
   try {
     const staff = requireStaff(req.headers);
@@ -45,6 +47,16 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: "name, durationDays, and price are required" },
         { status: 400 }
+      );
+    }
+
+    const activeCount = await prisma.subscriptionPackage.count({
+      where: { venueId, isActive: true },
+    });
+    if (activeCount >= MAX_ACTIVE_PACKAGES) {
+      return NextResponse.json(
+        { error: `Maximum ${MAX_ACTIVE_PACKAGES} active packages allowed` },
+        { status: 409 }
       );
     }
 

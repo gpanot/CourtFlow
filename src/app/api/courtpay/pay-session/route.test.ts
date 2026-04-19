@@ -190,6 +190,54 @@ describe("POST /api/courtpay/pay-session", () => {
     });
   });
 
+  it("allows renewal payment after confirmed zero check-in payment", async () => {
+    mockPrisma.venue.findFirst.mockResolvedValue({ id: "v1", settings: {} });
+    mockPrisma.checkInPlayer.findUnique.mockResolvedValue({ id: "p1", venueId: "v1" });
+    mockGetActiveSubscription.mockResolvedValue(null);
+    mockPrisma.subscriptionPackage.findFirst.mockResolvedValue({
+      id: "pkg-1",
+      price: 900000,
+    });
+    mockActivateSubscription.mockResolvedValue({ id: "sub-new" });
+    mockPrisma.pendingPayment.findFirst
+      .mockResolvedValueOnce({
+        id: "pp-zero",
+        type: "checkin",
+        amount: 0,
+        status: "confirmed",
+      })
+      .mockResolvedValueOnce(null);
+    mockCreateCheckInPayment.mockResolvedValue({
+      pendingPaymentId: "pp-renew",
+      amount: 900000,
+      vietQR: "qr",
+      paymentRef: "CF-SUB-RENEW2",
+    });
+
+    const req = new Request("http://localhost/api/courtpay/pay-session", {
+      method: "POST",
+      body: JSON.stringify({
+        venueCode: "v1",
+        playerId: "p1",
+        packageId: "pkg-1",
+        skipSessionDeduction: true,
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await POST(req);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.pendingPaymentId).toBe("pp-renew");
+    expect(mockCreateCheckInPayment).toHaveBeenCalledWith({
+      venueId: "v1",
+      playerId: "p1",
+      amount: 900000,
+      type: "subscription_renewal",
+      packageId: "pkg-1",
+    });
+  });
+
   it("creates direct check-in when session fee is zero and no subscription", async () => {
     mockPrisma.venue.findFirst.mockResolvedValue({ id: "v1", settings: {} });
     mockPrisma.session.findFirst.mockResolvedValue(null);

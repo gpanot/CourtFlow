@@ -201,6 +201,7 @@ export function CourtPayCheckInScreen({
   const [confirmMessage, setConfirmMessage] = useState("");
   const [confirmedSubInfo, setConfirmedSubInfo] = useState<ActiveSubInfo | null>(null);
   const [exhaustedSubInfo, setExhaustedSubInfo] = useState<ActiveSubInfo | null>(null);
+  const [showExhaustedPackages, setShowExhaustedPackages] = useState(false);
   const [alreadyPaidPlayer, setAlreadyPaidPlayer] = useState<CheckInPlayerLite | null>(null);
   const [alreadyPaidStatus, setAlreadyPaidStatus] = useState<string>("");
 
@@ -346,6 +347,7 @@ export function CourtPayCheckInScreen({
     setConfirmMessage("");
     setConfirmedSubInfo(null);
     setExhaustedSubInfo(null);
+    setShowExhaustedPackages(false);
     setConfirmedSeconds(CONFIRMED_AUTO_HOME_SEC);
     setExhaustedOfferSeconds(EXHAUSTED_OFFER_AUTO_HOME_SEC);
   }, []);
@@ -405,7 +407,7 @@ export function CourtPayCheckInScreen({
 
   // ── Exhausted-offer countdown ──────────────────────────────────────────────
   useEffect(() => {
-    if (step !== "subscription_exhausted_offer") {
+    if (step !== "subscription_exhausted_offer" || showExhaustedPackages) {
       if (exhaustedOfferIntervalRef.current) {
         clearInterval(exhaustedOfferIntervalRef.current);
         exhaustedOfferIntervalRef.current = null;
@@ -431,7 +433,7 @@ export function CourtPayCheckInScreen({
         exhaustedOfferIntervalRef.current = null;
       }
     };
-  }, [step, resetToHome]);
+  }, [step, showExhaustedPackages, resetToHome]);
 
   // ── WebSocket ─────────────────────────────────────────────────────────────
   useSocket(venueId, {
@@ -507,6 +509,7 @@ export function CourtPayCheckInScreen({
       if (shouldShowExhaustedOffer) {
         setExhaustedSubInfo(latestSub);
         setSelectedPkg(null);
+        setShowExhaustedPackages(false);
         setStep("subscription_exhausted_offer");
         return;
       }
@@ -1540,7 +1543,7 @@ export function CourtPayCheckInScreen({
                 </View>
                 <Text style={styles.exhaustedTitle}>Welcome back, {playerName}!</Text>
                 <Text style={styles.exhaustedSubtitle}>
-                  Your package is finished. Pick a package to continue now.
+                  You are in but consider buying a new package for next time.
                 </Text>
                 <View style={styles.exhaustedKpiRow}>
                   <LiquidGlassSurface style={styles.exhaustedKpiCard} tintColor={CP.glassOverlay}>
@@ -1558,88 +1561,110 @@ export function CourtPayCheckInScreen({
                     </View>
                   </LiquidGlassSurface>
                 </View>
-                <Text style={styles.exhaustedCountdownText}>
-                  Returning to menu in {exhaustedOfferSeconds}s...
-                </Text>
-              </View>
-
-              <View style={styles.subOfferList}>
-                {activePackages.map((pkg) => {
-                  const isSelected = selectedPkg === pkg.id;
-                  return (
+                {!showExhaustedPackages ? (
+                  <>
+                    <Text style={styles.exhaustedCountdownText}>
+                      Returning to menu in {exhaustedOfferSeconds}s...
+                    </Text>
                     <TouchableOpacity
-                      key={pkg.id}
-                      onPress={() => setSelectedPkg(pkg.id)}
+                      style={[styles.primaryBtn, dyn.primaryBtn, styles.primaryBtnWide]}
+                      onPress={() => setShowExhaustedPackages(true)}
                       activeOpacity={0.85}
                     >
-                      <LiquidGlassSurface
-                        style={[
-                          styles.pkgGlass,
-                          isSelected && styles.pkgGlassSelected,
-                        ]}
-                        accent={isSelected ? "green" : "none"}
-                        intensity={
-                          Platform.OS === "ios"
-                            ? isSelected
-                              ? 52
-                              : 40
-                            : isSelected
-                              ? 88
-                              : 72
-                        }
-                      >
-                        <View style={styles.pkgBadgeStack}>
-                          {pkg.isBestChoice && (
-                            <View style={[styles.pkgBestChoiceTag, dyn.pkgBestChoiceTag]}>
-                              <Text style={styles.pkgBestChoiceText}>Best Choice</Text>
-                            </View>
-                          )}
-                          {pkg.discountPct != null && pkg.discountPct > 0 && (
-                            <View style={styles.pkgDiscountBadge}>
-                              <Text style={styles.pkgDiscountBadgeText}>
-                                Save {pkg.discountPct}%
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-                        <Text style={[styles.pkgName, { marginRight: 80 }]}>{pkg.name}</Text>
-                        <Text style={styles.pkgMeta}>
-                          {pkg.sessions === null ? "Unlimited" : `${pkg.sessions} sessions`}
-                          {pkg.durationDays ? ` · ${pkg.durationDays} days` : ""}
-                        </Text>
-                        <Text style={styles.pkgPrice}>
-                          {pkg.price === 0 ? "—" : formatVND(pkg.price)}
-                        </Text>
-                      </LiquidGlassSurface>
+                      <Text style={styles.primaryBtnText}>Show New Packages</Text>
                     </TouchableOpacity>
-                  );
-                })}
+                    <TouchableOpacity
+                      style={styles.cancelBtn}
+                      onPress={resetToHome}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.cancelText}>Next time</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : null}
               </View>
 
-              <TouchableOpacity
-                style={[
-                  styles.primaryBtn,
-                  { width: "100%" },
-                  selectedPkg ? dyn.primaryBtn : undefined,
-                  (!selectedPkg || loading) && styles.disabledBtn,
-                ]}
-                onPress={handleSubscriptionContinue}
-                disabled={!selectedPkg || loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" />
-                ) : selectedPkg ? (
-                  <Text style={styles.primaryBtnText}>Continue</Text>
-                ) : null}
-              </TouchableOpacity>
+              {showExhaustedPackages ? (
+                <>
+                  <View style={styles.subOfferList}>
+                    {activePackages.map((pkg) => {
+                      const isSelected = selectedPkg === pkg.id;
+                      return (
+                        <TouchableOpacity
+                          key={pkg.id}
+                          onPress={() => setSelectedPkg(pkg.id)}
+                          activeOpacity={0.85}
+                        >
+                          <LiquidGlassSurface
+                            style={[
+                              styles.pkgGlass,
+                              isSelected && styles.pkgGlassSelected,
+                            ]}
+                            accent={isSelected ? "green" : "none"}
+                            intensity={
+                              Platform.OS === "ios"
+                                ? isSelected
+                                  ? 52
+                                  : 40
+                                : isSelected
+                                  ? 88
+                                  : 72
+                            }
+                          >
+                            <View style={styles.pkgBadgeStack}>
+                              {pkg.isBestChoice && (
+                                <View style={[styles.pkgBestChoiceTag, dyn.pkgBestChoiceTag]}>
+                                  <Text style={styles.pkgBestChoiceText}>Best Choice</Text>
+                                </View>
+                              )}
+                              {pkg.discountPct != null && pkg.discountPct > 0 && (
+                                <View style={styles.pkgDiscountBadge}>
+                                  <Text style={styles.pkgDiscountBadgeText}>
+                                    Save {pkg.discountPct}%
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
+                            <Text style={[styles.pkgName, { marginRight: 80 }]}>{pkg.name}</Text>
+                            <Text style={styles.pkgMeta}>
+                              {pkg.sessions === null ? "Unlimited" : `${pkg.sessions} sessions`}
+                              {pkg.durationDays ? ` · ${pkg.durationDays} days` : ""}
+                            </Text>
+                            <Text style={styles.pkgPrice}>
+                              {pkg.price === 0 ? "—" : formatVND(pkg.price)}
+                            </Text>
+                          </LiquidGlassSurface>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
 
-              <TouchableOpacity
-                style={styles.cancelBtn}
-                onPress={resetToHome}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.cancelText}>Next time</Text>
-              </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.primaryBtn,
+                      { width: "100%" },
+                      selectedPkg ? dyn.primaryBtn : undefined,
+                      (!selectedPkg || loading) && styles.disabledBtn,
+                    ]}
+                    onPress={handleSubscriptionContinue}
+                    disabled={!selectedPkg || loading}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : selectedPkg ? (
+                      <Text style={styles.primaryBtnText}>Continue</Text>
+                    ) : null}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.cancelBtn}
+                    onPress={resetToHome}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.cancelText}>Next time</Text>
+                  </TouchableOpacity>
+                </>
+              ) : null}
             </ScrollView>
           </View>
         );
