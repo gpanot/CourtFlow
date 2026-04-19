@@ -141,6 +141,7 @@ export function CourtPayCheckInScreen({
     secondaryActionBtn: { borderColor: CP.primaryLight },
     secondaryActionText:{ color: CP.primaryLight },
     selectBtnActive:    { borderColor: CP.primary, backgroundColor: CP.bg },
+    selectBtnTextActive:{ color: CP.text },
     scanAgainBig:       { backgroundColor: CP.primary },
     phoneAltBtn:        { backgroundColor: CP.primaryDark },
     confirmAccentBtn:   { backgroundColor: CP.primary },
@@ -1218,16 +1219,40 @@ export function CourtPayCheckInScreen({
               <Text style={styles.regFormLabel}>{t("regGender")}</Text>
               <View style={styles.inlineRow}>
                 <TouchableOpacity
-                  style={[styles.selectBtn, gender === "male" && styles.selectBtnActive, dyn.selectBtnActive]}
+                  style={[
+                    styles.selectBtn,
+                    gender === "male" && styles.selectBtnActive,
+                    gender === "male" && dyn.selectBtnActive,
+                  ]}
                   onPress={() => { Keyboard.dismiss(); setGender("male"); restartIdleTimer(); }}
                 >
-                  <Text style={styles.selectBtnText}>{t("regMale")}</Text>
+                  <Text
+                    style={[
+                      styles.selectBtnText,
+                      gender === "male" && styles.selectBtnTextActive,
+                      gender === "male" && dyn.selectBtnTextActive,
+                    ]}
+                  >
+                    {t("regMale")}
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.selectBtn, gender === "female" && styles.selectBtnActive, dyn.selectBtnActive]}
+                  style={[
+                    styles.selectBtn,
+                    gender === "female" && styles.selectBtnActive,
+                    gender === "female" && dyn.selectBtnActive,
+                  ]}
                   onPress={() => { Keyboard.dismiss(); setGender("female"); restartIdleTimer(); }}
                 >
-                  <Text style={styles.selectBtnText}>{t("regFemale")}</Text>
+                  <Text
+                    style={[
+                      styles.selectBtnText,
+                      gender === "female" && styles.selectBtnTextActive,
+                      gender === "female" && dyn.selectBtnTextActive,
+                    ]}
+                  >
+                    {t("regFemale")}
+                  </Text>
                 </TouchableOpacity>
               </View>
               <Text style={styles.regFormLabel}>{t("regLevel")}</Text>
@@ -1241,10 +1266,20 @@ export function CourtPayCheckInScreen({
                 ).map(([lvl, labelKey]) => (
                   <TouchableOpacity
                     key={lvl}
-                    style={[styles.selectBtn, skillLevel === lvl && styles.selectBtnActive, dyn.selectBtnActive]}
+                    style={[
+                      styles.selectBtn,
+                      skillLevel === lvl && styles.selectBtnActive,
+                      skillLevel === lvl && dyn.selectBtnActive,
+                    ]}
                     onPress={() => { Keyboard.dismiss(); setSkillLevel(lvl); restartIdleTimer(); }}
                   >
-                    <Text style={styles.selectBtnText}>
+                    <Text
+                      style={[
+                        styles.selectBtnText,
+                        skillLevel === lvl && styles.selectBtnTextActive,
+                        skillLevel === lvl && dyn.selectBtnTextActive,
+                      ]}
+                    >
                       {t(labelKey as CheckInScannerStringKey)}
                     </Text>
                   </TouchableOpacity>
@@ -1379,9 +1414,9 @@ export function CourtPayCheckInScreen({
               >
                 {loading ? (
                   <ActivityIndicator color="#fff" />
-                ) : (
+                ) : selectedPkg ? (
                   <Text style={styles.primaryBtnText}>Continue</Text>
-                )}
+                ) : null}
               </TouchableOpacity>
 
               {/* OR separator */}
@@ -1722,8 +1757,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     height: 42,
   },
-  selectBtnActive: { borderColor: "transparent", backgroundColor: "transparent" },
+  selectBtnActive: { borderColor: "rgba(255,255,255,0.32)", backgroundColor: "rgba(255,255,255,0.12)" },
   selectBtnText: { color: "#fff", fontSize: 13, fontWeight: "600" },
+  selectBtnTextActive: { color: "#fff" },
 
   flowGlassPanel: {
     width: "100%",

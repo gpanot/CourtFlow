@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { createCheckInPayment, checkInSubscriber } from "@/modules/courtpay/lib/check-in";
+import {
+  createCheckInPayment,
+  createConfirmedCheckInPayment,
+  checkInSubscriber,
+} from "@/modules/courtpay/lib/check-in";
 import { getActiveSubscription, activateSubscription } from "@/modules/courtpay/lib/subscription";
+import { emitToVenue } from "@/lib/socket-server";
 
 export async function POST(req: Request) {
   try {
@@ -76,14 +81,28 @@ export async function POST(req: Request) {
     // ── Active subscription (no package purchase) → auto check-in, amount = 0 ──
     const activeSub = await getActiveSubscription(playerId);
     if (activeSub && !packageId) {
-      await checkInSubscriber(playerId, venue.id, activeSub.id, sessionStart);
+      const autoPayment = await createConfirmedCheckInPayment({
+        venueId: venue.id,
+        playerId,
+        amount: 0,
+        type: "checkin",
+        paymentMethod: "subscription",
+        confirmedBy: "system_subscription",
+      });
+      await checkInSubscriber(playerId, venue.id, activeSub.id, sessionStart, autoPayment.id);
 
       const updated = await getActiveSubscription(playerId);
+      emitToVenue(venue.id, "payment:confirmed", {
+        pendingPaymentId: autoPayment.id,
+        paymentRef: autoPayment.paymentRef,
+        playerName: player.name,
+        subscription: updated,
+      });
       return NextResponse.json({
-        pendingPaymentId: null,
+        pendingPaymentId: autoPayment.id,
         amount: 0,
         vietQR: null,
-        paymentRef: null,
+        paymentRef: autoPayment.paymentRef,
         subscription: updated,
         checkedIn: true,
       });

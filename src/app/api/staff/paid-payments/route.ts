@@ -46,6 +46,50 @@ export async function GET(request: NextRequest) {
       orderBy: { confirmedAt: "desc" },
     });
 
+    const subscriptionPlayerIds = [
+      ...new Set(payments.map((p) => p.checkInPlayerId).filter((v): v is string => Boolean(v))),
+    ];
+    const subscriptions =
+      subscriptionPlayerIds.length > 0
+        ? await prisma.playerSubscription.findMany({
+            where: { playerId: { in: subscriptionPlayerIds } },
+            select: {
+              playerId: true,
+              status: true,
+              sessionsRemaining: true,
+              expiresAt: true,
+              activatedAt: true,
+              package: { select: { name: true, sessions: true } },
+            },
+            orderBy: [{ playerId: "asc" }, { activatedAt: "desc" }],
+          })
+        : [];
+
+    const subscriptionByPlayer = new Map<
+      string,
+      {
+        packageName: string;
+        sessionsRemaining: number | null;
+        isUnlimited: boolean;
+        daysRemaining: number;
+        status: string;
+      }
+    >();
+    for (const sub of subscriptions) {
+      if (subscriptionByPlayer.has(sub.playerId)) continue;
+      const daysRemaining = Math.max(
+        0,
+        Math.ceil((sub.expiresAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+      );
+      subscriptionByPlayer.set(sub.playerId, {
+        packageName: sub.package.name,
+        sessionsRemaining: sub.sessionsRemaining,
+        isUnlimited: sub.package.sessions === null,
+        daysRemaining,
+        status: sub.status,
+      });
+    }
+
     // For CourtPay payments (checkInPlayerId set, no player), attach face photo via phone lookup
     const courtPayPhones = [
       ...new Set(
@@ -69,11 +113,14 @@ export async function GET(request: NextRequest) {
     );
 
     const enriched = payments.map((p) => {
+      const subscriptionInfo = p.checkInPlayerId
+        ? subscriptionByPlayer.get(p.checkInPlayerId) ?? null
+        : null;
       if (p.checkInPlayerId && !p.playerId && p.checkInPlayer?.phone) {
         const face = faceByPhone.get(p.checkInPlayer.phone) ?? null;
-        return { ...p, facePhotoUrl: face };
+        return { ...p, facePhotoUrl: face, subscriptionInfo };
       }
-      return p;
+      return { ...p, subscriptionInfo };
     });
 
     const confirmed = enriched.filter((p) => p.status === "confirmed");

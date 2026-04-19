@@ -59,6 +59,15 @@ interface CreatePaymentInput {
   packageId?: string;
 }
 
+interface CreateConfirmedPaymentInput {
+  venueId: string;
+  playerId: string;
+  amount: number;
+  type: "checkin" | "subscription";
+  paymentMethod?: string;
+  confirmedBy?: string;
+}
+
 /**
  * Create a PendingPayment for a check-in player, returning VietQR URL + ref.
  */
@@ -127,6 +136,34 @@ export async function createCheckInPayment(
 }
 
 /**
+ * Create an already-confirmed payment row for zero-cost subscription check-ins.
+ * This keeps staff "Paid" history consistent even when no payment action is needed.
+ */
+export async function createConfirmedCheckInPayment(
+  input: CreateConfirmedPaymentInput
+) {
+  const refType = input.type === "subscription" ? "subscription" : "session";
+  const paymentRef = await generatePaymentRef(refType as "subscription" | "session");
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + 15 * 60 * 1000);
+
+  return prisma.pendingPayment.create({
+    data: {
+      venueId: input.venueId,
+      checkInPlayerId: input.playerId,
+      amount: input.amount,
+      paymentRef,
+      type: input.type,
+      paymentMethod: input.paymentMethod ?? "subscription",
+      status: "confirmed",
+      confirmedAt: now,
+      confirmedBy: input.confirmedBy ?? "system",
+      expiresAt,
+    },
+  });
+}
+
+/**
  * Check in a subscriber (skip payment, deduct session, record check-in).
  * Returns the existing record without deducting again if the player already
  * checked in at this venue since `dedupeSince` (or start of day by default).
@@ -135,7 +172,8 @@ export async function checkInSubscriber(
   playerId: string,
   venueId: string,
   subscriptionId: string,
-  dedupeSince?: Date
+  dedupeSince?: Date,
+  paymentId?: string
 ) {
   const since = dedupeSince
     ? new Date(dedupeSince)
@@ -164,6 +202,7 @@ export async function checkInSubscriber(
       playerId,
       venueId,
       source: "subscription",
+      ...(paymentId ? { paymentId } : {}),
     },
   });
 

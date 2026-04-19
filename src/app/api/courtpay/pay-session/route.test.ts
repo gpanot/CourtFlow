@@ -4,8 +4,10 @@ const {
   mockPrisma,
   mockCheckInSubscriber,
   mockCreateCheckInPayment,
+  mockCreateConfirmedCheckInPayment,
   mockGetActiveSubscription,
   mockActivateSubscription,
+  mockEmitToVenue,
 } = vi.hoisted(() => {
   return {
     mockPrisma: {
@@ -19,8 +21,10 @@ const {
     },
     mockCheckInSubscriber: vi.fn(),
     mockCreateCheckInPayment: vi.fn(),
+    mockCreateConfirmedCheckInPayment: vi.fn(),
     mockGetActiveSubscription: vi.fn(),
     mockActivateSubscription: vi.fn(),
+    mockEmitToVenue: vi.fn(),
   };
 });
 
@@ -30,12 +34,17 @@ vi.mock("@/lib/db", () => ({
 
 vi.mock("@/modules/courtpay/lib/check-in", () => ({
   createCheckInPayment: mockCreateCheckInPayment,
+  createConfirmedCheckInPayment: mockCreateConfirmedCheckInPayment,
   checkInSubscriber: mockCheckInSubscriber,
 }));
 
 vi.mock("@/modules/courtpay/lib/subscription", () => ({
   getActiveSubscription: mockGetActiveSubscription,
   activateSubscription: mockActivateSubscription,
+}));
+
+vi.mock("@/lib/socket-server", () => ({
+  emitToVenue: mockEmitToVenue,
 }));
 
 import { POST } from "./route";
@@ -83,6 +92,10 @@ describe("POST /api/courtpay/pay-session", () => {
       isUnlimited: false,
       status: "active",
     });
+    mockCreateConfirmedCheckInPayment.mockResolvedValue({
+      id: "pp-auto-1",
+      paymentRef: "CF-SES-AUTO01",
+    });
 
     const req = new Request("http://localhost/api/courtpay/pay-session", {
       method: "POST",
@@ -94,7 +107,18 @@ describe("POST /api/courtpay/pay-session", () => {
 
     expect(res.status).toBe(200);
     expect(body.checkedIn).toBe(true);
-    expect(mockCheckInSubscriber).toHaveBeenCalledWith("p1", "v1", "sub-1", openedAt);
+    expect(body.pendingPaymentId).toBe("pp-auto-1");
+    expect(body.amount).toBe(0);
+    expect(mockCreateConfirmedCheckInPayment).toHaveBeenCalledWith({
+      venueId: "v1",
+      playerId: "p1",
+      amount: 0,
+      type: "checkin",
+      paymentMethod: "subscription",
+      confirmedBy: "system_subscription",
+    });
+    expect(mockCheckInSubscriber).toHaveBeenCalledWith("p1", "v1", "sub-1", openedAt, "pp-auto-1");
+    expect(mockEmitToVenue).toHaveBeenCalled();
   });
 
   it("creates subscription payment and waits for confirmation when package is selected", async () => {

@@ -65,6 +65,15 @@ function getFlowTag(p: PendingPayment): "CourtPay" | "Self" {
   return p.checkInPlayerId ? "CourtPay" : "Self";
 }
 
+function getMethodBadge(paymentMethod: string): {
+  label: string;
+  kind: "cash" | "qr" | "subscription";
+} {
+  if (paymentMethod === "cash") return { label: "CASH", kind: "cash" };
+  if (paymentMethod === "subscription") return { label: "SUB", kind: "subscription" };
+  return { label: "QR", kind: "qr" };
+}
+
 function formatWaitTime(createdAt: string): string {
   const ms = Date.now() - new Date(createdAt).getTime();
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -166,6 +175,8 @@ function createStyles(t: AppColors) {
     badgeCashText: { fontSize: 10, fontWeight: "700", color: t.amber400 },
     badgeQr: { backgroundColor: "rgba(37,99,235,0.2)" },
     badgeQrText: { fontSize: 10, fontWeight: "700", color: t.blue400 },
+    badgeSub: { backgroundColor: "rgba(22,163,74,0.2)" },
+    badgeSubText: { fontSize: 10, fontWeight: "700", color: t.green400 },
     badgeFlow: { backgroundColor: "rgba(217,70,239,0.2)" },
     badgeFlowText: { fontSize: 10, fontWeight: "700", color: t.fuchsia300 },
     badgeApr: { backgroundColor: "rgba(22,163,74,0.2)" },
@@ -208,6 +219,7 @@ function createStyles(t: AppColors) {
       fontSize: 14,
     },
     skillMuted: { fontSize: 12, color: t.subtle, marginTop: 2 },
+    subLeftLine: { fontSize: 12, color: t.green400, marginTop: 2, fontWeight: "600" },
     dotsBtn: {
       padding: 4,
       borderRadius: 8,
@@ -497,7 +509,7 @@ export function PaymentTabScreen() {
     const isActing = actionId === item.id || actionId === `${item.id}-cancel`;
     const player = getDisplayPlayer(item);
     const faceUri = getFacePreviewUri(item);
-    const isCash = item.paymentMethod === "cash";
+    const methodBadge = getMethodBadge(item.paymentMethod);
     const isNew = item.type === "registration";
     const waitMs = Date.now() - new Date(item.createdAt).getTime();
     const isUrgent = waitMs > 2 * 60 * 1000;
@@ -530,13 +542,23 @@ export function PaymentTabScreen() {
               <View
                 style={[
                   styles.badge,
-                  isCash ? styles.badgeCash : styles.badgeQr,
+                  methodBadge.kind === "cash"
+                    ? styles.badgeCash
+                    : methodBadge.kind === "subscription"
+                      ? styles.badgeSub
+                      : styles.badgeQr,
                 ]}
               >
                 <Text
-                  style={isCash ? styles.badgeCashText : styles.badgeQrText}
+                  style={
+                    methodBadge.kind === "cash"
+                      ? styles.badgeCashText
+                      : methodBadge.kind === "subscription"
+                        ? styles.badgeSubText
+                        : styles.badgeQrText
+                  }
                 >
-                  {isCash ? "CASH" : "QR"}
+                  {methodBadge.label}
                 </Text>
               </View>
               <View style={[styles.badge, styles.badgeFlow]}>
@@ -598,10 +620,16 @@ export function PaymentTabScreen() {
   const renderPaidItem = ({ item }: { item: PendingPayment }) => {
     const player = getDisplayPlayer(item);
     const faceUri = getFacePreviewUri(item);
-    const isCash = item.paymentMethod === "cash";
+    const methodBadge = getMethodBadge(item.paymentMethod);
     const isNew = item.type === "registration";
     const expanded = expandedPhotoId === `paid-${item.id}`;
     const isCancelled = !!item.cancelReason;
+    const sub = item.subscriptionInfo;
+    const subLeftText = sub
+      ? sub.isUnlimited
+        ? `Subscription left: Unlimited (${sub.daysRemaining} days)`
+        : `Subscription left: ${sub.sessionsRemaining ?? 0} sessions (${sub.daysRemaining} days)`
+      : null;
 
     return (
       <View style={[styles.card, isCancelled && styles.cardCancelled]}>
@@ -628,9 +656,26 @@ export function PaymentTabScreen() {
               <Text style={styles.cardName} numberOfLines={1}>
                 {player.name}
               </Text>
-              <View style={[styles.badge, isCash ? styles.badgeCash : styles.badgeQr]}>
-                <Text style={isCash ? styles.badgeCashText : styles.badgeQrText}>
-                  {isCash ? "CASH" : "QR"}
+              <View
+                style={[
+                  styles.badge,
+                  methodBadge.kind === "cash"
+                    ? styles.badgeCash
+                    : methodBadge.kind === "subscription"
+                      ? styles.badgeSub
+                      : styles.badgeQr,
+                ]}
+              >
+                <Text
+                  style={
+                    methodBadge.kind === "cash"
+                      ? styles.badgeCashText
+                      : methodBadge.kind === "subscription"
+                        ? styles.badgeSubText
+                        : styles.badgeQrText
+                  }
+                >
+                  {methodBadge.label}
                 </Text>
               </View>
               <View style={[styles.badge, styles.badgeFlow]}>
@@ -689,6 +734,7 @@ export function PaymentTabScreen() {
         <Text style={styles.metaLine}>
           {isNew ? "Registration" : "Check-in"} · {formatVND(item.amount)}
         </Text>
+        {subLeftText ? <Text style={styles.subLeftLine}>{subLeftText}</Text> : null}
         {isCancelled && (
           <Text style={styles.cancelledAmount}>
             -{formatVND(item.amount)} ({item.cancelReason})

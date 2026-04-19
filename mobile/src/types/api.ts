@@ -107,6 +107,13 @@ export interface PendingPayment {
   player?: PendingPaymentPlayer | null;
   checkInPlayer?: PendingPaymentCheckInPlayer | null;
   facePhotoUrl?: string | null;
+  subscriptionInfo?: {
+    packageName: string;
+    sessionsRemaining: number | null;
+    isUnlimited: boolean;
+    daysRemaining: number;
+    status: string;
+  } | null;
 }
 
 export interface StaffPaidPaymentsResponse {

@@ -41,6 +41,7 @@ Expected result:
 - No `awaiting_payment` step.
 - `checkedIn: true`.
 - Remaining sessions shown as `N-1` for limited package, unlimited hint for unlimited package.
+- A `confirmed` CourtPay payment row is still recorded for staff history (`amount = 0`), and the Paid card shows subscription remaining sessions.
 
 ### 2) Returning player without active subscription -> buys package
 
