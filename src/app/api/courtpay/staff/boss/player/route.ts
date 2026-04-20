@@ -4,12 +4,10 @@ import { requireStaff } from "@/lib/auth";
 
 /**
  * GET /api/courtpay/staff/boss/player?playerId=...&source=courtpay|self
+ * PATCH /api/courtpay/staff/boss/player  { playerId, source, name, phone, gender, skillLevel }
  *
- * Returns detailed profile for a single player including:
- * - Basic info (name, phone, gender, skill, photo)
- * - Active subscription summary
- * - Recent check-in history (last 50)
- * - All-time stats
+ * Returns / updates a single player profile.
+ * Phone uniqueness is enforced: returns 409 if the new phone is already taken.
  */
 export async function GET(req: Request) {
   try {
@@ -139,6 +137,116 @@ export async function GET(req: Request) {
         subscriptionHistory: [],
       },
     });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Internal server error";
+    const status =
+      message.includes("access") || message.includes("token") ? 401 : 500;
+    return NextResponse.json({ error: message }, { status });
+  }
+}
+
+export async function PATCH(req: Request) {
+  try {
+    const staff = requireStaff(req.headers);
+    const body = await req.json() as {
+      playerId: string;
+      source: "courtpay" | "self";
+      name: string;
+      phone: string;
+      gender: string | null;
+      skillLevel: string | null;
+    };
+
+    const { playerId, source, name, phone, gender, skillLevel } = body;
+
+    if (!playerId || !name?.trim() || !phone?.trim()) {
+      return NextResponse.json({ error: "playerId, name and phone are required" }, { status: 400 });
+    }
+
+    if (source === "courtpay") {
+      // Fetch current record to get venueId
+      const current = await prisma.checkInPlayer.findUnique({
+        where: { id: playerId },
+        select: { venueId: true, phone: true },
+      });
+      if (!current) {
+        return NextResponse.json({ error: "Player not found" }, { status: 404 });
+      }
+
+      // Phone uniqueness check within the same venue (excluding self)
+      if (phone.trim() !== current.phone) {
+        const conflict = await prisma.checkInPlayer.findFirst({
+          where: { phone: phone.trim(), venueId: current.venueId, NOT: { id: playerId } },
+          select: { id: true },
+        });
+        if (conflict) {
+          return NextResponse.json(
+            { error: "This phone number is already registered to another player at this venue." },
+            { status: 409 }
+          );
+        }
+      }
+
+      const updated = await prisma.checkInPlayer.update({
+        where: { id: playerId },
+        data: {
+          name: name.trim(),
+          phone: phone.trim(),
+          gender: gender ?? null,
+          skillLevel: skillLevel ?? null,
+        },
+        select: { id: true, name: true, phone: true, gender: true, skillLevel: true },
+      });
+
+      return NextResponse.json({ ok: true, player: updated });
+    }
+
+    // source === "self"
+    const current = await prisma.player.findUnique({
+      where: { id: playerId },
+      select: { phone: true },
+    });
+    if (!current) {
+      return NextResponse.json({ error: "Player not found" }, { status: 404 });
+    }
+
+    // Phone is globally unique for Player table
+    if (phone.trim() !== current.phone) {
+      const conflict = await prisma.player.findFirst({
+        where: { phone: phone.trim(), NOT: { id: playerId } },
+        select: { id: true },
+      });
+      if (conflict) {
+        return NextResponse.json(
+          { error: "This phone number is already registered to another player." },
+          { status: 409 }
+        );
+      }
+    }
+
+    // Map string values to enums — fall back gracefully
+    const validGenders = ["male", "female", "other"] as const;
+    const validSkills = ["beginner", "intermediate", "advanced", "pro"] as const;
+
+    const genderVal = validGenders.includes(gender as typeof validGenders[number])
+      ? (gender as typeof validGenders[number])
+      : undefined;
+    const skillVal = validSkills.includes(skillLevel as typeof validSkills[number])
+      ? (skillLevel as typeof validSkills[number])
+      : undefined;
+
+    const updated = await prisma.player.update({
+      where: { id: playerId },
+      data: {
+        name: name.trim(),
+        phone: phone.trim(),
+        ...(genderVal !== undefined ? { gender: genderVal } : {}),
+        ...(skillVal !== undefined ? { skillLevel: skillVal } : {}),
+      },
+      select: { id: true, name: true, phone: true, gender: true, skillLevel: true },
+    });
+
+    return NextResponse.json({ ok: true, player: updated });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Internal server error";
     const status =

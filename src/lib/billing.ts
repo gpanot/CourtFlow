@@ -55,6 +55,7 @@ async function getBillingRates(venueId: string) {
       baseRate: custom.baseRatePerCheckin,
       subAddon: custom.subscriptionAddon,
       sepayAddon: custom.sepayAddon,
+      isFree: custom.isFree,
     };
   }
 
@@ -65,6 +66,7 @@ async function getBillingRates(venueId: string) {
     baseRate: config?.defaultBaseRate ?? 5000,
     subAddon: config?.defaultSubAddon ?? 1000,
     sepayAddon: config?.defaultSepayAddon ?? 1000,
+    isFree: false,
   };
 }
 
@@ -194,6 +196,10 @@ export async function generateWeeklyInvoice(
   });
   const ref = `CF-BILL-${venueShortCode(venue.name)}-${year}W${String(weekNum).padStart(2, "0")}`;
 
+  // When the venue has isFree set, show the real amounts on line items but
+  // present a 0 totalAmount so the boss sees a "free" invoice.
+  const billedTotal = rates.isFree ? 0 : computed.totalAmount;
+
   const invoice = await prisma.billingInvoice.create({
     data: {
       venueId,
@@ -205,9 +211,10 @@ export async function generateWeeklyInvoice(
       baseAmount: computed.totalPayments * rates.baseRate,
       subscriptionAmount: computed.subscriptionPayments * rates.subAddon,
       sepayAmount: computed.sepayPayments * rates.sepayAddon,
-      totalAmount: computed.totalAmount,
-      status: computed.totalAmount === 0 ? "paid" : "pending",
+      totalAmount: billedTotal,
+      status: billedTotal === 0 ? "paid" : "pending",
       paymentRef: ref,
+      confirmedBy: rates.isFree ? "free_tier" : undefined,
       lineItems: { create: computed.lineItems },
     },
     include: { lineItems: true },
@@ -233,7 +240,8 @@ export async function getCurrentWeekUsage(venueId: string) {
     baseAmount: computed.totalPayments * rates.baseRate,
     subscriptionAmount: computed.subscriptionPayments * rates.subAddon,
     sepayAmount: computed.sepayPayments * rates.sepayAddon,
-    estimatedTotal: computed.totalAmount,
+    estimatedTotal: rates.isFree ? 0 : computed.totalAmount,
+    isFree: rates.isFree,
     weekStart,
     weekEnd,
     rates,

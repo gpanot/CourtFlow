@@ -13,19 +13,26 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Image,
+  Modal,
+  TextInput,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  ActionSheetIOS,
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import type {
-  NativeStackNavigationProp,
-  RouteProp,
-} from "@react-navigation/native-stack";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { RouteProp } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "../../lib/api-client";
 import { resolveMediaUrl } from "../../lib/media-url";
 import { useAppColors } from "../../theme/use-app-colors";
 import type { AppColors } from "../../theme/palettes";
 import type { StaffStackParamList } from "../../navigation/types";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface ActiveSub {
   id: string;
@@ -72,6 +79,13 @@ interface PlayerDetail {
   subscriptionHistory: SubHistory[];
 }
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const GENDER_OPTIONS = ["male", "female", "other"] as const;
+const SKILL_OPTIONS = ["beginner", "intermediate", "advanced", "pro"] as const;
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
   if (Number.isNaN(d.getTime())) return "—";
@@ -93,6 +107,13 @@ function formatDateTime(dateStr: string): string {
     minute: "2-digit",
   });
 }
+
+function capitalize(s: string | null | undefined): string {
+  if (!s) return "—";
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 function createStyles(t: AppColors) {
   return StyleSheet.create({
@@ -147,7 +168,7 @@ function createStyles(t: AppColors) {
     },
     avatarInitials: { fontSize: 24, fontWeight: "800", color: "#a855f7" },
     profileNameCol: { flex: 1 },
-    playerName: { fontSize: 20, fontWeight: "800", color: t.text, flexWrap: "wrap" },
+    playerName: { fontSize: 20, fontWeight: "800", flexWrap: "wrap" },
     playerPhone: { fontSize: 13, color: t.muted, marginTop: 2 },
     badgeRow: {
       flexDirection: "row",
@@ -192,7 +213,14 @@ function createStyles(t: AppColors) {
       backgroundColor: t.card,
       padding: 14,
     },
-    subCardTitle: { fontSize: 12, fontWeight: "700", color: t.muted, marginBottom: 8, textTransform: "uppercase", letterSpacing: 0.5 },
+    subCardTitle: {
+      fontSize: 12,
+      fontWeight: "700",
+      color: t.muted,
+      marginBottom: 8,
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+    },
     subPackageName: { fontSize: 16, fontWeight: "700", color: "#a855f7" },
     subStatusRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 },
     subStatusBadge: {
@@ -214,7 +242,13 @@ function createStyles(t: AppColors) {
       overflow: "hidden",
     },
     sessionsBarFill: { height: 6, borderRadius: 3, backgroundColor: "#a855f7" },
-    sessionsBarLabel: { fontSize: 12, fontWeight: "600", color: "#a855f7", marginTop: 4, textAlign: "right" },
+    sessionsBarLabel: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: "#a855f7",
+      marginTop: 4,
+      textAlign: "right",
+    },
     noSubCard: {
       marginHorizontal: 14,
       marginTop: 14,
@@ -268,8 +302,84 @@ function createStyles(t: AppColors) {
       paddingVertical: 24,
     },
     listFooter: { height: 32 },
+
+    // ── Edit modal ───────────────────────────────────────────────────────
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.6)",
+      justifyContent: "flex-end",
+    },
+    modalCard: {
+      backgroundColor: t.bg,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      borderWidth: 1,
+      borderColor: t.border,
+      padding: 20,
+      paddingBottom: 32,
+    },
+    modalHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 20,
+    },
+    modalTitle: { fontSize: 17, fontWeight: "700", color: t.text },
+    modalClose: { padding: 4 },
+    fieldLabel: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: t.muted,
+      marginBottom: 6,
+      marginTop: 14,
+      textTransform: "uppercase",
+      letterSpacing: 0.4,
+    },
+    fieldInput: {
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.inputBg,
+      paddingHorizontal: 14,
+      paddingVertical: 11,
+      fontSize: 15,
+      color: t.text,
+    },
+    fieldInputError: { borderColor: t.red500 },
+    fieldError: { fontSize: 12, color: t.red500, marginTop: 4 },
+    optionRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 8,
+      marginTop: 2,
+    },
+    optionChip: {
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.card,
+    },
+    optionChipActive: {
+      borderColor: "#a855f7",
+      backgroundColor: "rgba(168,85,247,0.15)",
+    },
+    optionChipText: { fontSize: 13, fontWeight: "600", color: t.muted },
+    optionChipTextActive: { color: "#a855f7" },
+    saveBtn: {
+      marginTop: 22,
+      backgroundColor: "#a855f7",
+      borderRadius: 12,
+      paddingVertical: 14,
+      alignItems: "center",
+    },
+    saveBtnDisabled: { opacity: 0.5 },
+    saveBtnText: { color: "#fff", fontWeight: "700", fontSize: 15 },
   });
 }
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export function StaffPlayerDetailScreen() {
   const navigation =
@@ -281,9 +391,42 @@ export function StaffPlayerDetailScreen() {
   const theme = useAppColors();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
+  // ── Data state ──────────────────────────────────────────────────────────
   const [detail, setDetail] = useState<PlayerDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // ── Edit modal state ────────────────────────────────────────────────────
+  const [showEdit, setShowEdit] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editGender, setEditGender] = useState<string | null>(null);
+  const [editSkill, setEditSkill] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [phoneError, setPhoneError] = useState("");
+  const [nameError, setNameError] = useState("");
+
+  // ── Header 3-dots ───────────────────────────────────────────────────────
+  const openMoreMenu = useCallback(() => {
+    if (Platform.OS === "ios") {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ["Cancel", "Edit player"],
+          cancelButtonIndex: 0,
+        },
+        (idx) => {
+          if (idx === 1 && detail) openEditModal(detail);
+        }
+      );
+    } else {
+      Alert.alert("Options", "", [
+        { text: "Edit player", onPress: () => detail && openEditModal(detail) },
+        { text: "Cancel", style: "cancel" },
+      ]);
+    }
+  // openEditModal is defined below but stable — intentionally excluded from deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -293,9 +436,19 @@ export function StaffPlayerDetailScreen() {
       headerTitleStyle: { color: theme.text, fontWeight: "700" },
       headerShadowVisible: false,
       headerBackTitle: "",
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={openMoreMenu}
+          hitSlop={10}
+          style={{ marginRight: 4, padding: 4 }}
+        >
+          <Ionicons name="ellipsis-vertical" size={20} color={theme.text} />
+        </TouchableOpacity>
+      ),
     });
-  }, [navigation, theme]);
+  }, [navigation, theme, openMoreMenu]);
 
+  // ── Fetch ───────────────────────────────────────────────────────────────
   const fetchDetail = useCallback(async () => {
     setError(null);
     setLoading(true);
@@ -315,6 +468,69 @@ export function StaffPlayerDetailScreen() {
     void fetchDetail();
   }, [fetchDetail]);
 
+  // ── Edit modal helpers ──────────────────────────────────────────────────
+  function openEditModal(p: PlayerDetail) {
+    setEditName(p.name);
+    setEditPhone(p.phone);
+    setEditGender(p.gender);
+    setEditSkill(p.skillLevel);
+    setNameError("");
+    setPhoneError("");
+    setShowEdit(true);
+  }
+
+  const handleSave = useCallback(async () => {
+    let hasError = false;
+    if (!editName.trim()) {
+      setNameError("Name is required");
+      hasError = true;
+    } else {
+      setNameError("");
+    }
+    if (editPhone.trim().length < 8) {
+      setPhoneError("Enter a valid phone number");
+      hasError = true;
+    } else {
+      setPhoneError("");
+    }
+    if (hasError || !detail) return;
+
+    setSaving(true);
+    try {
+      await api.patch("/api/courtpay/staff/boss/player", {
+        playerId: detail.id,
+        source: detail.source,
+        name: editName.trim(),
+        phone: editPhone.trim(),
+        gender: editGender,
+        skillLevel: editSkill,
+      });
+      // Apply changes locally immediately
+      setDetail((prev) =>
+        prev
+          ? {
+              ...prev,
+              name: editName.trim(),
+              phone: editPhone.trim(),
+              gender: editGender,
+              skillLevel: editSkill,
+            }
+          : prev
+      );
+      setShowEdit(false);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to save";
+      if (msg.toLowerCase().includes("phone")) {
+        setPhoneError(msg);
+      } else {
+        Alert.alert("Error", msg);
+      }
+    } finally {
+      setSaving(false);
+    }
+  }, [detail, editName, editPhone, editGender, editSkill]);
+
+  // ── Derived display values ──────────────────────────────────────────────
   if (loading) {
     return (
       <View style={styles.loadingBox}>
@@ -349,15 +565,10 @@ export function StaffPlayerDetailScreen() {
   const activeSub = detail.activeSub;
   const fillRatio =
     activeSub?.totalSessions && activeSub.totalSessions > 0
-      ? Math.max(
-          0,
-          Math.min(
-            1,
-            (activeSub.sessionsUsed / activeSub.totalSessions)
-          )
-        )
+      ? Math.max(0, Math.min(1, activeSub.sessionsUsed / activeSub.totalSessions))
       : 0;
 
+  // ── List header ─────────────────────────────────────────────────────────
   const renderHeader = () => (
     <>
       {/* ── Profile card ───────────────────────────────────────────────── */}
@@ -402,16 +613,14 @@ export function StaffPlayerDetailScreen() {
               {detail.skillLevel ? (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>
-                    {detail.skillLevel.charAt(0).toUpperCase() +
-                      detail.skillLevel.slice(1)}
+                    {capitalize(detail.skillLevel)}
                   </Text>
                 </View>
               ) : null}
               {detail.gender ? (
                 <View style={styles.badge}>
                   <Text style={styles.badgeText}>
-                    {detail.gender.charAt(0).toUpperCase() +
-                      detail.gender.slice(1)}
+                    {capitalize(detail.gender)}
                   </Text>
                 </View>
               ) : null}
@@ -498,40 +707,168 @@ export function StaffPlayerDetailScreen() {
   );
 
   return (
-    <FlatList
-      style={styles.container}
-      data={detail.checkIns}
-      keyExtractor={(c) => c.id}
-      ListHeaderComponent={renderHeader}
-      contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-      ListEmptyComponent={
-        <Text style={styles.emptyText}>No check-ins recorded yet.</Text>
-      }
-      renderItem={({ item, index }) => (
-        <View style={styles.checkInCard}>
-          <View style={styles.checkInIconBox}>
-            <Ionicons name="checkmark-circle" size={18} color="#a855f7" />
+    <>
+      <FlatList
+        style={styles.container}
+        data={detail.checkIns}
+        keyExtractor={(c) => c.id}
+        ListHeaderComponent={renderHeader}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>No check-ins recorded yet.</Text>
+        }
+        renderItem={({ item, index }) => (
+          <View style={styles.checkInCard}>
+            <View style={styles.checkInIconBox}>
+              <Ionicons name="checkmark-circle" size={18} color="#a855f7" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.checkInIndex}>
+                #{detail.checkIns.length - index}
+              </Text>
+              <Text style={styles.checkInDate}>
+                {formatDate(item.checkedInAt)}
+              </Text>
+              <Text style={styles.checkInTime}>
+                {new Date(item.checkedInAt).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </Text>
+            </View>
+            <Text style={{ fontSize: 12, color: theme.muted }}>
+              {formatDateTime(item.checkedInAt).split(",")[0]}
+            </Text>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.checkInIndex}>
-              #{detail.checkIns.length - index}
-            </Text>
-            <Text style={styles.checkInDate}>
-              {formatDate(item.checkedInAt)}
-            </Text>
-            <Text style={styles.checkInTime}>
-              {new Date(item.checkedInAt).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </Text>
+        )}
+        ListFooterComponent={<View style={styles.listFooter} />}
+      />
+
+      {/* ── Edit player modal ─────────────────────────────────────────── */}
+      <Modal
+        visible={showEdit}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowEdit(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            activeOpacity={1}
+            onPress={() => setShowEdit(false)}
+          />
+          <View style={[styles.modalCard, { paddingBottom: insets.bottom + 20 }]}>
+            {/* Header */}
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Edit player</Text>
+              <TouchableOpacity
+                style={styles.modalClose}
+                onPress={() => setShowEdit(false)}
+              >
+                <Ionicons name="close" size={22} color={theme.muted} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* Name */}
+              <Text style={styles.fieldLabel}>Full name</Text>
+              <TextInput
+                style={[styles.fieldInput, nameError ? styles.fieldInputError : null]}
+                value={editName}
+                onChangeText={(t) => { setEditName(t); setNameError(""); }}
+                placeholder="Full name"
+                placeholderTextColor={theme.muted}
+                autoCapitalize="words"
+                returnKeyType="next"
+              />
+              {nameError ? <Text style={styles.fieldError}>{nameError}</Text> : null}
+
+              {/* Phone */}
+              <Text style={styles.fieldLabel}>Phone number</Text>
+              <TextInput
+                style={[styles.fieldInput, phoneError ? styles.fieldInputError : null]}
+                value={editPhone}
+                onChangeText={(t) => { setEditPhone(t); setPhoneError(""); }}
+                placeholder="0912345678"
+                placeholderTextColor={theme.muted}
+                keyboardType="phone-pad"
+                returnKeyType="done"
+              />
+              {phoneError ? <Text style={styles.fieldError}>{phoneError}</Text> : null}
+
+              {/* Gender */}
+              <Text style={styles.fieldLabel}>Gender</Text>
+              <View style={styles.optionRow}>
+                {GENDER_OPTIONS.map((g) => (
+                  <TouchableOpacity
+                    key={g}
+                    style={[
+                      styles.optionChip,
+                      editGender === g && styles.optionChipActive,
+                    ]}
+                    onPress={() => setEditGender(editGender === g ? null : g)}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.optionChipText,
+                        editGender === g && styles.optionChipTextActive,
+                      ]}
+                    >
+                      {capitalize(g)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Skill level */}
+              <Text style={styles.fieldLabel}>Skill level</Text>
+              <View style={styles.optionRow}>
+                {SKILL_OPTIONS.map((s) => (
+                  <TouchableOpacity
+                    key={s}
+                    style={[
+                      styles.optionChip,
+                      editSkill === s && styles.optionChipActive,
+                    ]}
+                    onPress={() => setEditSkill(editSkill === s ? null : s)}
+                    activeOpacity={0.7}
+                  >
+                    <Text
+                      style={[
+                        styles.optionChipText,
+                        editSkill === s && styles.optionChipTextActive,
+                      ]}
+                    >
+                      {capitalize(s)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Save */}
+              <TouchableOpacity
+                style={[styles.saveBtn, saving && styles.saveBtnDisabled]}
+                onPress={() => void handleSave()}
+                disabled={saving}
+                activeOpacity={0.8}
+              >
+                {saving ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.saveBtnText}>Save changes</Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
           </View>
-          <Text style={{ fontSize: 12, color: theme.muted }}>
-            {formatDateTime(item.checkedInAt).split(",")[0]}
-          </Text>
-        </View>
-      )}
-      ListFooterComponent={<View style={styles.listFooter} />}
-    />
+        </KeyboardAvoidingView>
+      </Modal>
+    </>
   );
 }

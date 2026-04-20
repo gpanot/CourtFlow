@@ -18,6 +18,12 @@ export async function GET(
       }),
       prisma.venueBillingRate.findUnique({
         where: { venueId },
+        select: {
+          baseRatePerCheckin: true,
+          subscriptionAddon: true,
+          sepayAddon: true,
+          isFree: true,
+        },
       }),
       prisma.billingInvoice.findMany({
         where: { venueId },

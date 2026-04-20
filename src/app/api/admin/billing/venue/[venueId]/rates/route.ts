@@ -18,6 +18,7 @@ export async function PUT(
         baseRatePerCheckin: body.baseRatePerCheckin ?? 5000,
         subscriptionAddon: body.subscriptionAddon ?? 1000,
         sepayAddon: body.sepayAddon ?? 1000,
+        isFree: body.isFree ?? false,
       },
       update: {
         ...(body.baseRatePerCheckin !== undefined && {
@@ -28,6 +29,9 @@ export async function PUT(
         }),
         ...(body.sepayAddon !== undefined && {
           sepayAddon: body.sepayAddon,
+        }),
+        ...(body.isFree !== undefined && {
+          isFree: body.isFree,
         }),
       },
     });

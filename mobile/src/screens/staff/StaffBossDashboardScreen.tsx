@@ -132,6 +132,7 @@ interface BillingCurrentData {
   subscriptionAmount: number;
   sepayAmount: number;
   estimatedTotal: number;
+  isFree?: boolean;
   weekStart: string;
   weekEnd: string;
   rates: { baseRate: number; subAddon: number; sepayAddon: number };
@@ -1089,7 +1090,14 @@ export function StaffBossDashboardScreen() {
                   style={{ borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.card, padding: 14, marginBottom: 16 }}
                 >
                   <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 10 }}>
-                    <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>This week</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>This week</Text>
+                      {billingCurrent.isFree && (
+                        <View style={{ backgroundColor: "rgba(22,163,74,0.2)", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                          <Text style={{ fontSize: 10, fontWeight: "700", color: "#4ade80" }}>FREE 🎁</Text>
+                        </View>
+                      )}
+                    </View>
                     <Text style={{ fontSize: 12, color: theme.muted }}>
                       {new Date(billingCurrent.weekStart).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
                       {" → "}
@@ -1144,7 +1152,16 @@ export function StaffBossDashboardScreen() {
                     )}
                     <View style={{ borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 8, marginTop: 4, flexDirection: "row", justifyContent: "space-between" }}>
                       <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>Estimated total</Text>
-                      <Text style={{ fontSize: 14, fontWeight: "700", color: theme.purple400 }}>{formatVND(billingCurrent.estimatedTotal)} VND</Text>
+                      {billingCurrent.isFree ? (
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <Text style={{ fontSize: 13, color: theme.muted, textDecorationLine: "line-through" }}>
+                            {formatVND(billingCurrent.baseAmount + billingCurrent.subscriptionAmount + billingCurrent.sepayAmount)} VND
+                          </Text>
+                          <Text style={{ fontSize: 14, fontWeight: "700", color: "#4ade80" }}>0 VND 🎁</Text>
+                        </View>
+                      ) : (
+                        <Text style={{ fontSize: 14, fontWeight: "700", color: theme.purple400 }}>{formatVND(billingCurrent.estimatedTotal)} VND</Text>
+                      )}
                     </View>
                   </View>
 
@@ -1154,175 +1171,195 @@ export function StaffBossDashboardScreen() {
                 </TouchableOpacity>
               )}
 
-              {/* Pending / overdue invoices */}
-              {billingInvoices
-                .filter((inv) => inv.status === "pending" || inv.status === "overdue")
-                .map((inv) => (
-                  <View
-                    key={inv.id}
-                    style={{
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: justPaid === inv.id ? "#16a34a" : inv.status === "overdue" ? "#b45309" : "#a16207",
-                      backgroundColor: justPaid === inv.id ? "rgba(20,83,45,0.2)" : inv.status === "overdue" ? "rgba(120,53,15,0.15)" : "rgba(113,63,18,0.1)",
-                      padding: 14,
-                      marginBottom: 16,
-                    }}
-                  >
-                    {justPaid === inv.id ? (
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                        <Ionicons name="checkmark-circle" size={20} color="#4ade80" />
-                        <Text style={{ fontSize: 14, fontWeight: "600", color: "#4ade80" }}>Payment received — thank you!</Text>
-                      </View>
-                    ) : (
-                      <>
-                        <Text style={{ fontSize: 15, fontWeight: "700", color: theme.text, marginBottom: 4 }}>
-                          {inv.status === "overdue" ? "Invoice overdue ⚠️" : "Invoice due ⏳"}
-                        </Text>
-                        <Text style={{ fontSize: 13, color: theme.muted, marginBottom: 2 }}>
-                          Week {new Date(inv.weekStartDate).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
-                          {" – "}
-                          {new Date(inv.weekEndDate).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
-                        </Text>
-                        <Text style={{ fontSize: 13, color: theme.text, marginBottom: 2 }}>{inv.totalCheckins} payments</Text>
-                        <Text style={{ fontSize: 18, fontWeight: "700", color: theme.purple400, marginBottom: 12 }}>{formatVND(inv.totalAmount)} VND</Text>
-
-                        <TouchableOpacity
-                          onPress={async () => {
-                            if (showQR === inv.id) {
-                              setShowQR(null);
-                              setQrData(null);
-                              return;
-                            }
-                            try {
-                              const data = await api.get<QRData>(
-                                `/api/staff/boss-dashboard/billing/invoices/${inv.id}/qr`
-                              );
-                              setQrData(data);
-                              setShowQR(inv.id);
-                            } catch {}
-                          }}
-                          style={{
-                            backgroundColor: showQR === inv.id ? theme.card : "#7c3aed",
-                            borderRadius: 10,
-                            paddingVertical: 12,
-                            alignItems: "center",
-                          }}
-                        >
-                          <Text style={{ fontSize: 14, fontWeight: "600", color: showQR === inv.id ? theme.muted : "#fff" }}>
-                            {showQR === inv.id ? "Hide QR ▲" : "Pay now — scan QR ▼"}
-                          </Text>
-                        </TouchableOpacity>
-
-                        {showQR === inv.id && qrData && (
-                          <View style={{ marginTop: 16, alignItems: "center", gap: 10 }}>
-                            {qrData.qrUrl ? (
-                              <Image
-                                source={{ uri: qrData.qrUrl }}
-                                style={{ width: 240, height: 240, borderRadius: 12, backgroundColor: "#fff" }}
-                                resizeMode="contain"
-                              />
-                            ) : (
-                              <Text style={{ fontSize: 13, color: "#ef4444" }}>Could not generate QR code</Text>
-                            )}
-                            <Text style={{ fontSize: 13, color: theme.text }}>
-                              Amount: <Text style={{ fontWeight: "700" }}>{formatVND(qrData.amount)} VND</Text>
-                            </Text>
-                            <Text style={{ fontSize: 11, fontFamily: "monospace", color: theme.muted }}>
-                              Ref: {qrData.reference}
-                            </Text>
-                            <Text style={{ fontSize: 11, color: theme.subtle }}>
-                              Payment confirmed automatically once received
-                            </Text>
-                            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                              <ActivityIndicator size="small" color={theme.purple400} />
-                              <Text style={{ fontSize: 12, color: theme.purple400 }}>Waiting for payment...</Text>
-                            </View>
-                          </View>
-                        )}
-                      </>
-                    )}
-                  </View>
-                ))}
-
-              {/* Invoice history */}
-              {billingInvoices.filter((inv) => inv.status === "paid").length > 0 && (
+              {/* Past weeks — all invoices (pending, overdue, paid) */}
+              {billingInvoices.length > 0 && (
                 <>
-                  <Text style={[styles.sectionTitle, { marginTop: 4, marginBottom: 10 }]}>Invoice history</Text>
-                  {billingInvoices
-                    .filter((inv) => inv.status === "paid")
-                    .map((inv) => (
-                      <React.Fragment key={inv.id}>
-                        <TouchableOpacity
-                          style={styles.row}
-                          onPress={async () => {
-                            if (selectedInvoice?.id === inv.id) {
-                              setSelectedInvoice(null);
-                              return;
-                            }
-                            try {
-                              const data = await api.get<InvoiceDetail>(
-                                `/api/staff/boss-dashboard/billing/invoices/${inv.id}`
-                              );
-                              setSelectedInvoice(data);
-                            } catch {}
-                          }}
-                        >
-                          <View style={styles.rowMain}>
-                            <Text style={{ fontSize: 13, color: theme.text }}>
-                              Week {new Date(inv.weekStartDate).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
-                              {" – "}
-                              {new Date(inv.weekEndDate).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
-                            </Text>
+                  <Text style={[styles.sectionTitle, { marginTop: 4, marginBottom: 10 }]}>Past weeks</Text>
+                  {billingInvoices.map((inv) => {
+                    const isPaid = inv.status === "paid";
+                    const isOverdue = inv.status === "overdue";
+                    const isPending = inv.status === "pending";
+                    const isJustPaid = justPaid === inv.id;
+
+                    const borderColor = isJustPaid
+                      ? "#16a34a"
+                      : isPaid
+                      ? theme.border
+                      : isOverdue
+                      ? "#b45309"
+                      : "#a16207";
+                    const bgColor = isJustPaid
+                      ? "rgba(20,83,45,0.2)"
+                      : isPaid
+                      ? theme.card
+                      : isOverdue
+                      ? "rgba(120,53,15,0.15)"
+                      : "rgba(113,63,18,0.1)";
+
+                    return (
+                      <TouchableOpacity
+                        key={inv.id}
+                        activeOpacity={isPaid ? 0.75 : 1}
+                        onPress={async () => {
+                          if (!isPaid) return;
+                          if (selectedInvoice?.id === inv.id) {
+                            setSelectedInvoice(null);
+                            return;
+                          }
+                          try {
+                            const data = await api.get<InvoiceDetail>(
+                              `/api/staff/boss-dashboard/billing/invoices/${inv.id}`
+                            );
+                            setSelectedInvoice(data);
+                          } catch {}
+                        }}
+                        style={{
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor,
+                          backgroundColor: bgColor,
+                          padding: 14,
+                          marginBottom: 16,
+                        }}
+                      >
+                        {isJustPaid ? (
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                            <Ionicons name="checkmark-circle" size={20} color="#4ade80" />
+                            <Text style={{ fontSize: 14, fontWeight: "600", color: "#4ade80" }}>Payment received — thank you!</Text>
                           </View>
-                          <View style={{ alignItems: "flex-end" }}>
-                            <Text style={{ fontSize: 13, fontWeight: "700", color: theme.purple400 }}>{formatVND(inv.totalAmount)} VND</Text>
-                            <Text style={{ fontSize: 11, color: "#4ade80" }}>✓ Paid</Text>
-                          </View>
-                        </TouchableOpacity>
-                        {selectedInvoice?.id === inv.id && (
-                          <View style={{ borderRadius: 10, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.card, padding: 12, marginBottom: 8, marginTop: -4, gap: 6 }}>
-                            <Text style={{ fontSize: 13, fontWeight: "600", color: theme.text, marginBottom: 4 }}>
-                              Week {new Date(selectedInvoice.weekStartDate).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })}
-                            </Text>
-                            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                              <Text style={{ fontSize: 12, color: theme.muted }}>Total payments</Text>
-                              <Text style={{ fontSize: 12, color: theme.text }}>{selectedInvoice.totalCheckins}</Text>
+                        ) : (
+                          <>
+                            {/* Header row */}
+                            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 8 }}>
+                              <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>
+                                {isPaid ? "✓ Week paid" : isOverdue ? "Invoice overdue ⚠️" : "Invoice due ⏳"}
+                              </Text>
+                              <Text style={{ fontSize: 12, color: theme.muted }}>
+                                {new Date(inv.weekStartDate).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+                                {" → "}
+                                {new Date(inv.weekEndDate).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+                              </Text>
                             </View>
-                            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                              <Text style={{ fontSize: 12, color: theme.muted }}>Base charges</Text>
-                              <Text style={{ fontSize: 12, color: theme.text }}>{formatVND(selectedInvoice.baseAmount)} VND</Text>
-                            </View>
-                            {selectedInvoice.subscriptionAmount > 0 && (
-                              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                                <Text style={{ fontSize: 12, color: theme.muted }}>Subscription add-on</Text>
-                                <Text style={{ fontSize: 12, color: theme.text }}>{formatVND(selectedInvoice.subscriptionAmount)} VND</Text>
+
+                            {/* Expanded paid detail */}
+                            {isPaid && selectedInvoice?.id === inv.id ? (
+                              <View style={{ gap: 6 }}>
+                                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                                  <Text style={{ fontSize: 12, color: theme.muted }}>Total payments</Text>
+                                  <Text style={{ fontSize: 12, color: theme.text }}>{selectedInvoice.totalCheckins}</Text>
+                                </View>
+                                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                                  <Text style={{ fontSize: 12, color: theme.muted }}>Base charges</Text>
+                                  <Text style={{ fontSize: 12, color: theme.text }}>{formatVND(selectedInvoice.baseAmount)} VND</Text>
+                                </View>
+                                {selectedInvoice.subscriptionAmount > 0 && (
+                                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                                    <Text style={{ fontSize: 12, color: theme.muted }}>Subscription add-on</Text>
+                                    <Text style={{ fontSize: 12, color: theme.text }}>{formatVND(selectedInvoice.subscriptionAmount)} VND</Text>
+                                  </View>
+                                )}
+                                {selectedInvoice.sepayAmount > 0 && (
+                                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                                    <Text style={{ fontSize: 12, color: theme.muted }}>Auto-Payment add-on</Text>
+                                    <Text style={{ fontSize: 12, color: theme.text }}>{formatVND(selectedInvoice.sepayAmount)} VND</Text>
+                                  </View>
+                                )}
+                                <View style={{ borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 6, marginTop: 2, flexDirection: "row", justifyContent: "space-between" }}>
+                                  <Text style={{ fontSize: 13, fontWeight: "600", color: theme.text }}>Total</Text>
+                                  <Text style={{ fontSize: 13, fontWeight: "700", color: theme.purple400 }}>{formatVND(selectedInvoice.totalAmount)} VND</Text>
+                                </View>
+                                {selectedInvoice.paidAt && (
+                                  <Text style={{ fontSize: 11, color: "#4ade80", marginTop: 2 }}>
+                                    Paid: {new Date(selectedInvoice.paidAt).toLocaleString()}
+                                  </Text>
+                                )}
+                                {selectedInvoice.paymentRef && (
+                                  <Text style={{ fontSize: 11, fontFamily: "monospace", color: theme.subtle }}>
+                                    Ref: {selectedInvoice.paymentRef}
+                                  </Text>
+                                )}
+                                <Text style={{ fontSize: 11, color: theme.muted, marginTop: 4 }}>Tap to collapse</Text>
+                              </View>
+                            ) : (
+                              /* Collapsed summary for all statuses */
+                              <View style={{ gap: 4 }}>
+                                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                                  <Text style={{ fontSize: 13, color: theme.muted }}>Payments</Text>
+                                  <Text style={{ fontSize: 13, color: theme.text }}>{inv.totalCheckins}</Text>
+                                </View>
+                                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                                  <Text style={{ fontSize: 14, fontWeight: "700", color: isPaid ? "#4ade80" : theme.purple400 }}>
+                                    {formatVND(inv.totalAmount)} VND
+                                  </Text>
+                                  {isPaid && <Text style={{ fontSize: 12, color: "#4ade80" }}>✓ Tap for details</Text>}
+                                </View>
                               </View>
                             )}
-                            {selectedInvoice.sepayAmount > 0 && (
-                              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                                <Text style={{ fontSize: 12, color: theme.muted }}>Auto-Payment add-on</Text>
-                                <Text style={{ fontSize: 12, color: theme.text }}>{formatVND(selectedInvoice.sepayAmount)} VND</Text>
-                              </View>
+
+                            {/* QR pay button for pending/overdue */}
+                            {(isPending || isOverdue) && (
+                              <>
+                                <TouchableOpacity
+                                  onPress={async () => {
+                                    if (showQR === inv.id) {
+                                      setShowQR(null);
+                                      setQrData(null);
+                                      return;
+                                    }
+                                    try {
+                                      const data = await api.get<QRData>(
+                                        `/api/staff/boss-dashboard/billing/invoices/${inv.id}/qr`
+                                      );
+                                      setQrData(data);
+                                      setShowQR(inv.id);
+                                    } catch {}
+                                  }}
+                                  style={{
+                                    backgroundColor: showQR === inv.id ? theme.card : "#7c3aed",
+                                    borderRadius: 10,
+                                    paddingVertical: 12,
+                                    alignItems: "center",
+                                    marginTop: 12,
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 14, fontWeight: "600", color: showQR === inv.id ? theme.muted : "#fff" }}>
+                                    {showQR === inv.id ? "Hide QR ▲" : "Pay now — scan QR ▼"}
+                                  </Text>
+                                </TouchableOpacity>
+
+                                {showQR === inv.id && qrData && (
+                                  <View style={{ marginTop: 16, alignItems: "center", gap: 10 }}>
+                                    {qrData.qrUrl ? (
+                                      <Image
+                                        source={{ uri: qrData.qrUrl }}
+                                        style={{ width: 240, height: 240, borderRadius: 12, backgroundColor: "#fff" }}
+                                        resizeMode="contain"
+                                      />
+                                    ) : (
+                                      <Text style={{ fontSize: 13, color: "#ef4444" }}>Could not generate QR code</Text>
+                                    )}
+                                    <Text style={{ fontSize: 13, color: theme.text }}>
+                                      Amount: <Text style={{ fontWeight: "700" }}>{formatVND(qrData.amount)} VND</Text>
+                                    </Text>
+                                    <Text style={{ fontSize: 11, fontFamily: "monospace", color: theme.muted }}>
+                                      Ref: {qrData.reference}
+                                    </Text>
+                                    <Text style={{ fontSize: 11, color: theme.subtle }}>
+                                      Payment confirmed automatically once received
+                                    </Text>
+                                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                                      <ActivityIndicator size="small" color={theme.purple400} />
+                                      <Text style={{ fontSize: 12, color: theme.purple400 }}>Waiting for payment...</Text>
+                                    </View>
+                                  </View>
+                                )}
+                              </>
                             )}
-                            <View style={{ borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 6, marginTop: 2, flexDirection: "row", justifyContent: "space-between" }}>
-                              <Text style={{ fontSize: 13, fontWeight: "600", color: theme.text }}>Total</Text>
-                              <Text style={{ fontSize: 13, fontWeight: "700", color: theme.purple400 }}>{formatVND(selectedInvoice.totalAmount)} VND</Text>
-                            </View>
-                            {selectedInvoice.paidAt && (
-                              <Text style={{ fontSize: 11, color: theme.muted, marginTop: 2 }}>
-                                Paid: {new Date(selectedInvoice.paidAt).toLocaleString()}
-                              </Text>
-                            )}
-                            {selectedInvoice.paymentRef && (
-                              <Text style={{ fontSize: 11, fontFamily: "monospace", color: theme.subtle }}>
-                                Ref: {selectedInvoice.paymentRef}
-                              </Text>
-                            )}
-                          </View>
+                          </>
                         )}
-                      </React.Fragment>
-                    ))}
+                      </TouchableOpacity>
+                    );
+                  })}
                 </>
               )}
 
