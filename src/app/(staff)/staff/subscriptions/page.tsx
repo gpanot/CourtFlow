@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useSessionStore, useHasHydrated } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { ArrowLeft, Plus, Sparkles, Loader2 } from "lucide-react";
+import { ArrowLeft, Plus, Sparkles, Loader2, Copy, Check, QrCode, X } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { PackageCard } from "@/modules/courtpay/components/PackageCard";
 import { PackageForm } from "@/modules/courtpay/components/PackageForm";
 import { SubscriberList } from "@/modules/courtpay/components/SubscriberList";
@@ -51,6 +52,8 @@ export default function StaffSubscriptionsPage() {
   const [editingPkg, setEditingPkg] = useState<Package | null>(null);
   const [creatingDefaults, setCreatingDefaults] = useState(false);
   const [defaultsBanner, setDefaultsBanner] = useState("");
+  const [copiedLink, setCopiedLink] = useState<string | null>(null);
+  const [qrUrl, setQrUrl] = useState<string | null>(null);
 
   const fetchPackages = useCallback(async () => {
     if (!venueId) return;
@@ -127,9 +130,21 @@ export default function StaffSubscriptionsPage() {
     await fetchPackages();
   };
 
+  const copyToClipboard = async (url: string, key: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedLink(key);
+      setTimeout(() => setCopiedLink(null), 2000);
+    } catch { /* ignore */ }
+  };
+
   if (!hydrated || !token) return null;
 
   const activePackages = packages.filter((p) => p.isActive);
+
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const balanceUrl = `${origin}/my-balance/${venueId}`;
+  const subscribeUrl = `${origin}/subscribe/${venueId}`;
 
   return (
     <div className="min-h-dvh bg-neutral-950 text-white">
@@ -168,6 +183,31 @@ export default function StaffSubscriptionsPage() {
           ))}
         </div>
       </div>
+
+      {/* Share with players */}
+      {venueId && (
+        <div className="mx-4 mt-4 rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+          <p className="mb-3 text-sm font-medium text-neutral-300">Share with players</p>
+          <div className="space-y-3">
+            <ShareRow
+              label="Balance check"
+              url={balanceUrl}
+              copyKey="balance"
+              copiedLink={copiedLink}
+              onCopy={copyToClipboard}
+              onShowQR={setQrUrl}
+            />
+            <ShareRow
+              label="Buy a package"
+              url={subscribeUrl}
+              copyKey="subscribe"
+              copiedLink={copiedLink}
+              onCopy={copyToClipboard}
+              onShowQR={setQrUrl}
+            />
+          </div>
+        </div>
+      )}
 
       <div className="p-4">
         {loading ? (
@@ -262,6 +302,71 @@ export default function StaffSubscriptionsPage() {
           onClose={() => setEditingPkg(null)}
         />
       )}
+
+      {/* QR bottom sheet */}
+      {qrUrl && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={() => setQrUrl(null)}>
+          <div
+            className="w-full max-w-md rounded-t-2xl bg-neutral-900 px-6 pb-8 pt-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-sm font-medium text-neutral-300">Scan QR code</p>
+              <button onClick={() => setQrUrl(null)} className="rounded-lg p-1 text-neutral-400 hover:text-white">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex justify-center">
+              <div className="rounded-2xl bg-white p-5">
+                <QRCodeSVG value={qrUrl} size={220} level="H" />
+              </div>
+            </div>
+            <p className="mt-4 break-all text-center text-xs text-neutral-500">{qrUrl}</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ShareRow({
+  label,
+  url,
+  copyKey,
+  copiedLink,
+  onCopy,
+  onShowQR,
+}: {
+  label: string;
+  url: string;
+  copyKey: string;
+  copiedLink: string | null;
+  onCopy: (url: string, key: string) => void;
+  onShowQR: (url: string) => void;
+}) {
+  const isCopied = copiedLink === copyKey;
+  const shortUrl = url.replace(/^https?:\/\//, "");
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="text-xs text-neutral-500">{label}</p>
+      <p className="truncate text-xs text-neutral-400">{shortUrl}</p>
+      <div className="flex gap-2">
+        <button
+          onClick={() => onCopy(url, copyKey)}
+          className="flex items-center gap-1.5 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:bg-neutral-800"
+        >
+          {isCopied ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
+          {isCopied ? "Copied!" : "Copy link"}
+        </button>
+        <button
+          onClick={() => onShowQR(url)}
+          className="flex items-center gap-1.5 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:bg-neutral-800"
+        >
+          <QrCode className="h-3.5 w-3.5" />
+          Show QR
+        </button>
+      </div>
     </div>
   );
 }
