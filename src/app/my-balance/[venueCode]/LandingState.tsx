@@ -121,7 +121,7 @@ export function LandingState({ venueCode, venueName, onIdentified }: LandingStat
             />
             {faceScanning && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                <Loader2 className="h-8 w-8 animate-spin text-fuchsia-400" />
+                <Loader2 className="h-8 w-8 animate-spin text-emerald-400" />
               </div>
             )}
           </div>
@@ -133,7 +133,7 @@ export function LandingState({ venueCode, venueName, onIdentified }: LandingStat
           <button
             onClick={handleFaceScan}
             disabled={faceScanning}
-            className="w-full rounded-xl bg-fuchsia-600 py-3.5 text-base font-semibold text-white hover:bg-fuchsia-500 disabled:opacity-50"
+            className="w-full rounded-xl bg-emerald-600 py-3.5 text-base font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
           >
             {faceScanning ? "Scanning..." : "Scan now"}
           </button>
@@ -164,7 +164,7 @@ export function LandingState({ venueCode, venueName, onIdentified }: LandingStat
                 "w-full rounded-xl border bg-neutral-950 px-4 py-3.5 text-lg text-white placeholder:text-neutral-600 focus:outline-none focus:ring-2",
                 error
                   ? "border-red-500/50 focus:ring-red-500/30"
-                  : "border-neutral-700 focus:ring-fuchsia-500/30"
+                  : "border-neutral-700 focus:ring-emerald-500/30"
               )}
             />
             {error && (
@@ -173,7 +173,7 @@ export function LandingState({ venueCode, venueName, onIdentified }: LandingStat
             <button
               onClick={handlePhoneSubmit}
               disabled={loading || phone.trim().length < 8}
-              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-fuchsia-600 py-3.5 text-base font-semibold text-white hover:bg-fuchsia-500 disabled:opacity-40"
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 py-3.5 text-base font-semibold text-white hover:bg-emerald-500 disabled:opacity-40"
             >
               {loading && <Loader2 className="h-5 w-5 animate-spin" />}
               Check my balance

@@ -36,7 +36,7 @@ export function SubscriptionCard({
 
       {isUnlimited ? (
         <div className="mt-4 flex flex-col items-center gap-1">
-          <div className="flex items-center gap-2 text-purple-400">
+          <div className="flex items-center gap-2 text-emerald-400">
             <InfinityIcon className="h-8 w-8" />
             <span className="text-2xl font-bold">Unlimited</span>
           </div>

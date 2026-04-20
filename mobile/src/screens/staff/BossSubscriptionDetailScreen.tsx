@@ -7,9 +7,6 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Image,
-  ActionSheetIOS,
-  Alert,
-  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -217,47 +214,6 @@ export function BossSubscriptionDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [avatarExpanded, setAvatarExpanded] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
-  const handleDelete = useCallback(() => {
-    const confirmDelete = async () => {
-      setDeleting(true);
-      try {
-        await api.delete(`/api/courtpay/staff/boss/session/${subscriptionId}`);
-        navigation.goBack();
-      } catch (err) {
-        Alert.alert("Error", err instanceof Error ? err.message : "Failed to delete subscription.");
-      } finally {
-        setDeleting(false);
-      }
-    };
-
-    Alert.alert(
-      "Delete Subscription",
-      "Are you sure you want to permanently delete this subscription? This cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Delete", style: "destructive", onPress: () => void confirmDelete() },
-      ]
-    );
-  }, [subscriptionId, navigation]);
-
-  const handleMoreOptions = useCallback(() => {
-    if (Platform.OS === "ios") {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options: ["Cancel", "Delete Subscription"],
-          destructiveButtonIndex: 1,
-          cancelButtonIndex: 0,
-        },
-        (buttonIndex) => {
-          if (buttonIndex === 1) handleDelete();
-        }
-      );
-    } else {
-      handleDelete();
-    }
-  }, [handleDelete]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -267,20 +223,8 @@ export function BossSubscriptionDetailScreen() {
       headerTitleStyle: { color: theme.text, fontWeight: "700" },
       headerShadowVisible: false,
       headerBackTitle: "",
-      headerRight: () =>
-        deleting ? (
-          <ActivityIndicator size="small" color={theme.muted} style={{ marginRight: 8 }} />
-        ) : (
-          <TouchableOpacity
-            onPress={handleMoreOptions}
-            hitSlop={10}
-            style={{ marginRight: 4, padding: 4 }}
-          >
-            <Ionicons name="ellipsis-vertical" size={20} color={theme.text} />
-          </TouchableOpacity>
-        ),
     });
-  }, [navigation, theme, deleting, handleMoreOptions]);
+  }, [navigation, theme]);
 
   const fetchDetail = useCallback(async () => {
     setError(null);

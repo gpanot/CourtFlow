@@ -16,12 +16,16 @@ import {
   RefreshControl,
   TextInput,
   Image,
+  Modal,
+  Share,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import QRCode from "react-native-qrcode-svg";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { api } from "../../lib/api-client";
 import { useAuthStore } from "../../stores/auth-store";
+import { ENV } from "../../config/env";
 import { useAppColors } from "../../theme/use-app-colors";
 import type { AppColors } from "../../theme/palettes";
 import type { StaffStackParamList } from "../../navigation/types";
@@ -236,6 +240,78 @@ function createStyles(t: AppColors) {
       color: t.text,
     },
     playerCardCheckinLabel: { fontSize: 10, color: t.muted, textAlign: "center" },
+
+    // ── Share card (subscribers tab) ─────────────────────────────────────
+    shareCard: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.card,
+      padding: 14,
+      marginBottom: 12,
+    },
+    shareCardTitle: { fontSize: 13, fontWeight: "700", color: t.text, marginBottom: 6 },
+    shareCardDesc: { fontSize: 12, color: t.muted, marginBottom: 10, lineHeight: 17 },
+    shareBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      backgroundColor: "#9333ea",
+      paddingVertical: 10,
+      borderRadius: 9,
+    },
+    shareBtnText: { color: "#fff", fontWeight: "700", fontSize: 13 },
+    shareModalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
+    shareModalCard: {
+      backgroundColor: t.bg,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      borderWidth: 1,
+      borderColor: t.border,
+      padding: 24,
+      paddingBottom: 40,
+    },
+    shareModalTitle: { fontSize: 16, fontWeight: "700", color: t.text, marginBottom: 6 },
+    shareModalSub: { fontSize: 13, color: t.muted, marginBottom: 16, lineHeight: 18 },
+    shareModalUrl: {
+      backgroundColor: t.inputBg,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: t.border,
+      padding: 12,
+      fontSize: 12,
+      color: t.purple400,
+      marginBottom: 16,
+      lineHeight: 18,
+    },
+    shareModalActions: { flexDirection: "row", gap: 10 },
+    shareModalClose: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: t.border,
+      alignItems: "center",
+    },
+    shareModalCloseText: { color: t.muted, fontWeight: "600", fontSize: 14 },
+    shareModalShare: {
+      flex: 2,
+      paddingVertical: 12,
+      borderRadius: 10,
+      backgroundColor: "#9333ea",
+      alignItems: "center",
+    },
+    shareModalShareText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+    shareQrWrap: {
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 12,
+      borderRadius: 12,
+      backgroundColor: "#fff",
+      alignSelf: "center",
+      marginBottom: 16,
+    },
   });
 }
 
@@ -247,6 +323,9 @@ export function StaffDashboardScreen() {
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const [tab, setTab] = useState<Tab>("subscribers");
+  const [showShareModal, setShowShareModal] = useState(false);
+
+  const balanceUrl = venueId ? `${ENV.API_BASE_URL}/my-balance/${venueId}` : "";
 
   // Players state
   const [playersLoading, setPlayersLoading] = useState(false);
@@ -257,9 +336,6 @@ export function StaffDashboardScreen() {
   const [searchVisible, setSearchVisible] = useState(false);
   const searchRef = useRef<TextInput>(null);
 
-  // Subscribers tab refresh signal
-  const [subsRefreshKey, setSubsRefreshKey] = useState(0);
-  const [subsRefreshing, setSubsRefreshing] = useState(false);
 
   // Track which tabs have been loaded — never re-fetch on tab switch
   const loadedTabs = useRef(new Set<Tab>());
@@ -308,13 +384,6 @@ export function StaffDashboardScreen() {
     void fetchPlayers(true);
   };
 
-  const handleSubsRefresh = () => {
-    setSubsRefreshing(true);
-    // bump the key to remount SubscribersList (forces re-fetch from page 0)
-    setSubsRefreshKey((k) => k + 1);
-    // give a tiny delay so the refreshControl feels responsive
-    setTimeout(() => setSubsRefreshing(false), 600);
-  };
 
   return (
     <View style={styles.screen}>
@@ -347,23 +416,31 @@ export function StaffDashboardScreen() {
       <View style={{ flex: 1, position: "relative" }}>
 
       {/* ── Subscribers tab ──────────────────────────────────────────────── */}
-      <ScrollView
+      <View
         style={[
           StyleSheet.absoluteFillObject,
-          { opacity: tab === "subscribers" ? 1 : 0 },
+          { opacity: tab === "subscribers" ? 1 : 0, padding: 16, paddingBottom: 0 },
         ]}
         pointerEvents={tab === "subscribers" ? "auto" : "none"}
-        contentContainerStyle={styles.body}
-        refreshControl={
-          <RefreshControl
-            refreshing={subsRefreshing}
-            onRefresh={handleSubsRefresh}
-            tintColor={theme.blue400}
-          />
-        }
       >
-        <SubscribersList key={subsRefreshKey} showSearch />
-      </ScrollView>
+        {venueId ? (
+          <View style={styles.shareCard}>
+            <Text style={styles.shareCardTitle}>Share balance check link</Text>
+            <Text style={styles.shareCardDesc}>
+              Players can check their session balance without installing the app.
+            </Text>
+            <TouchableOpacity
+              style={styles.shareBtn}
+              onPress={() => setShowShareModal(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="share-outline" size={16} color="#fff" />
+              <Text style={styles.shareBtnText}>Share link & QR</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+        <SubscribersList showSearch />
+      </View>
 
       {/* ── Players tab ──────────────────────────────────────────────────── */}
       <View
@@ -535,17 +612,21 @@ export function StaffDashboardScreen() {
                   );
                   const initials = p.name.trim().charAt(0).toUpperCase();
                   const isCourtPay = p.source === "courtpay";
-                  const genderIcon =
-                    p.gender?.toLowerCase() === "female"
-                      ? "♀"
-                      : p.gender?.toLowerCase() === "male"
-                      ? "♂"
-                      : "?";
+                  const isFemale = p.gender?.toLowerCase() === "female";
+                  const isMale = p.gender?.toLowerCase() === "male";
+                  const nameColor = isFemale ? "#f9a8d4" : isMale ? "#93c5fd" : theme.text;
 
                   return (
-                    <View
+                    <TouchableOpacity
                       key={`${p.source}-${p.id}`}
                       style={styles.playerCard}
+                      activeOpacity={0.75}
+                      onPress={() =>
+                        navigation.navigate("StaffPlayerDetail", {
+                          playerId: p.id,
+                          source: p.source,
+                        })
+                      }
                     >
                       <View style={styles.playerAvatarWrap}>
                         {photoUri ? (
@@ -566,13 +647,10 @@ export function StaffDashboardScreen() {
                       <View style={styles.playerCardMain}>
                         <View style={styles.playerCardNameRow}>
                           <Text
-                            style={styles.playerCardName}
-                            numberOfLines={1}
+                            style={[styles.playerCardName, { color: nameColor }]}
+                            numberOfLines={2}
                           >
                             {p.name}
-                          </Text>
-                          <Text style={styles.playerCardGender}>
-                            {genderIcon}
                           </Text>
                         </View>
                         <Text style={styles.playerCardPhone}>{p.phone}</Text>
@@ -638,7 +716,7 @@ export function StaffDashboardScreen() {
                           visits
                         </Text>
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   );
                 });
               })()
@@ -648,6 +726,60 @@ export function StaffDashboardScreen() {
       </View>
 
       </View>{/* end relative container */}
+
+      {/* ── Share balance link modal ──────────────────────────────────────── */}
+      <Modal
+        visible={showShareModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowShareModal(false)}
+      >
+        <TouchableOpacity
+          style={styles.shareModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowShareModal(false)}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <View style={styles.shareModalCard}>
+              <Text style={styles.shareModalTitle}>Share balance check</Text>
+              <Text style={styles.shareModalSub}>
+                Send this link to your players so they can check their session balance anytime — no app needed.
+              </Text>
+              {balanceUrl ? (
+                <View style={styles.shareQrWrap}>
+                  <QRCode value={balanceUrl} size={160} backgroundColor="#fff" color="#000" />
+                </View>
+              ) : null}
+              <Text style={styles.shareModalUrl} selectable>
+                {balanceUrl}
+              </Text>
+              <View style={styles.shareModalActions}>
+                <TouchableOpacity
+                  style={styles.shareModalClose}
+                  onPress={() => setShowShareModal(false)}
+                >
+                  <Text style={styles.shareModalCloseText}>Close</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.shareModalShare}
+                  onPress={async () => {
+                    try {
+                      await Share.share({
+                        message: `Check your session balance at ${balanceUrl}`,
+                        url: balanceUrl,
+                      });
+                    } catch {
+                      /* ignore */
+                    }
+                  }}
+                >
+                  <Text style={styles.shareModalShareText}>Share link & QR</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }

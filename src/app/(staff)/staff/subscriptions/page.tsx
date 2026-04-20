@@ -54,6 +54,7 @@ export default function StaffSubscriptionsPage() {
   const [defaultsBanner, setDefaultsBanner] = useState("");
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
+  const [showLimitModal, setShowLimitModal] = useState(false);
 
   const fetchPackages = useCallback(async () => {
     if (!venueId) return;
@@ -250,7 +251,13 @@ export default function StaffSubscriptionsPage() {
               <>
                 <div className="flex justify-end mb-4">
                   <button
-                    onClick={() => setShowForm(true)}
+                    onClick={() => {
+                      if (activePackages.length >= 3) {
+                        setShowLimitModal(true);
+                      } else {
+                        setShowForm(true);
+                      }
+                    }}
                     className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-purple-500"
                   >
                     <Plus className="h-4 w-4" />
@@ -301,6 +308,25 @@ export default function StaffSubscriptionsPage() {
           onSubmit={handleEditPackage}
           onClose={() => setEditingPkg(null)}
         />
+      )}
+
+      {/* Package limit modal */}
+      {showLimitModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6" onClick={() => setShowLimitModal(false)}>
+          <div
+            className="w-full max-w-sm rounded-2xl bg-neutral-900 border border-neutral-700 px-6 py-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-base font-semibold text-white">Maximum 3 active packages reached</p>
+            <p className="mt-2 text-sm text-neutral-400">Delete or edit a package first.</p>
+            <button
+              onClick={() => setShowLimitModal(false)}
+              className="mt-5 w-full rounded-xl bg-purple-600 py-2.5 text-sm font-semibold text-white hover:bg-purple-500"
+            >
+              OK
+            </button>
+          </div>
+        </div>
       )}
 
       {/* QR bottom sheet */}

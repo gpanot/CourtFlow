@@ -16,6 +16,7 @@ import { StaffSessionHistoryScreen } from "../screens/staff/StaffSessionHistoryS
 import { StaffPaymentSettingsScreen } from "../screens/staff/StaffPaymentSettingsScreen";
 import { SessionDetailScreen } from "../screens/staff/SessionDetailScreen";
 import { BossSubscriptionDetailScreen } from "../screens/staff/BossSubscriptionDetailScreen";
+import { StaffPlayerDetailScreen } from "../screens/staff/StaffPlayerDetailScreen";
 import { StaffBillingWeekPaymentsScreen } from "../screens/staff/StaffBillingWeekPaymentsScreen";
 import { StaffDashboardHeader } from "../components/StaffDashboardHeader";
 import { useAppColors } from "../theme/use-app-colors";
@@ -125,6 +126,11 @@ export function StaffNavigator() {
       <Stack.Screen
         name="BossSubscriptionDetail"
         component={BossSubscriptionDetailScreen}
+        options={{ headerShown: true }}
+      />
+      <Stack.Screen
+        name="StaffPlayerDetail"
+        component={StaffPlayerDetailScreen}
         options={{ headerShown: true }}
       />
     </Stack.Navigator>

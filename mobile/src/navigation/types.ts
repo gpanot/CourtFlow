@@ -23,6 +23,7 @@ export type StaffStackParamList = {
   StaffSessionDetail: { sessionId: string; date: string; openedAt: string; closedAt: string | null };
   StaffBillingWeekPayments: { venueId: string; weekStart: string; weekEnd: string };
   BossSubscriptionDetail: { subscriptionId: string };
+  StaffPlayerDetail: { playerId: string; source: "self" | "courtpay" };
 };
 
 export type StaffTabParamList = {

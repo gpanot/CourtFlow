@@ -1,6 +1,6 @@
 "use client";
 
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, ChevronLeft } from "lucide-react";
 import { SubscriptionCard } from "@/components/balance/SubscriptionCard";
 import type { BalanceData } from "./LandingState";
 
@@ -36,10 +36,22 @@ function formatRelativeTime(iso: string): string {
 
 export function BalanceScreen({ data, onRefresh, onLogout, refreshing }: BalanceScreenProps) {
   return (
-    <div className="flex min-h-dvh flex-col bg-[#0e0e0e] px-6 py-8">
+    <div className="flex min-h-dvh flex-col bg-[#0e0e0e]">
+      {/* Top bar */}
+      <div className="flex items-center gap-3 border-b border-neutral-800 px-4 py-3">
+        <button
+          onClick={onLogout}
+          className="flex items-center gap-1 text-sm text-neutral-400 hover:text-white"
+        >
+          <ChevronLeft className="h-5 w-5" />
+          Back
+        </button>
+        <span className="text-sm text-neutral-500">{data.venueName}</span>
+      </div>
+
+      <div className="flex flex-1 flex-col px-6 py-8">
       {/* Header */}
-      <p className="text-sm text-neutral-500">{data.venueName}</p>
-      <h1 className="mt-1 text-2xl font-bold text-white">
+      <h1 className="text-2xl font-bold text-white">
         Hi {data.playerName}
       </h1>
 
@@ -101,8 +113,9 @@ export function BalanceScreen({ data, onRefresh, onLogout, refreshing }: Balance
           onClick={onLogout}
           className="text-sm text-neutral-500 hover:text-neutral-300"
         >
-          Not you? Change number
+          Re-scan your face
         </button>
+      </div>
       </div>
     </div>
   );

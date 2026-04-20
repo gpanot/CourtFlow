@@ -18,12 +18,15 @@ import {
   KeyboardAvoidingView,
   Platform,
   Switch,
+  Share,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import QRCode from "react-native-qrcode-svg";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { api } from "../../lib/api-client";
 import { useAuthStore } from "../../stores/auth-store";
+import { ENV } from "../../config/env";
 import { useAppColors } from "../../theme/use-app-colors";
 import type { AppColors } from "../../theme/palettes";
 import type { StaffStackParamList } from "../../navigation/types";
@@ -317,6 +320,86 @@ function createStyles(t: AppColors) {
       color: t.amber400,
       marginBottom: 10,
     },
+
+    // ── Share balance card ────────────────────────────────────────────────
+    shareCard: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.card,
+      padding: 14,
+      marginBottom: 12,
+    },
+    shareCardTitle: { fontSize: 13, fontWeight: "700", color: t.text, marginBottom: 8 },
+    shareCardDesc: { fontSize: 12, color: t.muted, marginBottom: 10, lineHeight: 17 },
+    shareUrl: {
+      fontSize: 11,
+      color: t.purple400,
+      marginBottom: 10,
+      lineHeight: 16,
+    },
+    shareBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      backgroundColor: "#9333ea",
+      paddingVertical: 10,
+      borderRadius: 9,
+    },
+    shareBtnText: { color: "#fff", fontWeight: "700", fontSize: 13 },
+
+    // ── Share modal ───────────────────────────────────────────────────────
+    shareModalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
+    shareModalCard: {
+      backgroundColor: t.bg,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      borderWidth: 1,
+      borderColor: t.border,
+      padding: 24,
+      paddingBottom: 40,
+    },
+    shareModalTitle: { fontSize: 16, fontWeight: "700", color: t.text, marginBottom: 6 },
+    shareModalSub: { fontSize: 13, color: t.muted, marginBottom: 16, lineHeight: 18 },
+    shareModalUrl: {
+      backgroundColor: t.inputBg,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: t.border,
+      padding: 12,
+      fontSize: 12,
+      color: t.purple400,
+      marginBottom: 16,
+      lineHeight: 18,
+    },
+    shareModalActions: { flexDirection: "row", gap: 10 },
+    shareModalClose: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: t.border,
+      alignItems: "center",
+    },
+    shareModalCloseText: { color: t.textSecondary, fontWeight: "600", fontSize: 14 },
+    shareModalShare: {
+      flex: 2,
+      paddingVertical: 12,
+      borderRadius: 10,
+      backgroundColor: "#9333ea",
+      alignItems: "center",
+    },
+    shareModalShareText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+    shareQrWrap: {
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 12,
+      borderRadius: 12,
+      backgroundColor: "#fff",
+      alignSelf: "center",
+      marginBottom: 16,
+    },
   });
 }
 
@@ -340,6 +423,8 @@ export function StaffSubscriptionsScreen() {
   // Whether packages are shown in the CourtPay check-in flow
   const [showSubscriptionsInFlow, setShowSubscriptionsInFlow] = useState(true);
   const [toggleSaving, setToggleSaving] = useState(false);
+
+  const [showShareModal, setShowShareModal] = useState(false);
 
   // Form fields
   const [formName, setFormName] = useState("");
@@ -639,6 +724,7 @@ export function StaffSubscriptionsScreen() {
   };
 
   const activePackages = packages.filter((p) => p.isActive);
+  const balanceUrl = venueId ? `${ENV.API_BASE_URL}/my-balance/${venueId}` : "";
 
   // ── Hint text for discount field ─────────────────────────────────────────
   const formSessionsNum = formUnlimited ? null : Number(formSessions) || null;
@@ -794,9 +880,77 @@ export function StaffSubscriptionsScreen() {
               <Text style={styles.bannerText}>{defaultsBanner}</Text>
             </View>
           ) : null}
+
+          {/* Share balance link card */}
+          {venueId ? (
+            <View style={styles.shareCard}>
+              <Text style={styles.shareCardTitle}>Share balance check link</Text>
+              <Text style={styles.shareCardDesc}>
+                Players can check their session balance without installing the app.
+              </Text>
+              <TouchableOpacity
+                style={styles.shareBtn}
+                onPress={() => setShowShareModal(true)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="share-outline" size={16} color="#fff" />
+                <Text style={styles.shareBtnText}>Share link & QR</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
           <SubscribersList showSearch />
         </View>
       )}
+
+      {/* ── Share balance link modal ──────────────────────────────────────── */}
+      <Modal visible={showShareModal} animationType="slide" transparent onRequestClose={() => setShowShareModal(false)}>
+        <TouchableOpacity
+          style={styles.shareModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowShareModal(false)}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <View style={styles.shareModalCard}>
+              <Text style={styles.shareModalTitle}>Share balance check</Text>
+              <Text style={styles.shareModalSub}>
+                Send this link to your players so they can check their session balance anytime — no app needed.
+              </Text>
+              {balanceUrl ? (
+                <View style={styles.shareQrWrap}>
+                  <QRCode value={balanceUrl} size={160} backgroundColor="#fff" color="#000" />
+                </View>
+              ) : null}
+              <Text style={styles.shareModalUrl} selectable>
+                {balanceUrl}
+              </Text>
+              <View style={styles.shareModalActions}>
+                <TouchableOpacity
+                  style={styles.shareModalClose}
+                  onPress={() => setShowShareModal(false)}
+                >
+                  <Text style={styles.shareModalCloseText}>Close</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.shareModalShare}
+                  onPress={async () => {
+                    try {
+                      await Share.share({
+                        message: `Check your session balance at ${balanceUrl}`,
+                        url: balanceUrl,
+                      });
+                    } catch {
+                      /* ignore */
+                    }
+                  }}
+                >
+                  <Text style={styles.shareModalShareText}>Share</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
 
       {/* ── Create / Edit Modal ───────────────────────────────────────────── */}
       <Modal visible={showForm} animationType="slide" transparent>
