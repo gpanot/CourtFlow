@@ -26,15 +26,16 @@ export function getWeekBounds(refDate?: Date): {
   weekEnd: Date;
 } {
   const now = refDate ? new Date(refDate) : new Date();
-  const day = now.getDay();
-  const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+  // Use UTC day-of-week so behaviour is consistent regardless of server timezone.
+  const day = now.getUTCDay(); // 0=Sun … 6=Sat
+  const diffDays = day === 0 ? -6 : 1 - day; // shift to Monday
   const weekStart = new Date(now);
-  weekStart.setDate(diff);
-  weekStart.setHours(0, 0, 0, 0);
+  weekStart.setUTCDate(now.getUTCDate() + diffDays);
+  weekStart.setUTCHours(0, 0, 0, 0);
 
   const weekEnd = new Date(weekStart);
-  weekEnd.setDate(weekStart.getDate() + 6);
-  weekEnd.setHours(23, 59, 59, 999);
+  weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
+  weekEnd.setUTCHours(23, 59, 59, 999);
 
   return { weekStart, weekEnd };
 }
@@ -52,10 +53,14 @@ async function getBillingRates(venueId: string) {
   });
   if (custom) {
     return {
-      baseRate: custom.baseRatePerCheckin,
-      subAddon: custom.subscriptionAddon,
-      sepayAddon: custom.sepayAddon,
-      isFree: custom.isFree,
+      baseRate: custom.isFreeBase ? 0 : custom.baseRatePerCheckin,
+      subAddon: custom.isFreeSubAddon ? 0 : custom.subscriptionAddon,
+      sepayAddon: custom.isFreeSepayAddon ? 0 : custom.sepayAddon,
+      isFreeBase: custom.isFreeBase,
+      isFreeSubAddon: custom.isFreeSubAddon,
+      isFreeSepayAddon: custom.isFreeSepayAddon,
+      // isFree = all three free → invoice total is 0
+      isFree: custom.isFreeBase && custom.isFreeSubAddon && custom.isFreeSepayAddon,
     };
   }
 
@@ -66,6 +71,9 @@ async function getBillingRates(venueId: string) {
     baseRate: config?.defaultBaseRate ?? 5000,
     subAddon: config?.defaultSubAddon ?? 1000,
     sepayAddon: config?.defaultSepayAddon ?? 1000,
+    isFreeBase: false,
+    isFreeSubAddon: false,
+    isFreeSepayAddon: false,
     isFree: false,
   };
 }
@@ -196,9 +204,9 @@ export async function generateWeeklyInvoice(
   });
   const ref = `CF-BILL-${venueShortCode(venue.name)}-${year}W${String(weekNum).padStart(2, "0")}`;
 
-  // When the venue has isFree set, show the real amounts on line items but
-  // present a 0 totalAmount so the boss sees a "free" invoice.
-  const billedTotal = rates.isFree ? 0 : computed.totalAmount;
+  // Individual rate components are already zeroed when free flags are set in getBillingRates.
+  // isFree (all three flags) means we confirm immediately with a "free_tier" note.
+  const billedTotal = computed.totalAmount;
 
   const invoice = await prisma.billingInvoice.create({
     data: {
@@ -215,6 +223,7 @@ export async function generateWeeklyInvoice(
       status: billedTotal === 0 ? "paid" : "pending",
       paymentRef: ref,
       confirmedBy: rates.isFree ? "free_tier" : undefined,
+      // Note: billedTotal is already 0 when all rate components are zeroed via free flags
       lineItems: { create: computed.lineItems },
     },
     include: { lineItems: true },
@@ -240,7 +249,10 @@ export async function getCurrentWeekUsage(venueId: string) {
     baseAmount: computed.totalPayments * rates.baseRate,
     subscriptionAmount: computed.subscriptionPayments * rates.subAddon,
     sepayAmount: computed.sepayPayments * rates.sepayAddon,
-    estimatedTotal: rates.isFree ? 0 : computed.totalAmount,
+    estimatedTotal: computed.totalAmount,
+    isFreeBase: rates.isFreeBase,
+    isFreeSubAddon: rates.isFreeSubAddon,
+    isFreeSepayAddon: rates.isFreeSepayAddon,
     isFree: rates.isFree,
     weekStart,
     weekEnd,

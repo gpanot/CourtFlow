@@ -24,7 +24,9 @@ interface RatesData {
   baseRatePerCheckin: number;
   subscriptionAddon: number;
   sepayAddon: number;
-  isFree: boolean;
+  isFreeBase: boolean;
+  isFreeSubAddon: boolean;
+  isFreeSepayAddon: boolean;
 }
 
 interface InvoiceRow {
@@ -115,6 +117,8 @@ export default function VenueBillingDetailPage() {
   const [invoicePayments, setInvoicePayments] = useState<Record<string, WeeklyPaymentsResponse>>({});
   const [loadingPayments, setLoadingPayments] = useState<string | null>(null);
   const [markingPaid, setMarkingPaid] = useState<string | null>(null);
+  const [backfilling, setBackfilling] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<string | null>(null);
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const fetchDetail = useCallback(async () => {
@@ -131,7 +135,9 @@ export default function VenueBillingDetailPage() {
           baseRatePerCheckin: c.defaultBaseRate ?? 5000,
           subscriptionAddon: c.defaultSubAddon ?? 1000,
           sepayAddon: c.defaultSepayAddon ?? 1000,
-          isFree: false,
+          isFreeBase: false,
+          isFreeSubAddon: false,
+          isFreeSepayAddon: false,
         }
       );
     } catch (e) {
@@ -189,6 +195,28 @@ export default function VenueBillingDetailPage() {
       console.error(e);
     }
     setLoadingPayments(null);
+  };
+
+  const runBackfill = async () => {
+    if (!confirm("Generate missing invoices for all past weeks? (Existing invoices are skipped)")) return;
+    setBackfilling(true);
+    setBackfillResult(null);
+    try {
+      const res = await api.post<{ message: string; created: { weekStart: string; payments: number; totalAmount: number; status: string }[] }>(
+        `/api/admin/billing/venue/${venueId}/backfill`
+      );
+      const created = res.created.filter((r) => r.payments > 0);
+      setBackfillResult(
+        created.length === 0
+          ? "No missing weeks found."
+          : `Created ${created.length} invoice(s): ${created.map((r) => new Date(r.weekStart).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) + " (" + r.payments + " pmts)").join(", ")}`
+      );
+      await fetchDetail();
+    } catch (e) {
+      console.error(e);
+      setBackfillResult("Backfill failed — check console.");
+    }
+    setBackfilling(false);
   };
 
   const markPaid = async (invoiceId: string) => {
@@ -318,74 +346,84 @@ export default function VenueBillingDetailPage() {
           </div>
 
           <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1.5">
+            {/* Base rate */}
+            <div className="space-y-2">
+              <label className="text-xs text-neutral-500 block">
                 Base rate per payment
               </label>
               <input
                 type="number"
                 value={ratesForm.baseRatePerCheckin}
                 onChange={(e) =>
-                  setRatesForm({
-                    ...ratesForm,
-                    baseRatePerCheckin: parseInt(e.target.value) || 0,
-                  })
+                  setRatesForm({ ...ratesForm, baseRatePerCheckin: parseInt(e.target.value) || 0 })
                 }
-                disabled={ratesForm.isFree}
+                disabled={ratesForm.isFreeBase}
                 className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white disabled:opacity-40"
               />
+              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={ratesForm.isFreeBase}
+                  onChange={(e) => setRatesForm({ ...ratesForm, isFreeBase: e.target.checked })}
+                  className="h-3.5 w-3.5 rounded accent-green-500"
+                />
+                <span className="text-xs font-medium text-green-400">Free</span>
+                <span className="text-[10px] text-neutral-600">(0 VND)</span>
+              </label>
             </div>
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1.5">
+
+            {/* Subscription add-on */}
+            <div className="space-y-2">
+              <label className="text-xs text-neutral-500 block">
                 Subscription add-on
               </label>
               <input
                 type="number"
                 value={ratesForm.subscriptionAddon}
                 onChange={(e) =>
-                  setRatesForm({
-                    ...ratesForm,
-                    subscriptionAddon: parseInt(e.target.value) || 0,
-                  })
+                  setRatesForm({ ...ratesForm, subscriptionAddon: parseInt(e.target.value) || 0 })
                 }
-                disabled={ratesForm.isFree}
+                disabled={ratesForm.isFreeSubAddon}
                 className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white disabled:opacity-40"
               />
+              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={ratesForm.isFreeSubAddon}
+                  onChange={(e) => setRatesForm({ ...ratesForm, isFreeSubAddon: e.target.checked })}
+                  className="h-3.5 w-3.5 rounded accent-green-500"
+                />
+                <span className="text-xs font-medium text-green-400">Free</span>
+                <span className="text-[10px] text-neutral-600">(0 VND)</span>
+              </label>
             </div>
-            <div>
-              <label className="text-xs text-neutral-500 block mb-1.5">
+
+            {/* SePay add-on */}
+            <div className="space-y-2">
+              <label className="text-xs text-neutral-500 block">
                 SePay-confirmed add-on
               </label>
               <input
                 type="number"
                 value={ratesForm.sepayAddon}
                 onChange={(e) =>
-                  setRatesForm({
-                    ...ratesForm,
-                    sepayAddon: parseInt(e.target.value) || 0,
-                  })
+                  setRatesForm({ ...ratesForm, sepayAddon: parseInt(e.target.value) || 0 })
                 }
-                disabled={ratesForm.isFree}
+                disabled={ratesForm.isFreeSepayAddon}
                 className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white disabled:opacity-40"
               />
+              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={ratesForm.isFreeSepayAddon}
+                  onChange={(e) => setRatesForm({ ...ratesForm, isFreeSepayAddon: e.target.checked })}
+                  className="h-3.5 w-3.5 rounded accent-green-500"
+                />
+                <span className="text-xs font-medium text-green-400">Free</span>
+                <span className="text-[10px] text-neutral-600">(0 VND)</span>
+              </label>
             </div>
           </div>
-
-          {/* Free toggle */}
-          <label className="flex items-center gap-2.5 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={ratesForm.isFree}
-              onChange={(e) =>
-                setRatesForm({ ...ratesForm, isFree: e.target.checked })
-              }
-              className="h-4 w-4 rounded accent-green-500"
-            />
-            <span className="text-sm font-semibold text-green-400">Free</span>
-            <span className="text-xs text-neutral-500">
-              Weekly invoice total shown as 0 VND — the boss sees a discount
-            </span>
-          </label>
 
           <div className="flex gap-3 pt-1">
             <button
@@ -416,6 +454,22 @@ export default function VenueBillingDetailPage() {
 
       {/* ── Weeks tab ─────────────────────────────────────────────────────── */}
       {tab === "weeks" && (
+        <div className="space-y-3">
+          {/* Backfill toolbar */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => void runBackfill()}
+              disabled={backfilling}
+              className="flex items-center gap-1.5 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-400 hover:text-white hover:border-neutral-500 disabled:opacity-50"
+            >
+              {backfilling ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+              {backfilling ? "Generating…" : "Backfill missing weeks"}
+            </button>
+            {backfillResult && (
+              <span className="text-xs text-green-400">{backfillResult}</span>
+            )}
+          </div>
+
         <div className="rounded-xl border border-neutral-800 bg-neutral-900 overflow-hidden">
           {allInvoices.length === 0 ? (
             <p className="py-8 text-center text-sm text-neutral-500">No invoices yet.</p>
@@ -545,6 +599,7 @@ export default function VenueBillingDetailPage() {
               })}
             </div>
           )}
+        </div>
         </div>
       )}
 

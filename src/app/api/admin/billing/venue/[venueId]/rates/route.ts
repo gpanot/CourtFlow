@@ -18,21 +18,17 @@ export async function PUT(
         baseRatePerCheckin: body.baseRatePerCheckin ?? 5000,
         subscriptionAddon: body.subscriptionAddon ?? 1000,
         sepayAddon: body.sepayAddon ?? 1000,
-        isFree: body.isFree ?? false,
+        isFreeBase: body.isFreeBase ?? false,
+        isFreeSubAddon: body.isFreeSubAddon ?? false,
+        isFreeSepayAddon: body.isFreeSepayAddon ?? false,
       },
       update: {
-        ...(body.baseRatePerCheckin !== undefined && {
-          baseRatePerCheckin: body.baseRatePerCheckin,
-        }),
-        ...(body.subscriptionAddon !== undefined && {
-          subscriptionAddon: body.subscriptionAddon,
-        }),
-        ...(body.sepayAddon !== undefined && {
-          sepayAddon: body.sepayAddon,
-        }),
-        ...(body.isFree !== undefined && {
-          isFree: body.isFree,
-        }),
+        ...(body.baseRatePerCheckin !== undefined && { baseRatePerCheckin: body.baseRatePerCheckin }),
+        ...(body.subscriptionAddon !== undefined && { subscriptionAddon: body.subscriptionAddon }),
+        ...(body.sepayAddon !== undefined && { sepayAddon: body.sepayAddon }),
+        ...(body.isFreeBase !== undefined && { isFreeBase: body.isFreeBase }),
+        ...(body.isFreeSubAddon !== undefined && { isFreeSubAddon: body.isFreeSubAddon }),
+        ...(body.isFreeSepayAddon !== undefined && { isFreeSepayAddon: body.isFreeSepayAddon }),
       },
     });
 

@@ -774,8 +774,10 @@ model VenueBillingRate {
   baseRatePerCheckin Int      @default(5000) @map("base_rate_per_checkin")
   subscriptionAddon  Int      @default(1000) @map("subscription_addon")
   sepayAddon         Int      @default(1000) @map("sepay_addon")
-  /// When true the weekly invoice total is set to 0 (free tier / promotional)
-  isFree             Boolean  @default(false) @map("is_free")
+  /// Free flags per component — when true that component costs 0 on the weekly invoice
+  isFreeBase         Boolean  @default(false) @map("is_free_base")
+  isFreeSubAddon     Boolean  @default(false) @map("is_free_sub_addon")
+  isFreeSepayAddon   Boolean  @default(false) @map("is_free_sepay_addon")
   createdAt          DateTime @default(now()) @map("created_at")
   updatedAt          DateTime @updatedAt @map("updated_at")
 

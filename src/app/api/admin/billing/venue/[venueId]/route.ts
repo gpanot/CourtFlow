@@ -22,7 +22,9 @@ export async function GET(
           baseRatePerCheckin: true,
           subscriptionAddon: true,
           sepayAddon: true,
-          isFree: true,
+          isFreeBase: true,
+          isFreeSubAddon: true,
+          isFreeSepayAddon: true,
         },
       }),
       prisma.billingInvoice.findMany({

@@ -132,6 +132,9 @@ interface BillingCurrentData {
   subscriptionAmount: number;
   sepayAmount: number;
   estimatedTotal: number;
+  isFreeBase?: boolean;
+  isFreeSubAddon?: boolean;
+  isFreeSepayAddon?: boolean;
   isFree?: boolean;
   weekStart: string;
   weekEnd: string;
