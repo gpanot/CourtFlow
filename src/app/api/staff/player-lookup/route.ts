@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     console.log("[Staff Player Lookup] digitsOnly:", digitsOnly);
 
     // 1. Search the main Player table (self check-in / wristband flow)
-    const player = await findPlayerByPhoneDigits(phone.trim());
+    const player = await findPlayerByPhoneDigits(phone.trim(), { minimumDigits: 4 });
     console.log("[Staff Player Lookup] players table result:", player?.id ?? "not found");
 
     if (player) {

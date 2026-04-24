@@ -21,7 +21,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { ScanFace, UserPlus } from "lucide-react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { StatusBar } from "expo-status-bar";
-import { BlurView } from "expo-blur";
 import { CourtPayLiquidBackdrop } from "../../components/courtpay/CourtPayLiquidBackdrop";
 import { LiquidGlassSurface } from "../../components/courtpay/LiquidGlassSurface";
 import { CourtPayStatusCard } from "../../components/courtpay/CourtPayStatusCard";
@@ -114,8 +113,8 @@ function formatVND(amount: number) {
 }
 
 const IDLE_TIMEOUT_MS = 30_000;
-const REG_FACE_CIRCLE = 260;
-const CONFIRMED_AUTO_HOME_SEC = 10;
+const REG_FACE_CIRCLE = 312;
+const CONFIRMED_AUTO_HOME_SEC = 8;
 const EXHAUSTED_OFFER_AUTO_HOME_SEC = 30;
 // Steps where idle timer must NOT fire (active user interaction or timed auto-reset)
 const NO_IDLE_TIMEOUT_STEPS: Step[] = [
@@ -140,24 +139,25 @@ export function CourtPayCheckInScreen({
   const toggleTheme = useThemeStore((s) => s.toggleMode);
   const accentKey = useThemeStore((s) => s.accent);
   const CP = useMemo(() => ACCENT_MAP[accentKey], [accentKey]);
+  const isLight = themeMode === "light";
   const dyn = useMemo(() => ({
     primaryBtn:         { backgroundColor: CP.primary },
-    secondaryActionBtn: { borderColor: CP.primaryLight },
-    secondaryActionText:{ color: CP.primaryLight },
-    selectBtnActive:    { borderColor: CP.primary, backgroundColor: CP.bg },
-    selectBtnTextActive:{ color: CP.text },
+    secondaryActionBtn: { borderColor: isLight ? CP.primaryDark : CP.primaryLight },
+    secondaryActionText:{ color: isLight ? CP.primaryDark : CP.primaryLight },
+    selectBtnActive:    { borderColor: CP.primary, backgroundColor: isLight ? CP.bgOnLight : CP.bg },
+    selectBtnTextActive:{ color: isLight ? CP.textOnLight : CP.text },
     scanAgainBig:       { backgroundColor: CP.primary },
     phoneAltBtn:        { backgroundColor: CP.primaryDark },
     confirmAccentBtn:   { backgroundColor: CP.primary },
-    regGotPhotoTitle:   { color: CP.text },
+    regGotPhotoTitle:   { color: isLight ? CP.textOnLight : CP.text },
     regCircleOuter:     { borderColor: CP.scannerBorder },
     regShutterBtn:      { backgroundColor: CP.primary },
     regLooksGoodBtn:    { backgroundColor: CP.primary },
     pkgBestChoiceTag:   { backgroundColor: CP.primary },
-    amount:             { color: CP.amountText },
+    amount:             { color: isLight ? CP.amountTextOnLight : CP.amountText },
     payPulseDot:        { backgroundColor: CP.pulseDot },
-    successCircle:      { backgroundColor: CP.successCircle },
-  }), [CP]);
+    successCircle:      { backgroundColor: isLight ? CP.successCircleOnLight : CP.successCircle },
+  }), [CP, isLight]);
   const insets = useSafeAreaInsets();
   const { locale, toggleLocale, t } = useTabletKioskLocale();
   const [venueApiName, setVenueApiName] = useState("");
@@ -195,6 +195,7 @@ export function CourtPayCheckInScreen({
   const [pendingPayment, setPendingPayment] = useState<PendingPaymentState | null>(null);
   const [loading, setLoading] = useState(false);
   const [cashPending, setCashPending] = useState(false);
+  const [regPhoneRequiredVisible, setRegPhoneRequiredVisible] = useState(false);
   const [confirmedSeconds, setConfirmedSeconds] = useState(CONFIRMED_AUTO_HOME_SEC);
   const [exhaustedOfferSeconds, setExhaustedOfferSeconds] = useState(EXHAUSTED_OFFER_AUTO_HOME_SEC);
   const [error, setError] = useState("");
@@ -301,7 +302,7 @@ export function CourtPayCheckInScreen({
   }, [venueId]);
 
   // ── Session fee + subscription flow setting ───────────────────────────────
-  useEffect(() => {
+  const refreshPaymentSettings = useCallback(() => {
     if (!venueId) return;
     api
       .get<{ sessionFee?: number; showSubscriptionsInFlow?: boolean }>(
@@ -313,6 +314,10 @@ export function CourtPayCheckInScreen({
       })
       .catch(() => {});
   }, [venueId]);
+
+  useEffect(() => {
+    refreshPaymentSettings();
+  }, [refreshPaymentSettings]);
 
   const activePackages = packages.filter((p) => p.active);
 
@@ -343,6 +348,7 @@ export function CourtPayCheckInScreen({
     setIsNewPlayer(false);
     setPendingPayment(null);
     setCashPending(false);
+    setRegPhoneRequiredVisible(false);
     setLoading(false);
     setError("");
     setConfirmMessage("");
@@ -351,7 +357,8 @@ export function CourtPayCheckInScreen({
     setShowExhaustedPackages(false);
     setConfirmedSeconds(CONFIRMED_AUTO_HOME_SEC);
     setExhaustedOfferSeconds(EXHAUSTED_OFFER_AUTO_HOME_SEC);
-  }, []);
+    refreshPaymentSettings();
+  }, [refreshPaymentSettings]);
 
   // ── Idle timer ────────────────────────────────────────────────────────────
   const restartIdleTimer = useCallback(() => {
@@ -448,7 +455,7 @@ export function CourtPayCheckInScreen({
         setCashPending(false);
         const sub = d.subscription;
         setConfirmedSubInfo(sub ?? null);
-        setConfirmMessage("Payment confirmed.");
+        setConfirmMessage(t("paymentConfirmedMsg"));
         setStep("confirmed");
       }
     },
@@ -582,7 +589,7 @@ export function CourtPayCheckInScreen({
         setPhoneActiveSub(res.activeSubscription ?? null);
         setStep("phone_preview");
       } else {
-        setPhoneError("No player found with this phone number");
+        setPhoneError(t("phoneNotFound"));
       }
     } catch (err) {
       setPhoneError(err instanceof Error ? err.message : "Lookup failed");
@@ -626,7 +633,7 @@ export function CourtPayCheckInScreen({
       if (check.existing) {
         setConfirmMessage(
           check.playerName
-            ? `${check.playerName} already exists. Use Check In.`
+            ? t("faceAlreadyExists", { name: check.playerName })
             : t("regExistingUserHint")
         );
         setStep("existing_user");
@@ -682,7 +689,7 @@ export function CourtPayCheckInScreen({
           setStep("subscription_exhausted_offer");
         } else {
           setConfirmedSubInfo(sub ?? null);
-          setConfirmMessage("Check-in confirmed.");
+          setConfirmMessage(t("checkInConfirmedMsg"));
           setStep("confirmed");
         }
         return;
@@ -702,13 +709,13 @@ export function CourtPayCheckInScreen({
       }
 
       setConfirmedSubInfo(null);
-      setConfirmMessage("Check-in confirmed.");
+      setConfirmMessage(t("checkInConfirmedMsg"));
       setStep("confirmed");
     } catch (err) {
       // 409 already_checked_in → show friendly confirmation screen instead of error
       if (err instanceof Error && err.message === "already_checked_in") {
         setConfirmedSubInfo(null);
-        setConfirmMessage(`${targetPlayer.name} is already checked in for this session.`);
+        setConfirmMessage(t("alreadyCheckedInMsg", { name: targetPlayer.name }));
         setStep("confirmed");
         return;
       }
@@ -720,7 +727,7 @@ export function CourtPayCheckInScreen({
   };
 
   const handleRegisterAndPay = async (packageId?: string) => {
-    if (!venueId || !faceBase64 || !name.trim() || !phoneInput.trim() || !gender || !skillLevel) {
+    if (!venueId || !faceBase64 || !name.trim() || !gender || !skillLevel) {
       return;
     }
     setLoading(true);
@@ -747,14 +754,14 @@ export function CourtPayCheckInScreen({
       const registeredPlayer: CheckInPlayerLite = {
         id: reg.playerId ?? "",
         name: reg.playerName ?? name.trim(),
-        phone: phoneInput.trim(),
+        phone: phoneInput.trim() || "",
       };
       setPlayer(registeredPlayer);
 
       if (reg.checkedIn) {
         const sub = reg.subscription;
         setConfirmedSubInfo(sub ?? null);
-        setConfirmMessage("Check-in confirmed.");
+        setConfirmMessage(t("checkInConfirmedMsg"));
         setStep("confirmed");
       } else if (reg.pendingPaymentId) {
         setPendingPayment({
@@ -768,13 +775,13 @@ export function CourtPayCheckInScreen({
         setStep("awaiting_payment");
       } else {
         setConfirmedSubInfo(null);
-        setConfirmMessage("Check-in confirmed.");
+        setConfirmMessage(t("checkInConfirmedMsg"));
         setStep("confirmed");
       }
     } catch (err) {
       if (err instanceof Error && err.message === "already_checked_in") {
         setConfirmedSubInfo(null);
-        setConfirmMessage(`${name.trim()} is already checked in for this session.`);
+        setConfirmMessage(t("alreadyCheckedInMsg", { name: name.trim() }));
         setStep("confirmed");
         return;
       }
@@ -871,7 +878,7 @@ export function CourtPayCheckInScreen({
               )
             ) : null}
             {venueName ? (
-              <Text style={styles.venueNameMuted}>{venueName}</Text>
+              <Text style={[styles.venueNameMuted, isLight && styles.venueNameMutedLight]}>{venueName}</Text>
             ) : null}
             <View style={styles.homeActionsWide}>
               <TouchableOpacity
@@ -884,15 +891,16 @@ export function CourtPayCheckInScreen({
                 }}
               >
                 <LiquidGlassSurface
-                  tintColor={CP.glassOverlay}
+                  tintColor={isLight ? CP.glassOverlayOnLight : CP.glassOverlay}
                   style={styles.homeGlassCard}
                   intensity={Platform.OS === "ios" ? 50 : 88}
+                  mode={themeMode}
                 >
                   <View style={styles.homeGlassRow}>
-                    <ScanFace size={40} color={CP.text} strokeWidth={2} />
+                    <ScanFace size={40} color={isLight ? CP.textOnLight : CP.text} strokeWidth={2} />
                     <View style={styles.homeCardTextCol}>
-                      <Text style={styles.homeCardTitle}>{t("homeCheckIn")}</Text>
-                      <Text style={styles.homeCardSub}>{t("homeCheckInSub")}</Text>
+                      <Text style={[styles.homeCardTitle, isLight && styles.homeCardTitleLight]}>{t("homeCheckIn")}</Text>
+                      <Text style={[styles.homeCardSub, isLight && styles.homeCardSubLight]}>{t("homeCheckInSub")}</Text>
                     </View>
                   </View>
                 </LiquidGlassSurface>
@@ -911,12 +919,13 @@ export function CourtPayCheckInScreen({
                   accent="none"
                   style={styles.homeGlassCard}
                   intensity={Platform.OS === "ios" ? 44 : 82}
+                  mode={themeMode}
                 >
                   <View style={styles.homeGlassRow}>
-                    <UserPlus size={40} color="#a3a3a3" strokeWidth={2} />
+                    <UserPlus size={40} color={isLight ? "#64748b" : "#a3a3a3"} strokeWidth={2} />
                     <View style={styles.homeCardTextCol}>
-                      <Text style={styles.homeCardTitle}>{t("homeFirstTime")}</Text>
-                      <Text style={styles.homeCardSubMuted}>{t("homeFirstTimeSub")}</Text>
+                      <Text style={[styles.homeCardTitle, isLight && styles.homeCardTitleLight]}>{t("homeFirstTime")}</Text>
+                      <Text style={[styles.homeCardSubMuted, isLight && styles.homeCardSubMutedLight]}>{t("homeFirstTimeSub")}</Text>
                     </View>
                   </View>
                 </LiquidGlassSurface>
@@ -937,7 +946,7 @@ export function CourtPayCheckInScreen({
             onSubmitFrame={submitReturningFrame}
             onExhaustedRetries={() => setStep("no_face")}
             onCameraNotReady={() => {
-              setError("Camera not ready — try again.");
+              setError(t("cameraNotReady"));
               setStep("error");
             }}
             onUsePhone={() => setStep("phone_enter")}
@@ -948,11 +957,11 @@ export function CourtPayCheckInScreen({
       // ── NO FACE ────────────────────────────────────────────────────────────
       case "no_face":
         return (
-          <LiquidGlassSurface style={styles.flowGlassPanel} accent="none">
+          <LiquidGlassSurface style={styles.flowGlassPanel} accent="none" mode={themeMode}>
             <View style={styles.flowGlassPanelInner}>
-              <Ionicons name="scan-outline" size={56} color="#fbbf24" />
-              <Text style={styles.formTitle}>{t("noFaceDetected")}</Text>
-              <Text style={styles.heroSubtitle}>{t("lookAtCamera")}</Text>
+              <Ionicons name="scan-outline" size={56} color={isLight ? "#b45309" : "#fbbf24"} />
+              <Text style={[styles.formTitle, isLight && styles.formTitleLight]}>{t("noFaceDetected")}</Text>
+              <Text style={[styles.heroSubtitle, isLight && styles.heroSubtitleLight]}>{t("lookAtCamera")}</Text>
               <TouchableOpacity
                 style={[styles.primaryBtn, dyn.primaryBtn]}
                 onPress={() => setStep("scan_returning")}
@@ -963,11 +972,11 @@ export function CourtPayCheckInScreen({
                 style={[styles.secondaryActionBtn, dyn.secondaryActionBtn]}
                 onPress={() => setStep("phone_enter")}
               >
-                <Ionicons name="call-outline" size={18} color={CP.primaryLight} />
+                <Ionicons name="call-outline" size={18} color={isLight ? CP.primaryDark : CP.primaryLight} />
                 <Text style={[styles.secondaryActionText, dyn.secondaryActionText]}>{t("usePhoneInstead")}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.cancelBtn} onPress={resetToHome}>
-                <Text style={styles.cancelText}>{t("backToHome")}</Text>
+                <Text style={[styles.cancelText, isLight && styles.cancelTextLight]}>{t("backToHome")}</Text>
               </TouchableOpacity>
             </View>
           </LiquidGlassSurface>
@@ -982,13 +991,13 @@ export function CourtPayCheckInScreen({
               onPress={resetToHome}
               hitSlop={12}
             >
-              <Ionicons name="arrow-back" size={26} color="#a3a3a3" />
+              <Ionicons name="arrow-back" size={26} color={isLight ? "#475569" : "#a3a3a3"} />
             </Pressable>
-            <LiquidGlassSurface style={styles.needsRegGlass} accent="amber">
+            <LiquidGlassSurface style={styles.needsRegGlass} accent="amber" mode={themeMode}>
               <View style={styles.needsRegGlassInner}>
-                <Ionicons name="alert-circle-outline" size={60} color="#f59e0b" />
-                <Text style={styles.formTitle}>{t("faceNotRecognized")}</Text>
-                <Text style={styles.heroSubtitle}>{t("faceNotRecognizedHint")}</Text>
+                <Ionicons name="alert-circle-outline" size={60} color={isLight ? "#b45309" : "#f59e0b"} />
+                <Text style={[styles.formTitle, isLight && styles.formTitleLight]}>{t("faceNotRecognized")}</Text>
+                <Text style={[styles.heroSubtitle, isLight && styles.heroSubtitleLight]}>{t("faceNotRecognizedHint")}</Text>
                 <TouchableOpacity
                   style={[styles.scanAgainBig, dyn.scanAgainBig]}
                   onPress={() => setStep("scan_returning")}
@@ -1013,7 +1022,7 @@ export function CourtPayCheckInScreen({
       case "phone_enter":
         return (
           <View style={styles.formContent}>
-            <LiquidGlassSurface style={styles.phoneGlass} tintColor={CP.glassOverlay}>
+            <LiquidGlassSurface style={styles.phoneGlass} tintColor={isLight ? CP.glassOverlayOnLight : CP.glassOverlay} mode={themeMode}>
               <View style={styles.phoneCardInner}>
                 <View style={styles.phoneCardHeader}>
                   <TouchableOpacity
@@ -1021,13 +1030,13 @@ export function CourtPayCheckInScreen({
                     onPress={resetToHome}
                     hitSlop={10}
                   >
-                    <Ionicons name="arrow-back" size={22} color="#a3a3a3" />
+                    <Ionicons name="arrow-back" size={22} color={isLight ? "#475569" : "#a3a3a3"} />
                   </TouchableOpacity>
-                  <Text style={styles.phoneCardTitle}>{t("checkInByPhone")}</Text>
+                  <Text style={[styles.phoneCardTitle, isLight && styles.phoneCardTitleLight]}>{t("checkInByPhone")}</Text>
                 </View>
-                <Text style={styles.phoneCardHint}>{t("enterPhonePrompt")}</Text>
+                <Text style={[styles.phoneCardHint, isLight && styles.phoneCardHintLight]}>{t("enterPhonePrompt")}</Text>
                 <TextInput
-                  style={styles.bigInput}
+                  style={[styles.bigInput, isLight && styles.bigInputLight]}
                   value={phoneInput}
                   onChangeText={(v) => {
                     setPhoneInput(v);
@@ -1035,7 +1044,7 @@ export function CourtPayCheckInScreen({
                   }}
                   keyboardType="phone-pad"
                   placeholder={t("phonePlaceholder")}
-                  placeholderTextColor="#737373"
+                  placeholderTextColor={isLight ? "#94a3b8" : "#737373"}
                   autoFocus
                 />
                 {phoneError ? <Text style={styles.errorText}>{phoneError}</Text> : null}
@@ -1059,7 +1068,7 @@ export function CourtPayCheckInScreen({
       case "phone_preview":
         return (
           <View style={styles.formContent}>
-            <LiquidGlassSurface style={styles.phoneGlass} tintColor={CP.glassOverlay}>
+            <LiquidGlassSurface style={styles.phoneGlass} tintColor={isLight ? CP.glassOverlayOnLight : CP.glassOverlay} mode={themeMode}>
               <View style={styles.phoneCardInner}>
                 <View style={styles.phoneCardHeader}>
                   <TouchableOpacity
@@ -1070,23 +1079,23 @@ export function CourtPayCheckInScreen({
                     }}
                     hitSlop={10}
                   >
-                    <Ionicons name="arrow-back" size={22} color="#a3a3a3" />
+                    <Ionicons name="arrow-back" size={22} color={isLight ? "#475569" : "#a3a3a3"} />
                   </TouchableOpacity>
-                  <Text style={styles.phoneCardTitle}>
+                  <Text style={[styles.phoneCardTitle, isLight && styles.phoneCardTitleLight]}>
                     {phonePreview?.name ?? "—"}
                   </Text>
                 </View>
-                <View style={styles.phonePreviewBox}>
-                  <Text style={styles.phonePreviewLine}>
-                    <Text style={styles.phonePreviewMuted}>{t("phoneLabel")} </Text>
-                    <Text style={styles.phonePreviewStrong}>
+                <View style={[styles.phonePreviewBox, isLight && styles.phonePreviewBoxLight]}>
+                  <Text style={[styles.phonePreviewLine, isLight && styles.phonePreviewLineLight]}>
+                    <Text style={[styles.phonePreviewMuted, isLight && styles.phonePreviewMutedLight]}>{t("phoneLabel")} </Text>
+                    <Text style={[styles.phonePreviewStrong, isLight && styles.phonePreviewStrongLight]}>
                       {phonePreview?.phone ?? ""}
                     </Text>
                   </Text>
                   {phonePreview?.skillLevel ? (
-                    <Text style={styles.phonePreviewLine}>
-                      <Text style={styles.phonePreviewMuted}>{t("levelLabel")} </Text>
-                      <Text style={styles.phonePreviewStrong}>
+                    <Text style={[styles.phonePreviewLine, isLight && styles.phonePreviewLineLight]}>
+                      <Text style={[styles.phonePreviewMuted, isLight && styles.phonePreviewMutedLight]}>{t("levelLabel")} </Text>
+                      <Text style={[styles.phonePreviewStrong, isLight && styles.phonePreviewStrongLight]}>
                         {phonePreview.skillLevel}
                       </Text>
                     </Text>
@@ -1121,10 +1130,10 @@ export function CourtPayCheckInScreen({
         }
         if (!permission.granted) {
           return (
-            <LiquidGlassSurface style={styles.flowGlassPanel} tintColor={CP.glassOverlay}>
+            <LiquidGlassSurface style={styles.flowGlassPanel} tintColor={isLight ? CP.glassOverlayOnLight : CP.glassOverlay} mode={themeMode}>
               <View style={[styles.flowGlassPanelInner, { paddingHorizontal: 8 }]}>
-                <Text style={styles.formTitle}>{t("cameraPermissionTitle")}</Text>
-                <Text style={styles.heroSubtitle}>{t("cameraPermissionHint")}</Text>
+                <Text style={[styles.formTitle, isLight && styles.formTitleLight]}>{t("cameraPermissionTitle")}</Text>
+                <Text style={[styles.heroSubtitle, isLight && styles.heroSubtitleLight]}>{t("cameraPermissionHint")}</Text>
                 <TouchableOpacity
                   style={[styles.primaryBtn, dyn.primaryBtn]}
                   onPress={() => void requestPermission()}
@@ -1132,7 +1141,7 @@ export function CourtPayCheckInScreen({
                   <Text style={styles.primaryBtnText}>{t("allowCameraCta")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.cancelBtn} onPress={resetToHome}>
-                  <Text style={styles.cancelText}>{t("back")}</Text>
+                  <Text style={[styles.cancelText, isLight && styles.cancelTextLight]}>{t("back")}</Text>
                 </TouchableOpacity>
               </View>
             </LiquidGlassSurface>
@@ -1146,12 +1155,12 @@ export function CourtPayCheckInScreen({
                 onPress={resetToHome}
                 hitSlop={10}
               >
-                <Ionicons name="arrow-back" size={22} color="#a3a3a3" />
+                <Ionicons name="arrow-back" size={22} color={isLight ? "#475569" : "#a3a3a3"} />
               </TouchableOpacity>
             </View>
             <View style={[styles.centerContent, styles.regCaptureContent]}>
-              <Text style={styles.regCaptureTitle}>{t("regTitle")}</Text>
-              <Text style={styles.regCaptureHint}>{t("regFaceHint")}</Text>
+              <Text style={[styles.regCaptureTitle, isLight && styles.regCaptureTitleLight]}>{t("regTitle")}</Text>
+              <Text style={[styles.regCaptureHint, isLight && styles.regCaptureHintLight]}>{t("regFaceHint")}</Text>
               <View style={[styles.regCircleOuter, dyn.regCircleOuter]}>
                 <View style={styles.regCircleClip}>
                   <CameraView
@@ -1211,7 +1220,7 @@ export function CourtPayCheckInScreen({
                 )}
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.regRetakeBtn}
+                style={[styles.regRetakeBtn, isLight && styles.regRetakeBtnLight]}
                 onPress={() => {
                   setFaceBase64(null);
                   regCameraReady.current = false;
@@ -1219,7 +1228,7 @@ export function CourtPayCheckInScreen({
                 }}
                 activeOpacity={0.85}
               >
-                <Text style={styles.regRetakeText}>{t("regRetake")}</Text>
+                <Text style={[styles.regRetakeText, isLight && styles.regRetakeTextLight]}>{t("regRetake")}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1236,7 +1245,7 @@ export function CourtPayCheckInScreen({
             ]}
             keyboardShouldPersistTaps="handled"
           >
-            <LiquidGlassSurface style={styles.regFormGlass} accent="none">
+            <LiquidGlassSurface style={styles.regFormGlass} accent="none" mode={themeMode}>
               <View style={styles.regFormCardInner}>
                 <View style={styles.regFormHeaderRow}>
                   <TouchableOpacity
@@ -1247,25 +1256,25 @@ export function CourtPayCheckInScreen({
                     }}
                     hitSlop={10}
                   >
-                    <Ionicons name="arrow-back" size={22} color="#a3a3a3" />
+                    <Ionicons name="arrow-back" size={22} color={isLight ? "#475569" : "#a3a3a3"} />
                   </TouchableOpacity>
-                  <Text style={styles.regFormCardTitle}>{t("regTitle")}</Text>
+                  <Text style={[styles.regFormCardTitle, isLight && styles.regFormCardTitleLight]}>{t("regTitle")}</Text>
                 </View>
-                <Text style={styles.regFormLabel}>{t("regName")}</Text>
+                <Text style={[styles.regFormLabel, isLight && styles.regFormLabelLight]}>{t("regName")}</Text>
               <TextInput
-                style={styles.bigInput}
+                style={[styles.bigInput, isLight && styles.bigInputLight]}
                 value={name}
                 onChangeText={(v) => {
                   setName(v);
                   restartIdleTimer();
                 }}
                 placeholder={t("regNamePlaceholder")}
-                placeholderTextColor="#737373"
+                placeholderTextColor={isLight ? "#94a3b8" : "#737373"}
                 autoFocus
               />
-              <Text style={styles.regFormLabel}>{t("regPhone")}</Text>
+              <Text style={[styles.regFormLabel, isLight && styles.regFormLabelLight]}>{t("regPhone")}</Text>
               <TextInput
-                style={styles.bigInput}
+                style={[styles.bigInput, isLight && styles.bigInputLight]}
                 value={phoneInput}
                 onChangeText={(v) => {
                   setPhoneInput(v);
@@ -1273,13 +1282,14 @@ export function CourtPayCheckInScreen({
                 }}
                 keyboardType="phone-pad"
                 placeholder={t("regPhonePlaceholder")}
-                placeholderTextColor="#737373"
+                placeholderTextColor={isLight ? "#94a3b8" : "#737373"}
               />
-              <Text style={styles.regFormLabel}>{t("regGender")}</Text>
+              <Text style={[styles.regFormLabel, isLight && styles.regFormLabelLight]}>{t("regGender")}</Text>
               <View style={styles.inlineRow}>
                 <TouchableOpacity
                   style={[
                     styles.selectBtn,
+                    isLight && styles.selectBtnLight,
                     gender === "male" && styles.selectBtnActive,
                     gender === "male" && dyn.selectBtnActive,
                   ]}
@@ -1288,6 +1298,7 @@ export function CourtPayCheckInScreen({
                   <Text
                     style={[
                       styles.selectBtnText,
+                      isLight && styles.selectBtnTextLight,
                       gender === "male" && styles.selectBtnTextActive,
                       gender === "male" && dyn.selectBtnTextActive,
                     ]}
@@ -1298,6 +1309,7 @@ export function CourtPayCheckInScreen({
                 <TouchableOpacity
                   style={[
                     styles.selectBtn,
+                    isLight && styles.selectBtnLight,
                     gender === "female" && styles.selectBtnActive,
                     gender === "female" && dyn.selectBtnActive,
                   ]}
@@ -1306,6 +1318,7 @@ export function CourtPayCheckInScreen({
                   <Text
                     style={[
                       styles.selectBtnText,
+                      isLight && styles.selectBtnTextLight,
                       gender === "female" && styles.selectBtnTextActive,
                       gender === "female" && dyn.selectBtnTextActive,
                     ]}
@@ -1314,7 +1327,7 @@ export function CourtPayCheckInScreen({
                   </Text>
                 </TouchableOpacity>
               </View>
-              <Text style={styles.regFormLabel}>{t("regLevel")}</Text>
+              <Text style={[styles.regFormLabel, isLight && styles.regFormLabelLight]}>{t("regLevel")}</Text>
               <View style={styles.inlineRow}>
                 {(
                   [
@@ -1327,6 +1340,7 @@ export function CourtPayCheckInScreen({
                     key={lvl}
                     style={[
                       styles.selectBtn,
+                      isLight && styles.selectBtnLight,
                       skillLevel === lvl && styles.selectBtnActive,
                       skillLevel === lvl && dyn.selectBtnActive,
                     ]}
@@ -1335,6 +1349,7 @@ export function CourtPayCheckInScreen({
                     <Text
                       style={[
                         styles.selectBtnText,
+                        isLight && styles.selectBtnTextLight,
                         skillLevel === lvl && styles.selectBtnTextActive,
                         skillLevel === lvl && dyn.selectBtnTextActive,
                       ]}
@@ -1347,6 +1362,11 @@ export function CourtPayCheckInScreen({
               <TouchableOpacity
                 style={[styles.primaryBtn, dyn.primaryBtn, loading && styles.disabledBtn]}
                 onPress={() => {
+                  if (!phoneInput.trim()) {
+                    restartIdleTimer();
+                    setRegPhoneRequiredVisible(true);
+                    return;
+                  }
                   setIsNewPlayer(true);
                   const active = packages.filter((p) => p.active);
                   if (active.length > 0 && showSubscriptionsInFlow) {
@@ -1358,7 +1378,6 @@ export function CourtPayCheckInScreen({
                 disabled={
                   loading ||
                   !name.trim() ||
-                  !phoneInput.trim() ||
                   !gender ||
                   !skillLevel ||
                   !faceBase64
@@ -1379,11 +1398,11 @@ export function CourtPayCheckInScreen({
       case "subscription_offer": {
         const playerName = player?.name ?? name.trim();
         const greeting = isNewPlayer
-          ? `Welcome to the club, ${playerName}!`
-          : `Welcome back, ${playerName}!`;
+          ? t("subOfferWelcomeNew", { name: playerName })
+          : t("subOfferWelcomeBack", { name: playerName });
         const subtitle = isNewPlayer
-          ? "Want to save with a package?"
-          : "Save with a package today?";
+          ? t("subOfferSubtitleNew")
+          : t("subOfferSubtitleReturning");
 
         return (
           <View style={{ flex: 1 }}>
@@ -1394,7 +1413,7 @@ export function CourtPayCheckInScreen({
               hitSlop={12}
               activeOpacity={0.7}
             >
-              <Ionicons name="arrow-back" size={26} color="#a3a3a3" />
+              <Ionicons name="arrow-back" size={26} color={isLight ? "#475569" : "#a3a3a3"} />
             </TouchableOpacity>
 
             <ScrollView
@@ -1402,8 +1421,8 @@ export function CourtPayCheckInScreen({
               contentContainerStyle={styles.subOfferScroll}
               keyboardShouldPersistTaps="handled"
             >
-              <Text style={styles.subOfferGreeting}>{greeting}</Text>
-              <Text style={styles.subOfferSubtitle}>{subtitle}</Text>
+              <Text style={[styles.subOfferGreeting, isLight && styles.subOfferGreetingLight]}>{greeting}</Text>
+              <Text style={[styles.subOfferSubtitle, isLight && styles.subOfferSubtitleLight]}>{subtitle}</Text>
 
               <View style={styles.subOfferList}>
                 {activePackages.map((pkg) => {
@@ -1429,31 +1448,32 @@ export function CourtPayCheckInScreen({
                               ? 88
                               : 72
                         }
+                        mode={themeMode}
                       >
-                      {/* Top-right badges: Best Choice + Save X%, stacked */}
                       <View style={styles.pkgBadgeStack}>
                         {pkg.isBestChoice && (
                           <View style={[styles.pkgBestChoiceTag, dyn.pkgBestChoiceTag]}>
-                            <Text style={styles.pkgBestChoiceText}>Best Choice</Text>
+                            <Text style={styles.pkgBestChoiceText}>{t("subOfferBestChoice")}</Text>
                           </View>
                         )}
                         {pkg.discountPct != null && pkg.discountPct > 0 && (
                           <View style={styles.pkgDiscountBadge}>
                             <Text style={styles.pkgDiscountBadgeText}>
-                              Save {pkg.discountPct}%
+                              {t("subOfferSave", { pct: pkg.discountPct })}
                             </Text>
                           </View>
                         )}
                       </View>
 
-                      {/* Name — leave right margin so it doesn't overlap badges */}
-                      <Text style={[styles.pkgName, { marginRight: 80 }]}>{pkg.name}</Text>
+                      <Text style={[styles.pkgName, { marginRight: 80 }, isLight && styles.pkgNameLight]}>{pkg.name}</Text>
 
-                      <Text style={styles.pkgMeta}>
-                        {pkg.sessions === null ? "Unlimited" : `${pkg.sessions} sessions`}
-                        {pkg.durationDays ? ` · ${pkg.durationDays} days` : ""}
+                      <Text style={[styles.pkgMeta, isLight && styles.pkgMetaLight]}>
+                        {pkg.sessions === null
+                          ? t("subOfferUnlimited")
+                          : `${pkg.sessions} ${t("subOfferSessions")}`}
+                        {pkg.durationDays ? ` · ${pkg.durationDays} ${t("subOfferDays")}` : ""}
                       </Text>
-                      <Text style={styles.pkgPrice}>
+                      <Text style={[styles.pkgPrice, isLight && styles.pkgPriceLight]}>
                         {pkg.price === 0 ? "—" : formatVND(pkg.price)}
                       </Text>
                       </LiquidGlassSurface>
@@ -1467,7 +1487,8 @@ export function CourtPayCheckInScreen({
                   styles.primaryBtn,
                   { width: "100%" },
                   selectedPkg ? dyn.primaryBtn : undefined,
-                  (!selectedPkg || loading) && styles.disabledBtn,
+                  !selectedPkg && !loading && styles.primaryBtnContinueIdle,
+                  loading && styles.disabledBtn,
                 ]}
                 onPress={handleSubscriptionContinue}
                 disabled={!selectedPkg || loading}
@@ -1475,18 +1496,16 @@ export function CourtPayCheckInScreen({
                 {loading ? (
                   <ActivityIndicator color="#fff" />
                 ) : selectedPkg ? (
-                  <Text style={styles.primaryBtnText}>Continue</Text>
+                  <Text style={styles.primaryBtnText}>{t("subOfferContinue")}</Text>
                 ) : null}
               </TouchableOpacity>
 
-              {/* OR separator */}
               <View style={styles.orSeparator}>
-                <View style={styles.orLine} />
-                <Text style={styles.orText}>OR</Text>
-                <View style={styles.orLine} />
+                <View style={[styles.orLine, isLight && styles.orLineLight]} />
+                <Text style={[styles.orText, isLight && styles.orTextLight]}>{t("subOfferOr")}</Text>
+                <View style={[styles.orLine, isLight && styles.orLineLight]} />
               </View>
 
-              {/* "Pay for Today Only" card — outer width box avoids 0-width % under centered ScrollView */}
               <View style={styles.payTodayOuter}>
                 <TouchableOpacity
                   onPress={handleSubscriptionSkip}
@@ -1494,18 +1513,18 @@ export function CourtPayCheckInScreen({
                   activeOpacity={0.8}
                   style={styles.payTodayTouchable}
                 >
-                  <LiquidGlassSurface style={styles.payTodayGlass} accent="none">
+                  <LiquidGlassSurface style={styles.payTodayGlass} accent="none" mode={themeMode}>
                     <View style={styles.payTodayRow}>
                       <View style={styles.payTodayTextWrap}>
-                        <Text style={styles.payTodayTitle}>Pay for Today Only</Text>
-                        <Text style={styles.payTodayDesc}>
-                          Single session - no package required
+                        <Text style={[styles.payTodayTitle, isLight && styles.payTodayTitleLight]}>{t("subOfferPayTodayTitle")}</Text>
+                        <Text style={[styles.payTodayDesc, isLight && styles.payTodayDescLight]}>
+                          {t("subOfferPayTodayDesc")}
                         </Text>
                         {sessionFee > 0 ? (
-                          <Text style={styles.payTodayPrice}>{formatVND(sessionFee)}</Text>
+                          <Text style={[styles.payTodayPrice, isLight && styles.payTodayPriceLight]}>{formatVND(sessionFee)}</Text>
                         ) : null}
                       </View>
-                      <Ionicons name="chevron-forward" size={20} color="#a3a3a3" />
+                      <Ionicons name="chevron-forward" size={20} color={isLight ? "#64748b" : "#a3a3a3"} />
                     </View>
                   </LiquidGlassSurface>
                 </TouchableOpacity>
@@ -1527,7 +1546,7 @@ export function CourtPayCheckInScreen({
               hitSlop={12}
               activeOpacity={0.7}
             >
-              <Ionicons name="arrow-back" size={26} color="#a3a3a3" />
+              <Ionicons name="arrow-back" size={26} color={isLight ? "#475569" : "#a3a3a3"} />
             </TouchableOpacity>
             <ScrollView
               contentContainerStyle={styles.subOfferScroll}
@@ -1535,32 +1554,32 @@ export function CourtPayCheckInScreen({
             >
               <View style={styles.exhaustedHero}>
                 <View style={[styles.successCircle, dyn.successCircle, styles.exhaustedSuccessCircle]}>
-                  <Ionicons name="checkmark" size={42} color={CP.text} />
+                  <Ionicons name="checkmark" size={42} color={isLight ? CP.textOnLight : CP.text} />
                 </View>
-                <Text style={styles.exhaustedTitle}>Welcome back, {playerName}!</Text>
-                <Text style={styles.exhaustedSubtitle}>
-                  You are in but consider buying a new package for next time.
+                <Text style={[styles.exhaustedTitle, isLight && styles.exhaustedTitleLight]}>{t("exhaustedWelcomeBack", { name: playerName })}</Text>
+                <Text style={[styles.exhaustedSubtitle, isLight && styles.exhaustedSubtitleLight]}>
+                  {t("exhaustedSubtitle")}
                 </Text>
                 <View style={styles.exhaustedKpiRow}>
-                  <LiquidGlassSurface style={styles.exhaustedKpiCard} tintColor={CP.glassOverlay}>
+                  <LiquidGlassSurface style={styles.exhaustedKpiCard} tintColor={isLight ? CP.glassOverlayOnLight : CP.glassOverlay} mode={themeMode}>
                     <View style={styles.exhaustedKpiInner}>
-                      <Ionicons name="ticket-outline" size={18} color={CP.primaryLight} />
-                      <Text style={[styles.exhaustedKpiValue, { color: CP.text }]}>0</Text>
-                      <Text style={styles.exhaustedKpiLabel}>Sessions Left</Text>
+                      <Ionicons name="ticket-outline" size={18} color={isLight ? CP.primaryDark : CP.primaryLight} />
+                      <Text style={[styles.exhaustedKpiValue, { color: isLight ? CP.textOnLight : CP.text }]}>0</Text>
+                      <Text style={[styles.exhaustedKpiLabel, isLight && styles.exhaustedKpiLabelLight]}>{t("exhaustedSessionsLeft")}</Text>
                     </View>
                   </LiquidGlassSurface>
-                  <LiquidGlassSurface style={styles.exhaustedKpiCard} tintColor={CP.glassOverlay}>
+                  <LiquidGlassSurface style={styles.exhaustedKpiCard} tintColor={isLight ? CP.glassOverlayOnLight : CP.glassOverlay} mode={themeMode}>
                     <View style={styles.exhaustedKpiInner}>
-                      <Ionicons name="calendar-outline" size={18} color={CP.primaryLight} />
-                      <Text style={[styles.exhaustedKpiValue, { color: CP.text }]}>{daysLeft}</Text>
-                      <Text style={styles.exhaustedKpiLabel}>Days Left</Text>
+                      <Ionicons name="calendar-outline" size={18} color={isLight ? CP.primaryDark : CP.primaryLight} />
+                      <Text style={[styles.exhaustedKpiValue, { color: isLight ? CP.textOnLight : CP.text }]}>{daysLeft}</Text>
+                      <Text style={[styles.exhaustedKpiLabel, isLight && styles.exhaustedKpiLabelLight]}>{t("exhaustedDaysLeft")}</Text>
                     </View>
                   </LiquidGlassSurface>
                 </View>
                 {!showExhaustedPackages ? (
                   <>
-                    <Text style={styles.exhaustedCountdownText}>
-                      Returning to menu in {exhaustedOfferSeconds}s...
+                    <Text style={[styles.exhaustedCountdownText, isLight && styles.exhaustedCountdownTextLight]}>
+                      {t("exhaustedCountdown", { seconds: exhaustedOfferSeconds })}
                     </Text>
                     <TouchableOpacity
                       style={[styles.primaryBtn, dyn.primaryBtn, styles.primaryBtnWide]}
@@ -1572,14 +1591,14 @@ export function CourtPayCheckInScreen({
                       }}
                       activeOpacity={0.85}
                     >
-                      <Text style={styles.primaryBtnText}>Show New Packages</Text>
+                      <Text style={styles.primaryBtnText}>{t("exhaustedShowPackages")}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.cancelBtn}
                       onPress={resetToHome}
                       activeOpacity={0.7}
                     >
-                      <Text style={styles.cancelText}>Next time</Text>
+                      <Text style={[styles.cancelText, isLight && styles.cancelTextLight]}>{t("exhaustedNextTime")}</Text>
                     </TouchableOpacity>
                   </>
                 ) : null}
@@ -1611,27 +1630,30 @@ export function CourtPayCheckInScreen({
                                   ? 88
                                   : 72
                             }
+                            mode={themeMode}
                           >
                             <View style={styles.pkgBadgeStack}>
                               {pkg.isBestChoice && (
                                 <View style={[styles.pkgBestChoiceTag, dyn.pkgBestChoiceTag]}>
-                                  <Text style={styles.pkgBestChoiceText}>Best Choice</Text>
+                                  <Text style={styles.pkgBestChoiceText}>{t("subOfferBestChoice")}</Text>
                                 </View>
                               )}
                               {pkg.discountPct != null && pkg.discountPct > 0 && (
                                 <View style={styles.pkgDiscountBadge}>
                                   <Text style={styles.pkgDiscountBadgeText}>
-                                    Save {pkg.discountPct}%
+                                    {t("subOfferSave", { pct: pkg.discountPct })}
                                   </Text>
                                 </View>
                               )}
                             </View>
-                            <Text style={[styles.pkgName, { marginRight: 80 }]}>{pkg.name}</Text>
-                            <Text style={styles.pkgMeta}>
-                              {pkg.sessions === null ? "Unlimited" : `${pkg.sessions} sessions`}
-                              {pkg.durationDays ? ` · ${pkg.durationDays} days` : ""}
+                            <Text style={[styles.pkgName, { marginRight: 80 }, isLight && styles.pkgNameLight]}>{pkg.name}</Text>
+                            <Text style={[styles.pkgMeta, isLight && styles.pkgMetaLight]}>
+                              {pkg.sessions === null
+                                ? t("subOfferUnlimited")
+                                : `${pkg.sessions} ${t("subOfferSessions")}`}
+                              {pkg.durationDays ? ` · ${pkg.durationDays} ${t("subOfferDays")}` : ""}
                             </Text>
-                            <Text style={styles.pkgPrice}>
+                            <Text style={[styles.pkgPrice, isLight && styles.pkgPriceLight]}>
                               {pkg.price === 0 ? "—" : formatVND(pkg.price)}
                             </Text>
                           </LiquidGlassSurface>
@@ -1645,7 +1667,8 @@ export function CourtPayCheckInScreen({
                       styles.primaryBtn,
                       { width: "100%" },
                       selectedPkg ? dyn.primaryBtn : undefined,
-                      (!selectedPkg || loading) && styles.disabledBtn,
+                      !selectedPkg && !loading && styles.primaryBtnContinueIdle,
+                      loading && styles.disabledBtn,
                     ]}
                     onPress={handleSubscriptionContinue}
                     disabled={!selectedPkg || loading}
@@ -1653,7 +1676,7 @@ export function CourtPayCheckInScreen({
                     {loading ? (
                       <ActivityIndicator color="#fff" />
                     ) : selectedPkg ? (
-                      <Text style={styles.primaryBtnText}>Continue</Text>
+                      <Text style={styles.primaryBtnText}>{t("subOfferContinue")}</Text>
                     ) : null}
                   </TouchableOpacity>
 
@@ -1662,7 +1685,7 @@ export function CourtPayCheckInScreen({
                     onPress={resetToHome}
                     activeOpacity={0.7}
                   >
-                    <Text style={styles.cancelText}>Next time</Text>
+                    <Text style={[styles.cancelText, isLight && styles.cancelTextLight]}>{t("exhaustedNextTime")}</Text>
                   </TouchableOpacity>
                 </>
               ) : null}
@@ -1674,14 +1697,14 @@ export function CourtPayCheckInScreen({
       // ── AWAITING PAYMENT ───────────────────────────────────────────────────
       case "awaiting_payment":
         return (
-          <LiquidGlassSurface style={styles.payWaitGlass} tintColor={CP.glassOverlay}>
+          <LiquidGlassSurface style={styles.payWaitGlass} tintColor={isLight ? CP.glassOverlayOnLight : CP.glassOverlay} mode={themeMode}>
             <View style={styles.payWaitGlassInner}>
-              <Text style={styles.formTitle}>
+              <Text style={[styles.formTitle, isLight && styles.formTitleLight]}>
                 {pendingPayment?.playerName?.trim()
                   ? t("payTitle", { name: pendingPayment.playerName.trim() })
                   : t("payReturningTitle")}
               </Text>
-              <Text style={styles.payScanHint}>{t("payScanQR")}</Text>
+              <Text style={[styles.payScanHint, isLight && styles.payScanHintLight]}>{t("payScanQR")}</Text>
               {pendingPayment?.qrUrl ? (
                 <View style={styles.qrWrap}>
                   <Image
@@ -1694,19 +1717,19 @@ export function CourtPayCheckInScreen({
               <Text style={[styles.amount, dyn.amount]}>
                 {formatVND(pendingPayment?.amount ?? 0)} VND
               </Text>
-              <Text style={styles.ref}>{pendingPayment?.paymentRef}</Text>
+              <Text style={[styles.ref, isLight && styles.refLight]}>{pendingPayment?.paymentRef}</Text>
 
               <View style={styles.payWaitingRow}>
                 <View style={[styles.payPulseDot, dyn.payPulseDot]} />
-                <Text style={styles.waitText}>{t("payWaitingForStaff")}</Text>
+                <Text style={[styles.waitText, isLight && styles.waitTextLight]}>{t("payWaitingForStaff")}</Text>
               </View>
 
               <TouchableOpacity style={styles.cashBtn} onPress={handleCash}>
-                <Ionicons name="cash-outline" size={18} color="#fbbf24" />
-                <Text style={styles.cashText}>{t("payByCash")}</Text>
+                <Ionicons name="cash-outline" size={18} color={isLight ? "#b45309" : "#fbbf24"} />
+                <Text style={[styles.cashText, isLight && styles.cashTextLight]}>{t("payByCash")}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelPayment}>
-                <Text style={styles.cancelText}>{t("cancel")}</Text>
+                <Text style={[styles.cancelText, isLight && styles.cancelTextLight]}>{t("cancel")}</Text>
               </TouchableOpacity>
             </View>
           </LiquidGlassSurface>
@@ -1718,14 +1741,21 @@ export function CourtPayCheckInScreen({
           <CourtPayStatusCard
             variant="already_paid"
             playerName={alreadyPaidPlayer?.name}
+            playerNameAlreadyPaidLabel={
+              alreadyPaidPlayer?.name
+                ? t("alreadyPaidWithName", { name: alreadyPaidPlayer.name })
+                : t("alreadyPaidNoName")
+            }
+            noNameFallback={t("alreadyPaidNoName")}
             subtitle={
               alreadyPaidStatus === "pending"
-                ? "Payment is pending confirmation — no new payment needed."
-                : "This player has already paid for this session."
+                ? t("alreadyPaidPending")
+                : t("alreadyPaidConfirmed")
             }
             faceBase64={faceBase64}
             onPrimaryAction={resetToHome}
             primaryLabel={t("backToHome")}
+            mode={themeMode}
           />
         );
 
@@ -1735,20 +1765,22 @@ export function CourtPayCheckInScreen({
           <CourtPayStatusCard
             variant="existing_user"
             playerName={t("regExistingUserTitle")}
+            noNameFallback={t("existingPlayerNoName")}
             subtitle={confirmMessage || t("regExistingUserHint")}
             faceBase64={faceBase64}
             onPrimaryAction={resetToHome}
             primaryLabel={t("backToHome")}
+            mode={themeMode}
           />
         );
 
       // ── ERROR ──────────────────────────────────────────────────────────────
       case "error":
         return (
-          <LiquidGlassSurface style={styles.flowGlassPanel} accent="none">
+          <LiquidGlassSurface style={styles.flowGlassPanel} accent="none" mode={themeMode}>
             <View style={styles.flowGlassPanelInner}>
               <Ionicons name="warning-outline" size={64} color="#ef4444" />
-              <Text style={styles.formTitle}>{t("somethingWrong")}</Text>
+              <Text style={[styles.formTitle, isLight && styles.formTitleLight]}>{t("somethingWrong")}</Text>
               <Text style={styles.errorText}>{error || t("tryAgain")}</Text>
               <TouchableOpacity style={[styles.primaryBtn, dyn.primaryBtn]} onPress={resetToHome}>
                 <Text style={styles.primaryBtnText}>{t("tryAgainGeneric")}</Text>
@@ -1765,44 +1797,47 @@ export function CourtPayCheckInScreen({
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.confirmedInner}>
-              <LiquidGlassSurface style={styles.confirmedGlass} tintColor={CP.glassOverlay}>
+              <LiquidGlassSurface style={styles.confirmedGlass} tintColor={isLight ? CP.glassOverlayOnLight : CP.glassOverlay} mode={themeMode}>
                 <View style={styles.confirmedGlassInner}>
                   <View style={[styles.successCircle, dyn.successCircle]}>
-                    <Ionicons name="checkmark" size={64} color={CP.text} />
+                    <Ionicons name="checkmark" size={64} color={isLight ? CP.textOnLight : CP.text} />
                   </View>
-                  <Text style={styles.successTitle}>
-                    {isNewPlayer
-                      ? `Welcome to the club, ${player?.name ?? ""}!`
-                      : player?.name
-                        ? `Welcome back, ${player.name}!`
-                        : t("welcomeExclaim")}
+                  <Text style={[styles.successTitle, isLight && styles.successTitleLight]}>
+                    {(player?.name ?? "").trim()
+                      ? t("confirmedHeadline", { name: (player?.name ?? "").trim() })
+                      : t("confirmedHeadlineNoName")}
+                  </Text>
+                  <Text style={[styles.successSub, isLight && styles.successSubLight]}>
+                    {t("confirmedHaveFun")}
                   </Text>
                   {confirmMessage ? (
-                    <Text style={styles.successSub}>{confirmMessage}</Text>
+                    <Text style={[styles.successSubMuted, isLight && styles.successSubMutedLight]}>
+                      {confirmMessage}
+                    </Text>
                   ) : null}
                   {confirmedSubInfo ? (
                     <View style={styles.confirmedKpiRow}>
-                      <LiquidGlassSurface style={styles.confirmedKpiCard} tintColor={CP.glassOverlay}>
+                      <LiquidGlassSurface style={styles.confirmedKpiCard} tintColor={isLight ? CP.glassOverlayOnLight : CP.glassOverlay} mode={themeMode}>
                         <View style={styles.confirmedKpiInner}>
-                          <Ionicons name="ticket-outline" size={22} color={CP.primaryLight} />
-                          <Text style={[styles.confirmedKpiValue, { color: CP.text }]}>
+                          <Ionicons name="ticket-outline" size={22} color={isLight ? CP.primaryDark : CP.primaryLight} />
+                          <Text style={[styles.confirmedKpiValue, { color: isLight ? CP.textOnLight : CP.text }]}>
                             {confirmedSubInfo.isUnlimited ? "∞" : String(confirmedSubInfo.sessionsRemaining ?? 0)}
                           </Text>
-                          <Text style={styles.confirmedKpiLabel}>Sessions{"\n"}Remaining</Text>
+                          <Text style={[styles.confirmedKpiLabel, isLight && styles.confirmedKpiLabelLight]}>{t("confirmedSessionsRemaining")}</Text>
                         </View>
                       </LiquidGlassSurface>
-                      <LiquidGlassSurface style={styles.confirmedKpiCard} tintColor={CP.glassOverlay}>
+                      <LiquidGlassSurface style={styles.confirmedKpiCard} tintColor={isLight ? CP.glassOverlayOnLight : CP.glassOverlay} mode={themeMode}>
                         <View style={styles.confirmedKpiInner}>
-                          <Ionicons name="calendar-outline" size={22} color={CP.primaryLight} />
-                          <Text style={[styles.confirmedKpiValue, { color: CP.text }]}>
+                          <Ionicons name="calendar-outline" size={22} color={isLight ? CP.primaryDark : CP.primaryLight} />
+                          <Text style={[styles.confirmedKpiValue, { color: isLight ? CP.textOnLight : CP.text }]}>
                             {confirmedSubInfo.daysRemaining}
                           </Text>
-                          <Text style={styles.confirmedKpiLabel}>Days{"\n"}Left</Text>
+                          <Text style={[styles.confirmedKpiLabel, isLight && styles.confirmedKpiLabelLight]}>{t("confirmedDaysLeft")}</Text>
                         </View>
                       </LiquidGlassSurface>
                     </View>
                   ) : null}
-                  <Text style={styles.confirmedCountdown}>
+                  <Text style={[styles.confirmedCountdown, isLight && styles.confirmedCountdownLight]}>
                     {t("returningToMenu", { seconds: confirmedSeconds })}
                   </Text>
                   <TouchableOpacity
@@ -1832,7 +1867,7 @@ export function CourtPayCheckInScreen({
       {step === "home" ? (
         <CourtFlowKioskTopBar
           topInset={insets.top}
-          tagline="CourtPay"
+          tagline={t("courtpayTagline")}
           locale={locale}
           onToggleLocale={toggleLocale}
           themeMode={themeMode}
@@ -1843,23 +1878,39 @@ export function CourtPayCheckInScreen({
         {renderStep()}
       </View>
 
-      {/* Cash waiting overlay — shown after player taps Pay by Cash, waits for staff confirm */}
-      <Modal visible={cashPending} transparent animationType="fade">
-        <BlurView
-          intensity={Platform.OS === "ios" ? 48 : 90}
-          tint="dark"
-          style={styles.cashOverlayBlur}
+      {/* Cash waiting overlay — solid surfaces (no translucent dialog chrome) */}
+      <Modal visible={cashPending} animationType="fade">
+        <View
+          style={[
+            styles.cashOverlayBlur,
+            { backgroundColor: isLight ? CP.backdropBaseLight : CP.backdropBase },
+          ]}
         >
           <View style={styles.cashOverlayInner}>
-            <LiquidGlassSurface style={styles.cashOverlayCard} accent="amber">
+            <View
+              style={[
+                styles.cashOverlayCard,
+                isLight && styles.cashOverlayCardLight,
+              ]}
+            >
               <View style={styles.cashOverlayCardInner}>
-                <View style={styles.cashOverlayIconRow}>
+                <View
+                  style={[
+                    styles.cashOverlayIconRow,
+                    isLight && styles.cashOverlayIconRowLight,
+                  ]}
+                >
                   <Ionicons name="cash-outline" size={48} color="#f59e0b" />
                 </View>
-                <Text style={styles.cashOverlayTitle}>Cash Payment</Text>
-                <Text style={styles.cashOverlayHint}>
-                  Please hand the cash to the staff.{"\n"}
-                  Waiting for staff to confirm…
+                <Text
+                  style={[styles.cashOverlayTitle, isLight && styles.cashOverlayTitleLight]}
+                >
+                  {t("cashOverlayTitle")}
+                </Text>
+                <Text
+                  style={[styles.cashOverlayHint, isLight && styles.cashOverlayHintLight]}
+                >
+                  {t("cashOverlayHint")}
                 </Text>
                 <ActivityIndicator color="#f59e0b" style={{ marginVertical: 8 }} />
                 {pendingPayment ? (
@@ -1868,16 +1919,84 @@ export function CourtPayCheckInScreen({
                   </Text>
                 ) : null}
                 <TouchableOpacity
-                  style={styles.cashOverlayCancel}
+                  style={[styles.cashOverlayCancel, isLight && styles.cashOverlayCancelLight]}
                   onPress={handleCancelPayment}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.cashOverlayCancelText}>Cancel — go back</Text>
+                  <Text
+                    style={[
+                      styles.cashOverlayCancelText,
+                      isLight && styles.cashOverlayCancelTextLight,
+                    ]}
+                  >
+                    {t("cashOverlayCancel")}
+                  </Text>
                 </TouchableOpacity>
               </View>
-            </LiquidGlassSurface>
+            </View>
           </View>
-        </BlurView>
+        </View>
+      </Modal>
+
+      {/* Registration: phone reminder — solid panel (no glass / translucent scrim) */}
+      <Modal
+        visible={regPhoneRequiredVisible}
+        animationType="fade"
+        onRequestClose={() => setRegPhoneRequiredVisible(false)}
+      >
+        <View
+          style={[
+            styles.phoneReqRoot,
+            { backgroundColor: isLight ? CP.backdropBaseLight : CP.backdropBase },
+          ]}
+          onTouchStart={restartIdleTimer}
+        >
+          <Pressable
+            style={StyleSheet.absoluteFillObject}
+            onPress={() => setRegPhoneRequiredVisible(false)}
+            accessibilityRole="button"
+            accessibilityLabel={t("regPhoneRequiredDismissScrim")}
+          />
+          <View style={styles.phoneReqCardWrap} pointerEvents="box-none">
+            <View
+              style={[
+                styles.phoneReqCard,
+                isLight ? styles.phoneReqCardLight : styles.phoneReqCardDark,
+              ]}
+            >
+              <View style={styles.phoneReqInner}>
+                <View
+                  style={[
+                    styles.phoneReqIconCircle,
+                    isLight ? styles.phoneReqIconCircleLight : styles.phoneReqIconCircleDark,
+                  ]}
+                >
+                  <Ionicons
+                    name="phone-portrait-outline"
+                    size={40}
+                    color={isLight ? CP.primaryDark : CP.primaryLight}
+                  />
+                </View>
+                <Text style={[styles.formTitle, isLight && styles.formTitleLight]}>
+                  {t("regPhoneRequiredAlertTitle")}
+                </Text>
+                <Text style={[styles.heroSubtitle, isLight && styles.heroSubtitleLight]}>
+                  {t("regPhoneRequiredAlertMessage")}
+                </Text>
+                <TouchableOpacity
+                  style={[styles.primaryBtn, dyn.primaryBtn, styles.phoneReqOkBtn]}
+                  onPress={() => {
+                    restartIdleTimer();
+                    setRegPhoneRequiredVisible(false);
+                  }}
+                  activeOpacity={0.88}
+                >
+                  <Text style={styles.primaryBtnText}>{t("regPhoneRequiredOk")}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
       </Modal>
 
       <TabletStaffEscape
@@ -1922,6 +2041,9 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.55)",
     textAlign: "center",
   },
+  venueNameMutedLight: {
+    color: "rgba(15,23,42,0.55)",
+  },
   homeActionsWide: { width: "100%", maxWidth: 520, gap: 16 },
   homeCardTouchable: { width: "100%" },
   homeGlassCard: {
@@ -1940,14 +2062,18 @@ const styles = StyleSheet.create({
   },
   homeCardTextCol: { flex: 1, gap: 4 },
   homeCardTitle: { fontSize: 24, fontWeight: "700", color: "#fff" },
+  homeCardTitleLight: { color: "#0f172a" },
   homeCardSub: { fontSize: 16, color: "#a3a3a3" },
+  homeCardSubLight: { color: "#475569" },
   homeCardSubMuted: { fontSize: 16, color: "#a3a3a3" },
+  homeCardSubMutedLight: { color: "#64748b" },
 
   // ── SHARED ───────────────────────────────────────────────────────────────
   centerContent: { alignItems: "center", gap: 16 },
   formContent: { gap: 16 },
   formContentSafe: { paddingHorizontal: 8, paddingBottom: 24 },
   heroSubtitle: { fontSize: 16, color: "#a3a3a3", textAlign: "center" },
+  heroSubtitleLight: { color: "#475569" },
   formTitle: {
     fontSize: 24,
     fontWeight: "700",
@@ -1955,6 +2081,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 8,
   },
+  formTitleLight: { color: "#0f172a" },
   primaryBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -1964,12 +2091,30 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 14,
     marginTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(255,255,255,0.30)",
+    borderBottomWidth: 2,
+    borderBottomColor: "rgba(0,0,0,0.20)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
   },
-  primaryBtnText: { color: "#fff", fontSize: 18, fontWeight: "600" },
+  primaryBtnText: { color: "#fff", fontSize: 18, fontWeight: "600", textShadowColor: "rgba(0,0,0,0.18)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1 },
   primaryBtnWide: { alignSelf: "stretch", width: "100%", marginTop: 12, minHeight: 56 },
+  /** Continue on subscription offer: no package selected — keep layout height, no grey chrome */
+  primaryBtnContinueIdle: {
+    borderTopWidth: 0,
+    borderBottomWidth: 0,
+    shadowOpacity: 0,
+    elevation: 0,
+    opacity: 1,
+  },
   disabledBtn: { opacity: 0.5 },
   cancelBtn: { alignItems: "center", padding: 16 },
   cancelText: { color: "#a3a3a3", fontSize: 16 },
+  cancelTextLight: { color: "#64748b" },
   secondaryActionBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -1980,6 +2125,12 @@ const styles = StyleSheet.create({
     borderColor: "transparent",
     height: 48,
     marginTop: 4,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 2,
   },
   secondaryActionText: { color: "transparent", fontSize: 15, fontWeight: "600" },
   iconGhostBtn: { padding: 6, borderRadius: 10 },
@@ -1994,9 +2145,25 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     height: 42,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(255,255,255,0.12)",
+    borderBottomWidth: 1.5,
+    borderBottomColor: "rgba(0,0,0,0.12)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.10,
+    shadowRadius: 2,
+    elevation: 1,
   },
   selectBtnActive: { borderColor: "rgba(255,255,255,0.32)", backgroundColor: "rgba(255,255,255,0.12)" },
+  selectBtnLight: {
+    borderColor: "rgba(0,0,0,0.1)",
+    backgroundColor: "rgba(0,0,0,0.04)",
+    borderTopColor: "rgba(255,255,255,0.60)",
+    borderBottomColor: "rgba(0,0,0,0.08)",
+  },
   selectBtnText: { color: "#fff", fontSize: 13, fontWeight: "600" },
+  selectBtnTextLight: { color: "#334155" },
   selectBtnTextActive: { color: "#fff" },
 
   flowGlassPanel: {
@@ -2035,8 +2202,17 @@ const styles = StyleSheet.create({
     paddingVertical: 26,
     alignItems: "center",
     justifyContent: "center",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(255,255,255,0.28)",
+    borderBottomWidth: 2,
+    borderBottomColor: "rgba(0,0,0,0.18)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.30,
+    shadowRadius: 8,
+    elevation: 6,
   },
-  scanAgainBigText: { color: "#fff", fontSize: 22, fontWeight: "700" },
+  scanAgainBigText: { color: "#fff", fontSize: 22, fontWeight: "700", textShadowColor: "rgba(0,0,0,0.20)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1 },
   phoneAltBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -2045,8 +2221,17 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
     paddingVertical: 14,
     paddingHorizontal: 22,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(255,255,255,0.22)",
+    borderBottomWidth: 1.5,
+    borderBottomColor: "rgba(0,0,0,0.18)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.20,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  phoneAltBtnText: { color: "#fff", fontSize: 17, fontWeight: "600" },
+  phoneAltBtnText: { color: "#fff", fontSize: 17, fontWeight: "600", textShadowColor: "rgba(0,0,0,0.18)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1 },
 
   // ── PHONE CARD ────────────────────────────────────────────────────────────
   phoneGlass: {
@@ -2061,7 +2246,9 @@ const styles = StyleSheet.create({
   phoneCardInner: { padding: 20, gap: 12 },
   phoneCardHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
   phoneCardTitle: { flex: 1, fontSize: 18, fontWeight: "600", color: "#fff" },
+  phoneCardTitleLight: { color: "#0f172a" },
   phoneCardHint: { fontSize: 14, color: "#a3a3a3" },
+  phoneCardHintLight: { color: "#64748b" },
   phonePreviewBox: {
     borderRadius: 12,
     borderWidth: 1,
@@ -2070,9 +2257,16 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 8,
   },
+  phonePreviewBoxLight: {
+    borderColor: "rgba(0,0,0,0.08)",
+    backgroundColor: "rgba(0,0,0,0.04)",
+  },
   phonePreviewLine: { fontSize: 14, color: "#d4d4d4" },
+  phonePreviewLineLight: { color: "#334155" },
   phonePreviewMuted: { color: "#737373" },
+  phonePreviewMutedLight: { color: "#94a3b8" },
   phonePreviewStrong: { color: "#fff", fontWeight: "600" },
+  phonePreviewStrongLight: { color: "#0f172a" },
   confirmFuchsiaBtn: {
     marginTop: 4,
     borderRadius: 10,
@@ -2080,8 +2274,17 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: "center",
     justifyContent: "center",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(255,255,255,0.25)",
+    borderBottomWidth: 2,
+    borderBottomColor: "rgba(0,0,0,0.18)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.22,
+    shadowRadius: 5,
+    elevation: 4,
   },
-  confirmFuchsiaBtnText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+  confirmFuchsiaBtnText: { color: "#fff", fontSize: 16, fontWeight: "600", textShadowColor: "rgba(0,0,0,0.18)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1 },
 
   // ── REG CAMERA ────────────────────────────────────────────────────────────
   regCaptureScreen: { flex: 1, width: "100%" },
@@ -2100,6 +2303,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   regCaptureTitle: { fontSize: 24, fontWeight: "700", color: "#fff", textAlign: "center" },
+  regCaptureTitleLight: { color: "#0f172a" },
   regCaptureHint: {
     fontSize: 16,
     color: "#a3a3a3",
@@ -2107,6 +2311,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     paddingHorizontal: 12,
   },
+  regCaptureHintLight: { color: "#64748b" },
   regGotPhotoTitle: { fontSize: 30, fontWeight: "700", color: "transparent", textAlign: "center" },
   bigInput: {
     backgroundColor: "rgba(255,255,255,0.06)",
@@ -2117,6 +2322,11 @@ const styles = StyleSheet.create({
     color: "#fff",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.12)",
+  },
+  bigInputLight: {
+    backgroundColor: "rgba(0,0,0,0.04)",
+    borderColor: "rgba(0,0,0,0.12)",
+    color: "#0f172a",
   },
   regCircleOuter: {
     width: REG_FACE_CIRCLE,
@@ -2156,6 +2366,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.35)",
+    borderBottomWidth: 3,
+    borderBottomColor: "rgba(0,0,0,0.25)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
   },
   regPreviewActions: {
     width: "100%",
@@ -2173,8 +2392,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     minHeight: 56,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(255,255,255,0.30)",
+    borderBottomWidth: 2,
+    borderBottomColor: "rgba(0,0,0,0.20)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
   },
-  regLooksGoodText: { color: "#fff", fontSize: 18, fontWeight: "700" },
+  regLooksGoodText: { color: "#fff", fontSize: 18, fontWeight: "700", textShadowColor: "rgba(0,0,0,0.18)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1 },
   regRetakeBtn: {
     borderRadius: 16,
     backgroundColor: "#404040",
@@ -2183,8 +2411,23 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     minHeight: 56,
     minWidth: 100,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(255,255,255,0.12)",
+    borderBottomWidth: 2,
+    borderBottomColor: "rgba(0,0,0,0.25)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  regRetakeBtnLight: {
+    backgroundColor: "rgba(0,0,0,0.08)",
+    borderTopColor: "rgba(255,255,255,0.5)",
+    borderBottomColor: "rgba(0,0,0,0.10)",
   },
   regRetakeText: { color: "#e5e5e5", fontSize: 16, fontWeight: "600" },
+  regRetakeTextLight: { color: "#334155" },
 
   // ── REG FORM ──────────────────────────────────────────────────────────────
   regFormGlass: {
@@ -2201,6 +2444,7 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   regFormCardTitle: { flex: 1, fontSize: 18, fontWeight: "700", color: "#fff" },
+  regFormCardTitleLight: { color: "#0f172a" },
   regFormHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -2214,6 +2458,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 4,
   },
+  regFormLabelLight: { color: "#64748b" },
 
   // ── SUBSCRIPTION OFFER ────────────────────────────────────────────────────
   subOfferBack: {
@@ -2237,12 +2482,14 @@ const styles = StyleSheet.create({
     color: "#fff",
     textAlign: "center",
   },
+  subOfferGreetingLight: { color: "#0f172a" },
   subOfferSubtitle: {
     fontSize: 18,
     color: "#a3a3a3",
     textAlign: "center",
     marginTop: 8,
   },
+  subOfferSubtitleLight: { color: "#475569" },
   subOfferList: { width: "100%", marginTop: 24, gap: 12, marginBottom: 16 },
   pkgGlass: {
     borderRadius: 18,
@@ -2257,6 +2504,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
   },
   pkgName: { fontSize: 16, fontWeight: "600", color: "#fff" },
+  pkgNameLight: { color: "#0f172a" },
 
   // Stacked badges — absolute top-right corner of the card
   pkgBadgeStack: {
@@ -2283,7 +2531,9 @@ const styles = StyleSheet.create({
   },
   pkgDiscountBadgeText: { fontSize: 11, fontWeight: "700", color: "#4ade80" },
   pkgMeta: { fontSize: 14, color: "#a3a3a3", marginTop: 4 },
+  pkgMetaLight: { color: "#64748b" },
   pkgPrice: { fontSize: 18, fontWeight: "700", color: "#a855f7", marginTop: 8 },
+  pkgPriceLight: { color: "#7c3aed" },
 
   // OR separator
   orSeparator: {
@@ -2295,7 +2545,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   orLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: "rgba(255,255,255,0.14)" },
+  orLineLight: { backgroundColor: "rgba(0,0,0,0.12)" },
   orText: { fontSize: 12, fontWeight: "600", color: "rgba(255,255,255,0.35)", letterSpacing: 1 },
+  orTextLight: { color: "rgba(0,0,0,0.35)" },
 
   // "Pay for Today Only" card at the bottom
   payTodayOuter: {
@@ -2319,8 +2571,11 @@ const styles = StyleSheet.create({
   },
   payTodayTextWrap: { flex: 1, minWidth: 0 },
   payTodayTitle: { fontSize: 16, fontWeight: "700", color: "#fff" },
+  payTodayTitleLight: { color: "#0f172a" },
   payTodayDesc: { fontSize: 13, color: "#a3a3a3", marginTop: 4 },
+  payTodayDescLight: { color: "#64748b" },
   payTodayPrice: { fontSize: 15, fontWeight: "700", color: "#a855f7", marginTop: 6 },
+  payTodayPriceLight: { color: "#7c3aed" },
 
   skipBtn: { marginTop: 20, paddingVertical: 12 },
   skipText: {
@@ -2347,6 +2602,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   payScanHint: { fontSize: 14, color: "#a3a3a3", textAlign: "center", paddingHorizontal: 8 },
+  payScanHintLight: { color: "#64748b" },
   qrWrap: {
     backgroundColor: "#fff",
     borderRadius: 20,
@@ -2359,20 +2615,34 @@ const styles = StyleSheet.create({
   qrImage: { width: 260, height: 260 },
   amount: { fontSize: 36, fontWeight: "700", color: "transparent" },
   ref: { fontSize: 14, color: "#737373", fontFamily: "monospace" },
+  refLight: { color: "#64748b" },
   payWaitingRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   payPulseDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: "transparent" },
   waitText: { color: "#a3a3a3", fontSize: 15 },
+  waitTextLight: { color: "#475569" },
   cashBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    backgroundColor: "transparent",
+    backgroundColor: "rgba(217,119,6,0.12)",
     height: 40,
     borderRadius: 12,
-    paddingHorizontal: 8,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: "rgba(217,119,6,0.30)",
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(255,255,255,0.12)",
+    borderBottomWidth: 1.5,
+    borderBottomColor: "rgba(0,0,0,0.12)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.10,
+    shadowRadius: 2,
+    elevation: 1,
   },
   cashText: { color: "#fbbf24", fontSize: 16, fontWeight: "600" },
+  cashTextLight: { color: "#b45309" },
 
   // ── EXHAUSTED OFFER ────────────────────────────────────────────────────────
   exhaustedHero: { width: "100%", alignItems: "center", marginBottom: 16 },
@@ -2385,6 +2655,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 8,
   },
+  exhaustedTitleLight: { color: "#0f172a" },
   exhaustedSubtitle: {
     fontSize: 15,
     color: "#a3a3a3",
@@ -2392,6 +2663,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 12,
   },
+  exhaustedSubtitleLight: { color: "#475569" },
   exhaustedKpiRow: {
     width: "100%",
     flexDirection: "row",
@@ -2422,12 +2694,14 @@ const styles = StyleSheet.create({
     color: "#cbd5e1",
     fontWeight: "600",
   },
+  exhaustedKpiLabelLight: { color: "#475569" },
   exhaustedCountdownText: {
     fontSize: 14,
     color: "#94a3b8",
     textAlign: "center",
     marginTop: 4,
   },
+  exhaustedCountdownTextLight: { color: "#64748b" },
 
   // ── CONFIRMED ─────────────────────────────────────────────────────────────
   confirmedScroll: {
@@ -2465,7 +2739,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   successTitle: { fontSize: 28, fontWeight: "800", color: "#fff", textAlign: "center" },
+  successTitleLight: { color: "#0f172a" },
   successSub: { fontSize: 16, color: "#a3a3a3", textAlign: "center" },
+  successSubLight: { color: "#475569" },
+  successSubMuted: {
+    fontSize: 15,
+    color: "#737373",
+    textAlign: "center",
+    marginTop: 4,
+    lineHeight: 22,
+  },
+  successSubMutedLight: { color: "#64748b" },
   confirmedKpiRow: {
     width: "100%",
     flexDirection: "row",
@@ -2496,14 +2780,71 @@ const styles = StyleSheet.create({
     color: "#cbd5e1",
     fontWeight: "600",
   },
+  confirmedKpiLabelLight: { color: "#475569" },
   confirmedCountdown: {
     fontSize: 15,
     color: "#94a3b8",
     textAlign: "center",
     marginTop: 4,
   },
+  confirmedCountdownLight: { color: "#64748b" },
 
-  // ── Cash waiting overlay ──────────────────────────────────────────────────
+  // ── Registration phone reminder dialog (opaque) ───────────────────────────
+  phoneReqRoot: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  phoneReqCardWrap: {
+    width: "88%",
+    maxWidth: 400,
+    zIndex: 1,
+  },
+  phoneReqCard: {
+    width: "100%",
+    borderRadius: 26,
+    borderWidth: 1,
+    overflow: "hidden",
+    ...(Platform.OS === "ios"
+      ? ({ borderCurve: "continuous" } as const)
+      : null),
+  },
+  phoneReqCardDark: {
+    backgroundColor: "#1a1225",
+    borderColor: "#2e2040",
+  },
+  phoneReqCardLight: {
+    backgroundColor: "#ffffff",
+    borderColor: "#e2e8f0",
+  },
+  phoneReqInner: {
+    paddingVertical: 26,
+    paddingHorizontal: 22,
+    alignItems: "center",
+    gap: 14,
+  },
+  phoneReqIconCircle: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    borderWidth: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  phoneReqIconCircleDark: {
+    backgroundColor: "#2a1f3d",
+    borderColor: "#3d2f55",
+  },
+  phoneReqIconCircleLight: {
+    backgroundColor: "#f1f5f9",
+    borderColor: "#cbd5e1",
+  },
+  phoneReqOkBtn: {
+    width: "100%",
+    marginTop: 4,
+  },
+
+  // ── Cash waiting overlay (opaque) ────────────────────────────────────────
   cashOverlayBlur: {
     flex: 1,
   },
@@ -2517,9 +2858,16 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 420,
     borderRadius: 28,
+    backgroundColor: "#1a1225",
+    borderWidth: 1,
+    borderColor: "#2e2040",
     ...(Platform.OS === "ios"
       ? ({ borderCurve: "continuous" } as const)
       : null),
+  },
+  cashOverlayCardLight: {
+    backgroundColor: "#ffffff",
+    borderColor: "#e2e8f0",
   },
   cashOverlayCardInner: {
     padding: 32,
@@ -2530,10 +2878,13 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: "rgba(245,158,11,0.12)",
+    backgroundColor: "#2d1f00",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 4,
+  },
+  cashOverlayIconRowLight: {
+    backgroundColor: "#fff7ed",
   },
   cashOverlayTitle: {
     fontSize: 26,
@@ -2541,11 +2892,17 @@ const styles = StyleSheet.create({
     color: "#fff",
     textAlign: "center",
   },
+  cashOverlayTitleLight: {
+    color: "#0f172a",
+  },
   cashOverlayHint: {
     fontSize: 16,
     color: "#a3a3a3",
     textAlign: "center",
     lineHeight: 24,
+  },
+  cashOverlayHintLight: {
+    color: "#475569",
   },
   cashOverlayAmount: {
     fontSize: 32,
@@ -2562,10 +2919,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#404040",
   },
+  cashOverlayCancelLight: {
+    borderColor: "#cbd5e1",
+  },
   cashOverlayCancelText: {
     color: "#a3a3a3",
     fontSize: 15,
     fontWeight: "500",
     textAlign: "center",
+  },
+  cashOverlayCancelTextLight: {
+    color: "#475569",
   },
 });

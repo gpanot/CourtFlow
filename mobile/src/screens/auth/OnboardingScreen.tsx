@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -13,26 +13,23 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuthStore } from "../../stores/auth-store";
 import { C } from "../../theme/colors";
 import type { RootStackScreenProps } from "../../navigation/types";
+import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
+import { TabletLanguageToggle } from "../../components/TabletLanguageToggle";
+import type { CheckInScannerStringKey } from "../../lib/tablet-check-in-strings";
 
 const { width } = Dimensions.get("window");
 
-const slides = [
-  {
-    icon: "card-outline" as const,
-    title: "Seamless Payments",
-    body: "Accept VietQR and cash payments for session check-ins with automatic confirmation.",
-  },
-  {
-    icon: "people-outline" as const,
-    title: "Fast Check-in",
-    body: "Use face recognition or phone lookup to check players in within seconds.",
-  },
-  {
-    icon: "bar-chart-outline" as const,
-    title: "Session Management",
-    body: "Open and close sessions, track revenue, and manage your venue from one place.",
-  },
-];
+const SLIDE_ICON_KEYS = [
+  "card-outline",
+  "people-outline",
+  "bar-chart-outline",
+] as const;
+
+type SlideDef = {
+  icon: (typeof SLIDE_ICON_KEYS)[number];
+  titleKey: CheckInScannerStringKey;
+  bodyKey: CheckInScannerStringKey;
+};
 
 export function OnboardingScreen({
   navigation,
@@ -41,6 +38,28 @@ export function OnboardingScreen({
   const [currentIndex, setCurrentIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const setAuth = useAuthStore((s) => s.setAuth);
+  const { locale, toggleLocale, t } = useTabletKioskLocale();
+
+  const slides = useMemo<SlideDef[]>(
+    () => [
+      {
+        icon: SLIDE_ICON_KEYS[0],
+        titleKey: "onboardingSlide1Title",
+        bodyKey: "onboardingSlide1Body",
+      },
+      {
+        icon: SLIDE_ICON_KEYS[1],
+        titleKey: "onboardingSlide2Title",
+        bodyKey: "onboardingSlide2Body",
+      },
+      {
+        icon: SLIDE_ICON_KEYS[2],
+        titleKey: "onboardingSlide3Title",
+        bodyKey: "onboardingSlide3Body",
+      },
+    ],
+    []
+  );
 
   const onViewableItemsChanged = useRef(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
@@ -69,16 +88,23 @@ export function OnboardingScreen({
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity
-        style={[styles.skipBtn, { top: insets.top + 12 }]}
-        onPress={finish}
+      <View
+        style={[
+          styles.topBar,
+          { paddingTop: insets.top + 12, paddingBottom: 8 },
+        ]}
       >
-        <Text style={styles.skipText}>Skip</Text>
-      </TouchableOpacity>
+        <TouchableOpacity style={styles.skipBtn} onPress={finish}>
+          <Text style={styles.skipText}>{t("onboardingSkip")}</Text>
+        </TouchableOpacity>
+        <TabletLanguageToggle locale={locale} onToggle={toggleLocale} />
+      </View>
 
       <FlatList
         ref={flatListRef}
+        style={styles.slideList}
         data={slides}
+        extraData={locale}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
@@ -90,8 +116,8 @@ export function OnboardingScreen({
             <View style={styles.iconCircle}>
               <Ionicons name={item.icon} size={48} color={C.green500} />
             </View>
-            <Text style={styles.title}>{item.title}</Text>
-            <Text style={styles.body}>{item.body}</Text>
+            <Text style={styles.title}>{t(item.titleKey)}</Text>
+            <Text style={styles.body}>{t(item.bodyKey)}</Text>
           </View>
         )}
       />
@@ -112,7 +138,9 @@ export function OnboardingScreen({
           activeOpacity={0.7}
         >
           <Text style={styles.nextText}>
-            {currentIndex === slides.length - 1 ? "Get Started" : "Next"}
+            {currentIndex === slides.length - 1
+              ? t("onboardingGetStarted")
+              : t("onboardingNext")}
           </Text>
           <Ionicons name="arrow-forward" size={16} color="#fff" />
         </TouchableOpacity>
@@ -126,10 +154,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: C.bg,
   },
-  skipBtn: {
-    position: "absolute",
-    right: 20,
+  slideList: {
+    flex: 1,
+  },
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
     zIndex: 10,
+  },
+  skipBtn: {
     backgroundColor: "rgba(34,197,94,0.12)",
     borderRadius: 999,
     paddingHorizontal: 14,

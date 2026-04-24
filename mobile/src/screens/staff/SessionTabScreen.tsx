@@ -19,6 +19,7 @@ import { useAppColors } from "../../theme/use-app-colors";
 import type { AppColors } from "../../theme/palettes";
 import type { Session, CourtsState, SessionHistoryRow } from "../../types/api";
 import type { StaffStackParamList } from "../../navigation/types";
+import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
 
 function isToday(dateStr: string): boolean {
   const d = new Date(dateStr);
@@ -30,9 +31,9 @@ function isToday(dateStr: string): boolean {
   );
 }
 
-function sessionDateLabel(openedAt: string): string {
+function sessionDateLabel(openedAt: string, todayLabel: string): string {
   const dateStr = new Date(openedAt).toLocaleDateString();
-  return isToday(openedAt) ? `Today — ${dateStr}` : dateStr;
+  return isToday(openedAt) ? `${todayLabel} — ${dateStr}` : dateStr;
 }
 
 function createStyles(t: AppColors) {
@@ -70,6 +71,7 @@ export function SessionTabScreen() {
   const theme = useAppColors();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const navigation = useNavigation<NativeStackNavigationProp<StaffStackParamList>>();
+  const { t } = useTabletKioskLocale();
 
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -125,10 +127,10 @@ export function SessionTabScreen() {
 
   const handleCloseSession = async () => {
     if (!session) return;
-    Alert.alert("Close Session", "Close the current session?", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("sessionCloseConfirmTitle"), t("sessionCloseConfirmMsg"), [
+      { text: t("cancel"), style: "cancel" },
       {
-        text: "Close",
+        text: t("sessionCloseBtn"),
         style: "destructive",
         onPress: async () => {
           setActionLoading(true);
@@ -149,7 +151,7 @@ export function SessionTabScreen() {
   const openDetail = (row: SessionHistoryRow) => {
     navigation.navigate("StaffSessionDetail", {
       sessionId: row.id,
-      date: sessionDateLabel(row.openedAt),
+      date: sessionDateLabel(row.openedAt, t("sessionToday")),
       openedAt: row.openedAt,
       closedAt: row.closedAt ?? null,
     });
@@ -189,19 +191,19 @@ export function SessionTabScreen() {
             <View style={[styles.statusDot, { backgroundColor: isOpen ? theme.green500 : theme.subtle }]} />
             <Text style={styles.statusText}>
               {isOpen
-                ? `Session Open${session?.openedAt && isToday(session.openedAt) ? " — Today" : ""}`
-                : "No Active Session"}
+                ? `${t("sessionOpen")}${session?.openedAt && isToday(session.openedAt) ? ` — ${t("sessionToday")}` : ""}`
+                : t("sessionNoActive")}
             </Text>
           </View>
 
           {session && isOpen && (
             <View style={styles.sessionInfo}>
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Fee</Text>
+                <Text style={styles.infoLabel}>{t("sessionFee")}</Text>
                 <Text style={styles.infoValue}>{session.sessionFee?.toLocaleString() ?? "0"} VND</Text>
               </View>
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Started</Text>
+                <Text style={styles.infoLabel}>{t("sessionStarted")}</Text>
                 <Text style={styles.infoValue}>{sessionStartLabel}</Text>
               </View>
             </View>
@@ -218,7 +220,7 @@ export function SessionTabScreen() {
             ) : (
               <>
                 <Ionicons name={isOpen ? "stop-circle-outline" : "play-circle-outline"} size={20} color="#fff" />
-                <Text style={styles.actionBtnText}>{isOpen ? "Close Session" : "Open Session"}</Text>
+                <Text style={styles.actionBtnText}>{isOpen ? t("sessionCloseBtn") : t("sessionOpenBtn")}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -226,17 +228,17 @@ export function SessionTabScreen() {
 
         {sessionHistory.length > 0 && (
           <View style={styles.historySection}>
-            <Text style={styles.historyTitle}>Today's Sessions</Text>
+            <Text style={styles.historyTitle}>{t("sessionTodaySessions")}</Text>
             {sessionHistory.map((s) => (
               <TouchableOpacity key={s.id} style={styles.historyCard} onPress={() => openDetail(s)} activeOpacity={0.7}>
                 <View style={styles.historyRow}>
-                  <Text style={styles.historyDate}>{sessionDateLabel(s.openedAt)}</Text>
+                  <Text style={styles.historyDate}>{sessionDateLabel(s.openedAt, t("sessionToday"))}</Text>
                   <View style={[styles.historyBadge, { backgroundColor: "rgba(115,115,115,0.13)" }]}>
-                    <Text style={[styles.historyBadgeText, { color: theme.subtle }]}>closed</Text>
+                    <Text style={[styles.historyBadgeText, { color: theme.subtle }]}>{t("sessionClosed")}</Text>
                   </View>
                 </View>
                 <Text style={styles.historyFee}>
-                  Revenue: {s.paymentRevenue?.toLocaleString() ?? "0"} VND · {s.paymentCount ?? 0} payments
+                  {t("sessionRevenue")}: {s.paymentRevenue?.toLocaleString() ?? "0"} VND · {s.paymentCount ?? 0} {t("sessionPayments")}
                 </Text>
                 <Text style={styles.historyTime}>
                   {new Date(s.openedAt).toLocaleTimeString()}

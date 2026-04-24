@@ -48,6 +48,8 @@ export interface PaymentResult {
   amount: number;
   vietQR: string | null;
   paymentRef: string;
+  playerName?: string;
+  playerPhone?: string;
 }
 
 export interface SepayWebhookPayload {

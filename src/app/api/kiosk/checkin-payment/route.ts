@@ -87,6 +87,14 @@ export async function POST(request: NextRequest) {
 
     if (!playerId) return error("Could not identify player", 400);
 
+    const playerRecord = await prisma.player.findUnique({
+      where: { id: playerId },
+      select: { name: true, phone: true },
+    });
+    if (!playerRecord) return error("Player not found", 404);
+    playerName = playerRecord.name;
+    const playerPhone = playerRecord.phone;
+
     const existingEntry = await prisma.queueEntry.findUnique({
       where: { sessionId_playerId: { sessionId: session.id, playerId } },
     });
@@ -98,6 +106,7 @@ export async function POST(request: NextRequest) {
         resultType: "already_checked_in",
         playerId,
         playerName,
+        playerPhone,
         alreadyCheckedIn: true,
         queueNumber: existingEntry.queueNumber,
         skillLevel: player?.skillLevel,
@@ -125,6 +134,7 @@ export async function POST(request: NextRequest) {
         amount: existingPending.amount,
         vietQR: resumeQR,
         playerName,
+        playerPhone,
         isReturning: true,
         resuming: true,
         bankName: venue.bankName,
@@ -177,6 +187,7 @@ export async function POST(request: NextRequest) {
       amount,
       vietQR,
       playerName,
+      playerPhone,
       isReturning: true,
       bankName: venue.bankName,
       bankAccount: venue.bankAccount,

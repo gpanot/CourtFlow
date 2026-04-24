@@ -32,6 +32,7 @@ import type { AppColors } from "../../theme/palettes";
 import type { StaffStackParamList } from "../../navigation/types";
 import { SubscribersList } from "../../components/SubscribersList";
 import type { VenuePaymentSettings } from "../../types/api";
+import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
 
 type Tab = "packages" | "subscribers";
 const MAX_ACTIVE_PACKAGES = 3;
@@ -409,6 +410,7 @@ export function StaffSubscriptionsScreen() {
   const venueId = useAuthStore((s) => s.venueId);
   const theme = useAppColors();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { t } = useTabletKioskLocale();
 
   const [tab, setTab] = useState<Tab>("packages");
   const [packages, setPackages] = useState<PackageRow[]>([]);
@@ -440,12 +442,12 @@ export function StaffSubscriptionsScreen() {
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      title: "Subscriptions",
+      title: t("subsTitle"),
       headerStyle: { backgroundColor: theme.bg },
       headerTintColor: theme.text,
       headerTitleStyle: { color: theme.text, fontWeight: "700" },
     });
-  }, [navigation, theme]);
+  }, [navigation, theme, t]);
 
   const fetchPackages = useCallback(async () => {
     if (!venueId) return;
@@ -744,7 +746,7 @@ export function StaffSubscriptionsScreen() {
           onPress={() => setTab("packages")}
         >
           <Text style={[styles.tabText, tab === "packages" && styles.tabTextOn]}>
-            Packages
+            {t("subsTabPackages")}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -754,7 +756,7 @@ export function StaffSubscriptionsScreen() {
           <Text
             style={[styles.tabText, tab === "subscribers" && styles.tabTextOn]}
           >
-            Subscribers
+            {t("subsTabSubscribers")}
           </Text>
         </TouchableOpacity>
       </View>
@@ -775,9 +777,9 @@ export function StaffSubscriptionsScreen() {
               {/* ── CourtPay flow toggle ──────────────────────────────── */}
               <View style={styles.toggleCard}>
                 <View style={styles.toggleTextWrap}>
-                  <Text style={styles.toggleTitle}>Show in CourtPay check-in</Text>
+                  <Text style={styles.toggleTitle}>{t("subsShowInFlow")}</Text>
                   <Text style={styles.toggleDesc}>
-                    When off, players go directly to single-session payment and skip the packages screen.
+                    {t("subsShowInFlowDesc")}
                   </Text>
                 </View>
                 <Switch
@@ -791,7 +793,7 @@ export function StaffSubscriptionsScreen() {
 
               {activePackages.length === 0 ? (
                 <View>
-                  <Text style={styles.empty}>No packages yet</Text>
+                  <Text style={styles.empty}>{t("subsNoPackages")}</Text>
                   <TouchableOpacity
                     style={styles.primaryBtn}
                     onPress={createDefaults}
@@ -803,13 +805,13 @@ export function StaffSubscriptionsScreen() {
                       <>
                         <Ionicons name="sparkles" size={18} color="#fff" />
                         <Text style={styles.primaryBtnText}>
-                          Create packages for me
+                          {t("subsCreateForMe")}
                         </Text>
                       </>
                     )}
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.linkBtn} onPress={openCreate}>
-                    <Text style={styles.linkText}>or create custom package</Text>
+                    <Text style={styles.linkText}>{t("subsCreateCustom")}</Text>
                   </TouchableOpacity>
                 </View>
               ) : (
@@ -825,7 +827,7 @@ export function StaffSubscriptionsScreen() {
                     disabled={activePackages.length >= MAX_ACTIVE_PACKAGES}
                   >
                     <Ionicons name="add" size={18} color="#fff" />
-                    <Text style={styles.primaryBtnText}>Add package</Text>
+                    <Text style={styles.primaryBtnText}>{t("subsAddPackage")}</Text>
                   </TouchableOpacity>
                   {packages.map((pkg) => (
                     <View key={pkg.id} style={styles.pkgCard}>
@@ -833,38 +835,38 @@ export function StaffSubscriptionsScreen() {
                         <Text style={styles.pkgTitle}>{pkg.name}</Text>
                         {pkg.isBestChoice && (
                           <View style={styles.bestChoiceTag}>
-                            <Text style={styles.bestChoiceTagText}>Best Choice</Text>
+                            <Text style={styles.bestChoiceTagText}>{t("subsBestChoice")}</Text>
                           </View>
                         )}
                         {pkg.discountPct != null && pkg.discountPct > 0 && (
                           <View style={styles.discountTag}>
                             <Text style={styles.discountTagText}>
-                              Save {pkg.discountPct}%
+                              {t("subsSave").replace("{{pct}}", String(pkg.discountPct))}
                             </Text>
                           </View>
                         )}
                       </View>
                       <Text style={styles.pkgMeta}>
                         {pkg.sessions === null
-                          ? "Unlimited sessions"
-                          : `${pkg.sessions} sessions`}{" "}
-                        · {pkg.durationDays} days · {formatVND(pkg.price)}
+                          ? t("subsUnlimitedSessions")
+                          : `${pkg.sessions} ${t("subsSessions")}`}{" "}
+                        · {pkg.durationDays} {t("subsDays")} · {formatVND(pkg.price)}
                       </Text>
                       <Text style={[styles.pkgMeta, { fontSize: 12 }]}>
-                        Active subs: {pkg._count?.subscriptions ?? 0}
+                        {t("subsActiveSubs")}: {pkg._count?.subscriptions ?? 0}
                       </Text>
                       <View style={styles.pkgRow}>
                         <TouchableOpacity
                           style={styles.btnGhost}
                           onPress={() => openEdit(pkg)}
                         >
-                          <Text style={styles.btnGhostText}>Edit</Text>
+                          <Text style={styles.btnGhostText}>{t("subsEdit")}</Text>
                         </TouchableOpacity>
                         <TouchableOpacity
                           style={styles.btnDanger}
                           onPress={() => deletePackage(pkg)}
                         >
-                          <Text style={styles.btnDangerText}>Delete</Text>
+                          <Text style={styles.btnDangerText}>{t("subsDelete")}</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -884,9 +886,9 @@ export function StaffSubscriptionsScreen() {
           {/* Share balance link card */}
           {venueId ? (
             <View style={styles.shareCard}>
-              <Text style={styles.shareCardTitle}>Share balance check link</Text>
+              <Text style={styles.shareCardTitle}>{t("subsShareTitle")}</Text>
               <Text style={styles.shareCardDesc}>
-                Players can check their session balance without installing the app.
+                {t("subsShareDesc")}
               </Text>
               <TouchableOpacity
                 style={styles.shareBtn}
@@ -894,7 +896,7 @@ export function StaffSubscriptionsScreen() {
                 activeOpacity={0.8}
               >
                 <Ionicons name="share-outline" size={16} color="#fff" />
-                <Text style={styles.shareBtnText}>Share link & QR</Text>
+                <Text style={styles.shareBtnText}>{t("subsShareBtn")}</Text>
               </TouchableOpacity>
             </View>
           ) : null}
@@ -912,9 +914,9 @@ export function StaffSubscriptionsScreen() {
         >
           <TouchableOpacity activeOpacity={1} onPress={() => {}}>
             <View style={styles.shareModalCard}>
-              <Text style={styles.shareModalTitle}>Share balance check</Text>
+              <Text style={styles.shareModalTitle}>{t("subsShareModalTitle")}</Text>
               <Text style={styles.shareModalSub}>
-                Send this link to your players so they can check their session balance anytime — no app needed.
+                {t("subsShareModalDesc")}
               </Text>
               {balanceUrl ? (
                 <View style={styles.shareQrWrap}>
@@ -929,7 +931,7 @@ export function StaffSubscriptionsScreen() {
                   style={styles.shareModalClose}
                   onPress={() => setShowShareModal(false)}
                 >
-                  <Text style={styles.shareModalCloseText}>Close</Text>
+                  <Text style={styles.shareModalCloseText}>{t("subsShareModalClose")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.shareModalShare}
@@ -944,7 +946,7 @@ export function StaffSubscriptionsScreen() {
                     }
                   }}
                 >
-                  <Text style={styles.shareModalShareText}>Share</Text>
+                  <Text style={styles.shareModalShareText}>{t("subsShareModalShare")}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -965,18 +967,18 @@ export function StaffSubscriptionsScreen() {
               contentContainerStyle={{ paddingBottom: 24 }}
             >
               <Text style={styles.modalTitle}>
-                {editing ? "Edit package" : "Create package"}
+                {editing ? t("subsModalEditTitle") : t("subsModalCreateTitle")}
               </Text>
 
               {/* ── Package name + Best Choice (inline) ─────────────────── */}
-              <Text style={styles.label}>Package name</Text>
+              <Text style={styles.label}>{t("subsPackageName")}</Text>
               <View style={styles.nameRow}>
                 <View style={styles.nameInputWrap}>
                   <TextInput
                     style={styles.nameInput}
                     value={formName}
                     onChangeText={setFormName}
-                    placeholder="e.g. Monthly Pass"
+                    placeholder={t("subsPackageNamePlaceholder")}
                     placeholderTextColor={theme.dimmed}
                   />
                 </View>
@@ -987,7 +989,7 @@ export function StaffSubscriptionsScreen() {
                   ]}
                   onPress={() => setFormBestChoice((v) => !v)}
                   activeOpacity={0.7}
-                >
+                  >
                   <Ionicons
                     name={formBestChoice ? "star" : "star-outline"}
                     size={14}
@@ -999,13 +1001,13 @@ export function StaffSubscriptionsScreen() {
                       formBestChoice && styles.bestChoiceBtnTextActive,
                     ]}
                   >
-                    Best Choice
+                    {t("subsBestChoice")}
                   </Text>
                 </TouchableOpacity>
               </View>
 
               {/* ── Sessions ──────────────────────────────────────────── */}
-              <Text style={styles.label}>Sessions included</Text>
+              <Text style={styles.label}>{t("subsSessionsIncluded")}</Text>
               <View style={styles.row}>
                 {!formUnlimited ? (
                   <TextInput
@@ -1032,12 +1034,12 @@ export function StaffSubscriptionsScreen() {
                     size={22}
                     color={theme.purple400}
                   />
-                  <Text style={styles.checkLabel}>Unlimited</Text>
+                  <Text style={styles.checkLabel}>{t("subsUnlimited")}</Text>
                 </TouchableOpacity>
               </View>
 
               {/* ── Duration ──────────────────────────────────────────── */}
-              <Text style={styles.label}>Valid for (days)</Text>
+              <Text style={styles.label}>{t("subsValidDays")}</Text>
               <TextInput
                 style={styles.input}
                 value={formDays}
@@ -1052,7 +1054,7 @@ export function StaffSubscriptionsScreen() {
               <View style={styles.priceDiscountRow}>
                 {/* Price column */}
                 <View style={styles.priceWrap}>
-                  <Text style={styles.label}>Price (VND)</Text>
+                  <Text style={styles.label}>{t("subsPriceVND")}</Text>
                   <TextInput
                     style={styles.fieldInput}
                     value={
@@ -1072,7 +1074,7 @@ export function StaffSubscriptionsScreen() {
 
                 {/* Discount column */}
                 <View style={styles.discountWrap}>
-                  <Text style={styles.label}>Discount (%)</Text>
+                  <Text style={styles.label}>{t("subsDiscountPct")}</Text>
                   <TextInput
                     style={styles.fieldInput}
                     value={formDiscountPct}
@@ -1097,7 +1099,7 @@ export function StaffSubscriptionsScreen() {
               )}
 
               {/* ── Perks ─────────────────────────────────────────────── */}
-              <Text style={styles.label}>Perks (optional)</Text>
+              <Text style={styles.label}>{t("subsPerks")}</Text>
               <TextInput
                 style={[styles.input, { height: 72 }]}
                 value={formPerks}
@@ -1115,7 +1117,7 @@ export function StaffSubscriptionsScreen() {
                   }}
                 >
                   <Text style={[styles.btnGhostText, { textAlign: "center" }]}>
-                    Cancel
+                    {t("subsCancel")}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -1126,7 +1128,7 @@ export function StaffSubscriptionsScreen() {
                   {formSaving ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={styles.primaryBtnText}>Save</Text>
+                    <Text style={styles.primaryBtnText}>{t("subsSaveBtn")}</Text>
                   )}
                 </TouchableOpacity>
               </View>

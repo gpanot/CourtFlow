@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { registerPlayer, createCheckInPayment } from "@/modules/courtpay/lib/check-in";
@@ -10,9 +11,14 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { venueCode, name, phone, gender, skillLevel, packageId, imageBase64 } = body;
 
-    if (!venueCode || !name || !phone) {
+    const nameTrimmed = typeof name === "string" ? name.trim() : "";
+    const phoneNorm = typeof phone === "string" ? phone.trim() : "";
+    /** Unique placeholder so CheckInPlayer @@unique([phone, venueId]) and Player.phone @unique stay valid when phone is omitted. */
+    const internalPhone = phoneNorm || `__cp_${randomUUID().replace(/-/g, "")}`;
+
+    if (!venueCode || !nameTrimmed) {
       return NextResponse.json(
-        { error: "venueCode, name, and phone are required" },
+        { error: "venueCode and name are required" },
         { status: 400 }
       );
     }
@@ -31,9 +37,11 @@ export async function POST(req: Request) {
       );
     }
 
-    const existingCheckIn = await prisma.checkInPlayer.findUnique({
-      where: { phone_venueId: { phone: phone.trim(), venueId: venue.id } },
-    });
+    const existingCheckIn = phoneNorm
+      ? await prisma.checkInPlayer.findUnique({
+          where: { phone_venueId: { phone: phoneNorm, venueId: venue.id } },
+        })
+      : null;
     if (existingCheckIn) {
       // Check if already checked in this session
       const openSession = await prisma.session.findFirst({
@@ -84,9 +92,11 @@ export async function POST(req: Request) {
         );
       }
 
-      const existingByPhone = await prisma.player.findUnique({
-        where: { phone: phone.trim() },
-      });
+      const existingByPhone = phoneNorm
+        ? await prisma.player.findUnique({
+            where: { phone: phoneNorm },
+          })
+        : null;
 
       if (existingByPhone) {
         corePlayerId = existingByPhone.id;
@@ -103,8 +113,8 @@ export async function POST(req: Request) {
 
         const corePlayer = await prisma.player.create({
           data: {
-            name: name.trim(),
-            phone: phone.trim(),
+            name: nameTrimmed,
+            phone: internalPhone,
             gender: genderVal,
             skillLevel: skillVal,
           },
@@ -128,8 +138,8 @@ export async function POST(req: Request) {
 
     const player = await registerPlayer({
       venueId: venue.id,
-      name: name.trim(),
-      phone: phone.trim(),
+      name: nameTrimmed,
+      phone: internalPhone,
       gender,
       skillLevel,
     });

@@ -29,6 +29,7 @@ import type { AppColors } from "../../theme/palettes";
 import { resolveMediaUrl } from "../../lib/media-url";
 import type { PendingPayment, StaffPaidPaymentsResponse } from "../../types/api";
 import type { StaffTabParamList } from "../../navigation/types";
+import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
 
 type SubTab = "pending" | "paid";
 
@@ -342,6 +343,7 @@ export function PaymentTabScreen() {
   const styles = useMemo(() => createStyles(theme), [theme]);
   const navigation =
     useNavigation<MaterialTopTabNavigationProp<StaffTabParamList>>();
+  const { t } = useTabletKioskLocale();
 
   const [subTab, setSubTab] = useState<SubTab>("pending");
   const [pending, setPending] = useState<PendingPayment[]>([]);
@@ -480,10 +482,10 @@ export function PaymentTabScreen() {
   };
 
   const handleCancel = (id: string) => {
-    Alert.alert("Cancel Payment", "Cancel this pending payment?", [
-      { text: "No", style: "cancel" },
+    Alert.alert(t("paymentCancelTitle"), t("paymentCancelMsg"), [
+      { text: t("back"), style: "cancel" },
       {
-        text: "Cancel Payment",
+        text: t("paymentCancel"),
         style: "destructive",
         onPress: async () => {
           setActionId(`${id}-cancel`);
@@ -568,12 +570,12 @@ export function PaymentTabScreen() {
                 <Text style={styles.badgeAprText}>SEPAY/MANUAL</Text>
               </View>
             </View>
-            <Text style={styles.skillMuted}>Skill: {player.skillLevel}</Text>
+            <Text style={styles.skillMuted}>{t("paymentSkill")}: {player.skillLevel}</Text>
             <Text style={styles.metaLine}>
-              {isNew ? "Registration" : "Check-in"} · {formatVND(item.amount)}
+              {isNew ? t("paymentRegistration") : t("paymentCheckIn")} · {formatVND(item.amount)}
             </Text>
             <Text style={[styles.waitLine, isUrgent && styles.waitUrgent]}>
-              Waiting {formatWaitTime(item.createdAt)}
+              {t("paymentWaiting")} {formatWaitTime(item.createdAt)}
             </Text>
           </View>
           <Text style={styles.amountRight}>
@@ -593,7 +595,7 @@ export function PaymentTabScreen() {
             ) : (
               <>
                 <Ionicons name="checkmark" size={14} color="#fff" />
-                <Text style={styles.confirmText}>Confirm</Text>
+                <Text style={styles.confirmText}>{t("paymentConfirm")}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -608,7 +610,7 @@ export function PaymentTabScreen() {
             ) : (
               <>
                 <Ionicons name="close" size={14} color={theme.red500} />
-                <Text style={styles.cancelText}>Cancel</Text>
+                <Text style={styles.cancelText}>{t("paymentCancel")}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -627,8 +629,8 @@ export function PaymentTabScreen() {
     const sub = item.subscriptionInfo;
     const subLeftText = sub
       ? sub.isUnlimited
-        ? `Subscription left: Unlimited (${sub.daysRemaining} days)`
-        : `Subscription left: ${sub.sessionsRemaining ?? 0} sessions (${sub.daysRemaining} days)`
+        ? `${t("paymentSubLeft")}: ${t("paymentUnlimited")} (${sub.daysRemaining} ${t("paymentDays")})`
+        : `${t("paymentSubLeft")}: ${sub.sessionsRemaining ?? 0} ${t("paymentSessions")} (${sub.daysRemaining} ${t("paymentDays")})`
       : null;
 
     return (
@@ -732,7 +734,7 @@ export function PaymentTabScreen() {
           )}
         </View>
         <Text style={styles.metaLine}>
-          {isNew ? "Registration" : "Check-in"} · {formatVND(item.amount)}
+          {isNew ? t("paymentRegistration") : t("paymentCheckIn")} · {formatVND(item.amount)}
         </Text>
         {subLeftText ? <Text style={styles.subLeftLine}>{subLeftText}</Text> : null}
         {isCancelled && (
@@ -758,9 +760,9 @@ export function PaymentTabScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.revenueBar}>
-        <Text style={styles.revenueLabel}>Session (paid)</Text>
+        <Text style={styles.revenueLabel}>{t("paymentSessionPaid")}</Text>
         <Text style={styles.revenueValue}>
-          {paidSummary.playerCount} players ·{" "}
+          {paidSummary.playerCount} {t("paymentPlayers")} ·{" "}
           {paidSummary.totalRevenue.toLocaleString()} VND
         </Text>
       </View>
@@ -777,7 +779,7 @@ export function PaymentTabScreen() {
               subTab === "pending" && styles.tabTextActive,
             ]}
           >
-            Pending ({pending.length})
+            {t("paymentPending")} ({pending.length})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -794,7 +796,7 @@ export function PaymentTabScreen() {
               subTab === "paid" && styles.tabTextActive,
             ]}
           >
-            Paid ({paid.length})
+            {t("paymentPaid")} ({paid.length})
           </Text>
         </TouchableOpacity>
       </View>
@@ -817,7 +819,7 @@ export function PaymentTabScreen() {
             />
           }
           ListEmptyComponent={
-            <Text style={styles.emptyText}>No pending payments.</Text>
+            <Text style={styles.emptyText}>{t("paymentNoPending")}</Text>
           }
         />
       ) : (
@@ -838,7 +840,7 @@ export function PaymentTabScreen() {
             />
           }
           ListEmptyComponent={
-            <Text style={styles.emptyText}>No paid check-ins this session.</Text>
+            <Text style={styles.emptyText}>{t("paymentNoPaid")}</Text>
           }
         />
       )}
@@ -865,7 +867,7 @@ export function PaymentTabScreen() {
               activeOpacity={0.7}
             >
               <Ionicons name="close-circle-outline" size={18} color={theme.red400} />
-              <Text style={styles.menuItemText}>Cancel</Text>
+              <Text style={styles.menuItemText}>{t("paymentCancel")}</Text>
             </TouchableOpacity>
           </View>
         </Pressable>
@@ -880,7 +882,7 @@ export function PaymentTabScreen() {
       >
         <View style={styles.cancelModalOverlay}>
           <View style={styles.cancelModalCard}>
-            <Text style={styles.cancelModalTitle}>Cancel payment?</Text>
+            <Text style={styles.cancelModalTitle}>{t("paymentCancelPaidTitle")}</Text>
 
             <TouchableOpacity
               style={[styles.cancelModalBtn, styles.cancelModalBtnRefund]}
@@ -891,7 +893,7 @@ export function PaymentTabScreen() {
               {cancelling ? (
                 <ActivityIndicator color={theme.amber400} size="small" />
               ) : (
-                <Text style={styles.cancelModalBtnRefundText}>Refunded</Text>
+                <Text style={styles.cancelModalBtnRefundText}>{t("paymentRefunded")}</Text>
               )}
             </TouchableOpacity>
 
@@ -904,7 +906,7 @@ export function PaymentTabScreen() {
               {cancelling ? (
                 <ActivityIndicator color={theme.red400} size="small" />
               ) : (
-                <Text style={styles.cancelModalBtnMistakeText}>Mistake</Text>
+                <Text style={styles.cancelModalBtnMistakeText}>{t("paymentMistake")}</Text>
               )}
             </TouchableOpacity>
 
@@ -917,7 +919,7 @@ export function PaymentTabScreen() {
               {cancelling ? (
                 <ActivityIndicator color={theme.purple400} size="small" />
               ) : (
-                <Text style={styles.cancelModalBtnFreePassText}>Free Pass</Text>
+                <Text style={styles.cancelModalBtnFreePassText}>{t("paymentFreePass")}</Text>
               )}
             </TouchableOpacity>
 
@@ -926,7 +928,7 @@ export function PaymentTabScreen() {
               onPress={() => setCancelTargetId(null)}
               disabled={cancelling}
             >
-              <Text style={styles.cancelModalDismissText}>Go back</Text>
+              <Text style={styles.cancelModalDismissText}>{t("paymentGoBack")}</Text>
             </TouchableOpacity>
           </View>
         </View>

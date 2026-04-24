@@ -23,6 +23,13 @@ export type AccentTokens = {
   orbColor: string;
   backdropBase: string;
   backdropBaseLight: string;
+  // Light-mode overrides for contrast
+  textOnLight: string;
+  amountTextOnLight: string;
+  bgOnLight: string;
+  borderOnLight: string;
+  successCircleOnLight: string;
+  glassOverlayOnLight: string;
 };
 
 export const ACCENT_MAP: Record<CourtPayAccent, AccentTokens> = {
@@ -41,6 +48,12 @@ export const ACCENT_MAP: Record<CourtPayAccent, AccentTokens> = {
     orbColor: "rgba(34,197,94,0.18)",
     backdropBase: "#030108",
     backdropBaseLight: "#ecfdf5",
+    textOnLight: "#15803d",
+    amountTextOnLight: "#15803d",
+    bgOnLight: "rgba(20,83,45,0.08)",
+    borderOnLight: "rgba(34,197,94,0.35)",
+    successCircleOnLight: "rgba(34,197,94,0.12)",
+    glassOverlayOnLight: "rgba(34,197,94,0.06)",
   },
   fuchsia: {
     primary: "#c026d3",
@@ -57,6 +70,12 @@ export const ACCENT_MAP: Record<CourtPayAccent, AccentTokens> = {
     orbColor: "rgba(192,38,211,0.20)",
     backdropBase: "#030108",
     backdropBaseLight: "#fdf4ff",
+    textOnLight: "#86198f",
+    amountTextOnLight: "#86198f",
+    bgOnLight: "rgba(112,26,117,0.08)",
+    borderOnLight: "rgba(192,38,211,0.35)",
+    successCircleOnLight: "rgba(192,38,211,0.12)",
+    glassOverlayOnLight: "rgba(192,38,211,0.07)",
   },
   blue: {
     primary: "#3b82f6",
@@ -73,6 +92,12 @@ export const ACCENT_MAP: Record<CourtPayAccent, AccentTokens> = {
     orbColor: "rgba(59,130,246,0.20)",
     backdropBase: "#020b18",
     backdropBaseLight: "#eff6ff",
+    textOnLight: "#1d4ed8",
+    amountTextOnLight: "#1d4ed8",
+    bgOnLight: "rgba(30,58,138,0.08)",
+    borderOnLight: "rgba(59,130,246,0.35)",
+    successCircleOnLight: "rgba(59,130,246,0.12)",
+    glassOverlayOnLight: "rgba(59,130,246,0.06)",
   },
   amber: {
     primary: "#f59e0b",
@@ -89,6 +114,12 @@ export const ACCENT_MAP: Record<CourtPayAccent, AccentTokens> = {
     orbColor: "rgba(245,158,11,0.18)",
     backdropBase: "#0d0700",
     backdropBaseLight: "#fffbeb",
+    textOnLight: "#92400e",
+    amountTextOnLight: "#92400e",
+    bgOnLight: "rgba(120,53,15,0.08)",
+    borderOnLight: "rgba(245,158,11,0.35)",
+    successCircleOnLight: "rgba(245,158,11,0.12)",
+    glassOverlayOnLight: "rgba(245,158,11,0.06)",
   },
 };
 

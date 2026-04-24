@@ -10,7 +10,9 @@ const Stack = createNativeStackNavigator<TabletStackParamList>();
 
 export function TabletNavigator() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator
+      screenOptions={{ headerShown: false, gestureEnabled: false }}
+    >
       <Stack.Screen
         name="TabletVenueSelect"
         component={TabletVenueSelectScreen}
@@ -19,11 +21,7 @@ export function TabletNavigator() {
         name="TabletModeSelect"
         component={TabletModeSelectScreen}
       />
-      <Stack.Screen
-        name="CourtPayCheckIn"
-        component={CourtPayCheckInScreen}
-        options={{ gestureEnabled: false }}
-      />
+      <Stack.Screen name="CourtPayCheckIn" component={CourtPayCheckInScreen} />
     </Stack.Navigator>
   );
 }

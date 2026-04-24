@@ -17,7 +17,7 @@ const CAPTURE_MAX_ATTEMPTS = 45;
 const MAX_FACE_ATTEMPTS = 3;
 const RETRY_IDLE_MS = 2000;
 
-const CIRCLE_SIZE = 280;
+const CIRCLE_SIZE = 336;
 
 type ScanPhase = "adjust" | "capturing" | "between_retries";
 

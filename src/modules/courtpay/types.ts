@@ -40,6 +40,9 @@ export interface PaymentResult {
   amount: number;
   vietQR: string | null;
   paymentRef: string;
+  /** Included for client UIs (e.g. staff awaiting-payment screen). */
+  playerName?: string;
+  playerPhone?: string;
 }
 
 export interface SepayWebhookPayload {

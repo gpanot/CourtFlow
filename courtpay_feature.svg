@@ -1,0 +1,220 @@
+<svg width="1024" height="500" viewBox="0 0 1024 500"
+  xmlns="http://www.w3.org/2000/svg">
+
+  <rect width="1024" height="500" fill="#0a0a0a"/>
+
+  <rect x="40" y="40" width="260" height="420"
+    rx="16" fill="#111111"/>
+
+  <rect x="60" y="68" width="220" height="28"
+    rx="6" fill="#0d2a18"/>
+  <text x="170" y="87"
+    text-anchor="middle"
+    font-family="Arial,sans-serif"
+    font-size="11" font-weight="600"
+    fill="#22c55e">Boss dashboard</text>
+
+  <rect x="60" y="112" width="220" height="72"
+    rx="10" fill="#0d1f0d" stroke="#166534"
+    stroke-width="1"/>
+  <text x="80" y="136"
+    font-family="Arial,sans-serif"
+    font-size="10" fill="#86efac">Revenue today</text>
+  <text x="80" y="168"
+    font-family="Arial,sans-serif"
+    font-size="28" font-weight="700"
+    fill="#ffffff">7,650,000</text>
+  <text x="200" y="168"
+    font-family="Arial,sans-serif"
+    font-size="13" fill="#22c55e"> đ</text>
+
+  <rect x="60" y="200" width="104" height="64"
+    rx="10" fill="#111" stroke="#1a3a2a"
+    stroke-width="1"/>
+  <text x="112" y="222"
+    text-anchor="middle"
+    font-family="Arial,sans-serif"
+    font-size="10" fill="#555">Check-ins</text>
+  <text x="112" y="250"
+    text-anchor="middle"
+    font-family="Arial,sans-serif"
+    font-size="24" font-weight="700"
+    fill="#ffffff">52</text>
+
+  <rect x="176" y="200" width="104" height="64"
+    rx="10" fill="#111" stroke="#1a3a2a"
+    stroke-width="1"/>
+  <text x="228" y="222"
+    text-anchor="middle"
+    font-family="Arial,sans-serif"
+    font-size="10" fill="#555">Confirmed</text>
+  <text x="228" y="250"
+    text-anchor="middle"
+    font-family="Arial,sans-serif"
+    font-size="24" font-weight="700"
+    fill="#22c55e">51</text>
+
+  <rect x="60" y="280" width="220" height="52"
+    rx="10" fill="#111"/>
+  <text x="170" y="300"
+    text-anchor="middle"
+    font-family="Arial,sans-serif"
+    font-size="10" fill="#555">James Chen</text>
+  <text x="170" y="318"
+    text-anchor="middle"
+    font-family="Arial,sans-serif"
+    font-size="11" font-weight="600"
+    fill="#ffffff">150,000 đ</text>
+  <text x="270" y="310"
+    font-family="Arial,sans-serif"
+    font-size="14" fill="#22c55e">✓</text>
+
+  <rect x="60" y="344" width="220" height="52"
+    rx="10" fill="#111"/>
+  <text x="170" y="364"
+    text-anchor="middle"
+    font-family="Arial,sans-serif"
+    font-size="10" fill="#555">Linh Nguyen</text>
+  <text x="170" y="382"
+    text-anchor="middle"
+    font-family="Arial,sans-serif"
+    font-size="11" font-weight="600"
+    fill="#ffffff">150,000 đ</text>
+  <text x="270" y="374"
+    font-family="Arial,sans-serif"
+    font-size="14" fill="#22c55e">✓</text>
+
+  <rect x="60" y="408" width="220" height="36"
+    rx="8" fill="#15803d"/>
+  <text x="170" y="431"
+    text-anchor="middle"
+    font-family="Arial,sans-serif"
+    font-size="12" font-weight="600"
+    fill="#ffffff">Pay now · scan QR</text>
+
+  <text x="512" y="170"
+    text-anchor="middle"
+    font-family="Arial,sans-serif"
+    font-size="13" font-weight="600"
+    fill="#22c55e" letter-spacing="3">COURTPAY</text>
+
+  <text x="512" y="232"
+    text-anchor="middle"
+    font-family="Arial,sans-serif"
+    font-size="42" font-weight="700"
+    fill="#ffffff">Know what your</text>
+
+  <text x="512" y="284"
+    text-anchor="middle"
+    font-family="Arial,sans-serif"
+    font-size="42" font-weight="700"
+    fill="#ffffff">venue earned</text>
+
+  <text x="512" y="336"
+    text-anchor="middle"
+    font-family="Arial,sans-serif"
+    font-size="42" font-weight="700"
+    fill="#22c55e">today.</text>
+
+  <text x="512" y="388"
+    text-anchor="middle"
+    font-family="Arial,sans-serif"
+    font-size="14" fill="#444">Every player · Every payment · Real time</text>
+
+  <text x="512" y="426"
+    text-anchor="middle"
+    font-family="Arial,sans-serif"
+    font-size="12" fill="#333">thecourtflow.com</text>
+
+  <rect x="724" y="60" width="260" height="420"
+    rx="16" fill="#111111"/>
+
+  <rect x="744" y="84" width="220" height="52"
+    rx="10" fill="#0d2a18" stroke="#22c55e"
+    stroke-width="1"/>
+  <circle cx="768" cy="110" r="10"
+    fill="#22c55e" opacity="0.2"/>
+  <path d="M762 110 L767 115 L775 104"
+    fill="none" stroke="#22c55e"
+    stroke-width="2" stroke-linecap="round"/>
+  <text x="786" y="106"
+    font-family="Arial,sans-serif"
+    font-size="12" font-weight="600"
+    fill="#22c55e">Face check-in</text>
+  <text x="786" y="123"
+    font-family="Arial,sans-serif"
+    font-size="10" fill="#555">Register once, scan forever</text>
+
+  <rect x="744" y="148" width="220" height="52"
+    rx="10" fill="#0d2a18" stroke="#22c55e"
+    stroke-width="1"/>
+  <circle cx="768" cy="174" r="10"
+    fill="#22c55e" opacity="0.2"/>
+  <path d="M762 174 L767 179 L775 168"
+    fill="none" stroke="#22c55e"
+    stroke-width="2" stroke-linecap="round"/>
+  <text x="786" y="170"
+    font-family="Arial,sans-serif"
+    font-size="12" font-weight="600"
+    fill="#22c55e">QR payments</text>
+  <text x="786" y="187"
+    font-family="Arial,sans-serif"
+    font-size="10" fill="#555">Auto-confirmed via SePay</text>
+
+  <rect x="744" y="212" width="220" height="52"
+    rx="10" fill="#0d2a18" stroke="#22c55e"
+    stroke-width="1"/>
+  <circle cx="768" cy="238" r="10"
+    fill="#22c55e" opacity="0.2"/>
+  <path d="M762 238 L767 243 L775 232"
+    fill="none" stroke="#22c55e"
+    stroke-width="2" stroke-linecap="round"/>
+  <text x="786" y="234"
+    font-family="Arial,sans-serif"
+    font-size="12" font-weight="600"
+    fill="#22c55e">Boss dashboard</text>
+  <text x="786" y="251"
+    font-family="Arial,sans-serif"
+    font-size="10" fill="#555">Live revenue on your phone</text>
+
+  <rect x="744" y="276" width="220" height="52"
+    rx="10" fill="#0d2a18" stroke="#22c55e"
+    stroke-width="1"/>
+  <circle cx="768" cy="302" r="10"
+    fill="#22c55e" opacity="0.2"/>
+  <path d="M762 302 L767 307 L775 296"
+    fill="none" stroke="#22c55e"
+    stroke-width="2" stroke-linecap="round"/>
+  <text x="786" y="298"
+    font-family="Arial,sans-serif"
+    font-size="12" font-weight="600"
+    fill="#22c55e">Subscriptions</text>
+  <text x="786" y="315"
+    font-family="Arial,sans-serif"
+    font-size="10" fill="#555">Session packages for retention</text>
+
+  <rect x="744" y="340" width="220" height="52"
+    rx="10" fill="#0d2a18" stroke="#22c55e"
+    stroke-width="1"/>
+  <circle cx="768" cy="366" r="10"
+    fill="#22c55e" opacity="0.2"/>
+  <path d="M762 366 L767 371 L775 360"
+    fill="none" stroke="#22c55e"
+    stroke-width="2" stroke-linecap="round"/>
+  <text x="786" y="362"
+    font-family="Arial,sans-serif"
+    font-size="12" font-weight="600"
+    fill="#22c55e">Any sport venue</text>
+  <text x="786" y="379"
+    font-family="Arial,sans-serif"
+    font-size="10" fill="#555">Pickleball, padel, badminton +</text>
+
+  <rect x="744" y="404" width="220" height="36"
+    rx="8" fill="#111" stroke="#222"
+    stroke-width="1"/>
+  <text x="854" y="427"
+    text-anchor="middle"
+    font-family="Arial,sans-serif"
+    font-size="11" fill="#555">Works on any phone or tablet</text>
+
+</svg>

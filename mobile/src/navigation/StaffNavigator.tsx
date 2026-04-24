@@ -22,6 +22,7 @@ import { StaffDashboardHeader } from "../components/StaffDashboardHeader";
 import { useAppColors } from "../theme/use-app-colors";
 import { useAuthStore } from "../stores/auth-store";
 import { usePaymentNotificationSound } from "../hooks/usePaymentNotificationSound";
+import { useTabletKioskLocale } from "../hooks/useTabletKioskLocale";
 
 const Stack = createNativeStackNavigator<StaffStackParamList>();
 const Tab = createMaterialTopTabNavigator<StaffTabParamList>();
@@ -30,6 +31,7 @@ function StaffTabs() {
   const venueId = useAuthStore((s) => s.venueId);
   usePaymentNotificationSound(venueId);
   const theme = useAppColors();
+  const { t } = useTabletKioskLocale();
   const tabOptions = useMemo(
     () => ({
       tabBarActiveTintColor: theme.text,
@@ -61,17 +63,17 @@ function StaffTabs() {
         <Tab.Screen
           name="SessionTab"
           component={SessionTabScreen}
-          options={{ tabBarLabel: "Session" }}
+          options={{ tabBarLabel: t("staffTabSession") }}
         />
         <Tab.Screen
           name="CheckInTab"
           component={CheckInTabScreen}
-          options={{ tabBarLabel: "Check-in" }}
+          options={{ tabBarLabel: t("staffTabCheckIn") }}
         />
         <Tab.Screen
           name="PaymentTab"
           component={PaymentTabScreen}
-          options={{ tabBarLabel: "Payment" }}
+          options={{ tabBarLabel: t("staffTabPayment") }}
         />
       </Tab.Navigator>
     </View>
@@ -79,6 +81,7 @@ function StaffTabs() {
 }
 
 export function StaffNavigator() {
+  const { t } = useTabletKioskLocale();
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="VenueSelect" component={VenueSelectScreen} />
@@ -86,17 +89,17 @@ export function StaffNavigator() {
       <Stack.Screen
         name="StaffProfile"
         component={StaffProfileScreen}
-        options={{ headerShown: true, title: "Profile" }}
+        options={{ headerShown: true, title: t("staffProfile") }}
       />
       <Stack.Screen
         name="StaffPaymentSettings"
         component={StaffPaymentSettingsScreen}
-        options={{ headerShown: true, title: "Payment Settings" }}
+        options={{ headerShown: true, title: t("staffPaymentSettings") }}
       />
       <Stack.Screen
         name="StaffSessionDetail"
         component={SessionDetailScreen}
-        options={{ headerShown: true, title: "Session Details", headerBackTitle: "" }}
+        options={{ headerShown: true, title: t("staffSessionDetails"), headerBackTitle: "" }}
       />
       <Stack.Screen
         name="StaffSubscriptions"

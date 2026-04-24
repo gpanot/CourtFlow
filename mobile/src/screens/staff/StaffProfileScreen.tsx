@@ -1,4 +1,4 @@
-import React, { useMemo, useLayoutEffect, useState, useRef } from "react";
+import React, { useMemo, useLayoutEffect, useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Modal,
   TextInput,
   Vibration,
+  Switch,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -22,6 +23,10 @@ import type { AppColors } from "../../theme/palettes";
 import { useAppColors } from "../../theme/use-app-colors";
 import { useThemeStore } from "../../stores/theme-store";
 import type { StaffStackParamList } from "../../navigation/types";
+import { api, ApiRequestError } from "../../lib/api-client";
+import { useStaffPushRegistration } from "../../hooks/useStaffPushRegistration";
+import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
+import { TabletLanguageToggle } from "../../components/TabletLanguageToggle";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Styles
@@ -196,6 +201,39 @@ function createProfileStyles(t: AppColors) {
     },
     pinCancelText: { fontSize: 14, color: t.muted },
     pinErrorText: { fontSize: 12, color: t.red400, marginTop: -8 },
+
+    // ── Push notifications card ──────────────────────────────────────────────
+    pushCard: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.card,
+      padding: 14,
+      gap: 10,
+    },
+    pushCardHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginBottom: 2,
+    },
+    pushCardHeaderText: {
+      fontSize: 14,
+      fontWeight: "500",
+      color: t.textSecondary,
+    },
+    pushRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+      paddingTop: 8,
+      borderTopWidth: 1,
+      borderTopColor: t.border,
+    },
+    pushLabelWrap: { flex: 1, gap: 2 },
+    pushTitle: { fontSize: 14, fontWeight: "600", color: t.text },
+    pushSub: { fontSize: 12, color: t.muted, lineHeight: 16 },
   });
 }
 
@@ -209,9 +247,13 @@ interface PinModalProps {
   onCancel: () => void;
   styles: ReturnType<typeof createProfileStyles>;
   theme: AppColors;
+  title: string;
+  subtitle: string;
+  errorText: string;
+  cancelLabel: string;
 }
 
-function PinModal({ visible, onSuccess, onCancel, styles, theme }: PinModalProps) {
+function PinModal({ visible, onSuccess, onCancel, styles, theme, title, subtitle, errorText, cancelLabel }: PinModalProps) {
   const verify = usePinStore((s) => s.verify);
   const [digits, setDigits] = useState<string[]>([]);
   const [error, setError] = useState(false);
@@ -266,10 +308,8 @@ function PinModal({ visible, onSuccess, onCancel, styles, theme }: PinModalProps
           activeOpacity={1}
           onPress={() => {/* prevent bubbling */}}
         >
-          <Text style={styles.modalTitle}>Enter PIN</Text>
-          <Text style={styles.modalSubtitle}>
-            Enter the 4-digit boss PIN to access this menu
-          </Text>
+          <Text style={styles.modalTitle}>{title}</Text>
+          <Text style={styles.modalSubtitle}>{subtitle}</Text>
 
           {/* Dots */}
           <View style={styles.pinDotsRow}>
@@ -285,7 +325,7 @@ function PinModal({ visible, onSuccess, onCancel, styles, theme }: PinModalProps
           </View>
 
           {error && (
-            <Text style={styles.pinErrorText}>Incorrect PIN. Try again.</Text>
+            <Text style={styles.pinErrorText}>{errorText}</Text>
           )}
 
           {/* Keypad */}
@@ -312,7 +352,7 @@ function PinModal({ visible, onSuccess, onCancel, styles, theme }: PinModalProps
           </View>
 
           <TouchableOpacity style={styles.pinCancelBtn} onPress={handleCancel}>
-            <Text style={styles.pinCancelText}>Cancel</Text>
+            <Text style={styles.pinCancelText}>{cancelLabel}</Text>
           </TouchableOpacity>
         </TouchableOpacity>
       </TouchableOpacity>
@@ -334,6 +374,7 @@ export function StaffProfileScreen() {
   const styles = useMemo(() => createProfileStyles(theme), [theme]);
   const themeMode = useThemeStore((s) => s.mode);
   const toggleTheme = useThemeStore((s) => s.toggleMode);
+  const { locale, toggleLocale, t } = useTabletKioskLocale();
 
   const { unlocked, unlock, lock } = usePinStore();
 
@@ -341,29 +382,66 @@ export function StaffProfileScreen() {
   const pendingRoute = useRef<keyof StaffStackParamList | null>(null);
   const [pinVisible, setPinVisible] = useState(false);
 
+  // ── Push notifications ────────────────────────────────────────────────────
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushToggling, setPushToggling] = useState(false);
+  useStaffPushRegistration(pushEnabled);
+
+  useEffect(() => {
+    api
+      .get<{ pushNotificationsEnabled: boolean }>("/api/auth/staff-me")
+      .then((data) => setPushEnabled(data.pushNotificationsEnabled))
+      .catch(() => {});
+  }, []);
+
+  const handleTogglePush = useCallback(async (next: boolean) => {
+    setPushEnabled(next);
+    setPushToggling(true);
+    try {
+      await api.post("/api/staff/push/preferences", {
+        pushNotificationsEnabled: next,
+      });
+    } catch (err) {
+      setPushEnabled(!next);
+      const detail =
+        err instanceof ApiRequestError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Could not update push notification preference.";
+      Alert.alert("Error", detail);
+    } finally {
+      setPushToggling(false);
+    }
+  }, []);
+
   useLayoutEffect(() => {
     navigation.setOptions({
+      title: t("staffProfile"),
       headerStyle: { backgroundColor: theme.bg },
       headerTintColor: theme.text,
       headerTitleStyle: { color: theme.text },
       headerShadowVisible: false,
       headerRight: () => (
-        <TouchableOpacity style={styles.themeBtn} onPress={toggleTheme}>
-          <Ionicons
-            name={themeMode === "dark" ? "sunny-outline" : "moon-outline"}
-            size={20}
-            color={theme.amber400}
-          />
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <TabletLanguageToggle locale={locale} onToggle={toggleLocale} />
+          <TouchableOpacity style={styles.themeBtn} onPress={toggleTheme}>
+            <Ionicons
+              name={themeMode === "dark" ? "sunny-outline" : "moon-outline"}
+              size={20}
+              color={theme.amber400}
+            />
+          </TouchableOpacity>
+        </View>
       ),
     });
-  }, [navigation, theme, styles, themeMode, toggleTheme]);
+  }, [navigation, theme, styles, themeMode, toggleTheme, locale, toggleLocale, t]);
 
   const handleLogout = () => {
-    Alert.alert("Log Out", "Are you sure you want to log out?", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("profileLogOut"), t("profileLogOutConfirm"), [
+      { text: t("cancel"), style: "cancel" },
       {
-        text: "Log Out",
+        text: t("profileLogOut"),
         style: "destructive",
         onPress: () => {
           lock(); // reset PIN session on logout
@@ -415,6 +493,10 @@ export function StaffProfileScreen() {
         onCancel={handlePinCancel}
         styles={styles}
         theme={theme}
+        title={t("profilePinTitle")}
+        subtitle={t("profilePinSubtitle")}
+        errorText={t("profilePinIncorrect")}
+        cancelLabel={t("cancel")}
       />
 
       <ScrollView
@@ -429,19 +511,40 @@ export function StaffProfileScreen() {
           <View style={styles.identityInfo}>
             <View style={styles.identityCard}>
               <View>
-                <Text style={styles.identityLabel}>Name</Text>
+                <Text style={styles.identityLabel}>{t("profileName")}</Text>
                 <Text style={styles.identityValue}>{staffName || "Staff"}</Text>
               </View>
               <View style={styles.identityDivider} />
               <View>
                 <View style={styles.phoneLabelRow}>
                   <Ionicons name="call-outline" size={11} color={theme.subtle} />
-                  <Text style={styles.identityLabel}>Phone</Text>
+                  <Text style={styles.identityLabel}>{t("profilePhone")}</Text>
                 </View>
                 <Text style={styles.identityValueMuted}>{staffPhone || "—"}</Text>
               </View>
             </View>
             <Text style={styles.venueLabel}>{venueName}</Text>
+          </View>
+        </View>
+
+        {/* Push Notifications */}
+        <View style={styles.pushCard}>
+          <View style={styles.pushCardHeader}>
+            <Ionicons name="notifications-outline" size={16} color={theme.blue400} />
+            <Text style={styles.pushCardHeaderText}>{t("profilePushNotifications")}</Text>
+          </View>
+          <View style={styles.pushRow}>
+            <View style={styles.pushLabelWrap}>
+              <Text style={styles.pushTitle}>{t("profilePaymentAlerts")}</Text>
+              <Text style={styles.pushSub}>{t("profilePaymentAlertsSub")}</Text>
+            </View>
+            <Switch
+              value={pushEnabled}
+              onValueChange={(next) => void handleTogglePush(next)}
+              disabled={pushToggling}
+              trackColor={{ false: theme.borderLight, true: theme.blue500 }}
+              thumbColor="#ffffff"
+            />
           </View>
         </View>
 
@@ -454,7 +557,7 @@ export function StaffProfileScreen() {
             activeOpacity={0.6}
           >
             <Ionicons name="card-outline" size={16} color={theme.green400} />
-            <Text style={styles.menuRowText}>Payment Settings</Text>
+            <Text style={styles.menuRowText}>{t("profilePaymentSettings")}</Text>
             <LockIcon />
             <Ionicons name="chevron-forward" size={16} color={theme.dimmed} style={styles.menuChevron} />
           </TouchableOpacity>
@@ -467,7 +570,7 @@ export function StaffProfileScreen() {
             activeOpacity={0.6}
           >
             <Ionicons name="cube-outline" size={16} color={theme.purple400} />
-            <Text style={styles.menuRowText}>Subscriptions</Text>
+            <Text style={styles.menuRowText}>{t("profileSubscriptions")}</Text>
             <LockIcon />
             <Ionicons name="chevron-forward" size={16} color={theme.dimmed} style={styles.menuChevron} />
           </TouchableOpacity>
@@ -480,7 +583,7 @@ export function StaffProfileScreen() {
             activeOpacity={0.6}
           >
             <Ionicons name="people-outline" size={16} color={theme.blue400} />
-            <Text style={styles.menuRowText}>Staff Dashboard</Text>
+            <Text style={styles.menuRowText}>{t("profileStaffDashboard")}</Text>
             <Ionicons name="chevron-forward" size={16} color={theme.dimmed} style={styles.menuChevron} />
           </TouchableOpacity>
           <View style={styles.menuDivider} />
@@ -492,7 +595,7 @@ export function StaffProfileScreen() {
             activeOpacity={0.6}
           >
             <Ionicons name="bar-chart-outline" size={16} color={theme.purple400} />
-            <Text style={styles.menuRowText}>Boss Dashboard</Text>
+            <Text style={styles.menuRowText}>{t("profileBossDashboard")}</Text>
             <LockIcon />
             <Ionicons name="chevron-forward" size={16} color={theme.dimmed} style={styles.menuChevron} />
           </TouchableOpacity>
@@ -501,8 +604,8 @@ export function StaffProfileScreen() {
           {/* Appearance — free */}
           <TouchableOpacity style={styles.menuRow} onPress={toggleTheme} activeOpacity={0.6}>
             <Ionicons name={themeMode === "dark" ? "moon" : "sunny"} size={18} color={theme.amber400} />
-            <Text style={styles.menuRowText}>Appearance</Text>
-            <Text style={styles.menuRowMeta}>{themeMode === "dark" ? "Dark" : "Light"}</Text>
+            <Text style={styles.menuRowText}>{t("profileAppearance")}</Text>
+            <Text style={styles.menuRowMeta}>{themeMode === "dark" ? t("profileAppearanceDark") : t("profileAppearanceLight")}</Text>
             <Ionicons name="chevron-forward" size={16} color={theme.dimmed} style={styles.menuChevron} />
           </TouchableOpacity>
         </View>
@@ -512,8 +615,8 @@ export function StaffProfileScreen() {
           <View style={styles.historyLeft}>
             <Ionicons name="time-outline" size={20} color={theme.blue400} />
             <View>
-              <Text style={styles.historyTitle}>Session History</Text>
-              <Text style={styles.historyDesc}>View past sessions</Text>
+              <Text style={styles.historyTitle}>{t("profileSessionHistory")}</Text>
+              <Text style={styles.historyDesc}>{t("profileSessionHistoryDesc")}</Text>
             </View>
           </View>
           <Ionicons name="chevron-forward" size={20} color={theme.subtle} />
@@ -522,7 +625,7 @@ export function StaffProfileScreen() {
         {/* Log Out */}
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
           <Ionicons name="log-out-outline" size={20} color={theme.red400} />
-          <Text style={styles.logoutText}>Log Out</Text>
+          <Text style={styles.logoutText}>{t("profileLogOut")}</Text>
         </TouchableOpacity>
 
         {/* Go to Role / Tablet */}
@@ -537,7 +640,7 @@ export function StaffProfileScreen() {
           activeOpacity={0.7}
         >
           <Ionicons name="swap-horizontal-outline" size={20} color={theme.blue400} />
-          <Text style={styles.roleBtnText}>Go to Role / Tablet</Text>
+          <Text style={styles.roleBtnText}>{t("profileGoToRole")}</Text>
         </TouchableOpacity>
       </ScrollView>
     </>

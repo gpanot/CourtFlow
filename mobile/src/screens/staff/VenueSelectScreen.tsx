@@ -7,6 +7,7 @@ import { connectSocket, joinVenue as socketJoinVenue } from "../../lib/socket";
 import type { Venue } from "../../types/api";
 import type { StaffStackScreenProps } from "../../navigation/types";
 import { mapStaffVenuesToVenues } from "../../lib/map-staff-venues";
+import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
 
 export function VenueSelectScreen({
   navigation,
@@ -15,6 +16,7 @@ export function VenueSelectScreen({
   const setVenue = useAuthStore((s) => s.setVenue);
   const [venues, setVenues] = useState<Venue[]>(storedVenues);
   const [loading, setLoading] = useState(storedVenues.length === 0);
+  const { t } = useTabletKioskLocale();
 
   useEffect(() => {
     if (storedVenues.length > 0) {
@@ -53,7 +55,7 @@ export function VenueSelectScreen({
       venues={venues}
       loading={loading}
       onSelect={handleSelect}
-      title="Select Venue"
+      title={t("staffSelectVenue")}
     />
   );
 }

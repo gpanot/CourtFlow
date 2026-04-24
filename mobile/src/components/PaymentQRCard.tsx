@@ -6,9 +6,11 @@ interface Props {
   amount: number;
   paymentRef: string;
   waiting?: boolean;
+  refLabel?: string;
+  waitingLabel?: string;
 }
 
-export function PaymentQRCard({ qrUrl, amount, paymentRef, waiting }: Props) {
+export function PaymentQRCard({ qrUrl, amount, paymentRef, waiting, refLabel = "Ref:", waitingLabel = "Waiting for payment..." }: Props) {
   return (
     <View style={styles.container}>
       {qrUrl ? (
@@ -21,11 +23,11 @@ export function PaymentQRCard({ qrUrl, amount, paymentRef, waiting }: Props) {
         </View>
       ) : null}
       <Text style={styles.amount}>{amount.toLocaleString()} VND</Text>
-      <Text style={styles.ref}>Ref: {paymentRef}</Text>
+      <Text style={styles.ref}>{refLabel} {paymentRef}</Text>
       {waiting && (
         <>
           <ActivityIndicator color="#3b82f6" style={{ marginTop: 12 }} />
-          <Text style={styles.waitText}>Waiting for payment...</Text>
+          <Text style={styles.waitText}>{waitingLabel}</Text>
         </>
       )}
     </View>

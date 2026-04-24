@@ -23,7 +23,11 @@ export function RootNavigator() {
       <Stack.Screen name="StaffLogin" component={StaffLoginScreen} />
       <Stack.Screen name="ContinueAs" component={ContinueAsScreen} />
       <Stack.Screen name="StaffStack" component={StaffNavigator} />
-      <Stack.Screen name="TabletStack" component={TabletNavigator} />
+      <Stack.Screen
+        name="TabletStack"
+        component={TabletNavigator}
+        options={{ gestureEnabled: false }}
+      />
       <Stack.Screen name="AdminWebView" component={AdminWebViewScreen} />
     </Stack.Navigator>
   );

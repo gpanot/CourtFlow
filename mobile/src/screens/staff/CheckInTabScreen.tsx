@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -20,6 +21,7 @@ import { FaceCaptureCard } from "../../components/FaceCaptureCard";
 import { useAppColors } from "../../theme/use-app-colors";
 import type { AppColors } from "../../theme/palettes";
 import { resolveMediaUrl } from "../../lib/media-url";
+import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
 
 type Step = "form" | "awaiting_payment" | "success" | "error";
 type Mode = "new" | "existing";
@@ -38,6 +40,8 @@ interface PendingPaymentState {
   amount: number;
   qrUrl: string | null;
   paymentRef: string;
+  playerName?: string | null;
+  playerPhone?: string | null;
 }
 
 type FaceQualityTier = "good" | "fair" | "poor";
@@ -58,6 +62,7 @@ export function CheckInTabScreen() {
   const venueId = useAuthStore((s) => s.venueId);
   const theme = useAppColors();
   const styles = useMemo(() => createCheckInStyles(theme), [theme]);
+  const { t } = useTabletKioskLocale();
 
   const [mode, setMode] = useState<Mode>("new");
   const [step, setStep] = useState<Step>("form");
@@ -147,6 +152,8 @@ export function CheckInTabScreen() {
       amount?: number;
       vietQR?: string | null;
       paymentRef?: string;
+      playerName?: string | null;
+      playerPhone?: string | null;
     } | null
   ) => {
     if (!data?.pendingPaymentId) return null;
@@ -155,6 +162,8 @@ export function CheckInTabScreen() {
       amount: data.amount ?? 0,
       qrUrl: data.vietQR ?? null,
       paymentRef: data.paymentRef ?? "",
+      playerName: data.playerName ?? null,
+      playerPhone: data.playerPhone ?? null,
     };
   };
 
@@ -238,7 +247,7 @@ export function CheckInTabScreen() {
       });
       const imageBase64 = photo?.base64;
       if (!imageBase64) {
-        setError("Capture failed. Please try again.");
+        setError(t("tryAgainGeneric"));
         return;
       }
       setError("");
@@ -250,6 +259,8 @@ export function CheckInTabScreen() {
           amount?: number;
           vietQR?: string | null;
           paymentRef?: string;
+          playerName?: string | null;
+          playerPhone?: string | null;
         }>("/api/kiosk/checkin-payment", {
           venueId,
           imageBase64,
@@ -267,11 +278,11 @@ export function CheckInTabScreen() {
           return;
         }
         if (data.resultType === "needs_registration") {
-          setError("Face not recognized. Use New Player flow.");
+          setError(t("checkInFaceNotRecognized"));
           return;
         }
         if (data.resultType === "no_face" || data.resultType === "multi_face") {
-          setError("No clear face detected. Retake and keep one face centered.");
+          setError(t("checkInNoFaceDetected"));
           return;
         }
         if (data.error) {
@@ -316,13 +327,9 @@ export function CheckInTabScreen() {
       (faceQuality ? faceQuality.checks.faceDetected : true),
     [faceBase64, faceQuality, faceQualityLoading, gender, loading, name, phone, skillLevel]
   );
-  const existingScannerHint = useMemo(
-    () =>
-      existingCameraStarted
-        ? "Use Capture to check this face. Switch camera if needed."
-        : "Tap Start Camera to begin a manual face check-in.",
-    [existingCameraStarted]
-  );
+  const existingScannerHint = existingCameraStarted
+    ? t("checkInCaptureHintActive")
+    : t("checkInCaptureHintIdle");
 
   const handleExistingPhoneCheckIn = async () => {
     if (!existingPreview || !venueId) return;
@@ -337,6 +344,8 @@ export function CheckInTabScreen() {
         amount?: number;
         vietQR?: string | null;
         paymentRef?: string;
+        playerName?: string | null;
+        playerPhone?: string | null;
       }>(
         isCourtPay ? "/api/courtpay/pay-session" : "/api/kiosk/checkin-payment",
         isCourtPay
@@ -376,6 +385,8 @@ export function CheckInTabScreen() {
         amount?: number;
         vietQR?: string | null;
         paymentRef?: string;
+        playerName?: string | null;
+        playerPhone?: string | null;
       }>("/api/kiosk/register", {
         venueId,
         imageBase64: faceBase64,
@@ -434,7 +445,7 @@ export function CheckInTabScreen() {
               mode === "new" && styles.modeBtnTextActive,
             ]}
           >
-            New Player
+            {t("checkInNewPlayer")}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -453,7 +464,7 @@ export function CheckInTabScreen() {
               mode === "existing" && styles.modeBtnTextActive,
             ]}
           >
-            Existing Player
+            {t("checkInExistingPlayer")}
           </Text>
         </TouchableOpacity>
       </View>
@@ -461,7 +472,7 @@ export function CheckInTabScreen() {
       {mode === "existing" ? (
         <>
           <View style={styles.autoScanCard}>
-            <Text style={styles.autoScanTitle}>Face Check-in</Text>
+            <Text style={styles.autoScanTitle}>{t("checkInFaceCheckIn")}</Text>
             <Text style={styles.autoScanHint}>{existingScannerHint}</Text>
             {!existingCameraStarted ? (
               <TouchableOpacity
@@ -469,7 +480,7 @@ export function CheckInTabScreen() {
                 onPress={() => void startExistingCamera()}
                 activeOpacity={0.7}
               >
-                <Text style={styles.primaryBtnText}>Start Camera</Text>
+                <Text style={styles.primaryBtnText}>{t("checkInStartCamera")}</Text>
               </TouchableOpacity>
             ) : (
               <View style={styles.autoScannerWrap}>
@@ -503,7 +514,7 @@ export function CheckInTabScreen() {
                     ) : (
                       <>
                         <Ionicons name="camera-outline" size={18} color="#fff" />
-                        <Text style={styles.primaryBtnText}>Capture</Text>
+                        <Text style={styles.primaryBtnText}>{t("checkInCapture")}</Text>
                       </>
                     )}
                   </TouchableOpacity>
@@ -522,13 +533,13 @@ export function CheckInTabScreen() {
 
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or phone fallback</Text>
+            <Text style={styles.dividerText}>{t("checkInOrPhoneFallback")}</Text>
             <View style={styles.dividerLine} />
           </View>
 
           <TextInput
             style={styles.inputFull}
-            placeholder="Phone number"
+            placeholder={t("phonePlaceholder")}
             placeholderTextColor={theme.dimmed}
             value={phone}
             onChangeText={setPhone}
@@ -541,7 +552,7 @@ export function CheckInTabScreen() {
             activeOpacity={0.7}
           >
             <Ionicons name="search" size={16} color={theme.blue500} />
-            <Text style={styles.outlineBtnText}>Lookup by phone</Text>
+            <Text style={styles.outlineBtnText}>{t("checkInLookupByPhone")}</Text>
           </TouchableOpacity>
           {existingPreview ? (() => {
             const photoUri = resolveMediaUrl(
@@ -576,7 +587,7 @@ export function CheckInTabScreen() {
                   {loading ? (
                     <ActivityIndicator color="#fff" size="small" />
                   ) : (
-                    <Text style={styles.inlineCheckBtnText}>Check In</Text>
+                    <Text style={styles.inlineCheckBtnText}>{t("checkIn")}</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -586,8 +597,8 @@ export function CheckInTabScreen() {
       ) : (
         <>
           <FaceCaptureCard
-            title="Register New Player Face"
-            hint="Required for first registration."
+            title={t("checkInRegisterNewFace")}
+            hint={t("checkInRegisterFaceHint")}
             capturedBase64={faceBase64}
             onChange={setFaceBase64}
           />
@@ -600,11 +611,11 @@ export function CheckInTabScreen() {
                 qualityTone === "poor" && styles.qualityCardPoor,
               ]}
             >
-              <Text style={styles.qualityTitle}>Photo quality (AWS Rekognition)</Text>
+                <Text style={styles.qualityTitle}>{t("checkInPhotoQuality")}</Text>
               {faceQualityLoading ? (
                 <View style={styles.qualityLoadingRow}>
                   <ActivityIndicator color={theme.blue500} size="small" />
-                  <Text style={styles.qualityText}>Analyzing photo quality...</Text>
+                  <Text style={styles.qualityText}>{t("checkInAnalyzingPhoto")}</Text>
                 </View>
               ) : faceQuality ? (
                 <>
@@ -613,7 +624,7 @@ export function CheckInTabScreen() {
                       {faceQuality.checks.faceDetected ? "✓" : "✕"}
                     </Text>
                     <Text style={styles.qualityText}>
-                      Face detected: {faceQuality.checks.faceDetected ? "Yes" : "No"}
+                      {t("checkInFaceDetected")}: {faceQuality.checks.faceDetected ? "Yes" : "No"}
                     </Text>
                   </View>
                   <View style={styles.qualityRow}>
@@ -621,7 +632,7 @@ export function CheckInTabScreen() {
                       {faceQuality.checks.size === "good" ? "✓" : faceQuality.checks.size === "fair" ? "!" : "✕"}
                     </Text>
                     <Text style={styles.qualityText}>
-                      Face size: {faceQuality.checks.size}
+                      {t("checkInFaceSize")}: {faceQuality.checks.size}
                     </Text>
                   </View>
                   <View style={styles.qualityRow}>
@@ -633,7 +644,7 @@ export function CheckInTabScreen() {
                           : "✕"}
                     </Text>
                     <Text style={styles.qualityText}>
-                      Lighting: {faceQuality.checks.lighting}
+                      {t("checkInLighting")}: {faceQuality.checks.lighting}
                     </Text>
                   </View>
                   <View style={styles.qualityRow}>
@@ -641,7 +652,7 @@ export function CheckInTabScreen() {
                       {faceQuality.checks.focus === "good" ? "✓" : faceQuality.checks.focus === "fair" ? "!" : "✕"}
                     </Text>
                     <Text style={styles.qualityText}>
-                      Focus: {faceQuality.checks.focus}
+                      {t("checkInFocus")}: {faceQuality.checks.focus}
                     </Text>
                   </View>
                   <Text style={styles.qualityMessage}>{faceQuality.message}</Text>
@@ -651,14 +662,14 @@ export function CheckInTabScreen() {
           ) : null}
           <TextInput
             style={styles.inputFull}
-            placeholder="Player name"
+            placeholder={t("checkInPlayerName")}
             placeholderTextColor={theme.dimmed}
             value={name}
             onChangeText={setName}
           />
           <TextInput
             style={styles.inputFull}
-            placeholder="Phone number"
+            placeholder={t("phonePlaceholder")}
             placeholderTextColor={theme.dimmed}
             value={phone}
             onChangeText={setPhone}
@@ -670,20 +681,26 @@ export function CheckInTabScreen() {
                 styles.choiceBtn,
                 gender === "male" && styles.choiceBtnActive,
               ]}
-              onPress={() => setGender("male")}
+              onPress={() => {
+                Keyboard.dismiss();
+                setGender("male");
+              }}
               activeOpacity={0.7}
             >
-              <Text style={styles.choiceBtnText}>Male</Text>
+              <Text style={styles.choiceBtnText}>{t("regMale")}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
                 styles.choiceBtn,
                 gender === "female" && styles.choiceBtnActive,
               ]}
-              onPress={() => setGender("female")}
+              onPress={() => {
+                Keyboard.dismiss();
+                setGender("female");
+              }}
               activeOpacity={0.7}
             >
-              <Text style={styles.choiceBtnText}>Female</Text>
+              <Text style={styles.choiceBtnText}>{t("regFemale")}</Text>
             </TouchableOpacity>
           </View>
           <View style={styles.row}>
@@ -694,11 +711,14 @@ export function CheckInTabScreen() {
                   styles.choiceBtn,
                   skillLevel === lvl && styles.choiceBtnActive,
                 ]}
-                onPress={() => setSkillLevel(lvl)}
+                onPress={() => {
+                  Keyboard.dismiss();
+                  setSkillLevel(lvl);
+                }}
                 activeOpacity={0.7}
               >
                 <Text style={styles.choiceBtnText}>
-                  {lvl.charAt(0).toUpperCase() + lvl.slice(1)}
+                  {lvl === "beginner" ? t("regBeginner") : lvl === "intermediate" ? t("regIntermediate") : t("regAdvanced")}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -715,7 +735,7 @@ export function CheckInTabScreen() {
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.primaryBtnText}>Register & Check-in</Text>
+              <Text style={styles.primaryBtnText}>{t("checkInRegisterBtn")}</Text>
             )}
           </TouchableOpacity>
         </>
@@ -725,9 +745,32 @@ export function CheckInTabScreen() {
     </View>
   );
 
-  const renderAwaitingPayment = () => (
+  const renderAwaitingPayment = () => {
+    const payerName =
+      pendingPayment?.playerName?.trim() ||
+      existingPreview?.name?.trim() ||
+      name.trim() ||
+      "";
+    const payerPhone =
+      pendingPayment?.playerPhone?.trim() ||
+      existingPreview?.phone?.trim() ||
+      phone.trim() ||
+      "";
+    const showPayer = Boolean(payerName || payerPhone);
+
+    return (
     <View style={styles.paymentSection}>
-      <Text style={styles.paymentTitle}>Awaiting Payment</Text>
+      <Text style={styles.paymentTitle}>{t("checkInAwaitingPayment")}</Text>
+      {showPayer ? (
+        <View style={styles.paymentPayerBlock}>
+          {payerName ? (
+            <Text style={styles.paymentPayerName}>{payerName}</Text>
+          ) : null}
+          {payerPhone ? (
+            <Text style={styles.paymentPayerPhone}>{payerPhone}</Text>
+          ) : null}
+        </View>
+      ) : null}
       {pendingPayment?.qrUrl ? (
         <View style={styles.qrContainer}>
           <Image
@@ -752,27 +795,28 @@ export function CheckInTabScreen() {
         {loading ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={styles.cashBtnText}>Confirm Cash Payment</Text>
+          <Text style={styles.cashBtnText}>{t("checkInConfirmCash")}</Text>
         )}
       </TouchableOpacity>
       <TouchableOpacity style={styles.cancelLink} onPress={resetForm}>
-        <Text style={styles.cancelLinkText}>Cancel</Text>
+        <Text style={styles.cancelLinkText}>{t("cancel")}</Text>
       </TouchableOpacity>
     </View>
-  );
+    );
+  };
 
   const renderSuccess = () => (
     <View style={styles.resultSection}>
       <View style={styles.successCircle}>
         <Ionicons name="checkmark" size={44} color={theme.green500} />
       </View>
-      <Text style={styles.resultTitle}>Check-in Complete</Text>
+      <Text style={styles.resultTitle}>{t("checkInComplete")}</Text>
       <TouchableOpacity
         style={styles.primaryBtn}
         onPress={resetForm}
         activeOpacity={0.7}
       >
-        <Text style={styles.primaryBtnText}>Next Check-in</Text>
+        <Text style={styles.primaryBtnText}>{t("checkInNextCheckIn")}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -782,14 +826,14 @@ export function CheckInTabScreen() {
       <View style={styles.errorCircle}>
         <Ionicons name="warning-outline" size={40} color={theme.red500} />
       </View>
-      <Text style={styles.resultTitle}>Something went wrong</Text>
+      <Text style={styles.resultTitle}>{t("checkInSomethingWrong")}</Text>
       <Text style={styles.errorText}>{error}</Text>
       <TouchableOpacity
         style={styles.primaryBtn}
         onPress={resetForm}
         activeOpacity={0.7}
       >
-        <Text style={styles.primaryBtnText}>Start Over</Text>
+        <Text style={styles.primaryBtnText}>{t("checkInStartOver")}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -797,12 +841,15 @@ export function CheckInTabScreen() {
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
-      behavior="padding"
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={Platform.OS === "ios" ? 96 : 0}
     >
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[
+          styles.scrollContent,
+          Platform.OS === "android" && styles.scrollContentAndroidKb,
+        ]}
         keyboardShouldPersistTaps="handled"
       >
         {step === "form" ? renderForm() : null}
@@ -818,6 +865,8 @@ function createCheckInStyles(t: AppColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: t.bg },
     scrollContent: { padding: 16, paddingBottom: 120 },
+    /** Extra space so bottom actions stay above keyboard + Android suggestion strip. */
+    scrollContentAndroidKb: { paddingBottom: 300 },
     section: { gap: 12 },
     modeSwitch: { flexDirection: "row", borderRadius: 10, borderWidth: 1, borderColor: t.border, overflow: "hidden" },
     modeBtn: { flex: 1, height: 42, alignItems: "center", justifyContent: "center", backgroundColor: t.card },
@@ -866,6 +915,9 @@ function createCheckInStyles(t: AppColors) {
     inlineCheckBtnText: { color: "#fff", fontWeight: "700", fontSize: 13 },
     paymentSection: { alignItems: "center", gap: 12 },
     paymentTitle: { fontSize: 20, fontWeight: "700", color: t.text },
+    paymentPayerBlock: { alignItems: "center", gap: 4, width: "100%" },
+    paymentPayerName: { fontSize: 17, fontWeight: "700", color: t.text, textAlign: "center" },
+    paymentPayerPhone: { fontSize: 15, fontWeight: "500", color: t.muted, textAlign: "center" },
     qrContainer: { alignItems: "center", backgroundColor: "#fff", borderRadius: 14, padding: 14 },
     qrImage: { width: 200, height: 200 },
     paymentAmount: { fontSize: 22, fontWeight: "700", color: t.text, textAlign: "center" },

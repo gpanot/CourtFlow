@@ -66,16 +66,8 @@ export function CourtFlowKioskTopBar({
             style={[styles.brandWord, isLight && styles.brandWordLight]}
             accessibilityRole="header"
           >
-            CourtFlow
+            CourtPay
           </Text>
-          {tagline.trim().length > 0 ? (
-            <Text
-              style={[styles.tagline, isLight && styles.taglineLight]}
-              numberOfLines={2}
-            >
-              {tagline}
-            </Text>
-          ) : null}
         </View>
         <View style={styles.sideSlotRight}>
           <TabletLanguageToggle locale={locale} onToggle={onToggleLocale} />

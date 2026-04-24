@@ -15,7 +15,6 @@ import {
   ActivityIndicator,
   RefreshControl,
   TextInput,
-  Image,
   Modal,
   Share,
 } from "react-native";
@@ -30,7 +29,8 @@ import { useAppColors } from "../../theme/use-app-colors";
 import type { AppColors } from "../../theme/palettes";
 import type { StaffStackParamList } from "../../navigation/types";
 import { SubscribersList } from "../../components/SubscribersList";
-import { resolveMediaUrl } from "../../lib/media-url";
+import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
+import { PlayerCard } from "../../components/PlayerCard";
 
 type Tab = "subscribers" | "players";
 type GenderFilter = "all" | "male" | "female";
@@ -63,17 +63,6 @@ interface PlayersData {
     /** avg check-in count per player (times they returned) */
     venueAvgCheckIns?: number | null;
   };
-}
-
-function formatDateShort(dateStr: string | null | undefined): string {
-  if (!dateStr) return "—";
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString(undefined, {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
 }
 
 function createStyles(t: AppColors) {
@@ -153,94 +142,6 @@ function createStyles(t: AppColors) {
       color: t.text,
       padding: 0,
     },
-    playerCard: {
-      flexDirection: "row",
-      alignItems: "center",
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: t.border,
-      backgroundColor: t.card,
-      padding: 10,
-      marginBottom: 8,
-      gap: 10,
-    },
-    playerAvatarWrap: {
-      width: 46,
-      height: 46,
-      borderRadius: 23,
-      overflow: "hidden",
-    },
-    playerAvatar: { width: 46, height: 46 },
-    playerAvatarFallback: {
-      width: 46,
-      height: 46,
-      borderRadius: 23,
-      backgroundColor: "rgba(37,99,235,0.18)",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    playerAvatarInitials: {
-      fontSize: 18,
-      fontWeight: "700",
-      color: t.blue400,
-    },
-    playerCardMain: { flex: 1, minWidth: 0, gap: 2 },
-    playerCardNameRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-    },
-    playerCardName: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: t.text,
-      flexShrink: 1,
-    },
-    playerCardGender: { fontSize: 13, color: t.muted },
-    playerCardPhone: { fontSize: 12, color: t.muted },
-    playerCardTagRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      flexWrap: "wrap",
-      marginTop: 3,
-    },
-    playerTagVenue: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 2,
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-      borderRadius: 6,
-      backgroundColor: "rgba(115,115,115,0.12)",
-    },
-    playerTagVenueText: { fontSize: 10, color: t.muted },
-    playerTagSource: {
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-      borderRadius: 6,
-    },
-    playerTagSourceCP: { backgroundColor: "rgba(245,158,11,0.18)" },
-    playerTagSourceSelf: { backgroundColor: "rgba(37,99,235,0.15)" },
-    playerTagSourceText: { fontSize: 10, fontWeight: "700" },
-    playerTagSourceTextCP: { color: "#f59e0b" },
-    playerTagSourceTextSelf: { color: t.blue400 },
-    playerTagSkill: {
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-      borderRadius: 6,
-      backgroundColor: "rgba(37,99,235,0.12)",
-    },
-    playerTagSkillText: { fontSize: 10, color: t.blue400 },
-    playerCardLastSeen: { fontSize: 11, color: t.subtle, marginTop: 2 },
-    playerCardRight: { alignItems: "center", minWidth: 44 },
-    playerCardCheckinCount: {
-      fontSize: 20,
-      fontWeight: "700",
-      color: t.text,
-    },
-    playerCardCheckinLabel: { fontSize: 10, color: t.muted, textAlign: "center" },
-
     // ── Share card (subscribers tab) ─────────────────────────────────────
     shareCard: {
       borderRadius: 12,
@@ -321,6 +222,7 @@ export function StaffDashboardScreen() {
   const venueId = useAuthStore((s) => s.venueId);
   const theme = useAppColors();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { t } = useTabletKioskLocale();
 
   const [tab, setTab] = useState<Tab>("subscribers");
   const [showShareModal, setShowShareModal] = useState(false);
@@ -342,12 +244,12 @@ export function StaffDashboardScreen() {
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      title: "Staff Dashboard",
+      title: t("staffDashboardTitle"),
       headerStyle: { backgroundColor: theme.bg },
       headerTintColor: theme.text,
       headerTitleStyle: { color: theme.text, fontWeight: "700" },
     });
-  }, [navigation, theme]);
+  }, [navigation, theme, t]);
 
   const fetchPlayers = useCallback(
     async (force = false) => {
@@ -391,8 +293,8 @@ export function StaffDashboardScreen() {
       <View style={styles.tabs}>
         {(
           [
-            { id: "subscribers" as const, label: "Subscribers" },
-            { id: "players" as const, label: "Players" },
+            { id: "subscribers" as const, label: t("staffDashboardTabSubscribers") },
+            { id: "players" as const, label: t("staffDashboardTabPlayers") },
           ] as const
         ).map(({ id, label }) => (
           <TouchableOpacity
@@ -425,9 +327,9 @@ export function StaffDashboardScreen() {
       >
         {venueId ? (
           <View style={styles.shareCard}>
-            <Text style={styles.shareCardTitle}>Share balance check link</Text>
+            <Text style={styles.shareCardTitle}>{t("staffDashboardShareTitle")}</Text>
             <Text style={styles.shareCardDesc}>
-              Players can check their session balance without installing the app.
+              {t("staffDashboardShareDesc")}
             </Text>
             <TouchableOpacity
               style={styles.shareBtn}
@@ -435,7 +337,7 @@ export function StaffDashboardScreen() {
               activeOpacity={0.8}
             >
               <Ionicons name="share-outline" size={16} color="#fff" />
-              <Text style={styles.shareBtnText}>Share link & QR</Text>
+              <Text style={styles.shareBtnText}>{t("staffDashboardShareBtn")}</Text>
             </TouchableOpacity>
           </View>
         ) : null}
@@ -469,25 +371,25 @@ export function StaffDashboardScreen() {
             {playersData && (
               <View style={styles.grid}>
                 <View style={styles.statCard}>
-                  <Text style={styles.statLabel}>Total players</Text>
+                  <Text style={styles.statLabel}>{t("staffDashboardTotalPlayers")}</Text>
                   <Text style={styles.statValue}>
                     {playersData.stats.totalPlayers}
                   </Text>
                 </View>
                 <View style={styles.statCard}>
-                  <Text style={styles.statLabel}>New this week</Text>
+                  <Text style={styles.statLabel}>{t("staffDashboardNewThisWeek")}</Text>
                   <Text style={[styles.statValue, styles.statPurple]}>
                     {playersData.stats.newThisWeek}
                   </Text>
                 </View>
                 <View style={styles.statCard}>
-                  <Text style={styles.statLabel}>With subscription</Text>
+                  <Text style={styles.statLabel}>{t("staffDashboardWithSub")}</Text>
                   <Text style={styles.statValue}>
                     {playersData.stats.activeSubscriptions}
                   </Text>
                 </View>
                 <View style={styles.statCard}>
-                  <Text style={styles.statLabel}>Avg visits / player</Text>
+                  <Text style={styles.statLabel}>{t("staffDashboardAvgVisits")}</Text>
                   <Text style={[styles.statValue, styles.statYellow]}>
                     {(() => {
                       // Prefer venueAvgCheckIns from API if available,
@@ -508,13 +410,14 @@ export function StaffDashboardScreen() {
 
             {/* Filter + search bar */}
             <View style={styles.playerFilterRow}>
-              {(["all", "male", "female"] as GenderFilter[]).map((g) => {
+                {(["all", "male", "female"] as GenderFilter[]).map((g) => {
                 const count =
                   g === "all"
                     ? (playersData?.stats.totalPlayers ?? 0)
                     : g === "male"
                     ? (playersData?.stats.maleCount ?? 0)
                     : (playersData?.stats.femaleCount ?? 0);
+                const gLabel = g === "all" ? t("bossDashboardAll") : g === "male" ? t("bossDashboardMale") : t("bossDashboardFemale");
                 return (
                   <TouchableOpacity
                     key={g}
@@ -530,7 +433,7 @@ export function StaffDashboardScreen() {
                         genderFilter === g && styles.filterChipTextActive,
                       ]}
                     >
-                      {g.charAt(0).toUpperCase() + g.slice(1)} ({count})
+                      {gLabel} ({count})
                     </Text>
                   </TouchableOpacity>
                 );
@@ -564,7 +467,7 @@ export function StaffDashboardScreen() {
                 <TextInput
                   ref={searchRef}
                   style={styles.searchInput}
-                  placeholder="Search by name or phone…"
+                  placeholder={t("bossDashboardSearchPlaceholder")}
                   placeholderTextColor={theme.muted}
                   value={playerSearch}
                   onChangeText={setPlayerSearch}
@@ -585,7 +488,7 @@ export function StaffDashboardScreen() {
 
             {/* Player list */}
             {!playersData ? (
-              <Text style={styles.empty}>No players found.</Text>
+              <Text style={styles.empty}>{t("staffDashboardNoPlayers")}</Text>
             ) : (
               (() => {
                 const q = playerSearch.toLowerCase().trim();
@@ -602,123 +505,25 @@ export function StaffDashboardScreen() {
 
                 if (filtered.length === 0) {
                   return (
-                    <Text style={styles.empty}>No players found.</Text>
+                    <Text style={styles.empty}>{t("staffDashboardNoPlayers")}</Text>
                   );
                 }
 
-                return filtered.map((p) => {
-                  const photoUri = resolveMediaUrl(
-                    p.avatarPhotoPath ?? p.facePhotoPath ?? null
-                  );
-                  const initials = p.name.trim().charAt(0).toUpperCase();
-                  const isCourtPay = p.source === "courtpay";
-                  const isFemale = p.gender?.toLowerCase() === "female";
-                  const isMale = p.gender?.toLowerCase() === "male";
-                  const nameColor = isFemale ? "#f9a8d4" : isMale ? "#93c5fd" : theme.text;
-
-                  return (
-                    <TouchableOpacity
-                      key={`${p.source}-${p.id}`}
-                      style={styles.playerCard}
-                      activeOpacity={0.75}
-                      onPress={() =>
-                        navigation.navigate("StaffPlayerDetail", {
-                          playerId: p.id,
-                          source: p.source,
-                        })
-                      }
-                    >
-                      <View style={styles.playerAvatarWrap}>
-                        {photoUri ? (
-                          <Image
-                            source={{ uri: photoUri }}
-                            style={styles.playerAvatar}
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <View style={styles.playerAvatarFallback}>
-                            <Text style={styles.playerAvatarInitials}>
-                              {initials}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-
-                      <View style={styles.playerCardMain}>
-                        <View style={styles.playerCardNameRow}>
-                          <Text
-                            style={[styles.playerCardName, { color: nameColor }]}
-                            numberOfLines={2}
-                          >
-                            {p.name}
-                          </Text>
-                        </View>
-                        <Text style={styles.playerCardPhone}>{p.phone}</Text>
-                        <View style={styles.playerCardTagRow}>
-                          <View style={styles.playerTagVenue}>
-                            <Ionicons
-                              name="location-outline"
-                              size={10}
-                              color={theme.muted}
-                            />
-                            <Text
-                              style={styles.playerTagVenueText}
-                              numberOfLines={1}
-                            >
-                              {p.venueName}
-                            </Text>
-                          </View>
-                          <View
-                            style={[
-                              styles.playerTagSource,
-                              isCourtPay
-                                ? styles.playerTagSourceCP
-                                : styles.playerTagSourceSelf,
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.playerTagSourceText,
-                                isCourtPay
-                                  ? styles.playerTagSourceTextCP
-                                  : styles.playerTagSourceTextSelf,
-                              ]}
-                            >
-                              {isCourtPay ? "CourtPay" : "Self"}
-                            </Text>
-                          </View>
-                          {p.skillLevel && (
-                            <View style={styles.playerTagSkill}>
-                              <Text style={styles.playerTagSkillText}>
-                                {p.skillLevel.charAt(0).toUpperCase() +
-                                  p.skillLevel.slice(1)}
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-                        {p.lastSeenAt && (
-                          <Text style={styles.playerCardLastSeen}>
-                            Last seen: {formatDateShort(p.lastSeenAt)}
-                          </Text>
-                        )}
-                      </View>
-
-                      <View style={styles.playerCardRight}>
-                        <Text
-                          style={[
-                            styles.playerCardCheckinCount,
-                            p.checkInCount > 0 ? styles.statYellow : undefined,
-                          ]}
-                        >
-                          {p.checkInCount > 0 ? p.checkInCount : "—"}
-                        </Text>
-                        <Text style={styles.playerCardCheckinLabel}>
-                          visits
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                });
+                return filtered.map((p) => (
+                  <PlayerCard
+                    key={`${p.source}-${p.id}`}
+                    player={p}
+                    statKey="checkInCount"
+                    statLabel={t("staffDashboardVisits")}
+                    lastSeenLabel={t("staffDashboardLastSeen")}
+                    onPress={() =>
+                      navigation.navigate("StaffPlayerDetail", {
+                        playerId: p.id,
+                        source: p.source,
+                      })
+                    }
+                  />
+                ));
               })()
             )}
           </ScrollView>
@@ -741,9 +546,9 @@ export function StaffDashboardScreen() {
         >
           <TouchableOpacity activeOpacity={1} onPress={() => {}}>
             <View style={styles.shareModalCard}>
-              <Text style={styles.shareModalTitle}>Share balance check</Text>
+              <Text style={styles.shareModalTitle}>{t("staffDashboardShareModalTitle")}</Text>
               <Text style={styles.shareModalSub}>
-                Send this link to your players so they can check their session balance anytime — no app needed.
+                {t("staffDashboardShareModalDesc")}
               </Text>
               {balanceUrl ? (
                 <View style={styles.shareQrWrap}>
@@ -758,7 +563,7 @@ export function StaffDashboardScreen() {
                   style={styles.shareModalClose}
                   onPress={() => setShowShareModal(false)}
                 >
-                  <Text style={styles.shareModalCloseText}>Close</Text>
+                  <Text style={styles.shareModalCloseText}>{t("staffDashboardShareModalClose")}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.shareModalShare}
@@ -773,7 +578,7 @@ export function StaffDashboardScreen() {
                     }
                   }}
                 >
-                  <Text style={styles.shareModalShareText}>Share link & QR</Text>
+                  <Text style={styles.shareModalShareText}>{t("staffDashboardShareModalShare")}</Text>
                 </TouchableOpacity>
               </View>
             </View>

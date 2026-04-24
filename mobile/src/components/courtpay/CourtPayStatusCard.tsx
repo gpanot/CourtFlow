@@ -16,25 +16,34 @@ export type CourtPayStatusVariant = "already_paid" | "existing_user";
 interface Props {
   variant: CourtPayStatusVariant;
   playerName?: string;
+  /** Pre-translated title to show (e.g. "{{name}} already paid" or "Already paid"). Falls back to built-in English if omitted. */
+  playerNameAlreadyPaidLabel?: string;
+  /** Pre-translated fallback when playerName is absent (e.g. "Existing player"). */
+  noNameFallback?: string;
   subtitle?: string;
   faceBase64?: string | null;
   onPrimaryAction: () => void;
   primaryLabel: string;
+  mode?: "light" | "dark";
 }
 
 const AMBER_CIRCLE = "rgba(245, 158, 11, 0.15)";
 const AMBER_COLOR = "#f59e0b";
-const FACE_SIZE = 120;
+const FACE_SIZE = 144;
 
 export function CourtPayStatusCard({
   variant,
   playerName,
+  playerNameAlreadyPaidLabel,
+  noNameFallback,
   subtitle,
   faceBase64,
   onPrimaryAction,
   primaryLabel,
+  mode = "dark",
 }: Props) {
   const accent: LiquidGlassAccent = "amber";
+  const isLight = mode === "light";
 
   return (
     <ScrollView
@@ -42,7 +51,7 @@ export function CourtPayStatusCard({
       keyboardShouldPersistTaps="handled"
     >
       <View style={styles.inner}>
-        <LiquidGlassSurface style={styles.glass} accent={accent}>
+        <LiquidGlassSurface style={styles.glass} accent={accent} mode={mode}>
           <View style={styles.glassInner}>
             {faceBase64 ? (
               <View style={styles.faceCircle}>
@@ -66,18 +75,18 @@ export function CourtPayStatusCard({
               </View>
             )}
 
-            <Text style={styles.title}>
+            <Text style={[styles.title, isLight && styles.titleLight]}>
               {playerName
                 ? variant === "already_paid"
-                  ? `${playerName} already paid`
+                  ? (playerNameAlreadyPaidLabel ?? `${playerName} already paid`)
                   : playerName
                 : variant === "already_paid"
-                  ? "Already paid"
-                  : "Existing player"}
+                  ? (noNameFallback ?? "Already paid")
+                  : (noNameFallback ?? "Existing player")}
             </Text>
 
             {subtitle ? (
-              <Text style={styles.subtitle}>{subtitle}</Text>
+              <Text style={[styles.subtitle, isLight && styles.subtitleLight]}>{subtitle}</Text>
             ) : null}
 
             <TouchableOpacity
@@ -150,11 +159,17 @@ const styles = StyleSheet.create({
     color: "#fff",
     textAlign: "center",
   },
+  titleLight: {
+    color: "#1c1917",
+  },
   subtitle: {
     fontSize: 16,
     color: "#a3a3a3",
     textAlign: "center",
     lineHeight: 22,
+  },
+  subtitleLight: {
+    color: "#57534e",
   },
   btn: {
     alignSelf: "stretch",
@@ -165,10 +180,22 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 16,
     marginTop: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(255,255,255,0.30)",
+    borderBottomWidth: 2,
+    borderBottomColor: "rgba(0,0,0,0.22)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
   },
   btnText: {
     color: "#fff",
     fontSize: 18,
     fontWeight: "700",
+    textShadowColor: "rgba(0,0,0,0.18)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 1,
   },
 });

@@ -13,10 +13,12 @@ export type PlayerPhoneLookupRow = {
  * Match by digits-only equality so +66… vs 66… still matches. Excludes synthetic walk-in phones.
  */
 export async function findPlayerByPhoneDigits(
-  rawPhone: string
+  rawPhone: string,
+  options?: { minimumDigits?: number }
 ): Promise<PlayerPhoneLookupRow | null> {
   const digitsOnly = rawPhone.replace(/\D/g, "");
-  if (digitsOnly.length < 8) return null;
+  const minimumDigits = options?.minimumDigits ?? 8;
+  if (digitsOnly.length < minimumDigits) return null;
 
   const rows = await prisma.$queryRaw<PlayerPhoneLookupRow[]>`
     SELECT id, name, phone, skill_level AS "skillLevel", gender AS gender

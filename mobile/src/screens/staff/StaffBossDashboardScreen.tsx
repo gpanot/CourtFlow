@@ -19,8 +19,9 @@ import { useAppColors } from "../../theme/use-app-colors";
 import type { AppColors } from "../../theme/palettes";
 import type { StaffStackParamList } from "../../navigation/types";
 import type { SessionHistoryRow } from "../../types/api";
-import { resolveMediaUrl } from "../../lib/media-url";
 import { SubscribersList } from "../../components/SubscribersList";
+import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
+import { PlayerCard } from "../../components/PlayerCard";
 
 type Tab = "today" | "history" | "subscriptions" | "players" | "billing";
 type GenderFilter = "all" | "male" | "female";
@@ -190,13 +191,6 @@ interface RevenueSummary {
 
 function formatVND(amount: number) {
   return new Intl.NumberFormat("vi-VN").format(amount);
-}
-
-function formatDateShort(dateStr: string | null | undefined): string {
-  if (!dateStr) return "—";
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
 }
 
 function formatDateTime(dateStr: string | null | undefined): string {
@@ -445,94 +439,6 @@ function createStyles(t: AppColors) {
       padding: 0,
     },
 
-    playerCard: {
-      flexDirection: "row",
-      alignItems: "center",
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: t.border,
-      backgroundColor: t.card,
-      padding: 10,
-      marginBottom: 8,
-      gap: 10,
-    },
-    playerAvatarWrap: {
-      width: 46,
-      height: 46,
-      borderRadius: 23,
-      overflow: "hidden",
-    },
-    playerAvatar: { width: 46, height: 46 },
-    playerAvatarFallback: {
-      width: 46,
-      height: 46,
-      borderRadius: 23,
-      backgroundColor: "rgba(147,51,234,0.2)",
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    playerAvatarInitials: {
-      fontSize: 18,
-      fontWeight: "700",
-      color: t.purple400,
-    },
-    playerCardMain: { flex: 1, minWidth: 0, gap: 2 },
-    playerCardNameRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-    },
-    playerCardName: {
-      fontSize: 14,
-      fontWeight: "700",
-      color: t.text,
-      flexShrink: 1,
-    },
-    playerCardGender: { fontSize: 13, color: t.muted },
-    playerCardPhone: { fontSize: 12, color: t.muted },
-    playerCardTagRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      flexWrap: "wrap",
-      marginTop: 3,
-    },
-    playerTagVenue: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 2,
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-      borderRadius: 6,
-      backgroundColor: "rgba(115,115,115,0.12)",
-    },
-    playerTagVenueText: { fontSize: 10, color: t.muted },
-    playerTagSource: {
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-      borderRadius: 6,
-    },
-    playerTagSourceCP: { backgroundColor: "rgba(245,158,11,0.18)" },
-    playerTagSourceSelf: { backgroundColor: "rgba(37,99,235,0.15)" },
-    playerTagSourceText: { fontSize: 10, fontWeight: "700" },
-    playerTagSourceTextCP: { color: "#f59e0b" },
-    playerTagSourceTextSelf: { color: t.blue400 },
-    playerTagSkill: {
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-      borderRadius: 6,
-      backgroundColor: "rgba(147,51,234,0.12)",
-    },
-    playerTagSkillText: { fontSize: 10, color: t.purple400 },
-    playerCardLastSeen: { fontSize: 11, color: t.subtle, marginTop: 2 },
-    playerCardRight: { alignItems: "center", minWidth: 44 },
-    playerCardCheckinCount: {
-      fontSize: 20,
-      fontWeight: "700",
-      color: t.text,
-    },
-    playerCardCheckinLabel: { fontSize: 10, color: t.muted },
-
     // ── History payment card ─────────────────────────────────────────────────
     payCard: {
       borderRadius: 10,
@@ -565,6 +471,7 @@ export function StaffBossDashboardScreen() {
   const venueId = useAuthStore((s) => s.venueId);
   const theme = useAppColors();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { t } = useTabletKioskLocale();
 
   const [tab, setTab] = useState<Tab>("today");
   const [loading, setLoading] = useState(true);
@@ -589,12 +496,12 @@ export function StaffBossDashboardScreen() {
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      title: "Boss Dashboard",
+      title: t("bossDashboardTitle"),
       headerStyle: { backgroundColor: theme.bg },
       headerTintColor: theme.text,
       headerTitleStyle: { color: theme.text, fontWeight: "700" },
     });
-  }, [navigation, theme]);
+  }, [navigation, theme, t]);
 
   const fetchData = useCallback(async (force = false) => {
     if (!venueId) {
@@ -662,11 +569,11 @@ export function StaffBossDashboardScreen() {
       <View style={styles.tabs}>
         {(
           [
-            { id: "today" as const, label: "Today" },
-            { id: "history" as const, label: "History" },
-            { id: "subscriptions" as const, label: "Subs" },
-            { id: "players" as const, label: "Players" },
-            { id: "billing" as const, label: "Billing" },
+            { id: "today" as const, label: t("bossDashboardTabToday") },
+            { id: "history" as const, label: t("bossDashboardTabHistory") },
+            { id: "subscriptions" as const, label: t("bossDashboardTabSubs") },
+            { id: "players" as const, label: t("bossDashboardTabPlayers") },
+            { id: "billing" as const, label: t("bossDashboardTabBilling") },
           ] as const
         ).map(({ id, label }) => (
           <TouchableOpacity
@@ -698,21 +605,21 @@ export function StaffBossDashboardScreen() {
             <>
               <View style={styles.grid}>
                 <View style={styles.statCard}>
-                  <Text style={styles.statLabel}>Kiosk check-ins</Text>
+                  <Text style={styles.statLabel}>{t("bossDashboardKioskCheckIns")}</Text>
                   <Text style={styles.statValue}>{todayData.checkInsToday}</Text>
                 </View>
                 <View style={styles.statCard}>
-                  <Text style={styles.statLabel}>Revenue</Text>
+                  <Text style={styles.statLabel}>{t("bossDashboardRevenue")}</Text>
                   <Text style={[styles.statValue, styles.statPurple]}>
                     {formatVND(todayData.revenueToday)}
                   </Text>
                 </View>
                 <View style={styles.statCard}>
-                  <Text style={styles.statLabel}>Subscribers</Text>
+                  <Text style={styles.statLabel}>{t("bossDashboardSubscribers")}</Text>
                   <Text style={styles.statValue}>{todayData.activeSubscribers}</Text>
                 </View>
                 <View style={styles.statCard}>
-                  <Text style={styles.statLabel}>Pending</Text>
+                  <Text style={styles.statLabel}>{t("bossDashboardPending")}</Text>
                   <Text style={[styles.statValue, styles.statYellow]}>
                     {todayData.pendingPayments}
                   </Text>
@@ -720,11 +627,11 @@ export function StaffBossDashboardScreen() {
               </View>
 
               {/* Today's court sessions — same cards as Session tab */}
-              <Text style={styles.sectionTitle}>Today's sessions</Text>
+              <Text style={styles.sectionTitle}>{t("bossDashboardTodaySessions")}</Text>
               {(() => {
                 const todaySessions = sessionHistory.filter((s) => isToday(s.openedAt));
                 if (todaySessions.length === 0) {
-                  return <Text style={styles.empty}>No sessions today.</Text>;
+                  return <Text style={styles.empty}>{t("bossDashboardNoSessions")}</Text>;
                 }
                 return todaySessions.map((s) => (
                   <TouchableOpacity
@@ -743,11 +650,11 @@ export function StaffBossDashboardScreen() {
                     <View style={styles.sessionCardRow}>
                       <Text style={styles.sessionCardDate}>{sessionDateLabel(s.openedAt)}</Text>
                       <View style={styles.sessionCardBadge}>
-                        <Text style={styles.sessionCardBadgeText}>closed</Text>
+                        <Text style={styles.sessionCardBadgeText}>{t("bossDashboardClosed")}</Text>
                       </View>
                     </View>
                     <Text style={styles.sessionCardFee}>
-                      Revenue: {s.paymentRevenue?.toLocaleString() ?? "0"} VND · {s.paymentCount ?? 0} payments
+                      {t("bossDashboardRevenue")}: {s.paymentRevenue?.toLocaleString() ?? "0"} VND · {s.paymentCount ?? 0} {t("bossDashboardPayments")}
                     </Text>
                     <Text style={styles.sessionCardTime}>
                       {new Date(s.openedAt).toLocaleTimeString()}
@@ -765,15 +672,15 @@ export function StaffBossDashboardScreen() {
               {historyData.revenueSummary && (() => {
                 const rs = historyData.revenueSummary;
                 const rows: { label: string; bucket: RevenueBucket; highlight?: boolean }[] = [
-                  { label: "Today", bucket: rs.today, highlight: true },
-                  { label: "Yesterday", bucket: rs.yesterday },
-                  { label: "This week", bucket: rs.thisWeek },
-                  { label: "This month", bucket: rs.thisMonth },
-                  { label: "All time", bucket: rs.allTime },
+                  { label: t("bossDashboardToday"), bucket: rs.today, highlight: true },
+                  { label: t("bossDashboardYesterday"), bucket: rs.yesterday },
+                  { label: t("bossDashboardThisWeek"), bucket: rs.thisWeek },
+                  { label: t("bossDashboardThisMonth"), bucket: rs.thisMonth },
+                  { label: t("bossDashboardAllTime"), bucket: rs.allTime },
                 ];
                 return (
                   <View style={styles.revenueSummaryCard}>
-                    <Text style={styles.revenueSummaryTitle}>Revenue summary</Text>
+                    <Text style={styles.revenueSummaryTitle}>{t("bossDashboardRevenueSummary")}</Text>
                     {rows.map(({ label, bucket, highlight }) => (
                       <View key={label} style={styles.revenueSummaryRow}>
                         <Text style={styles.revenueSummaryLabel}>{label}</Text>
@@ -781,7 +688,7 @@ export function StaffBossDashboardScreen() {
                           <Text style={[styles.revenueSummaryAmount, highlight && styles.statPurple]}>
                             {formatVND(bucket.total)} VND
                           </Text>
-                          <Text style={styles.revenueSummaryCount}>{bucket.count} payments</Text>
+                          <Text style={styles.revenueSummaryCount}>{bucket.count} {t("bossDashboardPayments")}</Text>
                         </View>
                       </View>
                     ))}
@@ -791,14 +698,14 @@ export function StaffBossDashboardScreen() {
 
               {historyData.dailyRevenue.length > 0 && (
                 <>
-                  <Text style={styles.sectionTitle}>Daily revenue (all today's payments)</Text>
+                  <Text style={styles.sectionTitle}>{t("bossDashboardDailyRevenue")}</Text>
                   {historyData.dailyRevenue.map((d) => (
                     <View key={d.date} style={styles.row}>
                       <View style={styles.rowMain}>
                         <Text style={styles.rowTitle}>
-                          {isToday(d.date + "T00:00:00") ? `Today — ${d.date}` : d.date}
+                          {isToday(d.date + "T00:00:00") ? `${t("bossDashboardToday")} — ${d.date}` : d.date}
                         </Text>
-                        <Text style={styles.rowSub}>{d.count} payments</Text>
+                        <Text style={styles.rowSub}>{d.count} {t("bossDashboardPayments")}</Text>
                       </View>
                       <Text style={[styles.rowTitle, styles.statPurple]}>
                         {formatVND(d.total)} VND
@@ -808,9 +715,9 @@ export function StaffBossDashboardScreen() {
                 </>
               )}
 
-              <Text style={[styles.sectionTitle, { marginTop: 12 }]}>Past sessions</Text>
+              <Text style={[styles.sectionTitle, { marginTop: 12 }]}>{t("bossDashboardPastSessions")}</Text>
               {sessionHistory.length === 0 ? (
-                <Text style={styles.empty}>No past sessions.</Text>
+                <Text style={styles.empty}>{t("bossDashboardNoPastSessions")}</Text>
               ) : (
                 sessionHistory.map((s) => (
                   <TouchableOpacity
@@ -829,11 +736,11 @@ export function StaffBossDashboardScreen() {
                     <View style={styles.sessionCardRow}>
                       <Text style={styles.sessionCardDate}>{sessionDateLabel(s.openedAt)}</Text>
                       <View style={styles.sessionCardBadge}>
-                        <Text style={styles.sessionCardBadgeText}>closed</Text>
+                        <Text style={styles.sessionCardBadgeText}>{t("bossDashboardClosed")}</Text>
                       </View>
                     </View>
                     <Text style={styles.sessionCardFee}>
-                      Revenue: {s.paymentRevenue?.toLocaleString() ?? "0"} VND · {s.paymentCount ?? 0} payments
+                      {t("bossDashboardRevenue")}: {s.paymentRevenue?.toLocaleString() ?? "0"} VND · {s.paymentCount ?? 0} {t("bossDashboardPayments")}
                     </Text>
                     <Text style={styles.sessionCardTime}>
                       {new Date(s.openedAt).toLocaleTimeString()}
@@ -857,43 +764,43 @@ export function StaffBossDashboardScreen() {
               {playersData && (
                 <View style={styles.grid}>
                   <View style={styles.statCard}>
-                    <Text style={styles.statLabel}>Total players</Text>
-                    <Text style={styles.statValue}>{playersData.stats.totalPlayers}</Text>
-                  </View>
-                  <View style={styles.statCard}>
-                    <Text style={styles.statLabel}>New this week</Text>
-                    <Text style={[styles.statValue, styles.statPurple]}>
-                      {playersData.stats.newThisWeek}
-                    </Text>
-                  </View>
-                  <View style={styles.statCard}>
-                    <Text style={styles.statLabel}>With subscription</Text>
-                    <Text style={styles.statValue}>{playersData.stats.activeSubscriptions}</Text>
-                  </View>
-                  <View style={styles.statCard}>
-                    <Text style={styles.statLabel}>Avg return (days)</Text>
-                    <Text style={[styles.statValue, styles.statYellow]}>
-                      {playersData.stats.venueAvgReturn != null
-                        ? playersData.stats.venueAvgReturn
-                        : "—"}
-                    </Text>
-                  </View>
-                  <View style={styles.statCard}>
-                    <Text style={styles.statLabel}>Avg visits / player</Text>
-                    <Text style={[styles.statValue, styles.statYellow]}>
-                      {(() => {
-                        const apiAvg = playersData.stats.venueAvgCheckIns;
-                        if (apiAvg != null) return apiAvg.toFixed(1);
-                        if (playersData.players.length === 0) return "—";
-                        const total = playersData.players.reduce(
-                          (sum, p) => sum + p.checkInCount, 0
-                        );
-                        return (total / playersData.players.length).toFixed(1);
-                      })()}
-                    </Text>
-                  </View>
-                  <View style={styles.statCard}>
-                    <Text style={styles.statLabel}>Returned (15d) %</Text>
+                  <Text style={styles.statLabel}>{t("bossDashboardTotalPlayers")}</Text>
+                  <Text style={styles.statValue}>{playersData.stats.totalPlayers}</Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statLabel}>{t("bossDashboardNewThisWeek")}</Text>
+                  <Text style={[styles.statValue, styles.statPurple]}>
+                    {playersData.stats.newThisWeek}
+                  </Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statLabel}>{t("bossDashboardWithSubscription")}</Text>
+                  <Text style={styles.statValue}>{playersData.stats.activeSubscriptions}</Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statLabel}>{t("bossDashboardAvgReturn")}</Text>
+                  <Text style={[styles.statValue, styles.statYellow]}>
+                    {playersData.stats.venueAvgReturn != null
+                      ? playersData.stats.venueAvgReturn
+                      : "—"}
+                  </Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statLabel}>{t("bossDashboardAvgVisits")}</Text>
+                  <Text style={[styles.statValue, styles.statYellow]}>
+                    {(() => {
+                      const apiAvg = playersData.stats.venueAvgCheckIns;
+                      if (apiAvg != null) return apiAvg.toFixed(1);
+                      if (playersData.players.length === 0) return "—";
+                      const total = playersData.players.reduce(
+                        (sum, p) => sum + p.checkInCount, 0
+                      );
+                      return (total / playersData.players.length).toFixed(1);
+                    })()}
+                  </Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statLabel}>{t("bossDashboardReturned")}</Text>
                     <Text style={[styles.statValue, styles.statPurple]}>
                       {(() => {
                         const apiRate = playersData.stats.returnRate15d;
@@ -919,6 +826,7 @@ export function StaffBossDashboardScreen() {
                       : g === "male"
                       ? playersData?.stats.maleCount ?? 0
                       : playersData?.stats.femaleCount ?? 0;
+                  const gLabel = g === "all" ? t("bossDashboardAll") : g === "male" ? t("bossDashboardMale") : t("bossDashboardFemale");
                   return (
                     <TouchableOpacity
                       key={g}
@@ -934,7 +842,7 @@ export function StaffBossDashboardScreen() {
                           genderFilter === g && styles.filterChipTextActive,
                         ]}
                       >
-                        {g.charAt(0).toUpperCase() + g.slice(1)} ({count})
+                        {gLabel} ({count})
                       </Text>
                     </TouchableOpacity>
                   );
@@ -963,7 +871,7 @@ export function StaffBossDashboardScreen() {
                   <TextInput
                     ref={searchRef}
                     style={styles.searchInput}
-                    placeholder="Search by name or phone…"
+                    placeholder={t("bossDashboardSearchPlaceholder")}
                     placeholderTextColor={theme.muted}
                     value={playerSearch}
                     onChangeText={setPlayerSearch}
@@ -996,83 +904,25 @@ export function StaffBossDashboardScreen() {
 
                 if (filtered.length === 0) {
                   return (
-                    <Text style={styles.empty}>No players found.</Text>
+                    <Text style={styles.empty}>{t("bossDashboardNoPlayers")}</Text>
                   );
                 }
 
-                return filtered.map((p) => {
-                  const photoUri = resolveMediaUrl(p.avatarPhotoPath ?? p.facePhotoPath ?? null);
-                  const initials = p.name.trim().charAt(0).toUpperCase();
-                  const isCourtPay = p.source === "courtpay";
-                  const genderIcon =
-                    p.gender?.toLowerCase() === "female" ? "♀" : p.gender?.toLowerCase() === "male" ? "♂" : "?";
-
-                  return (
-                    <View key={`${p.source}-${p.id}`} style={styles.playerCard}>
-                      {/* Avatar */}
-                      <View style={styles.playerAvatarWrap}>
-                        {photoUri ? (
-                          <Image
-                            source={{ uri: photoUri }}
-                            style={styles.playerAvatar}
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <View style={styles.playerAvatarFallback}>
-                            <Text style={styles.playerAvatarInitials}>{initials}</Text>
-                          </View>
-                        )}
-                      </View>
-
-                      {/* Main info */}
-                      <View style={styles.playerCardMain}>
-                        <View style={styles.playerCardNameRow}>
-                          <Text style={styles.playerCardName} numberOfLines={1}>
-                            {p.name}
-                          </Text>
-                          <Text style={styles.playerCardGender}>{genderIcon}</Text>
-                        </View>
-                        <Text style={styles.playerCardPhone}>{p.phone}</Text>
-                        <View style={styles.playerCardTagRow}>
-                          {/* Venue tag */}
-                          <View style={styles.playerTagVenue}>
-                            <Ionicons name="location-outline" size={10} color={theme.muted} />
-                            <Text style={styles.playerTagVenueText} numberOfLines={1}>
-                              {p.venueName}
-                            </Text>
-                          </View>
-                          {/* Source badge */}
-                          <View style={[styles.playerTagSource, isCourtPay ? styles.playerTagSourceCP : styles.playerTagSourceSelf]}>
-                            <Text style={[styles.playerTagSourceText, isCourtPay ? styles.playerTagSourceTextCP : styles.playerTagSourceTextSelf]}>
-                              {isCourtPay ? "CourtPay" : "Self"}
-                            </Text>
-                          </View>
-                          {/* Skill level */}
-                          {p.skillLevel && (
-                            <View style={styles.playerTagSkill}>
-                              <Text style={styles.playerTagSkillText}>
-                                {p.skillLevel.charAt(0).toUpperCase() + p.skillLevel.slice(1)}
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-                        {p.lastSeenAt && (
-                          <Text style={styles.playerCardLastSeen}>
-                            Last seen: {formatDateShort(p.lastSeenAt)}
-                          </Text>
-                        )}
-                      </View>
-
-                      {/* Right: avg return days */}
-                      <View style={styles.playerCardRight}>
-                        <Text style={[styles.playerCardCheckinCount, p.avgReturnDays != null ? styles.statYellow : undefined]}>
-                          {p.avgReturnDays != null ? p.avgReturnDays : "—"}
-                        </Text>
-                        <Text style={styles.playerCardCheckinLabel}>avg return d</Text>
-                      </View>
-                    </View>
-                  );
-                });
+                return filtered.map((p) => (
+                  <PlayerCard
+                    key={`${p.source}-${p.id}`}
+                    player={p}
+                    statKey="checkInCount"
+                    statLabel={t("staffDashboardVisits")}
+                    lastSeenLabel={t("bossDashboardLastSeen")}
+                    onPress={() =>
+                      navigation.navigate("StaffPlayerDetail", {
+                        playerId: p.id,
+                        source: p.source,
+                      })
+                    }
+                  />
+                ));
               })()}
             </>
           )}
@@ -1094,7 +944,7 @@ export function StaffBossDashboardScreen() {
                 >
                   <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 10 }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                      <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>This week</Text>
+                      <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>{t("bossDashboardBillingThisWeek")}</Text>
                       {billingCurrent.isFree && (
                         <View style={{ backgroundColor: "rgba(22,163,74,0.2)", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
                           <Text style={{ fontSize: 10, fontWeight: "700", color: "#4ade80" }}>FREE 🎁</Text>
@@ -1110,28 +960,28 @@ export function StaffBossDashboardScreen() {
 
                   <View style={{ gap: 6 }}>
                     <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                      <Text style={{ fontSize: 13, color: theme.muted }}>Payments</Text>
+                      <Text style={{ fontSize: 13, color: theme.muted }}>{t("bossDashboardBillingPayments")}</Text>
                       <Text style={{ fontSize: 13, color: theme.text }}>
                         {billingCurrent.totalPayments ?? billingCurrent.totalCheckins}
                       </Text>
                     </View>
                     <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                       <Text style={{ fontSize: 13, color: theme.muted }}>
-                        Base (×{formatVND(billingCurrent.rates.baseRate)})
+                        {t("bossDashboardBillingBase")} (×{formatVND(billingCurrent.rates.baseRate)})
                       </Text>
                       <Text style={{ fontSize: 13, color: theme.text }}>{formatVND(billingCurrent.baseAmount)} VND</Text>
                     </View>
                     {(billingCurrent.subscriptionPayments ?? billingCurrent.subscriptionCheckins) > 0 && (
                       <>
                         <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                          <Text style={{ fontSize: 13, color: theme.muted }}>Subscription payments</Text>
+                          <Text style={{ fontSize: 13, color: theme.muted }}>{t("bossDashboardBillingSubPayments")}</Text>
                           <Text style={{ fontSize: 13, color: theme.text }}>
                             {billingCurrent.subscriptionPayments ?? billingCurrent.subscriptionCheckins}
                           </Text>
                         </View>
                         <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                           <Text style={{ fontSize: 13, color: theme.muted }}>
-                            Add-on (×{formatVND(billingCurrent.rates.subAddon)})
+                            {t("bossDashboardBillingSubAddon")} (×{formatVND(billingCurrent.rates.subAddon)})
                           </Text>
                           <Text style={{ fontSize: 13, color: theme.text }}>{formatVND(billingCurrent.subscriptionAmount)} VND</Text>
                         </View>
@@ -1140,21 +990,21 @@ export function StaffBossDashboardScreen() {
                     {(billingCurrent.sepayPayments ?? billingCurrent.sepayCheckins) > 0 && (
                       <>
                         <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                          <Text style={{ fontSize: 13, color: theme.muted }}>Auto-payment confirmed</Text>
+                          <Text style={{ fontSize: 13, color: theme.muted }}>{t("bossDashboardBillingAutoPayment")}</Text>
                           <Text style={{ fontSize: 13, color: theme.text }}>
                             {billingCurrent.sepayPayments ?? billingCurrent.sepayCheckins}
                           </Text>
                         </View>
                         <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                           <Text style={{ fontSize: 13, color: theme.muted }}>
-                            Add-on (×{formatVND(billingCurrent.rates.sepayAddon)})
+                            {t("bossDashboardBillingSubAddon")} (×{formatVND(billingCurrent.rates.sepayAddon)})
                           </Text>
                           <Text style={{ fontSize: 13, color: theme.text }}>{formatVND(billingCurrent.sepayAmount)} VND</Text>
                         </View>
                       </>
                     )}
                     <View style={{ borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 8, marginTop: 4, flexDirection: "row", justifyContent: "space-between" }}>
-                      <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>Estimated total</Text>
+                      <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>{t("bossDashboardBillingEstimated")}</Text>
                       {billingCurrent.isFree ? (
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                           <Text style={{ fontSize: 13, color: theme.muted, textDecorationLine: "line-through" }}>
@@ -1169,7 +1019,7 @@ export function StaffBossDashboardScreen() {
                   </View>
 
                   <Text style={{ fontSize: 10, color: theme.subtle, marginTop: 8 }}>
-                    Tap card to view weekly payments. Base: {formatVND(billingCurrent.rates.baseRate)}đ · Sub: +{formatVND(billingCurrent.rates.subAddon)}đ · Auto-Payment: +{formatVND(billingCurrent.rates.sepayAddon)}đ per payment
+                    {t("bossDashboardBillingTapView")} Base: {formatVND(billingCurrent.rates.baseRate)}đ · Sub: +{formatVND(billingCurrent.rates.subAddon)}đ · Auto-Payment: +{formatVND(billingCurrent.rates.sepayAddon)}đ per payment
                   </Text>
                 </TouchableOpacity>
               )}
@@ -1177,7 +1027,7 @@ export function StaffBossDashboardScreen() {
               {/* Past weeks — all invoices (pending, overdue, paid) */}
               {billingInvoices.length > 0 && (
                 <>
-                  <Text style={[styles.sectionTitle, { marginTop: 4, marginBottom: 10 }]}>Past weeks</Text>
+                  <Text style={[styles.sectionTitle, { marginTop: 4, marginBottom: 10 }]}>{t("bossDashboardBillingPastWeeks")}</Text>
                   {billingInvoices.map((inv) => {
                     const isPaid = inv.status === "paid";
                     const isOverdue = inv.status === "overdue";
@@ -1228,14 +1078,14 @@ export function StaffBossDashboardScreen() {
                         {isJustPaid ? (
                           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                             <Ionicons name="checkmark-circle" size={20} color="#4ade80" />
-                            <Text style={{ fontSize: 14, fontWeight: "600", color: "#4ade80" }}>Payment received — thank you!</Text>
+                            <Text style={{ fontSize: 14, fontWeight: "600", color: "#4ade80" }}>{t("bossDashboardBillingPaymentReceived")}</Text>
                           </View>
                         ) : (
                           <>
                             {/* Header row */}
                             <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 8 }}>
                               <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>
-                                {isPaid ? "✓ Week paid" : isOverdue ? "Invoice overdue ⚠️" : "Invoice due ⏳"}
+                                {isPaid ? t("bossDashboardBillingWeekPaid") : isOverdue ? t("bossDashboardBillingOverdue") : t("bossDashboardBillingDue")}
                               </Text>
                               <Text style={{ fontSize: 12, color: theme.muted }}>
                                 {new Date(inv.weekStartDate).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
@@ -1248,53 +1098,53 @@ export function StaffBossDashboardScreen() {
                             {isPaid && selectedInvoice?.id === inv.id ? (
                               <View style={{ gap: 6 }}>
                                 <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                                  <Text style={{ fontSize: 12, color: theme.muted }}>Total payments</Text>
+                                  <Text style={{ fontSize: 12, color: theme.muted }}>{t("bossDashboardBillingTotalPayments")}</Text>
                                   <Text style={{ fontSize: 12, color: theme.text }}>{selectedInvoice.totalCheckins}</Text>
                                 </View>
                                 <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                                  <Text style={{ fontSize: 12, color: theme.muted }}>Base charges</Text>
+                                  <Text style={{ fontSize: 12, color: theme.muted }}>{t("bossDashboardBillingBaseCharges")}</Text>
                                   <Text style={{ fontSize: 12, color: theme.text }}>{formatVND(selectedInvoice.baseAmount)} VND</Text>
                                 </View>
                                 {selectedInvoice.subscriptionAmount > 0 && (
                                   <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                                    <Text style={{ fontSize: 12, color: theme.muted }}>Subscription add-on</Text>
+                                    <Text style={{ fontSize: 12, color: theme.muted }}>{t("bossDashboardBillingSubAddonLabel")}</Text>
                                     <Text style={{ fontSize: 12, color: theme.text }}>{formatVND(selectedInvoice.subscriptionAmount)} VND</Text>
                                   </View>
                                 )}
                                 {selectedInvoice.sepayAmount > 0 && (
                                   <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                                    <Text style={{ fontSize: 12, color: theme.muted }}>Auto-Payment add-on</Text>
+                                    <Text style={{ fontSize: 12, color: theme.muted }}>{t("bossDashboardBillingAutoPayAddon")}</Text>
                                     <Text style={{ fontSize: 12, color: theme.text }}>{formatVND(selectedInvoice.sepayAmount)} VND</Text>
                                   </View>
                                 )}
                                 <View style={{ borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 6, marginTop: 2, flexDirection: "row", justifyContent: "space-between" }}>
-                                  <Text style={{ fontSize: 13, fontWeight: "600", color: theme.text }}>Total</Text>
+                                  <Text style={{ fontSize: 13, fontWeight: "600", color: theme.text }}>{t("bossDashboardBillingTotal")}</Text>
                                   <Text style={{ fontSize: 13, fontWeight: "700", color: theme.purple400 }}>{formatVND(selectedInvoice.totalAmount)} VND</Text>
                                 </View>
                                 {selectedInvoice.paidAt && (
                                   <Text style={{ fontSize: 11, color: "#4ade80", marginTop: 2 }}>
-                                    Paid: {new Date(selectedInvoice.paidAt).toLocaleString()}
+                                    {t("bossDashboardBillingPaid")}: {new Date(selectedInvoice.paidAt).toLocaleString()}
                                   </Text>
                                 )}
                                 {selectedInvoice.paymentRef && (
                                   <Text style={{ fontSize: 11, fontFamily: "monospace", color: theme.subtle }}>
-                                    Ref: {selectedInvoice.paymentRef}
+                                    {t("bossDashboardBillingRef")}: {selectedInvoice.paymentRef}
                                   </Text>
                                 )}
-                                <Text style={{ fontSize: 11, color: theme.muted, marginTop: 4 }}>Tap to collapse</Text>
+                                <Text style={{ fontSize: 11, color: theme.muted, marginTop: 4 }}>{t("bossDashboardBillingTapCollapse")}</Text>
                               </View>
                             ) : (
                               /* Collapsed summary for all statuses */
                               <View style={{ gap: 4 }}>
                                 <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                                  <Text style={{ fontSize: 13, color: theme.muted }}>Payments</Text>
+                                  <Text style={{ fontSize: 13, color: theme.muted }}>{t("bossDashboardBillingPayments")}</Text>
                                   <Text style={{ fontSize: 13, color: theme.text }}>{inv.totalCheckins}</Text>
                                 </View>
                                 <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                                   <Text style={{ fontSize: 14, fontWeight: "700", color: isPaid ? "#4ade80" : theme.purple400 }}>
                                     {formatVND(inv.totalAmount)} VND
                                   </Text>
-                                  {isPaid && <Text style={{ fontSize: 12, color: "#4ade80" }}>✓ Tap for details</Text>}
+                                  {isPaid && <Text style={{ fontSize: 12, color: "#4ade80" }}>{t("bossDashboardBillingTapDetails")}</Text>}
                                 </View>
                               </View>
                             )}
@@ -1326,7 +1176,7 @@ export function StaffBossDashboardScreen() {
                                   }}
                                 >
                                   <Text style={{ fontSize: 14, fontWeight: "600", color: showQR === inv.id ? theme.muted : "#fff" }}>
-                                    {showQR === inv.id ? "Hide QR ▲" : "Pay now — scan QR ▼"}
+                                    {showQR === inv.id ? t("bossDashboardBillingHideQR") : t("bossDashboardBillingPayNow")}
                                   </Text>
                                 </TouchableOpacity>
 
@@ -1339,20 +1189,20 @@ export function StaffBossDashboardScreen() {
                                         resizeMode="contain"
                                       />
                                     ) : (
-                                      <Text style={{ fontSize: 13, color: "#ef4444" }}>Could not generate QR code</Text>
+                                      <Text style={{ fontSize: 13, color: "#ef4444" }}>{t("bossDashboardBillingNoQR")}</Text>
                                     )}
                                     <Text style={{ fontSize: 13, color: theme.text }}>
-                                      Amount: <Text style={{ fontWeight: "700" }}>{formatVND(qrData.amount)} VND</Text>
+                                      {t("bossDashboardBillingAmount")}: <Text style={{ fontWeight: "700" }}>{formatVND(qrData.amount)} VND</Text>
                                     </Text>
                                     <Text style={{ fontSize: 11, fontFamily: "monospace", color: theme.muted }}>
-                                      Ref: {qrData.reference}
+                                      {t("bossDashboardBillingRef")}: {qrData.reference}
                                     </Text>
                                     <Text style={{ fontSize: 11, color: theme.subtle }}>
-                                      Payment confirmed automatically once received
+                                      {t("bossDashboardBillingAutoConfirm")}
                                     </Text>
                                     <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                                       <ActivityIndicator size="small" color={theme.purple400} />
-                                      <Text style={{ fontSize: 12, color: theme.purple400 }}>Waiting for payment...</Text>
+                                      <Text style={{ fontSize: 12, color: theme.purple400 }}>{t("bossDashboardBillingWaiting")}</Text>
                                     </View>
                                   </View>
                                 )}
@@ -1367,7 +1217,7 @@ export function StaffBossDashboardScreen() {
               )}
 
               {billingInvoices.length === 0 && !billingCurrent && (
-                <Text style={styles.empty}>No billing data yet</Text>
+                <Text style={styles.empty}>{t("bossDashboardBillingNoBilling")}</Text>
               )}
             </>
           )}

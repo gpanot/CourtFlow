@@ -18,14 +18,13 @@ import {
   Modal,
   FlatList,
   Pressable,
-  Switch,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { api, ApiRequestError } from "../../lib/api-client";
+import { api } from "../../lib/api-client";
 import { useAuthStore } from "../../stores/auth-store";
 import type { AppColors } from "../../theme/palettes";
 import { useAppColors } from "../../theme/use-app-colors";
@@ -38,9 +37,9 @@ import {
   type SoundId,
 } from "../../lib/sound-options";
 import { playPaymentNotificationSound } from "../../lib/play-payment-notification-sound";
-import { useStaffPushRegistration } from "../../hooks/useStaffPushRegistration";
 import type { VenuePaymentSettings } from "../../types/api";
 import type { StaffStackParamList } from "../../navigation/types";
+import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
 
 function createStyles(t: AppColors) {
   return StyleSheet.create({
@@ -129,20 +128,6 @@ function createStyles(t: AppColors) {
     saveBtnText: { color: "#fff", fontSize: 14, fontWeight: "600" },
     disabledBtn: { opacity: 0.5 },
 
-    hapticRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      justifyContent: "space-between",
-      gap: 12,
-      marginTop: 6,
-      paddingTop: 8,
-      borderTopWidth: 1,
-      borderTopColor: t.border,
-    },
-    hapticLabelWrap: { flex: 1, gap: 2 },
-    hapticTitle: { fontSize: 14, fontWeight: "600", color: t.text },
-    hapticSub: { fontSize: 12, color: t.muted, lineHeight: 16 },
-
     soundHint: { fontSize: 12, color: t.muted, lineHeight: 17, marginBottom: 4 },
     soundRow: {
       flexDirection: "row",
@@ -218,6 +203,7 @@ export function StaffPaymentSettingsScreen() {
     useNavigation<NativeStackNavigationProp<StaffStackParamList>>();
   const theme = useAppColors();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { t } = useTabletKioskLocale();
 
   // ── Payment settings state ──
   const [settings, setSettings] = useState<VenuePaymentSettings>({
@@ -236,23 +222,11 @@ export function StaffPaymentSettingsScreen() {
   const [bankModalOpen, setBankModalOpen] = useState(false);
   const [bankSearch, setBankSearch] = useState("");
 
-  // ── Push notifications state ──
-  const [pushEnabled, setPushEnabled] = useState(false);
-  const [pushToggling, setPushToggling] = useState(false);
-  useStaffPushRegistration(pushEnabled);
-
   // ── Sound state ──
   const [soundId, setSoundId] = useState<SoundId>(DEFAULT_SOUND_ID);
   const [soundModalOpen, setSoundModalOpen] = useState(false);
 
   // ── Load data ──
-  useEffect(() => {
-    api
-      .get<{ pushNotificationsEnabled: boolean }>("/api/auth/staff-me")
-      .then((data) => setPushEnabled(data.pushNotificationsEnabled))
-      .catch(() => {});
-  }, []);
-
   useEffect(() => {
     void getStoredSoundId().then(setSoundId);
   }, []);
@@ -320,6 +294,7 @@ export function StaffPaymentSettingsScreen() {
 
   useLayoutEffect(() => {
     navigation.setOptions({
+      title: t("staffPaymentSettings"),
       headerStyle: { backgroundColor: theme.bg },
       headerTintColor: theme.text,
       headerTitleStyle: { color: theme.text },
@@ -351,34 +326,13 @@ export function StaffPaymentSettingsScreen() {
                   color: isDirty ? "#fff" : theme.dimmed,
                 }}
               >
-                {saved ? "Saved ✓" : "Save"}
+                {saved ? t("paySettingsSaved") : t("paySettingsSave")}
               </Text>
             )}
           </TouchableOpacity>
         ),
     });
-  }, [navigation, theme, isDirty, saving, saved, loading, handleSave]);
-
-  const handleTogglePush = useCallback(async (next: boolean) => {
-    setPushEnabled(next);
-    setPushToggling(true);
-    try {
-      await api.post("/api/staff/push/preferences", {
-        pushNotificationsEnabled: next,
-      });
-    } catch (err) {
-      setPushEnabled(!next);
-      const detail =
-        err instanceof ApiRequestError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : "Could not update push notification preference.";
-      Alert.alert("Error", detail);
-    } finally {
-      setPushToggling(false);
-    }
-  }, []);
+  }, [navigation, theme, isDirty, saving, saved, loading, handleSave, t]);
 
   const handleSelectSound = async (id: SoundId) => {
     setSoundId(id);
@@ -432,7 +386,7 @@ export function StaffPaymentSettingsScreen() {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Ionicons name="card-outline" size={16} color={theme.green400} />
-              <Text style={styles.sectionHeaderText}>Payment Settings</Text>
+              <Text style={styles.sectionHeaderText}>{t("paySettingsTitle")}</Text>
             </View>
 
             {loading ? (
@@ -440,7 +394,7 @@ export function StaffPaymentSettingsScreen() {
             ) : (
               <>
                 <View style={{ marginBottom: 4 }}>
-                  <Text style={styles.fieldLabel}>Session Fee (VND)</Text>
+                  <Text style={styles.fieldLabel}>{t("paySettingsSessionFee")}</Text>
                   <TextInput
                     style={styles.input}
                     value={settings.sessionFee ? settings.sessionFee.toLocaleString("en") : ""}
@@ -453,7 +407,7 @@ export function StaffPaymentSettingsScreen() {
                   />
                 </View>
                 <View style={{ marginBottom: 4 }}>
-                  <Text style={styles.fieldLabel}>Bank</Text>
+                  <Text style={styles.fieldLabel}>{t("paySettingsBank")}</Text>
                   <TouchableOpacity
                     style={styles.bankSelectField}
                     onPress={() => {
@@ -466,7 +420,7 @@ export function StaffPaymentSettingsScreen() {
                       style={selectedBankLabel ? styles.bankSelectText : styles.bankSelectPlaceholder}
                       numberOfLines={1}
                     >
-                      {selectedBankLabel || "Select bank"}
+                      {selectedBankLabel || t("paySettingsSelectBank")}
                     </Text>
                     <Ionicons name="chevron-down" size={18} color={theme.dimmed} />
                   </TouchableOpacity>
@@ -474,23 +428,23 @@ export function StaffPaymentSettingsScreen() {
 
                 <View style={styles.gridRow}>
                   <View style={styles.gridCol}>
-                    <Text style={styles.fieldLabel}>Account Number</Text>
+                    <Text style={styles.fieldLabel}>{t("paySettingsAccountNumber")}</Text>
                     <TextInput
                       style={styles.input}
                       value={settings.bankAccount}
                       onChangeText={(v) => updateField("bankAccount", v)}
-                      placeholder="Account #"
+                      placeholder={t("paySettingsAccountPlaceholder")}
                       placeholderTextColor={theme.dimmed}
                       keyboardType="numeric"
                     />
                   </View>
                   <View style={styles.gridCol}>
-                    <Text style={styles.fieldLabel}>Account Holder</Text>
+                    <Text style={styles.fieldLabel}>{t("paySettingsAccountHolder")}</Text>
                     <TextInput
                       style={styles.input}
                       value={settings.bankOwnerName}
                       onChangeText={(v) => updateField("bankOwnerName", v)}
-                      placeholder="Account name"
+                      placeholder={t("paySettingsAccountNamePlaceholder")}
                       placeholderTextColor={theme.dimmed}
                       autoCapitalize="characters"
                     />
@@ -498,10 +452,10 @@ export function StaffPaymentSettingsScreen() {
                 </View>
 
                 <View style={styles.autoApprovalBox}>
-                  <Text style={styles.autoApprovalTitle}>Automatic payment approval</Text>
+                  <Text style={styles.autoApprovalTitle}>{t("paySettingsAutoApproval")}</Text>
                   <View style={styles.gridRow}>
                     <View style={styles.gridCol}>
-                      <Text style={styles.fieldLabel}>Phone</Text>
+                      <Text style={styles.fieldLabel}>{t("paySettingsPhone")}</Text>
                       <TextInput
                         style={styles.input}
                         value={settings.autoApprovalPhone ?? ""}
@@ -531,7 +485,7 @@ export function StaffPaymentSettingsScreen() {
                       style={styles.qrImage}
                       resizeMode="contain"
                     />
-                    <Text style={styles.qrHint}>QR Preview</Text>
+                    <Text style={styles.qrHint}>{t("paySettingsQRPreview")}</Text>
                   </View>
                 )}
 
@@ -540,39 +494,13 @@ export function StaffPaymentSettingsScreen() {
             )}
           </View>
 
-          {/* Push Notifications */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="notifications-outline" size={16} color={theme.blue400} />
-              <Text style={styles.sectionHeaderText}>Push Notifications</Text>
-            </View>
-            <View style={styles.hapticRow}>
-              <View style={styles.hapticLabelWrap}>
-                <Text style={styles.hapticTitle}>Payment alerts</Text>
-                <Text style={styles.hapticSub}>
-                  Receive push notifications when a payment is pending or confirmed,
-                  even when the app is in the background.
-                </Text>
-              </View>
-              <Switch
-                value={pushEnabled}
-                onValueChange={(next) => void handleTogglePush(next)}
-                disabled={pushToggling}
-                trackColor={{ false: theme.borderLight, true: theme.blue500 }}
-                thumbColor="#ffffff"
-              />
-            </View>
-          </View>
-
           {/* Sound */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Ionicons name="volume-high-outline" size={16} color={theme.blue400} />
-              <Text style={styles.sectionHeaderText}>Notification Sound</Text>
+              <Text style={styles.sectionHeaderText}>{t("paySettingsNotificationSound")}</Text>
             </View>
-            <Text style={styles.soundHint}>
-              Sound when a payment arrives or is confirmed.
-            </Text>
+            <Text style={styles.soundHint}>{t("paySettingsNotificationSoundHint")}</Text>
             <View style={styles.soundRow}>
               <TouchableOpacity
                 style={styles.soundDropdown}
@@ -601,12 +529,12 @@ export function StaffPaymentSettingsScreen() {
         <View style={styles.modalOverlay}>
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setBankModalOpen(false)} />
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Select bank</Text>
+            <Text style={styles.modalTitle}>{t("paySettingsSelectBank")}</Text>
             <TextInput
               style={styles.modalSearch}
               value={bankSearch}
               onChangeText={setBankSearch}
-              placeholder="Search by name or BIN…"
+              placeholder={t("paySettingsSearchBank")}
               placeholderTextColor={theme.dimmed}
             />
             <FlatList
@@ -628,7 +556,7 @@ export function StaffPaymentSettingsScreen() {
               )}
             />
             <TouchableOpacity style={styles.modalClose} onPress={() => setBankModalOpen(false)}>
-              <Text style={styles.modalCloseText}>Close</Text>
+              <Text style={styles.modalCloseText}>{t("paySettingsClose")}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -639,7 +567,7 @@ export function StaffPaymentSettingsScreen() {
         <View style={styles.modalOverlay}>
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setSoundModalOpen(false)} />
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Notification Sound</Text>
+            <Text style={styles.modalTitle}>{t("paySettingsNotificationSound")}</Text>
             <FlatList
               data={SOUND_OPTIONS}
               keyExtractor={(item) => item.id}
@@ -655,7 +583,7 @@ export function StaffPaymentSettingsScreen() {
               )}
             />
             <TouchableOpacity style={styles.modalClose} onPress={() => setSoundModalOpen(false)}>
-              <Text style={styles.modalCloseText}>Close</Text>
+              <Text style={styles.modalCloseText}>{t("paySettingsClose")}</Text>
             </TouchableOpacity>
           </View>
         </View>

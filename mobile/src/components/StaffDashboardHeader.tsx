@@ -9,6 +9,7 @@ import type { AppColors } from "../theme/palettes";
 import { useAppColors } from "../theme/use-app-colors";
 import { useThemeStore } from "../stores/theme-store";
 import type { StaffStackParamList } from "../navigation/types";
+import { useTabletKioskLocale } from "../hooks/useTabletKioskLocale";
 
 function createHeaderStyles(t: AppColors) {
   return StyleSheet.create({
@@ -74,9 +75,10 @@ export function StaffDashboardHeader() {
   const styles = useMemo(() => createHeaderStyles(theme), [theme]);
   const themeMode = useThemeStore((s) => s.mode);
   const toggleTheme = useThemeStore((s) => s.toggleMode);
+  const { t } = useTabletKioskLocale();
 
   const venueName =
-    venues.find((v) => v.id === venueId)?.name ?? "Select venue";
+    venues.find((v) => v.id === venueId)?.name ?? t("staffSelectVenue");
 
   return (
     <View style={[styles.wrapper, { paddingTop: insets.top }]}>
@@ -94,7 +96,7 @@ export function StaffDashboardHeader() {
           onPress={() => nav.navigate("StaffProfile")}
           activeOpacity={0.7}
         >
-          <Text style={styles.title}>Staff Dashboard</Text>
+          <Text style={styles.title}>{t("staffDashboard")}</Text>
           <Text style={styles.venue} numberOfLines={1}>
             {venueName}
           </Text>

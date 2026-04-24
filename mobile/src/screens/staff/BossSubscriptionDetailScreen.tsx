@@ -17,6 +17,7 @@ import { resolveMediaUrl } from "../../lib/media-url";
 import { useAppColors } from "../../theme/use-app-colors";
 import type { AppColors } from "../../theme/palettes";
 import type { StaffStackParamList } from "../../navigation/types";
+import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
 
 interface SubscriptionDetail {
   id: string;
@@ -209,6 +210,7 @@ export function BossSubscriptionDetailScreen() {
   const insets = useSafeAreaInsets();
   const theme = useAppColors();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { t } = useTabletKioskLocale();
 
   const [detail, setDetail] = useState<SubscriptionDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -217,14 +219,14 @@ export function BossSubscriptionDetailScreen() {
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      title: "Subscription Detail",
+      title: t("bossSubDetailTitle"),
       headerStyle: { backgroundColor: theme.bg },
       headerTintColor: theme.text,
       headerTitleStyle: { color: theme.text, fontWeight: "700" },
       headerShadowVisible: false,
       headerBackTitle: "",
     });
-  }, [navigation, theme]);
+  }, [navigation, theme, t]);
 
   const fetchDetail = useCallback(async () => {
     setError(null);
@@ -257,9 +259,9 @@ export function BossSubscriptionDetailScreen() {
     return (
       <View style={styles.errorBox}>
         <Ionicons name="warning-outline" size={32} color={theme.red500} />
-        <Text style={styles.errorText}>{error ?? "Subscription not found"}</Text>
+        <Text style={styles.errorText}>{error ?? t("bossSubDetailNotFound")}</Text>
         <TouchableOpacity style={styles.retryBtn} onPress={() => void fetchDetail()}>
-          <Text style={styles.retryText}>Retry</Text>
+          <Text style={styles.retryText}>{t("bossSubDetailRetry")}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -315,16 +317,16 @@ export function BossSubscriptionDetailScreen() {
 
         <View style={styles.metaGrid}>
           <View style={styles.metaRow}>
-            <Text style={styles.metaLabel}>Purchased</Text>
+            <Text style={styles.metaLabel}>{t("bossSubDetailPurchased")}</Text>
             <Text style={styles.metaValue}>{formatDate(detail.activatedAt)}</Text>
           </View>
           <View style={styles.metaRow}>
-            <Text style={styles.metaLabel}>Expires</Text>
+            <Text style={styles.metaLabel}>{t("bossSubDetailExpires")}</Text>
             <Text style={styles.metaValue}>{formatDate(detail.expiresAt)}</Text>
           </View>
           {detail.usages.length > 0 && (
             <View style={styles.metaRow}>
-              <Text style={styles.metaLabel}>Last check-in</Text>
+              <Text style={styles.metaLabel}>{t("bossSubDetailLastCheckIn")}</Text>
               <Text style={styles.metaValue}>{formatDate(detail.usages[0].checkedInAt)}</Text>
             </View>
           )}
@@ -336,18 +338,18 @@ export function BossSubscriptionDetailScreen() {
               <View style={[styles.sessionsBarFill, { width: `${fillRatio * 100}%` }]} />
             </View>
             <Text style={styles.sessionsBarLabel}>
-              {used}/{total} used
+              {used}/{total} {t("bossSubDetailUsed")}
             </Text>
           </View>
         ) : (
-          <Text style={[styles.metaValue, { marginTop: 8 }]}>Unlimited · {used} used</Text>
+          <Text style={[styles.metaValue, { marginTop: 8 }]}>{t("bossSubDetailUnlimited")} · {used} {t("bossSubDetailUsed")}</Text>
         )}
       </View>
 
       {/* Check-ins section header */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>
-          Check-in history ({detail.usages.length})
+          {t("bossSubDetailCheckInHistory")} ({detail.usages.length})
         </Text>
       </View>
     </>
@@ -361,7 +363,7 @@ export function BossSubscriptionDetailScreen() {
       ListHeaderComponent={renderHeader}
       contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
       ListEmptyComponent={
-        <Text style={styles.emptyText}>No check-ins yet for this subscription.</Text>
+        <Text style={styles.emptyText}>{t("bossSubDetailNoCheckIns")}</Text>
       }
       renderItem={({ item, index }) => (
         <View style={styles.checkInCard}>

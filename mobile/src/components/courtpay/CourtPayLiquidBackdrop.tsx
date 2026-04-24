@@ -14,8 +14,8 @@ export function CourtPayLiquidBackdrop({ mode = "dark", accent = "green" }: Prop
   const isLight = mode === "light";
   const orbColor = ACCENT_MAP[accent].orbColor;
   const baseColor = isLight ? ACCENT_MAP[accent].backdropBaseLight : ACCENT_MAP[accent].backdropBase;
-  const orbOpacity = isLight ? 0.55 : 0.85;
-  const orbOpacityDim = isLight ? 0.5 : 0.9;
+  const orbOpacity = isLight ? 0.35 : 0.85;
+  const orbOpacityDim = isLight ? 0.3 : 0.9;
 
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -67,8 +67,8 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   orbVioletLight: {
-    backgroundColor: "rgba(124, 58, 237, 0.14)",
-    opacity: 0.6,
+    backgroundColor: "rgba(124, 58, 237, 0.10)",
+    opacity: 0.4,
   },
   orbAccent: {
     width: 380,
@@ -92,6 +92,6 @@ const styles = StyleSheet.create({
       : null),
   },
   vignetteLight: {
-    backgroundColor: "rgba(255, 255, 255, 0.25)",
+    backgroundColor: "rgba(255, 255, 255, 0.45)",
   },
 });

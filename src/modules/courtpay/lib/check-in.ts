@@ -101,7 +101,7 @@ export async function createCheckInPayment(
 
   const checkInPlayer = await prisma.checkInPlayer.findUnique({
     where: { id: input.playerId },
-    select: { name: true },
+    select: { name: true, phone: true },
   });
 
   let vietQR: string | null = null;
@@ -137,6 +137,8 @@ export async function createCheckInPayment(
     amount: input.amount,
     vietQR,
     paymentRef,
+    playerName: checkInPlayer?.name,
+    playerPhone: checkInPlayer?.phone,
   };
 }
 

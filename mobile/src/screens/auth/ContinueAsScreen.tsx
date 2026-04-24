@@ -12,6 +12,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuthStore } from "../../stores/auth-store";
 import { C } from "../../theme/colors";
 import type { RootStackScreenProps } from "../../navigation/types";
+import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
+import { TabletLanguageToggle } from "../../components/TabletLanguageToggle";
 
 interface ModeOption {
   key: string;
@@ -23,36 +25,6 @@ interface ModeOption {
   accentBg: string;
 }
 
-const modes: ModeOption[] = [
-  {
-    key: "staff",
-    label: "Staff Dashboard",
-    description: "Manage sessions, check-ins, and payments",
-    icon: "people-outline",
-    route: "StaffStack",
-    accent: C.blue400,
-    accentBg: "rgba(37,99,235,0.15)",
-  },
-  {
-    key: "admin",
-    label: "Admin",
-    description: "Full admin panel (web view)",
-    icon: "settings-outline",
-    route: "AdminWebView",
-    accent: C.purple400,
-    accentBg: "rgba(168,85,247,0.15)",
-  },
-  {
-    key: "tablet",
-    label: "Tablet Mode",
-    description: "Self check-in or CourtPay kiosk",
-    icon: "tablet-landscape-outline",
-    route: "TabletStack",
-    accent: C.green400,
-    accentBg: "rgba(34,197,94,0.15)",
-  },
-];
-
 export function ContinueAsScreen({
   navigation,
 }: RootStackScreenProps<"ContinueAs">) {
@@ -60,7 +32,39 @@ export function ContinueAsScreen({
   const staffName = useAuthStore((s) => s.staffName);
   const role = useAuthStore((s) => s.role);
   const clearAuth = useAuthStore((s) => s.clearAuth);
+  const { locale, toggleLocale, t } = useTabletKioskLocale();
   const canAccessAdmin = role === "superadmin";
+
+  const modes: ModeOption[] = [
+    {
+      key: "staff",
+      label: t("continueAsStaffLabel"),
+      description: t("continueAsStaffDesc"),
+      icon: "people-outline",
+      route: "StaffStack",
+      accent: C.blue400,
+      accentBg: "rgba(37,99,235,0.15)",
+    },
+    {
+      key: "admin",
+      label: t("continueAsAdminLabel"),
+      description: t("continueAsAdminDesc"),
+      icon: "settings-outline",
+      route: "AdminWebView",
+      accent: C.purple400,
+      accentBg: "rgba(168,85,247,0.15)",
+    },
+    {
+      key: "tablet",
+      label: t("continueAsTabletLabel"),
+      description: t("continueAsTabletDesc"),
+      icon: "tablet-landscape-outline",
+      route: "TabletStack",
+      accent: C.green400,
+      accentBg: "rgba(34,197,94,0.15)",
+    },
+  ];
+
   const visibleModes = canAccessAdmin
     ? modes
     : modes.filter((mode) => mode.key !== "admin");
@@ -68,8 +72,8 @@ export function ContinueAsScreen({
   const handleSelect = (mode: ModeOption) => {
     if (mode.route === "AdminWebView" && !canAccessAdmin) {
       Alert.alert(
-        "Access restricted",
-        "Only admin accounts can access the Admin panel."
+        t("continueAsAccessRestricted"),
+        t("continueAsAccessRestrictedMsg")
       );
       return;
     }
@@ -77,10 +81,10 @@ export function ContinueAsScreen({
   };
 
   const handleLogout = () => {
-    Alert.alert("Log Out", "Are you sure?", [
-      { text: "Cancel", style: "cancel" },
+    Alert.alert(t("continueAsLogOutTitle"), t("continueAsLogOutMsg"), [
+      { text: t("subsCancel"), style: "cancel" },
       {
-        text: "Log Out",
+        text: t("continueAsLogOutTitle"),
         style: "destructive",
         onPress: () => {
           clearAuth();
@@ -96,16 +100,19 @@ export function ContinueAsScreen({
   };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 40 }]}>
+    <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
+      <View style={styles.topBar}>
+        <TabletLanguageToggle locale={locale} onToggle={toggleLocale} />
+      </View>
       <View style={styles.header}>
         <View style={styles.welcomePill}>
           <Ionicons name="hand-right-outline" size={13} color={C.green400} />
           <Text style={styles.welcomeText}>
-            Welcome{staffName ? `, ${staffName}` : ""}
+            {t("continueAsWelcome")}{staffName ? `, ${staffName}` : ""}
           </Text>
         </View>
-        <Text style={styles.title}>Continue as</Text>
-        <Text style={styles.subtitle}>Select your role to get started</Text>
+        <Text style={styles.title}>{t("continueAsTitle")}</Text>
+        <Text style={styles.subtitle}>{t("continueAsSubtitle")}</Text>
       </View>
 
       <View style={styles.cards}>
@@ -136,7 +143,7 @@ export function ContinueAsScreen({
         activeOpacity={0.7}
       >
         <Ionicons name="log-out-outline" size={18} color={C.red400} />
-        <Text style={styles.logoutText}>Sign out</Text>
+        <Text style={styles.logoutText}>{t("continueAsSignOut")}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -147,6 +154,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: C.bg,
     paddingHorizontal: 20,
+  },
+  topBar: {
+    alignItems: "flex-end",
+    marginBottom: 24,
   },
   header: {
     marginBottom: 32,

@@ -117,6 +117,7 @@ export async function POST(request: NextRequest) {
       amount,
       vietQR,
       playerName: player.name,
+      playerPhone: player.phone,
       bankName: venue.bankName,
       bankAccount: venue.bankAccount,
       bankOwnerName: venue.bankOwnerName,

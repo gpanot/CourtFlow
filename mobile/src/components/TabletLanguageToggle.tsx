@@ -29,19 +29,11 @@ export function TabletLanguageToggle({ locale, onToggle }: Props) {
 const styles = StyleSheet.create({
   btn: {
     borderRadius: 10,
-    borderWidth: 1,
-    borderColor: "rgba(64,64,64,0.95)",
-    backgroundColor: "rgba(23,23,23,0.92)",
     paddingHorizontal: 10,
     paddingVertical: 8,
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 1 },
   },
   pressed: {
-    borderColor: "rgba(115,115,115,0.95)",
-    backgroundColor: "rgba(38,38,38,0.92)",
+    opacity: 0.6,
   },
   flag: {
     fontSize: 22,
