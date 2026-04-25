@@ -56,7 +56,9 @@ export function RegistrationForm({ phone: initPhone, onSubmit, onBack }: Registr
 
       <div className="mt-8 space-y-5 max-w-sm mx-auto w-full">
         <div>
-          <label className="block text-sm font-medium text-neutral-300 mb-1">Name</label>
+          <label className="block text-sm font-medium text-neutral-300 mb-1">
+            Name (same as Reclub)
+          </label>
           <input
             value={name}
             onChange={(e) => { setName(e.target.value); setError(""); }}
@@ -85,9 +87,11 @@ export function RegistrationForm({ phone: initPhone, onSubmit, onBack }: Registr
                 key={g.value}
                 onClick={() => { setGender(g.value); setError(""); }}
                 className={cn(
-                  "flex-1 rounded-xl border py-3 text-sm font-medium transition-colors",
+                  "flex-1 rounded-xl border-2 py-3 text-sm font-medium transition-colors",
                   gender === g.value
-                    ? "border-purple-500 bg-purple-500/10 text-purple-400"
+                    ? g.value === "male"
+                      ? "border-sky-400 bg-sky-500/35 text-sky-100"
+                      : "border-rose-400 bg-rose-500/35 text-rose-100"
                     : "border-neutral-700 bg-neutral-900 text-neutral-400 hover:border-neutral-600"
                 )}
               >
@@ -105,9 +109,13 @@ export function RegistrationForm({ phone: initPhone, onSubmit, onBack }: Registr
                 key={l.value}
                 onClick={() => { setSkillLevel(l.value); setError(""); }}
                 className={cn(
-                  "flex-1 rounded-xl border py-3 text-xs font-medium transition-colors",
+                  "flex-1 rounded-xl border-2 py-3 text-xs font-medium transition-colors",
                   skillLevel === l.value
-                    ? "border-purple-500 bg-purple-500/10 text-purple-400"
+                    ? l.value === "beginner"
+                      ? "border-green-500 bg-green-500/35 text-green-50"
+                      : l.value === "intermediate"
+                        ? "border-red-500 bg-red-500/35 text-red-50"
+                        : "border-yellow-500 bg-yellow-500/35 text-yellow-950"
                     : "border-neutral-700 bg-neutral-900 text-neutral-400 hover:border-neutral-600"
                 )}
               >

@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
 
     const playerRecord = await prisma.player.findUnique({
       where: { id: playerId },
-      select: { name: true, phone: true },
+      select: { name: true, phone: true, skillLevel: true },
     });
     if (!playerRecord) return error("Player not found", 404);
     playerName = playerRecord.name;
@@ -135,6 +135,7 @@ export async function POST(request: NextRequest) {
         vietQR: resumeQR,
         playerName,
         playerPhone,
+        skillLevel: playerRecord.skillLevel,
         isReturning: true,
         resuming: true,
         bankName: venue.bankName,
@@ -188,6 +189,7 @@ export async function POST(request: NextRequest) {
       vietQR,
       playerName,
       playerPhone,
+      skillLevel: playerRecord.skillLevel,
       isReturning: true,
       bankName: venue.bankName,
       bankAccount: venue.bankAccount,

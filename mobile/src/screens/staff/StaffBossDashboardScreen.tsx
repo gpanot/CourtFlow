@@ -27,8 +27,8 @@ type Tab = "today" | "history" | "subscriptions" | "players" | "billing";
 type GenderFilter = "all" | "male" | "female";
 
 interface TodayData {
-  /** Sum of confirmed payment amounts attributed to sessions that opened today (deduped). */
-  paymentsTodaySessionsTotal: number;
+  /** Still returned by API; Revenue card covers money. */
+  paymentsTodaySessionsTotal?: number;
   paymentsTodaySessionsCount: number;
   revenueToday: number;
   activeSubscribers: number;
@@ -254,7 +254,6 @@ function createStyles(t: AppColors) {
     },
     statLabel: { fontSize: 11, color: t.muted, marginBottom: 2 },
     statValue: { fontSize: 20, fontWeight: "700", color: t.text },
-    statSub: { fontSize: 11, color: t.muted, marginTop: 4 },
     statPurple: { color: t.purple400 },
     statYellow: { color: t.amber400 },
     sectionTitle: { fontSize: 13, fontWeight: "600", color: t.textSecondary, marginBottom: 4 },
@@ -610,10 +609,7 @@ export function StaffBossDashboardScreen() {
                 <View style={styles.statCard}>
                   <Text style={styles.statLabel}>{t("bossDashboardSessionPayments")}</Text>
                   <Text style={styles.statValue}>
-                    {formatVND(todayData.paymentsTodaySessionsTotal ?? 0)}
-                  </Text>
-                  <Text style={styles.statSub}>
-                    {todayData.paymentsTodaySessionsCount ?? 0} {t("bossDashboardPayments")}
+                    {(todayData.paymentsTodaySessionsCount ?? 0).toLocaleString()}
                   </Text>
                 </View>
                 <View style={styles.statCard}>

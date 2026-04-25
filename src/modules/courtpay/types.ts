@@ -30,7 +30,12 @@ export interface ActiveSubscriptionInfo {
 
 export interface IdentifyResult {
   found: boolean;
-  player: { id: string; name: string; phone: string } | null;
+  player: {
+    id: string;
+    name: string;
+    phone: string;
+    skillLevel?: string | null;
+  } | null;
   activeSubscription: ActiveSubscriptionInfo | null;
   latestSubscription: ActiveSubscriptionInfo | null;
 }
@@ -43,6 +48,8 @@ export interface PaymentResult {
   /** Included for client UIs (e.g. staff awaiting-payment screen). */
   playerName?: string;
   playerPhone?: string;
+  /** CheckInPlayer skill level — VietQR frame tint on kiosk. */
+  skillLevel?: string | null;
 }
 
 export interface SepayWebhookPayload {

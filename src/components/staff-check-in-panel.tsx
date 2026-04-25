@@ -15,6 +15,10 @@ import { AlertTriangle, Loader2, UserPlus, Camera, SwitchCamera } from "lucide-r
 import { testCameraSupport } from "@/lib/camera-test";
 import { KioskConfirmationScreen } from "@/components/kiosk-confirmation-screen";
 import { useSocket } from "@/hooks/use-socket";
+import {
+  COURTPAY_LEVEL_QR_FRAME,
+  parseCourtPaySkillLevel,
+} from "@/modules/courtpay/lib/skill-level-ui";
 
 const GENDERS = ["male", "female"] as const;
 
@@ -84,6 +88,11 @@ interface PendingPaymentData {
   playerName: string;
   skillLevel: string;
   gender: string;
+}
+
+function courtPayQrFrameClass(skillLevel: string | null | undefined): string {
+  const lvl = parseCourtPaySkillLevel(skillLevel ?? undefined);
+  return lvl ? COURTPAY_LEVEL_QR_FRAME[lvl] : "";
 }
 
 function readDraft(): CheckInDraft {
@@ -1282,7 +1291,12 @@ ${test.error ? `Error: ${test.error}` : ''}
             {paymentMode === "vietqr" ? (
               <>
                 {pendingPayment.vietQR ? (
-                  <div className="mx-auto mt-4 w-fit rounded-xl bg-white p-2">
+                  <div
+                    className={cn(
+                      "mx-auto mt-4 w-fit rounded-xl bg-white p-2",
+                      courtPayQrFrameClass(pendingPayment.skillLevel)
+                    )}
+                  >
                     <img src={pendingPayment.vietQR} alt="VietQR" className="h-56 w-56 object-contain" />
                   </div>
                 ) : (

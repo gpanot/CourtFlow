@@ -39,7 +39,12 @@ export interface ActiveSubscriptionInfo {
 
 export interface IdentifyResult {
   found: boolean;
-  player: { id: string; name: string; phone: string } | null;
+  player: {
+    id: string;
+    name: string;
+    phone: string;
+    skillLevel?: string | null;
+  } | null;
   activeSubscription: ActiveSubscriptionInfo | null;
 }
 

@@ -81,22 +81,6 @@ export async function getDevicePushToken(): Promise<PushTokenResult> {
     log("Notification channel created");
   }
 
-  // Register notification category with Confirm / Cancel action buttons.
-  // Works on Android; on iOS this controls lock-screen/banner actions.
-  await Notifications.setNotificationCategoryAsync("payment_new", [
-    {
-      identifier: "confirm_payment",
-      buttonTitle: "✓ Confirm",
-      options: { opensAppToForeground: false },
-    },
-    {
-      identifier: "cancel_payment",
-      buttonTitle: "✕ Cancel",
-      options: { opensAppToForeground: false, isDestructive: true },
-    },
-  ]);
-  log("Notification category 'payment_new' registered");
-
   // Retry loop — SERVICE_NOT_AVAILABLE is transient after fresh install
   let lastErr = "";
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {

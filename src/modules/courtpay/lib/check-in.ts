@@ -7,6 +7,33 @@ import { getActiveSubscription, getLatestSubscription, deductSession } from "./s
 import type { IdentifyResult, PaymentResult } from "../types";
 
 /**
+ * When `CheckInPlayer.skill_level` is null but a core `Player` shares the same phone,
+ * copy skill from `Player` into `CheckInPlayer` so CourtPay APIs and kiosks match the
+ * roster (e.g. admin shows Advanced while check_in_players was stale/null).
+ */
+export async function ensureCourtPayCheckInPlayerSkillSynced(
+  checkInPlayerId: string
+): Promise<void> {
+  const cip = await prisma.checkInPlayer.findUnique({
+    where: { id: checkInPlayerId },
+    select: { phone: true, skillLevel: true },
+  });
+  if (!cip?.phone || cip.skillLevel) return;
+  if (cip.phone.startsWith("__cp_")) return;
+
+  const core = await prisma.player.findUnique({
+    where: { phone: cip.phone },
+    select: { skillLevel: true },
+  });
+  if (core?.skillLevel == null) return;
+
+  await prisma.checkInPlayer.update({
+    where: { id: checkInPlayerId },
+    data: { skillLevel: core.skillLevel },
+  });
+}
+
+/**
  * Look up a CheckInPlayer by phone at a venue.
  */
 export async function identifyPlayer(
@@ -21,12 +48,26 @@ export async function identifyPlayer(
     return { found: false, player: null, activeSubscription: null, latestSubscription: null };
   }
 
-  const activeSubscription = await getActiveSubscription(player.id);
-  const latestSubscription = await getLatestSubscription(player.id);
+  await ensureCourtPayCheckInPlayerSkillSynced(player.id);
+  const refreshed = await prisma.checkInPlayer.findUnique({
+    where: { id: player.id },
+    select: { id: true, name: true, phone: true, skillLevel: true },
+  });
+  if (!refreshed) {
+    return { found: false, player: null, activeSubscription: null, latestSubscription: null };
+  }
+
+  const activeSubscription = await getActiveSubscription(refreshed.id);
+  const latestSubscription = await getLatestSubscription(refreshed.id);
 
   return {
     found: true,
-    player: { id: player.id, name: player.name, phone: player.phone },
+    player: {
+      id: refreshed.id,
+      name: refreshed.name,
+      phone: refreshed.phone,
+      skillLevel: refreshed.skillLevel,
+    },
     activeSubscription,
     latestSubscription,
   };
@@ -99,9 +140,11 @@ export async function createCheckInPayment(
     },
   });
 
+  await ensureCourtPayCheckInPlayerSkillSynced(input.playerId);
+
   const checkInPlayer = await prisma.checkInPlayer.findUnique({
     where: { id: input.playerId },
-    select: { name: true, phone: true },
+    select: { name: true, phone: true, skillLevel: true },
   });
 
   let vietQR: string | null = null;
@@ -139,6 +182,7 @@ export async function createCheckInPayment(
     paymentRef,
     playerName: checkInPlayer?.name,
     playerPhone: checkInPlayer?.phone,
+    skillLevel: checkInPlayer?.skillLevel ?? null,
   };
 }
 

@@ -15,6 +15,10 @@ import { TvTabletLanguageToggle } from "@/components/tv-tablet-language-toggle";
 import { useSuccessChime } from "@/hooks/use-success-chime";
 import { useSocket } from "@/hooks/use-socket";
 import { joinVenue } from "@/lib/socket-client";
+import {
+  COURTPAY_LEVEL_QR_FRAME,
+  parseCourtPaySkillLevel,
+} from "@/modules/courtpay/lib/skill-level-ui";
 
 /* ─── State machine ───────────────────────────────────────── */
 type KioskStep =
@@ -69,6 +73,8 @@ interface PaymentData {
   vietQR: string | null;
   playerName: string;
   isNew: boolean;
+  /** Raw player skill (beginner | intermediate | advanced) for VietQR frame. */
+  skillLevel?: string | null;
 }
 
 type VenueTabletSettings = { logoSpin?: boolean };
@@ -90,6 +96,11 @@ const ERROR_RESET_MS = 15_000;
 
 function formatVND(amount: number): string {
   return amount.toLocaleString("vi-VN");
+}
+
+function courtPayQrFrameClass(skillLevel: string | null | undefined): string {
+  const lvl = parseCourtPaySkillLevel(skillLevel ?? undefined);
+  return lvl ? COURTPAY_LEVEL_QR_FRAME[lvl] : "";
 }
 
 /* ─── Component ───────────────────────────────────────────── */
@@ -329,6 +340,7 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
             vietQR: res.vietQR || null,
             playerName: res.playerName || "",
             isNew: false,
+            skillLevel: res.skillLevel ?? null,
           });
           goTo("payment_waiting");
           paymentTimerRef.current = setTimeout(() => {
@@ -589,6 +601,7 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
         vietQR: res.vietQR,
         playerName: res.playerName,
         isNew: true,
+        skillLevel: regLevel,
       });
       goTo("payment_waiting");
       paymentTimerRef.current = setTimeout(() => {
@@ -1087,7 +1100,9 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
           </h2>
 
           {payment.vietQR ? (
-            <div className="rounded-2xl bg-white p-3">
+            <div
+              className={cn("rounded-2xl bg-white p-3", courtPayQrFrameClass(payment.skillLevel))}
+            >
               <img src={payment.vietQR} alt="VietQR" className="w-72 max-w-[70vw] object-contain" />
             </div>
           ) : (

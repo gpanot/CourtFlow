@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { faceRecognitionService } from "@/lib/face-recognition";
 import { getActiveSubscription, getLatestSubscription } from "@/modules/courtpay/lib/subscription";
+import { ensureCourtPayCheckInPlayerSkillSynced } from "@/modules/courtpay/lib/check-in";
 
 /**
  * POST /api/courtpay/face-checkin
@@ -89,6 +90,12 @@ async function bridgeToCheckInPlayer(
         skillLevel: fullPlayer?.skillLevel || null,
       },
     });
+  } else {
+    await ensureCourtPayCheckInPlayerSkillSynced(checkInPlayer.id);
+    const refreshed = await prisma.checkInPlayer.findUnique({
+      where: { id: checkInPlayer.id },
+    });
+    if (refreshed) checkInPlayer = refreshed;
   }
 
   // Check if the player has already paid (confirmed payment) or has a pending
@@ -120,6 +127,7 @@ async function bridgeToCheckInPlayer(
         id: checkInPlayer.id,
         name: checkInPlayer.name,
         phone: checkInPlayer.phone,
+        skillLevel: checkInPlayer.skillLevel,
       },
     });
   }
@@ -133,6 +141,7 @@ async function bridgeToCheckInPlayer(
       id: checkInPlayer.id,
       name: checkInPlayer.name,
       phone: checkInPlayer.phone,
+      skillLevel: checkInPlayer.skillLevel,
     },
     activeSubscription: activeSub,
     latestSubscription: latestSub,

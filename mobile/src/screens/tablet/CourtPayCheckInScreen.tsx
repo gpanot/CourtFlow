@@ -38,6 +38,11 @@ import { TabletStaffEscape } from "../../components/TabletStaffEscape";
 import { CourtFlowKioskTopBar } from "../../components/CourtFlowKioskTopBar";
 import type { SubscriptionPackage } from "../../types/api";
 import type { CheckInScannerStringKey } from "../../lib/tablet-check-in-strings";
+import {
+  COURTPAY_LEVEL_QR_BORDER,
+  parseCourtPaySkillLevel,
+  type CourtPaySkillLevelUI,
+} from "../../lib/courtpay-skill-level-ui";
 import type { TabletStackScreenProps } from "../../navigation/types";
 
 function resolveVenueMediaUrl(url: string | null | undefined): string | null {
@@ -88,6 +93,16 @@ interface PendingPaymentState {
   paymentRef: string;
   qrUrl: string | null;
   playerName: string;
+  skillLevel?: CourtPaySkillLevelUI;
+  /** On-screen diagnostics for QR border / level parsing (remove when stable). */
+  _debug?: {
+    flow: "returning_pay_session" | "first_time_register";
+    apiSkillLevel: string | null;
+    playerSkillLevel: string | null;
+    combinedRaw: string | null;
+    parsedLabel: string;
+    borderApplied: boolean;
+  };
 }
 
 interface ActiveSubInfo {
@@ -144,14 +159,11 @@ export function CourtPayCheckInScreen({
     primaryBtn:         { backgroundColor: CP.primary },
     secondaryActionBtn: { borderColor: isLight ? CP.primaryDark : CP.primaryLight },
     secondaryActionText:{ color: isLight ? CP.primaryDark : CP.primaryLight },
-    selectBtnActive:    { borderColor: CP.primary, backgroundColor: isLight ? CP.bgOnLight : CP.bg },
-    selectBtnTextActive:{ color: isLight ? CP.textOnLight : CP.text },
     scanAgainBig:       { backgroundColor: CP.primary },
     phoneAltBtn:        { backgroundColor: CP.primaryDark },
     confirmAccentBtn:   { backgroundColor: CP.primary },
     regGotPhotoTitle:   { color: isLight ? CP.textOnLight : CP.text },
     regCircleOuter:     { borderColor: CP.scannerBorder },
-    regShutterBtn:      { backgroundColor: CP.primary },
     regLooksGoodBtn:    { backgroundColor: CP.primary },
     pkgBestChoiceTag:   { backgroundColor: CP.primary },
     amount:             { color: isLight ? CP.amountTextOnLight : CP.amountText },
@@ -186,6 +198,10 @@ export function CourtPayCheckInScreen({
   const [faceBase64, setFaceBase64] = useState<string | null>(null);
   const [regCheckingFace, setRegCheckingFace] = useState(false);
   const [regCaptureBusy, setRegCaptureBusy] = useState(false);
+  /** 3–1 overlay inside the registration camera circle; null = not counting */
+  const [regFaceCountdown, setRegFaceCountdown] = useState<number | null>(null);
+  /** Bumps when auto-capture fails so the countdown effect restarts */
+  const [regFaceCaptureSession, setRegFaceCaptureSession] = useState(0);
   const [sessionFee, setSessionFee] = useState<number>(0);
   const [showSubscriptionsInFlow, setShowSubscriptionsInFlow] = useState(true);
   const [packages, setPackages] = useState<SubscriptionPackage[]>([]);
@@ -212,6 +228,7 @@ export function CourtPayCheckInScreen({
   const exhaustedOfferScrollRef = useRef<ScrollView | null>(null);
   const regCameraRef = useRef<CameraView | null>(null);
   const regCameraReady = useRef(false);
+  const regCaptureInFlight = useRef(false);
   const [permission, requestPermission] = useCameraPermissions();
 
   // ── Block OS back button / swipe-back on this kiosk screen ─────────────────
@@ -343,6 +360,9 @@ export function CourtPayCheckInScreen({
     setFaceBase64(null);
     setRegCheckingFace(false);
     setRegCaptureBusy(false);
+    setRegFaceCountdown(null);
+    setRegFaceCaptureSession(0);
+    regCaptureInFlight.current = false;
     setSelectedPkg(null);
     setPlayer(null);
     setIsNewPlayer(false);
@@ -604,8 +624,9 @@ export function CourtPayCheckInScreen({
   };
 
   // ── Registration face capture ─────────────────────────────────────────────
-  const captureRegistrationPhoto = async () => {
-    if (!regCameraRef.current || !regCameraReady.current || regCaptureBusy) return;
+  const captureRegistrationPhoto = useCallback(async () => {
+    if (!regCameraRef.current || !regCameraReady.current || regCaptureInFlight.current) return;
+    regCaptureInFlight.current = true;
     setRegCaptureBusy(true);
     try {
       const photo = await regCameraRef.current.takePictureAsync({
@@ -615,11 +636,60 @@ export function CourtPayCheckInScreen({
       if (photo?.base64) {
         setFaceBase64(photo.base64);
         setStep("reg_face_preview");
+      } else {
+        setRegFaceCaptureSession((s) => s + 1);
       }
     } finally {
+      regCaptureInFlight.current = false;
       setRegCaptureBusy(false);
     }
-  };
+  }, []);
+
+  // Tablet first-time flow: 3s countdown inside the circle, then auto-capture
+  useEffect(() => {
+    if (step !== "reg_face_capture" || !permission?.granted) {
+      setRegFaceCountdown(null);
+      return;
+    }
+
+    let cancelled = false;
+    let waitIv: ReturnType<typeof setInterval> | null = null;
+    let countIv: ReturnType<typeof setInterval> | null = null;
+
+    const clearTimers = () => {
+      if (waitIv) clearInterval(waitIv);
+      if (countIv) clearInterval(countIv);
+      waitIv = countIv = null;
+    };
+
+    waitIv = setInterval(() => {
+      if (cancelled) return;
+      if (!regCameraReady.current) return;
+      if (waitIv) clearInterval(waitIv);
+      waitIv = null;
+
+      let n = 3;
+      setRegFaceCountdown(n);
+      countIv = setInterval(() => {
+        if (cancelled) return;
+        n -= 1;
+        if (n <= 0) {
+          if (countIv) clearInterval(countIv);
+          countIv = null;
+          setRegFaceCountdown(null);
+          if (!cancelled) void captureRegistrationPhoto();
+        } else {
+          setRegFaceCountdown(n);
+        }
+      }, 1000);
+    }, 50);
+
+    return () => {
+      cancelled = true;
+      clearTimers();
+      setRegFaceCountdown(null);
+    };
+  }, [step, permission?.granted, regFaceCaptureSession, captureRegistrationPhoto]);
 
   const handleCaptureRegistrationFace = async () => {
     if (!faceBase64) return;
@@ -661,6 +731,7 @@ export function CourtPayCheckInScreen({
         amount?: number;
         paymentRef?: string | null;
         vietQR?: string | null;
+        skillLevel?: string | null;
         checkedIn?: boolean;
         free?: boolean;
         subscription?: ActiveSubInfo | null;
@@ -696,12 +767,23 @@ export function CourtPayCheckInScreen({
       }
 
       if (res.pendingPaymentId) {
+        const levelRaw = res.skillLevel ?? targetPlayer.skillLevel ?? undefined;
+        const parsed = parseCourtPaySkillLevel(levelRaw);
         setPendingPayment({
           id: res.pendingPaymentId,
           amount: res.amount ?? 0,
           paymentRef: res.paymentRef ?? "",
           qrUrl: res.vietQR ?? null,
           playerName: targetPlayer.name,
+          skillLevel: parsed,
+          _debug: {
+            flow: "returning_pay_session",
+            apiSkillLevel: res.skillLevel ?? null,
+            playerSkillLevel: targetPlayer.skillLevel ?? null,
+            combinedRaw: levelRaw ?? null,
+            parsedLabel: parsed ?? "(parse → undefined)",
+            borderApplied: !!parsed,
+          },
         });
         setConfirmedSubInfo(null);
         setStep("awaiting_payment");
@@ -739,6 +821,7 @@ export function CourtPayCheckInScreen({
         amount?: number;
         paymentRef?: string | null;
         vietQR?: string | null;
+        skillLevel?: string | null;
         checkedIn?: boolean;
         subscription?: ActiveSubInfo | null;
       }>("/api/courtpay/register", {
@@ -764,12 +847,23 @@ export function CourtPayCheckInScreen({
         setConfirmMessage(t("checkInConfirmedMsg"));
         setStep("confirmed");
       } else if (reg.pendingPaymentId) {
+        const levelRaw = reg.skillLevel ?? skillLevel;
+        const parsed = parseCourtPaySkillLevel(levelRaw);
         setPendingPayment({
           id: reg.pendingPaymentId,
           amount: reg.amount ?? 0,
           paymentRef: reg.paymentRef ?? "",
           qrUrl: reg.vietQR ?? null,
           playerName: registeredPlayer.name,
+          skillLevel: parsed,
+          _debug: {
+            flow: "first_time_register",
+            apiSkillLevel: reg.skillLevel ?? null,
+            playerSkillLevel: null,
+            combinedRaw: levelRaw ?? null,
+            parsedLabel: parsed ?? "(parse → undefined)",
+            borderApplied: !!parsed,
+          },
         });
         setConfirmedSubInfo(null);
         setStep("awaiting_payment");
@@ -1172,20 +1266,18 @@ export function CourtPayCheckInScreen({
                       regCameraReady.current = true;
                     }}
                   />
+                  {regFaceCountdown !== null ? (
+                    <View style={styles.regCountdownOverlay} pointerEvents="none">
+                      <Text style={styles.regCountdownDigit}>{regFaceCountdown}</Text>
+                    </View>
+                  ) : null}
+                  {regCaptureBusy && regFaceCountdown === null ? (
+                    <View style={styles.regCountdownOverlay}>
+                      <ActivityIndicator color="#fff" size="large" />
+                    </View>
+                  ) : null}
                 </View>
               </View>
-              <TouchableOpacity
-                style={[styles.regShutterBtn, dyn.regShutterBtn, regCaptureBusy && styles.disabledBtn]}
-                onPress={() => void captureRegistrationPhoto()}
-                disabled={regCaptureBusy}
-                activeOpacity={0.85}
-              >
-                {regCaptureBusy ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Ionicons name="camera" size={36} color="#fff" />
-                )}
-              </TouchableOpacity>
             </View>
           </View>
         );
@@ -1290,8 +1382,7 @@ export function CourtPayCheckInScreen({
                   style={[
                     styles.selectBtn,
                     isLight && styles.selectBtnLight,
-                    gender === "male" && styles.selectBtnActive,
-                    gender === "male" && dyn.selectBtnActive,
+                    gender === "male" && styles.genderMaleSelected,
                   ]}
                   onPress={() => { Keyboard.dismiss(); setGender("male"); restartIdleTimer(); }}
                 >
@@ -1299,8 +1390,8 @@ export function CourtPayCheckInScreen({
                     style={[
                       styles.selectBtnText,
                       isLight && styles.selectBtnTextLight,
-                      gender === "male" && styles.selectBtnTextActive,
-                      gender === "male" && dyn.selectBtnTextActive,
+                      gender === "male" && styles.chipTextSelected,
+                      gender === "male" && isLight && styles.chipTextSelectedLight,
                     ]}
                   >
                     {t("regMale")}
@@ -1310,8 +1401,7 @@ export function CourtPayCheckInScreen({
                   style={[
                     styles.selectBtn,
                     isLight && styles.selectBtnLight,
-                    gender === "female" && styles.selectBtnActive,
-                    gender === "female" && dyn.selectBtnActive,
+                    gender === "female" && styles.genderFemaleSelected,
                   ]}
                   onPress={() => { Keyboard.dismiss(); setGender("female"); restartIdleTimer(); }}
                 >
@@ -1319,8 +1409,8 @@ export function CourtPayCheckInScreen({
                     style={[
                       styles.selectBtnText,
                       isLight && styles.selectBtnTextLight,
-                      gender === "female" && styles.selectBtnTextActive,
-                      gender === "female" && dyn.selectBtnTextActive,
+                      gender === "female" && styles.chipTextSelected,
+                      gender === "female" && isLight && styles.chipTextSelectedLight,
                     ]}
                   >
                     {t("regFemale")}
@@ -1341,8 +1431,12 @@ export function CourtPayCheckInScreen({
                     style={[
                       styles.selectBtn,
                       isLight && styles.selectBtnLight,
-                      skillLevel === lvl && styles.selectBtnActive,
-                      skillLevel === lvl && dyn.selectBtnActive,
+                      skillLevel === lvl &&
+                        (lvl === "beginner"
+                          ? styles.levelBeginnerSelected
+                          : lvl === "intermediate"
+                            ? styles.levelIntermediateSelected
+                            : styles.levelAdvancedSelected),
                     ]}
                     onPress={() => { Keyboard.dismiss(); setSkillLevel(lvl); restartIdleTimer(); }}
                   >
@@ -1350,8 +1444,8 @@ export function CourtPayCheckInScreen({
                       style={[
                         styles.selectBtnText,
                         isLight && styles.selectBtnTextLight,
-                        skillLevel === lvl && styles.selectBtnTextActive,
-                        skillLevel === lvl && dyn.selectBtnTextActive,
+                        skillLevel === lvl && styles.chipTextSelected,
+                        skillLevel === lvl && isLight && styles.chipTextSelectedLight,
                       ]}
                     >
                       {t(labelKey as CheckInScannerStringKey)}
@@ -1706,7 +1800,14 @@ export function CourtPayCheckInScreen({
               </Text>
               <Text style={[styles.payScanHint, isLight && styles.payScanHintLight]}>{t("payScanQR")}</Text>
               {pendingPayment?.qrUrl ? (
-                <View style={styles.qrWrap}>
+                <View
+                  style={[
+                    styles.qrWrap,
+                    pendingPayment.skillLevel
+                      ? COURTPAY_LEVEL_QR_BORDER[pendingPayment.skillLevel]
+                      : null,
+                  ]}
+                >
                   <Image
                     source={{ uri: pendingPayment.qrUrl }}
                     style={styles.qrImage}
@@ -1718,6 +1819,37 @@ export function CourtPayCheckInScreen({
                 {formatVND(pendingPayment?.amount ?? 0)} VND
               </Text>
               <Text style={[styles.ref, isLight && styles.refLight]}>{pendingPayment?.paymentRef}</Text>
+
+              {pendingPayment?._debug ? (
+                <View
+                  style={[
+                    styles.payDebugBox,
+                    isLight && styles.payDebugBoxLight,
+                  ]}
+                >
+                  <Text style={[styles.payDebugTitle, isLight && styles.payDebugTitleLight]}>
+                    Debug — QR border / level
+                  </Text>
+                  <Text style={[styles.payDebugLine, isLight && styles.payDebugLineLight]}>
+                    flow: {pendingPayment._debug.flow}
+                  </Text>
+                  <Text style={[styles.payDebugLine, isLight && styles.payDebugLineLight]}>
+                    api skillLevel: {JSON.stringify(pendingPayment._debug.apiSkillLevel)}
+                  </Text>
+                  <Text style={[styles.payDebugLine, isLight && styles.payDebugLineLight]}>
+                    player skillLevel: {JSON.stringify(pendingPayment._debug.playerSkillLevel)}
+                  </Text>
+                  <Text style={[styles.payDebugLine, isLight && styles.payDebugLineLight]}>
+                    combined raw: {JSON.stringify(pendingPayment._debug.combinedRaw)}
+                  </Text>
+                  <Text style={[styles.payDebugLine, isLight && styles.payDebugLineLight]}>
+                    parsed: {pendingPayment._debug.parsedLabel}
+                  </Text>
+                  <Text style={[styles.payDebugLine, isLight && styles.payDebugLineLight]}>
+                    border applied: {String(pendingPayment._debug.borderApplied)}
+                  </Text>
+                </View>
+              ) : null}
 
               <View style={styles.payWaitingRow}>
                 <View style={[styles.payPulseDot, dyn.payPulseDot]} />
@@ -2166,6 +2298,41 @@ const styles = StyleSheet.create({
   selectBtnTextLight: { color: "#334155" },
   selectBtnTextActive: { color: "#fff" },
 
+  genderMaleSelected: {
+    borderColor: "#38bdf8",
+    backgroundColor: "rgba(56,189,248,0.38)",
+    borderTopColor: "rgba(125,211,252,0.45)",
+    borderBottomColor: "rgba(14,165,233,0.28)",
+  },
+  genderFemaleSelected: {
+    borderColor: "#f472b6",
+    backgroundColor: "rgba(244,114,182,0.38)",
+    borderTopColor: "rgba(249,168,212,0.45)",
+    borderBottomColor: "rgba(219,39,119,0.28)",
+  },
+  /** Selected gender / level chips — label stays grey (not white on tint). */
+  chipTextSelected: { color: "#a3a3a3", fontWeight: "700" },
+  chipTextSelectedLight: { color: "#64748b", fontWeight: "700" },
+
+  levelBeginnerSelected: {
+    borderColor: "#4ade80",
+    backgroundColor: "rgba(74,222,128,0.38)",
+    borderTopColor: "rgba(134,239,172,0.5)",
+    borderBottomColor: "rgba(22,163,74,0.3)",
+  },
+  levelIntermediateSelected: {
+    borderColor: "#f87171",
+    backgroundColor: "rgba(248,113,113,0.38)",
+    borderTopColor: "rgba(252,165,165,0.5)",
+    borderBottomColor: "rgba(220,38,38,0.3)",
+  },
+  levelAdvancedSelected: {
+    borderColor: "#facc15",
+    backgroundColor: "rgba(250,204,21,0.42)",
+    borderTopColor: "rgba(253,224,71,0.55)",
+    borderBottomColor: "rgba(202,138,4,0.35)",
+  },
+
   flowGlassPanel: {
     width: "100%",
     maxWidth: 440,
@@ -2341,11 +2508,27 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   regCircleClip: {
+    position: "relative",
     width: REG_FACE_CIRCLE - 8,
     height: REG_FACE_CIRCLE - 8,
     borderRadius: (REG_FACE_CIRCLE - 8) / 2,
     overflow: "hidden",
     backgroundColor: "#000",
+  },
+  regCountdownOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  regCountdownDigit: {
+    fontSize: 120,
+    fontWeight: "800",
+    color: "#fff",
+    textAlign: "center",
+    textShadowColor: "rgba(0,0,0,0.45)",
+    textShadowOffset: { width: 0, height: 4 },
+    textShadowRadius: 12,
   },
   regCameraFill: {
     width: (REG_FACE_CIRCLE - 8) * 1.18,
@@ -2357,24 +2540,6 @@ const styles = StyleSheet.create({
     width: REG_FACE_CIRCLE - 8,
     height: REG_FACE_CIRCLE - 8,
     borderRadius: (REG_FACE_CIRCLE - 8) / 2,
-  },
-  regShutterBtn: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
-    backgroundColor: "transparent",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255,255,255,0.35)",
-    borderBottomWidth: 3,
-    borderBottomColor: "rgba(0,0,0,0.25)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 6,
   },
   regPreviewActions: {
     width: "100%",
@@ -2603,6 +2768,33 @@ const styles = StyleSheet.create({
   },
   payScanHint: { fontSize: 14, color: "#a3a3a3", textAlign: "center", paddingHorizontal: 8 },
   payScanHintLight: { color: "#64748b" },
+  payDebugBox: {
+    alignSelf: "stretch",
+    marginTop: 4,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.55)",
+    backgroundColor: "rgba(0,0,0,0.35)",
+    gap: 4,
+  },
+  payDebugBoxLight: {
+    borderColor: "rgba(180,83,9,0.45)",
+    backgroundColor: "rgba(255,251,235,0.95)",
+  },
+  payDebugTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#fbbf24",
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+  },
+  payDebugTitleLight: { color: "#b45309" },
+  payDebugLine: {
+    fontSize: 11,
+    color: "#e5e5e5",
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+  },
+  payDebugLineLight: { color: "#334155" },
   qrWrap: {
     backgroundColor: "#fff",
     borderRadius: 20,

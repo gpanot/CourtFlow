@@ -13,6 +13,11 @@ import { joinVenue } from "@/lib/socket-client";
 import { api } from "@/lib/api-client";
 import { SubscriptionOffer } from "./SubscriptionOffer";
 import { SuccessScreen } from "./SuccessScreen";
+import {
+  COURTPAY_LEVEL_QR_FRAME,
+  parseCourtPaySkillLevel,
+  type CourtPaySkillLevelUI,
+} from "@/modules/courtpay/lib/skill-level-ui";
 
 /* ─── State machine ───────────────────────────────────────── */
 type KioskStep =
@@ -39,6 +44,7 @@ interface PlayerInfo {
   id: string;
   name: string;
   phone: string;
+  skillLevel?: string | null;
 }
 
 interface SubscriptionInfo {
@@ -54,6 +60,8 @@ interface PaymentInfo {
   amount: number;
   vietQR: string | null;
   paymentRef: string;
+  /** Session skill level — colored QR frame for staff. */
+  skillLevel?: CourtPaySkillLevelUI;
 }
 
 interface Package {
@@ -516,7 +524,12 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
       skillLevel: regLevel,
       imageBase64: regImage,
     });
-    setPlayer({ id: "", name: regName.trim(), phone: regPhone.trim() });
+    setPlayer({
+      id: "",
+      name: regName.trim(),
+      phone: regPhone.trim(),
+      skillLevel: regLevel,
+    });
     setIsNewPlayer(true);
     goTo("subscription_offer");
   }, [regName, regPhone, regGender, regLevel, regImage, goTo]);
@@ -555,13 +568,19 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
           return;
         }
 
-        setPlayer({ id: data.playerId, name: data.playerName, phone: regDraft.phone });
+        setPlayer({
+          id: data.playerId,
+          name: data.playerName,
+          phone: regDraft.phone,
+          skillLevel: regDraft.skillLevel,
+        });
         if (data.pendingPaymentId) {
           setPayment({
             pendingPaymentId: data.pendingPaymentId,
             amount: data.amount ?? 0,
             vietQR: data.vietQR ?? null,
             paymentRef: data.paymentRef ?? "",
+            skillLevel: parseCourtPaySkillLevel(regDraft.skillLevel),
           });
           goTo("payment_waiting");
           startPaymentTimeout();
@@ -588,6 +607,7 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
         amount: data.amount,
         vietQR: data.vietQR,
         paymentRef: data.paymentRef,
+        skillLevel: parseCourtPaySkillLevel(player.skillLevel),
       });
       goTo("payment_waiting");
       startPaymentTimeout();
@@ -622,13 +642,19 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
           return;
         }
 
-        setPlayer({ id: data.playerId, name: data.playerName, phone: regDraft.phone });
+        setPlayer({
+          id: data.playerId,
+          name: data.playerName,
+          phone: regDraft.phone,
+          skillLevel: regDraft.skillLevel,
+        });
         if (data.pendingPaymentId) {
           setPayment({
             pendingPaymentId: data.pendingPaymentId,
             amount: data.amount ?? 0,
             vietQR: data.vietQR ?? null,
             paymentRef: data.paymentRef ?? "",
+            skillLevel: parseCourtPaySkillLevel(regDraft.skillLevel),
           });
           goTo("payment_waiting");
           startPaymentTimeout();
@@ -654,6 +680,7 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
         amount: data.amount,
         vietQR: data.vietQR,
         paymentRef: data.paymentRef,
+        skillLevel: parseCourtPaySkillLevel(player.skillLevel),
       });
       goTo("payment_waiting");
       startPaymentTimeout();
@@ -950,9 +977,11 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
           <div className="w-full max-w-md space-y-4 rounded-xl border border-neutral-800 bg-neutral-900/40 p-4">
             <div className="flex gap-2">
               <div className="flex-1">
-                <label className="mb-1.5 block text-xs font-medium text-neutral-400">Name</label>
+                <label className="mb-1.5 block text-xs font-medium text-neutral-400">
+                  Name
+                </label>
                 <input type="text" value={regName} onChange={(e) => setRegName(e.target.value)}
-                  placeholder="Your name"
+                  placeholder="Your Reclub's name"
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-base text-white placeholder:text-neutral-500 focus:border-fuchsia-500 focus:outline-none"
                   autoFocus
                 />
@@ -966,8 +995,8 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
                         "flex h-10 w-12 items-center justify-center rounded-lg border-2 text-xs font-bold tracking-wide transition-colors",
                         regGender === g
                           ? g === "male"
-                            ? "border-fuchsia-500 bg-fuchsia-600/20 text-fuchsia-300"
-                            : "border-pink-500 bg-pink-600/20 text-pink-400"
+                            ? "border-sky-400 bg-sky-500/40 text-sky-100 shadow-[inset_0_0_0_1px_rgba(56,189,248,0.35)]"
+                            : "border-rose-400 bg-rose-500/40 text-rose-100 shadow-[inset_0_0_0_1px_rgba(244,114,182,0.35)]"
                           : "border-neutral-600 bg-neutral-950/80 text-neutral-400 hover:border-neutral-500"
                       )}
                     >
@@ -994,7 +1023,11 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
                     className={cn(
                       "rounded-lg border-2 px-2 py-2 text-center text-xs font-semibold transition-colors",
                       regLevel === lvl
-                        ? "border-fuchsia-500 bg-fuchsia-600/20 text-white"
+                        ? lvl === "beginner"
+                          ? "border-green-500 bg-green-500/35 text-green-50 shadow-[inset_0_0_0_1px_rgba(74,222,128,0.4)]"
+                          : lvl === "intermediate"
+                            ? "border-red-500 bg-red-500/35 text-red-50 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.4)]"
+                            : "border-yellow-500 bg-yellow-500/35 text-yellow-950 shadow-[inset_0_0_0_1px_rgba(250,204,21,0.45)]"
                         : "border-neutral-700 bg-neutral-900 text-neutral-300 hover:border-neutral-500"
                     )}
                   >
@@ -1041,12 +1074,24 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
           </h2>
 
           {payment.vietQR ? (
-            <div className="rounded-2xl bg-white p-3">
+            <div
+              className={cn(
+                "rounded-2xl bg-white p-3",
+                payment.skillLevel ? COURTPAY_LEVEL_QR_FRAME[payment.skillLevel] : ""
+              )}
+            >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={payment.vietQR} alt="VietQR" className="w-72 max-w-[70vw] object-contain" />
             </div>
           ) : (
-            <div className="rounded-2xl border-2 border-dashed border-neutral-600 bg-neutral-900 p-8 text-center">
+            <div
+              className={cn(
+                "rounded-2xl bg-neutral-900 p-8 text-center",
+                payment.skillLevel
+                  ? COURTPAY_LEVEL_QR_FRAME[payment.skillLevel]
+                  : "border-2 border-dashed border-neutral-600"
+              )}
+            >
               <p className="text-lg text-neutral-400">QR unavailable — pay by cash below</p>
             </div>
           )}

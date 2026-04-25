@@ -15,7 +15,7 @@ import {
 type Tab = "today" | "history" | "subscriptions" | "billing";
 
 interface TodayData {
-  paymentsTodaySessionsTotal: number;
+  paymentsTodaySessionsTotal?: number;
   paymentsTodaySessionsCount: number;
   revenueToday: number;
   activeSubscribers: number;
@@ -331,11 +331,10 @@ export default function BossDashboardPage() {
             <div className="grid grid-cols-2 gap-3 mb-6">
               <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
                 <div className="flex items-center gap-2 text-neutral-400 text-xs mb-1">
-                  <Receipt className="h-3.5 w-3.5" /> Payments
+                  <Receipt className="h-3.5 w-3.5" /> Number of payments
                 </div>
-                <p className="text-2xl font-bold">{formatVND(todayData.paymentsTodaySessionsTotal ?? 0)}</p>
-                <p className="text-xs text-neutral-500 mt-1">
-                  {(todayData.paymentsTodaySessionsCount ?? 0).toLocaleString()} payments · today&apos;s sessions
+                <p className="text-2xl font-bold">
+                  {(todayData.paymentsTodaySessionsCount ?? 0).toLocaleString()}
                 </p>
               </div>
               <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">

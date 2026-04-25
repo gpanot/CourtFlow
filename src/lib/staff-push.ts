@@ -61,8 +61,7 @@ export async function sendPushToVenueStaff(
   const messaging = getMessaging(app);
 
   // Data-only FCM messages (no `notification` key). Expo's native
-  // ExpoFirebaseMessagingService presents these as local notifications,
-  // which means registered categories (action buttons) are applied.
+  // ExpoFirebaseMessagingService presents these as local notifications.
   // If we used the `notification` key, Android's system would display
   // the notification directly and bypass Expo entirely.
   const results = await Promise.allSettled(
@@ -137,7 +136,6 @@ export function sendPaymentPushToStaff(
     venueId: ctx.venueId,
     pendingPaymentId: ctx.pendingPaymentId,
     screen: "PaymentTab",
-    ...(event === "payment_new" ? { categoryId: "payment_new" } : {}),
   };
 
   void sendPushToVenueStaff(ctx.venueId, { title, body, data }).catch((err) =>

@@ -18,6 +18,10 @@ import {
 import { KioskConfirmationScreen } from "@/components/kiosk-confirmation-screen";
 import { CameraCapture, type CameraCaptureHandle } from "@/components/camera-capture";
 import { useSocket } from "@/hooks/use-socket";
+import {
+  COURTPAY_LEVEL_QR_FRAME,
+  parseCourtPaySkillLevel,
+} from "@/modules/courtpay/lib/skill-level-ui";
 
 type KioskState =
   | "idle"
@@ -70,6 +74,7 @@ type PaymentData = {
   amount: number;
   vietQR: string | null;
   playerName: string;
+  skillLevel?: string | null;
 };
 
 type PhoneLookupResponse = {
@@ -86,6 +91,11 @@ type PhoneLookupResponse = {
   queuePosition?: number;
   totalSessions?: number;
 };
+
+function courtPayQrFrameClass(skillLevel: string | null | undefined): string {
+  const lvl = parseCourtPaySkillLevel(skillLevel ?? undefined);
+  return lvl ? COURTPAY_LEVEL_QR_FRAME[lvl] : "";
+}
 
 function skillLabelFromKey(level: string, t: (k: string) => string): string {
   const map: Record<string, string> = {
@@ -181,6 +191,7 @@ export function FaceKioskTab({ venueId, hasSession = true }: FaceKioskTabProps) 
           amount: response.amount || 0,
           vietQR: response.vietQR || null,
           playerName: response.playerName || response.displayName || "",
+          skillLevel: response.skillLevel ?? null,
         });
         setState("payment_waiting");
         cameraRef.current?.stopCamera();
@@ -355,6 +366,7 @@ export function FaceKioskTab({ venueId, hasSession = true }: FaceKioskTabProps) 
           amount: response.amount || 0,
           vietQR: response.vietQR || null,
           playerName: response.playerName || phonePreview?.player.name || "",
+          skillLevel: response.skillLevel ?? phonePreview?.player.skillLevel ?? null,
         });
         setState("payment_waiting");
         paymentTimerRef.current = setTimeout(() => {
@@ -683,7 +695,12 @@ export function FaceKioskTab({ venueId, hasSession = true }: FaceKioskTabProps) 
               <div className="flex w-full max-w-md flex-col gap-4 rounded-xl border border-neutral-800 bg-neutral-900 p-6 text-center">
                 <h3 className="text-xl font-semibold text-white">{t("tablet.checkInScanner.payReturningTitle")}</h3>
                 {payment.vietQR ? (
-                  <div className="mx-auto rounded-2xl bg-white p-3">
+                  <div
+                    className={cn(
+                      "mx-auto rounded-2xl bg-white p-3",
+                      courtPayQrFrameClass(payment.skillLevel)
+                    )}
+                  >
                     <img src={payment.vietQR} alt="VietQR" className="w-60 max-w-[70vw] object-contain" />
                   </div>
                 ) : (
