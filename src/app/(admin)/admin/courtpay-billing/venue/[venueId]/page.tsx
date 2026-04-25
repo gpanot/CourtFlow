@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, type Dispatch, type SetStateAction } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
@@ -56,8 +56,22 @@ interface VenueDetail {
   invoices: InvoiceRow[];
 }
 
+interface BillingSessionSummary {
+  id: string;
+  date: string;
+  openedAt: string;
+  closedAt: string | null;
+  status: string;
+  type: string;
+  title: string | null;
+}
+
+interface WeekPaymentItem extends CourtPayBillingPaymentCardData {
+  session: BillingSessionSummary | null;
+}
+
 interface WeeklyPaymentsResponse {
-  payments: CourtPayBillingPaymentCardData[];
+  payments: WeekPaymentItem[];
   summary: {
     totalPayments: number;
     totalAmount: number;
@@ -66,6 +80,16 @@ interface WeeklyPaymentsResponse {
     subscriptionPayments: number;
   };
 }
+
+const CURRENT_WEEK_ROW_KEY = "__cf_billing_current_week__" as const;
+
+type WeekListRow =
+  | {
+      kind: "current";
+      weekKey: typeof CURRENT_WEEK_ROW_KEY;
+      cw: NonNullable<VenueDetail["currentWeek"]>;
+    }
+  | { kind: "invoice"; weekKey: string; invoice: InvoiceRow };
 
 interface BillingConfig {
   defaultBaseRate: number;
@@ -94,6 +118,103 @@ function fmtShort(iso: string) {
   });
 }
 
+function utcDayKey(iso: string | Date): string {
+  const d = typeof iso === "string" ? new Date(iso) : iso;
+  return d.toISOString().slice(0, 10);
+}
+
+function groupPaymentsBySession(payments: WeekPaymentItem[]) {
+  const m = new Map<string, { sessionKey: string; session: BillingSessionSummary | null; payments: WeekPaymentItem[] }>();
+  for (const p of payments) {
+    const sessionKey = p.session?.id ?? "__none__";
+    if (!m.has(sessionKey)) {
+      m.set(sessionKey, { sessionKey, session: p.session, payments: [] });
+    }
+    m.get(sessionKey)!.payments.push(p);
+  }
+  return Array.from(m.values()).sort((a, b) => {
+    const ta = a.session?.openedAt ?? a.payments[0]?.confirmedAt ?? "";
+    const tb = b.session?.openedAt ?? b.payments[0]?.confirmedAt ?? "";
+    return new Date(tb).getTime() - new Date(ta).getTime();
+  });
+}
+
+function sessionListTitle(bucket: { session: BillingSessionSummary | null; payments: WeekPaymentItem[] }) {
+  if (bucket.session?.title?.trim()) return bucket.session.title.trim();
+  if (bucket.session) return `Session · ${fmtShort(bucket.session.openedAt)}`;
+  return "Payments without session";
+}
+
+function sessionComposite(weekKey: string, sessionKey: string) {
+  return `${weekKey}:::${sessionKey}`;
+}
+
+function BillingWeekSessionBuckets({
+  weekKey,
+  payments,
+  expandedSessionComposite,
+  setExpandedSessionComposite,
+}: {
+  weekKey: string;
+  payments: WeekPaymentItem[];
+  expandedSessionComposite: string | null;
+  setExpandedSessionComposite: Dispatch<SetStateAction<string | null>>;
+}) {
+  if (payments.length === 0) {
+    return <p className="text-xs text-neutral-600">No individual payment records found.</p>;
+  }
+  return (
+    <div className="space-y-2">
+      {groupPaymentsBySession(payments).map((bucket) => {
+        const comp = sessionComposite(weekKey, bucket.sessionKey);
+        const sessionOpen = expandedSessionComposite === comp;
+        return (
+          <div key={bucket.sessionKey} className="rounded-lg border border-neutral-800/80 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setExpandedSessionComposite((prev) => (prev === comp ? null : comp))}
+              className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-neutral-800/40 bg-neutral-900/80"
+            >
+              {sessionOpen ? (
+                <ChevronDown className="h-3.5 w-3.5 text-neutral-500 shrink-0" />
+              ) : (
+                <ChevronRight className="h-3.5 w-3.5 text-neutral-500 shrink-0" />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium truncate">{sessionListTitle(bucket)}</p>
+                <p className="text-[11px] text-neutral-500 mt-0.5">
+                  {bucket.session ? (
+                    <>
+                      <span className="capitalize">{String(bucket.session.type).replace(/_/g, " ")}</span>
+                      <span className="text-neutral-600"> · </span>
+                      <span className="capitalize">{bucket.session.status}</span>
+                      {bucket.session.closedAt ? (
+                        <>
+                          <span className="text-neutral-600"> · closed </span>
+                          {fmtShort(bucket.session.closedAt)}
+                        </>
+                      ) : null}
+                    </>
+                  ) : null}
+                  <span className="text-neutral-600"> · </span>
+                  {bucket.payments.length} payment{bucket.payments.length === 1 ? "" : "s"}
+                </p>
+              </div>
+            </button>
+            {sessionOpen && (
+              <div className="border-t border-neutral-800 px-3 py-3 space-y-2 bg-neutral-950/40">
+                {bucket.payments.map((p) => (
+                  <CourtPayBillingPaymentCard key={p.id} payment={p} />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 type TabId = "rates" | "weeks" | "paid";
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -113,8 +234,9 @@ export default function VenueBillingDetailPage() {
   const [ratesSaved, setRatesSaved] = useState(false);
 
   // Weeks tab state
-  const [expandedInvoiceId, setExpandedInvoiceId] = useState<string | null>(null);
-  const [invoicePayments, setInvoicePayments] = useState<Record<string, WeeklyPaymentsResponse>>({});
+  const [expandedWeekKey, setExpandedWeekKey] = useState<string | null>(null);
+  const [expandedSessionComposite, setExpandedSessionComposite] = useState<string | null>(null);
+  const [weekPayments, setWeekPayments] = useState<Record<string, WeeklyPaymentsResponse>>({});
   const [loadingPayments, setLoadingPayments] = useState<string | null>(null);
   const [markingPaid, setMarkingPaid] = useState<string | null>(null);
   const [backfilling, setBackfilling] = useState(false);
@@ -178,19 +300,31 @@ export default function VenueBillingDetailPage() {
   };
 
   // ── Weeks actions ─────────────────────────────────────────────────────────
-  const toggleInvoice = async (inv: InvoiceRow) => {
-    if (expandedInvoiceId === inv.id) {
-      setExpandedInvoiceId(null);
+  const toggleWeekRow = async (row: WeekListRow) => {
+    const weekKey = row.weekKey;
+    if (expandedWeekKey === weekKey) {
+      setExpandedWeekKey(null);
+      setExpandedSessionComposite(null);
       return;
     }
-    setExpandedInvoiceId(inv.id);
-    if (invoicePayments[inv.id]) return;
-    setLoadingPayments(inv.id);
+    setExpandedWeekKey(weekKey);
+    setExpandedSessionComposite(null);
+    if (weekPayments[weekKey]) return;
+    setLoadingPayments(weekKey);
     try {
-      const data = await api.get<WeeklyPaymentsResponse>(
-        `/api/admin/billing/venue/${venueId}/invoices/${inv.id}/payments`
-      );
-      setInvoicePayments((prev) => ({ ...prev, [inv.id]: data }));
+      if (row.kind === "invoice") {
+        const data = await api.get<WeeklyPaymentsResponse>(
+          `/api/admin/billing/venue/${venueId}/invoices/${row.invoice.id}/payments`
+        );
+        setWeekPayments((prev) => ({ ...prev, [weekKey]: data }));
+      } else {
+        const ws = encodeURIComponent(row.cw.weekStart);
+        const we = encodeURIComponent(row.cw.weekEnd);
+        const data = await api.get<WeeklyPaymentsResponse>(
+          `/api/admin/billing/venue/${venueId}/week-payments?weekStart=${ws}&weekEnd=${we}`
+        );
+        setWeekPayments((prev) => ({ ...prev, [weekKey]: data }));
+      }
     } catch (e) {
       console.error(e);
     }
@@ -247,6 +381,22 @@ export default function VenueBillingDetailPage() {
   }
 
   const allInvoices = detail.invoices;
+  const weekRows: WeekListRow[] = (() => {
+    const rows: WeekListRow[] = [];
+    const cw = detail.currentWeek;
+    if (cw) {
+      const hasInvoiceForSameWeek = detail.invoices.some(
+        (inv) => utcDayKey(inv.weekStartDate) === utcDayKey(cw.weekStart)
+      );
+      if (!hasInvoiceForSameWeek) {
+        rows.push({ kind: "current", weekKey: CURRENT_WEEK_ROW_KEY, cw });
+      }
+    }
+    for (const inv of detail.invoices) {
+      rows.push({ kind: "invoice", weekKey: inv.id, invoice: inv });
+    }
+    return rows;
+  })();
   const pendingInvoices = allInvoices.filter(
     (i) => i.status === "pending" || i.status === "overdue"
   );
@@ -312,7 +462,7 @@ export default function VenueBillingDetailPage() {
         {(
           [
             { id: "rates" as const, label: "Rates (custom)" },
-            { id: "weeks" as const, label: `Weeks (${allInvoices.length})` },
+            { id: "weeks" as const, label: `Weeks (${weekRows.length})` },
             { id: "paid" as const, label: `Paid (${paidInvoices.length})` },
           ] as const
         ).map(({ id, label }) => (
@@ -471,20 +621,92 @@ export default function VenueBillingDetailPage() {
           </div>
 
         <div className="rounded-xl border border-neutral-800 bg-neutral-900 overflow-hidden">
-          {allInvoices.length === 0 ? (
+          {weekRows.length === 0 ? (
             <p className="py-8 text-center text-sm text-neutral-500">No invoices yet.</p>
           ) : (
             <div className="divide-y divide-neutral-800">
-              {allInvoices.map((inv) => {
+              {weekRows.map((row) => {
+                const weekKey = row.weekKey;
+                const isExpanded = expandedWeekKey === weekKey;
+                const payments = weekPayments[weekKey];
+
+                if (row.kind === "current") {
+                  const { cw } = row;
+                  return (
+                    <div key={weekKey}>
+                      <button
+                        type="button"
+                        onClick={() => void toggleWeekRow(row)}
+                        className="w-full flex items-center justify-between px-5 py-3.5 text-left hover:bg-neutral-800/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          {isExpanded ? (
+                            <ChevronDown className="h-4 w-4 text-neutral-500 shrink-0" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4 text-neutral-500 shrink-0" />
+                          )}
+                          <div>
+                            <p className="text-sm font-medium flex flex-wrap items-center gap-2">
+                              <span>This week (in progress)</span>
+                              <span className="text-[10px] font-semibold uppercase tracking-wide text-sky-400/90 bg-sky-950/40 border border-sky-800/50 rounded px-1.5 py-0.5">
+                                Not invoiced
+                              </span>
+                            </p>
+                            <p className="text-xs text-neutral-500 mt-0.5">
+                              {fmtShort(cw.weekStart)} – {fmtShort(cw.weekEnd)} · {cw.totalPayments} payments
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className="text-sm font-semibold text-sky-400/90">
+                            ~{formatVND(cw.estimatedTotal)} VND
+                          </span>
+                        </div>
+                      </button>
+
+                      {isExpanded && (
+                        <div className="border-t border-neutral-800 bg-neutral-950/50 px-5 py-4 space-y-3">
+                          <p className="text-xs text-neutral-500">
+                            Estimated bill for the week so far (rates × payments). Tap a session to see each CourtPay
+                            payment.
+                          </p>
+                          {loadingPayments === weekKey ? (
+                            <div className="flex justify-center py-3">
+                              <Loader2 className="h-4 w-4 animate-spin text-neutral-500" />
+                            </div>
+                          ) : payments ? (
+                            <>
+                              <p className="text-xs text-neutral-500">
+                                {payments.summary.totalPayments} payments · {payments.summary.sepayPayments} SePay ·{" "}
+                                {payments.summary.subscriptionPayments} subscription
+                              </p>
+                              {payments.payments.length === 0 ? (
+                                <p className="text-xs text-neutral-600">No payments confirmed this week yet.</p>
+                              ) : (
+                                <BillingWeekSessionBuckets
+                                  weekKey={weekKey}
+                                  payments={payments.payments}
+                                  expandedSessionComposite={expandedSessionComposite}
+                                  setExpandedSessionComposite={setExpandedSessionComposite}
+                                />
+                              )}
+                            </>
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                const inv = row.invoice;
                 const isPaid = inv.status === "paid";
                 const isOverdue = inv.status === "overdue";
-                const isExpanded = expandedInvoiceId === inv.id;
-                const payments = invoicePayments[inv.id];
 
                 return (
                   <div key={inv.id}>
                     <button
-                      onClick={() => void toggleInvoice(inv)}
+                      type="button"
+                      onClick={() => void toggleWeekRow(row)}
                       className="w-full flex items-center justify-between px-5 py-3.5 text-left hover:bg-neutral-800/50 transition-colors"
                     >
                       <div className="flex items-center gap-3 min-w-0">
@@ -500,17 +722,13 @@ export default function VenueBillingDetailPage() {
                           <p className="text-xs text-neutral-500 mt-0.5">
                             {inv.totalCheckins} payments
                             {inv.paymentRef && (
-                              <span className="ml-2 font-mono text-neutral-600">
-                                {inv.paymentRef}
-                              </span>
+                              <span className="ml-2 font-mono text-neutral-600">{inv.paymentRef}</span>
                             )}
                           </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
-                        <span className="text-sm font-semibold text-purple-400">
-                          {formatVND(inv.totalAmount)} VND
-                        </span>
+                        <span className="text-sm font-semibold text-purple-400">{formatVND(inv.totalAmount)} VND</span>
                         {isPaid ? (
                           <span className="text-xs text-green-400 whitespace-nowrap">
                             ✓ Paid
@@ -519,7 +737,11 @@ export default function VenueBillingDetailPage() {
                           </span>
                         ) : (
                           <button
-                            onClick={(e) => { e.stopPropagation(); void markPaid(inv.id); }}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void markPaid(inv.id);
+                            }}
                             disabled={markingPaid === inv.id}
                             className={cn(
                               "text-xs px-2 py-1 rounded",
@@ -530,8 +752,10 @@ export default function VenueBillingDetailPage() {
                           >
                             {markingPaid === inv.id ? (
                               <Loader2 className="h-3 w-3 animate-spin inline" />
+                            ) : isOverdue ? (
+                              "Overdue — Mark paid"
                             ) : (
-                              isOverdue ? "Overdue — Mark paid" : "Mark paid"
+                              "Mark paid"
                             )}
                           </button>
                         )}
@@ -540,7 +764,6 @@ export default function VenueBillingDetailPage() {
 
                     {isExpanded && (
                       <div className="border-t border-neutral-800 bg-neutral-950/50 px-5 py-4 space-y-3">
-                        {/* Line-item breakdown */}
                         <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-xs mb-3">
                           <div className="flex justify-between">
                             <span className="text-neutral-500">Base charges</span>
@@ -571,24 +794,29 @@ export default function VenueBillingDetailPage() {
                           </p>
                         )}
 
-                        {/* Payment list */}
-                        {loadingPayments === inv.id ? (
+                        <p className="text-xs text-neutral-500">
+                          Open a session to see each CourtPay payment for that live session.
+                        </p>
+
+                        {loadingPayments === weekKey ? (
                           <div className="flex justify-center py-3">
                             <Loader2 className="h-4 w-4 animate-spin text-neutral-500" />
                           </div>
                         ) : payments ? (
                           <div className="space-y-2">
                             <p className="text-xs text-neutral-500">
-                              {payments.summary.totalPayments} payments ·{" "}
-                              {payments.summary.sepayPayments} SePay ·{" "}
+                              {payments.summary.totalPayments} payments · {payments.summary.sepayPayments} SePay ·{" "}
                               {payments.summary.subscriptionPayments} subscription
                             </p>
                             {payments.payments.length === 0 ? (
                               <p className="text-xs text-neutral-600">No individual payment records found.</p>
                             ) : (
-                              payments.payments.map((p) => (
-                                <CourtPayBillingPaymentCard key={p.id} payment={p} />
-                              ))
+                              <BillingWeekSessionBuckets
+                                weekKey={weekKey}
+                                payments={payments.payments}
+                                expandedSessionComposite={expandedSessionComposite}
+                                setExpandedSessionComposite={setExpandedSessionComposite}
+                              />
                             )}
                           </div>
                         ) : null}

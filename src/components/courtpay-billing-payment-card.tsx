@@ -6,6 +6,7 @@ export interface CourtPayBillingPaymentCardData {
   id: string;
   playerName: string;
   playerPhone: string;
+  playerSkillLevel?: string | null;
   amount: number;
   paymentRef: string | null;
   paymentMethod: string;
@@ -38,6 +39,9 @@ export function CourtPayBillingPaymentCard({
         <div className="min-w-0">
           <p className="text-sm font-medium truncate">{payment.playerName}</p>
           <p className="text-xs text-neutral-500">{payment.playerPhone}</p>
+          {payment.playerSkillLevel ? (
+            <p className="text-[11px] text-neutral-600 mt-0.5">Skill: {payment.playerSkillLevel}</p>
+          ) : null}
         </div>
         <p className="text-sm font-semibold text-purple-400">
           {formatVND(payment.amount)} VND

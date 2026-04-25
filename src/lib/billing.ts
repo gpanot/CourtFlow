@@ -96,6 +96,15 @@ interface CheckInWithRelations {
     phone: string;
     skillLevel: string | null;
   } | null;
+  session: {
+    id: string;
+    date: Date;
+    openedAt: Date;
+    closedAt: Date | null;
+    status: string;
+    type: string;
+    title: string | null;
+  } | null;
 }
 
 async function getBillablePaymentsForPeriod(
@@ -117,6 +126,17 @@ async function getBillablePaymentsForPeriod(
           name: true,
           phone: true,
           skillLevel: true,
+        },
+      },
+      session: {
+        select: {
+          id: true,
+          date: true,
+          openedAt: true,
+          closedAt: true,
+          status: true,
+          type: true,
+          title: true,
         },
       },
     },
@@ -284,6 +304,17 @@ export async function getBillablePaymentsForWeek(
         confirmedBy: p.confirmedBy,
         cancelReason: p.cancelReason,
         cancelledAt: p.cancelledAt,
+        session: p.session
+          ? {
+              id: p.session.id,
+              date: p.session.date,
+              openedAt: p.session.openedAt,
+              closedAt: p.session.closedAt,
+              status: p.session.status,
+              type: p.session.type,
+              title: p.session.title,
+            }
+          : null,
       };
     })
     .filter((p): p is NonNullable<typeof p> => p !== null);
