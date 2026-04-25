@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { CameraView, type CameraType, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
-import { api } from "../../lib/api-client";
+import { api, ApiRequestError } from "../../lib/api-client";
 import { useAuthStore } from "../../stores/auth-store";
 import { useSocket } from "../../hooks/useSocket";
 import { FaceCaptureCard } from "../../components/FaceCaptureCard";
@@ -255,28 +255,10 @@ export function CheckInTabScreen() {
         const data = await api.post<{
           resultType?: string;
           error?: string;
-          pendingPaymentId?: string;
-          amount?: number;
-          vietQR?: string | null;
-          paymentRef?: string;
-          playerName?: string | null;
-          playerPhone?: string | null;
-        }>("/api/kiosk/checkin-payment", {
-          venueId,
-          imageBase64,
-        });
-        const payment = toPendingPayment(data);
-        if (payment) {
-          setPendingPayment(payment);
-          setStep("awaiting_payment");
-          setExistingCameraStarted(false);
-          return;
-        }
-        if (data.resultType === "already_checked_in") {
-          setStep("success");
-          setExistingCameraStarted(false);
-          return;
-        }
+          player?: { id: string; name: string; phone: string };
+          alreadyPaidStatus?: string;
+        }>("/api/courtpay/face-checkin", { venueId, imageBase64 });
+
         if (data.resultType === "needs_registration") {
           setError(t("checkInFaceNotRecognized"));
           return;
@@ -285,18 +267,60 @@ export function CheckInTabScreen() {
           setError(t("checkInNoFaceDetected"));
           return;
         }
-        if (data.error) {
-          setError(data.error);
+        if (data.resultType === "error") {
+          setError(data.error ?? t("somethingWrong"));
           return;
         }
-        setStep("success");
+        if (data.resultType === "already_paid") {
+          setStep("success");
+          setExistingCameraStarted(false);
+          return;
+        }
+        if (data.resultType === "matched" && data.player) {
+          const pay = await api.post<{
+            pendingPaymentId?: string;
+            amount?: number;
+            vietQR?: string | null;
+            paymentRef?: string;
+            playerName?: string | null;
+            playerPhone?: string | null;
+            checkedIn?: boolean;
+            free?: boolean;
+          }>("/api/courtpay/pay-session", {
+            venueCode: venueId,
+            playerId: data.player.id,
+          });
+          if (pay.checkedIn || pay.free) {
+            setStep("success");
+            setExistingCameraStarted(false);
+            return;
+          }
+          const payment = toPendingPayment(pay);
+          if (payment) {
+            setPendingPayment(payment);
+            setStep("awaiting_payment");
+            setExistingCameraStarted(false);
+            return;
+          }
+          setStep("success");
+          setExistingCameraStarted(false);
+          return;
+        }
+        setError(t("checkInFaceNotRecognized"));
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Check-in failed");
+        const msg =
+          err instanceof ApiRequestError || err instanceof Error ? err.message : "Check-in failed";
+        if (msg === "already_checked_in") {
+          setStep("success");
+          setExistingCameraStarted(false);
+          return;
+        }
+        setError(msg);
       }
     } finally {
       setExistingCaptureBusy(false);
     }
-  }, [existingCameraReady, existingCaptureBusy, venueId]);
+  }, [existingCameraReady, existingCaptureBusy, venueId, t]);
 
   const stopExistingCamera = useCallback(() => {
     setExistingCameraStarted(false);
@@ -336,9 +360,23 @@ export function CheckInTabScreen() {
     setLoading(true);
     setError("");
     try {
-      // CourtPay players (CheckInPlayer) use the courtpay pay-session endpoint.
-      // Self check-in players (Player) use the kiosk checkin-payment endpoint.
-      const isCourtPay = existingPreview.source === "checkInPlayer";
+      let checkInPlayerId = existingPreview.id;
+      if (existingPreview.source === "player") {
+        const bridged = await api.post<{
+          checkInPlayer: { id: string; name: string; phone: string };
+        }>("/api/courtpay/staff/ensure-check-in-player", {
+          venueId,
+          playerId: existingPreview.id,
+        });
+        checkInPlayerId = bridged.checkInPlayer.id;
+        setExistingPreview({
+          id: bridged.checkInPlayer.id,
+          name: bridged.checkInPlayer.name,
+          phone: bridged.checkInPlayer.phone,
+          source: "checkInPlayer",
+        });
+      }
+
       const data = await api.post<{
         pendingPaymentId?: string;
         amount?: number;
@@ -346,12 +384,17 @@ export function CheckInTabScreen() {
         paymentRef?: string;
         playerName?: string | null;
         playerPhone?: string | null;
-      }>(
-        isCourtPay ? "/api/courtpay/pay-session" : "/api/kiosk/checkin-payment",
-        isCourtPay
-          ? { playerId: existingPreview.id, venueCode: venueId }
-          : { venueId, playerId: existingPreview.id }
-      );
+        checkedIn?: boolean;
+        free?: boolean;
+      }>("/api/courtpay/pay-session", {
+        venueCode: venueId,
+        playerId: checkInPlayerId,
+      });
+
+      if (data.checkedIn || data.free) {
+        setStep("success");
+        return;
+      }
       const payment = toPendingPayment(data);
       if (payment) {
         setPendingPayment(payment);
@@ -360,7 +403,13 @@ export function CheckInTabScreen() {
         setStep("success");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Check-in failed");
+      const msg =
+        err instanceof ApiRequestError || err instanceof Error ? err.message : "Check-in failed";
+      if (msg === "already_checked_in") {
+        setStep("success");
+        return;
+      }
+      setError(msg);
       setStep("error");
     } finally {
       setLoading(false);
@@ -387,14 +436,20 @@ export function CheckInTabScreen() {
         paymentRef?: string;
         playerName?: string | null;
         playerPhone?: string | null;
-      }>("/api/kiosk/register", {
-        venueId,
+        checkedIn?: boolean;
+        free?: boolean;
+      }>("/api/courtpay/register", {
+        venueCode: venueId,
         imageBase64: faceBase64,
         name: name.trim(),
         phone: phone.trim(),
         gender,
         skillLevel,
       });
+      if (data.checkedIn || data.free) {
+        setStep("success");
+        return;
+      }
       const payment = toPendingPayment(data);
       if (payment) {
         setPendingPayment(payment);
@@ -414,7 +469,7 @@ export function CheckInTabScreen() {
     if (!pendingPayment) return;
     setLoading(true);
     try {
-      await api.post("/api/kiosk/cash-payment", {
+      await api.post("/api/courtpay/cash-payment", {
         pendingPaymentId: pendingPayment.id,
       });
       setStep("success");
@@ -574,9 +629,7 @@ export function CheckInTabScreen() {
                 <View style={styles.playerInfo}>
                   <Text style={styles.playerName}>{existingPreview.name}</Text>
                   <Text style={styles.playerPhone}>{existingPreview.phone}</Text>
-                  {existingPreview.source === "checkInPlayer" && (
-                    <Text style={styles.playerSourceBadge}>CourtPay</Text>
-                  )}
+                  <Text style={styles.playerSourceBadge}>CourtPay</Text>
                 </View>
                 <TouchableOpacity
                   style={[styles.inlineCheckBtn, loading && styles.disabledBtn]}

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSessionStore, useHasHydrated } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { ArrowLeft, Loader2, Users, DollarSign, Clock, TrendingUp, Receipt, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Loader2, DollarSign, Clock, TrendingUp, Receipt, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
 import { useSocket } from "@/hooks/use-socket";
 import {
   CourtPayBillingPaymentCard,
@@ -15,7 +15,8 @@ import {
 type Tab = "today" | "history" | "subscriptions" | "billing";
 
 interface TodayData {
-  checkInsToday: number;
+  paymentsTodaySessionsTotal: number;
+  paymentsTodaySessionsCount: number;
   revenueToday: number;
   activeSubscribers: number;
   pendingPayments: number;
@@ -330,9 +331,12 @@ export default function BossDashboardPage() {
             <div className="grid grid-cols-2 gap-3 mb-6">
               <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
                 <div className="flex items-center gap-2 text-neutral-400 text-xs mb-1">
-                  <Users className="h-3.5 w-3.5" /> Kiosk check-ins
+                  <Receipt className="h-3.5 w-3.5" /> Payments
                 </div>
-                <p className="text-2xl font-bold">{todayData.checkInsToday}</p>
+                <p className="text-2xl font-bold">{formatVND(todayData.paymentsTodaySessionsTotal ?? 0)}</p>
+                <p className="text-xs text-neutral-500 mt-1">
+                  {(todayData.paymentsTodaySessionsCount ?? 0).toLocaleString()} payments · today&apos;s sessions
+                </p>
               </div>
               <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
                 <div className="flex items-center gap-2 text-neutral-400 text-xs mb-1">

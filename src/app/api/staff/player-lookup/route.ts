@@ -25,12 +25,42 @@ export async function POST(request: NextRequest) {
 
     console.log("[Staff Player Lookup] digitsOnly:", digitsOnly);
 
-    // 1. Search the main Player table (self check-in / wristband flow)
+    // 1. At a venue, prefer CourtPay `CheckInPlayer` so staff flows stay CourtPay-first.
+    type CipRow = { id: string; name: string; phone: string; skill_level: string | null };
+    let checkInRows: CipRow[] = [];
+
+    if (venueId) {
+      checkInRows = await prisma.$queryRaw<CipRow[]>`
+        SELECT id, name, phone, skill_level
+        FROM check_in_players
+        WHERE venue_id = ${venueId}
+          AND regexp_replace(phone, '\\D', '', 'g') = ${digitsOnly}
+        LIMIT 1
+      `;
+    }
+
+    const checkInPlayer = checkInRows[0] ?? null;
+    if (checkInPlayer) {
+      console.log("[Staff Player Lookup] check_in_players (venue) result:", checkInPlayer.id);
+      return json({
+        success: true,
+        source: "checkInPlayer",
+        player: {
+          id: checkInPlayer.id,
+          name: checkInPlayer.name,
+          phone: checkInPlayer.phone,
+          skillLevel: checkInPlayer.skill_level ?? null,
+          facePhotoPath: null,
+          avatarPhotoPath: null,
+        },
+      });
+    }
+
+    // 2. Legacy `Player` row (linked face / app) — staff check-in bridges to CheckInPlayer at payment time.
     const player = await findPlayerByPhoneDigits(phone.trim(), { minimumDigits: 4 });
     console.log("[Staff Player Lookup] players table result:", player?.id ?? "not found");
 
     if (player) {
-      // Fetch the full row to include photo paths
       const fullPlayer = await prisma.player.findUnique({
         where: { id: player.id },
         select: { id: true, name: true, phone: true, skillLevel: true, facePhotoPath: true, avatarPhotoPath: true },
@@ -49,43 +79,30 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 2. Search CheckInPlayer table (CourtPay flow) using digits-only match
-    type CipRow = { id: string; name: string; phone: string; skill_level: string | null };
-    let checkInRows: CipRow[];
-
-    if (venueId) {
-      checkInRows = await prisma.$queryRaw<CipRow[]>`
-        SELECT id, name, phone, skill_level
-        FROM check_in_players
-        WHERE venue_id = ${venueId}
-          AND regexp_replace(phone, '\\D', '', 'g') = ${digitsOnly}
-        LIMIT 1
-      `;
-    } else {
+    // 3. CheckInPlayer at any venue (only when venue-scoped search did not run)
+    if (!venueId) {
       checkInRows = await prisma.$queryRaw<CipRow[]>`
         SELECT id, name, phone, skill_level
         FROM check_in_players
         WHERE regexp_replace(phone, '\\D', '', 'g') = ${digitsOnly}
         LIMIT 1
       `;
-    }
-
-    console.log("[Staff Player Lookup] check_in_players result:", checkInRows[0]?.id ?? "not found");
-
-    const checkInPlayer = checkInRows[0] ?? null;
-    if (checkInPlayer) {
-      return json({
-        success: true,
-        source: "checkInPlayer",
-        player: {
-          id: checkInPlayer.id,
-          name: checkInPlayer.name,
-          phone: checkInPlayer.phone,
-          skillLevel: checkInPlayer.skill_level ?? null,
-          facePhotoPath: null,
-          avatarPhotoPath: null,
-        },
-      });
+      const cipGlobal = checkInRows[0] ?? null;
+      if (cipGlobal) {
+        console.log("[Staff Player Lookup] check_in_players (global) result:", cipGlobal.id);
+        return json({
+          success: true,
+          source: "checkInPlayer",
+          player: {
+            id: cipGlobal.id,
+            name: cipGlobal.name,
+            phone: cipGlobal.phone,
+            skillLevel: cipGlobal.skill_level ?? null,
+            facePhotoPath: null,
+            avatarPhotoPath: null,
+          },
+        });
+      }
     }
 
     console.log("[Staff Player Lookup] no player found for digits:", digitsOnly);

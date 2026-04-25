@@ -2,14 +2,17 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireStaff } from "@/lib/auth";
 
-/** UTC calendar day [start, end] — matches `toISOString().slice(0, 10)` used in boss history. */
-function utcCalendarDayBounds(d = new Date()) {
-  const y = d.getUTCFullYear();
-  const m = d.getUTCMonth();
-  const day = d.getUTCDate();
-  const start = new Date(Date.UTC(y, m, day, 0, 0, 0, 0));
-  const end = new Date(Date.UTC(y, m, day, 23, 59, 59, 999));
-  return { start, end };
+/**
+ * Server-local calendar day [start, nextDayStart) — matches `GET .../boss/history`
+ * (`todayStart.setHours(0,0,0,0)`), not UTC midnight. Using UTC here made the
+ * Payments KPI show 0 while History / session cards (local "today") still looked correct.
+ */
+function localCalendarDayBounds(d = new Date()) {
+  const start = new Date(d);
+  start.setHours(0, 0, 0, 0);
+  const nextDayStart = new Date(start);
+  nextDayStart.setDate(nextDayStart.getDate() + 1);
+  return { start, nextDayStart };
 }
 
 export async function GET(req: Request) {
@@ -23,28 +26,22 @@ export async function GET(req: Request) {
     }
 
     const now = new Date();
-    const { start: todayStart, end: todayEnd } = utcCalendarDayBounds(now);
+    const { start: todayStart, nextDayStart: todayNext } = localCalendarDayBounds(now);
 
     const [
-      checkIns,
       revenue,
       activeSubscribers,
       pendingPayments,
       recentCheckIns,
       courtSessionsToday,
       openCourtSession,
+      sessionsOpenedTodayForPayments,
     ] = await Promise.all([
-      prisma.checkInRecord.count({
-        where: {
-          venueId,
-          checkedInAt: { gte: todayStart, lte: todayEnd },
-        },
-      }),
       prisma.pendingPayment.aggregate({
         where: {
           venueId,
           status: "confirmed",
-          confirmedAt: { gte: todayStart, lte: todayEnd },
+          confirmedAt: { gte: todayStart, lt: todayNext },
           checkInPlayerId: { not: null },
         },
         _sum: { amount: true },
@@ -62,7 +59,7 @@ export async function GET(req: Request) {
       prisma.checkInRecord.findMany({
         where: {
           venueId,
-          checkedInAt: { gte: todayStart, lte: todayEnd },
+          checkedInAt: { gte: todayStart, lt: todayNext },
         },
         include: { player: true },
         orderBy: { checkedInAt: "desc" },
@@ -71,7 +68,7 @@ export async function GET(req: Request) {
       prisma.session.findMany({
         where: {
           venueId,
-          openedAt: { gte: todayStart, lte: todayEnd },
+          openedAt: { gte: todayStart, lt: todayNext },
         },
         orderBy: { openedAt: "desc" },
         take: 20,
@@ -86,10 +83,44 @@ export async function GET(req: Request) {
           _count: { select: { queueEntries: true } },
         },
       }),
+      prisma.session.findMany({
+        where: { venueId, openedAt: { gte: todayStart, lt: todayNext } },
+        select: { id: true, openedAt: true, closedAt: true },
+      }),
     ]);
 
+    /** Same rules as `GET /api/sessions/history` per session; dedupe payment ids across overlapping windows. */
+    const seenPaymentIds = new Set<string>();
+    let paymentsTodaySessionsTotal = 0;
+    for (const s of sessionsOpenedTodayForPayments) {
+      const periodEnd = s.closedAt ?? now;
+      const periodStart = s.openedAt;
+      const payments = await prisma.pendingPayment.findMany({
+        where: {
+          venueId,
+          status: "confirmed",
+          OR: [
+            { sessionId: s.id },
+            {
+              checkInPlayerId: { not: null },
+              confirmedAt: { gte: periodStart, lte: periodEnd },
+            },
+          ],
+        },
+        select: { id: true, amount: true },
+      });
+      for (const p of payments) {
+        if (!seenPaymentIds.has(p.id)) {
+          seenPaymentIds.add(p.id);
+          paymentsTodaySessionsTotal += p.amount;
+        }
+      }
+    }
+    const paymentsTodaySessionsCount = seenPaymentIds.size;
+
     return NextResponse.json({
-      checkInsToday: checkIns,
+      paymentsTodaySessionsTotal,
+      paymentsTodaySessionsCount,
       revenueToday: revenue._sum.amount || 0,
       activeSubscribers,
       pendingPayments,
