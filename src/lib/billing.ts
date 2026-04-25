@@ -252,6 +252,45 @@ export async function generateWeeklyInvoice(
   return invoice;
 }
 
+/** Same rule as GET /api/sessions/[sessionId]/payments: CourtPay rows often have no sessionId FK. */
+type SessionTimeWindow = {
+  id: string;
+  date: Date;
+  openedAt: Date;
+  closedAt: Date | null;
+  status: string;
+  type: string;
+  title: string | null;
+};
+
+function inferCourtPaySessionByTimeWindow(
+  confirmedAt: Date,
+  candidates: SessionTimeWindow[]
+): SessionTimeWindow | null {
+  const t = confirmedAt.getTime();
+  const matches = candidates.filter((s) => {
+    if (s.openedAt.getTime() > t) return false;
+    if (s.closedAt === null) return true;
+    return s.closedAt.getTime() >= t;
+  });
+  if (matches.length === 0) return null;
+  // If multiple windows contain the same instant (overlapping / unclosed), prefer the most recently opened session.
+  matches.sort((a, b) => b.openedAt.getTime() - a.openedAt.getTime());
+  return matches[0];
+}
+
+function sessionToBillingPayload(s: SessionTimeWindow) {
+  return {
+    id: s.id,
+    date: s.date,
+    openedAt: s.openedAt,
+    closedAt: s.closedAt,
+    status: s.status,
+    type: s.type,
+    title: s.title,
+  };
+}
+
 export async function getCurrentWeekUsage(venueId: string) {
   const { weekStart, weekEnd } = getWeekBounds();
   const rates = await getBillingRates(venueId);
@@ -285,10 +324,33 @@ export async function getBillablePaymentsForWeek(
   weekStart: Date,
   weekEnd: Date
 ) {
-  const payments = await getBillablePaymentsForPeriod(venueId, weekStart, weekEnd);
+  const [payments, sessionCandidates] = await Promise.all([
+    getBillablePaymentsForPeriod(venueId, weekStart, weekEnd),
+    prisma.session.findMany({
+      where: {
+        venueId,
+        openedAt: { lte: weekEnd },
+        OR: [{ closedAt: null }, { closedAt: { gte: weekStart } }],
+      },
+      select: {
+        id: true,
+        date: true,
+        openedAt: true,
+        closedAt: true,
+        status: true,
+        type: true,
+        title: true,
+      },
+      orderBy: { openedAt: "asc" },
+    }),
+  ]);
+
   const list = payments
     .map((p) => {
       if (!p.checkInPlayer || !p.confirmedAt || !p.checkInPlayerId) return null;
+      const fromFk = p.session;
+      const inferred =
+        fromFk ?? inferCourtPaySessionByTimeWindow(p.confirmedAt, sessionCandidates);
       return {
         id: p.id,
         checkInPlayerId: p.checkInPlayerId,
@@ -304,17 +366,7 @@ export async function getBillablePaymentsForWeek(
         confirmedBy: p.confirmedBy,
         cancelReason: p.cancelReason,
         cancelledAt: p.cancelledAt,
-        session: p.session
-          ? {
-              id: p.session.id,
-              date: p.session.date,
-              openedAt: p.session.openedAt,
-              closedAt: p.session.closedAt,
-              status: p.session.status,
-              type: p.session.type,
-              title: p.session.title,
-            }
-          : null,
+        session: inferred ? sessionToBillingPayload(inferred) : null,
       };
     })
     .filter((p): p is NonNullable<typeof p> => p !== null);
