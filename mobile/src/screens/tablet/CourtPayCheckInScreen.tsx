@@ -94,15 +94,6 @@ interface PendingPaymentState {
   qrUrl: string | null;
   playerName: string;
   skillLevel?: CourtPaySkillLevelUI;
-  /** On-screen diagnostics for QR border / level parsing (remove when stable). */
-  _debug?: {
-    flow: "returning_pay_session" | "first_time_register";
-    apiSkillLevel: string | null;
-    playerSkillLevel: string | null;
-    combinedRaw: string | null;
-    parsedLabel: string;
-    borderApplied: boolean;
-  };
 }
 
 interface ActiveSubInfo {
@@ -768,22 +759,13 @@ export function CourtPayCheckInScreen({
 
       if (res.pendingPaymentId) {
         const levelRaw = res.skillLevel ?? targetPlayer.skillLevel ?? undefined;
-        const parsed = parseCourtPaySkillLevel(levelRaw);
         setPendingPayment({
           id: res.pendingPaymentId,
           amount: res.amount ?? 0,
           paymentRef: res.paymentRef ?? "",
           qrUrl: res.vietQR ?? null,
           playerName: targetPlayer.name,
-          skillLevel: parsed,
-          _debug: {
-            flow: "returning_pay_session",
-            apiSkillLevel: res.skillLevel ?? null,
-            playerSkillLevel: targetPlayer.skillLevel ?? null,
-            combinedRaw: levelRaw ?? null,
-            parsedLabel: parsed ?? "(parse → undefined)",
-            borderApplied: !!parsed,
-          },
+          skillLevel: parseCourtPaySkillLevel(levelRaw),
         });
         setConfirmedSubInfo(null);
         setStep("awaiting_payment");
@@ -848,22 +830,13 @@ export function CourtPayCheckInScreen({
         setStep("confirmed");
       } else if (reg.pendingPaymentId) {
         const levelRaw = reg.skillLevel ?? skillLevel;
-        const parsed = parseCourtPaySkillLevel(levelRaw);
         setPendingPayment({
           id: reg.pendingPaymentId,
           amount: reg.amount ?? 0,
           paymentRef: reg.paymentRef ?? "",
           qrUrl: reg.vietQR ?? null,
           playerName: registeredPlayer.name,
-          skillLevel: parsed,
-          _debug: {
-            flow: "first_time_register",
-            apiSkillLevel: reg.skillLevel ?? null,
-            playerSkillLevel: null,
-            combinedRaw: levelRaw ?? null,
-            parsedLabel: parsed ?? "(parse → undefined)",
-            borderApplied: !!parsed,
-          },
+          skillLevel: parseCourtPaySkillLevel(levelRaw),
         });
         setConfirmedSubInfo(null);
         setStep("awaiting_payment");
@@ -1820,37 +1793,6 @@ export function CourtPayCheckInScreen({
               </Text>
               <Text style={[styles.ref, isLight && styles.refLight]}>{pendingPayment?.paymentRef}</Text>
 
-              {pendingPayment?._debug ? (
-                <View
-                  style={[
-                    styles.payDebugBox,
-                    isLight && styles.payDebugBoxLight,
-                  ]}
-                >
-                  <Text style={[styles.payDebugTitle, isLight && styles.payDebugTitleLight]}>
-                    Debug — QR border / level
-                  </Text>
-                  <Text style={[styles.payDebugLine, isLight && styles.payDebugLineLight]}>
-                    flow: {pendingPayment._debug.flow}
-                  </Text>
-                  <Text style={[styles.payDebugLine, isLight && styles.payDebugLineLight]}>
-                    api skillLevel: {JSON.stringify(pendingPayment._debug.apiSkillLevel)}
-                  </Text>
-                  <Text style={[styles.payDebugLine, isLight && styles.payDebugLineLight]}>
-                    player skillLevel: {JSON.stringify(pendingPayment._debug.playerSkillLevel)}
-                  </Text>
-                  <Text style={[styles.payDebugLine, isLight && styles.payDebugLineLight]}>
-                    combined raw: {JSON.stringify(pendingPayment._debug.combinedRaw)}
-                  </Text>
-                  <Text style={[styles.payDebugLine, isLight && styles.payDebugLineLight]}>
-                    parsed: {pendingPayment._debug.parsedLabel}
-                  </Text>
-                  <Text style={[styles.payDebugLine, isLight && styles.payDebugLineLight]}>
-                    border applied: {String(pendingPayment._debug.borderApplied)}
-                  </Text>
-                </View>
-              ) : null}
-
               <View style={styles.payWaitingRow}>
                 <View style={[styles.payPulseDot, dyn.payPulseDot]} />
                 <Text style={[styles.waitText, isLight && styles.waitTextLight]}>{t("payWaitingForStaff")}</Text>
@@ -2768,33 +2710,6 @@ const styles = StyleSheet.create({
   },
   payScanHint: { fontSize: 14, color: "#a3a3a3", textAlign: "center", paddingHorizontal: 8 },
   payScanHintLight: { color: "#64748b" },
-  payDebugBox: {
-    alignSelf: "stretch",
-    marginTop: 4,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "rgba(251,191,36,0.55)",
-    backgroundColor: "rgba(0,0,0,0.35)",
-    gap: 4,
-  },
-  payDebugBoxLight: {
-    borderColor: "rgba(180,83,9,0.45)",
-    backgroundColor: "rgba(255,251,235,0.95)",
-  },
-  payDebugTitle: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#fbbf24",
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-  },
-  payDebugTitleLight: { color: "#b45309" },
-  payDebugLine: {
-    fontSize: 11,
-    color: "#e5e5e5",
-    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
-  },
-  payDebugLineLight: { color: "#334155" },
   qrWrap: {
     backgroundColor: "#fff",
     borderRadius: 20,

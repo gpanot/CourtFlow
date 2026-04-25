@@ -30,6 +30,10 @@ import { resolveMediaUrl } from "../../lib/media-url";
 import type { PendingPayment, StaffPaidPaymentsResponse } from "../../types/api";
 import type { StaffTabParamList } from "../../navigation/types";
 import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
+import {
+  COURTPAY_LEVEL_QR_BORDER,
+  parseCourtPaySkillLevel,
+} from "../../lib/courtpay-skill-level-ui";
 
 type SubTab = "pending" | "paid";
 
@@ -64,6 +68,13 @@ function getFacePreviewUri(p: PendingPayment): string | null {
 
 function getFlowTag(p: PendingPayment): "CourtPay" | "Self" {
   return p.checkInPlayerId ? "CourtPay" : "Self";
+}
+
+/** Same hues as CourtPay QR / kiosk — ring around staff payment card face thumb. */
+function paymentSkillRingStyle(p: PendingPayment) {
+  const raw = p.player?.skillLevel ?? p.checkInPlayer?.skillLevel ?? undefined;
+  const lvl = parseCourtPaySkillLevel(raw);
+  return lvl ? COURTPAY_LEVEL_QR_BORDER[lvl] : null;
 }
 
 function getMethodBadge(paymentMethod: string): {
@@ -147,19 +158,32 @@ function createStyles(t: AppColors) {
       borderColor: t.border,
       gap: 8,
     },
-    faceBtnSm: {
+    thumbRingSm: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      justifyContent: "center",
+      alignItems: "center",
       alignSelf: "flex-start",
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: t.border,
+    },
+    thumbRingSmDefault: { borderWidth: 1, borderColor: t.border },
+    thumbRingLg: {
+      alignSelf: "stretch",
+      borderRadius: 14,
+      overflow: "hidden",
+    },
+    thumbRingLgDefault: { borderWidth: 1, borderColor: t.border },
+    faceTouchSm: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
       overflow: "hidden",
       backgroundColor: t.bg,
     },
-    faceBtnLg: {
-      alignSelf: "stretch",
+    faceTouchLg: {
+      width: "100%",
+      height: 200,
       borderRadius: 10,
-      borderWidth: 1,
-      borderColor: t.border,
       overflow: "hidden",
       backgroundColor: t.bg,
     },
@@ -517,22 +541,31 @@ export function PaymentTabScreen() {
     const isUrgent = waitMs > 2 * 60 * 1000;
     const expanded = expandedPhotoId === item.id;
 
+    const skillRing = paymentSkillRingStyle(item);
+
     return (
       <View style={styles.card}>
         {faceUri ? (
-          <TouchableOpacity
-            style={expanded ? styles.faceBtnLg : styles.faceBtnSm}
-            onPress={() =>
-              setExpandedPhotoId((prev) => (prev === item.id ? null : item.id))
-            }
-            activeOpacity={0.85}
+          <View
+            style={[
+              expanded ? styles.thumbRingLg : styles.thumbRingSm,
+              skillRing ?? (expanded ? styles.thumbRingLgDefault : styles.thumbRingSmDefault),
+            ]}
           >
-            <Image
-              source={{ uri: faceUri }}
-              style={expanded ? styles.faceImgLg : styles.faceImgSm}
-              resizeMode="cover"
-            />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={expanded ? styles.faceTouchLg : styles.faceTouchSm}
+              onPress={() =>
+                setExpandedPhotoId((prev) => (prev === item.id ? null : item.id))
+              }
+              activeOpacity={0.85}
+            >
+              <Image
+                source={{ uri: faceUri }}
+                style={expanded ? styles.faceImgLg : styles.faceImgSm}
+                resizeMode="cover"
+              />
+            </TouchableOpacity>
+          </View>
         ) : null}
 
         <View style={styles.topRow}>
@@ -633,24 +666,34 @@ export function PaymentTabScreen() {
         : `${t("paymentSubLeft")}: ${sub.sessionsRemaining ?? 0} ${t("paymentSessions")} (${sub.daysRemaining} ${t("paymentDays")})`
       : null;
 
+    const skillRingPaid = paymentSkillRingStyle(item);
+
     return (
       <View style={[styles.card, isCancelled && styles.cardCancelled]}>
         {faceUri ? (
-          <TouchableOpacity
-            style={expanded ? styles.faceBtnLg : styles.faceBtnSm}
-            onPress={() =>
-              setExpandedPhotoId((prev) =>
-                prev === `paid-${item.id}` ? null : `paid-${item.id}`
-              )
-            }
-            activeOpacity={0.85}
+          <View
+            style={[
+              expanded ? styles.thumbRingLg : styles.thumbRingSm,
+              skillRingPaid ??
+                (expanded ? styles.thumbRingLgDefault : styles.thumbRingSmDefault),
+            ]}
           >
-            <Image
-              source={{ uri: faceUri }}
-              style={expanded ? styles.faceImgLg : styles.faceImgSm}
-              resizeMode="cover"
-            />
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={expanded ? styles.faceTouchLg : styles.faceTouchSm}
+              onPress={() =>
+                setExpandedPhotoId((prev) =>
+                  prev === `paid-${item.id}` ? null : `paid-${item.id}`
+                )
+              }
+              activeOpacity={0.85}
+            >
+              <Image
+                source={{ uri: faceUri }}
+                style={expanded ? styles.faceImgLg : styles.faceImgSm}
+                resizeMode="cover"
+              />
+            </TouchableOpacity>
+          </View>
         ) : null}
         <View style={styles.topRow}>
           <View style={{ flex: 1, minWidth: 0 }}>

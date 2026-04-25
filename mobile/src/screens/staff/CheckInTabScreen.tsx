@@ -49,12 +49,6 @@ interface PendingPaymentState {
   playerName?: string | null;
   playerPhone?: string | null;
   skillLevel?: CourtPaySkillLevelUI;
-  /** On-screen diagnostics for QR border / level (remove when stable). */
-  _debug?: {
-    rawFromApi: string | null;
-    parsedLabel: string;
-    borderApplied: boolean;
-  };
 }
 
 type FaceQualityTier = "good" | "fair" | "poor";
@@ -171,7 +165,6 @@ export function CheckInTabScreen() {
     } | null
   ) => {
     if (!data?.pendingPaymentId) return null;
-    const rawFromApi = data.skillLevel ?? null;
     const parsedLevel = parseCourtPaySkillLevel(data.skillLevel ?? undefined);
     return {
       id: data.pendingPaymentId,
@@ -181,11 +174,6 @@ export function CheckInTabScreen() {
       playerName: data.playerName ?? null,
       playerPhone: data.playerPhone ?? null,
       ...(parsedLevel ? { skillLevel: parsedLevel } : {}),
-      _debug: {
-        rawFromApi,
-        parsedLabel: parsedLevel ?? "(parse → undefined)",
-        borderApplied: !!parsedLevel,
-      },
     };
   };
 
@@ -872,20 +860,6 @@ export function CheckInTabScreen() {
       <Text style={styles.paymentRef}>
         Ref: {pendingPayment?.paymentRef}
       </Text>
-      {pendingPayment?._debug ? (
-        <View style={styles.payDebugBox}>
-          <Text style={styles.payDebugTitle}>Debug — QR border / level</Text>
-          <Text style={styles.payDebugLine}>
-            api skillLevel: {JSON.stringify(pendingPayment._debug.rawFromApi)}
-          </Text>
-          <Text style={styles.payDebugLine}>
-            parsed: {pendingPayment._debug.parsedLabel}
-          </Text>
-          <Text style={styles.payDebugLine}>
-            border applied: {String(pendingPayment._debug.borderApplied)}
-          </Text>
-        </View>
-      ) : null}
       <TouchableOpacity
         style={styles.cashBtn}
         onPress={handleCashPayment}
@@ -1022,25 +996,6 @@ function createCheckInStyles(t: AppColors) {
     qrImage: { width: 200, height: 200 },
     paymentAmount: { fontSize: 22, fontWeight: "700", color: t.text, textAlign: "center" },
     paymentRef: { fontSize: 13, color: t.subtle, textAlign: "center" },
-    payDebugBox: {
-      alignSelf: "stretch",
-      marginTop: 8,
-      padding: 12,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: "rgba(251,191,36,0.55)",
-      backgroundColor: t.card,
-      gap: 4,
-    },
-    payDebugTitle: {
-      fontSize: 12,
-      fontWeight: "800",
-      color: t.amber400,
-    },
-    payDebugLine: {
-      fontSize: 11,
-      color: t.muted,
-    },
     cashBtn: { alignItems: "center", justifyContent: "center", backgroundColor: t.amber400, height: 44, borderRadius: 10, width: "100%" },
     cashBtnText: { color: t.bg, fontSize: 15, fontWeight: "700" },
     cancelLink: { padding: 10 },
