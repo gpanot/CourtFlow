@@ -257,6 +257,9 @@ export async function updatePendingCheckinSessionPaymentHeadcount(input: {
     });
     emitToVenue(input.venueId, "payment:updated", {
       pendingPaymentId: pending.id,
+      partyCount,
+      amount,
+      paymentRef,
     });
   }
 

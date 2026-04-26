@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useLayoutEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useLayoutEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Image,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -20,6 +21,12 @@ import type { AppColors } from "../../theme/palettes";
 import { resolveMediaUrl } from "../../lib/media-url";
 import type { PendingPayment } from "../../types/api";
 import type { StaffStackParamList } from "../../navigation/types";
+import {
+  exportToCSV,
+  formatDateTimeDDMMYYYYHHmm,
+  sessionExportFilename,
+} from "../../lib/csv-export";
+import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
 
 type Filter = "all" | "cash" | "qr" | "subscription";
 
@@ -38,6 +45,20 @@ function getDisplayPlayer(p: PendingPayment): { name: string; skillLevel: string
   if (p.player?.name?.trim()) return { name: p.player.name, skillLevel: p.player.skillLevel ?? "—" };
   if (p.checkInPlayer?.name?.trim()) return { name: p.checkInPlayer.name, skillLevel: p.checkInPlayer.skillLevel ?? "—" };
   return { name: "Unknown", skillLevel: "—" };
+}
+
+function getExportPhone(p: PendingPayment): string {
+  const c = p.checkInPlayer?.phone?.trim();
+  if (c) return c;
+  const pl = p.player?.phone?.trim();
+  if (pl) return pl;
+  return "";
+}
+
+function paymentMethodCsv(p: PendingPayment): string {
+  if (p.paymentMethod === "cash") return "Cash";
+  if (p.paymentMethod === "subscription" || p.type === "subscription") return "Sub";
+  return "QR";
 }
 
 function getFacePreviewUri(p: PendingPayment): string | null {
@@ -183,6 +204,7 @@ export function SessionDetailScreen() {
   const theme = useAppColors();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
+  const { t } = useTabletKioskLocale();
 
   const [payments, setPayments] = useState<PendingPayment[]>([]);
   const [summary, setSummary] = useState<SessionPaymentsResponse["summary"] | null>(null);
@@ -191,6 +213,46 @@ export function SessionDetailScreen() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const [expandedPhotoId, setExpandedPhotoId] = useState<string | null>(null);
+  const [exportToast, setExportToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const exportSessionCsv = useCallback(async () => {
+    if (payments.length > 500) {
+      setExportToast(t("bossExportPreparing"));
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+      toastTimer.current = setTimeout(() => setExportToast(null), 2200);
+    }
+    try {
+      const headers = [
+        "Name",
+        "Phone",
+        "Skill level",
+        "Amount paid (VND)",
+        "Payment method (QR/Cash/Sub)",
+        "Check-in time",
+      ];
+      const rows = payments.map((p) => {
+        const pl = getDisplayPlayer(p);
+        const skillRaw =
+          p.player?.skillLevel != null
+            ? String(p.player.skillLevel)
+            : p.checkInPlayer?.skillLevel != null
+              ? String(p.checkInPlayer.skillLevel)
+              : "";
+        return [
+          pl.name,
+          getExportPhone(p),
+          skillRaw,
+          p.amount,
+          paymentMethodCsv(p),
+          p.confirmedAt ? formatDateTimeDDMMYYYYHHmm(p.confirmedAt) : "",
+        ];
+      });
+      await exportToCSV(sessionExportFilename(openedAt), headers, rows);
+    } catch (e) {
+      Alert.alert("Export failed", e instanceof Error ? e.message : "Unknown error");
+    }
+  }, [payments, openedAt, t]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -199,8 +261,18 @@ export function SessionDetailScreen() {
       headerTintColor: theme.text,
       headerTitleStyle: { color: theme.text },
       headerShadowVisible: false,
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={() => void exportSessionCsv()}
+          style={{ padding: 6, marginRight: 4 }}
+          accessibilityRole="button"
+          accessibilityLabel={t("sessionDetailExportCsv")}
+        >
+          <Ionicons name="download-outline" size={18} color={theme.muted} />
+        </TouchableOpacity>
+      ),
     });
-  }, [navigation, date, theme]);
+  }, [navigation, date, theme, exportSessionCsv, t]);
 
   const fetchPayments = useCallback(async () => {
     setFetchError(null);
@@ -221,6 +293,12 @@ export function SessionDetailScreen() {
   useEffect(() => {
     void fetchPayments();
   }, [fetchPayments]);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    };
+  }, []);
 
   const filtered = useMemo(() => {
     if (filter === "all") return payments;
@@ -325,6 +403,25 @@ export function SessionDetailScreen() {
 
   return (
     <View style={styles.container}>
+      {exportToast ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            left: 20,
+            right: 20,
+            top: insets.top + 8,
+            zIndex: 10,
+            backgroundColor: "rgba(0,0,0,0.82)",
+            paddingVertical: 10,
+            paddingHorizontal: 14,
+            borderRadius: 10,
+            alignItems: "center",
+          }}
+        >
+          <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>{exportToast}</Text>
+        </View>
+      ) : null}
       {/* Revenue summary bar */}
       <View style={styles.summaryBar}>
         <Text style={styles.summaryLabel}>{timeLabel}</Text>

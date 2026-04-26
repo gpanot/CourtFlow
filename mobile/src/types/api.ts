@@ -55,11 +55,15 @@ export interface SessionHistoryRow {
   gameCount: number;
   paymentCount: number;
   paymentRevenue: number;
+  paymentQrCount?: number;
+  paymentCashCount?: number;
+  paymentSubCount?: number;
 }
 
 export interface PendingPaymentPlayer {
   id: string;
   name: string;
+  phone?: string;
   skillLevel: string | null;
   facePhotoPath: string | null;
 }

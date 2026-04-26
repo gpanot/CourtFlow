@@ -371,6 +371,15 @@ const CHECK_IN_SCANNER_EN = {
   "bossDashboardBillingPaymentReceived": "Payment received — thank you!",
   "bossDashboardBillingNoQR": "Could not generate QR code",
   "bossDashboardClosed": "closed",
+  "bossExportRevenueTitle": "Export revenue (CSV)",
+  "bossExportFrom": "From",
+  "bossExportTo": "To",
+  "bossExportButton": "Export",
+  "bossExportCancel": "Cancel",
+  "bossExportPreparing": "Preparing export…",
+  "bossExportNoData": "No sessions in this date range.",
+  "bossExportInvalidRange": "From date must be before or equal to To date.",
+  "sessionDetailExportCsv": "Export session CSV",
 
   // ── Staff Dashboard ────────────────────────────────────────────────────────
   "staffDashboardTitle": "Staff Dashboard",
@@ -827,6 +836,15 @@ const CHECK_IN_SCANNER_VI = {
   "bossDashboardBillingPaymentReceived": "Đã nhận thanh toán — cảm ơn!",
   "bossDashboardBillingNoQR": "Không thể tạo mã QR",
   "bossDashboardClosed": "đã đóng",
+  "bossExportRevenueTitle": "Xuất doanh thu (CSV)",
+  "bossExportFrom": "Từ ngày",
+  "bossExportTo": "Đến ngày",
+  "bossExportButton": "Xuất",
+  "bossExportCancel": "Hủy",
+  "bossExportPreparing": "Đang chuẩn bị xuất…",
+  "bossExportNoData": "Không có buổi trong khoảng ngày này.",
+  "bossExportInvalidRange": "Ngày bắt đầu phải trước hoặc bằng ngày kết thúc.",
+  "sessionDetailExportCsv": "Xuất CSV buổi",
 
   // ── Staff Dashboard ────────────────────────────────────────────────────────
   "staffDashboardTitle": "Bảng điều khiển nhân viên",

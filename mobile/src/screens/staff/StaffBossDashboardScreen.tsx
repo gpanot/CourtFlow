@@ -9,6 +9,7 @@ import {
   RefreshControl,
   TextInput,
   Image,
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -21,7 +22,15 @@ import type { StaffStackParamList } from "../../navigation/types";
 import type { SessionHistoryRow } from "../../types/api";
 import { SubscribersList } from "../../components/SubscribersList";
 import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PlayerCard } from "../../components/PlayerCard";
+import { BossRevenueExportSheet } from "../../components/staff/BossRevenueExportSheet";
+import {
+  exportToCSV,
+  formatDateDDMMYYYY,
+  formatFilenameDateLocal,
+  formatTimeHHmm,
+} from "../../lib/csv-export";
 
 type Tab = "today" | "history" | "subscriptions" | "players" | "billing";
 type GenderFilter = "all" | "male" | "female";
@@ -106,6 +115,7 @@ interface PlayerRow {
   lastSeenAt: string | null;
   registeredAt: string;
   venueName: string;
+  hasSubscription?: boolean;
 }
 
 interface PlayersData {
@@ -419,10 +429,6 @@ function createStyles(t: AppColors) {
     },
     filterChipText: { fontSize: 12, fontWeight: "600", color: t.muted },
     filterChipTextActive: { color: t.purple400 },
-    searchIconBtn: {
-      marginLeft: "auto" as never,
-      padding: 6,
-    },
     searchContainer: {
       flexDirection: "row",
       alignItems: "center",
@@ -474,6 +480,7 @@ export function StaffBossDashboardScreen() {
   const theme = useAppColors();
   const styles = useMemo(() => createStyles(theme), [theme]);
   const { t } = useTabletKioskLocale();
+  const insets = useSafeAreaInsets();
 
   const [tab, setTab] = useState<Tab>("today");
   const [loading, setLoading] = useState(true);
@@ -493,8 +500,99 @@ export function StaffBossDashboardScreen() {
   const [playerSearch, setPlayerSearch] = useState("");
   const [searchVisible, setSearchVisible] = useState(false);
   const searchRef = useRef<TextInput>(null);
+  const [revenueExportOpen, setRevenueExportOpen] = useState(false);
+  const [exportToast, setExportToast] = useState<string | null>(null);
   // Track which tabs have been fetched so we don't reload on re-visit
   const loadedTabs = useRef(new Set<Tab>());
+
+  const showExportToast = useCallback((msg: string) => {
+    setExportToast(msg);
+    setTimeout(() => setExportToast(null), 2200);
+  }, []);
+
+  const exportBossPlayersCsv = useCallback(async () => {
+    if (!playersData?.players?.length) return;
+    const list = playersData.players;
+    if (list.length > 500) showExportToast(t("bossExportPreparing"));
+    try {
+      const headers = [
+        "Name",
+        "Phone",
+        "Skill level",
+        "Visits count",
+        "Last seen date",
+        "Check-in method (Self/CourtPay/Manual)",
+        "Subscription status (yes/no)",
+        "Venue",
+      ];
+      const rows = list.map((p) => {
+        const method = p.source === "courtpay" ? "CourtPay" : "Self";
+        const sub = p.hasSubscription === true ? "yes" : "no";
+        return [
+          p.name,
+          p.phone ?? "",
+          p.skillLevel ?? "",
+          p.checkInCount,
+          p.lastSeenAt ? formatDateDDMMYYYY(p.lastSeenAt) : "",
+          method,
+          sub,
+          p.venueName ?? "",
+        ];
+      });
+      const fn = `players_export_${formatFilenameDateLocal(new Date())}.csv`;
+      await exportToCSV(fn, headers, rows);
+    } catch (e) {
+      Alert.alert("Export failed", e instanceof Error ? e.message : "Unknown error");
+    }
+  }, [playersData, showExportToast, t]);
+
+  const runBossRevenueExport = useCallback(
+    async (fromIso: string, toIso: string) => {
+      if (!venueId) return;
+      try {
+        const q = new URLSearchParams({
+          venueId,
+          from: fromIso,
+          to: toIso,
+        });
+        const list = await api.get<SessionHistoryRow[]>(`/api/sessions/history?${q.toString()}`);
+        const sessions = Array.isArray(list) ? list : [];
+        if (sessions.length === 0) {
+          Alert.alert("", t("bossExportNoData"));
+          return;
+        }
+        if (sessions.length > 500) showExportToast(t("bossExportPreparing"));
+        const headers = [
+          "Date",
+          "Session start time",
+          "Session end time",
+          "Total revenue (VND)",
+          "Total payments",
+          "Payment breakdown (QR count, Cash count, Subs count)",
+        ];
+        const rows = sessions.map((s) => {
+          const qr = s.paymentQrCount ?? 0;
+          const cash = s.paymentCashCount ?? 0;
+          const sub = s.paymentSubCount ?? 0;
+          return [
+            formatDateDDMMYYYY(s.openedAt),
+            formatTimeHHmm(s.openedAt),
+            s.closedAt ? formatTimeHHmm(s.closedAt) : "",
+            s.paymentRevenue ?? 0,
+            s.paymentCount ?? 0,
+            `${qr} / ${cash} / ${sub}`,
+          ];
+        });
+        const dFrom = formatFilenameDateLocal(new Date(fromIso));
+        const dTo = formatFilenameDateLocal(new Date(toIso));
+        await exportToCSV(`revenue_${dFrom}_to_${dTo}.csv`, headers, rows);
+        setRevenueExportOpen(false);
+      } catch (e) {
+        Alert.alert("Export failed", e instanceof Error ? e.message : "Unknown error");
+      }
+    },
+    [venueId, showExportToast, t]
+  );
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -672,6 +770,16 @@ export function StaffBossDashboardScreen() {
 
           {tab === "history" && historyData && (
             <>
+              <View style={{ flexDirection: "row", justifyContent: "flex-end", marginBottom: 6 }}>
+                <TouchableOpacity
+                  style={{ padding: 6 }}
+                  onPress={() => setRevenueExportOpen(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("bossExportRevenueTitle")}
+                >
+                  <Ionicons name="download-outline" size={18} color={theme.muted} />
+                </TouchableOpacity>
+              </View>
               {/* Revenue summary card */}
               {historyData.revenueSummary && (() => {
                 const rs = historyData.revenueSummary;
@@ -851,22 +959,32 @@ export function StaffBossDashboardScreen() {
                     </TouchableOpacity>
                   );
                 })}
-                <TouchableOpacity
-                  style={styles.searchIconBtn}
-                  onPress={() => {
-                    setSearchVisible((v) => {
-                      if (!v) setTimeout(() => searchRef.current?.focus(), 100);
-                      return !v;
-                    });
-                    if (searchVisible) setPlayerSearch("");
-                  }}
-                >
-                  <Ionicons
-                    name={searchVisible ? "close" : "search"}
-                    size={18}
-                    color={theme.muted}
-                  />
-                </TouchableOpacity>
+                <View style={{ flexDirection: "row", alignItems: "center", marginLeft: "auto" as never }}>
+                  <TouchableOpacity
+                    style={{ padding: 6 }}
+                    onPress={() => void exportBossPlayersCsv()}
+                    accessibilityRole="button"
+                    accessibilityLabel="Export players CSV"
+                  >
+                    <Ionicons name="download-outline" size={18} color={theme.muted} />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{ padding: 6 }}
+                    onPress={() => {
+                      setSearchVisible((v) => {
+                        if (!v) setTimeout(() => searchRef.current?.focus(), 100);
+                        return !v;
+                      });
+                      if (searchVisible) setPlayerSearch("");
+                    }}
+                  >
+                    <Ionicons
+                      name={searchVisible ? "close" : "search"}
+                      size={18}
+                      color={theme.muted}
+                    />
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {searchVisible && (
@@ -1227,6 +1345,38 @@ export function StaffBossDashboardScreen() {
           )}
         </ScrollView>
       )}
+
+      <BossRevenueExportSheet
+        visible={revenueExportOpen}
+        onClose={() => setRevenueExportOpen(false)}
+        theme={theme}
+        title={t("bossExportRevenueTitle")}
+        fromLabel={t("bossExportFrom")}
+        toLabel={t("bossExportTo")}
+        exportLabel={t("bossExportButton")}
+        invalidRangeLabel={t("bossExportInvalidRange")}
+        cancelLabel={t("bossExportCancel")}
+        onExport={runBossRevenueExport}
+      />
+
+      {exportToast ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            left: 24,
+            right: 24,
+            bottom: Math.max(32, insets.bottom + 16),
+            backgroundColor: "rgba(0,0,0,0.82)",
+            paddingVertical: 12,
+            paddingHorizontal: 16,
+            borderRadius: 10,
+            alignItems: "center",
+          }}
+        >
+          <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>{exportToast}</Text>
+        </View>
+      ) : null}
     </View>
   );
 }

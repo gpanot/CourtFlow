@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -7,7 +7,11 @@ import {
   ActivityIndicator,
   Image,
   Platform,
+  useWindowDimensions,
+  Animated,
+  Easing,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LiquidGlassSurface } from "./LiquidGlassSurface";
 import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
@@ -67,7 +71,60 @@ export function CourtPaySessionAwaitingPayment({
 }: Props) {
   const { t } = useTabletKioskLocale();
   const theme = useAppColors();
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const staffStyles = useMemo(() => createStaffStyles(theme), [theme]);
+
+  /** Short phones: less vertical padding + smaller QR so content clears status + home areas. */
+  const compact = windowHeight < 720;
+  const qrSize = compact ? 210 : 260;
+
+  const kioskSafeStyle = useMemo(
+    () => ({
+      width: "100%" as const,
+      maxWidth: 440,
+      alignSelf: "center" as const,
+      paddingTop: insets.top + (compact ? 6 : 10),
+      paddingBottom: insets.bottom + (compact ? 12 : 16),
+      paddingLeft: insets.left,
+      paddingRight: insets.right,
+    }),
+    [insets.top, insets.bottom, insets.left, insets.right, compact]
+  );
+
+  const staffSafeStyle = useMemo(
+    () => ({
+      paddingBottom: insets.bottom + 10,
+      paddingLeft: insets.left,
+      paddingRight: insets.right,
+    }),
+    [insets.bottom, insets.left, insets.right]
+  );
+
+  const pulseOpacity = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseOpacity, {
+          toValue: 0.2,
+          duration: 700,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseOpacity, {
+          toValue: 1,
+          duration: 700,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      pulseOpacity.setValue(1);
+    };
+  }, [pulseOpacity]);
 
   const title = playerName.trim()
     ? t("payTitle", { name: playerName.trim() })
@@ -153,7 +210,11 @@ export function CourtPaySessionAwaitingPayment({
         pending.skillLevel ? COURTPAY_LEVEL_QR_BORDER[pending.skillLevel] : null,
       ]}
     >
-      <Image source={{ uri: pending.qrUrl }} style={styles.qrImage} resizeMode="contain" />
+      <Image
+        source={{ uri: pending.qrUrl }}
+        style={[styles.qrImage, { width: qrSize, height: qrSize }]}
+        resizeMode="contain"
+      />
     </View>
   ) : null;
 
@@ -184,12 +245,13 @@ export function CourtPaySessionAwaitingPayment({
 
   const waitingRow = (
     <View style={styles.payWaitingRow}>
-      <View
+      <Animated.View
         style={[
           styles.payPulseDot,
           variant === "kiosk" && kioskTheme
             ? { backgroundColor: kioskTheme.pulseDotColor }
             : { backgroundColor: theme.green500 },
+          { opacity: pulseOpacity },
         ]}
       />
       <Text
@@ -256,8 +318,16 @@ export function CourtPaySessionAwaitingPayment({
     </TouchableOpacity>
   );
 
+  const innerPadStyle =
+    variant === "kiosk"
+      ? [
+          styles.payWaitGlassInner,
+          compact && styles.payWaitGlassInnerCompact,
+        ]
+      : [staffStyles.inner, compact && staffStyles.innerCompact];
+
   const inner = (
-    <View style={variant === "kiosk" ? styles.payWaitGlassInner : staffStyles.inner}>
+    <View style={innerPadStyle}>
       <Text
         style={[
           styles.formTitle,
@@ -276,11 +346,6 @@ export function CourtPaySessionAwaitingPayment({
       >
         {t("payScanQR")}
       </Text>
-      {partyAdjusting ? (
-        <View style={styles.partyLoadingRow}>
-          <ActivityIndicator size="small" color={variant === "staff" ? theme.blue500 : "#fff"} />
-        </View>
-      ) : null}
       {counter}
       {qrBlock}
       {amountEl}
@@ -293,17 +358,23 @@ export function CourtPaySessionAwaitingPayment({
 
   if (variant === "kiosk" && kioskTheme) {
     return (
-      <LiquidGlassSurface
-        style={styles.payWaitGlass}
-        tintColor={kioskTheme.glassTint}
-        mode={kioskTheme.themeMode}
-      >
-        {inner}
-      </LiquidGlassSurface>
+      <View style={kioskSafeStyle}>
+        <LiquidGlassSurface
+          style={styles.payWaitGlass}
+          tintColor={kioskTheme.glassTint}
+          mode={kioskTheme.themeMode}
+        >
+          {inner}
+        </LiquidGlassSurface>
+      </View>
     );
   }
 
-  return <View style={staffStyles.outer}>{inner}</View>;
+  return (
+    <View style={[staffStyles.outer, staffSafeStyle]}>
+      {inner}
+    </View>
+  );
 }
 
 function createStaffStyles(t: AppColors) {
@@ -317,6 +388,7 @@ function createStaffStyles(t: AppColors) {
       overflow: "hidden",
     },
     inner: { paddingVertical: 20, paddingHorizontal: 16, alignItems: "center", gap: 14 },
+    innerCompact: { paddingVertical: 14, gap: 10 },
     formTitle: { fontSize: 20, fontWeight: "800", color: t.text, textAlign: "center" },
     payScanHint: { fontSize: 13, color: t.muted, textAlign: "center", paddingHorizontal: 8 },
     counterCard: {
@@ -388,11 +460,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 16,
   },
+  payWaitGlassInnerCompact: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 10,
+  },
   formTitle: { fontSize: 22, fontWeight: "800", color: "#fff", textAlign: "center" },
   formTitleLight: { color: "#0f172a" },
   payScanHint: { fontSize: 14, color: "#a3a3a3", textAlign: "center", paddingHorizontal: 8 },
   payScanHintLight: { color: "#64748b" },
-  partyLoadingRow: { height: 24, justifyContent: "center" },
   counterCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -424,7 +500,7 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
   },
-  qrImage: { width: 260, height: 260 },
+  qrImage: { width: 260, height: 260, maxWidth: "100%" },
   amount: { fontSize: 36, fontWeight: "700", color: "transparent" },
   ref: { fontSize: 14, color: "#737373", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" },
   refLight: { color: "#64748b" },

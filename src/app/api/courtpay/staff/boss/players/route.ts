@@ -39,7 +39,8 @@ export async function GET(req: Request) {
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     const now = new Date();
 
-    const [selfPlayers, courtPayPlayers, venueName, activeSubscriptions] = await Promise.all([
+    const [selfPlayers, courtPayPlayers, venueName, activeSubscriptions, membershipRows, courtSubRows] =
+      await Promise.all([
       // Self Check-In players who have ever joined a queue in this venue
       prisma.player.findMany({
         where: {
@@ -91,7 +92,22 @@ export async function GET(req: Request) {
           expiresAt: { gte: now },
         },
       }),
+      prisma.membership.findMany({
+        where: { venueId, status: "active" },
+        select: { playerId: true },
+      }),
+      prisma.playerSubscription.findMany({
+        where: {
+          venueId,
+          status: "active",
+          expiresAt: { gte: now },
+        },
+        select: { playerId: true },
+      }),
     ]);
+
+    const selfHasSubscription = new Set(membershipRows.map((m) => m.playerId));
+    const courtPayHasSubscription = new Set(courtSubRows.map((s) => s.playerId));
 
     const vname = venueName?.name ?? venueId;
 
@@ -117,6 +133,7 @@ export async function GET(req: Request) {
           lastSeenAt,
           registeredAt: p.createdAt.toISOString(),
           venueName: vname,
+          hasSubscription: selfHasSubscription.has(p.id),
         };
       }),
       ...courtPayPlayers.map((p) => {
@@ -139,6 +156,7 @@ export async function GET(req: Request) {
           lastSeenAt,
           registeredAt: p.createdAt.toISOString(),
           venueName: vname,
+          hasSubscription: courtPayHasSubscription.has(p.id),
         };
       }),
     ];

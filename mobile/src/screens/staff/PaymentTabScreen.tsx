@@ -37,6 +37,14 @@ import {
 
 type SubTab = "pending" | "paid";
 
+/** Socket `payment:updated` payload (headcount / amount change on same pending row). */
+type PaymentUpdatedSocketPayload = {
+  pendingPaymentId?: string;
+  partyCount?: number;
+  amount?: number;
+  paymentRef?: string;
+};
+
 function getDisplayPlayer(p: PendingPayment): {
   name: string;
   skillLevel: string;
@@ -244,7 +252,12 @@ function createStyles(t: AppColors) {
       fontSize: 14,
     },
     skillMuted: { fontSize: 12, color: t.subtle, marginTop: 2 },
-    groupLine: { fontSize: 12, color: t.muted, fontWeight: "600", marginTop: 2 },
+    groupLine: {
+      fontSize: 13,
+      color: t.blue600,
+      fontWeight: "700",
+      marginTop: 4,
+    },
     subLeftLine: { fontSize: 12, color: t.green400, marginTop: 2, fontWeight: "600" },
     dotsBtn: {
       padding: 4,
@@ -425,7 +438,23 @@ export function PaymentTabScreen() {
 
   useSocket(venueId, {
     "payment:new": () => fetchPending(),
-    "payment:updated": () => void fetchPending(),
+    "payment:updated": (raw: unknown) => {
+      const d = raw as PaymentUpdatedSocketPayload;
+      if (d?.pendingPaymentId) {
+        setPending((prev) =>
+          prev.map((p) => {
+            if (p.id !== d.pendingPaymentId) return p;
+            return {
+              ...p,
+              ...(typeof d.partyCount === "number" ? { partyCount: d.partyCount } : {}),
+              ...(typeof d.amount === "number" ? { amount: d.amount } : {}),
+              ...(typeof d.paymentRef === "string" ? { paymentRef: d.paymentRef } : {}),
+            };
+          })
+        );
+      }
+      void fetchPending();
+    },
     "payment:confirmed": () => fetchAll(),
     "payment:cancelled": () => fetchAll(),
     "session:updated": (data: unknown) => {
@@ -607,7 +636,9 @@ export function PaymentTabScreen() {
             </View>
             <Text style={styles.skillMuted}>{t("paymentSkill")}: {player.skillLevel}</Text>
             {(item.partyCount ?? 1) > 1 ? (
-              <Text style={styles.groupLine}>{t("paymentGroupOf", { count: item.partyCount ?? 1 })}</Text>
+              <Text style={styles.groupLine}>
+                {t("paymentGroupOf", { count: item.partyCount ?? 1 })}
+              </Text>
             ) : null}
             <Text style={styles.metaLine}>
               {isNew ? t("paymentRegistration") : t("paymentCheckIn")} · {formatVND(item.amount)}
@@ -782,7 +813,9 @@ export function PaymentTabScreen() {
           )}
         </View>
         {(item.partyCount ?? 1) > 1 ? (
-          <Text style={styles.groupLine}>{t("paymentGroupOf", { count: item.partyCount ?? 1 })}</Text>
+          <Text style={styles.groupLine}>
+            {t("paymentGroupOf", { count: item.partyCount ?? 1 })}
+          </Text>
         ) : null}
         <Text style={styles.metaLine}>
           {isNew ? t("paymentRegistration") : t("paymentCheckIn")} · {formatVND(item.amount)}

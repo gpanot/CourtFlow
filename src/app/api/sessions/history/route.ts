@@ -3,6 +3,12 @@ import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 
+function classifyPayment(p: { paymentMethod: string; type: string }): "qr" | "cash" | "sub" {
+  if (p.paymentMethod === "cash") return "cash";
+  if (p.paymentMethod === "subscription" || p.type === "subscription") return "sub";
+  return "qr";
+}
+
 export async function GET(request: NextRequest) {
   try {
     requireStaff(request.headers);
@@ -10,10 +16,29 @@ export async function GET(request: NextRequest) {
     const venueId = request.nextUrl.searchParams.get("venueId");
     if (!venueId) return error("venueId is required");
 
+    const fromIso = request.nextUrl.searchParams.get("from");
+    const toIso = request.nextUrl.searchParams.get("to");
+
+    const sessionWhere: {
+      venueId: string;
+      status: "closed";
+      openedAt?: { gte: Date; lte: Date };
+    } = { venueId, status: "closed" };
+
+    if (fromIso && toIso) {
+      const from = new Date(fromIso);
+      const to = new Date(toIso);
+      if (!Number.isNaN(from.getTime()) && !Number.isNaN(to.getTime())) {
+        sessionWhere.openedAt = { gte: from, lte: to };
+      }
+    }
+
+    const take = fromIso && toIso ? 2000 : 50;
+
     const sessions = await prisma.session.findMany({
-      where: { venueId, status: "closed" },
+      where: sessionWhere,
       orderBy: { openedAt: "desc" },
-      take: 50,
+      take,
       include: {
         _count: {
           select: {
@@ -32,6 +57,7 @@ export async function GET(request: NextRequest) {
       playerCount: s._count.queueEntries,
       gameCount: s._count.courtAssignments,
     }));
+
     const sessionsWithPayments = await Promise.all(
       result.map(async (s) => {
         const periodEnd = s.closedAt ? new Date(s.closedAt) : new Date();
@@ -51,12 +77,24 @@ export async function GET(request: NextRequest) {
               },
             ],
           },
-          select: { amount: true },
+          select: { amount: true, paymentMethod: true, type: true },
         });
+        let qr = 0;
+        let cash = 0;
+        let sub = 0;
+        for (const p of payments) {
+          const b = classifyPayment(p);
+          if (b === "qr") qr += 1;
+          else if (b === "cash") cash += 1;
+          else sub += 1;
+        }
         return {
           ...s,
           paymentCount: payments.length,
           paymentRevenue: payments.reduce((sum, p) => sum + p.amount, 0),
+          paymentQrCount: qr,
+          paymentCashCount: cash,
+          paymentSubCount: sub,
         };
       })
     );
