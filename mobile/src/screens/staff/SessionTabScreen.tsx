@@ -238,7 +238,9 @@ export function SessionTabScreen() {
                   </View>
                 </View>
                 <Text style={styles.historyFee}>
-                  {t("sessionRevenue")}: {s.paymentRevenue?.toLocaleString() ?? "0"} VND · {s.paymentCount ?? 0} {t("sessionPayments")}
+                  {t("sessionRevenue")}: {s.paymentRevenue?.toLocaleString() ?? "0"} VND ·{" "}
+                  {s.paymentPeopleTotal ?? s.paymentCount ?? 0} {t("bossDashboardSessionPlayersPaid")} ·{" "}
+                  {s.paymentCount ?? 0} {t("sessionPayments")}
                 </Text>
                 <Text style={styles.historyTime}>
                   {new Date(s.openedAt).toLocaleTimeString()}

@@ -756,7 +756,9 @@ export function StaffBossDashboardScreen() {
                       </View>
                     </View>
                     <Text style={styles.sessionCardFee}>
-                      {t("bossDashboardRevenue")}: {s.paymentRevenue?.toLocaleString() ?? "0"} VND · {s.paymentCount ?? 0} {t("bossDashboardPayments")}
+                      {t("bossDashboardRevenue")}: {s.paymentRevenue?.toLocaleString() ?? "0"} VND ·{" "}
+                      {s.paymentPeopleTotal ?? s.paymentCount ?? 0} {t("bossDashboardSessionPlayersPaid")} ·{" "}
+                      {s.paymentCount ?? 0} {t("bossDashboardPayments")}
                     </Text>
                     <Text style={styles.sessionCardTime}>
                       {new Date(s.openedAt).toLocaleTimeString()}
@@ -770,16 +772,6 @@ export function StaffBossDashboardScreen() {
 
           {tab === "history" && historyData && (
             <>
-              <View style={{ flexDirection: "row", justifyContent: "flex-end", marginBottom: 6 }}>
-                <TouchableOpacity
-                  style={{ padding: 6 }}
-                  onPress={() => setRevenueExportOpen(true)}
-                  accessibilityRole="button"
-                  accessibilityLabel={t("bossExportRevenueTitle")}
-                >
-                  <Ionicons name="download-outline" size={18} color={theme.muted} />
-                </TouchableOpacity>
-              </View>
               {/* Revenue summary card */}
               {historyData.revenueSummary && (() => {
                 const rs = historyData.revenueSummary;
@@ -827,7 +819,28 @@ export function StaffBossDashboardScreen() {
                 </>
               )}
 
-              <Text style={[styles.sectionTitle, { marginTop: 12 }]}>{t("bossDashboardPastSessions")}</Text>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginTop: 12,
+                  marginBottom: 4,
+                  gap: 8,
+                }}
+              >
+                <Text style={[styles.sectionTitle, { marginBottom: 0, flex: 1 }]}>
+                  {t("bossDashboardPastSessions")}
+                </Text>
+                <TouchableOpacity
+                  style={{ padding: 6 }}
+                  onPress={() => setRevenueExportOpen(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t("bossExportRevenueTitle")}
+                >
+                  <Ionicons name="download-outline" size={18} color={theme.muted} />
+                </TouchableOpacity>
+              </View>
               {sessionHistory.length === 0 ? (
                 <Text style={styles.empty}>{t("bossDashboardNoPastSessions")}</Text>
               ) : (
@@ -852,7 +865,9 @@ export function StaffBossDashboardScreen() {
                       </View>
                     </View>
                     <Text style={styles.sessionCardFee}>
-                      {t("bossDashboardRevenue")}: {s.paymentRevenue?.toLocaleString() ?? "0"} VND · {s.paymentCount ?? 0} {t("bossDashboardPayments")}
+                      {t("bossDashboardRevenue")}: {s.paymentRevenue?.toLocaleString() ?? "0"} VND ·{" "}
+                      {s.paymentPeopleTotal ?? s.paymentCount ?? 0} {t("bossDashboardSessionPlayersPaid")} ·{" "}
+                      {s.paymentCount ?? 0} {t("bossDashboardPayments")}
                     </Text>
                     <Text style={styles.sessionCardTime}>
                       {new Date(s.openedAt).toLocaleTimeString()}

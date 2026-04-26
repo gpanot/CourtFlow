@@ -23,6 +23,7 @@ import { useAppColors } from "../../theme/use-app-colors";
 import type { AppColors } from "../../theme/palettes";
 import type { StaffStackParamList } from "../../navigation/types";
 import type { SessionHistoryRow } from "../../types/api";
+import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
 
 interface HistoryData {
   payments: {
@@ -121,6 +122,7 @@ export function StaffSessionHistoryScreen() {
   const venueId = useAuthStore((s) => s.venueId);
   const theme = useAppColors();
   const styles = useMemo(() => createStyles(theme), [theme]);
+  const { t } = useTabletKioskLocale();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -237,8 +239,9 @@ export function StaffSessionHistoryScreen() {
               </View>
             </View>
             <Text style={styles.sessionCardFee}>
-              Revenue: {s.paymentRevenue?.toLocaleString() ?? "0"} VND ·{" "}
-              {s.paymentCount ?? 0} payments
+              {t("bossDashboardRevenue")}: {s.paymentRevenue?.toLocaleString() ?? "0"} VND ·{" "}
+              {s.paymentPeopleTotal ?? s.paymentCount ?? 0} {t("bossDashboardSessionPlayersPaid")} ·{" "}
+              {s.paymentCount ?? 0} {t("bossDashboardPayments")}
             </Text>
             <Text style={styles.sessionCardTime}>
               {new Date(s.openedAt).toLocaleTimeString()}

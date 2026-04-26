@@ -77,20 +77,24 @@ export async function GET(request: NextRequest) {
               },
             ],
           },
-          select: { amount: true, paymentMethod: true, type: true },
+          select: { amount: true, paymentMethod: true, type: true, partyCount: true },
         });
         let qr = 0;
         let cash = 0;
         let sub = 0;
+        let paymentPeopleTotal = 0;
         for (const p of payments) {
           const b = classifyPayment(p);
           if (b === "qr") qr += 1;
           else if (b === "cash") cash += 1;
           else sub += 1;
+          const party = typeof p.partyCount === "number" && p.partyCount > 0 ? p.partyCount : 1;
+          paymentPeopleTotal += party;
         }
         return {
           ...s,
           paymentCount: payments.length,
+          paymentPeopleTotal,
           paymentRevenue: payments.reduce((sum, p) => sum + p.amount, 0),
           paymentQrCount: qr,
           paymentCashCount: cash,

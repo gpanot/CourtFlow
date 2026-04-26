@@ -185,6 +185,7 @@ function createStyles(t: AppColors) {
     badgeApr: { backgroundColor: "rgba(22,163,74,0.2)" },
     badgeAprText: { fontSize: 10, fontWeight: "700", color: t.green400 },
     metaLine: { fontSize: 12, color: t.muted },
+    groupLine: { fontSize: 12, color: t.subtle, marginTop: 2 },
     waitLine: { fontSize: 12, color: t.subtle },
     skillMuted: { fontSize: 12, color: t.subtle, marginTop: 1 },
     subLeftLine: { fontSize: 12, color: t.green400, marginTop: 2, fontWeight: "600" },
@@ -380,6 +381,9 @@ export function SessionDetailScreen() {
         <Text style={styles.metaLine}>
           {isSub ? "Subscription" : isNew ? "Registration" : "Check-in"} · {formatVND(item.amount)}
         </Text>
+        {(item.partyCount ?? 1) > 1 ? (
+          <Text style={styles.groupLine}>{t("paymentGroupOf", { count: item.partyCount ?? 1 })}</Text>
+        ) : null}
         {subLeftText ? <Text style={styles.subLeftLine}>{subLeftText}</Text> : null}
         <Text style={styles.waitLine}>{formatDateTime(item.confirmedAt)}</Text>
       </View>
