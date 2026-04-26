@@ -75,13 +75,13 @@ interface HistoryData {
     confirmedAt: string;
     paymentRef: string | null;
   }[];
-  dailyRevenue: { date: string; total: number; count: number }[];
+  dailyRevenue: { date: string; total: number; count: number; peopleTotal?: number }[];
   revenueSummary?: {
-    today: { total: number; count: number };
-    yesterday: { total: number; count: number };
-    thisWeek: { total: number; count: number };
-    thisMonth: { total: number; count: number };
-    allTime: { total: number; count: number };
+    today: { total: number; count: number; peopleTotal?: number };
+    yesterday: { total: number; count: number; peopleTotal?: number };
+    thisWeek: { total: number; count: number; peopleTotal?: number };
+    thisMonth: { total: number; count: number; peopleTotal?: number };
+    allTime: { total: number; count: number; peopleTotal?: number };
   };
 }
 
@@ -192,6 +192,8 @@ interface QRData {
 interface RevenueBucket {
   total: number;
   count: number;
+  /** Σ max(1, partyCount) for CourtPay payments in this bucket */
+  peopleTotal?: number;
 }
 interface RevenueSummary {
   today: RevenueBucket;
@@ -746,6 +748,9 @@ export function StaffBossDashboardScreen() {
                         date: sessionDateLabel(s.openedAt),
                         openedAt: s.openedAt,
                         closedAt: s.closedAt ?? null,
+                        debugHistoryPaymentPeopleTotal: s.paymentPeopleTotal,
+                        debugHistoryPaymentCount: s.paymentCount,
+                        debugHistoryQueuePlayerCount: s.playerCount,
                       })
                     }
                   >
@@ -792,7 +797,11 @@ export function StaffBossDashboardScreen() {
                           <Text style={[styles.revenueSummaryAmount, highlight && styles.statPurple]}>
                             {formatVND(bucket.total)} VND
                           </Text>
-                          <Text style={styles.revenueSummaryCount}>{bucket.count} {t("bossDashboardPayments")}</Text>
+                          <Text style={styles.revenueSummaryCount}>
+                            {bucket.count} {t("bossDashboardPayments")}
+                            {" · "}
+                            {bucket.peopleTotal ?? bucket.count} {t("bossDashboardSessionPlayersPaid")}
+                          </Text>
                         </View>
                       </View>
                     ))}
@@ -809,7 +818,11 @@ export function StaffBossDashboardScreen() {
                         <Text style={styles.rowTitle}>
                           {isToday(d.date + "T00:00:00") ? `${t("bossDashboardToday")} — ${d.date}` : d.date}
                         </Text>
-                        <Text style={styles.rowSub}>{d.count} {t("bossDashboardPayments")}</Text>
+                        <Text style={styles.rowSub}>
+                          {d.count} {t("bossDashboardPayments")}
+                          {" · "}
+                          {d.peopleTotal ?? d.count} {t("bossDashboardSessionPlayersPaid")}
+                        </Text>
                       </View>
                       <Text style={[styles.rowTitle, styles.statPurple]}>
                         {formatVND(d.total)} VND
@@ -855,6 +868,9 @@ export function StaffBossDashboardScreen() {
                         date: sessionDateLabel(s.openedAt),
                         openedAt: s.openedAt,
                         closedAt: s.closedAt ?? null,
+                        debugHistoryPaymentPeopleTotal: s.paymentPeopleTotal,
+                        debugHistoryPaymentCount: s.paymentCount,
+                        debugHistoryQueuePlayerCount: s.playerCount,
                       })
                     }
                   >

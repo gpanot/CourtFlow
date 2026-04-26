@@ -28,6 +28,12 @@ import {
 } from "../../lib/csv-export";
 import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
 
+function devLogPaymentPartyDebug(payload: Record<string, unknown>) {
+  if (__DEV__) {
+    console.log("[SessionDetail] payment / party debug", payload);
+  }
+}
+
 type Filter = "all" | "cash" | "qr" | "subscription";
 
 interface SessionPaymentsResponse {
@@ -93,6 +99,16 @@ function getPaymentFilter(p: PendingPayment): Filter {
   if (p.paymentMethod === "subscription" || p.type === "subscription") return "subscription";
   if (p.paymentMethod === "cash") return "cash";
   return "qr";
+}
+
+/** Same rule as server history aggregate: at least 1 person per payment row. */
+function partyCountForPayment(p: PendingPayment): number {
+  const n = p.partyCount;
+  return typeof n === "number" && n > 0 ? n : 1;
+}
+
+function sumPartyFromPayments(list: PendingPayment[]): number {
+  return list.reduce((sum, p) => sum + partyCountForPayment(p), 0);
 }
 
 function getMethodBadge(paymentMethod: string): {
@@ -200,7 +216,15 @@ function createStyles(t: AppColors) {
 export function SessionDetailScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<StaffStackParamList>>();
   const route = useRoute<RouteProp<StaffStackParamList, "StaffSessionDetail">>();
-  const { sessionId, date, openedAt, closedAt } = route.params;
+  const {
+    sessionId,
+    date,
+    openedAt,
+    closedAt,
+    debugHistoryPaymentPeopleTotal,
+    debugHistoryPaymentCount,
+    debugHistoryQueuePlayerCount,
+  } = route.params;
 
   const theme = useAppColors();
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -305,6 +329,46 @@ export function SessionDetailScreen() {
     if (filter === "all") return payments;
     return payments.filter((p) => getPaymentFilter(p) === filter);
   }, [payments, filter]);
+
+  const detailPaymentCount = payments.length;
+  const detailPartySum = useMemo(() => sumPartyFromPayments(payments), [payments]);
+
+  useEffect(() => {
+    if (!loading) {
+      const fromCard =
+        debugHistoryPaymentPeopleTotal !== undefined ||
+        debugHistoryPaymentCount !== undefined ||
+        debugHistoryQueuePlayerCount !== undefined
+          ? {
+              paymentPeopleTotal: debugHistoryPaymentPeopleTotal,
+              paymentCount: debugHistoryPaymentCount,
+              queuePlayerCount: debugHistoryQueuePlayerCount,
+            }
+          : null;
+      devLogPaymentPartyDebug({
+        sessionId,
+        fromHistoryCard: fromCard,
+        detailPaymentCount,
+        detailPartySum,
+        perPayment: payments.map((p) => ({
+          id: p.id,
+          partyCount: p.partyCount,
+          sessionId: p.sessionId,
+          checkInPlayerId: p.checkInPlayerId,
+          amount: p.amount,
+        })),
+      });
+    }
+  }, [
+    loading,
+    sessionId,
+    payments,
+    detailPaymentCount,
+    detailPartySum,
+    debugHistoryPaymentPeopleTotal,
+    debugHistoryPaymentCount,
+    debugHistoryQueuePlayerCount,
+  ]);
 
   const timeLabel = (() => {
     const open = new Date(openedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });

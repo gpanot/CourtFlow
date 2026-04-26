@@ -34,7 +34,12 @@ export async function GET(req: Request) {
     // Keep this aligned with billing logic:
     // - CourtPay only (checkInPlayerId not null)
     // - include confirmed + cancelled (cancelled still went through)
-    const [recentPayments, allPayments] = await Promise.all([
+    const partyForRow = (p: { partyCount: number }) => {
+      const n = p.partyCount;
+      return typeof n === "number" && n > 0 ? n : 1;
+    };
+
+    const [recentPayments, allPayments, allTimePeopleRows] = await Promise.all([
       prisma.pendingPayment.findMany({
         where: {
           venueId,
@@ -55,7 +60,16 @@ export async function GET(req: Request) {
         _sum: { amount: true },
         _count: { id: true },
       }),
+      prisma.$queryRaw<[{ s: bigint }]>`
+        SELECT COALESCE(SUM(GREATEST(COALESCE(party_count, 1), 1)), 0)::bigint AS s
+        FROM pending_payments
+        WHERE venue_id = ${venueId}
+          AND check_in_player_id IS NOT NULL
+          AND status IN ('confirmed', 'cancelled')
+      `,
     ]);
+
+    const allTimePeopleTotal = Number(allTimePeopleRows[0]?.s ?? 0);
 
     // Revenue summary buckets
     const bucket = (from: Date, to?: Date) => {
@@ -66,6 +80,7 @@ export async function GET(req: Request) {
       return {
         total: filtered.reduce((s, p) => s + p.amount, 0),
         count: filtered.length,
+        peopleTotal: filtered.reduce((s, p) => s + partyForRow(p), 0),
       };
     };
 
@@ -84,16 +99,20 @@ export async function GET(req: Request) {
       allTime: {
         total: allPayments._sum.amount ?? 0,
         count: allPayments._count.id,
+        peopleTotal: allTimePeopleTotal,
       },
     };
 
     // Daily revenue breakdown
-    const dailyRevenue: Record<string, { date: string; total: number; count: number }> = {};
+    const dailyRevenue: Record<string, { date: string; total: number; count: number; peopleTotal: number }> = {};
     for (const p of recentPayments) {
       const day = (p.confirmedAt || p.createdAt).toISOString().slice(0, 10);
-      if (!dailyRevenue[day]) dailyRevenue[day] = { date: day, total: 0, count: 0 };
+      if (!dailyRevenue[day]) {
+        dailyRevenue[day] = { date: day, total: 0, count: 0, peopleTotal: 0 };
+      }
       dailyRevenue[day].total += p.amount;
       dailyRevenue[day].count += 1;
+      dailyRevenue[day].peopleTotal += partyForRow(p);
     }
 
     return NextResponse.json({

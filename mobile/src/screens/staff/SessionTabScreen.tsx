@@ -154,6 +154,9 @@ export function SessionTabScreen() {
       date: sessionDateLabel(row.openedAt, t("sessionToday")),
       openedAt: row.openedAt,
       closedAt: row.closedAt ?? null,
+      debugHistoryPaymentPeopleTotal: row.paymentPeopleTotal,
+      debugHistoryPaymentCount: row.paymentCount,
+      debugHistoryQueuePlayerCount: row.playerCount,
     });
   };
 

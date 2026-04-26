@@ -35,7 +35,7 @@ interface HistoryData {
     confirmedAt: string;
     paymentRef: string | null;
   }[];
-  dailyRevenue: { date: string; total: number; count: number }[];
+  dailyRevenue: { date: string; total: number; count: number; peopleTotal?: number }[];
 }
 
 function formatVND(amount: number) {
@@ -201,7 +201,11 @@ export function StaffSessionHistoryScreen() {
                 <Text style={styles.rowTitle}>
                   {isToday(d.date + "T00:00:00") ? `Today — ${d.date}` : d.date}
                 </Text>
-                <Text style={styles.rowSub}>{d.count} payments</Text>
+                <Text style={styles.rowSub}>
+                  {d.count} {t("bossDashboardPayments")}
+                  {" · "}
+                  {d.peopleTotal ?? d.count} {t("bossDashboardSessionPlayersPaid")}
+                </Text>
               </View>
               <Text style={[styles.rowTitle, styles.rowTitlePurple]}>
                 {formatVND(d.total)} VND
@@ -227,6 +231,9 @@ export function StaffSessionHistoryScreen() {
                 date: sessionDateLabel(s.openedAt),
                 openedAt: s.openedAt,
                 closedAt: s.closedAt ?? null,
+                debugHistoryPaymentPeopleTotal: s.paymentPeopleTotal,
+                debugHistoryPaymentCount: s.paymentCount,
+                debugHistoryQueuePlayerCount: s.playerCount,
               })
             }
           >

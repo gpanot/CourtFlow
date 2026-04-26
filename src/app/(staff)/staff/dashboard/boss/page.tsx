@@ -53,7 +53,7 @@ interface HistoryData {
     confirmedAt: string;
     paymentRef: string | null;
   }[];
-  dailyRevenue: { date: string; total: number; count: number }[];
+  dailyRevenue: { date: string; total: number; count: number; peopleTotal?: number }[];
 }
 
 interface SessionData {
@@ -474,7 +474,7 @@ export default function BossDashboardPage() {
                         {formatVND(d.total)} VND
                       </span>
                       <span className="text-xs text-neutral-500 ml-2">
-                        {d.count} payments
+                        {d.count} payments · {d.peopleTotal ?? d.count} players
                       </span>
                     </div>
                   </div>

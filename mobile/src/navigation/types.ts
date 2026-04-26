@@ -20,7 +20,16 @@ export type StaffStackParamList = {
   StaffDashboard: undefined;
   StaffBossDashboard: undefined;
   StaffSessionHistory: undefined;
-  StaffSessionDetail: { sessionId: string; date: string; openedAt: string; closedAt: string | null };
+  StaffSessionDetail: {
+    sessionId: string;
+    date: string;
+    openedAt: string;
+    closedAt: string | null;
+    /** __DEV__ / diagnostics: values from the history list row when opening this screen */
+    debugHistoryPaymentPeopleTotal?: number;
+    debugHistoryPaymentCount?: number;
+    debugHistoryQueuePlayerCount?: number;
+  };
   StaffBillingWeekPayments: { venueId: string; weekStart: string; weekEnd: string };
   BossSubscriptionDetail: { subscriptionId: string };
   StaffPlayerDetail: { playerId: string; source: "self" | "courtpay" };
