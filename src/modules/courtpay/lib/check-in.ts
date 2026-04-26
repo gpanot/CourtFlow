@@ -6,6 +6,15 @@ import { generatePaymentRef } from "./payment-reference";
 import { getActiveSubscription, getLatestSubscription, deductSession } from "./subscription";
 import type { IdentifyResult, PaymentResult } from "../types";
 
+/** Max people per session check-in payment (fee multiplier). */
+export const COURTPAY_SESSION_PARTY_MAX = 4;
+
+export function clampSessionPartyHeadCount(raw: unknown): number {
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(COURTPAY_SESSION_PARTY_MAX, Math.max(1, Math.floor(n)));
+}
+
 /**
  * When `CheckInPlayer.skill_level` is null but a core `Player` shares the same phone,
  * copy skill from `Player` into `CheckInPlayer` so CourtPay APIs and kiosks match the
@@ -100,6 +109,8 @@ interface CreatePaymentInput {
   amount: number;
   type: "checkin" | "subscription" | "subscription_renewal";
   packageId?: string;
+  /** Session check-in only; subscriptions ignore this (always 1 in DB). */
+  partyCount?: number;
 }
 
 interface CreateConfirmedPaymentInput {
@@ -128,6 +139,10 @@ export async function createCheckInPayment(
   const paymentRef = await generatePaymentRef(refType as "subscription" | "session");
 
   const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+  const partyCount =
+    input.type === "checkin"
+      ? clampSessionPartyHeadCount(input.partyCount ?? 1)
+      : 1;
 
   const pending = await prisma.pendingPayment.create({
     data: {
@@ -136,6 +151,7 @@ export async function createCheckInPayment(
       amount: input.amount,
       paymentRef,
       type: input.type,
+      partyCount,
       expiresAt,
     },
   });
@@ -180,6 +196,94 @@ export async function createCheckInPayment(
     amount: input.amount,
     vietQR,
     paymentRef,
+    partyCount,
+    playerName: checkInPlayer?.name,
+    playerPhone: checkInPlayer?.phone,
+    skillLevel: checkInPlayer?.skillLevel ?? null,
+  };
+}
+
+/**
+ * Update amount / party count / QR for an existing pending session check-in payment
+ * (same row, new payment ref). Emits `payment:updated` (no staff push).
+ */
+export async function updatePendingCheckinSessionPaymentHeadcount(input: {
+  pendingId: string;
+  venueId: string;
+  amount: number;
+  partyCount: number;
+}): Promise<PaymentResult | null> {
+  const pending = await prisma.pendingPayment.findFirst({
+    where: {
+      id: input.pendingId,
+      venueId: input.venueId,
+      status: "pending",
+      type: "checkin",
+    },
+    select: {
+      id: true,
+      checkInPlayerId: true,
+      amount: true,
+      partyCount: true,
+      paymentRef: true,
+    },
+  });
+  if (!pending?.checkInPlayerId) return null;
+
+  const venue = await prisma.venue.findUnique({
+    where: { id: input.venueId },
+  });
+  if (!venue) return null;
+
+  const partyCount = clampSessionPartyHeadCount(input.partyCount);
+  const amount = input.amount;
+
+  const sameHeadcount =
+    pending.partyCount === partyCount && pending.amount === amount;
+
+  let paymentRef = pending.paymentRef ?? "";
+  let expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+  if (!sameHeadcount) {
+    paymentRef = await generatePaymentRef("session");
+    await prisma.pendingPayment.update({
+      where: { id: pending.id },
+      data: {
+        amount,
+        partyCount,
+        paymentRef,
+        expiresAt,
+      },
+    });
+    emitToVenue(input.venueId, "payment:updated", {
+      pendingPaymentId: pending.id,
+    });
+  }
+
+  await ensureCourtPayCheckInPlayerSkillSynced(pending.checkInPlayerId);
+
+  const checkInPlayer = await prisma.checkInPlayer.findUnique({
+    where: { id: pending.checkInPlayerId },
+    select: { name: true, phone: true, skillLevel: true },
+  });
+
+  let vietQR: string | null = null;
+  if (venue.bankName && venue.bankAccount) {
+    vietQR = buildVietQRUrl({
+      bankBin: venue.bankName,
+      accountNumber: venue.bankAccount,
+      accountName: venue.bankOwnerName || "",
+      amount,
+      description: paymentRef,
+    });
+  }
+
+  return {
+    pendingPaymentId: pending.id,
+    amount,
+    vietQR,
+    paymentRef,
+    partyCount,
     playerName: checkInPlayer?.name,
     playerPhone: checkInPlayer?.phone,
     skillLevel: checkInPlayer?.skillLevel ?? null,
@@ -208,6 +312,7 @@ export async function createConfirmedCheckInPayment(
       amount: input.amount,
       paymentRef,
       type: input.type,
+      partyCount: 1,
       paymentMethod: input.paymentMethod ?? "subscription",
       status: "confirmed",
       confirmedAt: now,

@@ -14,8 +14,9 @@ const {
       venue: { findFirst: vi.fn() },
       session: { findFirst: vi.fn() },
       checkInPlayer: { findUnique: vi.fn() },
+      checkInRecord: { findFirst: vi.fn(), create: vi.fn() },
+      pendingPayment: { findFirst: vi.fn() },
       subscriptionPackage: { findFirst: vi.fn() },
-      checkInRecord: { create: vi.fn() },
       player: {
         findUnique: vi.fn(),
         create: vi.fn(),
@@ -38,6 +39,11 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@/modules/courtpay/lib/check-in", () => ({
   registerPlayer: mockRegisterPlayer,
   createCheckInPayment: mockCreateCheckInPayment,
+  clampSessionPartyHeadCount: (raw: unknown) => {
+    const n = typeof raw === "number" ? raw : Number(raw);
+    if (!Number.isFinite(n)) return 1;
+    return Math.min(4, Math.max(1, Math.floor(n)));
+  },
 }));
 
 vi.mock("@/modules/courtpay/lib/subscription", () => ({
@@ -60,6 +66,8 @@ import { POST } from "./route";
 describe("POST /api/courtpay/register", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPrisma.checkInRecord.findFirst.mockResolvedValue(null);
+    mockPrisma.pendingPayment.findFirst.mockResolvedValue(null);
   });
 
   it("returns 400 when required fields are missing", async () => {
@@ -257,6 +265,7 @@ describe("POST /api/courtpay/register", () => {
       playerId: "cp-22",
       amount: 150000,
       type: "checkin",
+      partyCount: 1,
     });
   });
 

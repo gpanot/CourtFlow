@@ -53,6 +53,7 @@ export interface PaymentResult {
   amount: number;
   vietQR: string | null;
   paymentRef: string;
+  partyCount?: number;
   playerName?: string;
   playerPhone?: string;
 }

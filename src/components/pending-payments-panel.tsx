@@ -179,6 +179,7 @@ export function PendingPaymentsPanel({
 
   useEffect(() => {
     const offNew = on("payment:new", () => void fetchPayments());
+    const offUpdated = on("payment:updated", () => void fetchPayments());
     const offConfirmed = on("payment:confirmed", () => {
       void fetchPayments();
       void fetchPaidPayments();
@@ -186,6 +187,7 @@ export function PendingPaymentsPanel({
     const offCancelled = on("payment:cancelled", () => void fetchPayments());
     return () => {
       offNew();
+      offUpdated();
       offConfirmed();
       offCancelled();
     };

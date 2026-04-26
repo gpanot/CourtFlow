@@ -612,6 +612,8 @@ model PendingPayment {
   checkInPlayerId String?   @map("check_in_player_id")
   paymentRef      String?   @unique @map("payment_ref")
   amount          Int
+  /// Session check-in: number of people covered by this payment (1–4). Default 1.
+  partyCount      Int       @default(1) @map("party_count")
   paymentMethod   String    @default("vietqr") @map("payment_method")
   type            String    // "checkin" | "registration" | "subscription"
   status          String    @default("pending") // "pending" | "confirmed" | "cancelled" | "expired"

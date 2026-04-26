@@ -12,6 +12,12 @@ This document is the source of truth for CourtPay check-in behavior in the table
   - `POST /api/staff/confirm-payment`
   - `POST /api/webhooks/sepay`
 
+### Session fee: paying for multiple people
+
+- Optional `headCount` (1–4) on `POST /api/courtpay/pay-session` and `POST /api/courtpay/register` multiplies the venue session fee for **session check-in** payments only (`type: checkin`). Subscription / package purchases ignore `headCount`.
+- If a **pending** session check-in payment already exists for the player, a new `pay-session` call with `headCount` **updates** that row (new amount, VietQR, and `payment_ref`) instead of returning `409`.
+- Realtime: `payment:updated` is emitted when the pending row is updated so staff pending lists refresh without a new `payment:new` (no extra notification sound).
+
 ---
 
 ## Core Rules

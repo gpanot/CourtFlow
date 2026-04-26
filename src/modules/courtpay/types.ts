@@ -45,6 +45,8 @@ export interface PaymentResult {
   amount: number;
   vietQR: string | null;
   paymentRef: string;
+  /** Session check-in: people count (1–4) for fee multiplier. */
+  partyCount: number;
   /** Included for client UIs (e.g. staff awaiting-payment screen). */
   playerName?: string;
   playerPhone?: string;

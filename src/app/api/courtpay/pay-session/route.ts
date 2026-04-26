@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import {
+  clampSessionPartyHeadCount,
   createCheckInPayment,
   createConfirmedCheckInPayment,
   checkInSubscriber,
+  updatePendingCheckinSessionPaymentHeadcount,
 } from "@/modules/courtpay/lib/check-in";
 import {
   getActiveSubscription,
@@ -14,7 +16,15 @@ import { emitToVenue } from "@/lib/socket-server";
 
 export async function POST(req: Request) {
   try {
-    const { venueCode, playerId, packageId, skipSessionDeduction } = await req.json();
+    const body = await req.json();
+    const { venueCode, playerId, packageId, skipSessionDeduction, headCount: headCountRaw } =
+      body as {
+        venueCode?: string;
+        playerId?: string;
+        packageId?: string;
+        skipSessionDeduction?: boolean;
+        headCount?: unknown;
+      };
 
     if (!venueCode || !playerId) {
       return NextResponse.json(
@@ -103,6 +113,31 @@ export async function POST(req: Request) {
             { status: 409 }
           );
         }
+      } else if (
+        !packageId &&
+        existingPayment.status === "pending" &&
+        existingPayment.type === "checkin"
+      ) {
+        const settingsEarly = venue.settings as Record<string, unknown>;
+        const sessionFeeEarly =
+          openSession?.sessionFee ?? (settingsEarly?.sessionFee as number) ?? 0;
+        if (sessionFeeEarly > 0) {
+          const headCount = clampSessionPartyHeadCount(headCountRaw ?? 1);
+          const amount = sessionFeeEarly * headCount;
+          const updated = await updatePendingCheckinSessionPaymentHeadcount({
+            pendingId: existingPayment.id,
+            venueId: venue.id,
+            amount,
+            partyCount: headCount,
+          });
+          if (updated) {
+            return NextResponse.json({ ...updated, checkedIn: false });
+          }
+        }
+        return NextResponse.json(
+          { error: "already_checked_in", alreadyCheckedIn: true, playerName: player.name },
+          { status: 409 }
+        );
       } else {
         return NextResponse.json(
           { error: "already_checked_in", alreadyCheckedIn: true, playerName: player.name },
@@ -177,11 +212,13 @@ export async function POST(req: Request) {
       openSession?.sessionFee ?? (settings?.sessionFee as number) ?? 0;
 
     if (sessionFee > 0) {
+      const headCount = clampSessionPartyHeadCount(headCountRaw ?? 1);
       const payment = await createCheckInPayment({
         venueId: venue.id,
         playerId,
-        amount: sessionFee,
+        amount: sessionFee * headCount,
         type: "checkin",
+        partyCount: headCount,
       });
 
       return NextResponse.json({ ...payment, checkedIn: false });

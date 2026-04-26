@@ -1,7 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { registerPlayer, createCheckInPayment } from "@/modules/courtpay/lib/check-in";
+import {
+  registerPlayer,
+  createCheckInPayment,
+  clampSessionPartyHeadCount,
+} from "@/modules/courtpay/lib/check-in";
 import { activateSubscription } from "@/modules/courtpay/lib/subscription";
 import { faceRecognitionService } from "@/lib/face-recognition";
 import { persistPlayerCheckInFacePhoto } from "@/lib/persist-player-check-in-photo";
@@ -9,7 +13,25 @@ import { persistPlayerCheckInFacePhoto } from "@/lib/persist-player-check-in-pho
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { venueCode, name, phone, gender, skillLevel, packageId, imageBase64 } = body;
+    const {
+      venueCode,
+      name,
+      phone,
+      gender,
+      skillLevel,
+      packageId,
+      imageBase64,
+      headCount: headCountRaw,
+    } = body as {
+      venueCode?: string;
+      name?: string;
+      phone?: string;
+      gender?: string;
+      skillLevel?: string;
+      packageId?: string;
+      imageBase64?: string;
+      headCount?: unknown;
+    };
 
     const nameTrimmed = typeof name === "string" ? name.trim() : "";
     const phoneNorm = typeof phone === "string" ? phone.trim() : "";
@@ -184,11 +206,13 @@ export async function POST(req: Request) {
       openSession?.sessionFee ?? (settings?.sessionFee as number) ?? 0;
 
     if (sessionFee > 0) {
+      const headCount = clampSessionPartyHeadCount(headCountRaw ?? 1);
       const payment = await createCheckInPayment({
         venueId: venue.id,
         playerId: player.id,
-        amount: sessionFee,
+        amount: sessionFee * headCount,
         type: "checkin",
+        partyCount: headCount,
       });
 
       return NextResponse.json({

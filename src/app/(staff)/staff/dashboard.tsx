@@ -294,6 +294,7 @@ export function StaffDashboard() {
       void playAssignmentAttentionSound();
       triggerPaymentHapticFeedback();
     });
+    const offPaymentUpdated = on("payment:updated", fetchPaymentCount);
     const offPaymentConfirmed = on("payment:confirmed", fetchPaymentCount);
     const offPaymentCancelled = on("payment:cancelled", fetchPaymentCount);
 
@@ -309,6 +310,7 @@ export function StaffDashboard() {
       offSession();
       offRankings();
       offPaymentNew();
+      offPaymentUpdated();
       offPaymentConfirmed();
       offPaymentCancelled();
       clearInterval(poll);

@@ -23,10 +23,13 @@ import type { AppColors } from "../../theme/palettes";
 import { resolveMediaUrl } from "../../lib/media-url";
 import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
 import {
-  COURTPAY_LEVEL_QR_BORDER,
   parseCourtPaySkillLevel,
   type CourtPaySkillLevelUI,
 } from "../../lib/courtpay-skill-level-ui";
+import {
+  CourtPaySessionAwaitingPayment,
+  COURTPAY_SESSION_PARTY_MAX,
+} from "../../components/courtpay/CourtPaySessionAwaitingPayment";
 
 type Step = "form" | "awaiting_payment" | "success" | "error";
 type Mode = "new" | "existing";
@@ -43,9 +46,11 @@ interface ExistingPlayerPreview {
 
 interface PendingPaymentState {
   id: string;
+  checkInPlayerId: string;
   amount: number;
   qrUrl: string | null;
   paymentRef: string;
+  partyCount: number;
   playerName?: string | null;
   playerPhone?: string | null;
   skillLevel?: CourtPaySkillLevelUI;
@@ -86,6 +91,9 @@ export function CheckInTabScreen() {
     useState<ExistingPlayerPreview | null>(null);
   const [pendingPayment, setPendingPayment] =
     useState<PendingPaymentState | null>(null);
+  const [sessionPartyCount, setSessionPartyCount] = useState(1);
+  const [partyAdjusting, setPartyAdjusting] = useState(false);
+  const [cashSubmitting, setCashSubmitting] = useState(false);
   const [existingCameraPermission, requestExistingCameraPermission] = useCameraPermissions();
   const existingCameraRef = useRef<CameraView | null>(null);
   const [existingCameraFacing, setExistingCameraFacing] = useState<CameraType>("back");
@@ -106,6 +114,9 @@ export function CheckInTabScreen() {
     setFaceQualityLoading(false);
     setExistingPreview(null);
     setPendingPayment(null);
+    setSessionPartyCount(1);
+    setPartyAdjusting(false);
+    setCashSubmitting(false);
     setExistingCameraFacing("back");
     setExistingCameraReady(false);
     setExistingCameraStarted(false);
@@ -162,15 +173,20 @@ export function CheckInTabScreen() {
       playerName?: string | null;
       playerPhone?: string | null;
       skillLevel?: string | null;
-    } | null
+      partyCount?: number;
+    } | null,
+    checkInPlayerId: string
   ) => {
-    if (!data?.pendingPaymentId) return null;
+    if (!data?.pendingPaymentId || !checkInPlayerId) return null;
     const parsedLevel = parseCourtPaySkillLevel(data.skillLevel ?? undefined);
+    const partyCount = data.partyCount ?? 1;
     return {
       id: data.pendingPaymentId,
+      checkInPlayerId,
       amount: data.amount ?? 0,
       qrUrl: data.vietQR ?? null,
       paymentRef: data.paymentRef ?? "",
+      partyCount,
       playerName: data.playerName ?? null,
       playerPhone: data.playerPhone ?? null,
       ...(parsedLevel ? { skillLevel: parsedLevel } : {}),
@@ -295,19 +311,22 @@ export function CheckInTabScreen() {
             playerName?: string | null;
             playerPhone?: string | null;
             skillLevel?: string | null;
+            partyCount?: number;
             checkedIn?: boolean;
             free?: boolean;
           }>("/api/courtpay/pay-session", {
             venueCode: venueId,
             playerId: data.player.id,
+            headCount: sessionPartyCount,
           });
           if (pay.checkedIn || pay.free) {
             setStep("success");
             setExistingCameraStarted(false);
             return;
           }
-          const payment = toPendingPayment(pay);
+          const payment = toPendingPayment(pay, data.player.id);
           if (payment) {
+            setSessionPartyCount(payment.partyCount);
             setPendingPayment(payment);
             setStep("awaiting_payment");
             setExistingCameraStarted(false);
@@ -331,7 +350,7 @@ export function CheckInTabScreen() {
     } finally {
       setExistingCaptureBusy(false);
     }
-  }, [existingCameraReady, existingCaptureBusy, venueId, t]);
+  }, [existingCameraReady, existingCaptureBusy, venueId, t, sessionPartyCount]);
 
   const stopExistingCamera = useCallback(() => {
     setExistingCameraStarted(false);
@@ -397,19 +416,22 @@ export function CheckInTabScreen() {
         playerName?: string | null;
         playerPhone?: string | null;
         skillLevel?: string | null;
+        partyCount?: number;
         checkedIn?: boolean;
         free?: boolean;
       }>("/api/courtpay/pay-session", {
         venueCode: venueId,
         playerId: checkInPlayerId,
+        headCount: sessionPartyCount,
       });
 
       if (data.checkedIn || data.free) {
         setStep("success");
         return;
       }
-      const payment = toPendingPayment(data);
+      const payment = toPendingPayment(data, checkInPlayerId);
       if (payment) {
+        setSessionPartyCount(payment.partyCount);
         setPendingPayment(payment);
         setStep("awaiting_payment");
       } else {
@@ -443,6 +465,7 @@ export function CheckInTabScreen() {
     setError("");
     try {
       const data = await api.post<{
+        playerId?: string;
         pendingPaymentId?: string;
         amount?: number;
         vietQR?: string | null;
@@ -450,6 +473,7 @@ export function CheckInTabScreen() {
         playerName?: string | null;
         playerPhone?: string | null;
         skillLevel?: string | null;
+        partyCount?: number;
         checkedIn?: boolean;
         free?: boolean;
       }>("/api/courtpay/register", {
@@ -459,13 +483,16 @@ export function CheckInTabScreen() {
         phone: phone.trim(),
         gender,
         skillLevel,
+        headCount: sessionPartyCount,
       });
       if (data.checkedIn || data.free) {
         setStep("success");
         return;
       }
-      const payment = toPendingPayment(data);
+      const pid = data.playerId?.trim();
+      const payment = pid ? toPendingPayment(data, pid) : null;
       if (payment) {
+        setSessionPartyCount(payment.partyCount);
         setPendingPayment(payment);
         setStep("awaiting_payment");
       } else {
@@ -479,9 +506,53 @@ export function CheckInTabScreen() {
     }
   };
 
+  const handleSessionPartyCountChange = useCallback(
+    async (next: number) => {
+      if (!venueId || !pendingPayment) return;
+      const clamped = Math.min(COURTPAY_SESSION_PARTY_MAX, Math.max(1, Math.floor(next)));
+      if (clamped === sessionPartyCount) return;
+      setPartyAdjusting(true);
+      setError("");
+      try {
+        const res = await api.post<{
+          pendingPaymentId?: string | null;
+          amount?: number;
+          paymentRef?: string | null;
+          vietQR?: string | null;
+          skillLevel?: string | null;
+          partyCount?: number;
+        }>("/api/courtpay/pay-session", {
+          venueCode: venueId,
+          playerId: pendingPayment.checkInPlayerId,
+          headCount: clamped,
+        });
+        const pc = res.partyCount ?? clamped;
+        setSessionPartyCount(pc);
+        setPendingPayment((prev) => {
+          if (!prev) return prev;
+          const lvl = parseCourtPaySkillLevel(res.skillLevel ?? undefined);
+          return {
+            ...prev,
+            id: res.pendingPaymentId ?? prev.id,
+            amount: res.amount ?? prev.amount,
+            paymentRef: res.paymentRef ?? prev.paymentRef,
+            qrUrl: res.vietQR ?? prev.qrUrl,
+            partyCount: pc,
+            skillLevel: lvl ?? prev.skillLevel,
+          };
+        });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Payment update failed");
+      } finally {
+        setPartyAdjusting(false);
+      }
+    },
+    [venueId, pendingPayment, sessionPartyCount]
+  );
+
   const handleCashPayment = async () => {
     if (!pendingPayment) return;
-    setLoading(true);
+    setCashSubmitting(true);
     try {
       await api.post("/api/courtpay/cash-payment", {
         pendingPaymentId: pendingPayment.id,
@@ -491,7 +562,7 @@ export function CheckInTabScreen() {
       setError(err instanceof Error ? err.message : "Cash payment failed");
       setStep("error");
     } finally {
-      setLoading(false);
+      setCashSubmitting(false);
     }
   };
 
@@ -813,69 +884,31 @@ export function CheckInTabScreen() {
   );
 
   const renderAwaitingPayment = () => {
+    if (!pendingPayment) return null;
     const payerName =
-      pendingPayment?.playerName?.trim() ||
+      pendingPayment.playerName?.trim() ||
       existingPreview?.name?.trim() ||
       name.trim() ||
       "";
-    const payerPhone =
-      pendingPayment?.playerPhone?.trim() ||
-      existingPreview?.phone?.trim() ||
-      phone.trim() ||
-      "";
-    const showPayer = Boolean(payerName || payerPhone);
-
     return (
-    <View style={styles.paymentSection}>
-      <Text style={styles.paymentTitle}>{t("checkInAwaitingPayment")}</Text>
-      {showPayer ? (
-        <View style={styles.paymentPayerBlock}>
-          {payerName ? (
-            <Text style={styles.paymentPayerName}>{payerName}</Text>
-          ) : null}
-          {payerPhone ? (
-            <Text style={styles.paymentPayerPhone}>{payerPhone}</Text>
-          ) : null}
-        </View>
-      ) : null}
-      {pendingPayment?.qrUrl ? (
-        <View
-          style={[
-            styles.qrContainer,
-            pendingPayment.skillLevel
-              ? COURTPAY_LEVEL_QR_BORDER[pendingPayment.skillLevel]
-              : null,
-          ]}
-        >
-          <Image
-            source={{ uri: pendingPayment.qrUrl }}
-            style={styles.qrImage}
-            resizeMode="contain"
-          />
-        </View>
-      ) : null}
-      <Text style={styles.paymentAmount}>
-        {pendingPayment?.amount?.toLocaleString()} VND
-      </Text>
-      <Text style={styles.paymentRef}>
-        Ref: {pendingPayment?.paymentRef}
-      </Text>
-      <TouchableOpacity
-        style={styles.cashBtn}
-        onPress={handleCashPayment}
-        disabled={loading}
-        activeOpacity={0.7}
-      >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.cashBtnText}>{t("checkInConfirmCash")}</Text>
-        )}
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.cancelLink} onPress={resetForm}>
-        <Text style={styles.cancelLinkText}>{t("cancel")}</Text>
-      </TouchableOpacity>
-    </View>
+      <View style={styles.paymentSection}>
+        <CourtPaySessionAwaitingPayment
+          variant="staff"
+          playerName={payerName}
+          pending={{
+            qrUrl: pendingPayment.qrUrl,
+            amount: pendingPayment.amount,
+            paymentRef: pendingPayment.paymentRef,
+            skillLevel: pendingPayment.skillLevel,
+          }}
+          partyCount={sessionPartyCount}
+          partyAdjusting={partyAdjusting}
+          cashLoading={cashSubmitting}
+          onPartyCountChange={handleSessionPartyCountChange}
+          onCash={() => void handleCashPayment()}
+          onCancel={resetForm}
+        />
+      </View>
     );
   };
 

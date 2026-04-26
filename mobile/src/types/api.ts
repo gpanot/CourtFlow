@@ -88,6 +88,8 @@ export interface Court {
 export interface PendingPayment {
   id: string;
   amount: number;
+  /** Session check-in: people count (1–4). Omitted on older rows → treat as 1. */
+  partyCount?: number;
   paymentRef: string;
   paymentMethod: string;
   type: string;

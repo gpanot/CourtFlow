@@ -24,6 +24,10 @@ import { StatusBar } from "expo-status-bar";
 import { CourtPayLiquidBackdrop } from "../../components/courtpay/CourtPayLiquidBackdrop";
 import { LiquidGlassSurface } from "../../components/courtpay/LiquidGlassSurface";
 import { CourtPayStatusCard } from "../../components/courtpay/CourtPayStatusCard";
+import {
+  CourtPaySessionAwaitingPayment,
+  COURTPAY_SESSION_PARTY_MAX,
+} from "../../components/courtpay/CourtPaySessionAwaitingPayment";
 import { api } from "../../lib/api-client";
 import { ENV } from "../../config/env";
 import { useAuthStore } from "../../stores/auth-store";
@@ -93,6 +97,7 @@ interface PendingPaymentState {
   paymentRef: string;
   qrUrl: string | null;
   playerName: string;
+  partyCount: number;
   skillLevel?: CourtPaySkillLevelUI;
 }
 
@@ -200,6 +205,10 @@ export function CourtPayCheckInScreen({
   const [player, setPlayer] = useState<CheckInPlayerLite | null>(null);
   const [isNewPlayer, setIsNewPlayer] = useState(false);
   const [pendingPayment, setPendingPayment] = useState<PendingPaymentState | null>(null);
+  /** Session fee payer count (1–4); sent on pay-session / register and updated via pay-session while pending. */
+  const [sessionPartyCount, setSessionPartyCount] = useState(1);
+  const [partyAdjusting, setPartyAdjusting] = useState(false);
+  const [cashSubmitting, setCashSubmitting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [cashPending, setCashPending] = useState(false);
   const [regPhoneRequiredVisible, setRegPhoneRequiredVisible] = useState(false);
@@ -358,6 +367,9 @@ export function CourtPayCheckInScreen({
     setPlayer(null);
     setIsNewPlayer(false);
     setPendingPayment(null);
+    setSessionPartyCount(1);
+    setPartyAdjusting(false);
+    setCashSubmitting(false);
     setCashPending(false);
     setRegPhoneRequiredVisible(false);
     setLoading(false);
@@ -723,6 +735,7 @@ export function CourtPayCheckInScreen({
         paymentRef?: string | null;
         vietQR?: string | null;
         skillLevel?: string | null;
+        partyCount?: number;
         checkedIn?: boolean;
         free?: boolean;
         subscription?: ActiveSubInfo | null;
@@ -732,6 +745,7 @@ export function CourtPayCheckInScreen({
         playerId: targetPlayer.id,
         packageId,
         skipSessionDeduction: options?.skipSessionDeduction === true,
+        headCount: packageId ? undefined : sessionPartyCount,
       });
 
       if (res.checkedIn || res.free) {
@@ -759,12 +773,15 @@ export function CourtPayCheckInScreen({
 
       if (res.pendingPaymentId) {
         const levelRaw = res.skillLevel ?? targetPlayer.skillLevel ?? undefined;
+        const pc = res.partyCount ?? sessionPartyCount;
+        setSessionPartyCount(pc);
         setPendingPayment({
           id: res.pendingPaymentId,
           amount: res.amount ?? 0,
           paymentRef: res.paymentRef ?? "",
           qrUrl: res.vietQR ?? null,
           playerName: targetPlayer.name,
+          partyCount: pc,
           skillLevel: parseCourtPaySkillLevel(levelRaw),
         });
         setConfirmedSubInfo(null);
@@ -790,6 +807,96 @@ export function CourtPayCheckInScreen({
     }
   };
 
+  const handleSessionPartyCountChange = useCallback(
+    async (next: number) => {
+      if (!venueId || !player) {
+        if (__DEV__) {
+          console.log("[CourtPay party] skip adjust: missing venueId or player", {
+            venueId,
+            playerId: player?.id,
+          });
+        }
+        return;
+      }
+      const clamped = Math.min(COURTPAY_SESSION_PARTY_MAX, Math.max(1, Math.floor(next)));
+      if (clamped === sessionPartyCount) {
+        if (__DEV__) {
+          console.log("[CourtPay party] skip adjust: already at count", {
+            requested: next,
+            clamped,
+            sessionPartyCount,
+          });
+        }
+        return;
+      }
+      if (__DEV__) {
+        console.log("[CourtPay party] pay-session headCount", {
+          venueId,
+          playerId: player.id,
+          from: sessionPartyCount,
+          to: clamped,
+          pendingPaymentId: pendingPayment?.id,
+        });
+      }
+      setPartyAdjusting(true);
+      setError("");
+      try {
+        const res = await api.post<{
+          pendingPaymentId?: string | null;
+          amount?: number;
+          paymentRef?: string | null;
+          vietQR?: string | null;
+          skillLevel?: string | null;
+          partyCount?: number;
+        }>("/api/courtpay/pay-session", {
+          venueCode: venueId,
+          playerId: player.id,
+          headCount: clamped,
+        });
+        const pc = res.partyCount ?? clamped;
+        if (__DEV__) {
+          console.log("[CourtPay party] pay-session OK", {
+            partyCount: pc,
+            amount: res.amount,
+            pendingPaymentId: res.pendingPaymentId,
+            paymentRef: res.paymentRef,
+          });
+        }
+        setSessionPartyCount(pc);
+        setPendingPayment((prev) => {
+          if (!prev) return prev;
+          const lvl = parseCourtPaySkillLevel(
+            res.skillLevel ?? player.skillLevel ?? undefined
+          );
+          return {
+            ...prev,
+            id: res.pendingPaymentId ?? prev.id,
+            amount: res.amount ?? prev.amount,
+            paymentRef: res.paymentRef ?? prev.paymentRef,
+            qrUrl: res.vietQR ?? prev.qrUrl,
+            partyCount: pc,
+            skillLevel: lvl ?? prev.skillLevel,
+          };
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Payment update failed";
+        if (__DEV__) {
+          console.warn("[CourtPay party] pay-session failed", {
+            message: msg,
+            err,
+            venueId,
+            playerId: player.id,
+            headCount: clamped,
+          });
+        }
+        setError(msg);
+      } finally {
+        setPartyAdjusting(false);
+      }
+    },
+    [venueId, player, sessionPartyCount, pendingPayment?.id]
+  );
+
   const handleRegisterAndPay = async (packageId?: string) => {
     if (!venueId || !faceBase64 || !name.trim() || !gender || !skillLevel) {
       return;
@@ -804,6 +911,7 @@ export function CourtPayCheckInScreen({
         paymentRef?: string | null;
         vietQR?: string | null;
         skillLevel?: string | null;
+        partyCount?: number;
         checkedIn?: boolean;
         subscription?: ActiveSubInfo | null;
       }>("/api/courtpay/register", {
@@ -814,6 +922,7 @@ export function CourtPayCheckInScreen({
         skillLevel,
         imageBase64: faceBase64,
         packageId,
+        headCount: packageId ? undefined : sessionPartyCount,
       });
 
       const registeredPlayer: CheckInPlayerLite = {
@@ -830,12 +939,15 @@ export function CourtPayCheckInScreen({
         setStep("confirmed");
       } else if (reg.pendingPaymentId) {
         const levelRaw = reg.skillLevel ?? skillLevel;
+        const pc = reg.partyCount ?? sessionPartyCount;
+        setSessionPartyCount(pc);
         setPendingPayment({
           id: reg.pendingPaymentId,
           amount: reg.amount ?? 0,
           paymentRef: reg.paymentRef ?? "",
           qrUrl: reg.vietQR ?? null,
           playerName: registeredPlayer.name,
+          partyCount: pc,
           skillLevel: parseCourtPaySkillLevel(levelRaw),
         });
         setConfirmedSubInfo(null);
@@ -901,7 +1013,7 @@ export function CourtPayCheckInScreen({
 
   const handleCash = async () => {
     if (!pendingPayment) return;
-    setLoading(true);
+    setCashSubmitting(true);
     try {
       await api.post("/api/courtpay/cash-payment", {
         pendingPaymentId: pendingPayment.id,
@@ -912,7 +1024,7 @@ export function CourtPayCheckInScreen({
       setError(err instanceof Error ? err.message : "Cash payment failed");
       setStep("error");
     } finally {
-      setLoading(false);
+      setCashSubmitting(false);
     }
   };
 
@@ -1240,12 +1352,15 @@ export function CourtPayCheckInScreen({
                     }}
                   />
                   {regFaceCountdown !== null ? (
-                    <View style={styles.regCountdownOverlay} pointerEvents="none">
+                    <View
+                      style={[styles.regCountdownOverlay, styles.regCountdownOverlayTimer]}
+                      pointerEvents="none"
+                    >
                       <Text style={styles.regCountdownDigit}>{regFaceCountdown}</Text>
                     </View>
                   ) : null}
                   {regCaptureBusy && regFaceCountdown === null ? (
-                    <View style={styles.regCountdownOverlay}>
+                    <View style={[styles.regCountdownOverlay, styles.regCountdownOverlayBusy]}>
                       <ActivityIndicator color="#fff" size="large" />
                     </View>
                   ) : null}
@@ -1763,51 +1878,31 @@ export function CourtPayCheckInScreen({
 
       // ── AWAITING PAYMENT ───────────────────────────────────────────────────
       case "awaiting_payment":
-        return (
-          <LiquidGlassSurface style={styles.payWaitGlass} tintColor={isLight ? CP.glassOverlayOnLight : CP.glassOverlay} mode={themeMode}>
-            <View style={styles.payWaitGlassInner}>
-              <Text style={[styles.formTitle, isLight && styles.formTitleLight]}>
-                {pendingPayment?.playerName?.trim()
-                  ? t("payTitle", { name: pendingPayment.playerName.trim() })
-                  : t("payReturningTitle")}
-              </Text>
-              <Text style={[styles.payScanHint, isLight && styles.payScanHintLight]}>{t("payScanQR")}</Text>
-              {pendingPayment?.qrUrl ? (
-                <View
-                  style={[
-                    styles.qrWrap,
-                    pendingPayment.skillLevel
-                      ? COURTPAY_LEVEL_QR_BORDER[pendingPayment.skillLevel]
-                      : null,
-                  ]}
-                >
-                  <Image
-                    source={{ uri: pendingPayment.qrUrl }}
-                    style={styles.qrImage}
-                    resizeMode="contain"
-                  />
-                </View>
-              ) : null}
-              <Text style={[styles.amount, dyn.amount]}>
-                {formatVND(pendingPayment?.amount ?? 0)} VND
-              </Text>
-              <Text style={[styles.ref, isLight && styles.refLight]}>{pendingPayment?.paymentRef}</Text>
-
-              <View style={styles.payWaitingRow}>
-                <View style={[styles.payPulseDot, dyn.payPulseDot]} />
-                <Text style={[styles.waitText, isLight && styles.waitTextLight]}>{t("payWaitingForStaff")}</Text>
-              </View>
-
-              <TouchableOpacity style={styles.cashBtn} onPress={handleCash}>
-                <Ionicons name="cash-outline" size={18} color={isLight ? "#b45309" : "#fbbf24"} />
-                <Text style={[styles.cashText, isLight && styles.cashTextLight]}>{t("payByCash")}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelPayment}>
-                <Text style={[styles.cancelText, isLight && styles.cancelTextLight]}>{t("cancel")}</Text>
-              </TouchableOpacity>
-            </View>
-          </LiquidGlassSurface>
-        );
+        return pendingPayment ? (
+          <CourtPaySessionAwaitingPayment
+            variant="kiosk"
+            kioskTheme={{
+              isLight,
+              themeMode,
+              amountColor: isLight ? CP.amountTextOnLight : CP.amountText,
+              pulseDotColor: CP.pulseDot,
+              glassTint: isLight ? CP.glassOverlayOnLight : CP.glassOverlay,
+            }}
+            playerName={pendingPayment.playerName}
+            pending={{
+              qrUrl: pendingPayment.qrUrl,
+              amount: pendingPayment.amount,
+              paymentRef: pendingPayment.paymentRef,
+              skillLevel: pendingPayment.skillLevel,
+            }}
+            partyCount={sessionPartyCount}
+            partyAdjusting={partyAdjusting}
+            cashLoading={cashSubmitting}
+            onPartyCountChange={handleSessionPartyCountChange}
+            onCash={() => void handleCash()}
+            onCancel={() => void handleCancelPayment()}
+          />
+        ) : null;
 
       // ── ALREADY PAID ───────────────────────────────────────────────────────
       case "already_paid":
@@ -2459,12 +2554,18 @@ const styles = StyleSheet.create({
   },
   regCountdownOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.1)",
     alignItems: "center",
   },
+  regCountdownOverlayTimer: {
+    justifyContent: "flex-end",
+    paddingBottom: 8,
+  },
+  regCountdownOverlayBusy: {
+    justifyContent: "center",
+  },
   regCountdownDigit: {
-    fontSize: 120,
+    fontSize: 50,
     fontWeight: "800",
     color: "#fff",
     textAlign: "center",

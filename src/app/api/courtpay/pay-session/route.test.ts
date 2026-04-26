@@ -9,6 +9,7 @@ const {
   mockGetLatestSubscription,
   mockActivateSubscription,
   mockEmitToVenue,
+  mockUpdatePendingCheckinSessionPaymentHeadcount,
 } = vi.hoisted(() => {
   return {
     mockPrisma: {
@@ -27,6 +28,7 @@ const {
     mockGetLatestSubscription: vi.fn(),
     mockActivateSubscription: vi.fn(),
     mockEmitToVenue: vi.fn(),
+    mockUpdatePendingCheckinSessionPaymentHeadcount: vi.fn(),
   };
 });
 
@@ -35,6 +37,12 @@ vi.mock("@/lib/db", () => ({
 }));
 
 vi.mock("@/modules/courtpay/lib/check-in", () => ({
+  clampSessionPartyHeadCount: (raw: unknown) => {
+    const n = typeof raw === "number" ? raw : Number(raw);
+    if (!Number.isFinite(n)) return 1;
+    return Math.min(4, Math.max(1, Math.floor(n)));
+  },
+  updatePendingCheckinSessionPaymentHeadcount: mockUpdatePendingCheckinSessionPaymentHeadcount,
   createCheckInPayment: mockCreateCheckInPayment,
   createConfirmedCheckInPayment: mockCreateConfirmedCheckInPayment,
   checkInSubscriber: mockCheckInSubscriber,
@@ -146,6 +154,7 @@ describe("POST /api/courtpay/pay-session", () => {
       amount: 900000,
       vietQR: "qr",
       paymentRef: "CF-SUB-XYZ999",
+      partyCount: 1,
     });
 
     const req = new Request("http://localhost/api/courtpay/pay-session", {
@@ -177,6 +186,7 @@ describe("POST /api/courtpay/pay-session", () => {
       amount: 900000,
       vietQR: "qr",
       paymentRef: "CF-SUB-RENEW1",
+      partyCount: 1,
     });
 
     const req = new Request("http://localhost/api/courtpay/pay-session", {
@@ -223,6 +233,7 @@ describe("POST /api/courtpay/pay-session", () => {
       amount: 900000,
       vietQR: "qr",
       paymentRef: "CF-SUB-RENEW2",
+      partyCount: 1,
     });
 
     const req = new Request("http://localhost/api/courtpay/pay-session", {
@@ -296,6 +307,7 @@ describe("POST /api/courtpay/pay-session", () => {
       amount: 140000,
       vietQR: "qr",
       paymentRef: "CF-SES-OPEN1",
+      partyCount: 1,
     });
 
     const req = new Request("http://localhost/api/courtpay/pay-session", {
@@ -315,6 +327,118 @@ describe("POST /api/courtpay/pay-session", () => {
       playerId: "p1",
       amount: 140000,
       type: "checkin",
+      partyCount: 1,
+    });
+  });
+
+  it("creates session payment with headCount doubling the session fee", async () => {
+    mockPrisma.venue.findFirst.mockResolvedValue({ id: "v1", settings: {} });
+    mockPrisma.session.findFirst.mockResolvedValue({ sessionFee: 140000 });
+    mockPrisma.checkInPlayer.findUnique.mockResolvedValue({ id: "p1", venueId: "v1" });
+    mockGetActiveSubscription.mockResolvedValue(null);
+    mockCreateCheckInPayment.mockResolvedValue({
+      pendingPaymentId: "pp-x2",
+      amount: 280000,
+      vietQR: "qr",
+      paymentRef: "CF-SES-X2",
+      partyCount: 2,
+    });
+
+    const req = new Request("http://localhost/api/courtpay/pay-session", {
+      method: "POST",
+      body: JSON.stringify({ venueCode: "v1", playerId: "p1", headCount: 2 }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({
+      pendingPaymentId: "pp-x2",
+      amount: 280000,
+      partyCount: 2,
+      checkedIn: false,
+    });
+    expect(mockCreateCheckInPayment).toHaveBeenCalledWith({
+      venueId: "v1",
+      playerId: "p1",
+      amount: 280000,
+      type: "checkin",
+      partyCount: 2,
+    });
+  });
+
+  it("updates pending session check-in payment headcount instead of 409", async () => {
+    mockPrisma.venue.findFirst.mockResolvedValue({ id: "v1", settings: {} });
+    mockPrisma.session.findFirst.mockResolvedValue({ sessionFee: 120000 });
+    mockPrisma.checkInPlayer.findUnique.mockResolvedValue({ id: "p1", venueId: "v1" });
+    mockGetActiveSubscription.mockResolvedValue(null);
+    mockPrisma.pendingPayment.findFirst.mockResolvedValue({
+      id: "pp-pending",
+      status: "pending",
+      type: "checkin",
+    });
+    mockUpdatePendingCheckinSessionPaymentHeadcount.mockResolvedValue({
+      pendingPaymentId: "pp-pending",
+      amount: 480000,
+      vietQR: "qr2",
+      paymentRef: "CF-SES-NEW",
+      partyCount: 4,
+      skillLevel: null,
+    });
+
+    const req = new Request("http://localhost/api/courtpay/pay-session", {
+      method: "POST",
+      body: JSON.stringify({ venueCode: "v1", playerId: "p1", headCount: 4 }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await POST(req);
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.partyCount).toBe(4);
+    expect(body.amount).toBe(480000);
+    expect(mockUpdatePendingCheckinSessionPaymentHeadcount).toHaveBeenCalledWith({
+      pendingId: "pp-pending",
+      venueId: "v1",
+      amount: 480000,
+      partyCount: 4,
+    });
+    expect(mockCreateCheckInPayment).not.toHaveBeenCalled();
+  });
+
+  it("ignores headCount for subscription package purchase", async () => {
+    mockPrisma.venue.findFirst.mockResolvedValue({ id: "v1", settings: {} });
+    mockPrisma.checkInPlayer.findUnique.mockResolvedValue({ id: "p1", venueId: "v1" });
+    mockGetActiveSubscription.mockResolvedValue(null);
+    mockPrisma.subscriptionPackage.findFirst.mockResolvedValue({
+      id: "pkg-1",
+      price: 900000,
+    });
+    mockActivateSubscription.mockResolvedValue({ id: "sub-new" });
+    mockCreateCheckInPayment.mockResolvedValue({
+      pendingPaymentId: "pp-sub",
+      amount: 900000,
+      vietQR: "qr",
+      paymentRef: "CF-SUB-XYZ",
+      partyCount: 1,
+    });
+
+    const req = new Request("http://localhost/api/courtpay/pay-session", {
+      method: "POST",
+      body: JSON.stringify({
+        venueCode: "v1",
+        playerId: "p1",
+        packageId: "pkg-1",
+        headCount: 99,
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(mockCreateCheckInPayment).toHaveBeenCalledWith({
+      venueId: "v1",
+      playerId: "p1",
+      amount: 900000,
+      type: "subscription",
+      packageId: "pkg-1",
     });
   });
 });
