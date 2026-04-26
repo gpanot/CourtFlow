@@ -36,6 +36,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   }, [token, role, onboardingCompleted, router]);
 
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
   if (!token || role !== "superadmin") {
     return (
       <div className="flex min-h-dvh items-center justify-center p-6">
@@ -91,23 +95,49 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </aside>
 
       {/* Mobile top header */}
-      <div className="fixed inset-x-0 top-0 z-40 flex items-center justify-between border-b border-neutral-800 bg-neutral-950/95 px-4 py-3 backdrop-blur-sm md:hidden">
-        <div>
-          <h1 className="text-base font-bold text-purple-500">Admin Panel</h1>
-          <p className="text-[10px] text-neutral-500 leading-none">CourtFlow</p>
-        </div>
+      <div className="fixed inset-x-0 top-0 z-40 flex items-center gap-3 border-b border-neutral-800 bg-neutral-950/95 px-3 py-3 pr-4 backdrop-blur-sm md:hidden">
         <button
+          type="button"
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white"
+          className="-ml-0.5 shrink-0 rounded-lg p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white"
+          aria-expanded={mobileMenuOpen}
+          aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
         >
           {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
+        <div className="min-w-0">
+          <h1 className="text-base font-bold text-purple-500">Admin Panel</h1>
+          <p className="text-[10px] text-neutral-500 leading-none">CourtFlow</p>
+        </div>
       </div>
 
-      {/* Mobile slide-down menu (for sign out + extra options) */}
+      {/* Mobile slide-down menu: all pages + sign out */}
       {mobileMenuOpen && (
-        <div className="fixed inset-x-0 top-[57px] z-30 border-b border-neutral-800 bg-neutral-950/98 backdrop-blur-sm p-4 md:hidden">
+        <div className="fixed inset-x-0 top-[57px] z-30 max-h-[min(70vh,calc(100dvh-9rem))] overflow-y-auto border-b border-neutral-800 bg-neutral-950/98 p-4 pb-6 backdrop-blur-sm md:hidden">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">Pages</p>
+          <nav className="space-y-0.5">
+            {navItems.map((item) => {
+              const active = pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                    active
+                      ? "bg-purple-600/20 text-purple-400"
+                      : "text-neutral-300 hover:bg-neutral-800 hover:text-white"
+                  )}
+                >
+                  <item.icon className="h-4 w-4 shrink-0" />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+          <div className="my-4 border-t border-neutral-800" />
           <button
+            type="button"
             onClick={() => {
               clearAuth();
               setMobileMenuOpen(false);
@@ -133,26 +163,28 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         {children}
       </main>
 
-      {/* Mobile bottom tab bar */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 flex items-end justify-around border-t border-neutral-800 bg-neutral-950/95 px-1 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm md:hidden">
-        {navItems.map((item) => {
-          const active = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                "flex flex-col items-center gap-0.5 px-2 py-2.5 text-[10px] font-medium transition-colors min-w-[56px]",
-                active
-                  ? "text-purple-400"
-                  : "text-neutral-500 active:text-neutral-300"
-              )}
-            >
-              <item.icon className={cn("h-5 w-5", active && "text-purple-400")} />
-              {item.label}
-            </Link>
-          );
-        })}
+      {/* Mobile bottom tab bar — horizontal scroll */}
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm md:hidden">
+        <div className="flex max-w-full flex-nowrap items-end overflow-x-auto overscroll-x-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+          {navItems.map((item) => {
+            const active = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "flex shrink-0 flex-col items-center gap-0.5 px-3 py-2.5 text-center text-[10px] font-medium leading-tight transition-colors min-w-[64px] max-w-[92px]",
+                  active
+                    ? "text-purple-400"
+                    : "text-neutral-500 active:text-neutral-300"
+                )}
+              >
+                <item.icon className={cn("h-5 w-5 shrink-0", active && "text-purple-400")} />
+                <span className="line-clamp-2 w-full">{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
       </nav>
     </div>
   );
