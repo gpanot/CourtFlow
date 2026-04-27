@@ -53,7 +53,8 @@ const clientConfigsDefinition = {
   courtpay_client2: {
     name: "CourtPay",
     venueId: "yyy",
-    primaryColor: "#534AB7",
+    /** Aligns with Payment tab “Pending” selected (`bg-blue-600` / #2563eb). */
+    primaryColor: "#2563eb",
     tabs: ["session", "checkin", "payment"],
     components: {
       session: "SessionCourtPay",
@@ -108,11 +109,10 @@ export function resolveClientId(raw: string | undefined): ClientId {
 }
 
 /**
- * Effective client id: runtime staff selection → env (local dev) → default.
+ * Client id from env/default only — no localStorage. Use for React initial state
+ * so server HTML matches the client’s first paint; then sync storage in useLayoutEffect.
  */
-export function resolveEffectiveClientId(): ClientId {
-  const stored = readStoredRuntimeClientId();
-  if (stored) return stored;
+export function resolveClientIdForHydration(): ClientId {
   const envRaw =
     typeof process !== "undefined" && process.env.NEXT_PUBLIC_CLIENT_ID
       ? process.env.NEXT_PUBLIC_CLIENT_ID
@@ -122,6 +122,19 @@ export function resolveEffectiveClientId(): ClientId {
     console.warn(`[CourtFlow] Unknown NEXT_PUBLIC_CLIENT_ID "${envRaw}", using ${DEFAULT_CLIENT_ID}`);
   }
   return fromEnv;
+}
+
+export function getHydrationSafeClientConfig(): ClientConfig {
+  return clientConfigs[resolveClientIdForHydration()];
+}
+
+/**
+ * Effective client id: runtime staff selection → env (local dev) → default.
+ */
+export function resolveEffectiveClientId(): ClientId {
+  const stored = readStoredRuntimeClientId();
+  if (stored) return stored;
+  return resolveClientIdForHydration();
 }
 
 export function getResolvedClientConfig(): ClientConfig {

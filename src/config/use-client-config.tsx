@@ -4,6 +4,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useLayoutEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -11,6 +12,8 @@ import {
 import {
   clientConfigs,
   getResolvedClientConfig,
+  readStoredRuntimeClientId,
+  resolveClientIdForHydration,
   resolveEffectiveClientId,
   SELECTED_CLIENT_STORAGE_KEY,
   type ClientConfig,
@@ -25,7 +28,12 @@ type Ctx = {
 const ClientConfigContext = createContext<Ctx | null>(null);
 
 export function ClientConfigProvider({ children }: { children: ReactNode }) {
-  const [clientId, setClientIdState] = useState<ClientId>(() => resolveEffectiveClientId());
+  const [clientId, setClientIdState] = useState<ClientId>(() => resolveClientIdForHydration());
+
+  useLayoutEffect(() => {
+    const stored = readStoredRuntimeClientId();
+    if (stored) setClientIdState(stored);
+  }, []);
 
   const setClientId = useCallback((id: ClientId) => {
     if (!(id in clientConfigs)) return;

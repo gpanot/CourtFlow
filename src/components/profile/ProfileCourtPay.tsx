@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import staffI18n from "@/i18n/staff-i18n";
 import type { StaffTabPanelProps } from "@/config/componentMap";
-import { useSessionStore } from "@/stores/session-store";
+import { useSessionStore, useHasHydrated } from "@/stores/session-store";
 import { useStaffPinStore } from "@/stores/staff-pin-store";
 import { api } from "@/lib/api-client";
 import { StaffProfilePinModal } from "@/components/profile/StaffProfilePinModal";
@@ -41,6 +41,7 @@ export function ProfileCourtPay({ legacyTab, onOpenSessionHistory, variant = "ta
   const { t } = useTranslation("translation", { i18n: staffI18n });
   const router = useRouter();
   const { token, venueId, staffName, staffPhone, setAuth, clearAuth } = useSessionStore();
+  const sessionHydrated = useHasHydrated();
   const { unlocked, unlock, lock, hydrateFromStorage } = useStaffPinStore();
 
   const [venueName, setVenueName] = useState<string | undefined>();
@@ -52,8 +53,9 @@ export function ProfileCourtPay({ legacyTab, onOpenSessionHistory, variant = "ta
   const pendingNav = useRef<PendingNav>(null);
 
   useEffect(() => {
+    if (!sessionHydrated) return;
     hydrateFromStorage();
-  }, [hydrateFromStorage]);
+  }, [sessionHydrated, hydrateFromStorage]);
 
   useEffect(() => {
     const nextMode = getStoredThemeMode();
@@ -282,7 +284,7 @@ export function ProfileCourtPay({ legacyTab, onOpenSessionHistory, variant = "ta
               onClick={() => handleLockedNav("payment")}
               className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-neutral-800/50 transition-colors"
             >
-              <CreditCard className="h-4 w-4 shrink-0 text-green-400" aria-hidden />
+              <CreditCard className="h-4 w-4 shrink-0 text-client-primary" aria-hidden />
               <span className="min-w-0 flex-1 text-sm font-medium text-neutral-200">
                 {t("staff.profile.paymentSettings")}
               </span>
@@ -295,7 +297,7 @@ export function ProfileCourtPay({ legacyTab, onOpenSessionHistory, variant = "ta
               onClick={() => handleLockedNav("subscriptions")}
               className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-neutral-800/50 transition-colors"
             >
-              <Package className="h-4 w-4 shrink-0 text-purple-400" aria-hidden />
+              <Package className="h-4 w-4 shrink-0 text-client-primary" aria-hidden />
               <span className="min-w-0 flex-1 text-sm font-medium text-neutral-200">
                 {t("staff.profile.subscriptions")}
               </span>
@@ -319,7 +321,7 @@ export function ProfileCourtPay({ legacyTab, onOpenSessionHistory, variant = "ta
               onClick={() => handleLockedNav("boss")}
               className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-neutral-800/50 transition-colors"
             >
-              <BarChart3 className="h-4 w-4 shrink-0 text-purple-400" aria-hidden />
+              <BarChart3 className="h-4 w-4 shrink-0 text-client-primary" aria-hidden />
               <span className="min-w-0 flex-1 text-sm font-medium text-neutral-200">
                 {t("staff.profile.bossDashboard")}
               </span>

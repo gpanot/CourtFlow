@@ -254,7 +254,7 @@ export function PendingPaymentsPanel({
           className={cn(
             "flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
             subTab === "pending"
-              ? "bg-blue-600 text-white"
+              ? "bg-client-primary text-white"
               : "text-neutral-300 hover:bg-neutral-800"
           )}
         >
@@ -342,14 +342,14 @@ export function PendingPaymentsPanel({
                               "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase",
                               isCash
                                 ? "bg-amber-600/20 text-amber-300"
-                                : "bg-blue-600/20 text-blue-300"
+                                : "bg-client-primary/20 text-client-primary"
                             )}
                           >
                             {isCash
                               ? t("staff.dashboard.paymentMethodCash")
                               : t("staff.dashboard.paymentMethodQR")}
                           </span>
-                          <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase bg-fuchsia-600/20 text-fuchsia-300">
+                          <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase bg-client-primary/20 text-client-primary">
                             {flowTag}
                           </span>
                           <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase bg-emerald-600/20 text-emerald-300">
@@ -370,7 +370,7 @@ export function PendingPaymentsPanel({
                         {isCash ? (
                           <Banknote className="h-4 w-4 text-amber-400" />
                         ) : (
-                          <QrCode className="h-4 w-4 text-blue-400" />
+                          <QrCode className="h-4 w-4 text-client-primary" />
                         )}
                       </div>
                     </div>
@@ -474,14 +474,14 @@ export function PendingPaymentsPanel({
                               "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase",
                               isCash
                                 ? "bg-amber-600/20 text-amber-300"
-                                : "bg-blue-600/20 text-blue-300"
+                                : "bg-client-primary/20 text-client-primary"
                             )}
                           >
                             {isCash
                               ? t("staff.dashboard.paymentMethodCash")
                               : t("staff.dashboard.paymentMethodQR")}
                           </span>
-                          <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase bg-fuchsia-600/20 text-fuchsia-300">
+                          <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase bg-client-primary/20 text-client-primary">
                             {flowTag}
                           </span>
                           <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase bg-emerald-600/20 text-emerald-300">

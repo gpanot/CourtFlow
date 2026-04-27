@@ -20,18 +20,15 @@ export default function StaffPaymentSettingsPage() {
   const [pinOpen, setPinOpen] = useState(false);
 
   useEffect(() => {
-    hydrateFromStorage();
-  }, [hydrateFromStorage]);
-
-  useEffect(() => {
     if (!hydrated) return;
+    hydrateFromStorage();
     if (!token || !staffId || !venueId) {
       router.replace("/staff");
       return;
     }
-    if (!unlocked) setPinOpen(true);
+    if (!useStaffPinStore.getState().unlocked) setPinOpen(true);
     else setPinOpen(false);
-  }, [hydrated, token, staffId, venueId, router, unlocked]);
+  }, [hydrated, hydrateFromStorage, token, staffId, venueId, router, unlocked]);
 
   const handleBack = () => {
     if (typeof window !== "undefined") {

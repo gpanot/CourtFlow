@@ -183,8 +183,8 @@ export default function StaffSubscriptionsPage() {
               className={cn(
                 "flex-1 rounded-lg py-2 text-sm font-medium transition-colors",
                 tab === t
-                  ? "bg-purple-600/20 text-purple-400"
-                  : "text-neutral-400 hover:text-white"
+                  ? "bg-client-primary/20 text-client-primary"
+                  : "text-neutral-400 hover:bg-neutral-800/40 hover:text-white"
               )}
             >
               {t === "packages" ? "Packages" : "Subscribers"}

@@ -42,7 +42,7 @@ import {
   setStoredThemeMode,
   type ThemeMode,
 } from "@/lib/theme-mode";
-import { getResolvedClientConfig, type StaffLegacyPanelId } from "@/config/clients";
+import { getHydrationSafeClientConfig, type StaffLegacyPanelId } from "@/config/clients";
 import { useClientConfig, useClientId } from "@/config/use-client-config";
 import { componentMap } from "@/config/componentMap";
 import { StaffLegacyPanelsProvider } from "@/contexts/staff-legacy-panels-context";
@@ -126,7 +126,7 @@ interface VenueData {
 const STAFF_TAB_KEY = "courtflow-staff-nav-tab";
 
 function readPersistedNavTab(): string {
-  const def = getResolvedClientConfig();
+  const def = getHydrationSafeClientConfig();
   const allowed = new Set(def.tabs);
   try {
     const v = sessionStorage.getItem(STAFF_TAB_KEY);

@@ -55,6 +55,7 @@ export const useSessionStore = create<SessionStore>()(
         if (typeof window !== "undefined") {
           sessionStorage.setItem(BLOCK_COOKIE_RESTORE_KEY, "1");
           sessionStorage.removeItem(SESSION_ALIVE_KEY);
+          sessionStorage.removeItem("courtflow-staff-pin-unlocked");
           try {
             localStorage.removeItem(PERSIST_KEY);
             localStorage.removeItem("cf_onboarding_complete");

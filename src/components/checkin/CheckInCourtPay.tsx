@@ -8,7 +8,8 @@ import { useSessionStore } from "@/stores/session-store";
 import { useSocket } from "@/hooks/use-socket";
 import { joinVenue } from "@/lib/socket-client";
 import type { StaffTabPanelProps } from "@/config/componentMap";
-import { CameraCapture, type CameraCaptureHandle } from "@/components/camera-capture";
+import { CameraCapture, type CameraCaptureHandle, mapCameraError } from "@/components/camera-capture";
+import { acquireBrowserCameraStream, stopMediaStream } from "@/lib/browser-camera";
 import { parseCourtPaySkillLevel, type CourtPaySkillLevelUI } from "@/modules/courtpay/lib/skill-level-ui";
 import {
   CourtPayAwaitingPaymentStaff,
@@ -123,21 +124,38 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
   const [cashSubmitting, setCashSubmitting] = useState(false);
 
   const [newFacing, setNewFacing] = useState<"user" | "environment">("user");
+  const [newStream, setNewStream] = useState<MediaStream | null>(null);
+  const [newCameraStarted, setNewCameraStarted] = useState(false);
   const [newCameraReady, setNewCameraReady] = useState(false);
   const [newCaptureBusy, setNewCaptureBusy] = useState(false);
   const newCamRef = useRef<CameraCaptureHandle>(null);
-  const newCameraActive = mode === "new" && step === "form" && !faceBase64;
+  const newStreamRef = useRef<MediaStream | null>(null);
+  const newCameraLive =
+    newCameraStarted && !!newStream && mode === "new" && step === "form" && !faceBase64;
 
+  const [existingStream, setExistingStream] = useState<MediaStream | null>(null);
   const [existingCameraStarted, setExistingCameraStarted] = useState(false);
   const [existingFacing, setExistingFacing] = useState<"user" | "environment">("environment");
   const [existingCameraReady, setExistingCameraReady] = useState(false);
   const [existingCaptureBusy, setExistingCaptureBusy] = useState(false);
   const existingCamRef = useRef<CameraCaptureHandle>(null);
+  const existingStreamRef = useRef<MediaStream | null>(null);
+
+  useEffect(() => {
+    newStreamRef.current = newStream;
+  }, [newStream]);
+  useEffect(() => {
+    existingStreamRef.current = existingStream;
+  }, [existingStream]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const resetForm = useCallback(() => {
+    stopMediaStream(newStreamRef.current);
+    stopMediaStream(existingStreamRef.current);
+    setNewStream(null);
+    setExistingStream(null);
     setStep("form");
     setName("");
     setPhone("");
@@ -152,6 +170,7 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
     setPartyAdjusting(false);
     setCashSubmitting(false);
     setNewFacing("user");
+    setNewCameraStarted(false);
     setNewCameraReady(false);
     setNewCaptureBusy(false);
     setExistingCameraStarted(false);
@@ -243,12 +262,12 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
   }, [faceBase64, t]);
 
   useEffect(() => {
-    if (!newCameraActive) setNewCameraReady(false);
-  }, [newCameraActive, newFacing]);
+    if (!newCameraLive) setNewCameraReady(false);
+  }, [newCameraLive, newFacing]);
 
   useEffect(() => {
-    if (!existingCameraStarted) setExistingCameraReady(false);
-  }, [existingCameraStarted, existingFacing]);
+    if (!existingCameraStarted || !existingStream) setExistingCameraReady(false);
+  }, [existingCameraStarted, existingStream, existingFacing]);
 
   const handleLookupByPhone = async () => {
     if (!phone.trim() || !venueId) return;
@@ -271,11 +290,83 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
     }
   };
 
-  const startExistingCamera = useCallback(() => {
+  const stopExistingCamera = useCallback(() => {
+    setExistingStream((prev) => {
+      stopMediaStream(prev);
+      return null;
+    });
+    setExistingCameraStarted(false);
+    setExistingCaptureBusy(false);
+    setExistingCameraReady(false);
+  }, []);
+
+  const startExistingCamera = useCallback(async () => {
     setError("");
     setExistingCameraReady(false);
-    setExistingCameraStarted(true);
+    try {
+      const stream = await acquireBrowserCameraStream(existingFacing);
+      setExistingStream(stream);
+      setExistingCameraStarted(true);
+    } catch (err) {
+      setError(mapCameraError(err));
+    }
+  }, [existingFacing]);
+
+  const switchExistingFacing = useCallback(async () => {
+    setExistingCameraReady(false);
+    const next = existingFacing === "environment" ? "user" : "environment";
+    setExistingStream((prev) => {
+      stopMediaStream(prev);
+      return null;
+    });
+    try {
+      const stream = await acquireBrowserCameraStream(next);
+      setExistingFacing(next);
+      setExistingStream(stream);
+    } catch (err) {
+      setError(mapCameraError(err));
+      stopExistingCamera();
+    }
+  }, [existingFacing, stopExistingCamera]);
+
+  const stopNewCamera = useCallback(() => {
+    setNewStream((prev) => {
+      stopMediaStream(prev);
+      return null;
+    });
+    setNewCameraStarted(false);
+    setNewCameraReady(false);
+    setNewCaptureBusy(false);
   }, []);
+
+  const startNewCamera = useCallback(async () => {
+    setError("");
+    setNewCameraReady(false);
+    try {
+      const stream = await acquireBrowserCameraStream(newFacing);
+      setNewStream(stream);
+      setNewCameraStarted(true);
+    } catch (err) {
+      setError(mapCameraError(err));
+    }
+  }, [newFacing]);
+
+  const switchNewFacing = useCallback(async () => {
+    setNewCameraReady(false);
+    const next = newFacing === "user" ? "environment" : "user";
+    setNewStream((prev) => {
+      stopMediaStream(prev);
+      return null;
+    });
+    try {
+      const stream = await acquireBrowserCameraStream(next);
+      setNewFacing(next);
+      setNewStream(stream);
+    } catch (err) {
+      setError(mapCameraError(err));
+      stopNewCamera();
+    }
+  }, [newFacing, stopNewCamera]);
 
   const handleExistingCapture = useCallback(async () => {
     if (!venueId || !existingCamRef.current || !existingCameraReady || existingCaptureBusy) return;
@@ -309,7 +400,7 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
         }
         if (data.resultType === "already_paid") {
           setStep("success");
-          setExistingCameraStarted(false);
+          stopExistingCamera();
           return;
         }
         if (data.resultType === "matched" && data.player) {
@@ -331,7 +422,7 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
           });
           if (pay.checkedIn || pay.free) {
             setStep("success");
-            setExistingCameraStarted(false);
+            stopExistingCamera();
             return;
           }
           const payment = toPendingPayment(pay, data.player.id);
@@ -339,11 +430,11 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
             setSessionPartyCount(payment.partyCount);
             setPendingPayment(payment);
             setStep("awaiting_payment");
-            setExistingCameraStarted(false);
+            stopExistingCamera();
             return;
           }
           setStep("success");
-          setExistingCameraStarted(false);
+          stopExistingCamera();
           return;
         }
         setError(t("staff.courtPayCheckIn.checkInFaceNotRecognized"));
@@ -352,7 +443,7 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
           err instanceof ApiRequestError || err instanceof Error ? err.message : "Check-in failed";
         if (msg === "already_checked_in") {
           setStep("success");
-          setExistingCameraStarted(false);
+          stopExistingCamera();
           return;
         }
         setError(msg);
@@ -360,13 +451,7 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
     } finally {
       setExistingCaptureBusy(false);
     }
-  }, [existingCameraReady, existingCaptureBusy, venueId, t, sessionPartyCount]);
-
-  const stopExistingCamera = useCallback(() => {
-    setExistingCameraStarted(false);
-    setExistingCaptureBusy(false);
-    setExistingCameraReady(false);
-  }, []);
+  }, [existingCameraReady, existingCaptureBusy, venueId, t, sessionPartyCount, stopExistingCamera]);
 
   const handleNewCapture = async () => {
     if (!newCamRef.current || !newCameraReady || newCaptureBusy) return;
@@ -378,7 +463,7 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
         return;
       }
       setFaceBase64(b64);
-      newCamRef.current.stopCamera();
+      stopNewCamera();
     } finally {
       setNewCaptureBusy(false);
     }
@@ -655,6 +740,7 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
             onClick={() => {
               setMode("new");
               stopExistingCamera();
+              stopNewCamera();
               setError("");
               setExistingPreview(null);
             }}
@@ -671,6 +757,7 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
               setMode("existing");
               setError("");
               setExistingPreview(null);
+              stopNewCamera();
               stopExistingCamera();
             }}
             className={cn(
@@ -700,7 +787,8 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
                   <div className="relative aspect-[4/3] w-full bg-black">
                     <CameraCapture
                       ref={existingCamRef}
-                      active={existingCameraStarted}
+                      active={existingCameraStarted && !!existingStream}
+                      externalStream={existingStream}
                       facingMode={existingFacing}
                       onStreamReady={() => setExistingCameraReady(true)}
                       onError={(msg) => setError(msg)}
@@ -711,7 +799,7 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
                   <div className="flex items-center gap-2 p-2.5">
                     <button
                       type="button"
-                      onClick={() => setExistingFacing((f) => (f === "environment" ? "user" : "environment"))}
+                      onClick={() => void switchExistingFacing()}
                       disabled={existingCaptureBusy}
                       className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-white disabled:opacity-50"
                       aria-label={t("staff.courtPayCheckIn.switchCamera")}
@@ -787,7 +875,7 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold text-white">{existingPreview.name}</p>
                   <p className="truncate text-sm text-neutral-400">{existingPreview.phone}</p>
-                  <p className="text-[11px] font-bold text-fuchsia-300">CourtPay</p>
+                  <p className="text-[11px] font-bold text-client-primary">CourtPay</p>
                 </div>
                 <button
                   type="button"
@@ -806,45 +894,65 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
               <p className="text-base font-bold text-white">{t("staff.courtPayCheckIn.checkInRegisterNewFace")}</p>
               <p className="text-xs text-neutral-400">{t("staff.courtPayCheckIn.checkInRegisterFaceHint")}</p>
               {!faceBase64 ? (
-                <div className="overflow-hidden rounded-xl border border-neutral-800 bg-black">
-                  <div className="relative mx-auto aspect-square w-full max-h-[min(90vw,360px)] bg-black">
-                    <CameraCapture
-                      ref={newCamRef}
-                      active={newCameraActive}
-                      facingMode={newFacing}
-                      onStreamReady={() => setNewCameraReady(true)}
-                      onError={(msg) => setError(msg)}
-                      className="absolute inset-0"
-                      videoClassName="h-full w-full object-cover"
-                    />
+                !newCameraStarted ? (
+                  <button
+                    type="button"
+                    onClick={() => void startNewCamera()}
+                    className="flex h-11 w-full items-center justify-center rounded-lg bg-client-primary text-[15px] font-bold text-neutral-950 hover:opacity-90"
+                  >
+                    {t("staff.courtPayCheckIn.checkInStartCamera")}
+                  </button>
+                ) : (
+                  <div className="overflow-hidden rounded-xl border border-neutral-800 bg-black">
+                    <div className="relative mx-auto aspect-square w-full max-h-[min(90vw,360px)] bg-black">
+                      <CameraCapture
+                        ref={newCamRef}
+                        active={newCameraLive}
+                        externalStream={newStream}
+                        facingMode={newFacing}
+                        onStreamReady={() => setNewCameraReady(true)}
+                        onError={(msg) => setError(msg)}
+                        className="absolute inset-0"
+                        videoClassName="h-full w-full object-cover"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2 p-2.5">
+                      <button
+                        type="button"
+                        onClick={() => void switchNewFacing()}
+                        disabled={newCaptureBusy}
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-white disabled:opacity-50"
+                        aria-label={t("staff.courtPayCheckIn.switchCamera")}
+                      >
+                        <RefreshCw className="h-5 w-5" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!newCameraReady || newCaptureBusy}
+                        onClick={() => void handleNewCapture()}
+                        className="flex h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-client-primary font-bold text-neutral-950 disabled:opacity-50"
+                      >
+                        {newCaptureBusy ? (
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : (
+                          <>
+                            <Camera className="h-4 w-4" />
+                            {t("staff.courtPayCheckIn.capture")}
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={stopNewCamera}
+                        disabled={newCaptureBusy}
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-white disabled:opacity-50"
+                        aria-label={t("staff.courtPayCheckIn.closeCamera")}
+                      >
+                        <CameraOff className="h-5 w-5" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex gap-2 p-2.5">
-                    <button
-                      type="button"
-                      onClick={() => setNewFacing((f) => (f === "user" ? "environment" : "user"))}
-                      disabled={newCaptureBusy}
-                      className="flex h-10 flex-1 items-center justify-center gap-2 rounded-lg bg-neutral-800 text-sm font-semibold text-white"
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                      {t("staff.courtPayCheckIn.switchCamera")}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!newCameraReady || newCaptureBusy}
-                      onClick={() => void handleNewCapture()}
-                      className="flex h-10 flex-[1.2] items-center justify-center gap-2 rounded-lg bg-client-primary text-sm font-bold text-neutral-950 disabled:opacity-50"
-                    >
-                      {newCaptureBusy ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <>
-                          <Camera className="h-4 w-4" />
-                          {t("staff.courtPayCheckIn.capture")}
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
+                )
               ) : (
                 <div className="space-y-2">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -856,9 +964,9 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
                   <button
                     type="button"
                     onClick={() => {
+                      stopNewCamera();
                       setFaceBase64(null);
                       setFaceQuality(null);
-                      setNewCameraReady(false);
                     }}
                     className="w-full rounded-lg border border-neutral-700 py-2.5 text-sm font-semibold text-neutral-200 hover:bg-neutral-800"
                   >

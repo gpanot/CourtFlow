@@ -37,18 +37,36 @@ html.cf-theme-light {
 }
 
 html.cf-theme-light body {
-  background: #f8fafc !important;
+  background: #ffffff !important;
   color: #0f172a !important;
 }
 
+/* Staff PWA light shell: white page + tab/header areas (avoid slate-tinted #f8fafc). */
 html.cf-theme-light .bg-neutral-950 {
-  background-color: #f8fafc !important;
+  background-color: #ffffff !important;
+}
+
+html.cf-theme-light .bg-neutral-950\/40,
+html.cf-theme-light .bg-neutral-950\/50,
+html.cf-theme-light .bg-neutral-950\/60,
+html.cf-theme-light .bg-neutral-950\/70,
+html.cf-theme-light .bg-neutral-950\/80,
+html.cf-theme-light .bg-neutral-950\/90,
+html.cf-theme-light .bg-neutral-950\/95,
+html.cf-theme-light .bg-neutral-950\/98 {
+  background-color: #ffffff !important;
 }
 
 html.cf-theme-light .bg-neutral-900,
+html.cf-theme-light .bg-neutral-900\/30,
+html.cf-theme-light .bg-neutral-900\/40,
 html.cf-theme-light .bg-neutral-900\/50,
+html.cf-theme-light .bg-neutral-900\/60,
 html.cf-theme-light .bg-neutral-900\/70,
-html.cf-theme-light .bg-neutral-900\/40 {
+html.cf-theme-light .bg-neutral-900\/80,
+html.cf-theme-light .bg-neutral-900\/85,
+html.cf-theme-light .bg-neutral-900\/90,
+html.cf-theme-light .bg-neutral-900\/95 {
   background-color: #ffffff !important;
 }
 
