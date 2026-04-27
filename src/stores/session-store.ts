@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { useState, useEffect } from "react";
+import { SELECTED_CLIENT_STORAGE_KEY } from "@/config/clients";
 
 interface AuthState {
   token: string | null;
@@ -57,6 +58,7 @@ export const useSessionStore = create<SessionStore>()(
           try {
             localStorage.removeItem(PERSIST_KEY);
             localStorage.removeItem("cf_onboarding_complete");
+            localStorage.removeItem(SELECTED_CLIENT_STORAGE_KEY);
           } catch {
             /* ignore */
           }

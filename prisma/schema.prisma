@@ -134,7 +134,7 @@ model Venue {
 
   courts               Court[]
   sessions             Session[]
-  staff                StaffMember[]
+  staffAssignments     StaffVenueAssignment[]
   auditLogs            AuditLog[]
   membershipTiers      MembershipTier[]
   memberships          Membership[]
@@ -210,6 +210,20 @@ model PushSubscription {
   @@map("push_subscriptions")
 }
 
+/// Staff–venue membership with per-venue PWA app access (CourtFlow vs CourtPay).
+model StaffVenueAssignment {
+  id        String   @id @default(cuid())
+  staffId   String   @map("staff_id")
+  venueId   String   @map("venue_id")
+  appAccess String[] @default(["courtflow"]) @map("app_access")
+
+  staff StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  venue Venue       @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, venueId])
+  @@map("staff_venue_assignments")
+}
+
 model StaffMember {
   id                  String    @id @default(cuid())
   name                String
@@ -225,8 +239,8 @@ model StaffMember {
 
   pushNotificationsEnabled Boolean @default(false) @map("push_notifications_enabled")
 
-  venues        Venue[]
-  auditLogs     AuditLog[]
+  venueAssignments StaffVenueAssignment[]
+  auditLogs        AuditLog[]
   sessions      Session[]
   payments      StaffPayment[]  @relation("StaffPayments")
   paidPayments  StaffPayment[]  @relation("PaidByStaff")

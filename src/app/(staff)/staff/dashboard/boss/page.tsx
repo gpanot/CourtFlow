@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useSessionStore, useHasHydrated } from "@/stores/session-store";
+import { staffProfileHomeHref } from "@/config/clients";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { ArrowLeft, Loader2, DollarSign, Clock, TrendingUp, Receipt, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
@@ -283,7 +284,7 @@ export default function BossDashboardPage() {
           <button
             onClick={() => {
               if (typeof window !== "undefined") {
-                window.location.assign("/staff/profile");
+                window.location.assign(staffProfileHomeHref());
                 return;
               }
               router.back();

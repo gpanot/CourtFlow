@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
     const auth = requireSuperAdmin(request.headers);
 
     const ownedVenues = await prisma.venue.findMany({
-      where: { staff: { some: { id: auth.id } } },
+      where: { staffAssignments: { some: { staffId: auth.id } } },
       select: { id: true },
     });
     const venueIds = ownedVenues.map((v) => v.id);
@@ -154,12 +154,12 @@ export async function GET(request: NextRequest) {
       }),
       // Staff count
       prisma.staffMember.count({
-        where: { venues: { some: { id: { in: venueIds } } }, role: "staff" },
+        where: { venueAssignments: { some: { venueId: { in: venueIds } } }, role: "staff" },
       }),
       // Unpaid payroll
       prisma.staffPayment.findMany({
         where: {
-          staff: { venues: { some: { id: { in: venueIds } } } },
+          staff: { venueAssignments: { some: { venueId: { in: venueIds } } } },
           status: "UNPAID",
         },
         select: { amount: true },

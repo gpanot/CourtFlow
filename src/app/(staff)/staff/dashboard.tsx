@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo, type ReactNode } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -42,6 +42,10 @@ import {
   setStoredThemeMode,
   type ThemeMode,
 } from "@/lib/theme-mode";
+import { getResolvedClientConfig, type StaffLegacyPanelId } from "@/config/clients";
+import { useClientConfig, useClientId } from "@/config/use-client-config";
+import { componentMap } from "@/config/componentMap";
+import { StaffLegacyPanelsProvider } from "@/contexts/staff-legacy-panels-context";
 
 function genderLabelForDialog(g: string, t: TFunction) {
   if (g === "male") return t("staff.dashboard.labelsGenderMale");
@@ -119,21 +123,66 @@ interface VenueData {
   courts: { id: string; label: string; activeInSession: boolean }[];
 }
 
-type Tab = "courts" | "checkin" | "queue" | "qr" | "payment";
+const STAFF_TAB_KEY = "courtflow-staff-nav-tab";
 
-const STAFF_TAB_KEY = "courtflow-staff-tab";
-const VALID_TABS: Tab[] = ["courts", "checkin", "queue", "qr", "payment"];
-
-function readPersistedTab(): Tab {
+function readPersistedNavTab(): string {
+  const def = getResolvedClientConfig();
+  const allowed = new Set(def.tabs);
   try {
     const v = sessionStorage.getItem(STAFF_TAB_KEY);
-    if (v && VALID_TABS.includes(v as Tab)) return v as Tab;
-  } catch { /* SSR / blocked storage */ }
-  return "courts";
+    if (v && allowed.has(v)) return v;
+  } catch {
+    /* SSR / blocked storage */
+  }
+  return def.tabs[0] ?? "session";
+}
+
+function staffNavTabLabel(
+  tabId: string,
+  t: TFunction,
+  queueWaitingCount: number,
+  pendingPaymentCount: number
+): string {
+  if (tabId === "queue") return t("staff.dashboard.tabQueue", { count: queueWaitingCount });
+  if (tabId === "payment") return t("staff.dashboard.tabPayment", { count: pendingPaymentCount });
+  if (tabId === "profile") return t("staff.dashboard.tabProfile");
+  const keys: Record<string, string> = {
+    session: "staff.dashboard.tabSession",
+    courts: "staff.dashboard.tabCourts",
+    checkin: "staff.dashboard.tabCheckIn",
+    rotation: "staff.dashboard.tabRotation",
+    qr: "staff.dashboard.tabQr",
+  };
+  const k = keys[tabId];
+  return k ? t(k) : tabId;
+}
+
+function staffNavTabIcon(tabId: string) {
+  switch (tabId) {
+    case "session":
+    case "courts":
+      return LayoutGrid;
+    case "checkin":
+      return UserPlus;
+    case "queue":
+      return Users;
+    case "rotation":
+      return Repeat;
+    case "payment":
+      return CreditCard;
+    case "profile":
+      return User;
+    case "qr":
+      return QrCode;
+    default:
+      return LayoutGrid;
+  }
 }
 
 export function StaffDashboard() {
   const { t } = useTranslation();
+  const clientConfig = useClientConfig();
+  const clientId = useClientId();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { venueId } = useSessionStore();
@@ -142,14 +191,35 @@ export function StaffDashboard() {
   const [courts, setCourts] = useState<CourtData[]>([]);
   const [queue, setQueue] = useState<QueueEntryData[]>([]);
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
-  const [tab, setTabRaw] = useState<Tab>(readPersistedTab);
-  const tabRef = useRef(tab);
+  const [navTab, setNavTabRaw] = useState<string>(readPersistedNavTab);
 
-  const setTab = useCallback((next: Tab) => {
-    setTabRaw(next);
-    tabRef.current = next;
-    try { sessionStorage.setItem(STAFF_TAB_KEY, next); } catch { /* noop */ }
-  }, []);
+  const setNavTab = useCallback(
+    (next: string) => {
+      if (!clientConfig.tabs.includes(next)) return;
+      setNavTabRaw(next);
+      try {
+        sessionStorage.setItem(STAFF_TAB_KEY, next);
+      } catch {
+        /* noop */
+      }
+    },
+    [clientConfig.tabs]
+  );
+
+  const legacyTab: StaffLegacyPanelId = useMemo(() => {
+    const mapped = clientConfig.legacyPanelByTab[navTab];
+    if (
+      mapped === "courts" ||
+      mapped === "checkin" ||
+      mapped === "queue" ||
+      mapped === "qr" ||
+      mapped === "payment" ||
+      mapped === "profile"
+    ) {
+      return mapped;
+    }
+    return "courts";
+  }, [clientConfig.legacyPanelByTab, navTab]);
   const [selectedCourt, setSelectedCourt] = useState<CourtData | null>(null);
   const [showOpenSession, setShowOpenSession] = useState(false);
   const [confirmAddCourt, setConfirmAddCourt] = useState<{ id: string; label: string } | null>(null);
@@ -243,10 +313,17 @@ export function StaffDashboard() {
 
   useEffect(() => {
     const tabParam = searchParams.get("tab");
-    if (tabParam === "checkin" || tabParam === "add") setTab("checkin");
-    if (tabParam === "qr") setTab("qr");
-    if (tabParam === "payment") setTab("payment");
-  }, [searchParams, setTab]);
+    if (!tabParam) return;
+    const key = tabParam === "add" ? "checkin" : tabParam;
+    if (clientConfig.tabs.includes(key)) setNavTab(key);
+  }, [searchParams, clientConfig.tabs, setNavTab]);
+
+  useEffect(() => {
+    if (!clientConfig.tabs.includes(navTab)) {
+      const first = clientConfig.tabs[0];
+      if (first) setNavTabRaw(first);
+    }
+  }, [clientConfig.tabs, navTab]);
 
   useEffect(() => {
     if (searchParams.get("history") === "1") {
@@ -592,178 +669,13 @@ export function StaffDashboard() {
     [courts]
   );
 
-  if (!venueId) {
-    return (
-      <div className="flex min-h-dvh items-center justify-center">
-        <p className="text-neutral-400">{t("staff.dashboard.noVenueAssigned")}</p>
-      </div>
-    );
-  }
+  const queueWaitingCount = queue.filter((e) => e.status === "waiting").length;
 
-  return (
-    <div className="flex h-dvh flex-col overflow-hidden bg-neutral-950 pt-[env(safe-area-inset-top)] text-white">
-      {/* Header */}
-      <header className="flex items-center gap-3 border-b border-neutral-800 px-4 py-3">
-        <button
-          type="button"
-          onClick={() => {
-            if (typeof window !== "undefined") {
-              window.location.assign("/staff/profile");
-              return;
-            }
-            router.push("/staff/profile");
-          }}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 transition-colors"
-        >
-          <User className="h-5 w-5" />
-        </button>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-lg font-bold text-blue-500 leading-tight">{t("staff.dashboard.title")}</h1>
-          <p className="text-sm text-neutral-400 truncate">{venue?.name}</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <button
-            type="button"
-            onClick={() => setPlayerSearchOpen(true)}
-            aria-label={t("staff.dashboard.playerSearch.openAria")}
-            title={t("staff.dashboard.playerSearch.openAria")}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-700/40 text-neutral-200 hover:bg-neutral-600/50 hover:text-white transition-colors"
-          >
-            <Search className="h-5 w-5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              const nextMode: ThemeMode = themeMode === "dark" ? "light" : "dark";
-              setThemeMode(nextMode);
-              applyThemeMode(nextMode);
-              setStoredThemeMode(nextMode);
-            }}
-            aria-label={themeMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            title={themeMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-700/40 text-neutral-200 hover:bg-neutral-600/50 hover:text-white transition-colors"
-          >
-            {themeMode === "dark" ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab("qr")}
-            aria-label={t("staff.dashboard.tabQr")}
-            title={t("staff.dashboard.tabQr")}
-            className={cn(
-              "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors",
-              tab === "qr"
-                ? "bg-blue-600/35 text-blue-300 ring-2 ring-blue-500/60"
-                : "bg-neutral-700/40 text-neutral-200 hover:bg-neutral-600/50 hover:text-white"
-            )}
-          >
-            <QrCode className="h-5 w-5" />
-          </button>
-        </div>
-      </header>
-
-      {/* Billing suspension banner */}
-      {venue?.billingStatus === "suspended" && (
-        <div className="flex items-center gap-2 bg-amber-900/30 border-b border-amber-700/50 px-4 py-2.5">
-          <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
-          <p className="text-xs text-amber-300">
-            Account suspended due to unpaid invoice. Ask your venue admin to pay in the Billing tab to restore service.
-          </p>
-        </div>
-      )}
-
-      {/* Tab bar */}
-      <div className="flex border-b border-neutral-800">
-        <button
-          type="button"
-          onClick={() => setTab("courts")}
-          className={cn(
-            "flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 max-sm:gap-0",
-            tab === "courts" ? "border-b-2 border-blue-500 text-white" : "text-neutral-400"
-          )}
-        >
-          <LayoutGrid className="h-4 w-4 max-sm:hidden" aria-hidden />
-          {t("staff.dashboard.tabCourts")}
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("checkin")}
-          className={cn(
-            "flex-1 py-3 text-sm font-medium flex items-center justify-center gap-1.5 min-w-0 max-sm:gap-0",
-            tab === "checkin" ? "border-b-2 border-blue-500 text-white" : "text-neutral-400"
-          )}
-        >
-          <UserPlus className="h-4 w-4 shrink-0 max-sm:hidden" aria-hidden />
-          <span className="truncate">{t("staff.dashboard.tabCheckIn")}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("queue")}
-          className={cn(
-            "flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 min-w-0 max-sm:gap-0",
-            tab === "queue" ? "border-b-2 border-blue-500 text-white" : "text-neutral-400"
-          )}
-        >
-          <Users className="h-4 w-4 shrink-0 max-sm:hidden" aria-hidden />
-          <span className="truncate">
-            {t("staff.dashboard.tabQueue", { count: queue.filter((e) => e.status === "waiting").length })}
-          </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab("payment")}
-          className={cn(
-            "flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 min-w-0 max-sm:gap-0",
-            tab === "payment" ? "border-b-2 border-blue-500 text-white" : "text-neutral-400"
-          )}
-        >
-          <CreditCard className="h-4 w-4 shrink-0 max-sm:hidden" aria-hidden />
-          <span className="truncate">
-            {t("staff.dashboard.tabPayment", { count: pendingPaymentCount })}
-          </span>
-        </button>
-      </div>
-
-      {/* Content — min-h-0 so flex child can shrink; tighter padding on check-in mobile */}
-      <main
-        className={cn(
-          "flex-1 min-h-0 p-4",
-          tab === "payment" && venueId
-            ? "flex flex-col overflow-hidden max-sm:p-2 sm:p-4"
-            : "overflow-y-auto",
-          session && tab === "checkin" && "max-sm:p-2 max-sm:pt-2 max-sm:pb-3"
-        )}
-      >
-        {!session && !showOpenSession && tab !== "qr" && tab !== "payment" && (
-          <div className="flex h-64 flex-col items-center justify-center gap-3 text-center px-2">
-            <p className="text-lg text-neutral-500">{t("staff.dashboard.noActiveSession")}</p>
-            {tab === "courts" ? (
-              <>
-                <p className="text-sm text-neutral-600">{t("staff.dashboard.noActiveSessionHint")}</p>
-                <button
-                  type="button"
-                  onClick={() => setShowOpenSession(true)}
-                  className="rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-green-500 transition-colors"
-                >
-                  {t("staff.dashboard.openSession")}
-                </button>
-              </>
-            ) : (
-              <p className="text-sm text-neutral-600">{t("staff.dashboard.noActiveSessionOpenFromCourts")}</p>
-            )}
-          </div>
-        )}
-
-        {showOpenSession && (
-          <OpenSessionPanel
-            courts={venue?.courts || []}
-            onOpen={(courtIds, mix, warmupMode) => handleOpenSession(courtIds, mix, warmupMode)}
-            onCancel={() => setShowOpenSession(false)}
-            t={t}
-          />
-        )}
-
-        {session && tab === "courts" && (
+  function renderLegacyPanel(id: StaffLegacyPanelId): ReactNode {
+    switch (id) {
+      case "courts":
+        if (!session) return null;
+        return (
           <div className="space-y-4">
             {rankingBannerCourts.length > 0 && (
               <div className="flex items-center gap-2 rounded-xl border border-amber-700/50 bg-amber-950/40 py-2.5 pl-3 pr-2">
@@ -844,79 +756,245 @@ export function StaffDashboard() {
               </button>
             </div>
           </div>
-        )}
-
-        {session && venueId && (
-          <div className={tab === "checkin" ? undefined : "hidden"}>
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-2 rounded-xl border border-neutral-800 bg-neutral-900/40 p-1">
-                <button
-                  type="button"
-                  onClick={() => setCheckInMode("new")}
-                  className={cn(
-                    "rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                    checkInMode === "new"
-                      ? "bg-blue-600 text-white"
-                      : "text-neutral-300 hover:bg-neutral-800"
-                  )}
-                >
-                  {t("staff.dashboard.checkInModeNewPlayer")}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCheckInMode("existing")}
-                  className={cn(
-                    "rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                    checkInMode === "existing"
-                      ? "bg-blue-600 text-white"
-                      : "text-neutral-300 hover:bg-neutral-800"
-                  )}
-                >
-                  {t("staff.dashboard.checkInModeExistingPlayer")}
-                </button>
-              </div>
-
-              {checkInMode === "new" ? (
-                <StaffCheckInPanel
-                  venueId={venueId}
-                  queueNamesLower={queueUsedNamesLower}
-                  onAdded={fetchState}
-                />
-              ) : (
-                <FaceKioskTab venueId={venueId} hasSession={!!session} />
-              )}
+        );
+      case "checkin":
+        if (!(session && venueId)) return null;
+        return (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-2 rounded-xl border border-neutral-800 bg-neutral-900/40 p-1">
+              <button
+                type="button"
+                onClick={() => setCheckInMode("new")}
+                className={cn(
+                  "rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  checkInMode === "new"
+                    ? "bg-client-primary text-neutral-950"
+                    : "text-neutral-300 hover:bg-neutral-800"
+                )}
+              >
+                {t("staff.dashboard.checkInModeNewPlayer")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCheckInMode("existing")}
+                className={cn(
+                  "rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                  checkInMode === "existing"
+                    ? "bg-client-primary text-neutral-950"
+                    : "text-neutral-300 hover:bg-neutral-800"
+                )}
+              >
+                {t("staff.dashboard.checkInModeExistingPlayer")}
+              </button>
             </div>
+
+            {checkInMode === "new" ? (
+              <StaffCheckInPanel
+                venueId={venueId}
+                queueNamesLower={queueUsedNamesLower}
+                onAdded={fetchState}
+              />
+            ) : (
+              <FaceKioskTab venueId={venueId} hasSession={!!session} />
+            )}
+          </div>
+        );
+      case "queue":
+        if (!session) return null;
+        return (
+          <QueuePanel
+            entries={queue}
+            variant="staff"
+            maxDisplay={50}
+            translationI18n={staffI18n}
+            onPlayerAction={handlePlayerAction}
+            onCreateGroup={() => setShowCreateGroup(true)}
+            onDissolveGroup={handleDissolveGroup}
+            isWarmupManual={!!assignableCourtsForQueue}
+            courts={assignableCourtsForQueue}
+            queueCourtGroups={staffQueueCourtGroups}
+          />
+        );
+      case "qr":
+        return <QRCodeTab venueId={venueId} venueName={venue?.name} hasSession={!!session} t={t} />;
+      case "payment":
+        if (!venueId) return null;
+        return <PendingPaymentsPanel venueId={venueId} onCountChange={setPendingPaymentCount} />;
+      default:
+        return null;
+    }
+  }
+
+  const activeComponentName = clientConfig.components[navTab];
+  const ActiveTabPanel =
+    activeComponentName && activeComponentName in componentMap
+      ? componentMap[activeComponentName as keyof typeof componentMap]
+      : null;
+
+  if (!venueId) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center">
+        <p className="text-neutral-400">{t("staff.dashboard.noVenueAssigned")}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="flex h-dvh flex-col overflow-hidden bg-neutral-950 pt-[env(safe-area-inset-top)] text-white"
+      style={{ ["--client-primary" as string]: clientConfig.primaryColor }}
+    >
+      {/* Header */}
+      <header className="flex items-center gap-3 border-b border-neutral-800 px-4 py-3">
+        <button
+          type="button"
+          onClick={() => {
+            if (typeof window !== "undefined") {
+              window.location.assign("/staff/profile");
+              return;
+            }
+            router.push("/staff/profile");
+          }}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-client-primary-muted text-client-primary hover:opacity-90 transition-opacity"
+        >
+          <User className="h-5 w-5" />
+        </button>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-lg font-bold text-client-primary leading-tight">{t("staff.dashboard.title")}</h1>
+          <p className="text-sm text-neutral-400 truncate">{venue?.name}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {clientId === "courtflow_default" ? (
+            <button
+              type="button"
+              onClick={() => setPlayerSearchOpen(true)}
+              aria-label={t("staff.dashboard.playerSearch.openAria")}
+              title={t("staff.dashboard.playerSearch.openAria")}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-700/40 text-neutral-200 hover:bg-neutral-600/50 hover:text-white transition-colors"
+            >
+              <Search className="h-5 w-5" />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => {
+              const nextMode: ThemeMode = themeMode === "dark" ? "light" : "dark";
+              setThemeMode(nextMode);
+              applyThemeMode(nextMode);
+              setStoredThemeMode(nextMode);
+            }}
+            aria-label={themeMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            title={themeMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-700/40 text-neutral-200 hover:bg-neutral-600/50 hover:text-white transition-colors"
+          >
+            {themeMode === "dark" ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+          </button>
+          {clientConfig.tabs.includes("qr") ? (
+            <button
+              type="button"
+              onClick={() => setNavTab("qr")}
+              aria-label={t("staff.dashboard.tabQr")}
+              title={t("staff.dashboard.tabQr")}
+              className={cn(
+                "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors",
+                navTab === "qr"
+                  ? "bg-client-primary-muted-strong text-client-primary ring-client-primary-soft"
+                  : "bg-neutral-700/40 text-neutral-200 hover:bg-neutral-600/50 hover:text-white"
+              )}
+            >
+              <QrCode className="h-5 w-5" />
+            </button>
+          ) : null}
+        </div>
+      </header>
+
+      {/* Billing suspension banner */}
+      {venue?.billingStatus === "suspended" && (
+        <div className="flex items-center gap-2 bg-amber-900/30 border-b border-amber-700/50 px-4 py-2.5">
+          <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+          <p className="text-xs text-amber-300">
+            Account suspended due to unpaid invoice. Ask your venue admin to pay in the Billing tab to restore service.
+          </p>
+        </div>
+      )}
+
+      {/* Tab bar — tabs come from client config only */}
+      <div className="flex border-b border-neutral-800">
+        {clientConfig.tabs.map((tabId: string) => {
+          const NavIcon = staffNavTabIcon(tabId);
+          const active = navTab === tabId;
+          return (
+            <button
+              key={tabId}
+              type="button"
+              onClick={() => setNavTab(tabId)}
+              className={cn(
+                "flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 min-w-0 max-sm:gap-0 border-b-2",
+                active ? "border-client-primary text-white" : "border-transparent text-neutral-400"
+              )}
+            >
+              <NavIcon className="h-4 w-4 shrink-0 max-sm:hidden" aria-hidden />
+              <span className="truncate">
+                {staffNavTabLabel(tabId, t, queueWaitingCount, pendingPaymentCount)}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Content — min-h-0 so flex child can shrink; tighter padding on check-in mobile */}
+      <main
+        className={cn(
+          "flex-1 min-h-0 p-4",
+          legacyTab === "payment" && venueId
+            ? "flex flex-col overflow-hidden max-sm:p-2 sm:p-4"
+            : "overflow-y-auto",
+          session && legacyTab === "checkin" && "max-sm:p-2 max-sm:pt-2 max-sm:pb-3"
+        )}
+      >
+        {!session &&
+          !showOpenSession &&
+          legacyTab !== "qr" &&
+          legacyTab !== "payment" &&
+          navTab !== "profile" &&
+          !(clientId === "courtpay_client2" && (navTab === "session" || navTab === "checkin")) && (
+          <div className="flex h-64 flex-col items-center justify-center gap-3 text-center px-2">
+            <p className="text-lg text-neutral-500">{t("staff.dashboard.noActiveSession")}</p>
+            {legacyTab === "courts" ? (
+              <>
+                <p className="text-sm text-neutral-600">{t("staff.dashboard.noActiveSessionHint")}</p>
+                <button
+                  type="button"
+                  onClick={() => setShowOpenSession(true)}
+                  className="rounded-lg bg-green-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-green-500 transition-colors"
+                >
+                  {t("staff.dashboard.openSession")}
+                </button>
+              </>
+            ) : (
+              <p className="text-sm text-neutral-600">{t("staff.dashboard.noActiveSessionOpenFromCourts")}</p>
+            )}
           </div>
         )}
 
-        {session && (
-          <div className={tab === "queue" ? undefined : "hidden"}>
-            <QueuePanel
-              entries={queue}
-              variant="staff"
-              maxDisplay={50}
-              translationI18n={staffI18n}
-              onPlayerAction={handlePlayerAction}
-              onCreateGroup={() => setShowCreateGroup(true)}
-              onDissolveGroup={handleDissolveGroup}
-              isWarmupManual={!!assignableCourtsForQueue}
-              courts={assignableCourtsForQueue}
-              queueCourtGroups={staffQueueCourtGroups}
-            />
-          </div>
-        )}
-
-        {tab === "qr" && (
-          <QRCodeTab venueId={venueId} venueName={venue?.name} hasSession={!!session} t={t} />
-        )}
-
-        {tab === "payment" && venueId && (
-          <PendingPaymentsPanel
-            venueId={venueId}
-            onCountChange={setPendingPaymentCount}
+        {showOpenSession && (
+          <OpenSessionPanel
+            courts={venue?.courts || []}
+            onOpen={(courtIds, mix, warmupMode) => handleOpenSession(courtIds, mix, warmupMode)}
+            onCancel={() => setShowOpenSession(false)}
+            t={t}
           />
         )}
 
+        <StaffLegacyPanelsProvider renderLegacyPanel={renderLegacyPanel}>
+          {ActiveTabPanel ? (
+            <ActiveTabPanel
+              key={legacyTab}
+              legacyTab={legacyTab}
+              onOpenSessionHistory={() => setShowHistory(true)}
+            />
+          ) : null}
+        </StaffLegacyPanelsProvider>
       </main>
 
       {session && (
@@ -2036,14 +2114,12 @@ function QRCodeTab({
   hasSession: boolean;
   t: TFunction;
 }) {
-  const [origin, setOrigin] = useState("");
+  const [origin] = useState(() =>
+    typeof window !== "undefined" ? window.location.origin : ""
+  );
   const [showTvSetup, setShowTvSetup] = useState(false);
   const [testPushStatus, setTestPushStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [testPushResult, setTestPushResult] = useState<string | null>(null);
-
-  useEffect(() => {
-    setOrigin(window.location.origin);
-  }, []);
 
   if (!venueId || !origin) return null;
 

@@ -24,7 +24,6 @@ export async function GET(request: NextRequest) {
     const { start, end } = getWeekRange(weekStart);
 
     const allStaff = await prisma.staffMember.findMany({
-      include: { venues: { select: { name: true } } },
       orderBy: { name: "asc" },
     });
 

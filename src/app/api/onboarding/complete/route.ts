@@ -29,7 +29,9 @@ export async function POST(request: NextRequest) {
         playFrequency: body.playFrequency || null,
         playTypes: body.playTypes || [],
         painPoints: body.painPoints || [],
-        staff: { connect: { id: auth.id } },
+        staffAssignments: {
+          create: [{ staffId: auth.id, appAccess: ["courtflow"] }],
+        },
       },
     });
 

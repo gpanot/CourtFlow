@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireSuperAdmin, hashPassword } from "@/lib/auth";
+import { normalizeAppAccess, staffAssignmentsToVenues } from "@/lib/staff-app-access";
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,7 +10,7 @@ export async function GET(request: NextRequest) {
 
     const ownedVenueIds = (
       await prisma.venue.findMany({
-        where: { staff: { some: { id: auth.id } } },
+        where: { staffAssignments: { some: { staffId: auth.id } } },
         select: { id: true },
       })
     ).map((v) => v.id);
@@ -18,13 +19,13 @@ export async function GET(request: NextRequest) {
       where: {
         OR: [
           { id: auth.id },
-          { venues: { some: { id: { in: ownedVenueIds } } } },
-          { venues: { none: {} } },
+          { venueAssignments: { some: { venueId: { in: ownedVenueIds } } } },
+          { venueAssignments: { none: {} } },
         ],
       },
       include: {
-        venues: {
-          select: { id: true, name: true },
+        venueAssignments: {
+          include: { venue: { select: { id: true, name: true } } },
         },
       },
       orderBy: { createdAt: "desc" },
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
         isCoach: s.isCoach,
         coachBio: s.coachBio,
         coachPhoto: s.coachPhoto,
-        venues: s.venues,
+        venues: staffAssignmentsToVenues(s.venueAssignments),
         createdAt: s.createdAt,
       }))
     );
@@ -57,6 +58,7 @@ export async function POST(request: NextRequest) {
       password: string;
       role: "staff" | "superadmin";
       venueIds?: string[];
+      venueAssignments?: { venueId: string; appAccess: string[] }[];
     }>(request);
 
     if (!body.name || !body.phone || !body.password) {
@@ -66,26 +68,48 @@ export async function POST(request: NextRequest) {
     const existing = await prisma.staffMember.findUnique({ where: { phone: body.phone } });
     if (existing) return error("Phone already in use", 409);
 
+    const assignmentCreates =
+      body.venueAssignments?.map((row) => ({
+        venueId: row.venueId,
+        appAccess: normalizeAppAccess(row.appAccess),
+      })) ??
+      body.venueIds?.map((venueId) => ({
+        venueId,
+        appAccess: normalizeAppAccess(["courtflow"]),
+      })) ??
+      [];
+
     const staff = await prisma.staffMember.create({
       data: {
         name: body.name,
         phone: body.phone,
         passwordHash: hashPassword(body.password),
         role: body.role || "staff",
-        venues: body.venueIds?.length
-          ? { connect: body.venueIds.map((id) => ({ id })) }
-          : undefined,
+        ...(assignmentCreates.length > 0
+          ? {
+              venueAssignments: {
+                create: assignmentCreates,
+              },
+            }
+          : {}),
       },
-      include: { venues: { select: { id: true, name: true } } },
+      include: {
+        venueAssignments: {
+          include: { venue: { select: { id: true, name: true } } },
+        },
+      },
     });
 
-    return json({
-      id: staff.id,
-      name: staff.name,
-      phone: staff.phone,
-      role: staff.role,
-      venues: staff.venues,
-    }, 201);
+    return json(
+      {
+        id: staff.id,
+        name: staff.name,
+        phone: staff.phone,
+        role: staff.role,
+        venues: staffAssignmentsToVenues(staff.venueAssignments),
+      },
+      201
+    );
   } catch (e) {
     return error((e as Error).message, 500);
   }

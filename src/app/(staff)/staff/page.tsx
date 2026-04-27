@@ -1,25 +1,36 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { useSessionStore } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { StaffDashboard } from "./dashboard";
 import Link from "next/link";
-import { Shield, Clipboard, Grid3X3, Phone, Lock, Eye, EyeOff } from "lucide-react";
+import { Shield, Clipboard, Grid3X3, Phone, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
 import { CourtFlowLogo } from "@/components/courtflow-logo";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 import { StaffTopBar } from "@/components/staff-top-bar";
+import { StaffAppPicker } from "@/components/staff-app-picker";
+import {
+  clientIdAllowedForAppAccess,
+  mapAppAccessKindToClientId,
+  readStoredRuntimeClientId,
+} from "@/config/clients";
+import { useSetStaffClientId } from "@/config/use-client-config";
+import { useStaffPinStore } from "@/stores/staff-pin-store";
+import type { StaffAppAccessKind } from "@/lib/staff-app-access";
 
 interface StaffVenue {
   id: string;
   name: string;
+  appAccess?: StaffAppAccessKind[];
 }
 
 export default function StaffPage() {
   const { t } = useTranslation();
   const { token, staffId, staffName, venueId, role, onboardingCompleted, setAuth, clearAuth } = useSessionStore();
+  const setStaffClientId = useSetStaffClientId();
   const { isAndroid, installed, canPrompt, promptInstall } = usePwaInstall();
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
@@ -28,13 +39,90 @@ export default function StaffPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [pendingVenues, setPendingVenues] = useState<StaffVenue[] | null>(null);
+  const [pendingAppPickVenue, setPendingAppPickVenue] = useState<StaffVenue | null>(null);
   const [showRoleChoice, setShowRoleChoice] = useState(false);
   const [showOtherApps, setShowOtherApps] = useState(false);
   const [loginVenues, setLoginVenues] = useState<StaffVenue[]>([]);
+  const [clientBootstrapDone, setClientBootstrapDone] = useState(false);
   const installPromptShownRef = useRef(false);
   const returnHomePendingRef = useRef(false);
   const freshLoginChoiceRef = useRef(false);
+  /** Skip staff-me bootstrap when we already resolved client for this staff+venue (e.g. single-app proceed). */
+  const clientResolvedForKeyRef = useRef<string | null>(null);
   const router = useRouter();
+
+  const proceedToVenue = useCallback(
+    (v: StaffVenue) => {
+      const access: StaffAppAccessKind[] =
+        v.appAccess && v.appAccess.length > 0 ? v.appAccess : ["courtflow"];
+      if (access.length === 1) {
+        setStaffClientId(mapAppAccessKindToClientId(access[0]));
+        if (staffId) clientResolvedForKeyRef.current = `${staffId}:${v.id}`;
+        setAuth({ venueId: v.id });
+        setPendingVenues(null);
+        setShowRoleChoice(false);
+        setClientBootstrapDone(true);
+        return;
+      }
+      // Must set venueId so the authenticated branch renders; otherwise we fall through to login UI.
+      setAuth({ venueId: v.id });
+      setPendingAppPickVenue({ ...v, appAccess: access });
+      setPendingVenues(null);
+      setShowRoleChoice(false);
+      setClientBootstrapDone(true);
+    },
+    [setAuth, setStaffClientId, staffId]
+  );
+
+  const needsClientBootstrap = Boolean(
+    token && staffId && venueId && !showRoleChoice && !showOtherApps && !pendingAppPickVenue
+  );
+
+  useEffect(() => {
+    if (!needsClientBootstrap) {
+      return;
+    }
+    const key = staffId && venueId ? `${staffId}:${venueId}` : null;
+    if (key && clientResolvedForKeyRef.current === key) {
+      setClientBootstrapDone(true);
+      return;
+    }
+    let cancelled = false;
+    setClientBootstrapDone(false);
+    void (async () => {
+      try {
+        const me = await api.get<{ venues: StaffVenue[] }>("/api/auth/staff-me");
+        if (cancelled) return;
+        const v = me.venues.find((x) => x.id === venueId);
+        if (!v) {
+          setClientBootstrapDone(true);
+          return;
+        }
+        const access: StaffAppAccessKind[] =
+          v.appAccess && v.appAccess.length > 0 ? v.appAccess : ["courtflow"];
+        if (access.length === 1) {
+          setStaffClientId(mapAppAccessKindToClientId(access[0]));
+          if (staffId && venueId) clientResolvedForKeyRef.current = `${staffId}:${venueId}`;
+          setClientBootstrapDone(true);
+          return;
+        }
+        const stored = readStoredRuntimeClientId();
+        if (stored && clientIdAllowedForAppAccess(stored, access)) {
+          setStaffClientId(stored);
+          if (staffId && venueId) clientResolvedForKeyRef.current = `${staffId}:${venueId}`;
+          setClientBootstrapDone(true);
+          return;
+        }
+        setPendingAppPickVenue({ ...v, appAccess: access });
+        setClientBootstrapDone(true);
+      } catch {
+        setClientBootstrapDone(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [needsClientBootstrap, venueId, staffId, setStaffClientId]);
 
   const handleShowOnboarding = () => {
     if (typeof window !== "undefined") {
@@ -48,6 +136,16 @@ export default function StaffPage() {
     returnHomePendingRef.current =
       sessionStorage.getItem("cf_staff_return_home") === "1";
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (sessionStorage.getItem("cf_staff_go_to_role") !== "1") return;
+    if (!token || !staffId) return;
+    sessionStorage.removeItem("cf_staff_go_to_role");
+    useStaffPinStore.getState().lock();
+    setAuth({ venueId: null });
+    setShowRoleChoice(true);
+  }, [token, staffId, setAuth]);
 
   useEffect(() => {
     if (returnHomePendingRef.current) {
@@ -87,6 +185,37 @@ export default function StaffPage() {
   }, [token, staffId, venueId, showRoleChoice, isAndroid, installed, canPrompt, promptInstall]);
 
   if (token && staffId && venueId && !showRoleChoice && !showOtherApps) {
+    if (pendingAppPickVenue) {
+      return (
+        <StaffAppPicker
+          venueName={pendingAppPickVenue.name}
+          appAccess={pendingAppPickVenue.appAccess ?? ["courtflow"]}
+          onSelect={(app) => {
+            setStaffClientId(mapAppAccessKindToClientId(app));
+            if (staffId) clientResolvedForKeyRef.current = `${staffId}:${pendingAppPickVenue.id}`;
+            setClientBootstrapDone(true);
+            setAuth({ venueId: pendingAppPickVenue.id });
+            setPendingAppPickVenue(null);
+          }}
+          onBack={() => {
+            setPendingAppPickVenue(null);
+            setAuth({ venueId: null });
+            if (loginVenues.length > 1) {
+              setPendingVenues(loginVenues);
+            } else {
+              setShowRoleChoice(true);
+            }
+          }}
+        />
+      );
+    }
+    if (!clientBootstrapDone) {
+      return (
+        <div className="flex min-h-dvh items-center justify-center bg-neutral-950 text-neutral-400">
+          <Loader2 className="h-8 w-8 animate-spin" aria-hidden />
+        </div>
+      );
+    }
     return <StaffDashboard />;
   }
 
@@ -162,12 +291,31 @@ export default function StaffPage() {
                   freshLoginChoiceRef.current = false;
                   setShowOtherApps(false);
                   if (venueId) {
+                    const v = loginVenues.find((x) => x.id === venueId);
+                    if (v) {
+                      const access: StaffAppAccessKind[] =
+                        v.appAccess && v.appAccess.length > 0 ? v.appAccess : ["courtflow"];
+                      if (access.length === 1) {
+                        setStaffClientId(mapAppAccessKindToClientId(access[0]));
+                        if (staffId) clientResolvedForKeyRef.current = `${staffId}:${venueId}`;
+                        setClientBootstrapDone(true);
+                      } else {
+                        const stored = readStoredRuntimeClientId();
+                        if (stored && clientIdAllowedForAppAccess(stored, access)) {
+                          setStaffClientId(stored);
+                          if (staffId) clientResolvedForKeyRef.current = `${staffId}:${venueId}`;
+                          setClientBootstrapDone(true);
+                        } else {
+                          setPendingAppPickVenue({ ...v, appAccess: access });
+                          setClientBootstrapDone(true);
+                        }
+                      }
+                    }
                     setShowRoleChoice(false);
                     return;
                   }
                   if (loginVenues.length === 1) {
-                    setAuth({ venueId: loginVenues[0].id });
-                    setShowRoleChoice(false);
+                    proceedToVenue(loginVenues[0]);
                   } else if (loginVenues.length > 1) {
                     setPendingVenues(loginVenues);
                     setShowRoleChoice(false);
@@ -241,8 +389,7 @@ export default function StaffPage() {
               <button
                 key={v.id}
                 onClick={() => {
-                  setAuth({ venueId: v.id });
-                  setPendingVenues(null);
+                  proceedToVenue(v);
                 }}
                 className="w-full rounded-2xl border border-neutral-800 bg-neutral-900 px-5 py-4 text-left text-base font-medium text-white transition-all hover:border-neutral-700 hover:bg-neutral-800"
               >

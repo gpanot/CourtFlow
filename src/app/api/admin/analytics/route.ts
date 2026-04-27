@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
     const auth = requireSuperAdmin(request.headers);
 
     const ownedVenues = await prisma.venue.findMany({
-      where: { staff: { some: { id: auth.id } } },
+      where: { staffAssignments: { some: { staffId: auth.id } } },
       select: { id: true },
     });
     const ownedVenueIds = ownedVenues.map((v) => v.id);

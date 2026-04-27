@@ -49,7 +49,7 @@ export async function GET(req: Request) {
       prisma.venue.findMany({
         where: {
           ...(venueId ? { id: venueId } : {}),
-          staff: { some: { id: auth.id } },
+          staffAssignments: { some: { staffId: auth.id } },
         },
         select: { id: true, name: true, settings: true },
         orderBy: { name: "asc" },

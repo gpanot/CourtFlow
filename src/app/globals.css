@@ -1,5 +1,36 @@
 @import "tailwindcss";
 
+/* Set on the staff shell via useClientConfig().primaryColor (see staff layout / dashboard). */
+@property --client-primary {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #3b82f6;
+}
+
+.text-client-primary {
+  color: var(--client-primary);
+}
+
+.border-client-primary {
+  border-color: var(--client-primary);
+}
+
+.bg-client-primary-muted {
+  background-color: color-mix(in srgb, var(--client-primary) 20%, transparent);
+}
+
+.bg-client-primary-muted-strong {
+  background-color: color-mix(in srgb, var(--client-primary) 35%, transparent);
+}
+
+.bg-client-primary {
+  background-color: var(--client-primary);
+}
+
+.ring-client-primary-soft {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--client-primary) 45%, transparent);
+}
+
 /* Native light palette overrides for utility-heavy dark UI. */
 html.cf-theme-light {
   color-scheme: light;

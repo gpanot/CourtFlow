@@ -45,8 +45,11 @@ async function main() {
   await prisma.staffMember.upsert({
     where: { phone: "+10000000000" },
     update: {
-      venues: { connect: [{ id: venue.id }] },
       passwordHash: adminPassword,
+      venueAssignments: {
+        deleteMany: {},
+        create: [{ venueId: venue.id, appAccess: ["courtflow"] }],
+      },
     },
     create: {
       id: "demo-superadmin",
@@ -56,15 +59,20 @@ async function main() {
       role: "superadmin",
       passwordHash: adminPassword,
       onboardingCompleted: true,
-      venues: { connect: [{ id: venue.id }] },
+      venueAssignments: {
+        create: [{ venueId: venue.id, appAccess: ["courtflow"] }],
+      },
     },
   });
 
   await prisma.staffMember.upsert({
     where: { phone: "+10000000001" },
     update: {
-      venues: { connect: [{ id: venue.id }] },
       passwordHash: staffPassword,
+      venueAssignments: {
+        deleteMany: {},
+        create: [{ venueId: venue.id, appAccess: ["courtflow"] }],
+      },
     },
     create: {
       id: "demo-staff-1",
@@ -72,7 +80,9 @@ async function main() {
       phone: "+10000000001",
       role: "staff",
       passwordHash: staffPassword,
-      venues: { connect: [{ id: venue.id }] },
+      venueAssignments: {
+        create: [{ venueId: venue.id, appAccess: ["courtflow"] }],
+      },
     },
   });
 

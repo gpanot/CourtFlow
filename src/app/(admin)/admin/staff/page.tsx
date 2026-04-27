@@ -4,10 +4,12 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { Plus, Shield, User, Pencil, Trash2, KeyRound, X, Check, GraduationCap } from "lucide-react";
+import type { StaffAppAccessKind } from "@/lib/staff-app-access";
 
 interface StaffVenue {
   id: string;
   name: string;
+  appAccess?: StaffAppAccessKind[];
 }
 
 interface Staff {
@@ -30,12 +32,22 @@ export default function StaffPage() {
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    name: string;
+    phone: string;
+    password: string;
+    role: "staff" | "superadmin";
+    venueIds: string[];
+    venueAppAccess: Record<string, StaffAppAccessKind[]>;
+    isCoach: boolean;
+    coachBio: string;
+  }>({
     name: "",
     phone: "",
     password: "",
-    role: "staff" as "staff" | "superadmin",
-    venueIds: [] as string[],
+    role: "staff",
+    venueIds: [],
+    venueAppAccess: {},
     isCoach: false,
     coachBio: "",
   });
@@ -57,19 +69,34 @@ export default function StaffPage() {
   }, []);
 
   const openCreate = () => {
-    setForm({ name: "", phone: "", password: "", role: "staff", venueIds: [], isCoach: false, coachBio: "" });
+    setForm({
+      name: "",
+      phone: "",
+      password: "",
+      role: "staff",
+      venueIds: [],
+      venueAppAccess: {},
+      isCoach: false,
+      coachBio: "",
+    });
     setErr("");
     setModalMode("create");
   };
 
   const openEdit = (s: Staff) => {
     setSelectedStaff(s);
+    const venueAppAccess: Record<string, StaffAppAccessKind[]> = {};
+    for (const v of s.venues) {
+      const a = v.appAccess?.length ? v.appAccess : (["courtflow"] as StaffAppAccessKind[]);
+      venueAppAccess[v.id] = a;
+    }
     setForm({
       name: s.name,
       phone: s.phone,
       password: "",
       role: s.role as "staff" | "superadmin",
       venueIds: s.venues.map((v) => v.id),
+      venueAppAccess,
       isCoach: s.isCoach,
       coachBio: s.coachBio || "",
     });
@@ -97,12 +124,30 @@ export default function StaffPage() {
   };
 
   const toggleVenue = (venueId: string) => {
-    setForm((prev) => ({
-      ...prev,
-      venueIds: prev.venueIds.includes(venueId)
-        ? prev.venueIds.filter((id) => id !== venueId)
-        : [...prev.venueIds, venueId],
-    }));
+    setForm((prev) => {
+      const on = prev.venueIds.includes(venueId);
+      const venueIds = on ? prev.venueIds.filter((id) => id !== venueId) : [...prev.venueIds, venueId];
+      const venueAppAccess = { ...prev.venueAppAccess };
+      if (on) {
+        delete venueAppAccess[venueId];
+      } else {
+        venueAppAccess[venueId] = ["courtflow"];
+      }
+      return { ...prev, venueIds, venueAppAccess };
+    });
+  };
+
+  const toggleVenueApp = (venueId: string, app: StaffAppAccessKind) => {
+    setForm((prev) => {
+      const current = prev.venueAppAccess[venueId] ?? (["courtflow"] as StaffAppAccessKind[]);
+      const has = current.includes(app);
+      let next = has ? current.filter((x) => x !== app) : [...current, app];
+      if (next.length === 0) next = ["courtflow"];
+      return {
+        ...prev,
+        venueAppAccess: { ...prev.venueAppAccess, [venueId]: next },
+      };
+    });
   };
 
   const handleCreate = async () => {
@@ -115,7 +160,10 @@ export default function StaffPage() {
         phone: form.phone,
         password: form.password,
         role: form.role,
-        venueIds: form.venueIds,
+        venueAssignments: form.venueIds.map((venueId) => ({
+          venueId,
+          appAccess: form.venueAppAccess[venueId] ?? ["courtflow"],
+        })),
       });
       await fetchAll();
       closeModal();
@@ -134,7 +182,10 @@ export default function StaffPage() {
       await api.patch(`/api/admin/staff/${selectedStaff.id}`, {
         name: form.name,
         role: form.role,
-        venueIds: form.venueIds,
+        venueAssignments: form.venueIds.map((venueId) => ({
+          venueId,
+          appAccess: form.venueAppAccess[venueId] ?? ["courtflow"],
+        })),
         isCoach: form.isCoach,
         coachBio: form.coachBio || null,
       });
@@ -335,6 +386,54 @@ export default function StaffPage() {
                   )}
                 </div>
               </div>
+
+              {form.venueIds.length > 0 && (
+                <div>
+                  <label className="mb-1.5 block text-sm text-neutral-400">App access</label>
+                  <p className="mb-2 text-xs text-neutral-500">
+                    Choose which staff PWA each venue opens (both can be enabled).
+                  </p>
+                  <div className="space-y-3">
+                    {form.venueIds.map((vid) => {
+                      const vname = venues.find((x) => x.id === vid)?.name ?? vid;
+                      const apps = form.venueAppAccess[vid] ?? ["courtflow"];
+                      return (
+                        <div key={vid} className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-3">
+                          <p className="mb-2 text-xs font-medium text-neutral-300">Venue: {vname}</p>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => toggleVenueApp(vid, "courtflow")}
+                              className={cn(
+                                "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors",
+                                apps.includes("courtflow")
+                                  ? "border-purple-500 bg-purple-600/20 text-purple-300"
+                                  : "border-neutral-700 text-neutral-400 hover:border-neutral-500"
+                              )}
+                            >
+                              {apps.includes("courtflow") && <Check className="h-3 w-3" />}
+                              CourtFlow
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => toggleVenueApp(vid, "courtpay")}
+                              className={cn(
+                                "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors",
+                                apps.includes("courtpay")
+                                  ? "border-purple-500 bg-purple-600/20 text-purple-300"
+                                  : "border-neutral-700 text-neutral-400 hover:border-neutral-500"
+                              )}
+                            >
+                              {apps.includes("courtpay") && <Check className="h-3 w-3" />}
+                              CourtPay
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="border-t border-neutral-800 pt-3">
                 <div className="flex items-center justify-between">

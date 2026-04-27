@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
     const auth = requireSuperAdmin(request.headers);
 
     const venues = await prisma.venue.findMany({
-      where: { staff: { some: { id: auth.id } } },
+      where: { staffAssignments: { some: { staffId: auth.id } } },
       include: {
         courts: { orderBy: { label: "asc" } },
         sessions: {
@@ -16,11 +16,16 @@ export async function GET(request: NextRequest) {
           take: 1,
           orderBy: { openedAt: "desc" },
         },
-        _count: { select: { staff: true } },
+        _count: { select: { staffAssignments: true } },
       },
     });
 
-    return json(venues);
+    return json(
+      venues.map((v) => ({
+        ...v,
+        _count: { staff: v._count.staffAssignments },
+      }))
+    );
   } catch (e) {
     return error((e as Error).message, 500);
   }
@@ -35,7 +40,9 @@ export async function POST(request: NextRequest) {
       data: {
         name: body.name,
         location: body.location || null,
-        staff: { connect: { id: auth.id } },
+        staffAssignments: {
+          create: [{ staffId: auth.id, appAccess: ["courtflow"] }],
+        },
         settings: {
           autoStartDelay: 180,
           postGameTimeout: 180,

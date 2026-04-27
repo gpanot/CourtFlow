@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { signToken } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
+import { staffAssignmentsToVenues } from "@/lib/staff-app-access";
 
 export async function POST(request: NextRequest) {
   try {
@@ -10,11 +11,16 @@ export async function POST(request: NextRequest) {
 
     const staff = await prisma.staffMember.findUnique({
       where: { id: staffId },
-      include: { venues: { select: { id: true, name: true } } },
+      include: {
+        venueAssignments: {
+          include: { venue: { select: { id: true, name: true } } },
+        },
+      },
     });
     if (!staff) return error("Staff not found", 404);
 
-    const firstVenueId = staff.venues.length === 1 ? staff.venues[0].id : undefined;
+    const venues = staffAssignmentsToVenues(staff.venueAssignments);
+    const firstVenueId = venues.length === 1 ? venues[0].id : undefined;
 
     const token = signToken({
       id: staff.id,
@@ -29,7 +35,7 @@ export async function POST(request: NextRequest) {
         name: staff.name,
         phone: staff.phone,
         role: staff.role,
-        venues: staff.venues,
+        venues,
         venueId: firstVenueId || null,
         onboardingCompleted: staff.onboardingCompleted,
       },

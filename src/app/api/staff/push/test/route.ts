@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     if (!venueId) return error("venueId is required", 400);
 
     const allowed = await prisma.staffMember.findFirst({
-      where: { id: auth.id, venues: { some: { id: venueId } } },
+      where: { id: auth.id, venueAssignments: { some: { venueId } } },
       select: { id: true },
     });
     if (!allowed) return error("You do not have access to this venue", 403);

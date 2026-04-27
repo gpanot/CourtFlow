@@ -31,7 +31,7 @@ export async function PATCH(
     const { venueId } = await params;
 
     const owned = await prisma.venue.count({
-      where: { id: venueId, staff: { some: { id: auth.id } } },
+      where: { id: venueId, staffAssignments: { some: { staffId: auth.id } } },
     });
     if (!owned) return error("You don't own this venue", 403);
 
@@ -60,7 +60,7 @@ export async function DELETE(
     const { venueId } = await params;
 
     const owned = await prisma.venue.count({
-      where: { id: venueId, staff: { some: { id: auth.id } } },
+      where: { id: venueId, staffAssignments: { some: { staffId: auth.id } } },
     });
     if (!owned) return error("You don't own this venue", 403);
 
@@ -99,10 +99,7 @@ export async function DELETE(
       await tx.court.deleteMany({ where: { venueId } });
       await tx.session.deleteMany({ where: { venueId } });
       await tx.auditLog.deleteMany({ where: { venueId } });
-      await tx.venue.update({
-        where: { id: venueId },
-        data: { staff: { set: [] } },
-      });
+      await tx.staffVenueAssignment.deleteMany({ where: { venueId } });
       await tx.venue.delete({ where: { id: venueId } });
     });
 

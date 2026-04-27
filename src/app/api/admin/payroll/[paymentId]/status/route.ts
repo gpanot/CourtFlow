@@ -70,13 +70,13 @@ export async function PATCH(
 
     const staffWithVenues = await prisma.staffMember.findUnique({
       where: { id: payment.staffId },
-      include: { venues: { select: { id: true } } },
+      include: { venueAssignments: { take: 1, select: { venueId: true } } },
     });
 
-    if (staffWithVenues?.venues[0]) {
+    if (staffWithVenues?.venueAssignments[0]) {
       await prisma.auditLog.create({
         data: {
-          venueId: staffWithVenues.venues[0].id,
+          venueId: staffWithVenues.venueAssignments[0].venueId,
           staffId: auth.id,
           action,
           targetId: paymentId,

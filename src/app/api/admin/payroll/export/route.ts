@@ -26,7 +26,6 @@ export async function GET(request: NextRequest) {
     const weekLabel = formatWeekRangeShort(weekStart);
 
     const allStaff = await prisma.staffMember.findMany({
-      include: { venues: { select: { name: true } } },
       orderBy: { name: "asc" },
     });
 

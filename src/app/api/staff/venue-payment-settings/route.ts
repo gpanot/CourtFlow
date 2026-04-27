@@ -11,9 +11,9 @@ export async function GET(request: NextRequest) {
 
     const staff = await prisma.staffMember.findUnique({
       where: { id: auth.id },
-      select: { venues: { where: { id: venueId }, select: { id: true } } },
+      select: { venueAssignments: { where: { venueId }, select: { id: true } } },
     });
-    if (!staff?.venues.length) return error("Not assigned to this venue", 403);
+    if (!staff?.venueAssignments.length) return error("Not assigned to this venue", 403);
 
     const venue = await prisma.venue.findUnique({
       where: { id: venueId },
@@ -68,9 +68,9 @@ export async function PATCH(request: NextRequest) {
 
     const staff = await prisma.staffMember.findUnique({
       where: { id: auth.id },
-      select: { venues: { where: { id: venueId }, select: { id: true } } },
+      select: { venueAssignments: { where: { venueId }, select: { id: true } } },
     });
-    if (!staff?.venues.length) return error("Not assigned to this venue", 403);
+    if (!staff?.venueAssignments.length) return error("Not assigned to this venue", 403);
 
     const venueUpdate: Record<string, unknown> = {};
     if (body.bankName !== undefined) venueUpdate.bankName = body.bankName || null;

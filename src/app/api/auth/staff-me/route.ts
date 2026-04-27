@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { requireStaff } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
+import { staffAssignmentsToVenues } from "@/lib/staff-app-access";
 
 /** Current staff member name and phone (Bearer staff/superadmin JWT). */
 export async function GET(request: NextRequest) {
@@ -13,7 +14,9 @@ export async function GET(request: NextRequest) {
         name: true,
         phone: true,
         pushNotificationsEnabled: true,
-        venues: { select: { id: true, name: true } },
+        venueAssignments: {
+          include: { venue: { select: { id: true, name: true } } },
+        },
       },
     });
     if (!staff) return error("Staff not found", 404);
@@ -21,7 +24,7 @@ export async function GET(request: NextRequest) {
       name: staff.name,
       phone: staff.phone,
       pushNotificationsEnabled: staff.pushNotificationsEnabled,
-      venues: staff.venues,
+      venues: staffAssignmentsToVenues(staff.venueAssignments),
     });
   } catch (e) {
     const msg = (e as Error).message;

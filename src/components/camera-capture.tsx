@@ -17,10 +17,14 @@ export interface CameraCaptureProps {
   className?: string;
   /** Classes on the <video> element itself */
   videoClassName?: string;
+  /** Camera facing — restarts stream when changed while `active`. Default `user` (selfie). */
+  facingMode?: "user" | "environment";
+  /** Fires when the video stream has loaded (first frame). */
+  onStreamReady?: () => void;
 }
 
 export const CameraCapture = forwardRef<CameraCaptureHandle, CameraCaptureProps>(
-  function CameraCapture({ active, onError, className, videoClassName }, ref) {
+  function CameraCapture({ active, onError, className, videoClassName, facingMode = "user", onStreamReady }, ref) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
@@ -33,7 +37,7 @@ export const CameraCapture = forwardRef<CameraCaptureHandle, CameraCaptureProps>
         let mediaStream: MediaStream;
         try {
           mediaStream = await navigator.mediaDevices.getUserMedia({
-            video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
+            video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode },
             audio: false,
           });
         } catch {
@@ -57,7 +61,7 @@ export const CameraCapture = forwardRef<CameraCaptureHandle, CameraCaptureProps>
         }
         return false;
       }
-    }, [onError]);
+    }, [onError, facingMode]);
 
     const stopCamera = useCallback(() => {
       streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -92,7 +96,7 @@ export const CameraCapture = forwardRef<CameraCaptureHandle, CameraCaptureProps>
         await startCamera();
       }, CAMERA_REMOUNT_MS);
       return () => clearTimeout(timer);
-    }, [active, startCamera, stopCamera]);
+    }, [active, facingMode, startCamera, stopCamera]);
 
     useEffect(() => {
       return () => stopCamera();
@@ -100,7 +104,14 @@ export const CameraCapture = forwardRef<CameraCaptureHandle, CameraCaptureProps>
 
     return (
       <div className={className}>
-        <video ref={videoRef} autoPlay playsInline muted className={videoClassName ?? "w-full h-full object-cover"} />
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className={videoClassName ?? "w-full h-full object-cover"}
+          onLoadedData={() => onStreamReady?.()}
+        />
         <canvas ref={canvasRef} className="hidden" />
       </div>
     );

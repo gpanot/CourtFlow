@@ -19,7 +19,7 @@ export async function GET(
     const { sessionId } = await params;
 
     const ownedVenues = await prisma.venue.findMany({
-      where: { staff: { some: { id: auth.id } } },
+      where: { staffAssignments: { some: { staffId: auth.id } } },
       select: { id: true },
     });
     const ownedVenueIds = new Set(ownedVenues.map((v) => v.id));

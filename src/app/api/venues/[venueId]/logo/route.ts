@@ -18,7 +18,7 @@ export async function POST(
     const { venueId } = await params;
 
     const owned = await prisma.venue.count({
-      where: { id: venueId, staff: { some: { id: auth.id } } },
+      where: { id: venueId, staffAssignments: { some: { staffId: auth.id } } },
     });
     if (!owned) return error("You don't own this venue", 403);
 
@@ -56,7 +56,7 @@ export async function DELETE(
     const { venueId } = await params;
 
     const owned = await prisma.venue.count({
-      where: { id: venueId, staff: { some: { id: auth.id } } },
+      where: { id: venueId, staffAssignments: { some: { staffId: auth.id } } },
     });
     if (!owned) return error("You don't own this venue", 403);
 

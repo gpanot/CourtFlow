@@ -8,26 +8,32 @@ export async function GET(request: NextRequest) {
     const auth = requireSuperAdmin(request.headers);
 
     const ownedVenues = await prisma.venue.findMany({
-      where: { staff: { some: { id: auth.id } } },
+      where: { staffAssignments: { some: { staffId: auth.id } } },
       select: { id: true },
     });
     const ownedVenueIds = ownedVenues.map((v) => v.id);
     const hasVenue = ownedVenueIds.length > 0;
 
-    const staffCount = await prisma.staffMember.count({
-      where: {
-        role: "staff",
-        venues: { some: { id: { in: ownedVenueIds } } },
-      },
-    });
+    const staffCount =
+      ownedVenueIds.length === 0
+        ? 0
+        : await prisma.staffMember.count({
+            where: {
+              role: "staff",
+              venueAssignments: { some: { venueId: { in: ownedVenueIds } } },
+            },
+          });
     const hasStaff = staffCount > 0;
 
-    const staffWithVenue = await prisma.staffMember.count({
-      where: {
-        role: "staff",
-        venues: { some: { id: { in: ownedVenueIds } } },
-      },
-    });
+    const staffWithVenue =
+      ownedVenueIds.length === 0
+        ? 0
+        : await prisma.staffMember.count({
+            where: {
+              role: "staff",
+              venueAssignments: { some: { venueId: { in: ownedVenueIds } } },
+            },
+          });
     const staffAssignedToVenue = staffWithVenue > 0;
 
     return json({ hasVenue, hasStaff, staffAssignedToVenue });
