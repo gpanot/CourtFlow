@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import { useSessionStore } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { StaffDashboard } from "./dashboard";
 import Link from "next/link";
-import { Shield, Clipboard, Grid3X3, Phone, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Shield, Clipboard, Grid3X3, Phone, Lock, Eye, EyeOff, Loader2, Tablet } from "lucide-react";
 import { CourtFlowLogo } from "@/components/courtflow-logo";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 import { StaffTopBar } from "@/components/staff-top-bar";
@@ -27,6 +27,12 @@ interface StaffVenue {
   appAccess?: StaffAppAccessKind[];
 }
 
+function venueHasCourtPayAccess(v: StaffVenue): boolean {
+  const access: StaffAppAccessKind[] =
+    v.appAccess && v.appAccess.length > 0 ? v.appAccess : ["courtflow"];
+  return access.includes("courtpay");
+}
+
 export default function StaffPage() {
   const { t } = useTranslation();
   const { token, staffId, staffName, venueId, role, onboardingCompleted, setAuth, clearAuth } = useSessionStore();
@@ -39,6 +45,7 @@ export default function StaffPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [pendingVenues, setPendingVenues] = useState<StaffVenue[] | null>(null);
+  const [pendingTabletVenues, setPendingTabletVenues] = useState<StaffVenue[] | null>(null);
   const [pendingAppPickVenue, setPendingAppPickVenue] = useState<StaffVenue | null>(null);
   const [showRoleChoice, setShowRoleChoice] = useState(false);
   const [showOtherApps, setShowOtherApps] = useState(false);
@@ -184,6 +191,34 @@ export default function StaffPage() {
     void promptInstall().catch(() => {});
   }, [token, staffId, venueId, showRoleChoice, isAndroid, installed, canPrompt, promptInstall]);
 
+  const courtPayVenueChoices = useMemo(
+    () => loginVenues.filter(venueHasCourtPayAccess),
+    [loginVenues]
+  );
+  const showTabletModeOnLanding = courtPayVenueChoices.length > 0;
+
+  const openCourtPayTablet = useCallback(() => {
+    freshLoginChoiceRef.current = false;
+    setShowOtherApps(false);
+    const withCp = loginVenues.filter(venueHasCourtPayAccess);
+    if (withCp.length === 0) return;
+    if (venueId) {
+      const match = withCp.find((x) => x.id === venueId);
+      if (match) {
+        setShowRoleChoice(false);
+        router.push(`/tv-queue/${venueId}`);
+        return;
+      }
+    }
+    if (withCp.length === 1) {
+      setShowRoleChoice(false);
+      router.push(`/tv-queue/${withCp[0]!.id}`);
+      return;
+    }
+    setPendingTabletVenues(withCp);
+    setShowRoleChoice(false);
+  }, [loginVenues, venueId, router]);
+
   if (token && staffId && venueId && !showRoleChoice && !showOtherApps) {
     if (pendingAppPickVenue) {
       return (
@@ -217,6 +252,76 @@ export default function StaffPage() {
       );
     }
     return <StaffDashboard />;
+  }
+
+  if (token && staffId && pendingTabletVenues && pendingTabletVenues.length > 0) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-neutral-950 p-6">
+        <div className="w-full max-w-sm space-y-8">
+          <div className="flex flex-col items-center gap-4">
+            <CourtFlowLogo size="large" dark asLink={false} />
+            <div className="text-center">
+              <h1 className="text-xl font-semibold text-white">{t("staff.login.selectTabletVenue")}</h1>
+              <p className="mt-1 text-sm text-neutral-400">{t("staff.login.selectTabletVenueDesc")}</p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {pendingTabletVenues.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => {
+                  setPendingTabletVenues(null);
+                  router.push(`/tv-queue/${v.id}`);
+                }}
+                className="w-full rounded-2xl border border-green-500/20 bg-green-500/5 px-5 py-4 text-left text-base font-medium text-white transition-all hover:border-green-500/40 hover:bg-green-500/10"
+              >
+                {v.name}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setPendingTabletVenues(null);
+              setShowRoleChoice(true);
+            }}
+            className="w-full rounded-2xl border border-neutral-800 bg-neutral-900 px-4 py-3 text-sm font-medium text-neutral-300 transition-colors hover:border-neutral-700 hover:bg-neutral-800"
+          >
+            {t("staff.login.backToDashboards")}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (token && staffId && pendingVenues && pendingVenues.length > 1) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-neutral-950 p-6">
+        <div className="w-full max-w-sm space-y-8">
+          <div className="flex flex-col items-center gap-4">
+            <CourtFlowLogo size="large" dark asLink={false} />
+            <div className="text-center">
+              <h1 className="text-xl font-semibold text-white">{t("staff.login.selectVenue")}</h1>
+              <p className="mt-1 text-sm text-neutral-400">{t("staff.login.selectVenueDesc")}</p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {pendingVenues.map((v) => (
+              <button
+                key={v.id}
+                onClick={() => {
+                  proceedToVenue(v);
+                }}
+                className="w-full rounded-2xl border border-neutral-800 bg-neutral-900 px-5 py-4 text-left text-base font-medium text-white transition-all hover:border-neutral-700 hover:bg-neutral-800"
+              >
+                {v.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (showRoleChoice) {
@@ -334,7 +439,24 @@ export default function StaffPage() {
                 </div>
               </button>
 
+              {showTabletModeOnLanding && (
+                <button
+                  type="button"
+                  onClick={openCourtPayTablet}
+                  className="group flex w-full items-center gap-4 rounded-2xl border border-green-500/25 bg-green-500/5 p-4 text-left transition-all hover:border-green-500/45 hover:bg-green-500/10"
+                >
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-green-500/15 transition-colors group-hover:bg-green-500/25">
+                    <Tablet className="h-5 w-5 text-green-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-white">{t("staff.login.tabletMode")}</p>
+                    <p className="text-xs text-neutral-400">{t("staff.login.tabletModeDesc")}</p>
+                  </div>
+                </button>
+              )}
+
               <button
+                type="button"
                 onClick={() => setShowOtherApps(true)}
                 className="group flex w-full items-center gap-4 rounded-2xl border border-neutral-700/70 bg-neutral-900/70 p-4 text-left transition-all hover:border-neutral-600 hover:bg-neutral-800/80"
               >
@@ -350,10 +472,12 @@ export default function StaffPage() {
           )}
 
           <button
+            type="button"
             onClick={() => {
               freshLoginChoiceRef.current = false;
               setShowRoleChoice(false);
               setShowOtherApps(false);
+              setPendingTabletVenues(null);
               setAuth({
                 token: null,
                 staffId: null,
@@ -368,35 +492,6 @@ export default function StaffPage() {
           >
             {t("staff.login.signOut")}
           </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (token && staffId && pendingVenues && pendingVenues.length > 1) {
-    return (
-      <div className="flex min-h-dvh items-center justify-center bg-neutral-950 p-6">
-        <div className="w-full max-w-sm space-y-8">
-          <div className="flex flex-col items-center gap-4">
-            <CourtFlowLogo size="large" dark asLink={false} />
-            <div className="text-center">
-              <h1 className="text-xl font-semibold text-white">{t("staff.login.selectVenue")}</h1>
-              <p className="mt-1 text-sm text-neutral-400">{t("staff.login.selectVenueDesc")}</p>
-            </div>
-          </div>
-          <div className="space-y-2">
-            {pendingVenues.map((v) => (
-              <button
-                key={v.id}
-                onClick={() => {
-                  proceedToVenue(v);
-                }}
-                className="w-full rounded-2xl border border-neutral-800 bg-neutral-900 px-5 py-4 text-left text-base font-medium text-white transition-all hover:border-neutral-700 hover:bg-neutral-800"
-              >
-                {v.name}
-              </button>
-            ))}
-          </div>
         </div>
       </div>
     );
