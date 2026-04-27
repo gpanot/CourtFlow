@@ -8,6 +8,9 @@ import {
   DeleteFacesCommand,
   ListFacesCommand,
 } from "@aws-sdk/client-rekognition";
+import { FACE_MATCH_THRESHOLD } from "@/lib/rekognition-config";
+
+export { FACE_MATCH_THRESHOLD } from "@/lib/rekognition-config";
 
 const COLLECTION_ID = process.env.AWS_REKOGNITION_COLLECTION || "courtflow-players";
 
@@ -57,6 +60,19 @@ export interface FaceRecognitionDebugInfo {
   interpretation: string;
 }
 
+/** Similarity scores for logging / DB (SearchFacesByImage best match vs production threshold). */
+export interface FaceRecognitionAttemptMeta {
+  similarityScore: number | null;
+  threshold: number;
+  passedThreshold: boolean;
+}
+
+export interface RecognizeFaceOptions {
+  debug?: boolean;
+  venueId?: string;
+  staffId?: string;
+}
+
 export interface FaceRecognitionResult {
   success: boolean;
   resultType:
@@ -73,6 +89,7 @@ export interface FaceRecognitionResult {
   faceSubjectId?: string;
   error?: string;
   recognitionDebug?: FaceRecognitionDebugInfo;
+  attemptMeta?: FaceRecognitionAttemptMeta;
 }
 
 export interface FaceEnrollmentResult {
@@ -84,6 +101,108 @@ export interface FaceEnrollmentResult {
 // ── Helper: base64 → Uint8Array (AWS SDK needs raw bytes) ─────────────────
 function base64ToBytes(base64: string): Uint8Array {
   return Buffer.from(base64, "base64");
+}
+
+/** Fire-and-forget row per SearchFacesByImage call when venueId is present. */
+function queueFaceRecognitionRow(params: {
+  venueId?: string;
+  staffId?: string;
+  playerId?: string | null;
+  similarityScore: number;
+  passed: boolean;
+}) {
+  const vid = params.venueId?.trim();
+  if (!vid) return;
+
+  const threshold = FACE_MATCH_THRESHOLD;
+  void prisma.faceRecognitionLog
+    .create({
+      data: {
+        venueId: vid,
+        staffId: params.staffId ?? undefined,
+        playerId: params.playerId ?? undefined,
+        similarityScore: params.similarityScore,
+        threshold,
+        passed: params.passed,
+      },
+    })
+    .catch((e) => console.error("[FaceRecognitionLog]", e));
+}
+
+function mockAttemptMeta(result: FaceRecognitionResult): FaceRecognitionAttemptMeta {
+  let similarityScore: number | null = null;
+  if (typeof result.confidence === "number") {
+    similarityScore =
+      result.confidence <= 1 ? result.confidence * 100 : result.confidence;
+  }
+  const passedThreshold =
+    similarityScore != null && similarityScore >= FACE_MATCH_THRESHOLD;
+  return {
+    similarityScore,
+    threshold: FACE_MATCH_THRESHOLD,
+    passedThreshold,
+  };
+}
+
+function appendMockAttemptLog(
+  result: FaceRecognitionResult,
+  options?: RecognizeFaceOptions
+): FaceRecognitionResult {
+  const meta = mockAttemptMeta(result);
+  console.log(
+    "[Rekognition][FaceRecognitionAttempt]",
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      rekognitionOperation: "SearchFacesByImage",
+      venueId: options?.venueId ?? null,
+      staffId: options?.staffId ?? null,
+      similarityScore: meta.similarityScore,
+      threshold: meta.threshold,
+      passedThreshold: meta.passedThreshold,
+      resultType: result.resultType,
+      mode: "MOCK",
+    })
+  );
+  queueFaceRecognitionRow({
+    venueId: options?.venueId,
+    staffId: options?.staffId,
+    playerId: result.resultType === "matched" ? result.playerId ?? null : null,
+    similarityScore: meta.similarityScore ?? 0,
+    passed: result.resultType === "matched",
+  });
+  return { ...result, attemptMeta: meta };
+}
+
+function finalizeAwsRecognition(
+  result: FaceRecognitionResult,
+  similarityScore: number | null,
+  options?: RecognizeFaceOptions,
+  extra?: Record<string, unknown>
+): FaceRecognitionResult {
+  const passedThreshold =
+    similarityScore != null && similarityScore >= FACE_MATCH_THRESHOLD;
+  const meta: FaceRecognitionAttemptMeta = {
+    similarityScore,
+    threshold: FACE_MATCH_THRESHOLD,
+    passedThreshold,
+  };
+  console.log(
+    "[Rekognition][FaceRecognitionAttempt]",
+    JSON.stringify({
+      timestamp: new Date().toISOString(),
+      rekognitionOperation: "SearchFacesByImage",
+      venueId: options?.venueId ?? null,
+      staffId: options?.staffId ?? null,
+      collectionId: COLLECTION_ID,
+      similarityScore,
+      threshold: FACE_MATCH_THRESHOLD,
+      passedThreshold,
+      resultType: result.resultType,
+      mode: "AWS",
+      ...extra,
+    })
+  );
+  return { ...result, attemptMeta: meta };
 }
 
 class FaceRecognitionService {
@@ -159,36 +278,38 @@ class FaceRecognitionService {
   // ── Recognize a face ─────────────────────────────────────────────────────
   async recognizeFace(
     imageBase64: string,
-    options?: { debug?: boolean }
+    options?: RecognizeFaceOptions
   ): Promise<FaceRecognitionResult> {
     const dbg = options?.debug === true;
 
     if (USE_MOCK_SERVICE) {
       if (imageBase64 === "test_image_no_camera") {
         const r = await mockFaceRecognitionService.recognizeTestImage();
-        return dbg
+        const out = dbg
           ? {
               ...r,
               recognitionDebug: {
-                mode: "MOCK",
+                mode: "MOCK" as const,
                 awsQueried: false,
                 interpretation: "mock_test_image_path",
               },
             }
           : r;
+        return appendMockAttemptLog(out, options);
       }
       const r = await mockFaceRecognitionService.recognizeFace(imageBase64);
-      return dbg
+      const out = dbg
         ? {
             ...r,
             recognitionDebug: {
-              mode: "MOCK",
+              mode: "MOCK" as const,
               awsQueried: false,
               interpretation:
                 "mock_service — SearchFacesByImage not called; use real AWS credentials for kiosk matching",
             },
           }
         : r;
+      return appendMockAttemptLog(out, options);
     }
 
     try {
@@ -206,60 +327,91 @@ class FaceRecognitionService {
             CollectionId: COLLECTION_ID,
             Image: { Bytes: imageBytes },
             MaxFaces: 5,
-            FaceMatchThreshold: 85,
+            FaceMatchThreshold: FACE_MATCH_THRESHOLD,
             QualityFilter: "AUTO",
           })
         );
 
         const allMatches = response.FaceMatches ?? [];
-        const matches = orphanFaceIdsToSkip.length > 0
-          ? allMatches.filter((m) => !orphanFaceIdsToSkip.includes(m.Face?.FaceId ?? ""))
-          : allMatches;
+        const topRawSimilarity = allMatches[0]?.Similarity ?? null;
 
-        console.log("[Rekognition] SearchFaces response:", {
-          matchCount: matches.length,
-          attempt,
-          orphansSkipped: orphanFaceIdsToSkip.length,
-          topMatch: matches[0]
-            ? {
-                similarity: matches[0].Similarity,
-                externalImageId: matches[0].Face?.ExternalImageId,
-                faceId: matches[0].Face?.FaceId,
-              }
-            : null,
-        });
-        console.log("[Rekognition] Collection:", COLLECTION_ID);
+        const candidates =
+          orphanFaceIdsToSkip.length > 0
+            ? allMatches.filter(
+                (m) =>
+                  !orphanFaceIdsToSkip.includes(m.Face?.FaceId ?? "")
+              )
+            : allMatches;
 
-        const top = matches[0];
-        const topDbg = top
+        console.log(
+          "[Rekognition][FaceRecognitionAttempt]",
+          JSON.stringify({
+            timestamp: new Date().toISOString(),
+            rekognitionOperation: "SearchFacesByImage",
+            phase: "search_iteration",
+            venueId: options?.venueId ?? null,
+            staffId: options?.staffId ?? null,
+            collectionId: COLLECTION_ID,
+            similarityScore: topRawSimilarity,
+            threshold: FACE_MATCH_THRESHOLD,
+            passedThreshold:
+              topRawSimilarity != null &&
+              topRawSimilarity >= FACE_MATCH_THRESHOLD,
+            orphanRetryAttempt: attempt,
+            orphansSkippedCount: orphanFaceIdsToSkip.length,
+            rawMatchCount: allMatches.length,
+            candidateCountAfterOrphanFilter: candidates.length,
+            mode: "AWS",
+          })
+        );
+
+        const topDbg = candidates[0]
           ? {
-              similarity: top.Similarity,
-              externalImageId: top.Face?.ExternalImageId,
-              faceId: top.Face?.FaceId,
+              similarity: candidates[0].Similarity,
+              externalImageId: candidates[0].Face?.ExternalImageId,
+              faceId: candidates[0].Face?.FaceId,
             }
-          : null;
+          : allMatches[0]
+            ? {
+                similarity: allMatches[0].Similarity,
+                externalImageId: allMatches[0].Face?.ExternalImageId,
+                faceId: allMatches[0].Face?.FaceId,
+              }
+            : null;
 
-        if (matches.length === 0) {
-          return {
-            success: true,
-            resultType: "new_player",
-            ...(dbg && {
-              recognitionDebug: {
-                mode: "AWS",
-                collectionId: COLLECTION_ID,
-                awsQueried: true,
-                faceMatchCount: 0,
-                topMatch: null,
-                interpretation:
-                  orphanFaceIdsToSkip.length > 0
-                    ? `No matches after removing ${orphanFaceIdsToSkip.length} orphaned face(s) — needs_registration`
-                    : "No FaceMatch above 85% in collection — kiosk returns needs_registration (register on Check-in tab first)",
-              },
-            }),
-          };
+        if (candidates.length === 0) {
+          queueFaceRecognitionRow({
+            venueId: options?.venueId,
+            staffId: options?.staffId,
+            playerId: null,
+            similarityScore: topRawSimilarity ?? 0,
+            passed: false,
+          });
+          return finalizeAwsRecognition(
+            {
+              success: true,
+              resultType: "new_player",
+              ...(dbg && {
+                recognitionDebug: {
+                  mode: "AWS",
+                  collectionId: COLLECTION_ID,
+                  awsQueried: true,
+                  faceMatchCount: 0,
+                  topMatch: topDbg,
+                  interpretation:
+                    orphanFaceIdsToSkip.length > 0
+                      ? `No matches after removing ${orphanFaceIdsToSkip.length} orphaned face(s) — needs_registration`
+                      : `No FaceMatch at or above ${FACE_MATCH_THRESHOLD}% in collection — kiosk returns needs_registration (register on Check-in tab first)`,
+                },
+              }),
+            },
+            topRawSimilarity,
+            options,
+            { orphanRetryAttempt: attempt }
+          );
         }
 
-        const bestMatch = matches[0];
+        const bestMatch = candidates[0];
         const confidence = bestMatch.Similarity ?? 0;
         const externalImageId = bestMatch.Face?.ExternalImageId ?? "";
         const matchedFaceId = bestMatch.Face?.FaceId ?? "";
@@ -270,16 +422,31 @@ class FaceRecognitionService {
         });
 
         if (!player) {
-          // Orphan: face in AWS but player deleted — auto-clean and retry
+          queueFaceRecognitionRow({
+            venueId: options?.venueId,
+            staffId: options?.staffId,
+            playerId: null,
+            similarityScore: topRawSimilarity ?? 0,
+            passed: false,
+          });
           console.warn(
             `[Rekognition] Orphan face detected: faceId=${matchedFaceId} externalImageId=${externalImageId} — deleting from AWS and retrying`
           );
           orphanFaceIdsToSkip.push(matchedFaceId);
           if (matchedFaceId) {
             rekognition!
-              .send(new DeleteFacesCommand({ CollectionId: COLLECTION_ID, FaceIds: [matchedFaceId] }))
-              .then(() => console.log(`[Rekognition] Orphan face ${matchedFaceId} deleted`))
-              .catch((e: unknown) => console.error(`[Rekognition] Failed to delete orphan face:`, e));
+              .send(
+                new DeleteFacesCommand({
+                  CollectionId: COLLECTION_ID,
+                  FaceIds: [matchedFaceId],
+                })
+              )
+              .then(() =>
+                console.log(`[Rekognition] Orphan face ${matchedFaceId} deleted`)
+              )
+              .catch((e: unknown) =>
+                console.error(`[Rekognition] Failed to delete orphan face:`, e)
+              );
           }
           continue;
         }
@@ -288,53 +455,49 @@ class FaceRecognitionService {
           `[Rekognition] Matched player ${player.name} with ${confidence.toFixed(1)}% confidence`
         );
 
-        return {
-          success: true,
-          resultType: "matched",
+        queueFaceRecognitionRow({
+          venueId: options?.venueId,
+          staffId: options?.staffId,
           playerId,
-          displayName: player.name,
-          confidence,
-          ...(dbg && {
-            recognitionDebug: {
-              mode: "AWS",
-              collectionId: COLLECTION_ID,
-              awsQueried: true,
-              faceMatchCount: matches.length,
-              topMatch: topDbg,
-              externalPlayerIdFromAws: playerId,
-              dbPlayerFound: true,
-              dbPlayerName: player.name,
-              interpretation:
-                orphanFaceIdsToSkip.length > 0
-                  ? `Matched after skipping ${orphanFaceIdsToSkip.length} orphaned face(s)`
-                  : "Matched AWS indexed face to DB player — kiosk should check in automatically",
-            },
-          }),
-        };
+          similarityScore: topRawSimilarity ?? 0,
+          passed: true,
+        });
+
+        return finalizeAwsRecognition(
+          {
+            success: true,
+            resultType: "matched",
+            playerId,
+            displayName: player.name,
+            confidence,
+            ...(dbg && {
+              recognitionDebug: {
+                mode: "AWS",
+                collectionId: COLLECTION_ID,
+                awsQueried: true,
+                faceMatchCount: candidates.length,
+                topMatch: topDbg,
+                externalPlayerIdFromAws: playerId,
+                dbPlayerFound: true,
+                dbPlayerName: player.name,
+                interpretation:
+                  orphanFaceIdsToSkip.length > 0
+                    ? `Matched after skipping ${orphanFaceIdsToSkip.length} orphaned face(s)`
+                    : "Matched AWS indexed face to DB player — kiosk should check in automatically",
+              },
+            }),
+          },
+          topRawSimilarity,
+          options,
+          {
+            matchedPlayerId: playerId,
+            orphanRetryAttempt: attempt,
+          }
+        );
       }
 
-      // Exhausted retries (all top matches were orphans)
-      return {
-        success: true,
-        resultType: "new_player",
-        ...(dbg && {
-          recognitionDebug: {
-            mode: "AWS",
-            collectionId: COLLECTION_ID,
-            awsQueried: true,
-            faceMatchCount: 0,
-            topMatch: null,
-            interpretation: `All ${orphanFaceIdsToSkip.length} matches were orphaned faces (deleted from DB) — cleaned from AWS`,
-          },
-        }),
-      };
-    } catch (err: any) {
-      // InvalidParameterException = no face in image
-      if (
-        err?.name === "InvalidParameterException" &&
-        err?.message?.includes("no faces")
-      ) {
-        return {
+      return finalizeAwsRecognition(
+        {
           success: true,
           resultType: "new_player",
           ...(dbg && {
@@ -344,26 +507,77 @@ class FaceRecognitionService {
               awsQueried: true,
               faceMatchCount: 0,
               topMatch: null,
-              interpretation:
-                "Rekognition: no face detected in image (InvalidParameterException) — flow uses new_player",
+              interpretation: `All ${orphanFaceIdsToSkip.length} matches were orphaned faces (deleted from DB) — cleaned from AWS`,
             },
           }),
-        };
+        },
+        null,
+        options,
+        { exhaustedOrphanRetries: true }
+      );
+    } catch (err: any) {
+      // InvalidParameterException = no face in image
+      if (
+        err?.name === "InvalidParameterException" &&
+        err?.message?.includes("no faces")
+      ) {
+        queueFaceRecognitionRow({
+          venueId: options?.venueId,
+          staffId: options?.staffId,
+          playerId: null,
+          similarityScore: 0,
+          passed: false,
+        });
+        return finalizeAwsRecognition(
+          {
+            success: true,
+            resultType: "new_player",
+            ...(dbg && {
+              recognitionDebug: {
+                mode: "AWS",
+                collectionId: COLLECTION_ID,
+                awsQueried: true,
+                faceMatchCount: 0,
+                topMatch: null,
+                interpretation:
+                  "Rekognition: no face detected in image (InvalidParameterException) — flow uses new_player",
+              },
+            }),
+          },
+          null,
+          options,
+          { rekognitionError: "no_face_in_image" }
+        );
       }
 
       console.error("[Rekognition] Recognition failed:", err);
-      return {
-        success: false,
-        resultType: "error",
-        error: err instanceof Error ? err.message : "Unknown recognition error",
-        ...(dbg && {
-          recognitionDebug: {
-            mode: "AWS",
-            awsQueried: true,
-            interpretation: `Rekognition error: ${err instanceof Error ? err.message : String(err)}`,
-          },
-        }),
-      };
+      queueFaceRecognitionRow({
+        venueId: options?.venueId,
+        staffId: options?.staffId,
+        playerId: null,
+        similarityScore: 0,
+        passed: false,
+      });
+      return finalizeAwsRecognition(
+        {
+          success: false,
+          resultType: "error",
+          error: err instanceof Error ? err.message : "Unknown recognition error",
+          ...(dbg && {
+            recognitionDebug: {
+              mode: "AWS",
+              awsQueried: true,
+              interpretation: `Rekognition error: ${err instanceof Error ? err.message : String(err)}`,
+            },
+          }),
+        },
+        null,
+        options,
+        {
+          rekognitionError:
+            err instanceof Error ? err.message : String(err),
+        }
+      );
     }
   }
 

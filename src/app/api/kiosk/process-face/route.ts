@@ -113,7 +113,11 @@ export async function POST(request: NextRequest) {
       // Recognize face
       const recognitionResult = await faceRecognitionService.recognizeFace(
         imageBase64,
-        { debug: wantsDebug === true }
+        {
+          debug: wantsDebug === true,
+          venueId,
+          staffId: staffId ?? undefined,
+        }
       );
 
       if (wantsDebug === true && recognitionResult.recognitionDebug) {

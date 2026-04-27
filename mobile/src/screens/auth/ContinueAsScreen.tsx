@@ -10,6 +10,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { CommonActions } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuthStore } from "../../stores/auth-store";
+import { logoutUnregisterStaffPush } from "../../hooks/useStaffPushRegistration";
 import { C } from "../../theme/colors";
 import type { RootStackScreenProps } from "../../navigation/types";
 import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
@@ -87,13 +88,16 @@ export function ContinueAsScreen({
         text: t("continueAsLogOutTitle"),
         style: "destructive",
         onPress: () => {
-          clearAuth();
-          navigation.dispatch(
-            CommonActions.reset({
-              index: 0,
-              routes: [{ name: "StaffLogin" }],
-            })
-          );
+          void (async () => {
+            await logoutUnregisterStaffPush();
+            clearAuth();
+            navigation.dispatch(
+              CommonActions.reset({
+                index: 0,
+                routes: [{ name: "StaffLogin" }],
+              })
+            );
+          })();
         },
       },
     ]);

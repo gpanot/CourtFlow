@@ -27,7 +27,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Venue not found" }, { status: 404 });
     }
 
-    const recognition = await faceRecognitionService.recognizeFace(imageBase64);
+    const recognition = await faceRecognitionService.recognizeFace(imageBase64, {
+      venueId: venue.id,
+    });
 
     let player: { id: string; name: string; phone: string } | null = null;
 

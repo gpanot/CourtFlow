@@ -58,7 +58,9 @@ export async function POST(request: NextRequest) {
       playerId = entry.playerId;
       playerName = entry.player.name;
     } else if (imageBase64) {
-      const result = await faceRecognitionService.recognizeFace(imageBase64);
+      const result = await faceRecognitionService.recognizeFace(imageBase64, {
+        venueId,
+      });
       if (result.resultType === "matched") {
         playerId = result.playerId!;
         playerName = result.displayName || "";

@@ -25,7 +25,9 @@ export async function POST(request: NextRequest) {
     });
     if (!session) return error("No active session found", 404);
 
-    const recognitionResult = await faceRecognitionService.recognizeFace(imageBase64);
+    const recognitionResult = await faceRecognitionService.recognizeFace(imageBase64, {
+      venueId,
+    });
 
     if (recognitionResult.resultType === "error") {
       return json({ success: false, resultType: "error", error: recognitionResult.error });

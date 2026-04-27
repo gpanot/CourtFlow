@@ -148,6 +148,7 @@ model Venue {
   checkInRecords       CheckInRecord[]
   billingRate          VenueBillingRate?
   billingInvoices      BillingInvoice[]
+  faceRecognitionLogs  FaceRecognitionLog[]
 
   @@map("venues")
 }
@@ -177,9 +178,10 @@ model Player {
   memberships       Membership[]
   bookings          Booking[]
   coachLessons      CoachLesson[]
-  faceAttempts      FaceAttempt[]
-  appAuthLogs       PlayerAppAuthLog[]
-  pendingPayments   PendingPayment[]
+  faceAttempts          FaceAttempt[]
+  appAuthLogs           PlayerAppAuthLog[]
+  pendingPayments       PendingPayment[]
+  faceRecognitionLogs   FaceRecognitionLog[]
 
   @@map("players")
 }
@@ -247,7 +249,8 @@ model StaffMember {
   coachPackages CoachPackage[]
   coachLessons  CoachLesson[]
   playerRankings PlayerRanking[]
-  pushTokens    StaffPushToken[]
+  pushTokens            StaffPushToken[]
+  faceRecognitionLogs   FaceRecognitionLog[]
 
   @@map("staff_members")
 }
@@ -616,6 +619,25 @@ model FaceAttempt {
   @@index([eventId])
   @@index([createdAt])
   @@map("face_attempts")
+}
+
+/// Live check-in / venue face recognition attempts (SearchFacesByImage scores for threshold tuning).
+model FaceRecognitionLog {
+  id              String   @id @default(cuid())
+  venueId         String   @map("venue_id")
+  playerId        String?  @map("player_id")
+  staffId         String?  @map("staff_id")
+  similarityScore Float?   @map("similarity_score")
+  threshold       Float    @map("threshold")
+  passed          Boolean
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  venue  Venue         @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  player Player?       @relation(fields: [playerId], references: [id], onDelete: SetNull)
+  staff  StaffMember?  @relation(fields: [staffId], references: [id], onDelete: SetNull)
+
+  @@index([venueId, createdAt])
+  @@map("face_recognition_logs")
 }
 
 model PendingPayment {

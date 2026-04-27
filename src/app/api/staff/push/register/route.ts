@@ -16,12 +16,22 @@ export async function POST(request: NextRequest) {
     if (!body.token?.trim()) return error("token is required", 400);
     if (!body.venueId?.trim()) return error("venueId is required", 400);
 
+    const venueId = body.venueId.trim();
+
+    const assigned = await prisma.staffVenueAssignment.findFirst({
+      where: { staffId: auth.id, venueId },
+      select: { id: true },
+    });
+    if (!assigned) {
+      return error("You do not have access to this venue", 403);
+    }
+
     await prisma.staffPushToken.upsert({
       where: {
         staffId_token: { staffId: auth.id, token: body.token },
       },
       update: {
-        venueId: body.venueId,
+        venueId,
         platform: body.platform || "android",
         deviceId: body.deviceId || null,
         active: true,
@@ -29,7 +39,7 @@ export async function POST(request: NextRequest) {
       },
       create: {
         staffId: auth.id,
-        venueId: body.venueId,
+        venueId,
         token: body.token,
         platform: body.platform || "android",
         deviceId: body.deviceId || null,

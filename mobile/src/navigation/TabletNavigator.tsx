@@ -5,11 +5,13 @@ import type { TabletStackParamList } from "./types";
 import { TabletVenueSelectScreen } from "../screens/tablet/TabletVenueSelectScreen";
 import { TabletModeSelectScreen } from "../screens/tablet/TabletModeSelectScreen";
 import { CourtPayCheckInScreen } from "../screens/tablet/CourtPayCheckInScreen";
+import { StaffPushBootstrap } from "../components/StaffPushBootstrap";
 
 const Stack = createNativeStackNavigator<TabletStackParamList>();
 
 export function TabletNavigator() {
   return (
+    <StaffPushBootstrap>
     <Stack.Navigator
       screenOptions={{ headerShown: false, gestureEnabled: false }}
     >
@@ -23,5 +25,6 @@ export function TabletNavigator() {
       />
       <Stack.Screen name="CourtPayCheckIn" component={CourtPayCheckInScreen} />
     </Stack.Navigator>
+    </StaffPushBootstrap>
   );
 }

@@ -11,6 +11,9 @@ const IS_EXPO_GO = Constants.appOwnership === "expo";
 const MAX_RETRIES = 5;
 const INITIAL_DELAY_MS = 2_000;
 
+/** Last FCM token registered with the backend — used for logout unregister while JWT is still valid. */
+let cachedStaffPushDeviceToken: string | null = null;
+
 function dbg(msg: string, ...args: unknown[]) {
   console.log(`[Push] ${msg}`, ...args);
 }
@@ -43,7 +46,6 @@ export async function getDevicePushToken(): Promise<PushTokenResult> {
     return { token: null, error: msg, debug };
   }
 
-  // Check Google Play Services availability via native module
   try {
     const gps = NativeModules.RNGooglePlayServicesAvailability;
     if (gps) {
@@ -81,7 +83,6 @@ export async function getDevicePushToken(): Promise<PushTokenResult> {
     log("Notification channel created");
   }
 
-  // Retry loop — SERVICE_NOT_AVAILABLE is transient after fresh install
   let lastErr = "";
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
@@ -110,8 +111,28 @@ export async function getDevicePushToken(): Promise<PushTokenResult> {
 }
 
 /**
- * Registers the device FCM token with the backend when push is enabled,
- * and unregisters when disabled or on logout.
+ * Call before `clearAuth()` so the unregister request still has a valid Bearer token.
+ */
+export async function logoutUnregisterStaffPush(): Promise<void> {
+  const jwt = useAuthStore.getState().token;
+  const deviceToken = cachedStaffPushDeviceToken;
+  if (!jwt || !deviceToken) {
+    cachedStaffPushDeviceToken = null;
+    return;
+  }
+  dbg("logout — unregistering push token with backend…");
+  try {
+    await api.post("/api/staff/push/unregister", { token: deviceToken });
+    dbg("✓ Push token removed server-side");
+  } catch (err) {
+    dbg("unregister at logout (best-effort) failed:", err);
+  }
+  cachedStaffPushDeviceToken = null;
+}
+
+/**
+ * Registers the device FCM token when push is enabled and a venue is selected,
+ * unregisters when disabled, and keeps `cachedStaffPushDeviceToken` for logout.
  */
 export function useStaffPushRegistration(pushEnabled: boolean) {
   const venueId = useAuthStore((s) => s.venueId);
@@ -136,6 +157,7 @@ export function useStaffPushRegistration(pushEnabled: boolean) {
         platform: Platform.OS,
       });
       registeredTokenRef.current = result.token;
+      cachedStaffPushDeviceToken = result.token;
       dbg("✓ Token registered with backend");
     } catch (err) {
       dbg("⚠ Registration API call failed:", err);
@@ -143,20 +165,24 @@ export function useStaffPushRegistration(pushEnabled: boolean) {
   }, [venueId, token]);
 
   const unregister = useCallback(async () => {
-    if (!registeredTokenRef.current) return;
+    const tok = registeredTokenRef.current;
+    if (!tok) return;
     dbg("unregistering token…");
     try {
-      await api.post("/api/staff/push/unregister", {
-        token: registeredTokenRef.current,
-      });
+      await api.post("/api/staff/push/unregister", { token: tok });
       dbg("✓ Token unregistered");
     } catch (err) {
       dbg("unregister failed (best-effort):", err);
     }
     registeredTokenRef.current = null;
+    cachedStaffPushDeviceToken = null;
   }, []);
 
   useEffect(() => {
+    if (!token) {
+      registeredTokenRef.current = null;
+      return;
+    }
     dbg("effect — pushEnabled:", pushEnabled, "venueId:", venueId, "hasToken:", !!token);
     if (pushEnabled && venueId && token) {
       void register();

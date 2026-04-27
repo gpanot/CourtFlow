@@ -25,6 +25,21 @@ export async function GET() {
     select: { id: true, name: true, faceSubjectId: true },
   });
 
+  const recentFaceRecognitionLogs = await prisma.faceRecognitionLog.findMany({
+    take: 20,
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      venueId: true,
+      playerId: true,
+      staffId: true,
+      similarityScore: true,
+      threshold: true,
+      passed: true,
+      createdAt: true,
+    },
+  });
+
   try {
     const faces = await client.send(
       new ListFacesCommand({
@@ -41,6 +56,7 @@ export async function GET() {
         confidence: f.Confidence,
       })),
       dbPlayersWithFaces: playersWithFaces,
+      recentFaceRecognitionLogs,
     });
   } catch (e) {
     return Response.json({
@@ -48,6 +64,7 @@ export async function GET() {
       enrolledFaceCount: 0,
       awsFaces: [],
       dbPlayersWithFaces: playersWithFaces,
+      recentFaceRecognitionLogs,
       error: (e as Error).message,
     });
   }

@@ -1,4 +1,4 @@
-import React, { useMemo, useLayoutEffect, useState, useEffect, useCallback, useRef } from "react";
+import React, { useMemo, useLayoutEffect, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -24,7 +24,7 @@ import { useAppColors } from "../../theme/use-app-colors";
 import { useThemeStore } from "../../stores/theme-store";
 import type { StaffStackParamList } from "../../navigation/types";
 import { api, ApiRequestError } from "../../lib/api-client";
-import { useStaffPushRegistration } from "../../hooks/useStaffPushRegistration";
+import { logoutUnregisterStaffPush } from "../../hooks/useStaffPushRegistration";
 import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
 import { TabletLanguageToggle } from "../../components/TabletLanguageToggle";
 
@@ -365,7 +365,7 @@ function PinModal({ visible, onSuccess, onCancel, styles, theme, title, subtitle
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function StaffProfileScreen() {
-  const { staffName, staffPhone, venues, clearAuth } = useAuthStore();
+  const { staffName, staffPhone, venues, clearAuth, setAuth } = useAuthStore();
   const venueId = useAuthStore((s) => s.venueId);
   const navigation =
     useNavigation<NativeStackNavigationProp<StaffStackParamList>>();
@@ -382,27 +382,19 @@ export function StaffProfileScreen() {
   const pendingRoute = useRef<keyof StaffStackParamList | null>(null);
   const [pinVisible, setPinVisible] = useState(false);
 
-  // ── Push notifications ────────────────────────────────────────────────────
-  const [pushEnabled, setPushEnabled] = useState(false);
+  // ── Push notifications (registration runs app-wide via StaffPushBootstrap) ─
+  const pushEnabled = useAuthStore((s) => s.pushNotificationsEnabled);
   const [pushToggling, setPushToggling] = useState(false);
-  useStaffPushRegistration(pushEnabled);
-
-  useEffect(() => {
-    api
-      .get<{ pushNotificationsEnabled: boolean }>("/api/auth/staff-me")
-      .then((data) => setPushEnabled(data.pushNotificationsEnabled))
-      .catch(() => {});
-  }, []);
 
   const handleTogglePush = useCallback(async (next: boolean) => {
-    setPushEnabled(next);
+    setAuth({ pushNotificationsEnabled: next });
     setPushToggling(true);
     try {
       await api.post("/api/staff/push/preferences", {
         pushNotificationsEnabled: next,
       });
     } catch (err) {
-      setPushEnabled(!next);
+      setAuth({ pushNotificationsEnabled: !next });
       const detail =
         err instanceof ApiRequestError
           ? err.message
@@ -413,7 +405,7 @@ export function StaffProfileScreen() {
     } finally {
       setPushToggling(false);
     }
-  }, []);
+  }, [setAuth]);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -444,11 +436,14 @@ export function StaffProfileScreen() {
         text: t("profileLogOut"),
         style: "destructive",
         onPress: () => {
-          lock(); // reset PIN session on logout
-          clearAuth();
-          navigation.dispatch(
-            CommonActions.reset({ index: 0, routes: [{ name: "StaffLogin" as never }] })
-          );
+          void (async () => {
+            lock(); // reset PIN session on logout
+            await logoutUnregisterStaffPush();
+            clearAuth();
+            navigation.dispatch(
+              CommonActions.reset({ index: 0, routes: [{ name: "StaffLogin" as never }] })
+            );
+          })();
         },
       },
     ]);

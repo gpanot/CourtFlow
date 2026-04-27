@@ -35,23 +35,40 @@ export type StaffPushSendResult =
   | { ok: true; targets: number; delivered: number }
   | { ok: false; reason: "no_firebase" | "no_tokens"; targets: number };
 
+export type SendPushToVenueStaffOptions = {
+  /**
+   * When true, delivers to all active staff device tokens (every venue).
+   * Use only for intentional system-wide alerts — default is venue-scoped.
+   */
+  broadcast?: boolean;
+};
+
 /**
- * Send a push notification to all active staff devices registered for a venue
- * that have pushNotificationsEnabled.
+ * Send a push notification to active staff devices with push enabled.
+ * By default only tokens whose `venueId` matches (payment / venue events).
+ * Pass `{ broadcast: true }` only for intentional cross-venue system alerts.
  */
 export async function sendPushToVenueStaff(
   venueId: string,
-  payload: StaffPushPayload
+  payload: StaffPushPayload,
+  options?: SendPushToVenueStaffOptions
 ): Promise<StaffPushSendResult> {
   const app = getFirebaseApp();
   if (!app) return { ok: false, reason: "no_firebase", targets: 0 };
 
+  const broadcast = options?.broadcast === true;
+
   const tokens = await prisma.staffPushToken.findMany({
-    where: {
-      venueId,
-      active: true,
-      staff: { pushNotificationsEnabled: true },
-    },
+    where: broadcast
+      ? {
+          active: true,
+          staff: { pushNotificationsEnabled: true },
+        }
+      : {
+          venueId,
+          active: true,
+          staff: { pushNotificationsEnabled: true },
+        },
     select: { id: true, token: true },
   });
 

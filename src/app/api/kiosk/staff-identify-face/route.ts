@@ -9,7 +9,7 @@ import { faceRecognitionService } from "@/lib/face-recognition";
  */
 export async function POST(request: NextRequest) {
   try {
-    requireStaff(request.headers);
+    const auth = requireStaff(request.headers);
     const body = await parseBody<{ venueId: string; imageBase64: string }>(request);
     const { venueId, imageBase64 } = body;
 
@@ -27,7 +27,10 @@ export async function POST(request: NextRequest) {
       return error("No active session found", 404);
     }
 
-    const recognitionResult = await faceRecognitionService.recognizeFace(imageBase64);
+    const recognitionResult = await faceRecognitionService.recognizeFace(imageBase64, {
+      venueId: venueId.trim(),
+      staffId: auth.id,
+    });
 
     if (recognitionResult.resultType === "error" || !recognitionResult.success) {
       return json({

@@ -6,7 +6,7 @@ import { useSessionStore } from "@/stores/session-store";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
-import { LayoutDashboard, MapPin, Users, UserCircle, BarChart3, Monitor, Banknote, Crown, CalendarDays, GraduationCap, LogOut, Menu, X, CreditCard, Receipt } from "lucide-react";
+import { LayoutDashboard, MapPin, Users, UserCircle, BarChart3, Monitor, Banknote, Crown, CalendarDays, GraduationCap, LogOut, Menu, X, CreditCard, Receipt, ScanFace } from "lucide-react";
 import { SetupWizardBanner } from "@/components/setup-wizard-banner";
 
 const navItems = [
@@ -22,6 +22,7 @@ const navItems = [
   { href: "/admin/payroll", label: "Payroll", icon: Banknote },
   { href: "/admin/players", label: "Players", icon: UserCircle },
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/admin/face-recognition-test", label: "Face Recognition Test", icon: ScanFace },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

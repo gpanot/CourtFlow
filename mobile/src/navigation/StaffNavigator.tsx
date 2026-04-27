@@ -23,6 +23,7 @@ import { useAppColors } from "../theme/use-app-colors";
 import { useAuthStore } from "../stores/auth-store";
 import { usePaymentNotificationSound } from "../hooks/usePaymentNotificationSound";
 import { useTabletKioskLocale } from "../hooks/useTabletKioskLocale";
+import { StaffPushBootstrap } from "../components/StaffPushBootstrap";
 
 const Stack = createNativeStackNavigator<StaffStackParamList>();
 const Tab = createMaterialTopTabNavigator<StaffTabParamList>();
@@ -83,6 +84,7 @@ function StaffTabs() {
 export function StaffNavigator() {
   const { t } = useTabletKioskLocale();
   return (
+    <StaffPushBootstrap>
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="VenueSelect" component={VenueSelectScreen} />
       <Stack.Screen name="StaffTabs" component={StaffTabs} />
@@ -137,5 +139,6 @@ export function StaffNavigator() {
         options={{ headerShown: true }}
       />
     </Stack.Navigator>
+    </StaffPushBootstrap>
   );
 }

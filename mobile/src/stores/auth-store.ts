@@ -12,6 +12,8 @@ interface AuthState {
   staffPhone: string | null;
   venueId: string | null;
   venues: Venue[];
+  /** Synced from `/api/auth/staff-me` — drives FCM registration when staff selects a venue. */
+  pushNotificationsEnabled: boolean;
   onboardingCompleted: boolean;
   onboardingSeen: boolean;
   hydrated: boolean;
@@ -35,6 +37,7 @@ const STATE_KEYS: (keyof AuthState)[] = [
   "staffPhone",
   "venueId",
   "venues",
+  "pushNotificationsEnabled",
   "onboardingCompleted",
   "onboardingSeen",
 ];
@@ -47,6 +50,7 @@ const initialState: AuthState = {
   staffPhone: null,
   venueId: null,
   venues: [],
+  pushNotificationsEnabled: false,
   onboardingCompleted: false,
   onboardingSeen: false,
   hydrated: false,
