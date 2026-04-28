@@ -9,11 +9,9 @@ import {
   ListFacesCommand,
   DetectFacesCommand,
 } from "@aws-sdk/client-rekognition";
-import { FACE_MATCH_THRESHOLD } from "@/lib/rekognition-config";
+import { COLLECTION_ID, FACE_MATCH_THRESHOLD } from "@/lib/rekognition-config";
 
 export { FACE_MATCH_THRESHOLD } from "@/lib/rekognition-config";
-
-const COLLECTION_ID = process.env.AWS_REKOGNITION_COLLECTION || "courtflow-players";
 
 export const USE_MOCK_SERVICE =
   !process.env.AWS_ACCESS_KEY_ID ||
@@ -35,10 +33,27 @@ console.log(
   !!process.env.AWS_ACCESS_KEY_ID
 );
 console.log("[FaceRecognition] AWS Region:", process.env.AWS_REGION);
-console.log(
-  "[FaceRecognition] Collection:",
-  process.env.AWS_REKOGNITION_COLLECTION
-);
+console.log(`[FaceRecognition] Collection: ${COLLECTION_ID}`);
+console.log(`[FaceRecognition] Environment: ${process.env.NODE_ENV}`);
+
+if (
+  process.env.NODE_ENV === "production" &&
+  COLLECTION_ID.includes("staging")
+) {
+  console.error(
+    "[FaceRecognition] CRITICAL: Production is pointed at a staging collection. Check AWS_REKOGNITION_COLLECTION env var."
+  );
+}
+
+if (
+  process.env.NODE_ENV !== "production" &&
+  COLLECTION_ID.includes("prod") &&
+  !COLLECTION_ID.includes("staging")
+) {
+  console.warn(
+    "[FaceRecognition] WARNING: Non-production environment is pointed at a prod collection. Check AWS_REKOGNITION_COLLECTION env var."
+  );
+}
 
 const rekognition = USE_MOCK_SERVICE
   ? null

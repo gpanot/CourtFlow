@@ -36,7 +36,7 @@ This document describes how CourtFlow integrates **Amazon Rekognition** for play
 | `ListFaces` | Health checks (`checkHealth`) and diagnostics (`/api/test-rekognition`). |
 | `CompareFaces` | **Not** used for production check-in. Exposed only for diagnostics in `src/lib/rekognition-compare.ts`. |
 
-**Collection ID**: `process.env.AWS_REKOGNITION_COLLECTION` or default `courtflow-players`.
+**Collection ID**: `process.env.AWS_REKOGNITION_COLLECTION` or fallback to `courtflow-players-prod` in production / `courtflow-players-staging` in non-production (from `src/lib/rekognition-config.ts`).
 
 **Region**: `process.env.AWS_REGION` or default `ap-southeast-1`.
 
@@ -51,13 +51,22 @@ Defined in `.env.example`:
 | `AWS_ACCESS_KEY_ID` | IAM access key used by the server SDK. |
 | `AWS_SECRET_ACCESS_KEY` | IAM secret key. |
 | `AWS_REGION` | Rekognition region (must match where the collection lives). |
-| `AWS_REKOGNITION_COLLECTION` | Rekognition collection id (alphanumeric and limited punctuation per AWS rules). |
+| `AWS_REKOGNITION_COLLECTION` | Rekognition collection id override (recommended explicit values: `courtflow-players-prod` in prod and `courtflow-players-staging` in staging). If unset, app fallback uses `courtflow-players-prod` when `NODE_ENV=production`, otherwise `courtflow-players-staging`. |
 
 Optional (see `src/lib/rekognition-config.ts`):
 
 | Variable | Description |
 |----------|-------------|
 | `AWS_REKOGNITION_FACE_MATCH_THRESHOLD` | **Active** cutoff for **`SearchFacesByImage`** in `src/lib/face-recognition.ts`: `FaceMatchThreshold` is **`FACE_MATCH_THRESHOLD`** from `rekognition-config.ts`, driven by this env (default **85**). Compare diagnostics use the same export. The former hardcoded `FaceMatchThreshold: 85` has been removed. Production (Railway) currently uses **`82`**. |
+
+### Environment isolation note (important)
+
+- Production and staging **must use separate Rekognition collections** to avoid duplicate enrollments and cross-environment mismatch results.
+- Recommended naming convention:
+  - Prod: `courtflow-players-prod`
+  - Staging: `courtflow-players-staging`
+- `ensureCollection()` in `src/lib/face-recognition.ts` will automatically create the configured collection on first use if it does not already exist in AWS.
+- After switching from an old shared collection, existing enrolled players will not be found in the new collection until re-enrolled. Re-enroll production users by running `npm run enroll:faces` against the prod database. Staging can typically start fresh.
 
 ---
 
