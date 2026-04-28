@@ -34,6 +34,7 @@ import { useAuthStore } from "../../stores/auth-store";
 import { useThemeStore, ACCENT_MAP } from "../../stores/theme-store";
 import { useSocket } from "../../hooks/useSocket";
 import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
+import { useRegistrationCamera } from "../../hooks/useRegistrationCamera";
 import {
   SelfCheckInReturningFaceScanner,
   type ReturningFrameResult,
@@ -193,11 +194,6 @@ export function CourtPayCheckInScreen({
   >(null);
   const [faceBase64, setFaceBase64] = useState<string | null>(null);
   const [regCheckingFace, setRegCheckingFace] = useState(false);
-  const [regCaptureBusy, setRegCaptureBusy] = useState(false);
-  /** 3–1 overlay inside the registration camera circle; null = not counting */
-  const [regFaceCountdown, setRegFaceCountdown] = useState<number | null>(null);
-  /** Bumps when auto-capture fails so the countdown effect restarts */
-  const [regFaceCaptureSession, setRegFaceCaptureSession] = useState(0);
   const [sessionFee, setSessionFee] = useState<number>(0);
   const [showSubscriptionsInFlow, setShowSubscriptionsInFlow] = useState(true);
   const [packages, setPackages] = useState<SubscriptionPackage[]>([]);
@@ -228,10 +224,22 @@ export function CourtPayCheckInScreen({
   const confirmedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const exhaustedOfferIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const exhaustedOfferScrollRef = useRef<ScrollView | null>(null);
-  const regCameraRef = useRef<CameraView | null>(null);
-  const regCameraReady = useRef(false);
-  const regCaptureInFlight = useRef(false);
   const [permission, requestPermission] = useCameraPermissions();
+  const {
+    cameraRef: regCameraRef,
+    onCameraReady: onRegCameraReady,
+    countdown: regFaceCountdown,
+    captureBusy: regCaptureBusy,
+    resetCamera: resetRegistrationCamera,
+  } = useRegistrationCamera({
+    active: step === "reg_face_capture",
+    permissionGranted: !!permission?.granted,
+    onPhotoCaptured: (base64) => {
+      setRegisterPhotoQualityMessage("");
+      setFaceBase64(base64);
+      setStep("reg_face_preview");
+    },
+  });
 
   // ── Block OS back button / swipe-back on this kiosk screen ─────────────────
   useEffect(() => {
@@ -350,7 +358,6 @@ export function CourtPayCheckInScreen({
       clearInterval(exhaustedOfferIntervalRef.current);
       exhaustedOfferIntervalRef.current = null;
     }
-    regCameraReady.current = false;
     setStep("home");
     setPhoneInput("");
     setPhoneError("");
@@ -360,11 +367,8 @@ export function CourtPayCheckInScreen({
     setGender(null);
     setSkillLevel(null);
     setFaceBase64(null);
+    resetRegistrationCamera();
     setRegCheckingFace(false);
-    setRegCaptureBusy(false);
-    setRegFaceCountdown(null);
-    setRegFaceCaptureSession(0);
-    regCaptureInFlight.current = false;
     setSelectedPkg(null);
     setPlayer(null);
     setIsNewPlayer(false);
@@ -385,7 +389,7 @@ export function CourtPayCheckInScreen({
     setConfirmedSeconds(CONFIRMED_AUTO_HOME_SEC);
     setExhaustedOfferSeconds(EXHAUSTED_OFFER_AUTO_HOME_SEC);
     refreshPaymentSettings();
-  }, [refreshPaymentSettings]);
+  }, [refreshPaymentSettings, resetRegistrationCamera]);
 
   // ── Idle timer ────────────────────────────────────────────────────────────
   const restartIdleTimer = useCallback(() => {
@@ -630,78 +634,6 @@ export function CourtPayCheckInScreen({
     goToSubscriptionOrPay(phonePreview, false, phoneActiveSub);
   };
 
-  // ── Registration face capture ─────────────────────────────────────────────
-  const captureRegistrationPhoto = useCallback(async () => {
-    if (!regCameraRef.current || !regCameraReady.current || regCaptureInFlight.current) return;
-    regCaptureInFlight.current = true;
-    setRegCaptureBusy(true);
-    try {
-      const photo = await regCameraRef.current.takePictureAsync({
-        quality: 0.72,
-        base64: true,
-      });
-      if (photo?.base64) {
-        setRegisterPhotoQualityMessage("");
-        // TODO(courtpay): Apply the same background-blur preprocessing as web tablet
-        // capture (preview-face-presence bounding box + preserve-face region) using
-        // expo-image-manipulator or a canvas equivalent before enrollment submission.
-        setFaceBase64(photo.base64);
-        setStep("reg_face_preview");
-      } else {
-        setRegFaceCaptureSession((s) => s + 1);
-      }
-    } finally {
-      regCaptureInFlight.current = false;
-      setRegCaptureBusy(false);
-    }
-  }, []);
-
-  // Tablet first-time flow: 3s countdown inside the circle, then auto-capture
-  useEffect(() => {
-    if (step !== "reg_face_capture" || !permission?.granted) {
-      setRegFaceCountdown(null);
-      return;
-    }
-
-    let cancelled = false;
-    let waitIv: ReturnType<typeof setInterval> | null = null;
-    let countIv: ReturnType<typeof setInterval> | null = null;
-
-    const clearTimers = () => {
-      if (waitIv) clearInterval(waitIv);
-      if (countIv) clearInterval(countIv);
-      waitIv = countIv = null;
-    };
-
-    waitIv = setInterval(() => {
-      if (cancelled) return;
-      if (!regCameraReady.current) return;
-      if (waitIv) clearInterval(waitIv);
-      waitIv = null;
-
-      let n = 3;
-      setRegFaceCountdown(n);
-      countIv = setInterval(() => {
-        if (cancelled) return;
-        n -= 1;
-        if (n <= 0) {
-          if (countIv) clearInterval(countIv);
-          countIv = null;
-          setRegFaceCountdown(null);
-          if (!cancelled) void captureRegistrationPhoto();
-        } else {
-          setRegFaceCountdown(n);
-        }
-      }, 1000);
-    }, 50);
-
-    return () => {
-      cancelled = true;
-      clearTimers();
-      setRegFaceCountdown(null);
-    };
-  }, [step, permission?.granted, regFaceCaptureSession, captureRegistrationPhoto]);
-
   const handleCaptureRegistrationFace = async () => {
     if (!faceBase64) return;
     setRegCheckingFace(true);
@@ -908,9 +840,9 @@ export function CourtPayCheckInScreen({
   const handleRegisterPhotoQualityTryAgain = useCallback(() => {
     setRegisterPhotoQualityMessage("");
     setFaceBase64(null);
-    regCameraReady.current = false;
+    resetRegistrationCamera();
     setStep("reg_face_capture");
-  }, []);
+  }, [resetRegistrationCamera]);
 
   const handleRegisterAndPay = async (packageId?: string) => {
     if (!venueId || !faceBase64 || !name.trim() || !gender || !skillLevel) {
@@ -1407,9 +1339,7 @@ export function CourtPayCheckInScreen({
                     style={styles.regCameraFill}
                     facing="front"
                     mirror
-                    onCameraReady={() => {
-                      regCameraReady.current = true;
-                    }}
+                    onCameraReady={onRegCameraReady}
                   />
                   {regFaceCountdown !== null ? (
                     <View
@@ -1463,7 +1393,7 @@ export function CourtPayCheckInScreen({
                 style={[styles.regRetakeBtn, isLight && styles.regRetakeBtnLight]}
                 onPress={() => {
                   setFaceBase64(null);
-                  regCameraReady.current = false;
+                  resetRegistrationCamera();
                   setStep("reg_face_capture");
                 }}
                 activeOpacity={0.85}
