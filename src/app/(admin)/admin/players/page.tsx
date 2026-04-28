@@ -5,7 +5,7 @@ import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { PlayerAvatarThumb } from "@/components/player-avatar-thumb";
 import { PlayerDetailFaceRecognition } from "@/components/admin/player-detail-face-recognition";
-import { Search, X, SlidersHorizontal, Users, UserPlus, Clock, Activity, Hourglass, Gauge, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Gamepad2, Star, MapPin, CalendarDays, Timer, Plus, Pencil, Trash2, Fingerprint, Smartphone } from "lucide-react";
+import { Search, X, SlidersHorizontal, Users, UserPlus, Clock, Activity, Hourglass, Gauge, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Gamepad2, Star, MapPin, CalendarDays, Timer, Plus, Pencil, Trash2, Fingerprint, Smartphone, Download } from "lucide-react";
 
 type SortKey = "name" | "phone" | "gender" | "skillLevel" | "totalSessions" | "totalGames" | "totalPlayMinutes" | "totalWaitMinutes" | "waitPlayRatio" | "venues";
 type SortDir = "asc" | "desc";
@@ -1254,6 +1254,33 @@ function PlayerDetailPanel({
     facePhotoPath?: string | null;
   }) => void;
 }) {
+  const handleDownloadCheckInPhoto = useCallback(async () => {
+    const src = player.facePhotoPath;
+    if (!src?.trim()) return;
+    try {
+      const res = await fetch(src);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const pathPart = src.split("?")[0] ?? src;
+      const extMatch = /\.([a-zA-Z0-9]+)$/.exec(pathPart);
+      const ext = extMatch ? extMatch[1].toLowerCase() : "jpg";
+      const safeName =
+        player.name.replace(/[^\w\s.-]/g, "").trim().replace(/\s+/g, "_") || "player";
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = `check-in_${safeName}_${player.id.slice(0, 12)}.${ext}`;
+      a.rel = "noopener";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objectUrl);
+    } catch (e) {
+      console.error("[check-in photo download]", e);
+      alert("Could not download the check-in photo. See the browser console for details.");
+    }
+  }, [player.facePhotoPath, player.id, player.name]);
+
   const avgFeedback = sessions.filter((s) => s.feedback).length > 0
     ? (sessions.reduce((sum, s) => sum + (s.feedback?.experience ?? 0), 0) / sessions.filter((s) => s.feedback).length).toFixed(1)
     : null;
@@ -1310,7 +1337,20 @@ function PlayerDetailPanel({
         <div className="p-4 space-y-4">
           {player.facePhotoPath && (
             <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
-              <p className="text-[11px] text-neutral-500 mb-2">Check-in photo (first face registration)</p>
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <p className="text-[11px] text-neutral-500 leading-snug">
+                  Check-in photo (first face registration)
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handleDownloadCheckInPhoto()}
+                  className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1 text-[11px] font-medium text-neutral-300 hover:bg-neutral-700 hover:text-white"
+                  title="Download check-in photo"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  Download
+                </button>
+              </div>
               {/* Served from Express/static /uploads — same origin as admin */}
               <CheckInFacePhotoBlock src={player.facePhotoPath} alt={`${player.name} check-in`} />
             </div>

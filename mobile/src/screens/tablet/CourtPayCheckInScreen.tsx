@@ -642,6 +642,9 @@ export function CourtPayCheckInScreen({
       });
       if (photo?.base64) {
         setRegisterPhotoQualityMessage("");
+        // TODO(courtpay): Apply the same background-blur preprocessing as web tablet
+        // capture (preview-face-presence bounding box + preserve-face region) using
+        // expo-image-manipulator or a canvas equivalent before enrollment submission.
         setFaceBase64(photo.base64);
         setStep("reg_face_preview");
       } else {

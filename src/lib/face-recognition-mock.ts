@@ -90,8 +90,19 @@ class MockFaceRecognitionService {
   /** CourtPay staff capture — assume a face is present in mock mode. */
   async detectFacePresentForCourtPayPreview(
     _imageBase64: string
-  ): Promise<{ faceDetected: boolean }> {
-    return { faceDetected: true };
+  ): Promise<{
+    faceDetected: boolean;
+    boundingBox?: { left: number; top: number; width: number; height: number };
+  }> {
+    return {
+      faceDetected: true,
+      boundingBox: {
+        left: 0.32,
+        top: 0.2,
+        width: 0.36,
+        height: 0.52,
+      },
+    };
   }
 
   /**

@@ -11,6 +11,10 @@ import { useSuccessChime } from "@/hooks/use-success-chime";
 import { useSocket } from "@/hooks/use-socket";
 import { joinVenue } from "@/lib/socket-client";
 import { api, ApiRequestError } from "@/lib/api-client";
+import {
+  blurBackgroundKeepFaceSharp,
+  type RelativeFaceBoundingBox,
+} from "@/lib/courtpay-face-blur";
 import { useTranslation } from "react-i18next";
 import staffI18n from "@/i18n/staff-i18n";
 import { SubscriptionOffer } from "./SubscriptionOffer";
@@ -497,9 +501,28 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
     if (!frame || regFaceChecking) return;
     setRegFaceChecking(true);
     try {
+      let processedFrame = frame;
+      try {
+        const preview = await api.post<{
+          faceDetected?: boolean;
+          boundingBox?: RelativeFaceBoundingBox;
+        }>("/api/courtpay/preview-face-presence", {
+          imageBase64: frame,
+          returnBoundingBox: true,
+        });
+        if (preview.faceDetected && preview.boundingBox) {
+          processedFrame = await blurBackgroundKeepFaceSharp(frame, preview.boundingBox, {
+            blurPx: 8,
+            facePaddingRatio: 0.2,
+          });
+        }
+      } catch {
+        // Fallback to the original image without blocking enrollment.
+      }
+
       const check = await api.post<{ existing: boolean; playerName?: string | null }>(
         "/api/courtpay/check-face",
-        { imageBase64: frame }
+        { imageBase64: processedFrame }
       );
       if (check.existing) {
         cameraRef.current?.stopCamera();
@@ -509,7 +532,7 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
       }
 
       setRegistrationQualityMessage("");
-      setRegImage(frame);
+      setRegImage(processedFrame);
       cameraRef.current?.stopCamera();
       goTo("reg_face_preview");
     } catch {

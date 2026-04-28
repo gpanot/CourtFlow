@@ -123,6 +123,13 @@ export interface FaceEnrollmentResult {
   qualityError?: boolean;
 }
 
+export interface RelativeFaceBoundingBox {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
 // ── Helper: base64 → Uint8Array (AWS SDK needs raw bytes) ─────────────────
 function base64ToBytes(base64: string): Uint8Array {
   return Buffer.from(base64, "base64");
@@ -340,7 +347,7 @@ class FaceRecognitionService {
    */
   async detectFacePresentForCourtPayPreview(
     imageBase64: string
-  ): Promise<{ faceDetected: boolean }> {
+  ): Promise<{ faceDetected: boolean; boundingBox?: RelativeFaceBoundingBox }> {
     if (USE_MOCK_SERVICE) {
       return mockFaceRecognitionService.detectFacePresentForCourtPayPreview(imageBase64);
     }
@@ -356,8 +363,32 @@ class FaceRecognitionService {
           Image: { Bytes: bytes },
         })
       );
-      const n = response.FaceDetails?.length ?? 0;
-      return { faceDetected: n >= 1 };
+      const faces = response.FaceDetails ?? [];
+      if (faces.length < 1) {
+        return { faceDetected: false };
+      }
+
+      const bestFace = faces.reduce((best, current) => {
+        return (current.Confidence ?? 0) > (best.Confidence ?? 0) ? current : best;
+      });
+      const bbox = bestFace.BoundingBox;
+      if (
+        typeof bbox?.Left === "number" &&
+        typeof bbox?.Top === "number" &&
+        typeof bbox?.Width === "number" &&
+        typeof bbox?.Height === "number"
+      ) {
+        return {
+          faceDetected: true,
+          boundingBox: {
+            left: bbox.Left,
+            top: bbox.Top,
+            width: bbox.Width,
+            height: bbox.Height,
+          },
+        };
+      }
+      return { faceDetected: true };
     } catch (err) {
       console.error("[Rekognition] CourtPay preview face presence:", err);
       return { faceDetected: true };

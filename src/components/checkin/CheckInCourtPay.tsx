@@ -12,6 +12,10 @@ import { CameraCapture, type CameraCaptureHandle, mapCameraError } from "@/compo
 import { acquireBrowserCameraStream, stopMediaStream } from "@/lib/browser-camera";
 import { parseCourtPaySkillLevel, type CourtPaySkillLevelUI } from "@/modules/courtpay/lib/skill-level-ui";
 import {
+  blurBackgroundKeepFaceSharp,
+  type RelativeFaceBoundingBox,
+} from "@/lib/courtpay-face-blur";
+import {
   CourtPayAwaitingPaymentStaff,
   COURTPAY_SESSION_PARTY_MAX,
 } from "@/components/checkin/court-pay-awaiting-payment-staff";
@@ -429,7 +433,26 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
         setError(t("staff.courtPayCheckIn.tryAgainGeneric"));
         return;
       }
-      setFaceBase64(b64);
+      let processed = b64;
+      try {
+        const preview = await api.post<{
+          faceDetected?: boolean;
+          boundingBox?: RelativeFaceBoundingBox;
+        }>("/api/courtpay/preview-face-presence", {
+          imageBase64: b64,
+          returnBoundingBox: true,
+        });
+        if (preview.faceDetected && preview.boundingBox) {
+          processed = await blurBackgroundKeepFaceSharp(b64, preview.boundingBox, {
+            blurPx: 8,
+            facePaddingRatio: 0.2,
+          });
+        }
+      } catch {
+        // Fallback to original image if preview API is unavailable.
+      }
+
+      setFaceBase64(processed);
       stopNewCamera();
     } finally {
       setNewCaptureBusy(false);
