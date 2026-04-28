@@ -1,346 +1,744 @@
 {
-  "dryRun": true,
-  "collectionId": "courtflow-players",
-  "at": "2026-04-28T00:32:18.329Z",
-  "totalPlayersScanned": 37,
-  "alreadyValidInAws": 36,
+  "dryRun": false,
+  "collectionId": "courtflow-players-prod",
+  "at": "2026-04-28T10:08:08.969Z",
+  "totalPlayersScanned": 81,
+  "alreadyValidInAws": 0,
   "noPhotoAvailable": 0,
-  "attemptedEnrollment": 1,
-  "dryRunPhotoLoadOk": 0,
-  "dryRunPhotoLoadFailed": 1,
+  "attemptedEnrollment": 81,
+  "successCount": 47,
+  "failNoFace": 0,
+  "failPhotoLoad": 0,
+  "failAws": 34,
   "results": [
+    {
+      "playerId": "cmohwexy00000pa01xdtwbbrt",
+      "name": "Guigui",
+      "phone": "94246378",
+      "facePhotoPath": "/uploads/players/cmohwexy00000pa01xdtwbbrt.jpg",
+      "status": "enrolled",
+      "newFaceSubjectId": "87185665-79c6-449a-a425-36b447db5c9a",
+      "reason": "IndexFaces + DB update OK"
+    },
     {
       "playerId": "cmodoykjq001zo801si9g95io",
       "name": "Cincin",
       "phone": "55555555",
       "facePhotoPath": "/uploads/players/cmodoykjq001zo801si9g95io.jpg",
-      "status": "skipped",
-      "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "status": "enrolled",
+      "newFaceSubjectId": "6855bb1b-4a9a-49b1-a523-ae75291e3ae5",
+      "reason": "IndexFaces + DB update OK"
     },
     {
       "playerId": "cmodpv2f6005ho8011r04k24u",
       "name": "Hien",
       "phone": "0908661910",
       "facePhotoPath": "/uploads/players/cmodpv2f6005ho8011r04k24u.jpg",
-      "status": "skipped",
+      "status": "enrolled",
+      "newFaceSubjectId": "d71884f5-e381-4383-a2f3-894696187662",
+      "reason": "IndexFaces + DB update OK"
+    },
+    {
+      "playerId": "cmohzurxw004ipa017diiof6j",
+      "name": "Hai",
+      "phone": "0796364622",
+      "facePhotoPath": "/uploads/players/cmohzurxw004ipa017diiof6j.jpg",
+      "status": "failed",
       "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
+    },
+    {
+      "playerId": "cmoi5rxp8001vp701lo91bldr",
+      "name": "Danh",
+      "phone": "0987092552",
+      "facePhotoPath": "/uploads/players/cmoi5rxp8001vp701lo91bldr.jpg",
+      "status": "failed",
+      "newFaceSubjectId": "",
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
     },
     {
       "playerId": "cmogrtxh5001cpd01f9w8iq1b",
       "name": "Nhung Nguyen",
       "phone": "0847220497",
       "facePhotoPath": "/uploads/players/cmogrtxh5001cpd01f9w8iq1b.jpg",
-      "status": "skipped",
+      "status": "enrolled",
+      "newFaceSubjectId": "55013ce7-f4b2-43eb-82f3-4d2d888884ab",
+      "reason": "IndexFaces + DB update OK"
+    },
+    {
+      "playerId": "cmoi1olnp0000p701wnuz4v1t",
+      "name": "Lieu",
+      "phone": "0902742703",
+      "facePhotoPath": "/uploads/players/cmoi1olnp0000p701wnuz4v1t.jpg",
+      "status": "failed",
       "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
+    },
+    {
+      "playerId": "cmoi6w2iu004np7017esiedwr",
+      "name": "Amish",
+      "phone": "00",
+      "facePhotoPath": "/uploads/players/cmoi6w2iu004np7017esiedwr.jpg",
+      "status": "failed",
+      "newFaceSubjectId": "",
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
     },
     {
       "playerId": "cmodp2ht70026o8012i80az2w",
       "name": "Qien qien",
       "phone": "0909784984",
       "facePhotoPath": "/uploads/players/cmodp2ht70026o8012i80az2w.jpg",
-      "status": "skipped",
-      "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "status": "enrolled",
+      "newFaceSubjectId": "db221af3-0504-4a69-a4e0-bee22a1f9f89",
+      "reason": "IndexFaces + DB update OK"
     },
     {
       "playerId": "cmodq1uir005qo801ju3rv62n",
       "name": "Thenamne",
       "phone": "0385499876",
       "facePhotoPath": "/uploads/players/cmodq1uir005qo801ju3rv62n.jpg",
-      "status": "skipped",
+      "status": "failed",
       "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
+    },
+    {
+      "playerId": "cmohz3mcc001lpa01k8apte7n",
+      "name": "Nhung tap drop",
+      "phone": "0907534453",
+      "facePhotoPath": "/uploads/players/cmohz3mcc001lpa01k8apte7n.jpg",
+      "status": "failed",
+      "newFaceSubjectId": "",
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
     },
     {
       "playerId": "cmogs9t29001jpd01rgucfxb6",
       "name": "🌼 TA 🌼",
       "phone": "0977041293",
       "facePhotoPath": "/uploads/players/cmogs9t29001jpd01rgucfxb6.jpg",
-      "status": "skipped",
+      "status": "failed",
       "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
+    },
+    {
+      "playerId": "cmohzw3vv004ppa01dnliw1pa",
+      "name": "Hang",
+      "phone": "0938395121",
+      "facePhotoPath": "/uploads/players/cmohzw3vv004ppa01dnliw1pa.jpg",
+      "status": "failed",
+      "newFaceSubjectId": "",
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
+    },
+    {
+      "playerId": "cmoi5u7g00022p701rrxozrcb",
+      "name": "Hero",
+      "phone": "0982717070",
+      "facePhotoPath": "/uploads/players/cmoi5u7g00022p701rrxozrcb.jpg",
+      "status": "enrolled",
+      "newFaceSubjectId": "d4e42d8f-9119-4dd0-991b-639f13183c23",
+      "reason": "IndexFaces + DB update OK"
+    },
+    {
+      "playerId": "cmohzyl6x004upa0100rd6mr8",
+      "name": "Tuyen Doan",
+      "phone": "0815348883",
+      "facePhotoPath": "/uploads/players/cmohzyl6x004upa0100rd6mr8.jpg",
+      "status": "failed",
+      "newFaceSubjectId": "",
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
+    },
+    {
+      "playerId": "cmoi1rvzv0007p701zmcx9lng",
+      "name": "Bunny",
+      "phone": "0936800148",
+      "facePhotoPath": "/uploads/players/cmoi1rvzv0007p701zmcx9lng.jpg",
+      "status": "enrolled",
+      "newFaceSubjectId": "39dfdc36-2366-4917-8947-1368ca381e25",
+      "reason": "IndexFaces + DB update OK"
+    },
+    {
+      "playerId": "cmoi5wpl2002gp701m8x53y1p",
+      "name": "Khanh",
+      "phone": "0987503944",
+      "facePhotoPath": "/uploads/players/cmoi5wpl2002gp701m8x53y1p.jpg",
+      "status": "failed",
+      "newFaceSubjectId": "",
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
+    },
+    {
+      "playerId": "cmoi77gq0004yp701tk4h56cd",
+      "name": "Phianh",
+      "phone": "0907336399",
+      "facePhotoPath": "/uploads/players/cmoi77gq0004yp701tk4h56cd.jpg",
+      "status": "enrolled",
+      "newFaceSubjectId": "32581e53-24f5-4936-8549-cfd24f68a7f1",
+      "reason": "IndexFaces + DB update OK"
     },
     {
       "playerId": "cmodp57rp002do8012i5i6xsl",
       "name": "Diem",
       "phone": "0906801374",
       "facePhotoPath": "/uploads/players/cmodp57rp002do8012i5i6xsl.jpg",
-      "status": "skipped",
-      "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "status": "enrolled",
+      "newFaceSubjectId": "edbcc410-4740-47b9-8219-6d1806a117ad",
+      "reason": "IndexFaces + DB update OK"
     },
     {
       "playerId": "cmodqd74m005xo801psmnthl4",
       "name": "Dau elbow",
       "phone": "0387599399",
       "facePhotoPath": "/uploads/players/cmodqd74m005xo801psmnthl4.jpg",
-      "status": "skipped",
+      "status": "enrolled",
+      "newFaceSubjectId": "db420a09-f5fe-4b9a-9086-6bab9ac051bc",
+      "reason": "IndexFaces + DB update OK"
+    },
+    {
+      "playerId": "cmohz5qul0026pa01t2cgyzex",
+      "name": "Luan Vo",
+      "phone": "0906133331",
+      "facePhotoPath": "/uploads/players/cmohz5qul0026pa01t2cgyzex.jpg",
+      "status": "failed",
       "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
     },
     {
       "playerId": "cmogsp4v9001opd01gn3qdqax",
       "name": "Zach",
       "phone": "0789212985",
       "facePhotoPath": "/uploads/players/cmogsp4v9001opd01gn3qdqax.jpg",
-      "status": "skipped",
+      "status": "enrolled",
+      "newFaceSubjectId": "b86ea1aa-512d-4fdf-b1b5-57d17542b16d",
+      "reason": "IndexFaces + DB update OK"
+    },
+    {
+      "playerId": "cmoi04nd70057pa0192ssrkl2",
+      "name": "Hien",
+      "phone": "0942270280",
+      "facePhotoPath": "/uploads/players/cmoi04nd70057pa0192ssrkl2.jpg",
+      "status": "failed",
       "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
     },
     {
       "playerId": "cmogst9q2001tpd01uem8ovv3",
       "name": "Phuoc",
       "phone": "0902636811",
       "facePhotoPath": "/uploads/players/cmogst9q2001tpd01uem8ovv3.jpg",
-      "status": "skipped",
+      "status": "enrolled",
+      "newFaceSubjectId": "331259a2-37a7-40f6-a4ab-2cfb38ccbecd",
+      "reason": "IndexFaces + DB update OK"
+    },
+    {
+      "playerId": "cmoi5vh380029p701qlclujs5",
+      "name": "Son",
+      "phone": "0868348185",
+      "facePhotoPath": "/uploads/players/cmoi5vh380029p701qlclujs5.jpg",
+      "status": "enrolled",
+      "newFaceSubjectId": "96ffe3e5-eab1-46cd-a823-cfea3306cc37",
+      "reason": "IndexFaces + DB update OK"
+    },
+    {
+      "playerId": "cmoi24w9o000ip701tkgv3vji",
+      "name": "Minh minh",
+      "phone": "0931868963",
+      "facePhotoPath": "/uploads/players/cmoi24w9o000ip701tkgv3vji.jpg",
+      "status": "failed",
       "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
+    },
+    {
+      "playerId": "cmoi7hfwk0057p7012p9udl9w",
+      "name": "Nguyen nguyen",
+      "phone": "0705114640",
+      "facePhotoPath": "/uploads/players/cmoi7hfwk0057p7012p9udl9w.jpg",
+      "status": "enrolled",
+      "newFaceSubjectId": "47d77881-1609-45c5-a59f-2ce3e97629f8",
+      "reason": "IndexFaces + DB update OK"
     },
     {
       "playerId": "cmodp6y9u002ko801kxho5b49",
       "name": "Ngoc Le",
       "phone": "0938120468",
       "facePhotoPath": "/uploads/players/cmodp6y9u002ko801kxho5b49.jpg",
-      "status": "skipped",
+      "status": "failed",
       "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
     },
     {
       "playerId": "cmodp78m1002po801zlzc96ex",
       "name": "Phat",
       "phone": "0908013881",
       "facePhotoPath": "/uploads/players/cmodp78m1002po801zlzc96ex.jpg",
-      "status": "skipped",
+      "status": "enrolled",
+      "newFaceSubjectId": "b32c46d6-141f-4b7a-b44a-9203c9f19565",
+      "reason": "IndexFaces + DB update OK"
+    },
+    {
+      "playerId": "cmohz6s5i002dpa01w2ulwrkk",
+      "name": "Loic",
+      "phone": "0763728007",
+      "facePhotoPath": "/uploads/players/cmohz6s5i002dpa01w2ulwrkk.jpg",
+      "status": "failed",
       "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
     },
     {
       "playerId": "cmodqi7wf0064o801zajnwyld",
       "name": "Khiem",
       "phone": "0905124399",
       "facePhotoPath": "/uploads/players/cmodqi7wf0064o801zajnwyld.jpg",
-      "status": "skipped",
-      "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "status": "enrolled",
+      "newFaceSubjectId": "9167c436-69a8-4e1a-a407-8d85fdd61391",
+      "reason": "IndexFaces + DB update OK"
     },
     {
       "playerId": "cmogt7ypq001ypd01yq5bk749",
       "name": "Ekhlas",
       "phone": "0869753763",
       "facePhotoPath": "/uploads/players/cmogt7ypq001ypd01yq5bk749.jpg",
-      "status": "skipped",
-      "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "status": "enrolled",
+      "newFaceSubjectId": "30059805-4109-4ea1-bf39-5fa21ecb0a3b",
+      "reason": "IndexFaces + DB update OK"
+    },
+    {
+      "playerId": "cmohzaogo002xpa01q3uxqbm0",
+      "name": "Vinh",
+      "phone": "0339107177",
+      "facePhotoPath": "/uploads/players/cmohzaogo002xpa01q3uxqbm0.jpg",
+      "status": "enrolled",
+      "newFaceSubjectId": "7ece2396-9bab-4c02-90b1-54662d69cd0f",
+      "reason": "IndexFaces + DB update OK"
     },
     {
       "playerId": "cmogt8ua30023pd01b32bgmfv",
       "name": "Vand003",
       "phone": "0365647430",
       "facePhotoPath": "/uploads/players/cmogt8ua30023pd01b32bgmfv.jpg",
-      "status": "skipped",
+      "status": "failed",
       "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
+    },
+    {
+      "playerId": "cmoi5ynhw002pp701wfby0d7n",
+      "name": "Ngbinh",
+      "phone": "0356184730",
+      "facePhotoPath": "/uploads/players/cmoi5ynhw002pp701wfby0d7n.jpg",
+      "status": "enrolled",
+      "newFaceSubjectId": "e252445e-2e9c-4785-b877-b179a9b48ffb",
+      "reason": "IndexFaces + DB update OK"
+    },
+    {
+      "playerId": "cmoi06aac005epa0134h5wkyk",
+      "name": "Chi",
+      "phone": "0907072466",
+      "facePhotoPath": "/uploads/players/cmoi06aac005epa0134h5wkyk.jpg",
+      "status": "failed",
+      "newFaceSubjectId": "",
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
+    },
+    {
+      "playerId": "cmoi5jznr000zp701fbyo996i",
+      "name": "Tiffany",
+      "phone": "60126063955",
+      "facePhotoPath": "/uploads/players/cmoi5jznr000zp701fbyo996i.jpg",
+      "status": "enrolled",
+      "newFaceSubjectId": "5bb3155d-2753-49a1-bac4-bfced1b16eeb",
+      "reason": "IndexFaces + DB update OK"
     },
     {
       "playerId": "cmodp8prl002yo801gq2rd857",
       "name": "Nhat Quang",
       "phone": "0919003345",
       "facePhotoPath": "/uploads/players/cmodp8prl002yo801gq2rd857.jpg",
-      "status": "skipped",
+      "status": "failed",
       "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
     },
     {
       "playerId": "cmods7lhg006bo801fgj7gkpc",
       "name": "Quan",
       "phone": "0968887315",
       "facePhotoPath": "/uploads/players/cmods7lhg006bo801fgj7gkpc.jpg",
-      "status": "skipped",
+      "status": "enrolled",
+      "newFaceSubjectId": "16f9ffed-d4b9-46b0-90fb-6d20b4350d5d",
+      "reason": "IndexFaces + DB update OK"
+    },
+    {
+      "playerId": "cmohz8dmb002kpa0174uweu4w",
+      "name": "Anna",
+      "phone": "111111111",
+      "facePhotoPath": "/uploads/players/cmohz8dmb002kpa0174uweu4w.jpg",
+      "status": "failed",
       "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
     },
     {
       "playerId": "cmogvjc0w002apd01eh83ousj",
       "name": "Kong",
       "phone": "0942130000",
       "facePhotoPath": "/uploads/players/cmogvjc0w002apd01eh83ousj.jpg",
-      "status": "skipped",
+      "status": "enrolled",
+      "newFaceSubjectId": "bd1ff29e-c5e7-4a0f-a8c2-0be753e43f2c",
+      "reason": "IndexFaces + DB update OK"
+    },
+    {
+      "playerId": "cmoi0konr005zpa016wc2nc0s",
+      "name": "GIANG",
+      "phone": "0767167791",
+      "facePhotoPath": "/uploads/players/cmoi0konr005zpa016wc2nc0s.jpg",
+      "status": "failed",
       "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
     },
     {
       "playerId": "cmogvkq4m002fpd01lyvfnf78",
       "name": "Mina",
       "phone": "0356667977",
       "facePhotoPath": "/uploads/players/cmogvkq4m002fpd01lyvfnf78.jpg",
-      "status": "skipped",
+      "status": "enrolled",
+      "newFaceSubjectId": "bec610c7-556a-47d6-9ff5-2ed441802183",
+      "reason": "IndexFaces + DB update OK"
+    },
+    {
+      "playerId": "cmoi63ldb002up701umb0zwbk",
+      "name": "Loan",
+      "phone": "0903885253",
+      "facePhotoPath": "/uploads/players/cmoi63ldb002up701umb0zwbk.jpg",
+      "status": "failed",
       "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
+    },
+    {
+      "playerId": "cmoi5l4fq0016p7012tnrdoyl",
+      "name": "MUNH",
+      "phone": "0176615229",
+      "facePhotoPath": "/uploads/players/cmoi5l4fq0016p7012tnrdoyl.jpg",
+      "status": "enrolled",
+      "newFaceSubjectId": "2ddb385a-b60a-4f24-ae35-6ab23217539d",
+      "reason": "IndexFaces + DB update OK"
+    },
+    {
+      "playerId": "cmoi5n79d001hp701viz51zp5",
+      "name": "Ly Hoang \"Minh\"",
+      "phone": "0964101913",
+      "facePhotoPath": "/uploads/players/cmoi5n79d001hp701viz51zp5.jpg",
+      "status": "enrolled",
+      "newFaceSubjectId": "7a73afba-c7d6-49b3-b9c0-899e8da7322e",
+      "reason": "IndexFaces + DB update OK"
     },
     {
       "playerId": "cmodpc5t60035o801o0ummjr6",
       "name": "Mumu",
       "phone": "0967504534",
       "facePhotoPath": "/uploads/players/cmodpc5t60035o801o0ummjr6.jpg",
-      "status": "skipped",
+      "status": "failed",
       "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
     },
     {
       "playerId": "cmodpck03003ao801iqpbrivn",
       "name": "Hoang",
       "phone": "0916049899",
       "facePhotoPath": "/uploads/players/cmodpck03003ao801iqpbrivn.jpg",
-      "status": "skipped",
+      "status": "enrolled",
+      "newFaceSubjectId": "be881418-f64b-49ad-b499-b67be10ca310",
+      "reason": "IndexFaces + DB update OK"
+    },
+    {
+      "playerId": "cmohzcbs40036pa01tndknkjf",
+      "name": "Tuyen",
+      "phone": "0934138269",
+      "facePhotoPath": "/uploads/players/cmohzcbs40036pa01tndknkjf.jpg",
+      "status": "failed",
       "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
     },
     {
       "playerId": "cmodpejux003jo801cztrorxe",
       "name": "Huong",
       "phone": "0973586345",
       "facePhotoPath": "/uploads/players/cmodpejux003jo801cztrorxe.jpg",
-      "status": "skipped",
-      "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "status": "enrolled",
+      "newFaceSubjectId": "a515715a-9adc-4f3b-aa3e-07ae1c360690",
+      "reason": "IndexFaces + DB update OK"
     },
     {
       "playerId": "cmodpekmu003oo801dc0g7sl5",
       "name": "Nhu",
       "phone": "0907802969",
       "facePhotoPath": "/uploads/players/cmodpekmu003oo801dc0g7sl5.jpg",
-      "status": "skipped",
-      "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "status": "enrolled",
+      "newFaceSubjectId": "36e4e281-ab93-4711-896e-d715a21962ed",
+      "reason": "IndexFaces + DB update OK"
     },
     {
       "playerId": "cmodsj912006io801rw9vodpc",
       "name": "Kimhoa",
       "phone": "0931899984",
       "facePhotoPath": "/uploads/players/cmodsj912006io801rw9vodpc.jpg",
-      "status": "skipped",
-      "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "status": "enrolled",
+      "newFaceSubjectId": "9abc2d1c-52b4-4ac9-9891-427636b5c448",
+      "reason": "IndexFaces + DB update OK"
     },
     {
       "playerId": "cmodsl4hp006po801kdvwhkl5",
       "name": "Trieu Nghi Hoang",
       "phone": "0705070705",
       "facePhotoPath": "/uploads/players/cmodsl4hp006po801kdvwhkl5.jpg",
-      "status": "skipped",
-      "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "status": "enrolled",
+      "newFaceSubjectId": "2163cd44-d3fe-4f1b-97cf-93c92f7ef52d",
+      "reason": "IndexFaces + DB update OK"
     },
     {
       "playerId": "cmogvt2sc002mpd01max3tgg1",
       "name": "SiuLee",
       "phone": "0933388868",
       "facePhotoPath": "/uploads/players/cmogvt2sc002mpd01max3tgg1.jpg",
-      "status": "skipped",
+      "status": "enrolled",
+      "newFaceSubjectId": "8946d22a-239f-4eec-818f-e85920905810",
+      "reason": "IndexFaces + DB update OK"
+    },
+    {
+      "playerId": "cmohzeea7003fpa01578sm2eo",
+      "name": "Huong Nguyen",
+      "phone": "0917839374",
+      "facePhotoPath": "/uploads/players/cmohzeea7003fpa01578sm2eo.jpg",
+      "status": "failed",
       "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
+    },
+    {
+      "playerId": "cmoi6bkc0003bp701c6j6qkxf",
+      "name": "Guigui",
+      "phone": "942463780",
+      "facePhotoPath": "/uploads/players/cmoi6bkc0003bp701c6j6qkxf.jpg",
+      "status": "enrolled",
+      "newFaceSubjectId": "1839514d-601c-451c-bfce-4d433b27293d",
+      "reason": "IndexFaces + DB update OK"
+    },
+    {
+      "playerId": "cmoi0uh310066pa01ebf6woy7",
+      "name": "Kien Vo",
+      "phone": "0903737476",
+      "facePhotoPath": "/uploads/players/cmoi0uh310066pa01ebf6woy7.jpg",
+      "status": "failed",
+      "newFaceSubjectId": "",
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
+    },
+    {
+      "playerId": "cmoi5p27f001op7017dn72fwi",
+      "name": "Khoi Tin",
+      "phone": "0902989404",
+      "facePhotoPath": "/uploads/players/cmoi5p27f001op7017dn72fwi.jpg",
+      "status": "enrolled",
+      "newFaceSubjectId": "b869d07a-dc6c-4db1-9b9c-5ba8a78544d7",
+      "reason": "IndexFaces + DB update OK"
+    },
+    {
+      "playerId": "cmoi6fpsw003wp701uwod6t89",
+      "name": "Quoc Linh",
+      "phone": "0385688483",
+      "facePhotoPath": "/uploads/players/cmoi6fpsw003wp701uwod6t89.jpg",
+      "status": "enrolled",
+      "newFaceSubjectId": "f74e23eb-8cc8-4ce7-be06-c03b6353770f",
+      "reason": "IndexFaces + DB update OK"
     },
     {
       "playerId": "cmodpi6zk003xo8013xfm6lnv",
       "name": "Thich Backhand",
       "phone": "0908612768",
       "facePhotoPath": "/uploads/players/cmodpi6zk003xo8013xfm6lnv.jpg",
-      "status": "skipped",
+      "status": "enrolled",
+      "newFaceSubjectId": "554cea57-b780-4381-b96b-e962960783ff",
+      "reason": "IndexFaces + DB update OK"
+    },
+    {
+      "playerId": "cmohzflp6003mpa01t3irj2lu",
+      "name": "Minh",
+      "phone": "0985917719",
+      "facePhotoPath": "/uploads/players/cmohzflp6003mpa01t3irj2lu.jpg",
+      "status": "enrolled",
+      "newFaceSubjectId": "5d742538-8a80-4320-961d-45f2a4ff6fef",
+      "reason": "IndexFaces + DB update OK"
+    },
+    {
+      "playerId": "cmoi0wsq2006dpa01omxniu3a",
+      "name": "Chi",
+      "phone": "0907880867",
+      "facePhotoPath": "/uploads/players/cmoi0wsq2006dpa01omxniu3a.jpg",
+      "status": "failed",
       "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
+    },
+    {
+      "playerId": "cmoi6diog003ip701lc03youv",
+      "name": "NGOC vo",
+      "phone": "0939073939",
+      "facePhotoPath": "/uploads/players/cmoi6diog003ip701lc03youv.jpg",
+      "status": "enrolled",
+      "newFaceSubjectId": "d5e0166b-7146-4819-a845-53fea352eef8",
+      "reason": "IndexFaces + DB update OK"
     },
     {
       "playerId": "cmodpktx50044o8015mfn9lg5",
       "name": "Cong Tran",
       "phone": "0909242743",
       "facePhotoPath": "/uploads/players/cmodpktx50044o8015mfn9lg5.jpg",
-      "status": "skipped",
-      "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "status": "enrolled",
+      "newFaceSubjectId": "6620b0cd-e857-4ae6-a864-93ce03e94cc3",
+      "reason": "IndexFaces + DB update OK"
     },
     {
       "playerId": "cmodplumw0049o80182h4ubcn",
       "name": "Amytran",
       "phone": "0938275369",
       "facePhotoPath": "/uploads/players/cmodplumw0049o80182h4ubcn.jpg",
-      "status": "skipped",
-      "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "status": "enrolled",
+      "newFaceSubjectId": "cf442950-fc2b-4a3b-beaa-fddf1255881b",
+      "reason": "IndexFaces + DB update OK"
     },
     {
-      "playerId": "cmoe547p40014oa011homr000",
-      "name": "Gui",
-      "phone": "22628625",
-      "facePhotoPath": "/uploads/players/cmoe547p40014oa011homr000.jpg",
+      "playerId": "cmoi6ep1g003pp701d1lmx8nc",
+      "name": "Hope",
+      "phone": "0862140465",
+      "facePhotoPath": "/uploads/players/cmoi6ep1g003pp701d1lmx8nc.jpg",
+      "status": "enrolled",
+      "newFaceSubjectId": "fa1533fe-82a6-49a3-b25b-226a695b45f4",
+      "reason": "IndexFaces + DB update OK"
+    },
+    {
+      "playerId": "cmohzibu9003tpa01vnzqcya7",
+      "name": "Mit",
+      "phone": "0333681983",
+      "facePhotoPath": "/uploads/players/cmohzibu9003tpa01vnzqcya7.jpg",
+      "status": "enrolled",
+      "newFaceSubjectId": "750c349a-f8c2-4efb-863e-841f774917cd",
+      "reason": "IndexFaces + DB update OK"
+    },
+    {
+      "playerId": "cmoi12faa006kpa01iu88cm8a",
+      "name": "Anh Quoc",
+      "phone": "0905060608",
+      "facePhotoPath": "/uploads/players/cmoi12faa006kpa01iu88cm8a.jpg",
       "status": "failed",
       "newFaceSubjectId": "",
-      "reason": "Photo load: ENOENT: no such file or directory, open '/uploads/players/cmoe547p40014oa011homr000.jpg' (dry-run: not calling IndexFaces, not updating database)"
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
     },
     {
       "playerId": "cmodpp642004io801rydaisiw",
       "name": "Ngan Le",
       "phone": "0909400584",
       "facePhotoPath": "/uploads/players/cmodpp642004io801rydaisiw.jpg",
-      "status": "skipped",
-      "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "status": "enrolled",
+      "newFaceSubjectId": "a99c218c-dd7a-4da6-a423-b0ed776a2f65",
+      "reason": "IndexFaces + DB update OK"
     },
     {
       "playerId": "cmodpphit004no8016vup6usr",
       "name": "Duy phuong",
       "phone": "0902987788",
       "facePhotoPath": "/uploads/players/cmodpphit004no8016vup6usr.jpg",
-      "status": "skipped",
-      "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "status": "enrolled",
+      "newFaceSubjectId": "465b31ad-a703-482d-8536-ec1fe993e4b9",
+      "reason": "IndexFaces + DB update OK"
     },
     {
       "playerId": "cmogqoh2p000kpd01abq6bzmx",
       "name": "Tuan Anh",
       "phone": "0902766888",
       "facePhotoPath": "/uploads/players/cmogqoh2p000kpd01abq6bzmx.jpg",
-      "status": "skipped",
+      "status": "failed",
       "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
+    },
+    {
+      "playerId": "cmohznwal0044pa012lx6z097",
+      "name": "Phuong Dung",
+      "phone": "0906910797",
+      "facePhotoPath": "/uploads/players/cmohznwal0044pa012lx6z097.jpg",
+      "status": "failed",
+      "newFaceSubjectId": "",
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
+    },
+    {
+      "playerId": "cmoi146g3006rpa01kllkshqm",
+      "name": "Phuoc",
+      "phone": "0868936806",
+      "facePhotoPath": "/uploads/players/cmoi146g3006rpa01kllkshqm.jpg",
+      "status": "failed",
+      "newFaceSubjectId": "",
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
+    },
+    {
+      "playerId": "cmoi6lpu10049p701q6saati9",
+      "name": "Emily",
+      "phone": "0909008211",
+      "facePhotoPath": "/uploads/players/cmoi6lpu10049p701q6saati9.jpg",
+      "status": "enrolled",
+      "newFaceSubjectId": "293751c4-fdaa-40e4-a42c-ca5ce3cf5b41",
+      "reason": "IndexFaces + DB update OK"
     },
     {
       "playerId": "cmogrpmok0017pd01sdjaqwq8",
       "name": "Sara",
       "phone": "0354076189",
       "facePhotoPath": "/uploads/players/cmogrpmok0017pd01sdjaqwq8.jpg",
-      "status": "skipped",
-      "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "status": "enrolled",
+      "newFaceSubjectId": "12f33cb8-2809-4d8f-8dee-e15321432b0b",
+      "reason": "IndexFaces + DB update OK"
     },
     {
       "playerId": "cmodpqoc3004wo801ef27q6fd",
       "name": "Quang",
       "phone": "0815013825",
       "facePhotoPath": "/uploads/players/cmodpqoc3004wo801ef27q6fd.jpg",
-      "status": "skipped",
+      "status": "enrolled",
+      "newFaceSubjectId": "99618ade-22b9-418f-9ec6-de10dc120aa8",
+      "reason": "IndexFaces + DB update OK"
+    },
+    {
+      "playerId": "cmohzt3t7004bpa012qoxudjg",
+      "name": "Eliseo",
+      "phone": "0338509603",
+      "facePhotoPath": "/uploads/players/cmohzt3t7004bpa012qoxudjg.jpg",
+      "status": "failed",
       "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
     },
     {
       "playerId": "cmodpr0vg0051o801kmkr9t2e",
       "name": "Tien",
       "phone": "0907230006",
       "facePhotoPath": "/uploads/players/cmodpr0vg0051o801kmkr9t2e.jpg",
-      "status": "skipped",
-      "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "status": "enrolled",
+      "newFaceSubjectId": "14e1c787-637a-4154-af38-ae9977dba53e",
+      "reason": "IndexFaces + DB update OK"
     },
     {
       "playerId": "cmodpskc6005ao801d92i3r4g",
       "name": "Hoa",
       "phone": "0909391012",
       "facePhotoPath": "/uploads/players/cmodpskc6005ao801d92i3r4g.jpg",
-      "status": "skipped",
+      "status": "failed",
       "newFaceSubjectId": "",
-      "reason": "faceSubjectId already present in AWS collection"
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
+    },
+    {
+      "playerId": "cmoi1atsk0076pa0183z4xpjl",
+      "name": "Aaron",
+      "phone": "0356502251",
+      "facePhotoPath": "/uploads/players/cmoi1atsk0076pa0183z4xpjl.jpg",
+      "status": "failed",
+      "newFaceSubjectId": "",
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
+    },
+    {
+      "playerId": "cmoi6thle004gp701zduv6ggy",
+      "name": "Quy",
+      "phone": "0985438866",
+      "facePhotoPath": "/uploads/players/cmoi6thle004gp701zduv6ggy.jpg",
+      "status": "failed",
+      "newFaceSubjectId": "",
+      "reason": "Multiple faces detected, please ensure only one person is in frame"
     }
   ]
 }

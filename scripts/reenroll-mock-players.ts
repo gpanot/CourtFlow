@@ -18,13 +18,20 @@ import { writeFileSync } from "fs";
 import { readFile } from "fs/promises";
 import { isAbsolute, join } from "path";
 import { PrismaClient } from "@prisma/client";
-import { ListFacesCommand, RekognitionClient } from "@aws-sdk/client-rekognition";
+import {
+  CreateCollectionCommand,
+  ListFacesCommand,
+  RekognitionClient,
+} from "@aws-sdk/client-rekognition";
 import { faceRecognitionService, USE_MOCK_SERVICE } from "@/lib/face-recognition";
 
 loadEnv({ path: ".env" });
 
 const COLLECTION_ID = process.env.AWS_REKOGNITION_COLLECTION || "courtflow-players";
 const AWS_REGION = process.env.AWS_REGION || "ap-southeast-1";
+const COURTFLOW_BASE_URL =
+  process.env.COURTFLOW_BASE_URL ||
+  "https://courtflow-production-0441.up.railway.app";
 const DRY_RUN = process.argv.includes("--dry-run");
 
 type OutcomeStatus = "enrolled" | "failed" | "skipped";
@@ -94,6 +101,29 @@ async function listAllFaceIdsInCollection(
   return ids;
 }
 
+async function ensureCollectionExists(
+  client: RekognitionClient,
+  collectionId: string
+): Promise<void> {
+  try {
+    await client.send(
+      new CreateCollectionCommand({ CollectionId: collectionId })
+    );
+    console.log(
+      `[${new Date().toISOString()}] Created new collection: ${collectionId}`
+    );
+  } catch (err: any) {
+    if (
+      err?.__type === "ResourceAlreadyExistsException" ||
+      err?.name === "ResourceAlreadyExistsException"
+    ) {
+      // Collection already exists.
+      return;
+    }
+    throw err;
+  }
+}
+
 async function loadFacePhotoAsBase64(
   facePhotoPath: string | null
 ): Promise<{ ok: true; base64: string } | { ok: false; error: string }> {
@@ -109,6 +139,22 @@ async function loadFacePhotoAsBase64(
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 60_000);
       const res = await fetch(stripQuery(raw0), { signal: ctrl.signal });
+      clearTimeout(timer);
+      if (!res.ok) return { ok: false, error: `HTTP ${res.status} fetching image` };
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length < 100) return { ok: false, error: "Image too small" };
+      return { ok: true, base64: buf.toString("base64") };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "fetch error" };
+    }
+  }
+  if (raw0.startsWith("/uploads/")) {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 60_000);
+      const base = COURTFLOW_BASE_URL.replace(/\/$/, "");
+      const url = `${base}${stripQuery(raw0)}`;
+      const res = await fetch(url, { signal: ctrl.signal });
       clearTimeout(timer);
       if (!res.ok) return { ok: false, error: `HTTP ${res.status} fetching image` };
       const buf = Buffer.from(await res.arrayBuffer());
@@ -162,6 +208,7 @@ async function main(): Promise<void> {
     },
   });
 
+  await ensureCollectionExists(awsClient, COLLECTION_ID);
   logPlayer(`Loading FaceIds from collection "${COLLECTION_ID}" (read-only)...`);
   const faceIdsInAws = await listAllFaceIdsInCollection(awsClient, COLLECTION_ID);
   logPlayer(`Collection has ${faceIdsInAws.size} face(s).`);

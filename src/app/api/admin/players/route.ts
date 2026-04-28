@@ -14,6 +14,8 @@ export async function GET(request: NextRequest) {
     const venueId = url.searchParams.get("venueId") || "";
     const skillLevel = url.searchParams.get("skillLevel") || "";
     const status = url.searchParams.get("status") || "";
+    const gender = url.searchParams.get("gender") || "";
+    const face = url.searchParams.get("face") || "";
     const page = Math.max(1, parseInt(url.searchParams.get("page") || "1"));
     const limit = 50;
 
@@ -28,6 +30,14 @@ export async function GET(request: NextRequest) {
 
     if (skillLevel) {
       where.skillLevel = skillLevel;
+    }
+
+    if (gender) {
+      where.gender = gender;
+    }
+
+    if (face === "no_face") {
+      where.faceSubjectId = null;
     }
 
     if (venueId) {
@@ -185,6 +195,7 @@ export async function GET(request: NextRequest) {
         name: player.name,
         phone: player.phone,
         avatar: player.avatar,
+        hasFace: !!player.faceSubjectId,
         faceSubjectId: player.faceSubjectId,
         facePhotoPath: player.facePhotoPath,
         avatarPhotoPath: player.avatarPhotoPath,

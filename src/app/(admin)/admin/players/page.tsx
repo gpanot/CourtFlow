@@ -82,6 +82,7 @@ interface PlayerRecord {
   name: string;
   phone: string;
   avatar: string;
+  hasFace?: boolean;
   /** AWS Rekognition indexed face id (FaceId) when enrolled */
   faceSubjectId?: string | null;
   /** First check-in face capture (staff “add with face”), served from /uploads/players */
@@ -173,6 +174,7 @@ const SKILL_COLORS: Record<string, string> = {
 };
 
 export default function PlayersPage() {
+  const [quickFilter, setQuickFilter] = useState<"all" | "male" | "female" | "no_face">("all");
   const [players, setPlayers] = useState<PlayerRecord[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [stats, setStats] = useState<PlayerStats | null>(null);
@@ -265,6 +267,11 @@ export default function PlayersPage() {
       if (venueFilter) params.set("venueId", venueFilter);
       if (skillFilter) params.set("skillLevel", skillFilter);
       if (statusFilter) params.set("status", statusFilter);
+      if (quickFilter === "male" || quickFilter === "female") {
+        params.set("gender", quickFilter);
+      } else if (quickFilter === "no_face") {
+        params.set("face", "no_face");
+      }
       params.set("page", String(page));
 
       const data = await api.get<{ players: PlayerRecord[]; total: number; stats: PlayerStats }>(
@@ -278,7 +285,7 @@ export default function PlayersPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, venueFilter, skillFilter, statusFilter, page]);
+  }, [search, venueFilter, skillFilter, statusFilter, quickFilter, page]);
 
   useEffect(() => {
     api.get<Venue[]>("/api/venues").then(setVenues).catch(console.error);
@@ -290,14 +297,14 @@ export default function PlayersPage() {
   }, [fetchPlayers]);
 
   const totalPages = Math.ceil(total / 50);
-  const hasFilters = venueFilter || skillFilter || statusFilter || search;
-  const activeFilterCount = [venueFilter, skillFilter, statusFilter].filter(Boolean).length;
+  const hasFilters = venueFilter || skillFilter || statusFilter || search || quickFilter !== "all";
+  const activeFilterCount = [venueFilter, skillFilter, statusFilter, quickFilter !== "all" ? quickFilter : ""].filter(Boolean).length;
 
   const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" });
   const fmtMin = (m: number) => m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ""}`;
 
   const clearAllFilters = () => {
-    setSearch(""); setVenueFilter(""); setSkillFilter(""); setStatusFilter(""); setPage(1);
+    setSearch(""); setVenueFilter(""); setSkillFilter(""); setStatusFilter(""); setQuickFilter("all"); setPage(1);
   };
 
   const openPlayerDetail = async (player: PlayerRecord) => {
@@ -485,6 +492,30 @@ export default function PlayersPage() {
 
       {/* Search + filter toggle (mobile) / inline filters (desktop) */}
       <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {[
+            { key: "all", label: "All" },
+            { key: "male", label: "Male" },
+            { key: "female", label: "Female" },
+            { key: "no_face", label: "No face" },
+          ].map((opt) => (
+            <button
+              key={opt.key}
+              onClick={() => {
+                setQuickFilter(opt.key as "all" | "male" | "female" | "no_face");
+                setPage(1);
+              }}
+              className={cn(
+                "rounded-full border px-3 py-1 text-xs transition-colors",
+                quickFilter === opt.key
+                  ? "border-purple-500 bg-purple-600/20 text-purple-200"
+                  : "border-neutral-700 bg-neutral-800 text-neutral-400 hover:text-white"
+              )}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
@@ -567,6 +598,7 @@ export default function PlayersPage() {
           <thead className="border-b border-neutral-800 text-neutral-400">
             <tr>
               <SortableHeader label="Player" sortKey="name" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
+              <th className="px-2.5 py-2.5">Face</th>
               <SortableHeader label="Phone" sortKey="phone" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
               <SortableHeader label="Skill" sortKey="skillLevel" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
               <SortableHeader label="Gender" sortKey="gender" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
@@ -597,6 +629,9 @@ export default function PlayersPage() {
                       <span className="h-1.5 w-1.5 rounded-full bg-green-500 shrink-0" title="Active today" />
                     )}
                   </div>
+                </td>
+                <td className="px-2.5 py-2">
+                  <FaceStatusBadge hasFace={p.hasFace ?? !!p.faceSubjectId} />
                 </td>
                 <td className="px-2.5 py-2 text-neutral-400 text-[11px] tabular-nums">{p.phone}</td>
                 <td className="px-2.5 py-2">
@@ -662,7 +697,7 @@ export default function PlayersPage() {
             ))}
             {!loading && players.length === 0 && (
               <tr>
-                <td colSpan={12} className="px-4 py-8 text-center text-neutral-500">No players found</td>
+                <td colSpan={13} className="px-4 py-8 text-center text-neutral-500">No players found</td>
               </tr>
             )}
           </tbody>
@@ -716,6 +751,7 @@ export default function PlayersPage() {
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-400">
               <span className="tabular-nums">{p.phone}</span>
               <span className="capitalize">{p.gender}</span>
+              <FaceStatusBadge hasFace={p.hasFace ?? !!p.faceSubjectId} compact />
               <span>{p.totalSessions} sessions</span>
               <span>{p.totalGames} games</span>
               <span>{fmtMin(p.totalPlayMinutes)} play</span>
@@ -956,6 +992,37 @@ function RatioBadge({ ratio }: { ratio: number }) {
   return (
     <span className={cn("rounded-full px-1.5 py-0.5 text-[11px] font-medium tabular-nums", color)}>
       {ratio}%
+    </span>
+  );
+}
+
+function FaceStatusBadge({
+  hasFace,
+  compact,
+}: {
+  hasFace: boolean;
+  compact?: boolean;
+}) {
+  if (hasFace) {
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center rounded-full bg-green-500/15 text-green-300",
+          compact ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-[11px] font-medium"
+        )}
+      >
+        ✓
+      </span>
+    );
+  }
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center rounded-full bg-red-500/15 text-red-300",
+        compact ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-[11px] font-medium"
+      )}
+    >
+      No face
     </span>
   );
 }
