@@ -2,7 +2,8 @@
 
 import { useCallback, useState } from "react";
 import { api } from "@/lib/api-client";
-import { ScanFace, Upload } from "lucide-react";
+import { PlayerAvatarThumb } from "@/components/player-avatar-thumb";
+import { ScanFace, Search, Upload } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 interface DiagnoseResponse {
@@ -38,6 +39,28 @@ function scoreBand(similarity: number | null): "muted" | "red" | "amber" | "gree
   return "green";
 }
 
+interface FaceSearchMatch {
+  playerId: string;
+  name: string;
+  avatar: string;
+  avatarPhotoPath: string | null;
+  facePhotoPath: string | null;
+  similarity: number;
+  passedProduction: boolean;
+  productionThreshold: number;
+  awsFaceId: string | null;
+  externalImageId: string | null;
+}
+
+interface FaceSearchResponse {
+  searchFaceMatchThreshold: number;
+  productionThreshold: number;
+  matches: FaceSearchMatch[];
+  mock?: boolean;
+  message?: string;
+  noFaceInImage?: boolean;
+}
+
 export default function FaceRecognitionTestPage() {
   const [imageA, setImageA] = useState<string | null>(null);
   const [imageB, setImageB] = useState<string | null>(null);
@@ -49,6 +72,12 @@ export default function FaceRecognitionTestPage() {
   const [detail, setDetail] = useState<DiagnoseResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [faceSearchImage, setFaceSearchImage] = useState<string | null>(null);
+  const [faceSearchPreview, setFaceSearchPreview] = useState<string | null>(null);
+  const [faceSearchLoading, setFaceSearchLoading] = useState(false);
+  const [faceSearchError, setFaceSearchError] = useState<string | null>(null);
+  const [faceSearchResult, setFaceSearchResult] = useState<FaceSearchResponse | null>(null);
 
   const onPickA = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -101,6 +130,40 @@ export default function FaceRecognitionTestPage() {
     similarity != null && similarity >= thresholdSlider;
 
   const band = scoreBand(similarity);
+
+  const onPickFaceSearch = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const b64 = await fileToBase64(f);
+    setFaceSearchImage(b64);
+    setFaceSearchPreview(URL.createObjectURL(f));
+    setFaceSearchError(null);
+    setFaceSearchResult(null);
+  }, []);
+
+  const runCollectionSearch = useCallback(async () => {
+    if (!faceSearchImage?.trim()) {
+      setFaceSearchError("Choose a photo first.");
+      return;
+    }
+    setFaceSearchLoading(true);
+    setFaceSearchError(null);
+    setFaceSearchResult(null);
+    try {
+      const res = await api.post<FaceSearchResponse>("/api/rekognition/search", {
+        imageBase64: faceSearchImage,
+      });
+      setFaceSearchResult(res);
+    } catch (err: unknown) {
+      const msg =
+        err && typeof err === "object" && "message" in err
+          ? String((err as { message: string }).message)
+          : "Request failed";
+      setFaceSearchError(msg);
+    } finally {
+      setFaceSearchLoading(false);
+    }
+  }, [faceSearchImage]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-8">
@@ -269,6 +332,129 @@ export default function FaceRecognitionTestPage() {
           </div>
         </div>
       )}
+
+      <div className="border-t border-neutral-800 pt-8">
+        <div className="mb-4 flex items-center gap-2 text-amber-200/90">
+          <Search className="h-6 w-6" />
+          <h2 className="text-xl font-bold text-white">Find player by face</h2>
+        </div>
+        <p className="mb-4 text-sm text-neutral-400">
+          Search the global Rekognition collection with a low match threshold (50%) to list candidate
+          faces. Production check-in only accepts matches at or above the env threshold.
+        </p>
+
+        <label className="mb-4 block rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
+          <span className="mb-2 flex items-center gap-2 text-sm font-medium text-neutral-300">
+            <Upload className="h-4 w-4" /> Image (upload or camera)
+          </span>
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="text-sm text-neutral-400 file:mr-2 file:rounded-lg file:border-0 file:bg-neutral-800 file:px-3 file:py-1.5 file:text-white"
+            onChange={onPickFaceSearch}
+          />
+          {faceSearchPreview && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={faceSearchPreview}
+              alt="Search preview"
+              className="mt-3 max-h-48 w-full rounded-lg object-contain"
+            />
+          )}
+        </label>
+
+        <button
+          type="button"
+          onClick={runCollectionSearch}
+          disabled={faceSearchLoading || !faceSearchImage}
+          className="w-full rounded-xl bg-amber-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+        >
+          {faceSearchLoading ? "Searching…" : "Search collection"}
+        </button>
+
+        {faceSearchError && (
+          <p className="mt-4 rounded-lg border border-red-900/50 bg-red-950/40 px-4 py-3 text-sm text-red-300">
+            {faceSearchError}
+          </p>
+        )}
+
+        {faceSearchResult && (
+          <div className="mt-6 space-y-4">
+            {faceSearchResult.mock && faceSearchResult.message && (
+              <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
+                {faceSearchResult.message}
+              </p>
+            )}
+
+            {faceSearchResult.noFaceInImage && (
+              <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 px-4 py-3 text-sm text-amber-200">
+                No face detected in the image. Use a clear frontal photo and try again.
+              </p>
+            )}
+
+            {faceSearchResult.matches.length === 0 &&
+              !faceSearchResult.noFaceInImage &&
+              !faceSearchResult.mock && (
+                <p className="text-sm text-neutral-300">
+                  No faces found in collection above 50% similarity. This player is likely not
+                  enrolled or enrollment failed.
+                </p>
+              )}
+
+            {faceSearchResult.matches.length > 0 && (
+              <ul className="space-y-4">
+                {faceSearchResult.matches.map((m, i) => (
+                  <li
+                    key={`${m.playerId}-${m.awsFaceId ?? i}`}
+                    className="flex flex-col gap-3 rounded-xl border border-neutral-800 bg-neutral-900/50 p-4 sm:flex-row sm:items-center"
+                  >
+                    <div className="shrink-0">
+                      <PlayerAvatarThumb
+                        avatarPhotoPath={m.avatarPhotoPath}
+                        facePhotoPath={m.facePhotoPath}
+                        avatar={m.avatar}
+                        sizeClass="h-20 w-20"
+                        className="mx-auto sm:mx-0"
+                        textFallbackClassName="text-2xl"
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-white">{m.name}</p>
+                      <p className="mt-0.5 font-mono text-xs text-neutral-500">ID: {m.playerId}</p>
+                      <p className="mt-1 text-sm text-neutral-300">
+                        Similarity:{" "}
+                        <span className="tabular-nums font-semibold text-amber-100">
+                          {m.similarity.toFixed(1)}%
+                        </span>{" "}
+                        <span className="text-neutral-500">(search floor 50%)</span>
+                      </p>
+                      <p className="mt-0.5 text-xs text-neutral-500">
+                        Production threshold: {m.productionThreshold}%
+                      </p>
+                    </div>
+                    <div className="shrink-0">
+                      <span
+                        className={cn(
+                          "inline-flex rounded-md px-3 py-1.5 text-xs font-bold",
+                          m.passedProduction
+                            ? "bg-emerald-950/60 text-emerald-300"
+                            : "bg-red-950/60 text-red-300"
+                        )}
+                      >
+                        {m.passedProduction ? "PASS" : "FAIL"}
+                      </span>
+                      <p className="mt-1 text-center text-[10px] text-neutral-500 sm:text-left">
+                        vs {m.productionThreshold}%
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

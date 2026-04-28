@@ -56,6 +56,8 @@ export default function StaffPage() {
   const freshLoginChoiceRef = useRef(false);
   /** Skip staff-me bootstrap when we already resolved client for this staff+venue (e.g. single-app proceed). */
   const clientResolvedForKeyRef = useRef<string | null>(null);
+  /** `loginVenues` is not persisted; re-fetch from staff-me after full page load (e.g. profile "Go to Role / Tablet"). */
+  const loginVenuesFetchStartedRef = useRef(false);
   const router = useRouter();
 
   const proceedToVenue = useCallback(
@@ -131,6 +133,29 @@ export default function StaffPage() {
     };
   }, [needsClientBootstrap, venueId, staffId, setStaffClientId]);
 
+  useEffect(() => {
+    if (!token || !staffId) {
+      loginVenuesFetchStartedRef.current = false;
+      return;
+    }
+    if (loginVenues.length > 0) return;
+    if (loginVenuesFetchStartedRef.current) return;
+    loginVenuesFetchStartedRef.current = true;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const me = await api.get<{ venues: StaffVenue[] }>("/api/auth/staff-me");
+        if (cancelled) return;
+        setLoginVenues(me.venues);
+      } catch {
+        // Leave empty; user can refresh.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, staffId, loginVenues.length]);
+
   const handleShowOnboarding = () => {
     if (typeof window !== "undefined") {
       localStorage.removeItem("cf_onboarding_complete");
@@ -150,6 +175,9 @@ export default function StaffPage() {
     if (!token || !staffId) return;
     sessionStorage.removeItem("cf_staff_go_to_role");
     useStaffPinStore.getState().lock();
+    clientResolvedForKeyRef.current = null;
+    setClientBootstrapDone(false);
+    setPendingAppPickVenue(null);
     setAuth({ venueId: null });
     setShowRoleChoice(true);
   }, [token, staffId, setAuth]);

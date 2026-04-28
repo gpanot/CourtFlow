@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { PlayerAvatarThumb } from "@/components/player-avatar-thumb";
+import { PlayerDetailFaceRecognition } from "@/components/admin/player-detail-face-recognition";
 import { Search, X, SlidersHorizontal, Users, UserPlus, Clock, Activity, Hourglass, Gauge, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Gamepad2, Star, MapPin, CalendarDays, Timer, Plus, Pencil, Trash2, Fingerprint, Smartphone } from "lucide-react";
 
 type SortKey = "name" | "phone" | "gender" | "skillLevel" | "totalSessions" | "totalGames" | "totalPlayMinutes" | "totalWaitMinutes" | "waitPlayRatio" | "venues";
@@ -81,6 +82,8 @@ interface PlayerRecord {
   name: string;
   phone: string;
   avatar: string;
+  /** AWS Rekognition indexed face id (FaceId) when enrolled */
+  faceSubjectId?: string | null;
   /** First check-in face capture (staff “add with face”), served from /uploads/players */
   facePhotoPath?: string | null;
   avatarPhotoPath?: string | null;
@@ -879,6 +882,12 @@ export default function PlayersPage() {
           onCancelEdit={() => setEditMode(false)}
           onDelete={deletePlayer}
           deleteBusy={deletingId === detailPlayer.id}
+          onFaceDataChange={(patch) => {
+            setDetailPlayer((prev) => (prev && prev.id === detailPlayer.id ? { ...prev, ...patch } : prev));
+            setPlayers((prev) =>
+              prev.map((p) => (p.id === detailPlayer.id ? { ...p, ...patch } : p))
+            );
+          }}
         />
       )}
     </div>
@@ -1150,6 +1159,7 @@ function PlayerDetailPanel({
   onCancelEdit,
   onDelete,
   deleteBusy,
+  onFaceDataChange,
 }: {
   player: PlayerRecord;
   sessions: PlayerSession[];
@@ -1172,6 +1182,10 @@ function PlayerDetailPanel({
   onCancelEdit: () => void;
   onDelete: () => void;
   deleteBusy: boolean;
+  onFaceDataChange: (patch: {
+    faceSubjectId: string | null;
+    facePhotoPath?: string | null;
+  }) => void;
 }) {
   const avgFeedback = sessions.filter((s) => s.feedback).length > 0
     ? (sessions.reduce((sum, s) => sum + (s.feedback?.experience ?? 0), 0) / sessions.filter((s) => s.feedback).length).toFixed(1)
@@ -1335,6 +1349,14 @@ function PlayerDetailPanel({
               </div>
             </div>
           )}
+
+          <PlayerDetailFaceRecognition
+            playerId={player.id}
+            faceSubjectId={player.faceSubjectId}
+            facePhotoPath={player.facePhotoPath}
+            avatarPhotoPath={player.avatarPhotoPath}
+            onUpdate={onFaceDataChange}
+          />
 
           {/* Aggregate stats */}
           <div className="grid grid-cols-4 gap-2">

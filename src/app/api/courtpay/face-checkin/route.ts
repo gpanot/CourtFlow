@@ -12,7 +12,19 @@ import { ensureCourtPayCheckInPlayerSkillSynced } from "@/modules/courtpay/lib/c
  */
 export async function POST(req: Request) {
   try {
+    console.log("[CourtPay FaceDebug] Route hit:", req.url);
     const { venueId, imageBase64 } = await req.json();
+    console.log("[CourtPay FaceDebug] venueId:", venueId);
+    console.log(
+      "[CourtPay FaceDebug] imageBase64 first 100 chars:",
+      imageBase64?.substring(0, 100)
+    );
+    console.log(
+      "[CourtPay FaceDebug] has data prefix:",
+      imageBase64?.startsWith("data:")
+    );
+    console.log("[CourtPay FaceDebug] imageBase64 length:", imageBase64?.length);
+
     if (!venueId?.trim() || !imageBase64?.trim()) {
       return NextResponse.json(
         { error: "venueId and imageBase64 are required" },
@@ -28,14 +40,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Venue not found" }, { status: 404 });
     }
 
-    const recognition = await faceRecognitionService.recognizeFace(imageBase64, {
+    const result = await faceRecognitionService.recognizeFace(imageBase64, {
       venueId,
+      debug: true,
     });
+    console.log(
+      "[CourtPay FaceDebug] recognizeFace result:",
+      JSON.stringify(result, null, 2)
+    );
 
-    if (recognition.resultType === "new_player") {
-      if (recognition.faceSubjectId) {
+    if (result.resultType === "new_player") {
+      if (result.faceSubjectId) {
         const byFace = await prisma.player.findFirst({
-          where: { faceSubjectId: recognition.faceSubjectId },
+          where: { faceSubjectId: result.faceSubjectId },
           select: { id: true, name: true, phone: true },
         });
         if (byFace) {
@@ -45,9 +62,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ resultType: "needs_registration" });
     }
 
-    if (recognition.resultType === "matched" && recognition.playerId) {
+    if (result.resultType === "matched" && result.playerId) {
       const player = await prisma.player.findUnique({
-        where: { id: recognition.playerId },
+        where: { id: result.playerId },
         select: { id: true, name: true, phone: true },
       });
       if (!player) {
@@ -58,8 +75,8 @@ export async function POST(req: Request) {
 
     // no_face, error, etc.
     return NextResponse.json({
-      resultType: recognition.resultType,
-      error: recognition.error,
+      resultType: result.resultType,
+      error: result.error,
     });
   } catch (e) {
     console.error("[courtpay/face-checkin]", e);

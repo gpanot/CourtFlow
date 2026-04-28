@@ -185,6 +185,7 @@ export async function GET(request: NextRequest) {
         name: player.name,
         phone: player.phone,
         avatar: player.avatar,
+        faceSubjectId: player.faceSubjectId,
         facePhotoPath: player.facePhotoPath,
         avatarPhotoPath: player.avatarPhotoPath,
         gender: player.gender,
