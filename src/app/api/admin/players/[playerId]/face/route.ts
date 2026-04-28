@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { error, errorJson, json, notFound, parseBody } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
 import { faceRecognitionService } from "@/lib/face-recognition";
+import { persistPlayerCheckInFacePhoto } from "@/lib/persist-player-check-in-photo";
 
 function stripDataUrl(b64: string): string {
   const t = b64.trim();
@@ -11,7 +12,7 @@ function stripDataUrl(b64: string): string {
 }
 
 /**
- * POST: enroll face (IndexFaces) for this player.
+ * POST: enroll face (IndexFaces) for this player and persist submitted image as facePhotoPath.
  * DELETE: remove face from collection and clear faceSubjectId.
  */
 export async function POST(
@@ -45,6 +46,12 @@ export async function POST(
       }
       return error(res.error || "Face enrollment failed", 400);
     }
+
+    // Keep "Face photo on file" aligned with the image actually used for enrollment.
+    await persistPlayerCheckInFacePhoto(playerId, raw).catch((e) => {
+      console.warn("[AdminFaceEnroll] Failed to persist enrolled face photo:", e);
+    });
+
     const updated = await prisma.player.findUnique({
       where: { id: playerId },
       select: { faceSubjectId: true, facePhotoPath: true },
