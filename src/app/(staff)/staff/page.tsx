@@ -20,6 +20,10 @@ import {
 import { useSetStaffClientId } from "@/config/use-client-config";
 import { useStaffPinStore } from "@/stores/staff-pin-store";
 import type { StaffAppAccessKind } from "@/lib/staff-app-access";
+import { setPersistedTabletVenueId } from "@/lib/tablet-venue-persistence";
+import { cn } from "@/lib/cn";
+
+type StaffMeStatus = "idle" | "loading" | "success" | "error";
 
 interface StaffVenue {
   id: string;
@@ -27,10 +31,16 @@ interface StaffVenue {
   appAccess?: StaffAppAccessKind[];
 }
 
+function venueAccessList(v: StaffVenue): StaffAppAccessKind[] {
+  return v.appAccess && v.appAccess.length > 0 ? v.appAccess : ["courtflow"];
+}
+
 function venueHasCourtPayAccess(v: StaffVenue): boolean {
-  const access: StaffAppAccessKind[] =
-    v.appAccess && v.appAccess.length > 0 ? v.appAccess : ["courtflow"];
-  return access.includes("courtpay");
+  return venueAccessList(v).includes("courtpay");
+}
+
+function venueHasCourtFlowAccess(v: StaffVenue): boolean {
+  return venueAccessList(v).includes("courtflow");
 }
 
 export default function StaffPage() {
@@ -50,14 +60,14 @@ export default function StaffPage() {
   const [showRoleChoice, setShowRoleChoice] = useState(false);
   const [showOtherApps, setShowOtherApps] = useState(false);
   const [loginVenues, setLoginVenues] = useState<StaffVenue[]>([]);
+  /** Authoritative staff venues from GET /api/auth/staff-me (avoids tablet race with login payload only). */
+  const [staffMeStatus, setStaffMeStatus] = useState<StaffMeStatus>("idle");
   const [clientBootstrapDone, setClientBootstrapDone] = useState(false);
   const installPromptShownRef = useRef(false);
   const returnHomePendingRef = useRef(false);
   const freshLoginChoiceRef = useRef(false);
   /** Skip staff-me bootstrap when we already resolved client for this staff+venue (e.g. single-app proceed). */
   const clientResolvedForKeyRef = useRef<string | null>(null);
-  /** `loginVenues` is not persisted; re-fetch from staff-me after full page load (e.g. profile "Go to Role / Tablet"). */
-  const loginVenuesFetchStartedRef = useRef(false);
   const router = useRouter();
 
   const proceedToVenue = useCallback(
@@ -135,26 +145,27 @@ export default function StaffPage() {
 
   useEffect(() => {
     if (!token || !staffId) {
-      loginVenuesFetchStartedRef.current = false;
+      setStaffMeStatus("idle");
+      setLoginVenues([]);
       return;
     }
-    if (loginVenues.length > 0) return;
-    if (loginVenuesFetchStartedRef.current) return;
-    loginVenuesFetchStartedRef.current = true;
     let cancelled = false;
+    setStaffMeStatus("loading");
     void (async () => {
       try {
         const me = await api.get<{ venues: StaffVenue[] }>("/api/auth/staff-me");
         if (cancelled) return;
         setLoginVenues(me.venues);
+        setStaffMeStatus("success");
       } catch {
-        // Leave empty; user can refresh.
+        if (cancelled) return;
+        setStaffMeStatus("error");
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [token, staffId, loginVenues.length]);
+  }, [token, staffId]);
 
   const handleShowOnboarding = () => {
     if (typeof window !== "undefined") {
@@ -223,9 +234,31 @@ export default function StaffPage() {
     () => loginVenues.filter(venueHasCourtPayAccess),
     [loginVenues]
   );
-  const showTabletModeOnLanding = courtPayVenueChoices.length > 0;
+  /** Player / TV / queue links are CourtFlow-only; hide until staff-me confirms at least one CourtFlow venue. */
+  const showOtherAppsEntry =
+    staffMeStatus === "success" && loginVenues.some(venueHasCourtFlowAccess);
+  /** Show Tablet mode row while staff-me is loading/errored, or when loaded with ≥1 CourtPay venue. */
+  const showTabletModeOnLanding =
+    staffMeStatus !== "success" || courtPayVenueChoices.length > 0;
+  const tabletModeButtonReady = staffMeStatus === "success" && courtPayVenueChoices.length > 0;
+
+  useEffect(() => {
+    if (!showOtherAppsEntry && showOtherApps) {
+      setShowOtherApps(false);
+    }
+  }, [showOtherAppsEntry, showOtherApps]);
+
+  const navigateToTablet = useCallback(
+    (id: string) => {
+      setShowRoleChoice(false);
+      setPersistedTabletVenueId(id);
+      router.push(`/tv-queue/${id}`);
+    },
+    [router]
+  );
 
   const openCourtPayTablet = useCallback(() => {
+    if (staffMeStatus !== "success") return;
     freshLoginChoiceRef.current = false;
     setShowOtherApps(false);
     const withCp = loginVenues.filter(venueHasCourtPayAccess);
@@ -233,19 +266,17 @@ export default function StaffPage() {
     if (venueId) {
       const match = withCp.find((x) => x.id === venueId);
       if (match) {
-        setShowRoleChoice(false);
-        router.push(`/tv-queue/${venueId}`);
+        navigateToTablet(venueId);
         return;
       }
     }
     if (withCp.length === 1) {
-      setShowRoleChoice(false);
-      router.push(`/tv-queue/${withCp[0]!.id}`);
+      navigateToTablet(withCp[0]!.id);
       return;
     }
     setPendingTabletVenues(withCp);
     setShowRoleChoice(false);
-  }, [loginVenues, venueId, router]);
+  }, [loginVenues, venueId, staffMeStatus, navigateToTablet]);
 
   if (token && staffId && venueId && !showRoleChoice && !showOtherApps) {
     if (pendingAppPickVenue) {
@@ -300,6 +331,8 @@ export default function StaffPage() {
                 type="button"
                 onClick={() => {
                   setPendingTabletVenues(null);
+                  setPersistedTabletVenueId(v.id);
+                  setShowRoleChoice(false);
                   router.push(`/tv-queue/${v.id}`);
                 }}
                 className="w-full rounded-2xl border border-green-500/20 bg-green-500/5 px-5 py-4 text-left text-base font-medium text-white transition-all hover:border-green-500/40 hover:bg-green-500/10"
@@ -470,32 +503,49 @@ export default function StaffPage() {
               {showTabletModeOnLanding && (
                 <button
                   type="button"
+                  disabled={!tabletModeButtonReady}
                   onClick={openCourtPayTablet}
-                  className="group flex w-full items-center gap-4 rounded-2xl border border-green-500/25 bg-green-500/5 p-4 text-left transition-all hover:border-green-500/45 hover:bg-green-500/10"
+                  className={cn(
+                    "group flex w-full items-center gap-4 rounded-2xl border border-green-500/25 bg-green-500/5 p-4 text-left transition-all",
+                    tabletModeButtonReady
+                      ? "hover:border-green-500/45 hover:bg-green-500/10"
+                      : "cursor-not-allowed opacity-80",
+                  )}
                 >
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-green-500/15 transition-colors group-hover:bg-green-500/25">
-                    <Tablet className="h-5 w-5 text-green-400" />
+                  <div
+                    className={cn(
+                      "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-green-500/15 transition-colors",
+                      tabletModeButtonReady && "group-hover:bg-green-500/25",
+                    )}
+                  >
+                    {staffMeStatus === "loading" ? (
+                      <Loader2 className="h-5 w-5 shrink-0 animate-spin text-green-400" aria-hidden />
+                    ) : (
+                      <Tablet className="h-5 w-5 shrink-0 text-green-400" />
+                    )}
                   </div>
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <p className="font-semibold text-white">{t("staff.login.tabletMode")}</p>
                     <p className="text-xs text-neutral-400">{t("staff.login.tabletModeDesc")}</p>
                   </div>
                 </button>
               )}
 
-              <button
-                type="button"
-                onClick={() => setShowOtherApps(true)}
-                className="group flex w-full items-center gap-4 rounded-2xl border border-neutral-700/70 bg-neutral-900/70 p-4 text-left transition-all hover:border-neutral-600 hover:bg-neutral-800/80"
-              >
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-neutral-800 transition-colors group-hover:bg-neutral-700">
-                  <Grid3X3 className="h-5 w-5 text-neutral-300" />
-                </div>
-                <div className="min-w-0">
-                  <p className="font-semibold text-white">{t("staff.login.otherApps")}</p>
-                  <p className="text-xs text-neutral-400">{t("staff.login.otherAppsDesc")}</p>
-                </div>
-              </button>
+              {showOtherAppsEntry ? (
+                <button
+                  type="button"
+                  onClick={() => setShowOtherApps(true)}
+                  className="group flex w-full items-center gap-4 rounded-2xl border border-neutral-700/70 bg-neutral-900/70 p-4 text-left transition-all hover:border-neutral-600 hover:bg-neutral-800/80"
+                >
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-neutral-800 transition-colors group-hover:bg-neutral-700">
+                    <Grid3X3 className="h-5 w-5 text-neutral-300" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-white">{t("staff.login.otherApps")}</p>
+                    <p className="text-xs text-neutral-400">{t("staff.login.otherAppsDesc")}</p>
+                  </div>
+                </button>
+              ) : null}
             </div>
           )}
 
@@ -506,6 +556,8 @@ export default function StaffPage() {
               setShowRoleChoice(false);
               setShowOtherApps(false);
               setPendingTabletVenues(null);
+              setLoginVenues([]);
+              setStaffMeStatus("idle");
               setAuth({
                 token: null,
                 staffId: null,
