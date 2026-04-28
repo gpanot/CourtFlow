@@ -1,0 +1,346 @@
+{
+  "dryRun": true,
+  "collectionId": "courtflow-players",
+  "at": "2026-04-28T00:32:18.329Z",
+  "totalPlayersScanned": 37,
+  "alreadyValidInAws": 36,
+  "noPhotoAvailable": 0,
+  "attemptedEnrollment": 1,
+  "dryRunPhotoLoadOk": 0,
+  "dryRunPhotoLoadFailed": 1,
+  "results": [
+    {
+      "playerId": "cmodoykjq001zo801si9g95io",
+      "name": "Cincin",
+      "phone": "55555555",
+      "facePhotoPath": "/uploads/players/cmodoykjq001zo801si9g95io.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmodpv2f6005ho8011r04k24u",
+      "name": "Hien",
+      "phone": "0908661910",
+      "facePhotoPath": "/uploads/players/cmodpv2f6005ho8011r04k24u.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmogrtxh5001cpd01f9w8iq1b",
+      "name": "Nhung Nguyen",
+      "phone": "0847220497",
+      "facePhotoPath": "/uploads/players/cmogrtxh5001cpd01f9w8iq1b.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmodp2ht70026o8012i80az2w",
+      "name": "Qien qien",
+      "phone": "0909784984",
+      "facePhotoPath": "/uploads/players/cmodp2ht70026o8012i80az2w.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmodq1uir005qo801ju3rv62n",
+      "name": "Thenamne",
+      "phone": "0385499876",
+      "facePhotoPath": "/uploads/players/cmodq1uir005qo801ju3rv62n.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmogs9t29001jpd01rgucfxb6",
+      "name": "🌼 TA 🌼",
+      "phone": "0977041293",
+      "facePhotoPath": "/uploads/players/cmogs9t29001jpd01rgucfxb6.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmodp57rp002do8012i5i6xsl",
+      "name": "Diem",
+      "phone": "0906801374",
+      "facePhotoPath": "/uploads/players/cmodp57rp002do8012i5i6xsl.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmodqd74m005xo801psmnthl4",
+      "name": "Dau elbow",
+      "phone": "0387599399",
+      "facePhotoPath": "/uploads/players/cmodqd74m005xo801psmnthl4.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmogsp4v9001opd01gn3qdqax",
+      "name": "Zach",
+      "phone": "0789212985",
+      "facePhotoPath": "/uploads/players/cmogsp4v9001opd01gn3qdqax.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmogst9q2001tpd01uem8ovv3",
+      "name": "Phuoc",
+      "phone": "0902636811",
+      "facePhotoPath": "/uploads/players/cmogst9q2001tpd01uem8ovv3.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmodp6y9u002ko801kxho5b49",
+      "name": "Ngoc Le",
+      "phone": "0938120468",
+      "facePhotoPath": "/uploads/players/cmodp6y9u002ko801kxho5b49.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmodp78m1002po801zlzc96ex",
+      "name": "Phat",
+      "phone": "0908013881",
+      "facePhotoPath": "/uploads/players/cmodp78m1002po801zlzc96ex.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmodqi7wf0064o801zajnwyld",
+      "name": "Khiem",
+      "phone": "0905124399",
+      "facePhotoPath": "/uploads/players/cmodqi7wf0064o801zajnwyld.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmogt7ypq001ypd01yq5bk749",
+      "name": "Ekhlas",
+      "phone": "0869753763",
+      "facePhotoPath": "/uploads/players/cmogt7ypq001ypd01yq5bk749.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmogt8ua30023pd01b32bgmfv",
+      "name": "Vand003",
+      "phone": "0365647430",
+      "facePhotoPath": "/uploads/players/cmogt8ua30023pd01b32bgmfv.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmodp8prl002yo801gq2rd857",
+      "name": "Nhat Quang",
+      "phone": "0919003345",
+      "facePhotoPath": "/uploads/players/cmodp8prl002yo801gq2rd857.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmods7lhg006bo801fgj7gkpc",
+      "name": "Quan",
+      "phone": "0968887315",
+      "facePhotoPath": "/uploads/players/cmods7lhg006bo801fgj7gkpc.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmogvjc0w002apd01eh83ousj",
+      "name": "Kong",
+      "phone": "0942130000",
+      "facePhotoPath": "/uploads/players/cmogvjc0w002apd01eh83ousj.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmogvkq4m002fpd01lyvfnf78",
+      "name": "Mina",
+      "phone": "0356667977",
+      "facePhotoPath": "/uploads/players/cmogvkq4m002fpd01lyvfnf78.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmodpc5t60035o801o0ummjr6",
+      "name": "Mumu",
+      "phone": "0967504534",
+      "facePhotoPath": "/uploads/players/cmodpc5t60035o801o0ummjr6.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmodpck03003ao801iqpbrivn",
+      "name": "Hoang",
+      "phone": "0916049899",
+      "facePhotoPath": "/uploads/players/cmodpck03003ao801iqpbrivn.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmodpejux003jo801cztrorxe",
+      "name": "Huong",
+      "phone": "0973586345",
+      "facePhotoPath": "/uploads/players/cmodpejux003jo801cztrorxe.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmodpekmu003oo801dc0g7sl5",
+      "name": "Nhu",
+      "phone": "0907802969",
+      "facePhotoPath": "/uploads/players/cmodpekmu003oo801dc0g7sl5.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmodsj912006io801rw9vodpc",
+      "name": "Kimhoa",
+      "phone": "0931899984",
+      "facePhotoPath": "/uploads/players/cmodsj912006io801rw9vodpc.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmodsl4hp006po801kdvwhkl5",
+      "name": "Trieu Nghi Hoang",
+      "phone": "0705070705",
+      "facePhotoPath": "/uploads/players/cmodsl4hp006po801kdvwhkl5.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmogvt2sc002mpd01max3tgg1",
+      "name": "SiuLee",
+      "phone": "0933388868",
+      "facePhotoPath": "/uploads/players/cmogvt2sc002mpd01max3tgg1.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmodpi6zk003xo8013xfm6lnv",
+      "name": "Thich Backhand",
+      "phone": "0908612768",
+      "facePhotoPath": "/uploads/players/cmodpi6zk003xo8013xfm6lnv.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmodpktx50044o8015mfn9lg5",
+      "name": "Cong Tran",
+      "phone": "0909242743",
+      "facePhotoPath": "/uploads/players/cmodpktx50044o8015mfn9lg5.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmodplumw0049o80182h4ubcn",
+      "name": "Amytran",
+      "phone": "0938275369",
+      "facePhotoPath": "/uploads/players/cmodplumw0049o80182h4ubcn.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmoe547p40014oa011homr000",
+      "name": "Gui",
+      "phone": "22628625",
+      "facePhotoPath": "/uploads/players/cmoe547p40014oa011homr000.jpg",
+      "status": "failed",
+      "newFaceSubjectId": "",
+      "reason": "Photo load: ENOENT: no such file or directory, open '/uploads/players/cmoe547p40014oa011homr000.jpg' (dry-run: not calling IndexFaces, not updating database)"
+    },
+    {
+      "playerId": "cmodpp642004io801rydaisiw",
+      "name": "Ngan Le",
+      "phone": "0909400584",
+      "facePhotoPath": "/uploads/players/cmodpp642004io801rydaisiw.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmodpphit004no8016vup6usr",
+      "name": "Duy phuong",
+      "phone": "0902987788",
+      "facePhotoPath": "/uploads/players/cmodpphit004no8016vup6usr.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmogqoh2p000kpd01abq6bzmx",
+      "name": "Tuan Anh",
+      "phone": "0902766888",
+      "facePhotoPath": "/uploads/players/cmogqoh2p000kpd01abq6bzmx.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmogrpmok0017pd01sdjaqwq8",
+      "name": "Sara",
+      "phone": "0354076189",
+      "facePhotoPath": "/uploads/players/cmogrpmok0017pd01sdjaqwq8.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmodpqoc3004wo801ef27q6fd",
+      "name": "Quang",
+      "phone": "0815013825",
+      "facePhotoPath": "/uploads/players/cmodpqoc3004wo801ef27q6fd.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmodpr0vg0051o801kmkr9t2e",
+      "name": "Tien",
+      "phone": "0907230006",
+      "facePhotoPath": "/uploads/players/cmodpr0vg0051o801kmkr9t2e.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    },
+    {
+      "playerId": "cmodpskc6005ao801d92i3r4g",
+      "name": "Hoa",
+      "phone": "0909391012",
+      "facePhotoPath": "/uploads/players/cmodpskc6005ao801d92i3r4g.jpg",
+      "status": "skipped",
+      "newFaceSubjectId": "",
+      "reason": "faceSubjectId already present in AWS collection"
+    }
+  ]
+}

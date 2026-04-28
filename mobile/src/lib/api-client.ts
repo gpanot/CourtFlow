@@ -21,12 +21,17 @@ function networkFetchFailureMessage(baseMsg: string): string {
 export class ApiRequestError extends Error {
   readonly status: number;
   readonly code?: string;
+  readonly qualityError?: boolean;
 
-  constructor(message: string, init: { status: number; code?: string }) {
+  constructor(
+    message: string,
+    init: { status: number; code?: string; qualityError?: boolean }
+  ) {
     super(message);
     this.name = "ApiRequestError";
     this.status = init.status;
     this.code = init.code;
+    this.qualityError = init.qualityError;
   }
 }
 
@@ -90,6 +95,7 @@ async function request<T>(
     throw new ApiRequestError(message, {
       status: res.status,
       code: typeof data.code === "string" ? data.code : undefined,
+      qualityError: data.qualityError === true,
     });
   }
 
@@ -131,7 +137,10 @@ async function uploadRequest<T>(url: string, formData: FormData): Promise<T> {
       text,
       data
     );
-    throw new ApiRequestError(message, { status: res.status });
+    throw new ApiRequestError(message, {
+      status: res.status,
+      qualityError: data.qualityError === true,
+    });
   }
 
   return data as T;

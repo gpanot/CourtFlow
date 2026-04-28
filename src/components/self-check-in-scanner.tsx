@@ -702,17 +702,6 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
           <div className="w-full max-w-lg space-y-4">
             <button
               type="button"
-              onClick={beginFaceScan}
-              className="flex w-full items-center gap-5 rounded-3xl border-2 border-green-600/50 bg-green-900/30 px-8 py-7 text-left transition-colors hover:bg-green-900/50 active:scale-[0.99]"
-            >
-              <ScanFace className="h-10 w-10 shrink-0 text-green-400" />
-              <div>
-                <p className="text-2xl font-bold text-white">{t("tablet.checkInScanner.homeCheckIn")}</p>
-                <p className="text-base text-neutral-400">{t("tablet.checkInScanner.homeCheckInSub")}</p>
-              </div>
-            </button>
-            <button
-              type="button"
               onClick={beginRegFaceCapture}
               className="flex w-full items-center gap-5 rounded-3xl border-2 border-neutral-600/50 bg-neutral-800/30 px-8 py-7 text-left transition-colors hover:bg-neutral-800/60 active:scale-[0.99]"
             >
@@ -720,6 +709,17 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
               <div>
                 <p className="text-2xl font-bold text-white">{t("tablet.checkInScanner.homeFirstTime")}</p>
                 <p className="text-base text-neutral-400">{t("tablet.checkInScanner.homeFirstTimeSub")}</p>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={beginFaceScan}
+              className="flex w-full items-center gap-5 rounded-3xl border-2 border-green-600/50 bg-green-900/30 px-8 py-7 text-left transition-colors hover:bg-green-900/50 active:scale-[0.99]"
+            >
+              <ScanFace className="h-10 w-10 shrink-0 text-green-400" />
+              <div>
+                <p className="text-2xl font-bold text-white">{t("tablet.checkInScanner.homeCheckIn")}</p>
+                <p className="text-base text-neutral-400">{t("tablet.checkInScanner.homeCheckInSub")}</p>
               </div>
             </button>
           </div>

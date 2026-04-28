@@ -17,6 +17,7 @@ export interface FaceEnrollmentResult {
   success: boolean;
   subjectId?: string;
   error?: string;
+  qualityError?: boolean;
 }
 
 export interface FaceDetectionResult {
@@ -84,6 +85,13 @@ class MockFaceRecognitionService {
         faceDetected: false,
       };
     }
+  }
+
+  /** CourtPay staff capture — assume a face is present in mock mode. */
+  async detectFacePresentForCourtPayPreview(
+    _imageBase64: string
+  ): Promise<{ faceDetected: boolean }> {
+    return { faceDetected: true };
   }
 
   /**

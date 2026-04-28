@@ -10,12 +10,16 @@ const { mockApiGet, mockApiPost, mockFetch } = vi.hoisted(() => ({
   mockFetch: vi.fn(),
 }));
 
-vi.mock("@/lib/api-client", () => ({
-  api: {
-    get: mockApiGet,
-    post: mockApiPost,
-  },
-}));
+vi.mock("@/lib/api-client", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/api-client")>();
+  return {
+    ...actual,
+    api: {
+      get: mockApiGet,
+      post: mockApiPost,
+    },
+  };
+});
 
 vi.mock("@/hooks/use-success-chime", () => ({
   useSuccessChime: () => ({
@@ -128,7 +132,7 @@ describe("CourtPayKiosk UI flow", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Looks good →" }));
 
-    fireEvent.change(screen.getByPlaceholderText("Your name"), {
+    fireEvent.change(screen.getByPlaceholderText("Your Reclub's name"), {
       target: { value: "Alice" },
     });
     fireEvent.change(screen.getByPlaceholderText("0901234567"), {

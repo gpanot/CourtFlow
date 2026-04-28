@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
-import { error, json, notFound, parseBody } from "@/lib/api-helpers";
+import { error, errorJson, json, notFound, parseBody } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
 import { faceRecognitionService } from "@/lib/face-recognition";
 
@@ -34,6 +34,15 @@ export async function POST(
     const raw = stripDataUrl(imageBase64);
     const res = await faceRecognitionService.enrollFace(raw, playerId);
     if (!res.success) {
+      if (res.qualityError) {
+        return errorJson(
+          {
+            error: res.error || "Face enrollment failed",
+            qualityError: true,
+          },
+          400
+        );
+      }
       return error(res.error || "Face enrollment failed", 400);
     }
     const updated = await prisma.player.findUnique({

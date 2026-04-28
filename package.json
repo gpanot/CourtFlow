@@ -20,6 +20,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "verify:groups": "tsx scripts/verify-groups-not-split.ts",
+    "enroll:faces:dry": "tsx scripts/reenroll-mock-players.ts --dry-run",
+    "enroll:faces": "tsx scripts/reenroll-mock-players.ts",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage"

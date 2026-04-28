@@ -1,0 +1,28 @@
+{
+  "collectionId": "courtflow-players",
+  "awsRegion": "ap-southeast-1",
+  "listedFaceCount": 39,
+  "playerRowsWithNonNullFaceSubject": 3,
+  "generatedAt": "2026-04-28T00:18:49.190Z",
+  "valid": [
+    {
+      "playerName": "Tan",
+      "phone": "9876543",
+      "faceSubjectId": "1ce1032b-b6a1-42a6-8205-f347cacf785b",
+      "confirmedInAws": true
+    },
+    {
+      "playerName": "Tan",
+      "phone": "987654308",
+      "faceSubjectId": "79044dd1-8374-4dcb-a1c0-1a6c4c37593b",
+      "confirmedInAws": true
+    },
+    {
+      "playerName": "duy",
+      "phone": "1237654",
+      "faceSubjectId": "641651e9-ced8-4b53-85e8-3009d306fe6a",
+      "confirmedInAws": true
+    }
+  ],
+  "staleOrNotInCollection": []
+}

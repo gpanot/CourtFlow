@@ -590,7 +590,12 @@
       "capture": "Chụp",
       "retake": "Chụp lại",
       "faceCaptured": "Đã chụp mặt",
-      "closeCamera": "Tắt camera"
+      "closeCamera": "Tắt camera",
+      "registerPhotoTryAgain": "Thử lại",
+      "registerPhotoAskStaff": "Vui lòng nhờ nhân viên hỗ trợ.",
+      "courtPayPreCaptureChecking": "Đang kiểm tra ảnh…",
+      "courtPayPreCaptureReady": "Đã chụp ảnh, có thể gửi đăng ký.",
+      "courtPayPreCaptureNoFace": "Không thấy khuôn mặt, vui lòng chụp lại."
     }
   }
 }

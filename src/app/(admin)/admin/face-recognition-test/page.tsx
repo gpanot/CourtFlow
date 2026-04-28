@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { api } from "@/lib/api-client";
 import { PlayerAvatarThumb } from "@/components/player-avatar-thumb";
 import { ScanFace, Search, Upload } from "lucide-react";
@@ -78,6 +78,9 @@ export default function FaceRecognitionTestPage() {
   const [faceSearchLoading, setFaceSearchLoading] = useState(false);
   const [faceSearchError, setFaceSearchError] = useState<string | null>(null);
   const [faceSearchResult, setFaceSearchResult] = useState<FaceSearchResponse | null>(null);
+  /** Test threshold for collection search PASS/FAIL (70–99); synced from env on first successful search. */
+  const [faceSearchThresholdSlider, setFaceSearchThresholdSlider] = useState(85);
+  const faceSearchSliderSyncedFromEnv = useRef(false);
 
   const onPickA = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -154,6 +157,10 @@ export default function FaceRecognitionTestPage() {
         imageBase64: faceSearchImage,
       });
       setFaceSearchResult(res);
+      if (!faceSearchSliderSyncedFromEnv.current && Number.isFinite(res.productionThreshold)) {
+        setFaceSearchThresholdSlider(Math.round(res.productionThreshold));
+        faceSearchSliderSyncedFromEnv.current = true;
+      }
     } catch (err: unknown) {
       const msg =
         err && typeof err === "object" && "message" in err
@@ -373,6 +380,30 @@ export default function FaceRecognitionTestPage() {
           {faceSearchLoading ? "Searching…" : "Search collection"}
         </button>
 
+        <div className="mt-6 space-y-2">
+          <div className="mb-2 flex justify-between text-sm text-neutral-400">
+            <span>Test threshold</span>
+            <span className="tabular-nums text-white">{faceSearchThresholdSlider}%</span>
+          </div>
+          <input
+            type="range"
+            min={70}
+            max={99}
+            value={faceSearchThresholdSlider}
+            onChange={(e) => setFaceSearchThresholdSlider(Number(e.target.value))}
+            className="h-2 w-full max-w-md cursor-pointer accent-amber-500"
+            aria-label="Test threshold for collection search"
+          />
+          <p className="text-sm text-neutral-500">
+            Production threshold (env):{" "}
+            <span className="font-mono tabular-nums text-neutral-300">
+              {faceSearchResult != null
+                ? `${faceSearchResult.productionThreshold}%`
+                : "— (shown after first search)"}
+            </span>
+          </p>
+        </div>
+
         {faceSearchError && (
           <p className="mt-4 rounded-lg border border-red-900/50 bg-red-950/40 px-4 py-3 text-sm text-red-300">
             {faceSearchError}
@@ -404,7 +435,9 @@ export default function FaceRecognitionTestPage() {
 
             {faceSearchResult.matches.length > 0 && (
               <ul className="space-y-4">
-                {faceSearchResult.matches.map((m, i) => (
+                {faceSearchResult.matches.map((m, i) => {
+                  const passedAtTestSlider = m.similarity >= faceSearchThresholdSlider;
+                  return (
                   <li
                     key={`${m.playerId}-${m.awsFaceId ?? i}`}
                     className="flex flex-col gap-3 rounded-xl border border-neutral-800 bg-neutral-900/50 p-4 sm:flex-row sm:items-center"
@@ -429,27 +462,25 @@ export default function FaceRecognitionTestPage() {
                         </span>{" "}
                         <span className="text-neutral-500">(search floor 50%)</span>
                       </p>
-                      <p className="mt-0.5 text-xs text-neutral-500">
-                        Production threshold: {m.productionThreshold}%
-                      </p>
                     </div>
                     <div className="shrink-0">
                       <span
                         className={cn(
                           "inline-flex rounded-md px-3 py-1.5 text-xs font-bold",
-                          m.passedProduction
+                          passedAtTestSlider
                             ? "bg-emerald-950/60 text-emerald-300"
                             : "bg-red-950/60 text-red-300"
                         )}
                       >
-                        {m.passedProduction ? "PASS" : "FAIL"}
+                        {passedAtTestSlider ? "PASS" : "FAIL"}
                       </span>
                       <p className="mt-1 text-center text-[10px] text-neutral-500 sm:text-left">
-                        vs {m.productionThreshold}%
+                        vs test {faceSearchThresholdSlider}%
                       </p>
                     </div>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
           </div>

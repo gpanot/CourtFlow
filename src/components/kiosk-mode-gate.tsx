@@ -10,8 +10,9 @@ import {
 import { useRouter } from "next/navigation";
 import { Monitor, MoreHorizontal, UserCheck, CreditCard } from "lucide-react";
 import { cn } from "@/lib/cn";
-
 export type KioskMode = "entrance" | "tv" | "courtpay";
+
+const ALL_KIOSK_MODES: KioskMode[] = ["entrance", "tv", "courtpay"];
 
 const KIOSK_PIN = "0000";
 const ESCAPE_TAP_COUNT = 5;
@@ -19,6 +20,8 @@ const ESCAPE_TAP_WINDOW_MS = 3000;
 
 interface KioskModeGateProps {
   venueId: string;
+  /** When set, hides modes the venue does not support (from staff app access). */
+  allowedModes?: KioskMode[];
   children: (mode: KioskMode) => ReactNode;
 }
 
@@ -122,9 +125,11 @@ function PinPad({
 function ModeSelector({
   onSelect,
   onBack,
+  allowedModes,
 }: {
   onSelect: (mode: KioskMode) => void;
   onBack: () => void;
+  allowedModes: KioskMode[];
 }) {
   return (
     <div className="flex h-dvh w-screen flex-col items-center justify-center gap-8 bg-black p-8">
@@ -136,45 +141,51 @@ function ModeSelector({
       </div>
 
       <div className="flex w-full max-w-md flex-col gap-4">
-        <button
-          type="button"
-          onClick={() => onSelect("entrance")}
-          className="flex items-center gap-5 rounded-2xl border-2 border-green-600/40 bg-green-900/40 p-6 text-left hover:bg-green-900/60 active:scale-[0.99]"
-        >
-          <UserCheck className="h-10 w-10 shrink-0 text-green-400" />
-          <div>
-            <p className="text-xl font-bold text-white">Self Check-in</p>
-            <p className="text-sm text-neutral-400">
-              Place at the entrance for player check-in
-            </p>
-          </div>
-        </button>
-        <button
-          type="button"
-          onClick={() => onSelect("tv")}
-          className="flex items-center gap-5 rounded-2xl border-2 border-blue-600/40 bg-blue-900/40 p-6 text-left hover:bg-blue-900/60 active:scale-[0.99]"
-        >
-          <Monitor className="h-10 w-10 shrink-0 text-blue-400" />
-          <div>
-            <p className="text-xl font-bold text-white">Join Queue</p>
-            <p className="text-sm text-neutral-400">
-              Place near TV for players to join the queue
-            </p>
-          </div>
-        </button>
-        <button
-          type="button"
-          onClick={() => onSelect("courtpay")}
-          className="flex items-center gap-5 rounded-2xl border-2 border-purple-600/40 bg-purple-900/40 p-6 text-left hover:bg-purple-900/60 active:scale-[0.99]"
-        >
-          <CreditCard className="h-10 w-10 shrink-0 text-purple-400" />
-          <div>
-            <p className="text-xl font-bold text-white">CourtPay Check-in</p>
-            <p className="text-sm text-neutral-400">
-              Phone-based check-in with payment &amp; subscriptions
-            </p>
-          </div>
-        </button>
+        {allowedModes.includes("entrance") && (
+          <button
+            type="button"
+            onClick={() => onSelect("entrance")}
+            className="flex items-center gap-5 rounded-2xl border-2 border-green-600/40 bg-green-900/40 p-6 text-left hover:bg-green-900/60 active:scale-[0.99]"
+          >
+            <UserCheck className="h-10 w-10 shrink-0 text-green-400" />
+            <div>
+              <p className="text-xl font-bold text-white">Self Check-in</p>
+              <p className="text-sm text-neutral-400">
+                Place at the entrance for player check-in
+              </p>
+            </div>
+          </button>
+        )}
+        {allowedModes.includes("tv") && (
+          <button
+            type="button"
+            onClick={() => onSelect("tv")}
+            className="flex items-center gap-5 rounded-2xl border-2 border-blue-600/40 bg-blue-900/40 p-6 text-left hover:bg-blue-900/60 active:scale-[0.99]"
+          >
+            <Monitor className="h-10 w-10 shrink-0 text-blue-400" />
+            <div>
+              <p className="text-xl font-bold text-white">Join Queue</p>
+              <p className="text-sm text-neutral-400">
+                Place near TV for players to join the queue
+              </p>
+            </div>
+          </button>
+        )}
+        {allowedModes.includes("courtpay") && (
+          <button
+            type="button"
+            onClick={() => onSelect("courtpay")}
+            className="flex items-center gap-5 rounded-2xl border-2 border-purple-600/40 bg-purple-900/40 p-6 text-left hover:bg-purple-900/60 active:scale-[0.99]"
+          >
+            <CreditCard className="h-10 w-10 shrink-0 text-purple-400" />
+            <div>
+              <p className="text-xl font-bold text-white">CourtPay Check-in</p>
+              <p className="text-sm text-neutral-400">
+                Phone-based check-in with payment &amp; subscriptions
+              </p>
+            </div>
+          </button>
+        )}
       </div>
 
       <button
@@ -182,7 +193,7 @@ function ModeSelector({
         onClick={onBack}
         className="text-sm text-neutral-500 transition-colors hover:text-neutral-300"
       >
-        ← Back to Venues
+        ← Back to staff
       </button>
     </div>
   );
@@ -263,7 +274,13 @@ export function KioskModeGate({ venueId, children }: KioskModeGateProps) {
   }
 
   if (phase === "select") {
-    return <ModeSelector onSelect={selectMode} onBack={() => router.push("/tv-queue")} />;
+    return (
+      <ModeSelector
+        allowedModes={ALL_KIOSK_MODES}
+        onSelect={selectMode}
+        onBack={() => router.push("/tv-queue")}
+      />
+    );
   }
 
   if (phase === "locked" && mode) {

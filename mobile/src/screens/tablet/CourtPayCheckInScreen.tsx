@@ -28,7 +28,7 @@ import {
   CourtPaySessionAwaitingPayment,
   COURTPAY_SESSION_PARTY_MAX,
 } from "../../components/courtpay/CourtPaySessionAwaitingPayment";
-import { api } from "../../lib/api-client";
+import { api, ApiRequestError } from "../../lib/api-client";
 import { ENV } from "../../config/env";
 import { useAuthStore } from "../../stores/auth-store";
 import { useThemeStore, ACCENT_MAP } from "../../stores/theme-store";
@@ -215,6 +215,8 @@ export function CourtPayCheckInScreen({
   const [confirmedSeconds, setConfirmedSeconds] = useState(CONFIRMED_AUTO_HOME_SEC);
   const [exhaustedOfferSeconds, setExhaustedOfferSeconds] = useState(EXHAUSTED_OFFER_AUTO_HOME_SEC);
   const [error, setError] = useState("");
+  const [registerPhotoQualityMessage, setRegisterPhotoQualityMessage] = useState("");
+  const [registerPhotoQualityFailures, setRegisterPhotoQualityFailures] = useState(0);
   const [confirmMessage, setConfirmMessage] = useState("");
   const [confirmedSubInfo, setConfirmedSubInfo] = useState<ActiveSubInfo | null>(null);
   const [exhaustedSubInfo, setExhaustedSubInfo] = useState<ActiveSubInfo | null>(null);
@@ -374,6 +376,8 @@ export function CourtPayCheckInScreen({
     setRegPhoneRequiredVisible(false);
     setLoading(false);
     setError("");
+    setRegisterPhotoQualityMessage("");
+    setRegisterPhotoQualityFailures(0);
     setConfirmMessage("");
     setConfirmedSubInfo(null);
     setExhaustedSubInfo(null);
@@ -637,6 +641,7 @@ export function CourtPayCheckInScreen({
         base64: true,
       });
       if (photo?.base64) {
+        setRegisterPhotoQualityMessage("");
         setFaceBase64(photo.base64);
         setStep("reg_face_preview");
       } else {
@@ -897,11 +902,19 @@ export function CourtPayCheckInScreen({
     [venueId, player, sessionPartyCount, pendingPayment?.id]
   );
 
+  const handleRegisterPhotoQualityTryAgain = useCallback(() => {
+    setRegisterPhotoQualityMessage("");
+    setFaceBase64(null);
+    regCameraReady.current = false;
+    setStep("reg_face_capture");
+  }, []);
+
   const handleRegisterAndPay = async (packageId?: string) => {
     if (!venueId || !faceBase64 || !name.trim() || !gender || !skillLevel) {
       return;
     }
     setLoading(true);
+    setError("");
     try {
       const reg = await api.post<{
         playerId?: string;
@@ -924,6 +937,9 @@ export function CourtPayCheckInScreen({
         packageId,
         headCount: packageId ? undefined : sessionPartyCount,
       });
+
+      setRegisterPhotoQualityFailures(0);
+      setRegisterPhotoQualityMessage("");
 
       const registeredPlayer: CheckInPlayerLite = {
         id: reg.playerId ?? "",
@@ -962,6 +978,11 @@ export function CourtPayCheckInScreen({
         setConfirmedSubInfo(null);
         setConfirmMessage(t("alreadyCheckedInMsg", { name: name.trim() }));
         setStep("confirmed");
+        return;
+      }
+      if (err instanceof ApiRequestError && err.qualityError) {
+        setRegisterPhotoQualityFailures((n) => n + 1);
+        setRegisterPhotoQualityMessage(err.message);
         return;
       }
       setError(err instanceof Error ? err.message : "Registration failed");
@@ -1030,6 +1051,42 @@ export function CourtPayCheckInScreen({
 
   // ── Render ────────────────────────────────────────────────────────────────
   const renderStep = () => {
+    const registerPhotoQualityBanner =
+      registerPhotoQualityMessage.length > 0 ? (
+        <View
+          style={[
+            styles.registerPhotoQualityBox,
+            isLight && styles.registerPhotoQualityBoxLight,
+          ]}
+        >
+          <Text
+            style={[
+              styles.registerPhotoQualityMain,
+              isLight && styles.registerPhotoQualityMainLight,
+            ]}
+          >
+            {registerPhotoQualityMessage}
+          </Text>
+          {registerPhotoQualityFailures >= 3 ? (
+            <Text
+              style={[
+                styles.registerPhotoQualityStaff,
+                isLight && styles.registerPhotoQualityStaffLight,
+              ]}
+            >
+              {t("registerPhotoAskStaff")}
+            </Text>
+          ) : null}
+          <TouchableOpacity
+            style={[styles.registerPhotoQualityBtn, dyn.primaryBtn]}
+            onPress={handleRegisterPhotoQualityTryAgain}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.primaryBtnText}>{t("registerPhotoTryAgain")}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null;
+
     switch (step) {
       // ── HOME ───────────────────────────────────────────────────────────────
       case "home":
@@ -1065,30 +1122,6 @@ export function CourtPayCheckInScreen({
                 activeOpacity={0.92}
                 onPress={() => {
                   setFaceBase64(null);
-                  setStep("scan_returning");
-                  restartIdleTimer();
-                }}
-              >
-                <LiquidGlassSurface
-                  tintColor={isLight ? CP.glassOverlayOnLight : CP.glassOverlay}
-                  style={styles.homeGlassCard}
-                  intensity={Platform.OS === "ios" ? 50 : 88}
-                  mode={themeMode}
-                >
-                  <View style={styles.homeGlassRow}>
-                    <ScanFace size={40} color={isLight ? CP.textOnLight : CP.text} strokeWidth={2} />
-                    <View style={styles.homeCardTextCol}>
-                      <Text style={[styles.homeCardTitle, isLight && styles.homeCardTitleLight]}>{t("homeCheckIn")}</Text>
-                      <Text style={[styles.homeCardSub, isLight && styles.homeCardSubLight]}>{t("homeCheckInSub")}</Text>
-                    </View>
-                  </View>
-                </LiquidGlassSurface>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.homeCardTouchable}
-                activeOpacity={0.92}
-                onPress={() => {
-                  setFaceBase64(null);
                   setIsNewPlayer(true);
                   setStep("reg_face_capture");
                   restartIdleTimer();
@@ -1105,6 +1138,30 @@ export function CourtPayCheckInScreen({
                     <View style={styles.homeCardTextCol}>
                       <Text style={[styles.homeCardTitle, isLight && styles.homeCardTitleLight]}>{t("homeFirstTime")}</Text>
                       <Text style={[styles.homeCardSubMuted, isLight && styles.homeCardSubMutedLight]}>{t("homeFirstTimeSub")}</Text>
+                    </View>
+                  </View>
+                </LiquidGlassSurface>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.homeCardTouchable}
+                activeOpacity={0.92}
+                onPress={() => {
+                  setFaceBase64(null);
+                  setStep("scan_returning");
+                  restartIdleTimer();
+                }}
+              >
+                <LiquidGlassSurface
+                  tintColor={isLight ? CP.glassOverlayOnLight : CP.glassOverlay}
+                  style={styles.homeGlassCard}
+                  intensity={Platform.OS === "ios" ? 50 : 88}
+                  mode={themeMode}
+                >
+                  <View style={styles.homeGlassRow}>
+                    <ScanFace size={40} color={isLight ? CP.textOnLight : CP.text} strokeWidth={2} />
+                    <View style={styles.homeCardTextCol}>
+                      <Text style={[styles.homeCardTitle, isLight && styles.homeCardTitleLight]}>{t("homeCheckIn")}</Text>
+                      <Text style={[styles.homeCardSub, isLight && styles.homeCardSubLight]}>{t("homeCheckInSub")}</Text>
                     </View>
                   </View>
                 </LiquidGlassSurface>
@@ -1425,6 +1482,7 @@ export function CourtPayCheckInScreen({
             ]}
             keyboardShouldPersistTaps="handled"
           >
+            {registerPhotoQualityBanner}
             <LiquidGlassSurface style={styles.regFormGlass} accent="none" mode={themeMode}>
               <View style={styles.regFormCardInner}>
                 <View style={styles.regFormHeaderRow}>
@@ -1603,6 +1661,7 @@ export function CourtPayCheckInScreen({
               contentContainerStyle={styles.subOfferScroll}
               keyboardShouldPersistTaps="handled"
             >
+              {registerPhotoQualityBanner}
               <Text style={[styles.subOfferGreeting, isLight && styles.subOfferGreetingLight]}>{greeting}</Text>
               <Text style={[styles.subOfferSubtitle, isLight && styles.subOfferSubtitleLight]}>{subtitle}</Text>
 
@@ -1734,6 +1793,7 @@ export function CourtPayCheckInScreen({
               contentContainerStyle={styles.subOfferScroll}
               keyboardShouldPersistTaps="handled"
             >
+              {registerPhotoQualityBanner}
               <View style={styles.exhaustedHero}>
                 <View style={[styles.successCircle, dyn.successCircle, styles.exhaustedSuccessCircle]}>
                   <Ionicons name="checkmark" size={42} color={isLight ? CP.textOnLight : CP.text} />
@@ -2636,6 +2696,42 @@ const styles = StyleSheet.create({
   },
   regRetakeText: { color: "#e5e5e5", fontSize: 16, fontWeight: "600" },
   regRetakeTextLight: { color: "#334155" },
+
+  registerPhotoQualityBox: {
+    width: "100%",
+    maxWidth: 400,
+    alignSelf: "center",
+    marginBottom: 12,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(245, 158, 11, 0.45)",
+    backgroundColor: "rgba(245, 158, 11, 0.12)",
+    gap: 10,
+  },
+  registerPhotoQualityBoxLight: {
+    borderColor: "rgba(217, 119, 6, 0.4)",
+    backgroundColor: "rgba(251, 191, 36, 0.15)",
+  },
+  registerPhotoQualityMain: {
+    fontSize: 15,
+    lineHeight: 21,
+    color: "#fef3c7",
+    fontWeight: "600",
+  },
+  registerPhotoQualityMainLight: { color: "#78350f" },
+  registerPhotoQualityStaff: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: "#d4d4d4",
+  },
+  registerPhotoQualityStaffLight: { color: "#57534e" },
+  registerPhotoQualityBtn: {
+    marginTop: 2,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center",
+  },
 
   // ── REG FORM ──────────────────────────────────────────────────────────────
   regFormGlass: {

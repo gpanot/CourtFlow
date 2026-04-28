@@ -123,7 +123,19 @@ export async function POST(req: Request) {
       if (existingByPhone) {
         corePlayerId = existingByPhone.id;
         if (!existingByPhone.faceSubjectId) {
-          await faceRecognitionService.enrollFace(imageBase64, existingByPhone.id);
+          const enrollExisting = await faceRecognitionService.enrollFace(
+            imageBase64,
+            existingByPhone.id
+          );
+          if (!enrollExisting.success) {
+            return NextResponse.json(
+              {
+                error: enrollExisting.error || "Face enrollment failed",
+                qualityError: enrollExisting.qualityError === true,
+              },
+              { status: 400 }
+            );
+          }
           try {
             await persistPlayerCheckInFacePhoto(existingByPhone.id, imageBase64);
           } catch { /* non-critical */ }
@@ -147,7 +159,10 @@ export async function POST(req: Request) {
         if (!enrollment.success) {
           await prisma.player.delete({ where: { id: corePlayer.id } });
           return NextResponse.json(
-            { error: enrollment.error || "Face enrollment failed" },
+            {
+              error: enrollment.error || "Face enrollment failed",
+              qualityError: enrollment.qualityError === true,
+            },
             { status: 400 }
           );
         }

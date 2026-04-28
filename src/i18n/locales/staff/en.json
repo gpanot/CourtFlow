@@ -582,7 +582,12 @@
       "capture": "Capture",
       "retake": "Retake",
       "faceCaptured": "Face captured",
-      "closeCamera": "Close camera"
+      "closeCamera": "Close camera",
+      "registerPhotoTryAgain": "Try again",
+      "registerPhotoAskStaff": "Please ask staff for help.",
+      "courtPayPreCaptureChecking": "Checking photo…",
+      "courtPayPreCaptureReady": "Photo captured, ready to submit.",
+      "courtPayPreCaptureNoFace": "No face detected, please retake."
     }
   }
 }

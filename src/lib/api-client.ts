@@ -9,6 +9,7 @@ export class ApiRequestError extends Error {
   readonly code?: string;
   readonly waitingCount?: number;
   readonly suggestAutofill?: boolean;
+  readonly qualityError?: boolean;
 
   constructor(
     message: string,
@@ -17,6 +18,7 @@ export class ApiRequestError extends Error {
       code?: string;
       waitingCount?: number;
       suggestAutofill?: boolean;
+      qualityError?: boolean;
     }
   ) {
     super(message);
@@ -25,6 +27,7 @@ export class ApiRequestError extends Error {
     this.code = init.code;
     this.waitingCount = init.waitingCount;
     this.suggestAutofill = init.suggestAutofill;
+    this.qualityError = init.qualityError;
   }
 }
 
@@ -60,6 +63,7 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
       code: typeof data.code === "string" ? data.code : undefined,
       waitingCount: typeof data.waitingCount === "number" ? data.waitingCount : undefined,
       suggestAutofill: typeof data.suggestAutofill === "boolean" ? data.suggestAutofill : undefined,
+      qualityError: data.qualityError === true,
     });
   }
   return data as T;
@@ -91,7 +95,10 @@ async function uploadRequest<T>(url: string, formData: FormData): Promise<T> {
 
   if (!res.ok) {
     const message = typeof data.error === "string" ? data.error : res.statusText || "Upload failed";
-    throw new ApiRequestError(message, { status: res.status });
+    throw new ApiRequestError(message, {
+      status: res.status,
+      qualityError: data.qualityError === true,
+    });
   }
   return data as T;
 }

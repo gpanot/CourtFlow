@@ -10,7 +10,9 @@ import { ArrowLeft, Loader2, Smartphone, UserPlus, ScanFace } from "lucide-react
 import { useSuccessChime } from "@/hooks/use-success-chime";
 import { useSocket } from "@/hooks/use-socket";
 import { joinVenue } from "@/lib/socket-client";
-import { api } from "@/lib/api-client";
+import { api, ApiRequestError } from "@/lib/api-client";
+import { useTranslation } from "react-i18next";
+import staffI18n from "@/i18n/staff-i18n";
 import { SubscriptionOffer } from "./SubscriptionOffer";
 import { SuccessScreen } from "./SuccessScreen";
 import {
@@ -105,6 +107,7 @@ interface CourtPayKioskProps {
 }
 
 export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
+  const { t } = useTranslation("translation", { i18n: staffI18n });
   const { unlockChime, playSuccessChime } = useSuccessChime();
   const { on } = useSocket();
   const cameraRef = useRef<CameraCaptureHandle>(null);
@@ -140,6 +143,8 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
   const [regFaceChecking, setRegFaceChecking] = useState(false);
   const [regLoading, setRegLoading] = useState(false);
   const [regDraft, setRegDraft] = useState<RegistrationDraft | null>(null);
+  const [registrationQualityMessage, setRegistrationQualityMessage] = useState("");
+  const [registrationQualityFailures, setRegistrationQualityFailures] = useState(0);
 
   // Payment state
   const [paymentLoading, setPaymentLoading] = useState(false);
@@ -186,6 +191,8 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
     setPaymentLoading(false);
     setPackages([]);
     setRegDraft(null);
+    setRegistrationQualityMessage("");
+    setRegistrationQualityFailures(0);
   }, [clearTimers, goTo]);
 
   const scheduleReset = useCallback(
@@ -501,6 +508,7 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
         return;
       }
 
+      setRegistrationQualityMessage("");
       setRegImage(frame);
       cameraRef.current?.stopCamera();
       goTo("reg_face_preview");
@@ -513,6 +521,17 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
       setRegFaceChecking(false);
     }
   }, [goTo, regFaceChecking, scheduleReset]);
+
+  const handleRegistrationPhotoTryAgain = useCallback(() => {
+    if (resetTimerRef.current) {
+      clearTimeout(resetTimerRef.current);
+      resetTimerRef.current = null;
+    }
+    setRegistrationQualityMessage("");
+    setRegImage(null);
+    setRegDraft((d) => (d ? { ...d, imageBase64: null } : null));
+    goTo("reg_face_capture");
+  }, [goTo]);
 
   /* ─── Registration: submit form ─────────────── */
   const handleRegSubmit = useCallback(async () => {
@@ -568,6 +587,9 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
           return;
         }
 
+        setRegistrationQualityFailures(0);
+        setRegistrationQualityMessage("");
+
         setPlayer({
           id: data.playerId,
           name: data.playerName,
@@ -611,7 +633,16 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
       });
       goTo("payment_waiting");
       startPaymentTimeout();
-    } catch {
+    } catch (err) {
+      if (err instanceof ApiRequestError && err.qualityError) {
+        if (resetTimerRef.current) {
+          clearTimeout(resetTimerRef.current);
+          resetTimerRef.current = null;
+        }
+        setRegistrationQualityFailures((n) => n + 1);
+        setRegistrationQualityMessage(err.message);
+        return;
+      }
       setErrorMessage("Error processing selection");
       goTo("error");
       scheduleReset(ERROR_DISPLAY_MS);
@@ -641,6 +672,9 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
           scheduleReset(ERROR_DISPLAY_MS);
           return;
         }
+
+        setRegistrationQualityFailures(0);
+        setRegistrationQualityMessage("");
 
         setPlayer({
           id: data.playerId,
@@ -684,7 +718,16 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
       });
       goTo("payment_waiting");
       startPaymentTimeout();
-    } catch {
+    } catch (err) {
+      if (err instanceof ApiRequestError && err.qualityError) {
+        if (resetTimerRef.current) {
+          clearTimeout(resetTimerRef.current);
+          resetTimerRef.current = null;
+        }
+        setRegistrationQualityFailures((n) => n + 1);
+        setRegistrationQualityMessage(err.message);
+        return;
+      }
       setErrorMessage("Error processing payment");
       goTo("error");
       scheduleReset(ERROR_DISPLAY_MS);
@@ -763,17 +806,6 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
           <div className="w-full max-w-lg space-y-4">
             <button
               type="button"
-              onClick={beginFaceScan}
-              className="flex w-full items-center gap-5 rounded-3xl border-2 border-fuchsia-600/50 bg-fuchsia-900/30 px-8 py-7 text-left transition-colors hover:bg-fuchsia-900/50 active:scale-[0.99]"
-            >
-              <ScanFace className="h-10 w-10 shrink-0 text-fuchsia-400" />
-              <div>
-                <p className="text-2xl font-bold text-white">Check In</p>
-                <p className="text-base text-neutral-400">Scan your face to check in</p>
-              </div>
-            </button>
-            <button
-              type="button"
               onClick={beginRegFaceCapture}
               className="flex w-full items-center gap-5 rounded-3xl border-2 border-neutral-600/50 bg-neutral-800/30 px-8 py-7 text-left transition-colors hover:bg-neutral-800/60 active:scale-[0.99]"
             >
@@ -781,6 +813,17 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
               <div>
                 <p className="text-2xl font-bold text-white">First Time?</p>
                 <p className="text-base text-neutral-400">Register & get started</p>
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={beginFaceScan}
+              className="flex w-full items-center gap-5 rounded-3xl border-2 border-fuchsia-600/50 bg-fuchsia-900/30 px-8 py-7 text-left transition-colors hover:bg-fuchsia-900/50 active:scale-[0.99]"
+            >
+              <ScanFace className="h-10 w-10 shrink-0 text-fuchsia-400" />
+              <div>
+                <p className="text-2xl font-bold text-white">Registered player</p>
+                <p className="text-base text-neutral-400">Scan your face to check in</p>
               </div>
             </button>
           </div>
@@ -862,7 +905,7 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
             <span className="text-3xl">!</span>
           </div>
           <h2 className="text-3xl font-bold text-amber-200">Already Registered</h2>
-          <p className="text-lg text-neutral-300">Use &quot;Check In&quot; instead</p>
+          <p className="text-lg text-neutral-300">Use &quot;Registered player&quot; instead</p>
         </div>
       )}
 
@@ -963,7 +1006,7 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
               className="flex-1 rounded-2xl bg-fuchsia-600 px-6 py-4 text-xl font-bold text-white hover:bg-fuchsia-500">
               Looks good →
             </button>
-            <button type="button" onClick={() => { setRegImage(null); goTo("reg_face_capture"); }}
+            <button type="button" onClick={() => { setRegImage(null); setRegistrationQualityMessage(""); goTo("reg_face_capture"); }}
               className="rounded-2xl bg-neutral-700 px-6 py-4 text-lg font-medium text-neutral-200 hover:bg-neutral-600">
               Retake
             </button>
@@ -975,6 +1018,21 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
       {step === "reg_form" && (
         <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4 pb-8 sm:items-center sm:py-6">
           <div className="w-full max-w-md space-y-4 rounded-xl border border-neutral-800 bg-neutral-900/40 p-4">
+            {registrationQualityMessage ? (
+              <div className="space-y-2 rounded-xl border border-amber-500/45 bg-amber-500/10 p-3">
+                <p className="text-sm leading-snug text-amber-50">{registrationQualityMessage}</p>
+                {registrationQualityFailures >= 3 ? (
+                  <p className="text-xs text-neutral-300">{t("staff.courtPayCheckIn.registerPhotoAskStaff")}</p>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => handleRegistrationPhotoTryAgain()}
+                  className="w-full rounded-lg bg-fuchsia-600 py-2.5 text-sm font-bold text-white hover:bg-fuchsia-500"
+                >
+                  {t("staff.courtPayCheckIn.registerPhotoTryAgain")}
+                </button>
+              </div>
+            ) : null}
             <div className="flex gap-2">
               <div className="flex-1">
                 <label className="mb-1.5 block text-xs font-medium text-neutral-400">
@@ -1052,6 +1110,23 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
       {/* ── SUBSCRIPTION OFFER ──────────────────── */}
       {step === "subscription_offer" && (
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          {registrationQualityMessage ? (
+            <div className="shrink-0 px-4 pt-4 sm:px-6">
+              <div className="mx-auto max-w-md space-y-2 rounded-xl border border-amber-500/45 bg-amber-500/10 p-3">
+                <p className="text-sm leading-snug text-amber-50">{registrationQualityMessage}</p>
+                {registrationQualityFailures >= 3 ? (
+                  <p className="text-xs text-neutral-300">{t("staff.courtPayCheckIn.registerPhotoAskStaff")}</p>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => handleRegistrationPhotoTryAgain()}
+                  className="w-full rounded-lg bg-fuchsia-600 py-2.5 text-sm font-bold text-white hover:bg-fuchsia-500"
+                >
+                  {t("staff.courtPayCheckIn.registerPhotoTryAgain")}
+                </button>
+              </div>
+            </div>
+          ) : null}
           <SubscriptionOffer
             playerName={player?.name || ""}
             packages={packages}

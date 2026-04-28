@@ -3,11 +3,13 @@ import {
   CompareFacesCommand,
 } from "@aws-sdk/client-rekognition";
 import { FACE_MATCH_THRESHOLD } from "@/lib/rekognition-config";
+import { USE_MOCK_SERVICE } from "@/lib/face-recognition";
 
-const USE_MOCK_SERVICE =
-  !process.env.AWS_ACCESS_KEY_ID ||
-  process.env.AWS_ACCESS_KEY_ID === "your-key-here" ||
-  process.env.AWS_ACCESS_KEY_ID.trim() === "";
+if (process.env.NODE_ENV === "production" && USE_MOCK_SERVICE) {
+  console.error(
+    "[FaceRecognition] CRITICAL: Mock mode is active in production. AWS_ACCESS_KEY_ID is missing or invalid. All face enrollments and recognition calls will be fake."
+  );
+}
 
 function base64ToBytes(base64: string): Uint8Array {
   const normalized = base64.includes(",") ? base64.split(",").pop() ?? base64 : base64;

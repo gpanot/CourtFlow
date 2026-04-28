@@ -19,7 +19,6 @@ import { cn } from "@/lib/cn";
 import {
   Camera,
   CameraOff,
-  Check,
   CheckCircle2,
   Loader2,
   RefreshCw,
@@ -51,20 +50,6 @@ interface PendingPaymentState {
   playerName?: string | null;
   playerPhone?: string | null;
   skillLevel?: CourtPaySkillLevelUI;
-}
-
-type FaceQualityTier = "good" | "fair" | "poor";
-
-interface FaceQualityCheck {
-  overall: FaceQualityTier;
-  checks: {
-    faceDetected: boolean;
-    lighting: FaceQualityTier;
-    focus: FaceQualityTier;
-    size: FaceQualityTier;
-  };
-  message: string;
-  canForce: boolean;
 }
 
 function toPendingPayment(
@@ -115,8 +100,9 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
   const [gender, setGender] = useState<"male" | "female" | null>(null);
   const [skillLevel, setSkillLevel] = useState<"beginner" | "intermediate" | "advanced" | null>(null);
   const [faceBase64, setFaceBase64] = useState<string | null>(null);
-  const [faceQuality, setFaceQuality] = useState<FaceQualityCheck | null>(null);
-  const [faceQualityLoading, setFaceQualityLoading] = useState(false);
+  /** null = not checked yet / cleared; set after /api/courtpay/preview-face-presence */
+  const [capturedFacePresent, setCapturedFacePresent] = useState<boolean | null>(null);
+  const [capturedFacePresenceLoading, setCapturedFacePresenceLoading] = useState(false);
   const [existingPreview, setExistingPreview] = useState<ExistingPlayerPreview | null>(null);
   const [pendingPayment, setPendingPayment] = useState<PendingPaymentState | null>(null);
   const [sessionPartyCount, setSessionPartyCount] = useState(1);
@@ -150,6 +136,9 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  /** Server-side enrollment photo quality (DetectFaces); non-empty → show retake UI, stay on form. */
+  const [registrationQualityMessage, setRegistrationQualityMessage] = useState("");
+  const [registrationQualityFailures, setRegistrationQualityFailures] = useState(0);
 
   const resetForm = useCallback(() => {
     stopMediaStream(newStreamRef.current);
@@ -162,8 +151,8 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
     setGender(null);
     setSkillLevel(null);
     setFaceBase64(null);
-    setFaceQuality(null);
-    setFaceQualityLoading(false);
+    setCapturedFacePresent(null);
+    setCapturedFacePresenceLoading(false);
     setExistingPreview(null);
     setPendingPayment(null);
     setSessionPartyCount(1);
@@ -179,6 +168,8 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
     setExistingCaptureBusy(false);
     setLoading(false);
     setError("");
+    setRegistrationQualityMessage("");
+    setRegistrationQualityFailures(0);
   }, []);
 
   const pendingIdRef = useRef<string | null>(null);
@@ -211,55 +202,31 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
   useEffect(() => {
     let cancelled = false;
     if (!faceBase64) {
-      setFaceQuality(null);
-      setFaceQualityLoading(false);
+      setCapturedFacePresent(null);
+      setCapturedFacePresenceLoading(false);
       return;
     }
-    setFaceQuality(null);
-    setFaceQualityLoading(true);
+    setCapturedFacePresent(null);
+    setCapturedFacePresenceLoading(true);
     void api
-      .post<{ qualityCheck?: FaceQualityCheck }>("/api/queue/analyze-face-quality", {
+      .post<{ faceDetected?: boolean }>("/api/courtpay/preview-face-presence", {
         imageBase64: faceBase64,
       })
       .then((response) => {
         if (cancelled) return;
-        if (response.qualityCheck) {
-          setFaceQuality(response.qualityCheck);
-        } else {
-          setFaceQuality({
-            overall: "fair",
-            checks: {
-              faceDetected: true,
-              lighting: "fair",
-              focus: "fair",
-              size: "fair",
-            },
-            message: t("staff.courtPayCheckIn.qualityPendingMessage"),
-            canForce: true,
-          });
-        }
+        setCapturedFacePresent(response.faceDetected === true);
       })
       .catch(() => {
         if (cancelled) return;
-        setFaceQuality({
-          overall: "fair",
-          checks: {
-            faceDetected: true,
-            lighting: "fair",
-            focus: "fair",
-            size: "fair",
-          },
-          message: t("staff.courtPayCheckIn.qualityPendingMessage"),
-          canForce: true,
-        });
+        setCapturedFacePresent(true);
       })
       .finally(() => {
-        if (!cancelled) setFaceQualityLoading(false);
+        if (!cancelled) setCapturedFacePresenceLoading(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [faceBase64, t]);
+  }, [faceBase64]);
 
   useEffect(() => {
     if (!newCameraLive) setNewCameraReady(false);
@@ -535,6 +502,14 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
     }
   };
 
+  const handleRegistrationPhotoTryAgain = useCallback(() => {
+    setRegistrationQualityMessage("");
+    stopNewCamera();
+    setFaceBase64(null);
+    setCapturedFacePresent(null);
+    setCapturedFacePresenceLoading(false);
+  }, [stopNewCamera]);
+
   const handleNewRegistration = async () => {
     if (!venueId || !name.trim() || !phone.trim() || !gender || !skillLevel || !faceBase64) return;
     setLoading(true);
@@ -561,6 +536,7 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
         skillLevel,
         headCount: sessionPartyCount,
       });
+      setRegistrationQualityFailures(0);
       if (data.checkedIn || data.free) {
         setStep("success");
         return;
@@ -575,6 +551,11 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
         setStep("success");
       }
     } catch (err) {
+      if (err instanceof ApiRequestError && err.qualityError) {
+        setRegistrationQualityFailures((n) => n + 1);
+        setRegistrationQualityMessage(err.message);
+        return;
+      }
       setError(err instanceof Error ? err.message : t("staff.courtPayCheckIn.registrationFailed"));
       setStep("error");
     } finally {
@@ -642,24 +623,26 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
     }
   };
 
-  const qualityTone = useMemo(() => {
-    if (!faceQuality) return "neutral";
-    if (faceQuality.overall === "good") return "good";
-    if (faceQuality.overall === "poor") return "poor";
-    return "fair";
-  }, [faceQuality]);
-
   const canSubmitNewPlayer = useMemo(
     () =>
       !loading &&
       !!faceBase64 &&
-      !faceQualityLoading &&
+      !capturedFacePresenceLoading &&
+      capturedFacePresent === true &&
       !!name.trim() &&
       !!phone.trim() &&
       !!gender &&
-      !!skillLevel &&
-      (faceQuality ? faceQuality.checks.faceDetected : true),
-    [faceBase64, faceQuality, faceQualityLoading, gender, loading, name, phone, skillLevel]
+      !!skillLevel,
+    [
+      capturedFacePresenceLoading,
+      capturedFacePresent,
+      faceBase64,
+      gender,
+      loading,
+      name,
+      phone,
+      skillLevel,
+    ]
   );
 
   const existingScannerHint = existingCameraStarted
@@ -966,18 +949,14 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
                     onClick={() => {
                       stopNewCamera();
                       setFaceBase64(null);
-                      setFaceQuality(null);
+                      setCapturedFacePresent(null);
+                      setCapturedFacePresenceLoading(false);
+                      setRegistrationQualityMessage("");
                     }}
                     className="w-full rounded-lg border border-neutral-700 py-2.5 text-sm font-semibold text-neutral-200 hover:bg-neutral-800"
                   >
                     {t("staff.courtPayCheckIn.retake")}
                   </button>
-                  <div className="flex items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-2">
-                    <Check className="h-4 w-4 shrink-0 text-emerald-400" />
-                    <span className="text-sm font-semibold text-emerald-300">
-                      {t("staff.courtPayCheckIn.faceCaptured")}
-                    </span>
-                  </div>
                 </div>
               )}
             </div>
@@ -985,34 +964,48 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
             {faceBase64 ? (
               <div
                 className={cn(
-                  "rounded-lg border px-2.5 py-2.5",
-                  qualityTone === "good" && "border-emerald-500/60 bg-neutral-900/40",
-                  qualityTone === "fair" && "border-amber-500/50 bg-neutral-900/40",
-                  qualityTone === "poor" && "border-red-500/50 bg-neutral-900/40",
-                  qualityTone === "neutral" && "border-neutral-800 bg-neutral-900/40"
+                  "rounded-lg border px-3 py-2.5",
+                  capturedFacePresenceLoading && "border-neutral-700 bg-neutral-900/40",
+                  !capturedFacePresenceLoading &&
+                    capturedFacePresent === true &&
+                    "border-neutral-600 bg-neutral-900/40",
+                  !capturedFacePresenceLoading &&
+                    capturedFacePresent === false &&
+                    "border-red-500/50 bg-red-500/10"
                 )}
               >
-                <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">
-                  {t("staff.courtPayCheckIn.checkInPhotoQuality")}
-                </p>
-                {faceQualityLoading ? (
-                  <div className="mt-2 flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin text-client-primary" />
-                    <span className="text-xs text-neutral-400">{t("staff.courtPayCheckIn.checkInAnalyzingPhoto")}</span>
+                {capturedFacePresenceLoading ? (
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-client-primary" />
+                    <span className="text-sm text-neutral-300">
+                      {t("staff.courtPayCheckIn.courtPayPreCaptureChecking")}
+                    </span>
                   </div>
-                ) : faceQuality ? (
-                  <div className="mt-2 space-y-1.5">
-                    <QualityRow
-                      ok={faceQuality.checks.faceDetected}
-                      label={t("staff.courtPayCheckIn.checkInFaceDetected")}
-                      value={faceQuality.checks.faceDetected ? t("staff.courtPayCheckIn.yes") : t("staff.courtPayCheckIn.no")}
-                    />
-                    <QualityRowTier label={t("staff.courtPayCheckIn.checkInFaceSize")} tier={faceQuality.checks.size} />
-                    <QualityRowTier label={t("staff.courtPayCheckIn.checkInLighting")} tier={faceQuality.checks.lighting} />
-                    <QualityRowTier label={t("staff.courtPayCheckIn.checkInFocus")} tier={faceQuality.checks.focus} />
-                    <p className="pt-1 text-xs leading-snug text-white">{faceQuality.message}</p>
-                  </div>
+                ) : capturedFacePresent === true ? (
+                  <p className="text-sm leading-snug text-neutral-200">
+                    {t("staff.courtPayCheckIn.courtPayPreCaptureReady")}
+                  </p>
+                ) : capturedFacePresent === false ? (
+                  <p className="text-sm font-medium leading-snug text-red-300">
+                    {t("staff.courtPayCheckIn.courtPayPreCaptureNoFace")}
+                  </p>
                 ) : null}
+              </div>
+            ) : null}
+
+            {registrationQualityMessage ? (
+              <div className="space-y-2 rounded-xl border border-amber-500/45 bg-amber-500/10 p-3">
+                <p className="text-sm leading-snug text-amber-50">{registrationQualityMessage}</p>
+                {registrationQualityFailures >= 3 ? (
+                  <p className="text-xs text-neutral-300">{t("staff.courtPayCheckIn.registerPhotoAskStaff")}</p>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => handleRegistrationPhotoTryAgain()}
+                  className="w-full rounded-lg bg-client-primary py-2.5 text-sm font-bold text-neutral-950 hover:opacity-90"
+                >
+                  {t("staff.courtPayCheckIn.registerPhotoTryAgain")}
+                </button>
               </div>
             ) : null}
 
@@ -1089,39 +1082,6 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
 
         {error ? <p className="text-center text-sm text-red-400">{error}</p> : null}
       </div>
-    </div>
-  );
-}
-
-function QualityRow({ ok, label, value }: { ok: boolean; label: string; value: string }) {
-  return (
-    <div className="flex gap-1.5 text-[11px] leading-tight">
-      <span className={cn("w-3 shrink-0 font-extrabold", ok ? "text-emerald-400" : "text-red-400")}>
-        {ok ? "✓" : "✕"}
-      </span>
-      <span className="text-neutral-400">
-        {label}: {value}
-      </span>
-    </div>
-  );
-}
-
-function QualityRowTier({ label, tier }: { label: string; tier: FaceQualityTier }) {
-  const ok = tier === "good";
-  const fair = tier === "fair";
-  return (
-    <div className="flex gap-1.5 text-[11px] leading-tight">
-      <span
-        className={cn(
-          "w-3 shrink-0 font-extrabold",
-          ok ? "text-emerald-400" : fair ? "text-amber-400" : "text-red-400"
-        )}
-      >
-        {ok ? "✓" : fair ? "!" : "✕"}
-      </span>
-      <span className="text-neutral-400">
-        {label}: {tier}
-      </span>
     </div>
   );
 }

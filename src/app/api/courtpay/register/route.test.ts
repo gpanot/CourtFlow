@@ -269,6 +269,40 @@ describe("POST /api/courtpay/register", () => {
     });
   });
 
+  it("returns 400 with qualityError when face enrollment fails quality gate", async () => {
+    mockPrisma.venue.findFirst.mockResolvedValue({ id: "v1", settings: {} });
+    mockPrisma.checkInPlayer.findUnique.mockResolvedValue(null);
+    mockFaceRecognize.mockResolvedValue({ resultType: "new_player" });
+    mockPrisma.player.findUnique.mockResolvedValue(null);
+    mockPrisma.player.create.mockResolvedValue({ id: "core-1", name: "James" });
+    mockFaceEnroll.mockResolvedValue({
+      success: false,
+      error: "Please look directly at the camera",
+      qualityError: true,
+    });
+
+    const req = new Request("http://localhost/api/courtpay/register", {
+      method: "POST",
+      body: JSON.stringify({
+        venueCode: "v1",
+        name: "James",
+        phone: "0901234567",
+        gender: "male",
+        skillLevel: "intermediate",
+        imageBase64: "abc-base64",
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toEqual({
+      error: "Please look directly at the camera",
+      qualityError: true,
+    });
+    expect(mockPrisma.player.delete).toHaveBeenCalledWith({ where: { id: "core-1" } });
+  });
+
   it("returns 404 when selected package does not exist", async () => {
     mockPrisma.venue.findFirst.mockResolvedValue({ id: "v1", settings: { sessionFee: 120000 } });
     mockPrisma.checkInPlayer.findUnique.mockResolvedValue(null);

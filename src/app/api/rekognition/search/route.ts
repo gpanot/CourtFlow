@@ -6,15 +6,17 @@ import {
 import { prisma } from "@/lib/db";
 import { FACE_MATCH_THRESHOLD } from "@/lib/rekognition-config";
 import { requireSuperAdmin } from "@/lib/auth";
+import { USE_MOCK_SERVICE } from "@/lib/face-recognition";
 
 const COLLECTION_ID = process.env.AWS_REKOGNITION_COLLECTION || "courtflow-players";
 const SEARCH_FACE_MATCH_THRESHOLD = 50;
 const MAX_FACES = 5;
 
-const USE_MOCK =
-  !process.env.AWS_ACCESS_KEY_ID ||
-  process.env.AWS_ACCESS_KEY_ID === "your-key-here" ||
-  process.env.AWS_ACCESS_KEY_ID.trim() === "";
+if (process.env.NODE_ENV === "production" && USE_MOCK_SERVICE) {
+  console.error(
+    "[FaceRecognition] CRITICAL: Mock mode is active in production. AWS_ACCESS_KEY_ID is missing or invalid. All face enrollments and recognition calls will be fake."
+  );
+}
 
 function allowSearch(headers: Headers): boolean {
   if (process.env.NODE_ENV === "development") return true;
@@ -54,7 +56,7 @@ export async function POST(req: NextRequest) {
 
     const raw = stripDataUrl(imageBase64);
 
-    if (USE_MOCK) {
+    if (USE_MOCK_SERVICE) {
       return NextResponse.json({
         searchFaceMatchThreshold: SEARCH_FACE_MATCH_THRESHOLD,
         productionThreshold: FACE_MATCH_THRESHOLD,

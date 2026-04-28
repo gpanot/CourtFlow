@@ -7,6 +7,7 @@ import {
   SearchFacesByImageCommand,
   DeleteFacesCommand,
   ListFacesCommand,
+  DetectFacesCommand,
 } from "@aws-sdk/client-rekognition";
 import { FACE_MATCH_THRESHOLD } from "@/lib/rekognition-config";
 
@@ -14,10 +15,16 @@ export { FACE_MATCH_THRESHOLD } from "@/lib/rekognition-config";
 
 const COLLECTION_ID = process.env.AWS_REKOGNITION_COLLECTION || "courtflow-players";
 
-const USE_MOCK_SERVICE =
+export const USE_MOCK_SERVICE =
   !process.env.AWS_ACCESS_KEY_ID ||
   process.env.AWS_ACCESS_KEY_ID === "your-key-here" ||
   process.env.AWS_ACCESS_KEY_ID.trim() === "";
+
+if (process.env.NODE_ENV === "production" && USE_MOCK_SERVICE) {
+  console.error(
+    "[FaceRecognition] CRITICAL: Mock mode is active in production. AWS_ACCESS_KEY_ID is missing or invalid. All face enrollments and recognition calls will be fake."
+  );
+}
 
 console.log(
   "[FaceRecognition] Mode:",
@@ -96,12 +103,35 @@ export interface FaceEnrollmentResult {
   success: boolean;
   subjectId?: string;
   error?: string;
+  /** True when failure is due to DetectFaces / enrollment quality rules — client should prompt retake. */
+  qualityError?: boolean;
 }
 
 // ── Helper: base64 → Uint8Array (AWS SDK needs raw bytes) ─────────────────
 function base64ToBytes(base64: string): Uint8Array {
   return Buffer.from(base64, "base64");
 }
+
+/** Strip data-URL prefix so Rekognition receives raw base64 payload bytes. */
+function normalizeEnrollmentBase64(imageBase64: string): string {
+  const t = imageBase64.trim();
+  const comma = t.indexOf(",");
+  if (t.startsWith("data:") && comma >= 0) {
+    return t.slice(comma + 1).trim();
+  }
+  return t;
+}
+
+function enrollmentImageBytes(imageBase64: string): Uint8Array {
+  return Buffer.from(normalizeEnrollmentBase64(imageBase64), "base64");
+}
+
+const ENROLLMENT_FACE_MIN_CONFIDENCE = 90;
+const ENROLLMENT_POSE_MAX_ABS_DEG = 30;
+
+type EnrollmentQualityGate =
+  | { pass: true }
+  | { pass: false; error: string; qualityError: boolean };
 
 /** Fire-and-forget row per SearchFacesByImage call when venueId is present. */
 function queueFaceRecognitionRow(params: {
@@ -207,6 +237,117 @@ function finalizeAwsRecognition(
 
 class FaceRecognitionService {
 
+  /**
+   * AWS DetectFaces (ALL) before IndexFaces — rejects unusable enrollment photos.
+   * Mock mode skips (no AWS call).
+   */
+  private async assertEnrollmentPhotoQuality(
+    imageBase64: string
+  ): Promise<EnrollmentQualityGate> {
+    if (USE_MOCK_SERVICE) {
+      return { pass: true };
+    }
+
+    const bytes = enrollmentImageBytes(imageBase64);
+    if (bytes.length < 100) {
+      return {
+        pass: false,
+        error: "No face detected, please try again",
+        qualityError: true,
+      };
+    }
+
+    try {
+      const response = await rekognition!.send(
+        new DetectFacesCommand({
+          Image: { Bytes: bytes },
+          Attributes: ["ALL"],
+        })
+      );
+
+      const faces = response.FaceDetails ?? [];
+      if (faces.length === 0) {
+        return {
+          pass: false,
+          error: "No face detected, please try again",
+          qualityError: true,
+        };
+      }
+      if (faces.length > 1) {
+        return {
+          pass: false,
+          error: "Multiple faces detected, please ensure only one person is in frame",
+          qualityError: true,
+        };
+      }
+
+      const face = faces[0];
+      const conf = face.Confidence ?? 0;
+      if (conf < ENROLLMENT_FACE_MIN_CONFIDENCE) {
+        return {
+          pass: false,
+          error: "Photo quality too low, please try again",
+          qualityError: true,
+        };
+      }
+
+      const pitch = face.Pose?.Pitch ?? 0;
+      const roll = face.Pose?.Roll ?? 0;
+      const yaw = face.Pose?.Yaw ?? 0;
+      if (
+        Math.abs(pitch) > ENROLLMENT_POSE_MAX_ABS_DEG ||
+        Math.abs(roll) > ENROLLMENT_POSE_MAX_ABS_DEG ||
+        Math.abs(yaw) > ENROLLMENT_POSE_MAX_ABS_DEG
+      ) {
+        return {
+          pass: false,
+          error: "Please look directly at the camera",
+          qualityError: true,
+        };
+      }
+
+      return { pass: true };
+    } catch (err) {
+      console.error("[Rekognition] DetectFaces (enrollment gate) failed:", err);
+      return {
+        pass: false,
+        error:
+          err instanceof Error ? err.message : "Face validation failed",
+        qualityError: false,
+      };
+    }
+  }
+
+  /**
+   * Lightweight DetectFaces (default attributes) for CourtPay capture UI only.
+   * Full enrollment quality (pose, confidence, etc.) still runs in enrollFace.
+   */
+  async detectFacePresentForCourtPayPreview(
+    imageBase64: string
+  ): Promise<{ faceDetected: boolean }> {
+    if (USE_MOCK_SERVICE) {
+      return mockFaceRecognitionService.detectFacePresentForCourtPayPreview(imageBase64);
+    }
+
+    const bytes = enrollmentImageBytes(imageBase64);
+    if (bytes.length < 100) {
+      return { faceDetected: false };
+    }
+
+    try {
+      const response = await rekognition!.send(
+        new DetectFacesCommand({
+          Image: { Bytes: bytes },
+        })
+      );
+      const n = response.FaceDetails?.length ?? 0;
+      return { faceDetected: n >= 1 };
+    } catch (err) {
+      console.error("[Rekognition] CourtPay preview face presence:", err);
+      return { faceDetected: true };
+    }
+  }
+
   // ── Ensure collection exists ─────────────────────────────────────────────
   private async ensureCollection(): Promise<void> {
     try {
@@ -231,13 +372,22 @@ class FaceRecognitionService {
       return mockFaceRecognitionService.enrollFace(imageBase64, playerId);
     }
 
+    const quality = await this.assertEnrollmentPhotoQuality(imageBase64);
+    if (!quality.pass) {
+      return {
+        success: false,
+        error: quality.error,
+        qualityError: quality.qualityError,
+      };
+    }
+
     try {
       await this.ensureCollection();
 
       const response = await rekognition!.send(
         new IndexFacesCommand({
           CollectionId: COLLECTION_ID,
-          Image: { Bytes: base64ToBytes(imageBase64) },
+          Image: { Bytes: enrollmentImageBytes(imageBase64) },
           ExternalImageId: `player_${playerId}`,
           MaxFaces: 1,
           QualityFilter: "AUTO",
@@ -255,6 +405,7 @@ class FaceRecognitionService {
         return {
           success: false,
           error: "No face detected in enrollment image",
+          qualityError: true,
         };
       }
 
