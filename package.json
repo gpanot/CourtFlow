@@ -22,6 +22,8 @@
     "verify:groups": "tsx scripts/verify-groups-not-split.ts",
     "enroll:faces:dry": "tsx scripts/reenroll-mock-players.ts --dry-run",
     "enroll:faces": "tsx scripts/reenroll-mock-players.ts",
+    "clear:failed:faces:dry": "tsx scripts/clear-failed-faces.ts --dry-run",
+    "clear:failed:faces": "tsx scripts/clear-failed-faces.ts",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage"
@@ -46,6 +48,7 @@
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-i18next": "^16.6.5",
+    "sharp": "^0.34.5",
     "socket.io": "^4.8.0",
     "socket.io-client": "^4.8.0",
     "tailwind-merge": "^3.2.0",

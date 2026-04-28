@@ -1419,6 +1419,7 @@ function PlayerDetailPanel({
 
           <PlayerDetailFaceRecognition
             playerId={player.id}
+            playerName={player.name}
             faceSubjectId={player.faceSubjectId}
             facePhotoPath={player.facePhotoPath}
             avatarPhotoPath={player.avatarPhotoPath}

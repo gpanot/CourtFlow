@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { ScanFace, Loader2, Search } from "lucide-react";
+import { ScanFace, Loader2, Search, Download, WandSparkles } from "lucide-react";
 
 interface SearchMatch {
   playerId: string;
@@ -51,14 +51,53 @@ async function fetchImageAsRawBase64(url: string): Promise<string> {
   });
 }
 
+function toSafeFileName(name: string): string {
+  const base = name.trim() || "player";
+  return base
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+async function downloadFromUrl(url: string, fileName: string): Promise<void> {
+  const res = await fetch(url, { credentials: "include" });
+  if (!res.ok) throw new Error(`Download failed (${res.status})`);
+  const blob = await res.blob();
+  const href = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(href);
+}
+
+function downloadBase64Image(
+  imageBase64: string,
+  mimeType: string,
+  fileName: string
+): void {
+  const href = `data:${mimeType};base64,${imageBase64}`;
+  const a = document.createElement("a");
+  a.href = href;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 export function PlayerDetailFaceRecognition({
   playerId,
+  playerName,
   faceSubjectId,
   facePhotoPath,
   avatarPhotoPath,
   onUpdate,
 }: {
   playerId: string;
+  playerName: string;
   faceSubjectId: string | null | undefined;
   facePhotoPath: string | null | undefined;
   avatarPhotoPath: string | null | undefined;
@@ -69,8 +108,16 @@ export function PlayerDetailFaceRecognition({
   const [enrollBusy, setEnrollBusy] = useState(false);
   const [removeBusy, setRemoveBusy] = useState(false);
   const [verifyBusy, setVerifyBusy] = useState(false);
+  const [downloadBusy, setDownloadBusy] = useState(false);
+  const [removeBgBusy, setRemoveBgBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [enrollError, setEnrollError] = useState<string | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [removeBgPreviewBase64, setRemoveBgPreviewBase64] = useState<string | null>(null);
+  const [removeBgPreviewMime, setRemoveBgPreviewMime] = useState<string>("image/png");
+  const [selectedBase64, setSelectedBase64] = useState<string | null>(null);
+  const [selectedMimeType, setSelectedMimeType] = useState<string>("image/png");
+  const [selectedSourceLabel, setSelectedSourceLabel] = useState<string | null>(null);
   const [verifyResult, setVerifyResult] = useState<{
     similarity: number | null;
     passedProduction: boolean | null;
@@ -93,36 +140,105 @@ export function PlayerDetailFaceRecognition({
     }
   }, [playerId, onUpdate]);
 
-  const handleEnrollFile = useCallback(
+  const handleDownloadOriginal = useCallback(async () => {
+    if (!facePhotoPath) return;
+    setDownloadBusy(true);
+    setActionError(null);
+    try {
+      const fileBase = toSafeFileName(playerName);
+      await downloadFromUrl(facePhotoPath, `${fileBase}-original.jpg`);
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Download failed");
+    } finally {
+      setDownloadBusy(false);
+    }
+  }, [facePhotoPath, playerName]);
+
+  const handleRemoveBackground = useCallback(async () => {
+    setRemoveBgBusy(true);
+    setActionError(null);
+    setEnrollError(null);
+    try {
+      const res = await api.post<{
+        success: boolean;
+        imageBase64: string;
+        mimeType: string;
+      }>(`/api/admin/players/${playerId}/remove-bg`, {});
+      const mime = res.mimeType || "image/png";
+      setRemoveBgPreviewBase64(res.imageBase64);
+      setRemoveBgPreviewMime(mime);
+      setSelectedBase64(res.imageBase64);
+      setSelectedMimeType(mime);
+      setSelectedSourceLabel("Background-removed photo");
+      const fileBase = toSafeFileName(playerName);
+      downloadBase64Image(res.imageBase64, mime, `${fileBase}-bg-removed.png`);
+    } catch (e) {
+      setActionError(
+        e instanceof Error ? e.message : "Background removal failed"
+      );
+    } finally {
+      setRemoveBgBusy(false);
+    }
+  }, [playerId, playerName]);
+
+  const handleUploadEditedPhoto = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       const f = e.target.files?.[0];
       if (!f) return;
-      setEnrollBusy(true);
+      setActionError(null);
       setEnrollError(null);
-      try {
-        const b64 = await fileToBase64(f);
-        const res = await api.post<{
-          success: boolean;
-          faceSubjectId: string | null;
-          facePhotoPath: string | null;
-        }>(`/api/admin/players/${playerId}/face`, { imageBase64: b64 });
-        onUpdate({
-          faceSubjectId: res.faceSubjectId,
-          facePhotoPath: res.facePhotoPath,
-        });
-        setEnrollOpen(false);
-      } catch (err: unknown) {
-        setEnrollError(
-          err && typeof err === "object" && "message" in err
-            ? String((err as { message: string }).message)
-            : "Enrollment failed"
-        );
-      } finally {
-        setEnrollBusy(false);
-        e.target.value = "";
-      }
+      const b64 = await fileToBase64(f);
+      setSelectedBase64(b64);
+      setSelectedMimeType(f.type || "image/jpeg");
+      setSelectedSourceLabel("Uploaded edited photo");
+      e.target.value = "";
     },
-    [playerId, onUpdate]
+    []
+  );
+
+  const handleEnrollSelected = useCallback(async () => {
+    if (!selectedBase64) return;
+    setEnrollBusy(true);
+    setEnrollError(null);
+    try {
+      const res = await api.post<{
+        success: boolean;
+        faceSubjectId: string | null;
+        facePhotoPath: string | null;
+      }>(`/api/admin/players/${playerId}/face`, { imageBase64: selectedBase64 });
+      onUpdate({
+        faceSubjectId: res.faceSubjectId,
+        facePhotoPath: res.facePhotoPath,
+      });
+      setEnrollOpen(false);
+      setSelectedBase64(null);
+      setSelectedSourceLabel(null);
+    } catch (err: unknown) {
+      setEnrollError(
+        err && typeof err === "object" && "message" in err
+          ? String((err as { message: string }).message)
+          : "Enrollment failed"
+      );
+    } finally {
+      setEnrollBusy(false);
+    }
+  }, [selectedBase64, playerId, onUpdate]);
+
+  const selectedPreviewSrc = selectedBase64
+    ? `data:${selectedMimeType};base64,${selectedBase64}`
+    : null;
+  const removeBgPreviewSrc = removeBgPreviewBase64
+    ? `data:${removeBgPreviewMime};base64,${removeBgPreviewBase64}`
+    : null;
+  const canUseManualWorkflow = Boolean(facePhotoPath?.trim());
+  const hasSelectedPhoto = Boolean(selectedBase64);
+  const fileBaseName = toSafeFileName(playerName);
+  const absoluteFacePhotoPath =
+    facePhotoPath && typeof window !== "undefined"
+      ? new URL(facePhotoPath, window.location.origin).href
+      : facePhotoPath ?? "";
+
+  const canInteract = !enrollBusy && !removeBgBusy && !downloadBusy;
   );
 
   const handleVerify = useCallback(async () => {
@@ -315,44 +431,138 @@ export function PlayerDetailFaceRecognition({
             This player has no face registered in AWS Rekognition. They will be treated as a new player
             on check-in.
           </p>
-          <div>
-            <button
-              type="button"
-              onClick={() => {
-                setEnrollOpen((o) => !o);
-                setEnrollError(null);
-              }}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-200 ring-1 ring-amber-500/30 hover:bg-amber-500/30"
-            >
-              Enroll face
-            </button>
-            {enrollOpen && (
-              <div className="mt-3 space-y-2 rounded-lg border border-neutral-800 bg-black/30 p-3">
-                <p className="text-[11px] text-neutral-500">Upload a clear frontal face photo (camera or file)</p>
-                <input
-                  type="file"
-                  accept="image/*"
-                  capture="user"
-                  className="text-xs text-neutral-400 file:mr-2 file:rounded file:border-0 file:bg-neutral-800 file:px-2 file:py-1 file:text-white"
-                  onChange={handleEnrollFile}
-                  disabled={enrollBusy}
-                />
-                {enrollBusy && (
-                  <p className="text-xs text-neutral-500">
-                    <Loader2 className="inline h-3.5 w-3.5 animate-spin" /> Enrolling…
+          <button
+            type="button"
+            onClick={() => {
+              setEnrollOpen((o) => !o);
+              setActionError(null);
+              setEnrollError(null);
+            }}
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-200 ring-1 ring-amber-500/30 hover:bg-amber-500/30"
+          >
+            Manual re-enrollment tools
+          </button>
+          {enrollOpen && (
+            <div className="space-y-3 rounded-lg border border-neutral-800 bg-black/30 p-3">
+              <div className="space-y-2">
+                <p className="text-[11px] uppercase tracking-wide text-neutral-500">
+                  Step 1 — Download tools
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleDownloadOriginal}
+                    disabled={!canUseManualWorkflow || !canInteract}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-800 px-3 py-1.5 text-xs text-white hover:bg-neutral-700 disabled:opacity-50"
+                  >
+                    {downloadBusy ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5" />
+                    )}
+                    Download photo
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRemoveBackground}
+                    disabled={!canUseManualWorkflow || !canInteract}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-purple-500/20 px-3 py-1.5 text-xs font-medium text-purple-200 ring-1 ring-purple-500/30 hover:bg-purple-500/30 disabled:opacity-50"
+                  >
+                    {removeBgBusy ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <WandSparkles className="h-3.5 w-3.5" />
+                    )}
+                    Remove background
+                  </button>
+                </div>
+                {!canUseManualWorkflow && (
+                  <p className="text-xs text-amber-300/90">
+                    No stored check-in photo is available for this player.
                   </p>
                 )}
-                {enrollError && <p className="text-xs text-red-400">{enrollError}</p>}
-                <button
-                  type="button"
-                  onClick={() => setEnrollOpen(false)}
-                  className="text-xs text-neutral-500 hover:text-white"
-                >
-                  Cancel
-                </button>
               </div>
-            )}
-          </div>
+
+              {removeBgPreviewSrc && (
+                <div className="space-y-2">
+                  <p className="text-[11px] text-neutral-400">
+                    Background-removed preview
+                  </p>
+                  <div className="relative h-24 w-24 overflow-hidden rounded-lg border border-neutral-700 bg-black">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={removeBgPreviewSrc}
+                      alt="Background removed preview"
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
+                  <p className="text-[11px] text-neutral-500">
+                    Auto-downloaded as <code>{fileBaseName}-bg-removed.png</code>
+                  </p>
+                </div>
+              )}
+
+              {removeBgPreviewSrc && (
+                <div className="space-y-2">
+                  <p className="text-[11px] uppercase tracking-wide text-neutral-500">
+                    Step 2 — Upload cleaned photo
+                  </p>
+                  <label className="block text-xs text-neutral-400">
+                    Or upload your own edited photo
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="text-xs text-neutral-400 file:mr-2 file:rounded file:border-0 file:bg-neutral-800 file:px-2 file:py-1 file:text-white"
+                    onChange={handleUploadEditedPhoto}
+                    disabled={!canInteract}
+                  />
+                  {selectedPreviewSrc && (
+                    <div className="space-y-1">
+                      <p className="text-[11px] text-neutral-500">
+                        Selected photo: {selectedSourceLabel}
+                      </p>
+                      <div className="relative h-24 w-24 overflow-hidden rounded-lg border border-neutral-700 bg-black">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={selectedPreviewSrc}
+                          alt="Selected photo preview"
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {hasSelectedPhoto && (
+                <div className="space-y-2">
+                  <p className="text-[11px] uppercase tracking-wide text-neutral-500">
+                    Step 3 — Enroll to AWS
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleEnrollSelected}
+                    disabled={!canInteract}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-500/20 px-3 py-1.5 text-xs font-medium text-emerald-200 ring-1 ring-emerald-500/30 hover:bg-emerald-500/30 disabled:opacity-50"
+                  >
+                    {enrollBusy ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : null}
+                    Enroll to AWS Rekognition
+                  </button>
+                </div>
+              )}
+
+              {absoluteFacePhotoPath && (
+                <p className="text-[11px] text-neutral-600 break-all">
+                  Source photo: {absoluteFacePhotoPath}
+                </p>
+              )}
+              {actionError && <p className="text-xs text-red-400">{actionError}</p>}
+              {enrollError && <p className="text-xs text-red-400">{enrollError}</p>}
+            </div>
+          )}
         </div>
       )}
 
