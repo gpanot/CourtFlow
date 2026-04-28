@@ -239,7 +239,6 @@ export function PlayerDetailFaceRecognition({
       : facePhotoPath ?? "";
 
   const canInteract = !enrollBusy && !removeBgBusy && !downloadBusy;
-  );
 
   const handleVerify = useCallback(async () => {
     setVerifyBusy(true);
