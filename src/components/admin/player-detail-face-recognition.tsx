@@ -201,6 +201,9 @@ export function PlayerDetailFaceRecognition({
     setEnrollBusy(true);
     setEnrollError(null);
     try {
+      if (enrolled) {
+        await api.delete(`/api/admin/players/${playerId}/face`);
+      }
       const res = await api.post<{
         success: boolean;
         faceSubjectId: string | null;
@@ -222,7 +225,7 @@ export function PlayerDetailFaceRecognition({
     } finally {
       setEnrollBusy(false);
     }
-  }, [selectedBase64, playerId, onUpdate]);
+  }, [selectedBase64, playerId, onUpdate, enrolled]);
 
   const selectedPreviewSrc = selectedBase64
     ? `data:${selectedMimeType};base64,${selectedBase64}`
@@ -364,7 +367,7 @@ export function PlayerDetailFaceRecognition({
                 type="button"
                 onClick={handleVerify}
                 disabled={verifyBusy}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-200 ring-1 ring-amber-500/35 hover:bg-amber-500/30 disabled:opacity-50"
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-amber-400 bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-200 disabled:opacity-50"
               >
                 {verifyBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
                 Verify in collection
@@ -374,10 +377,10 @@ export function PlayerDetailFaceRecognition({
               type="button"
               onClick={handleRemove}
               disabled={removeBusy}
-              className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-300 ring-1 ring-red-500/25 hover:bg-red-500/20 disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-400 bg-red-100 px-3 py-1.5 text-xs font-semibold text-red-900 hover:bg-red-200 disabled:opacity-50"
             >
               {removeBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-              Remove face
+              Remove AWS enrollment
             </button>
           </div>
           {verifyError && (
@@ -410,7 +413,7 @@ export function PlayerDetailFaceRecognition({
             </div>
           )}
           {verifyResult?.status === "no_match" && !verifyError && (
-            <p className="rounded-md bg-amber-500/10 px-2 py-1.5 text-xs text-amber-200 ring-1 ring-amber-500/30">
+            <p className="rounded-md border border-amber-300 bg-amber-100 px-2 py-1.5 text-xs text-amber-900">
               Top matches did not include this player at ≥50% similarity, or the stored photo does not
               match the indexed face. The DB FaceId may be stale; try re-enrolling after remove.
             </p>
@@ -430,140 +433,143 @@ export function PlayerDetailFaceRecognition({
             This player has no face registered in AWS Rekognition. They will be treated as a new player
             on check-in.
           </p>
-          <button
-            type="button"
-            onClick={() => {
-              setEnrollOpen((o) => !o);
-              setActionError(null);
-              setEnrollError(null);
-            }}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-amber-500/20 px-3 py-1.5 text-xs font-medium text-amber-200 ring-1 ring-amber-500/30 hover:bg-amber-500/30"
-          >
-            Manual re-enrollment tools
-          </button>
-          {enrollOpen && (
-            <div className="space-y-3 rounded-lg border border-neutral-800 bg-black/30 p-3">
-              <div className="space-y-2">
-                <p className="text-[11px] uppercase tracking-wide text-neutral-500">
-                  Step 1 — Download tools
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={handleDownloadOriginal}
-                    disabled={!canUseManualWorkflow || !canInteract}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-800 px-3 py-1.5 text-xs text-white hover:bg-neutral-700 disabled:opacity-50"
-                  >
-                    {downloadBusy ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Download className="h-3.5 w-3.5" />
-                    )}
-                    Download photo
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleRemoveBackground}
-                    disabled={!canUseManualWorkflow || !canInteract}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-purple-500/20 px-3 py-1.5 text-xs font-medium text-purple-200 ring-1 ring-purple-500/30 hover:bg-purple-500/30 disabled:opacity-50"
-                  >
-                    {removeBgBusy ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <WandSparkles className="h-3.5 w-3.5" />
-                    )}
-                    Remove background
-                  </button>
-                </div>
-                {!canUseManualWorkflow && (
-                  <p className="text-xs text-amber-300/90">
-                    No stored check-in photo is available for this player.
-                  </p>
-                )}
-              </div>
-
-              {removeBgPreviewSrc && (
-                <div className="space-y-2">
-                  <p className="text-[11px] text-neutral-400">
-                    Background-removed preview
-                  </p>
-                  <div className="relative h-24 w-24 overflow-hidden rounded-lg border border-neutral-700 bg-black">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={removeBgPreviewSrc}
-                      alt="Background removed preview"
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
-                  <p className="text-[11px] text-neutral-500">
-                    Auto-downloaded as <code>{fileBaseName}-bg-removed.png</code>
-                  </p>
-                </div>
-              )}
-
-              {removeBgPreviewSrc && (
-                <div className="space-y-2">
-                  <p className="text-[11px] uppercase tracking-wide text-neutral-500">
-                    Step 2 — Upload cleaned photo
-                  </p>
-                  <label className="block text-xs text-neutral-400">
-                    Or upload your own edited photo
-                  </label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="text-xs text-neutral-400 file:mr-2 file:rounded file:border-0 file:bg-neutral-800 file:px-2 file:py-1 file:text-white"
-                    onChange={handleUploadEditedPhoto}
-                    disabled={!canInteract}
-                  />
-                  {selectedPreviewSrc && (
-                    <div className="space-y-1">
-                      <p className="text-[11px] text-neutral-500">
-                        Selected photo: {selectedSourceLabel}
-                      </p>
-                      <div className="relative h-24 w-24 overflow-hidden rounded-lg border border-neutral-700 bg-black">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={selectedPreviewSrc}
-                          alt="Selected photo preview"
-                          className="h-full w-full object-cover"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {hasSelectedPhoto && (
-                <div className="space-y-2">
-                  <p className="text-[11px] uppercase tracking-wide text-neutral-500">
-                    Step 3 — Enroll to AWS
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleEnrollSelected}
-                    disabled={!canInteract}
-                    className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-500/20 px-3 py-1.5 text-xs font-medium text-emerald-200 ring-1 ring-emerald-500/30 hover:bg-emerald-500/30 disabled:opacity-50"
-                  >
-                    {enrollBusy ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : null}
-                    Enroll to AWS Rekognition
-                  </button>
-                </div>
-              )}
-
-              {absoluteFacePhotoPath && (
-                <p className="text-[11px] text-neutral-600 break-all">
-                  Source photo: {absoluteFacePhotoPath}
-                </p>
-              )}
-              {actionError && <p className="text-xs text-red-400">{actionError}</p>}
-              {enrollError && <p className="text-xs text-red-400">{enrollError}</p>}
-            </div>
-          )}
         </div>
       )}
+
+      <div className="mt-3 space-y-2">
+        <button
+          type="button"
+          onClick={() => {
+            setEnrollOpen((o) => !o);
+            setActionError(null);
+            setEnrollError(null);
+          }}
+          className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-amber-400 bg-amber-100 px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-200"
+        >
+          Manual re-enrollment tools
+        </button>
+        {enrollOpen && (
+          <div className="space-y-3 rounded-lg border border-neutral-700 bg-white/70 p-3">
+            <div className="space-y-2">
+              <p className="text-[11px] uppercase tracking-wide text-neutral-700">
+                Step 1 — Download tools
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleDownloadOriginal}
+                  disabled={!canUseManualWorkflow || !canInteract}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-400 bg-neutral-100 px-3 py-1.5 text-xs font-medium text-neutral-900 hover:bg-neutral-200 disabled:opacity-50"
+                >
+                  {downloadBusy ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5" />
+                  )}
+                  Download photo
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRemoveBackground}
+                  disabled={!canUseManualWorkflow || !canInteract}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-purple-400 bg-purple-100 px-3 py-1.5 text-xs font-semibold text-purple-900 hover:bg-purple-200 disabled:opacity-50"
+                >
+                  {removeBgBusy ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <WandSparkles className="h-3.5 w-3.5" />
+                  )}
+                  Remove background
+                </button>
+              </div>
+              {!canUseManualWorkflow && (
+                <p className="text-xs text-amber-700">
+                  No stored check-in photo is available for this player.
+                </p>
+              )}
+            </div>
+
+            {removeBgPreviewSrc && (
+              <div className="space-y-2">
+                <p className="text-[11px] text-neutral-700">
+                  Background-removed preview
+                </p>
+                <div className="relative h-24 w-24 overflow-hidden rounded-lg border border-neutral-500 bg-black">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={removeBgPreviewSrc}
+                    alt="Background removed preview"
+                    className="h-full w-full object-cover"
+                  />
+                </div>
+                <p className="text-[11px] text-neutral-600">
+                  Auto-downloaded as <code>{fileBaseName}-bg-removed.png</code>
+                </p>
+              </div>
+            )}
+
+            {removeBgPreviewSrc && (
+              <div className="space-y-2">
+                <p className="text-[11px] uppercase tracking-wide text-neutral-700">
+                  Step 2 — Upload cleaned photo
+                </p>
+                <label className="block text-xs text-neutral-700">
+                  Or upload your own edited photo
+                </label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="text-xs text-neutral-700 file:mr-2 file:rounded file:border file:border-neutral-400 file:bg-neutral-100 file:px-2 file:py-1 file:text-neutral-900"
+                  onChange={handleUploadEditedPhoto}
+                  disabled={!canInteract}
+                />
+                {selectedPreviewSrc && (
+                  <div className="space-y-1">
+                    <p className="text-[11px] text-neutral-600">
+                      Selected photo: {selectedSourceLabel}
+                    </p>
+                    <div className="relative h-24 w-24 overflow-hidden rounded-lg border border-neutral-500 bg-black">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={selectedPreviewSrc}
+                        alt="Selected photo preview"
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {hasSelectedPhoto && (
+              <div className="space-y-2">
+                <p className="text-[11px] uppercase tracking-wide text-neutral-700">
+                  Step 3 — Enroll to AWS
+                </p>
+                <button
+                  type="button"
+                  onClick={handleEnrollSelected}
+                  disabled={!canInteract}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-400 bg-emerald-100 px-3 py-1.5 text-xs font-semibold text-emerald-900 hover:bg-emerald-200 disabled:opacity-50"
+                >
+                  {enrollBusy ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : null}
+                  {enrolled ? "Re-enroll to AWS Rekognition" : "Enroll to AWS Rekognition"}
+                </button>
+              </div>
+            )}
+
+            {absoluteFacePhotoPath && (
+              <p className="text-[11px] text-neutral-600 break-all">
+                Source photo: {absoluteFacePhotoPath}
+              </p>
+            )}
+            {actionError && <p className="text-xs text-red-600">{actionError}</p>}
+            {enrollError && <p className="text-xs text-red-600">{enrollError}</p>}
+          </div>
+        )}
+      </div>
 
     </div>
   );

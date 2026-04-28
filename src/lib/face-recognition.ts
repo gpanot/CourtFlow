@@ -3,6 +3,7 @@ import { mockFaceRecognitionService } from "./face-recognition-mock";
 import {
   RekognitionClient,
   CreateCollectionCommand,
+  ListCollectionsCommand,
   IndexFacesCommand,
   SearchFacesByImageCommand,
   DeleteFacesCommand,
@@ -360,6 +361,39 @@ class FaceRecognitionService {
     } catch (err) {
       console.error("[Rekognition] CourtPay preview face presence:", err);
       return { faceDetected: true };
+    }
+  }
+
+  /**
+   * One-time startup check: verify configured collection exists, create if missing.
+   * Never throws — app can still boot and fail only on actual Rekognition calls.
+   */
+  async verifyCollectionExistsOnStartup(): Promise<void> {
+    if (USE_MOCK_SERVICE || !rekognition) return;
+    try {
+      let nextToken: string | undefined;
+      let found = false;
+      do {
+        const listRes = await rekognition.send(
+          new ListCollectionsCommand({ NextToken: nextToken, MaxResults: 100 })
+        );
+        if ((listRes.CollectionIds ?? []).includes(COLLECTION_ID)) {
+          found = true;
+          break;
+        }
+        nextToken = listRes.NextToken;
+      } while (nextToken);
+
+      if (found) {
+        console.log(`[FaceRecognition] Collection verified: ${COLLECTION_ID}`);
+      } else {
+        console.warn(
+          `[FaceRecognition] Collection not found, creating: ${COLLECTION_ID}`
+        );
+        await this.ensureCollection();
+      }
+    } catch (err) {
+      console.warn("[FaceRecognition] Could not verify collection:", err);
     }
   }
 
@@ -773,7 +807,17 @@ class FaceRecognitionService {
       });
 
       return true;
-    } catch (err) {
+    } catch (err: any) {
+      if (
+        err?.__type === "ResourceNotFoundException" ||
+        err?.name === "ResourceNotFoundException" ||
+        err?.Code === "ResourceNotFoundException"
+      ) {
+        console.warn(
+          "[FaceRecognition] Collection not found during removeFace, treating as success"
+        );
+        return true;
+      }
       console.error("[Rekognition] Face removal failed:", err);
       return false;
     }
@@ -833,3 +877,4 @@ class FaceRecognitionService {
 }
 
 export const faceRecognitionService = new FaceRecognitionService();
+void faceRecognitionService.verifyCollectionExistsOnStartup();

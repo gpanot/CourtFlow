@@ -6,7 +6,8 @@ import { useSessionStore } from "@/stores/session-store";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
-import { LayoutDashboard, MapPin, Users, UserCircle, BarChart3, Monitor, Banknote, Crown, CalendarDays, GraduationCap, LogOut, Menu, X, CreditCard, Receipt, ScanFace } from "lucide-react";
+import { applyThemeMode, getStoredThemeMode, setStoredThemeMode, type ThemeMode } from "@/lib/theme-mode";
+import { LayoutDashboard, MapPin, Users, UserCircle, BarChart3, Monitor, Banknote, Crown, CalendarDays, GraduationCap, LogOut, Menu, X, CreditCard, Receipt, ScanFace, Sun, Moon } from "lucide-react";
 import { SetupWizardBanner } from "@/components/setup-wizard-banner";
 
 const navItems = [
@@ -30,6 +31,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
 
   useEffect(() => {
     if (token && role === "superadmin" && onboardingCompleted === false) {
@@ -40,6 +42,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    const mode = getStoredThemeMode();
+    setThemeMode(mode);
+    applyThemeMode(mode);
+  }, []);
+
+  const toggleThemeMode = () => {
+    setThemeMode((prev) => {
+      const next: ThemeMode = prev === "dark" ? "light" : "dark";
+      setStoredThemeMode(next);
+      applyThemeMode(next);
+      return next;
+    });
+  };
 
   if (!token || role !== "superadmin") {
     return (
@@ -62,7 +79,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Desktop sidebar */}
       <aside className="hidden md:block w-56 shrink-0 border-r border-neutral-800 p-4">
         <div className="mb-6">
-          <h1 className="text-lg font-bold text-purple-500">Admin Panel</h1>
+          <div className="flex items-center justify-between gap-2">
+            <h1 className="text-lg font-bold text-purple-500">Admin Panel</h1>
+            <button
+              type="button"
+              onClick={toggleThemeMode}
+              aria-label={themeMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              title={themeMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800 hover:text-white"
+            >
+              {themeMode === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+          </div>
           <p className="text-xs text-neutral-500">CourtFlow</p>
         </div>
 

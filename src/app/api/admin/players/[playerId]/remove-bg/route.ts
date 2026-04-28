@@ -1,4 +1,6 @@
 import { NextRequest } from "next/server";
+import { readFile } from "fs/promises";
+import { join } from "path";
 import { prisma } from "@/lib/db";
 import { error, json, notFound } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
@@ -32,29 +34,45 @@ export async function POST(
       return error("No facePhotoPath found for this player", 400);
     }
 
-    const sourceUrl = toAbsolutePhotoUrl(
-      player.facePhotoPath,
-      request.nextUrl.origin
-    );
-    const sourceRes = await fetch(sourceUrl, { cache: "no-store" });
-    if (!sourceRes.ok) {
-      return error(
-        `Failed to fetch source photo (${sourceRes.status})`,
-        400
+    let sourceBytes: Buffer;
+    let sourceType = "image/jpeg";
+    if (player.facePhotoPath.startsWith("/uploads/")) {
+      // Prefer local disk read for mounted volume assets; avoids localhost TLS/self-signed issues in dev.
+      const relPath = player.facePhotoPath.replace(/^\/+/, "");
+      const absPath = join(process.cwd(), relPath);
+      sourceBytes = await readFile(absPath);
+      const p = player.facePhotoPath.toLowerCase();
+      if (p.endsWith(".png")) sourceType = "image/png";
+      else if (p.endsWith(".webp")) sourceType = "image/webp";
+      else sourceType = "image/jpeg";
+    } else {
+      const sourceUrl = toAbsolutePhotoUrl(
+        player.facePhotoPath,
+        request.nextUrl.origin
       );
+      const sourceRes = await fetch(sourceUrl, { cache: "no-store" });
+      if (!sourceRes.ok) {
+        return error(
+          `Failed to fetch source photo (${sourceRes.status})`,
+          400
+        );
+      }
+      sourceBytes = Buffer.from(await sourceRes.arrayBuffer());
+      sourceType =
+        sourceRes.headers.get("content-type") || "image/jpeg";
     }
 
-    const sourceBytes = Buffer.from(await sourceRes.arrayBuffer());
-    const sourceType =
-      sourceRes.headers.get("content-type") || "image/jpeg";
-
     const formData = new FormData();
+    const sourceBlob = new Blob([new Uint8Array(sourceBytes)], { type: sourceType });
     formData.append(
       "image_file",
-      new Blob([sourceBytes], { type: sourceType }),
+      sourceBlob,
       `${player.id}.jpg`
     );
     formData.append("size", "auto");
+    // Ensure remove.bg keeps the person/face and removes only background.
+    formData.append("type", "person");
+    formData.append("format", "png");
 
     const removeRes = await fetch("https://api.remove.bg/v1.0/removebg", {
       method: "POST",
@@ -80,6 +98,7 @@ export async function POST(
       fileName: `${player.name || "player"}-bg-removed.png`,
     });
   } catch (e) {
+    console.error("[remove-bg]", e);
     return error((e as Error).message, 500);
   }
 }
