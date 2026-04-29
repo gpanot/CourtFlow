@@ -21,17 +21,20 @@ export async function POST(
 
     // Build Reclub snapshot if roster data exists
     let reclubSnapshot: Prisma.InputJsonValue | undefined;
+    console.log("[session/close] Checking Reclub data:", { hasRoster: !!session.reclubRoster, hasRefCode: !!session.reclubReferenceCode, sessionId });
     if (session.reclubRoster && session.reclubReferenceCode) {
       try {
-        const roster = session.reclubRoster as {
-          eventName: string;
-          referenceCode: string;
-          players: Array<{
-            reclubUserId: number;
-            name: string;
-            avatarUrl: string;
-            isDefaultAvatar: boolean;
-          }>;
+        // reclubRoster is stored as a plain array of player objects
+        const rosterPlayers = session.reclubRoster as Array<{
+          reclubUserId: number;
+          name: string;
+          avatarUrl: string;
+          isDefaultAvatar: boolean;
+        }>;
+        const roster = {
+          eventName: session.reclubEventName ?? "",
+          referenceCode: session.reclubReferenceCode,
+          players: rosterPlayers,
         };
 
         const confirmedPayments = await prisma.pendingPayment.findMany({
@@ -157,6 +160,7 @@ export async function POST(
         console.error("[session/close] Failed to build Reclub snapshot:", snapshotErr);
       }
     }
+    console.log("[session/close] Snapshot built:", { hasSnapshot: !!reclubSnapshot, sessionId });
 
     const updated = await prisma.session.update({
       where: { id: sessionId },

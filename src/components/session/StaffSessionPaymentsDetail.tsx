@@ -323,38 +323,43 @@ export function StaffSessionPaymentsDetail({
         </p>
       </div>
 
-      {/* Top-level tabs (Payments / Reclub) */}
-      {reclubSnapshot && (
-        <div className="flex border-b border-neutral-800 bg-neutral-950">
-          <button
-            type="button"
-            onClick={() => setActiveTab("payments")}
-            className={cn(
-              "flex-1 py-2.5 text-center text-sm font-semibold transition-colors",
-              activeTab === "payments"
-                ? "border-b-2 border-client-primary text-white"
-                : "text-neutral-500 hover:text-neutral-300"
-            )}
-          >
-            Thanh toán
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("reclub")}
-            className={cn(
-              "flex-1 py-2.5 text-center text-sm font-semibold transition-colors",
-              activeTab === "reclub"
-                ? "border-b-2 border-green-500 text-white"
-                : "text-neutral-500 hover:text-neutral-300"
-            )}
-          >
-            Reclub
-          </button>
-        </div>
-      )}
+      {/* Top-level tabs (Payments / Reclub) — always visible */}
+      <div className="flex border-b border-neutral-800 bg-neutral-950">
+        <button
+          type="button"
+          onClick={() => setActiveTab("payments")}
+          className={cn(
+            "flex-1 py-2.5 text-center text-sm font-semibold transition-colors",
+            activeTab === "payments"
+              ? "border-b-2 border-client-primary text-white"
+              : "text-neutral-500 hover:text-neutral-300"
+          )}
+        >
+          Thanh toán
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("reclub")}
+          className={cn(
+            "flex-1 py-2.5 text-center text-sm font-semibold transition-colors",
+            activeTab === "reclub"
+              ? "border-b-2 border-green-500 text-white"
+              : "text-neutral-500 hover:text-neutral-300"
+          )}
+        >
+          Reclub
+        </button>
+      </div>
 
-      {activeTab === "reclub" && reclubSnapshot ? (
-        <ReclubSnapshotTab snapshot={reclubSnapshot} />
+      {activeTab === "reclub" ? (
+        reclubSnapshot ? (
+          <ReclubSnapshotTab snapshot={reclubSnapshot} />
+        ) : (
+          <main className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+            <p className="text-sm text-neutral-500">Không có dữ liệu Reclub cho phiên này.</p>
+            <p className="text-xs text-neutral-600">Snapshot sẽ được tạo khi đóng phiên có roster Reclub.</p>
+          </main>
+        )
       ) : (
       <>
       <div className="flex gap-1.5 border-b border-neutral-800 bg-neutral-950 px-3 py-2">

@@ -525,28 +525,33 @@ export function SessionDetailScreen() {
         </Text>
       </View>
 
-      {/* Top-level tabs when Reclub snapshot exists */}
-      {reclubSnapshot && (
-        <View style={{ flexDirection: "row", borderBottomWidth: 1, borderBottomColor: theme.border, backgroundColor: theme.bg }}>
-          <TouchableOpacity
-            style={{ flex: 1, paddingVertical: 10, alignItems: "center", borderBottomWidth: activeTab === "payments" ? 2 : 0, borderBottomColor: theme.blue500 }}
-            onPress={() => setActiveTab("payments")}
-            activeOpacity={0.7}
-          >
-            <Text style={{ fontSize: 13, fontWeight: "600", color: activeTab === "payments" ? "#fff" : theme.muted }}>Thanh toán</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={{ flex: 1, paddingVertical: 10, alignItems: "center", borderBottomWidth: activeTab === "reclub" ? 2 : 0, borderBottomColor: "#22c55e" }}
-            onPress={() => setActiveTab("reclub")}
-            activeOpacity={0.7}
-          >
-            <Text style={{ fontSize: 13, fontWeight: "600", color: activeTab === "reclub" ? "#fff" : theme.muted }}>Reclub</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      {/* Top-level tabs — always visible */}
+      <View style={{ flexDirection: "row", borderBottomWidth: 1, borderBottomColor: theme.border, backgroundColor: theme.bg }}>
+        <TouchableOpacity
+          style={{ flex: 1, paddingVertical: 10, alignItems: "center", borderBottomWidth: activeTab === "payments" ? 2 : 0, borderBottomColor: theme.blue500 }}
+          onPress={() => setActiveTab("payments")}
+          activeOpacity={0.7}
+        >
+          <Text style={{ fontSize: 13, fontWeight: "600", color: activeTab === "payments" ? "#fff" : theme.muted }}>Thanh toán</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={{ flex: 1, paddingVertical: 10, alignItems: "center", borderBottomWidth: activeTab === "reclub" ? 2 : 0, borderBottomColor: "#22c55e" }}
+          onPress={() => setActiveTab("reclub")}
+          activeOpacity={0.7}
+        >
+          <Text style={{ fontSize: 13, fontWeight: "600", color: activeTab === "reclub" ? "#fff" : theme.muted }}>Reclub</Text>
+        </TouchableOpacity>
+      </View>
 
-      {activeTab === "reclub" && reclubSnapshot ? (
-        <ReclubSnapshotView snapshot={reclubSnapshot} theme={theme} insets={insets} />
+      {activeTab === "reclub" ? (
+        reclubSnapshot ? (
+          <ReclubSnapshotView snapshot={reclubSnapshot} theme={theme} insets={insets} />
+        ) : (
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }}>
+            <Text style={{ fontSize: 13, color: theme.muted, textAlign: "center" }}>Không có dữ liệu Reclub cho phiên này.</Text>
+            <Text style={{ fontSize: 11, color: theme.subtle, textAlign: "center", marginTop: 6 }}>Snapshot sẽ được tạo khi đóng phiên có roster Reclub.</Text>
+          </View>
+        )
       ) : (
       <>
       {/* Filter tabs */}
