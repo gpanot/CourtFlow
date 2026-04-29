@@ -63,12 +63,37 @@ export async function GET(request: NextRequest) {
       ])
     );
 
-    const enriched = payments.map((p) => {
-      if (p.checkInPlayerId && !p.playerId && p.checkInPlayer?.phone) {
-        const face = faceByPhone.get(p.checkInPlayer.phone) ?? null;
-        return { ...p, facePhotoUrl: face };
+    // Look up discounts for players in this session
+    const staffId = session
+      ? (await prisma.session.findUnique({ where: { id: session.id }, select: { staffId: true } }))?.staffId
+      : null;
+
+    const discountedPlayerIds = new Set<string>();
+    if (staffId) {
+      const allPhones = payments
+        .filter((p) => p.checkInPlayer?.phone)
+        .map((p) => p.checkInPlayer!.phone);
+      const uniquePhones = [...new Set(allPhones)];
+      if (uniquePhones.length > 0) {
+        const playersWithDiscounts = await prisma.player.findMany({
+          where: { phone: { in: uniquePhones }, customPrices: { some: { staffId } } },
+          select: { phone: true },
+        });
+        const discountPhones = new Set(playersWithDiscounts.map((p) => p.phone));
+        for (const p of payments) {
+          if (p.checkInPlayer?.phone && discountPhones.has(p.checkInPlayer.phone)) {
+            discountedPlayerIds.add(p.id);
+          }
+        }
       }
-      return p;
+    }
+
+    const enriched = payments.map((p) => {
+      const facePhotoUrl = (p.checkInPlayerId && !p.playerId && p.checkInPlayer?.phone)
+        ? (faceByPhone.get(p.checkInPlayer.phone) ?? null)
+        : null;
+      const discounted = discountedPlayerIds.has(p.id) || undefined;
+      return { ...p, facePhotoUrl, discounted };
     });
 
     return json(enriched);

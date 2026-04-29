@@ -8,6 +8,7 @@ import { useStaffPinStore } from "@/stores/staff-pin-store";
 import { useClientConfig } from "@/config/use-client-config";
 import { StaffProfilePinModal } from "@/components/profile/StaffProfilePinModal";
 import { StaffPaymentSettingsForm } from "@/components/profile/StaffPaymentSettingsForm";
+import { StaffPlayerDiscounts } from "@/components/profile/StaffPlayerDiscounts";
 import { ArrowLeft } from "lucide-react";
 
 export default function StaffPaymentSettingsPage() {
@@ -79,8 +80,10 @@ export default function StaffPaymentSettingsPage() {
       </header>
 
       {unlocked && (
-        <main className="flex-1 space-y-4 p-5 pb-10">
+        <main className="flex-1 space-y-6 p-5 pb-10">
           <StaffPaymentSettingsForm venueId={venueId} />
+          <hr className="border-neutral-800" />
+          <StaffPlayerDiscounts venueId={venueId} />
         </main>
       )}
     </div>

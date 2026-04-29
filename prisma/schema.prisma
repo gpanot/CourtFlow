@@ -188,6 +188,7 @@ model Player {
   appAuthLogs           PlayerAppAuthLog[]
   pendingPayments       PendingPayment[]
   faceRecognitionLogs   FaceRecognitionLog[]
+  customPrices          PlayerCustomPrice[]
 
   @@index([registrationVenueId])
   @@map("players")
@@ -260,6 +261,7 @@ model StaffMember {
   playerRankings PlayerRanking[]
   pushTokens            StaffPushToken[]
   faceRecognitionLogs   FaceRecognitionLog[]
+  customPrices          PlayerCustomPrice[]
 
   @@map("staff_members")
 }
@@ -882,4 +884,22 @@ model BillingLineItem {
 
   @@index([invoiceId])
   @@map("billing_line_items")
+}
+
+model PlayerCustomPrice {
+  id           String   @id @default(cuid())
+  playerId     String   @map("player_id")
+  staffId      String   @map("staff_id")
+  discountType String   @map("discount_type")
+  customFee    Int?     @map("custom_fee")
+  discountPct  Int?     @map("discount_pct")
+  note         String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  player Player      @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  staff  StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, staffId])
+  @@map("player_custom_prices")
 }

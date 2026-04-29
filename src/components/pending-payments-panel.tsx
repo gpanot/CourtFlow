@@ -18,6 +18,7 @@ interface PendingPaymentItem {
   partyCount?: number;
   groupPaidByPaymentId?: string | null;
   groupPaidByName?: string | null;
+  discounted?: boolean;
   createdAt: string;
   player: {
     id: string;
@@ -43,6 +44,7 @@ interface PaidPaymentItem {
   partyCount?: number;
   groupPaidByPaymentId?: string | null;
   groupPaidByName?: string | null;
+  discounted?: boolean;
   createdAt: string;
   confirmedAt: string | null;
   player: {
@@ -402,6 +404,11 @@ export function PendingPaymentsPanel({
                           </span>
                           <span className="text-neutral-600">&middot;</span>
                           <span>{formatVND(p.amount)}</span>
+                          {p.discounted && (
+                            <span className="rounded px-1 py-0.5 text-[9px] font-bold uppercase bg-amber-500/20 text-amber-400">
+                              Giảm giá
+                            </span>
+                          )}
                         </div>
                       </div>
                       <div className="shrink-0 flex items-center gap-1.5">
@@ -535,6 +542,11 @@ export function PendingPaymentsPanel({
                           <span className="font-semibold text-neutral-200">
                             {formatVND(p.amount)}
                           </span>
+                          {p.discounted && (
+                            <span className="ml-1.5 rounded px-1 py-0.5 text-[9px] font-bold uppercase bg-amber-500/20 text-amber-400">
+                              Giảm giá
+                            </span>
+                          )}
                         </p>
 
                         {p.groupPaidByName ? (

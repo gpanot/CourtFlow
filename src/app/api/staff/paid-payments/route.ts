@@ -112,15 +112,40 @@ export async function GET(request: NextRequest) {
       ])
     );
 
+    // Identify discounted payments
+    const sessionRecord = await prisma.session.findUnique({
+      where: { id: session.id },
+      select: { staffId: true },
+    });
+    const discountedPaymentIds = new Set<string>();
+    if (sessionRecord?.staffId) {
+      const allPhones = payments
+        .filter((p) => p.checkInPlayer?.phone)
+        .map((p) => p.checkInPlayer!.phone);
+      const uniquePhones = [...new Set(allPhones)];
+      if (uniquePhones.length > 0) {
+        const playersWithDiscounts = await prisma.player.findMany({
+          where: { phone: { in: uniquePhones }, customPrices: { some: { staffId: sessionRecord.staffId } } },
+          select: { phone: true },
+        });
+        const discountPhones = new Set(playersWithDiscounts.map((p) => p.phone));
+        for (const p of payments) {
+          if (p.checkInPlayer?.phone && discountPhones.has(p.checkInPlayer.phone)) {
+            discountedPaymentIds.add(p.id);
+          }
+        }
+      }
+    }
+
     const enriched = payments.map((p) => {
       const subscriptionInfo = p.checkInPlayerId
         ? subscriptionByPlayer.get(p.checkInPlayerId) ?? null
         : null;
-      if (p.checkInPlayerId && !p.playerId && p.checkInPlayer?.phone) {
-        const face = faceByPhone.get(p.checkInPlayer.phone) ?? null;
-        return { ...p, facePhotoUrl: face, subscriptionInfo };
-      }
-      return { ...p, subscriptionInfo };
+      const facePhotoUrl = (p.checkInPlayerId && !p.playerId && p.checkInPlayer?.phone)
+        ? (faceByPhone.get(p.checkInPlayer.phone) ?? null)
+        : null;
+      const discounted = discountedPaymentIds.has(p.id) || undefined;
+      return { ...p, subscriptionInfo, facePhotoUrl, discounted };
     });
 
     const confirmed = enriched.filter((p) => p.status === "confirmed");

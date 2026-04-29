@@ -250,11 +250,28 @@ export async function POST(req: Request) {
     // Session-only payment: align with Self Check-In by using open session fee first.
     const openSession = await prisma.session.findFirst({
       where: { venueId: venue.id, status: "open" },
-      select: { sessionFee: true },
+      select: { id: true, sessionFee: true, staffId: true },
     });
     const settings = venue.settings as Record<string, unknown>;
-    const sessionFee =
+    let sessionFee =
       openSession?.sessionFee ?? (settings?.sessionFee as number) ?? 0;
+
+    // Apply player discount if one exists
+    if (sessionFee > 0 && openSession?.staffId) {
+      const corePlayer = await prisma.player.findFirst({ where: { phone: player.phone } });
+      if (corePlayer) {
+        const discount = await prisma.playerCustomPrice.findUnique({
+          where: { playerId_staffId: { playerId: corePlayer.id, staffId: openSession.staffId } },
+        });
+        if (discount) {
+          if (discount.discountType === "fixed" && discount.customFee) {
+            sessionFee = discount.customFee;
+          } else if (discount.discountType === "percent" && discount.discountPct) {
+            sessionFee = Math.round(sessionFee * (1 - discount.discountPct / 100));
+          }
+        }
+      }
+    }
 
     if (sessionFee > 0) {
       const headCount = clampSessionPartyHeadCount(headCountRaw ?? 1);

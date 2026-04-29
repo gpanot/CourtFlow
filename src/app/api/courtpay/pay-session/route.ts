@@ -119,8 +119,29 @@ export async function POST(req: Request) {
         existingPayment.type === "checkin"
       ) {
         const settingsEarly = venue.settings as Record<string, unknown>;
-        const sessionFeeEarly =
+        let sessionFeeEarly =
           openSession?.sessionFee ?? (settingsEarly?.sessionFee as number) ?? 0;
+        if (sessionFeeEarly > 0 && openSession?.id) {
+          const corePlayerEarly = await prisma.player.findFirst({ where: { phone: player.phone } });
+          if (corePlayerEarly) {
+            const sessionEarly = await prisma.session.findUnique({
+              where: { id: openSession.id },
+              select: { staffId: true },
+            });
+            if (sessionEarly?.staffId) {
+              const discountEarly = await prisma.playerCustomPrice.findUnique({
+                where: { playerId_staffId: { playerId: corePlayerEarly.id, staffId: sessionEarly.staffId } },
+              });
+              if (discountEarly) {
+                if (discountEarly.discountType === "fixed" && discountEarly.customFee) {
+                  sessionFeeEarly = discountEarly.customFee;
+                } else if (discountEarly.discountType === "percent" && discountEarly.discountPct) {
+                  sessionFeeEarly = Math.round(sessionFeeEarly * (1 - discountEarly.discountPct / 100));
+                }
+              }
+            }
+          }
+        }
         if (sessionFeeEarly > 0) {
           const headCount = clampSessionPartyHeadCount(headCountRaw ?? 1);
           const amount = sessionFeeEarly * headCount;
@@ -208,8 +229,31 @@ export async function POST(req: Request) {
 
     // ── Session-only payment (no subscription) ──────────────────────────────
     const settings = venue.settings as Record<string, unknown>;
-    const sessionFee =
+    let sessionFee =
       openSession?.sessionFee ?? (settings?.sessionFee as number) ?? 0;
+
+    // Apply player discount if one exists
+    if (sessionFee > 0 && openSession?.id) {
+      const corePlayer = await prisma.player.findFirst({ where: { phone: player.phone } });
+      if (corePlayer) {
+        const session = await prisma.session.findUnique({
+          where: { id: openSession.id },
+          select: { staffId: true },
+        });
+        if (session?.staffId) {
+          const discount = await prisma.playerCustomPrice.findUnique({
+            where: { playerId_staffId: { playerId: corePlayer.id, staffId: session.staffId } },
+          });
+          if (discount) {
+            if (discount.discountType === "fixed" && discount.customFee) {
+              sessionFee = discount.customFee;
+            } else if (discount.discountType === "percent" && discount.discountPct) {
+              sessionFee = Math.round(sessionFee * (1 - discount.discountPct / 100));
+            }
+          }
+        }
+      }
+    }
 
     if (sessionFee > 0) {
       const headCount = clampSessionPartyHeadCount(headCountRaw ?? 1);
