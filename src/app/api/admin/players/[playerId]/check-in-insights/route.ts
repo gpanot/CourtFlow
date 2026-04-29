@@ -22,6 +22,8 @@ export async function GET(
       select: {
         id: true,
         phone: true,
+        registrationAt: true,
+        registrationVenue: { select: { name: true } },
         faceSubjectId: true,
         facePhotoPath: true,
         avatarPhotoPath: true,
@@ -174,6 +176,8 @@ export async function GET(
     );
 
     return json({
+      firstTimeSignUpAt: player.registrationAt?.toISOString() ?? null,
+      firstTimeSignUpVenue: player.registrationVenue?.name ?? null,
       faceRegisteredAt,
       faceRegistrationSource: faceRegisteredAudit?.action ?? (createdNewPlayerAttempt ? "kiosk_new_player" : null),
       recognition: {

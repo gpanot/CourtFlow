@@ -39,6 +39,7 @@ interface PaidPaymentItem {
   type: string;
   checkInPlayerId: string | null;
   confirmedBy: string | null;
+  cancelReason: string | null;
   partyCount?: number;
   groupPaidByPaymentId?: string | null;
   groupPaidByName?: string | null;

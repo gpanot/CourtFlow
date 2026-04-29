@@ -107,7 +107,7 @@ interface CourtPayKioskProps {
 }
 
 export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
-  const { t } = useTranslation("translation", { i18n: staffI18n });
+  const { t, i18n } = useTranslation("translation", { i18n: staffI18n });
   const { unlockChime, playSuccessChime } = useSuccessChime();
   const { on } = useSocket();
   const cameraRef = useRef<CameraCaptureHandle>(null);
@@ -838,9 +838,28 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
       payment_timeout: "bg-red-950",
       payment_cancelled: "bg-red-950",
     } as Record<string, string>)[step] ?? "bg-black";
+  const showRegistrationLocaleToggle =
+    step === "reg_face_preview" || step === "reg_form";
+  const isVi = i18n.language?.toLowerCase().startsWith("vi");
 
   return (
     <div className={cn("relative flex h-full w-full flex-col transition-colors duration-300", bgColor)}>
+      {showRegistrationLocaleToggle ? (
+        <button
+          type="button"
+          onClick={() => void i18n.changeLanguage(isVi ? "en" : "vi")}
+          className="absolute right-4 top-4 z-30 shrink-0 rounded-full border border-neutral-700/90 bg-neutral-800/80 p-1.5 text-[1.35rem] leading-none transition-colors hover:border-neutral-500 hover:bg-neutral-700/80"
+          aria-label={
+            isVi
+              ? t("language.switchToEnglishAria")
+              : t("language.switchToVietnameseAria")
+          }
+        >
+          <span aria-hidden className="block select-none">
+            {isVi ? "🇬🇧" : "🇻🇳"}
+          </span>
+        </button>
+      ) : null}
 
       {/* ── HOME ─────────────────────────────────── */}
       {step === "home" && (

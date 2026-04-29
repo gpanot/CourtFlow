@@ -44,7 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {children}
         <script
           dangerouslySetInnerHTML={{
-            __html: "(function(){try{if(typeof window!=='undefined'&&window.history){var h=window.history;if(typeof h.pushState==='function'){h.pushState=h.pushState.bind(h);}if(typeof h.replaceState==='function'){h.replaceState=h.replaceState.bind(h);}}}catch(e){console.warn('[NavPatch] history bind failed',e);}if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js')}})();",
+            __html: "(function(){try{if(typeof window!=='undefined'&&window.history){var h=window.history;if(typeof h.pushState==='function'){h.pushState=h.pushState.bind(h);}if(typeof h.replaceState==='function'){h.replaceState=h.replaceState.bind(h);}}}catch(e){console.warn('[NavPatch] history bind failed',e);}if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').then(function(reg){reg.update();document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible'){reg.update();}});}).catch(function(err){console.warn('[SW] register failed',err);});}})();",
           }}
         />
       </body>

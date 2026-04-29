@@ -59,6 +59,8 @@ export async function POST(request: NextRequest) {
         phone: phone.trim(),
         gender,
         skillLevel,
+        registrationAt: new Date(),
+        registrationVenueId: venueId,
       },
     });
 

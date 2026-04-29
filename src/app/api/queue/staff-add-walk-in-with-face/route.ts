@@ -196,6 +196,8 @@ export async function POST(request: NextRequest) {
           isWalkIn: true,
           avatar: "🏓",
           rankingScore: initialRankingScoreForSkillLevel(skillLevel as SkillLevel),
+          registrationAt: new Date(),
+          registrationVenueId: venueId,
         },
       });
     } catch (e) {

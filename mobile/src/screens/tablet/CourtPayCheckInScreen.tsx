@@ -41,6 +41,7 @@ import {
 } from "../../components/SelfCheckInReturningFaceScanner";
 import { TabletStaffEscape } from "../../components/TabletStaffEscape";
 import { CourtFlowKioskTopBar } from "../../components/CourtFlowKioskTopBar";
+import { TabletLanguageToggle } from "../../components/TabletLanguageToggle";
 import type { SubscriptionPackage } from "../../types/api";
 import type { CheckInScannerStringKey } from "../../lib/tablet-check-in-strings";
 import {
@@ -2049,6 +2050,11 @@ export function CourtPayCheckInScreen({
           onToggleTheme={toggleTheme}
         />
       ) : null}
+      {step === "reg_face_preview" || step === "reg_form" ? (
+        <View style={[styles.floatingLocaleToggle, { top: insets.top + 8 }]}>
+          <TabletLanguageToggle locale={locale} onToggle={toggleLocale} />
+        </View>
+      ) : null}
       <View style={styles.container} onTouchStart={restartIdleTimer}>
         {renderStep()}
       </View>
@@ -2183,6 +2189,11 @@ export function CourtPayCheckInScreen({
 
 const styles = StyleSheet.create({
   outer: { flex: 1, backgroundColor: "#030108" },
+  floatingLocaleToggle: {
+    position: "absolute",
+    right: 14,
+    zIndex: 40,
+  },
   container: {
     flex: 1,
     backgroundColor: "transparent",

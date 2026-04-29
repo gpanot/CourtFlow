@@ -26,6 +26,8 @@ async function createWalkInPlayerWithUniquePhone(input: {
           skillLevel: input.skillLevel,
           faceSubjectId: null,
           isWalkIn: true,
+          registrationAt: new Date(),
+          registrationVenueId: input.venueId,
         },
       });
       corePlayerId = corePlayer.id;

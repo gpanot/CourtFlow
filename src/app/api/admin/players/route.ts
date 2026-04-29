@@ -253,6 +253,7 @@ export async function POST(request: NextRequest) {
         skillLevel: skill,
         avatar: body.avatar || "🏓",
         rankingScore: initialRankingScoreForSkillLevel(skill),
+        registrationAt: new Date(),
       },
     });
 

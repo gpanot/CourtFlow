@@ -11,6 +11,11 @@ import { faceRecognitionService } from "@/lib/face-recognition";
 import { persistPlayerCheckInFacePhoto } from "@/lib/persist-player-check-in-photo";
 import { COLLECTION_ID } from "@/lib/rekognition-config";
 
+function isNoFaceEnrollmentError(error?: string): boolean {
+  const msg = (error ?? "").toLowerCase();
+  return msg.includes("no face");
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -132,13 +137,20 @@ export async function POST(req: Request) {
             existingByPhone.id
           );
           if (!enrollExisting.success) {
-            return NextResponse.json(
-              {
-                error: enrollExisting.error || "Face enrollment failed",
-                qualityError: enrollExisting.qualityError === true,
-              },
-              { status: 400 }
-            );
+            if (isNoFaceEnrollmentError(enrollExisting.error)) {
+              return NextResponse.json(
+                {
+                  error: enrollExisting.error || "Face enrollment failed",
+                  qualityError: enrollExisting.qualityError === true,
+                },
+                { status: 400 }
+              );
+            }
+            console.warn("[courtpay/register] Non-blocking face enrollment failure (existing):", {
+              playerId: existingByPhone.id,
+              error: enrollExisting.error ?? null,
+              qualityError: enrollExisting.qualityError === true,
+            });
           }
           try {
             await persistPlayerCheckInFacePhoto(existingByPhone.id, imageBase64);
@@ -155,6 +167,8 @@ export async function POST(req: Request) {
             phone: internalPhone,
             gender: genderVal,
             skillLevel: skillVal,
+            registrationAt: new Date(),
+            registrationVenueId: venue.id,
           },
         });
         console.log("[courtpay/register] Enrolling face in collection", {
@@ -164,14 +178,21 @@ export async function POST(req: Request) {
         });
         const enrollment = await faceRecognitionService.enrollFace(imageBase64, corePlayer.id);
         if (!enrollment.success) {
-          await prisma.player.delete({ where: { id: corePlayer.id } });
-          return NextResponse.json(
-            {
-              error: enrollment.error || "Face enrollment failed",
-              qualityError: enrollment.qualityError === true,
-            },
-            { status: 400 }
-          );
+          if (isNoFaceEnrollmentError(enrollment.error)) {
+            await prisma.player.delete({ where: { id: corePlayer.id } });
+            return NextResponse.json(
+              {
+                error: enrollment.error || "Face enrollment failed",
+                qualityError: enrollment.qualityError === true,
+              },
+              { status: 400 }
+            );
+          }
+          console.warn("[courtpay/register] Non-blocking face enrollment failure (new):", {
+            playerId: corePlayer.id,
+            error: enrollment.error ?? null,
+            qualityError: enrollment.qualityError === true,
+          });
         }
 
         try {

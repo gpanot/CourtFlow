@@ -149,6 +149,8 @@ export async function POST(request: NextRequest) {
           skillLevel: "beginner",
           avatar: "🏓",
           rankingScore: initialRankingScoreForSkillLevel("beginner"),
+          registrationAt: new Date(),
+          registrationVenueId: venueId,
         },
       });
 

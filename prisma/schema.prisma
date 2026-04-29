@@ -149,6 +149,7 @@ model Venue {
   billingRate          VenueBillingRate?
   billingInvoices      BillingInvoice[]
   faceRecognitionLogs  FaceRecognitionLog[]
+  registeredPlayers    Player[]             @relation("PlayerRegistrationVenue")
 
   @@map("venues")
 }
@@ -172,18 +173,22 @@ model Player {
   rankingCount          Int            @default(0) @map("ranking_count")
   lastRankedAt          DateTime?      @map("last_ranked_at")
   createdAt             DateTime       @default(now()) @map("created_at")
+  registrationAt        DateTime?      @map("registration_at")
+  registrationVenueId   String?        @map("registration_venue_id")
 
-  queueEntries      QueueEntry[]
-  playerRankings    PlayerRanking[]
-  pushSubscriptions PushSubscription[]
-  memberships       Membership[]
-  bookings          Booking[]
-  coachLessons      CoachLesson[]
+  queueEntries        QueueEntry[]
+  playerRankings      PlayerRanking[]
+  pushSubscriptions   PushSubscription[]
+  memberships         Membership[]
+  bookings            Booking[]
+  coachLessons        CoachLesson[]
+  registrationVenue   Venue?           @relation("PlayerRegistrationVenue", fields: [registrationVenueId], references: [id])
   faceAttempts          FaceAttempt[]
   appAuthLogs           PlayerAppAuthLog[]
   pendingPayments       PendingPayment[]
   faceRecognitionLogs   FaceRecognitionLog[]
 
+  @@index([registrationVenueId])
   @@map("players")
 }
 

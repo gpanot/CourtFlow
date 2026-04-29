@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
         gender: body.gender,
         skillLevel: body.skillLevel,
         rankingScore: initialRankingScoreForSkillLevel(body.skillLevel),
+        registrationAt: new Date(),
       },
     });
 

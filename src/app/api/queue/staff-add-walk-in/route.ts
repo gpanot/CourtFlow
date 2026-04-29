@@ -150,6 +150,8 @@ export async function POST(request: NextRequest) {
             typeof avatarRaw === "string" ? avatarRaw : null
           ),
           rankingScore: initialRankingScoreForSkillLevel(skillLevel as SkillLevel),
+          registrationAt: new Date(),
+          registrationVenueId: venueId,
         },
       });
     } catch (e) {

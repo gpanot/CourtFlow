@@ -105,6 +105,8 @@ interface PlayerRecord {
 }
 
 interface CheckInInsights {
+  firstTimeSignUpAt: string | null;
+  firstTimeSignUpVenue: string | null;
   faceRegisteredAt: string | null;
   faceRegistrationSource: string | null;
   recognition?: {
@@ -1519,6 +1521,17 @@ function PlayerDetailPanel({
             </div>
             {checkInInsights ? (
               <div className="space-y-3">
+                <div className="rounded-lg border border-neutral-800/80 bg-neutral-950/50 px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-wide text-neutral-500">First time sign up</p>
+                  <p className="text-sm font-medium text-white">
+                    {checkInInsights.firstTimeSignUpAt
+                      ? `${fmtDate(checkInInsights.firstTimeSignUpAt)}${checkInInsights.firstTimeSignUpVenue ? ` · ${checkInInsights.firstTimeSignUpVenue}` : ""}`
+                      : "Not available"}
+                  </p>
+                  <p className="mt-1.5 text-[10px] leading-snug text-neutral-500">
+                    Captures when this profile was first created, plus the venue when registration happened through kiosk, CourtPay, or staff check-in.
+                  </p>
+                </div>
                 <div className="rounded-lg border border-neutral-800/80 bg-neutral-950/50 px-3 py-2">
                   <p className="text-[10px] uppercase tracking-wide text-neutral-500">Registered with face</p>
                   <p className="text-sm font-medium text-white">
