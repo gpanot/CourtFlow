@@ -90,7 +90,27 @@
       "appearanceDark": "Dark",
       "appearanceLight": "Light",
       "goToRole": "Go to Role / Tablet",
-      "pushUpdateError": "Could not update push notification preference."
+      "pushUpdateError": "Could not update push notification preference.",
+      "playerDiscountTitle": "Player discounts",
+      "playerDiscountEmpty": "No discounts set",
+      "playerDiscountAdd": "Add discount",
+      "playerDiscountDeleteConfirm": "Delete discount for this player?",
+      "playerDiscountEditTitle": "Edit discount",
+      "playerDiscountCreateTitle": "Create discount",
+      "playerDiscountSearchPlaceholder": "Search player by name or phone...",
+      "playerDiscountNoResults": "No players found",
+      "playerDiscountChange": "Change",
+      "playerDiscountFixed": "Fixed price",
+      "playerDiscountPercent": "Percentage",
+      "playerDiscountCustomFeeLabel": "Custom price (VND)",
+      "playerDiscountDefaultFee": "Default price: {{fee}} VND",
+      "playerDiscountPctLabel": "Discount %",
+      "playerDiscountPctResult": "Player pays: {{price}} VND",
+      "playerDiscountPctDefault": "(default {{fee}})",
+      "playerDiscountNoteLabel": "Note (optional)",
+      "playerDiscountNotePlaceholder": "e.g. Coach, Regular, Friend...",
+      "playerDiscountSaveError": "Could not save discount",
+      "playerDiscountSave": "Save"
     },
     "dashboard": {
       "noVenueAssigned": "No venue assigned. Contact admin.",
@@ -540,7 +560,19 @@
       "emptyFiltered": "No {{filter}} payments.",
       "retry": "Retry",
       "invalidLink": "Invalid session link.",
-      "backToStaff": "Back to staff"
+      "backToStaff": "Back to staff",
+      "tabPayments": "Payments",
+      "tabReclub": "Reclub",
+      "reclubKpiMatched": "Matched",
+      "reclubKpiAbsent": "Absent",
+      "reclubKpiWalkIn": "Walk-in",
+      "reclubKpiBooked": "Booked",
+      "reclubNoData": "No Reclub data for this session.",
+      "reclubNoDataHint": "Snapshot will be created when closing a session with a Reclub roster.",
+      "reclubLegend": "Legend",
+      "reclubLegendMatched": "Matched & paid",
+      "reclubLegendAbsent": "Absent",
+      "reclubLegendWalkIn": "Walk-in"
     },
     "courtPayAwaitingPayment": {
       "payTitle": "Almost there, {{name}}!",
@@ -616,7 +648,8 @@
       "registerPhotoAskStaff": "Please ask staff for help.",
       "courtPayPreCaptureChecking": "Checking photo…",
       "courtPayPreCaptureReady": "Photo captured, ready to submit.",
-      "courtPayPreCaptureNoFace": "No face detected, please retake."
+      "courtPayPreCaptureNoFace": "No face detected, please retake.",
+      "regFormTitle": "Let's setup your account"
     }
   }
 }

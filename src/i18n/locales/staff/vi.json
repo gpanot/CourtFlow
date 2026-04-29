@@ -90,7 +90,27 @@
       "appearanceDark": "Tối",
       "appearanceLight": "Sáng",
       "goToRole": "Chuyển vai / Máy tính bảng",
-      "pushUpdateError": "Không thể cập nhật tùy chọn thông báo đẩy."
+      "pushUpdateError": "Không thể cập nhật tùy chọn thông báo đẩy.",
+      "playerDiscountTitle": "Giảm giá người chơi",
+      "playerDiscountEmpty": "Chưa có giảm giá nào",
+      "playerDiscountAdd": "Thêm giảm giá",
+      "playerDiscountDeleteConfirm": "Xoá giảm giá cho người chơi này?",
+      "playerDiscountEditTitle": "Sửa giảm giá",
+      "playerDiscountCreateTitle": "Tạo giảm giá",
+      "playerDiscountSearchPlaceholder": "Tìm người chơi theo tên hoặc SĐT...",
+      "playerDiscountNoResults": "Không tìm thấy",
+      "playerDiscountChange": "Đổi",
+      "playerDiscountFixed": "Giá cố định",
+      "playerDiscountPercent": "Phần trăm",
+      "playerDiscountCustomFeeLabel": "Giá tuỳ chỉnh (VND)",
+      "playerDiscountDefaultFee": "Giá mặc định: {{fee}} VND",
+      "playerDiscountPctLabel": "Giảm giá %",
+      "playerDiscountPctResult": "Người chơi trả: {{price}} VND",
+      "playerDiscountPctDefault": "(mặc định {{fee}})",
+      "playerDiscountNoteLabel": "Ghi chú (tuỳ chọn)",
+      "playerDiscountNotePlaceholder": "VD: Huấn luyện viên, Thường xuyên, Bạn bè...",
+      "playerDiscountSaveError": "Lỗi lưu giảm giá",
+      "playerDiscountSave": "Lưu"
     },
     "dashboard": {
       "noVenueAssigned": "Chưa được gán địa điểm. Liên hệ quản trị viên.",
@@ -548,7 +568,19 @@
       "emptyFiltered": "Không có thanh toán {{filter}}.",
       "retry": "Thử lại",
       "invalidLink": "Liên kết buổi không hợp lệ.",
-      "backToStaff": "Về trang nhân viên"
+      "backToStaff": "Về trang nhân viên",
+      "tabPayments": "Thanh toán",
+      "tabReclub": "Reclub",
+      "reclubKpiMatched": "Khớp",
+      "reclubKpiAbsent": "Vắng",
+      "reclubKpiWalkIn": "Walk-in",
+      "reclubKpiBooked": "Đã đặt",
+      "reclubNoData": "Không có dữ liệu Reclub cho phiên này.",
+      "reclubNoDataHint": "Snapshot sẽ được tạo khi đóng phiên có roster Reclub.",
+      "reclubLegend": "Chú thích",
+      "reclubLegendMatched": "Khớp & đã trả",
+      "reclubLegendAbsent": "Vắng mặt",
+      "reclubLegendWalkIn": "Walk-in"
     },
     "courtPayAwaitingPayment": {
       "payTitle": "Sắp xong rồi, {{name}}!",
@@ -624,7 +656,8 @@
       "registerPhotoAskStaff": "Vui lòng nhờ nhân viên hỗ trợ.",
       "courtPayPreCaptureChecking": "Đang kiểm tra ảnh…",
       "courtPayPreCaptureReady": "Đã chụp ảnh, có thể gửi đăng ký.",
-      "courtPayPreCaptureNoFace": "Không thấy khuôn mặt, vui lòng chụp lại."
+      "courtPayPreCaptureNoFace": "Không thấy khuôn mặt, vui lòng chụp lại.",
+      "regFormTitle": "Hãy thiết lập tài khoản"
     }
   }
 }

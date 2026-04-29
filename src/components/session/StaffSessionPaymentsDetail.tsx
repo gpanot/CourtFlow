@@ -335,7 +335,7 @@ export function StaffSessionPaymentsDetail({
               : "text-neutral-500 hover:text-neutral-300"
           )}
         >
-          Thanh toán
+          {t("staff.sessionPaymentsDetail.tabPayments")}
         </button>
         <button
           type="button"
@@ -347,17 +347,17 @@ export function StaffSessionPaymentsDetail({
               : "text-neutral-500 hover:text-neutral-300"
           )}
         >
-          Reclub
+          {t("staff.sessionPaymentsDetail.tabReclub")}
         </button>
       </div>
 
       {activeTab === "reclub" ? (
         reclubSnapshot ? (
-          <ReclubSnapshotTab snapshot={reclubSnapshot} />
+          <ReclubSnapshotTab snapshot={reclubSnapshot} t={t} />
         ) : (
           <main className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-            <p className="text-sm text-neutral-500">Không có dữ liệu Reclub cho phiên này.</p>
-            <p className="text-xs text-neutral-600">Snapshot sẽ được tạo khi đóng phiên có roster Reclub.</p>
+            <p className="text-sm text-neutral-500">{t("staff.sessionPaymentsDetail.reclubNoData")}</p>
+            <p className="text-xs text-neutral-600">{t("staff.sessionPaymentsDetail.reclubNoDataHint")}</p>
           </main>
         )
       ) : (
@@ -514,7 +514,7 @@ export function StaffSessionPaymentsDetail({
   );
 }
 
-function ReclubSnapshotTab({ snapshot }: { snapshot: ReclubSnapshot }) {
+function ReclubSnapshotTab({ snapshot, t }: { snapshot: ReclubSnapshot; t: (key: string) => string }) {
   const rosterPlayers = snapshot.players.filter((p) => p.reclubName);
   const walkIns = snapshot.players.filter((p) => !p.reclubName);
 
@@ -540,19 +540,19 @@ function ReclubSnapshotTab({ snapshot }: { snapshot: ReclubSnapshot }) {
       <div className="mb-4 grid grid-cols-4 gap-2">
         <div className="rounded-lg bg-neutral-800/60 py-2.5 text-center">
           <p className="text-lg font-bold text-green-500">{snapshot.totalMatched}</p>
-          <p className="text-[10px] text-neutral-400">Khớp</p>
+          <p className="text-[10px] text-neutral-400">{t("staff.sessionPaymentsDetail.reclubKpiMatched")}</p>
         </div>
         <div className="rounded-lg bg-neutral-800/60 py-2.5 text-center">
           <p className="text-lg font-bold text-white">{snapshot.totalExpected - snapshot.totalMatched}</p>
-          <p className="text-[10px] text-neutral-400">Vắng</p>
+          <p className="text-[10px] text-neutral-400">{t("staff.sessionPaymentsDetail.reclubKpiAbsent")}</p>
         </div>
         <div className="rounded-lg bg-neutral-800/60 py-2.5 text-center">
           <p className={cn("text-lg font-bold", snapshot.totalWalkIns > 0 ? "text-amber-400" : "text-neutral-500")}>{snapshot.totalWalkIns}</p>
-          <p className="text-[10px] text-neutral-400">Walk-in</p>
+          <p className="text-[10px] text-neutral-400">{t("staff.sessionPaymentsDetail.reclubKpiWalkIn")}</p>
         </div>
         <div className="rounded-lg bg-neutral-800/60 py-2.5 text-center">
           <p className="text-lg font-bold text-blue-400">{snapshot.totalExpected}</p>
-          <p className="text-[10px] text-neutral-400">Đã đặt</p>
+          <p className="text-[10px] text-neutral-400">{t("staff.sessionPaymentsDetail.reclubKpiBooked")}</p>
         </div>
       </div>
 
@@ -615,16 +615,16 @@ function ReclubSnapshotTab({ snapshot }: { snapshot: ReclubSnapshot }) {
       </div>
 
       <div className="mt-4 rounded-lg border border-neutral-800 bg-neutral-900/50 p-3">
-        <p className="mb-2 text-xs font-medium text-neutral-400">Chú thích</p>
+        <p className="mb-2 text-xs font-medium text-neutral-400">{t("staff.sessionPaymentsDetail.reclubLegend")}</p>
         <div className="flex flex-wrap gap-3 text-[11px]">
           <span className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full ring-2 ring-green-500" /> Khớp & đã trả
+            <span className="h-3 w-3 rounded-full ring-2 ring-green-500" /> {t("staff.sessionPaymentsDetail.reclubLegendMatched")}
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full ring-2 ring-neutral-600 opacity-50" /> Vắng mặt
+            <span className="h-3 w-3 rounded-full ring-2 ring-neutral-600 opacity-50" /> {t("staff.sessionPaymentsDetail.reclubLegendAbsent")}
           </span>
           <span className="flex items-center gap-1.5">
-            <span className="h-3 w-3 rounded-full ring-2 ring-amber-500" /> Walk-in
+            <span className="h-3 w-3 rounded-full ring-2 ring-amber-500" /> {t("staff.sessionPaymentsDetail.reclubLegendWalkIn")}
           </span>
         </div>
       </div>

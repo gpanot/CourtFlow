@@ -40,6 +40,7 @@ import { playPaymentNotificationSound } from "../../lib/play-payment-notificatio
 import type { VenuePaymentSettings } from "../../types/api";
 import type { StaffStackParamList } from "../../navigation/types";
 import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
+import type { CheckInScannerStringKey } from "../../lib/tablet-check-in-strings";
 
 function createStyles(t: AppColors) {
   return StyleSheet.create({
@@ -521,6 +522,11 @@ export function StaffPaymentSettingsScreen() {
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* Player Discounts */}
+          {venueId && (
+            <PlayerDiscountsSection venueId={venueId} theme={theme} styles={styles} t={t} />
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -589,5 +595,528 @@ export function StaffPaymentSettingsScreen() {
         </View>
       </Modal>
     </>
+  );
+}
+
+/* ─── Player Discounts Section ─────────────────────────────────────────────── */
+
+interface PlayerResult {
+  id: string;
+  name: string;
+  phone: string;
+  facePhotoPath: string | null;
+  avatarPhotoPath: string | null;
+}
+
+interface DiscountRecord {
+  id: string;
+  playerId: string;
+  discountType: "fixed" | "percent";
+  customFee: number | null;
+  discountPct: number | null;
+  note: string | null;
+  player: PlayerResult;
+}
+
+type TFn = (key: CheckInScannerStringKey, params?: Record<string, string | number>) => string;
+
+function PlayerDiscountsSection({
+  venueId,
+  theme,
+  styles,
+  t,
+}: {
+  venueId: string;
+  theme: AppColors;
+  styles: ReturnType<typeof createStyles>;
+  t: TFn;
+}) {
+  const [discounts, setDiscounts] = useState<DiscountRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingDiscount, setEditingDiscount] = useState<DiscountRecord | null>(null);
+  const [venueSessionFee, setVenueSessionFee] = useState(0);
+
+  const fetchDiscounts = useCallback(async () => {
+    try {
+      const [discData, feeData] = await Promise.all([
+        api.get<{ discounts: DiscountRecord[] }>("/api/staff/player-discounts"),
+        api.get<{ sessionFee: number }>(`/api/staff/venue-payment-settings?venueId=${venueId}`),
+      ]);
+      setDiscounts(discData.discounts);
+      setVenueSessionFee(feeData.sessionFee || 0);
+    } catch { /* silent */ } finally {
+      setLoading(false);
+    }
+  }, [venueId]);
+
+  useEffect(() => { void fetchDiscounts(); }, [fetchDiscounts]);
+
+  const handleDelete = (playerId: string) => {
+    Alert.alert(
+      t("playerDiscountDelete"),
+      t("playerDiscountDeleteConfirm"),
+      [
+        { text: t("playerDiscountCancel"), style: "cancel" },
+        {
+          text: t("playerDiscountDelete"),
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await api.delete("/api/staff/player-discounts", { playerId });
+              setDiscounts((prev) => prev.filter((d) => d.playerId !== playerId));
+            } catch { /* silent */ }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleSaved = (updated: DiscountRecord) => {
+    setDiscounts((prev) => {
+      const existing = prev.findIndex((d) => d.playerId === updated.playerId);
+      if (existing >= 0) {
+        const copy = [...prev];
+        copy[existing] = updated;
+        return copy;
+      }
+      return [updated, ...prev];
+    });
+    setModalOpen(false);
+    setEditingDiscount(null);
+  };
+
+  const calcFinalPrice = (d: DiscountRecord) => {
+    if (d.discountType === "fixed" && d.customFee != null) return d.customFee;
+    if (d.discountType === "percent" && d.discountPct != null)
+      return Math.round(venueSessionFee * (1 - d.discountPct / 100));
+    return venueSessionFee;
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.section}>
+        <ActivityIndicator color={theme.blue500} style={{ marginVertical: 12 }} />
+      </View>
+    );
+  }
+
+  return (
+    <>
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="pricetag-outline" size={16} color="#f59e0b" />
+          <Text style={styles.sectionHeaderText}>{t("playerDiscountTitle")}</Text>
+        </View>
+
+        {discounts.length === 0 ? (
+          <Text style={{ fontSize: 12, color: theme.dimmed }}>{t("playerDiscountEmpty")}</Text>
+        ) : (
+          discounts.map((d) => (
+            <View
+              key={d.id}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                backgroundColor: theme.inputBg,
+                borderRadius: 10,
+                padding: 10,
+                borderWidth: 1,
+                borderColor: theme.borderLight,
+              }}
+            >
+              <PlayerAvatarRN player={d.player} size={36} theme={theme} />
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontSize: 13, fontWeight: "600", color: theme.text }} numberOfLines={1}>
+                  {d.player.name}
+                </Text>
+                <Text style={{ fontSize: 11, color: theme.muted }} numberOfLines={1}>
+                  {d.discountType === "fixed"
+                    ? `${(d.customFee ?? 0).toLocaleString("vi-VN")} VND`
+                    : `${d.discountPct}% off (${calcFinalPrice(d).toLocaleString("vi-VN")} VND)`}
+                  {d.note ? ` · ${d.note}` : ""}
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => { setEditingDiscount(d); setModalOpen(true); }}
+                style={{ padding: 6 }}
+              >
+                <Ionicons name="pencil" size={16} color={theme.muted} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => handleDelete(d.playerId)} style={{ padding: 6 }}>
+                <Ionicons name="trash-outline" size={16} color={theme.red400} />
+              </TouchableOpacity>
+            </View>
+          ))
+        )}
+
+        <TouchableOpacity
+          onPress={() => { setEditingDiscount(null); setModalOpen(true); }}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            borderRadius: 10,
+            borderWidth: 1,
+            borderStyle: "dashed",
+            borderColor: theme.borderLight,
+            paddingVertical: 10,
+          }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="add" size={16} color={theme.muted} />
+          <Text style={{ fontSize: 13, color: theme.muted }}>{t("playerDiscountAdd")}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {modalOpen && (
+        <DiscountModalRN
+          editing={editingDiscount}
+          venueSessionFee={venueSessionFee}
+          theme={theme}
+          t={t}
+          onClose={() => { setModalOpen(false); setEditingDiscount(null); }}
+          onSaved={handleSaved}
+        />
+      )}
+    </>
+  );
+}
+
+function PlayerAvatarRN({ player, size, theme }: { player: PlayerResult; size: number; theme: AppColors }) {
+  const src = player.avatarPhotoPath || player.facePhotoPath;
+  if (src) {
+    return (
+      <Image
+        source={{ uri: src }}
+        style={{ width: size, height: size, borderRadius: size / 2 }}
+      />
+    );
+  }
+  const initials = player.name
+    .split(" ")
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+  const colors = ["#6366f1", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981", "#06b6d4"];
+  const bg = colors[player.name.charCodeAt(0) % colors.length];
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: bg,
+        justifyContent: "center",
+        alignItems: "center",
+      }}
+    >
+      <Text style={{ fontSize: size * 0.35, fontWeight: "700", color: "#fff" }}>{initials}</Text>
+    </View>
+  );
+}
+
+function DiscountModalRN({
+  editing,
+  venueSessionFee,
+  theme,
+  t,
+  onClose,
+  onSaved,
+}: {
+  editing: DiscountRecord | null;
+  venueSessionFee: number;
+  theme: AppColors;
+  t: TFn;
+  onClose: () => void;
+  onSaved: (d: DiscountRecord) => void;
+}) {
+  const [step, setStep] = useState<"player" | "discount">(editing ? "discount" : "player");
+  const [selectedPlayer, setSelectedPlayer] = useState<PlayerResult | null>(editing?.player ?? null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<PlayerResult[]>([]);
+  const [searching, setSearching] = useState(false);
+
+  const [discountType, setDiscountType] = useState<"fixed" | "percent">(editing?.discountType ?? "fixed");
+  const [customFee, setCustomFee] = useState(editing?.customFee ? String(editing.customFee) : "");
+  const [discountPct, setDiscountPct] = useState(editing?.discountPct ? String(editing.discountPct) : "");
+  const [note, setNote] = useState(editing?.note ?? "");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  useEffect(() => {
+    if (searchQuery.length < 2) { setSearchResults([]); return; }
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const data = await api.get<{ players: PlayerResult[] }>(
+          `/api/staff/players-search?q=${encodeURIComponent(searchQuery)}`
+        );
+        setSearchResults(data.players);
+      } catch { /* silent */ } finally {
+        setSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const calculatedPrice = useMemo(() => {
+    if (discountType === "fixed") return Number(customFee) || 0;
+    const pct = Number(discountPct) || 0;
+    return Math.round(venueSessionFee * (1 - pct / 100));
+  }, [discountType, customFee, discountPct, venueSessionFee]);
+
+  const handleSave = async () => {
+    if (!selectedPlayer) return;
+    setSaving(true);
+    setSaveError("");
+    try {
+      const data = await api.put<{ discount: DiscountRecord }>("/api/staff/player-discounts", {
+        playerId: selectedPlayer.id,
+        discountType,
+        ...(discountType === "fixed" ? { customFee: Number(customFee) } : {}),
+        ...(discountType === "percent" ? { discountPct: Number(discountPct) } : {}),
+        note: note.trim() || undefined,
+      });
+      onSaved(data.discount);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : t("playerDiscountSaveError"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const isValid = discountType === "fixed"
+    ? Number(customFee) > 0
+    : Number(discountPct) >= 1 && Number(discountPct) <= 99;
+
+  return (
+    <Modal visible animationType="slide" transparent onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <Pressable
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "flex-end" }}
+          onPress={onClose}
+        >
+          <Pressable
+            style={{
+              backgroundColor: theme.card,
+              borderTopLeftRadius: 16,
+              borderTopRightRadius: 16,
+              paddingHorizontal: 16,
+              paddingTop: 14,
+              paddingBottom: 28,
+              maxHeight: "80%",
+              borderWidth: 1,
+              borderColor: theme.border,
+            }}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                <Text style={{ fontSize: 16, fontWeight: "700", color: theme.text }}>
+                  {editing ? t("playerDiscountEditTitle") : t("playerDiscountCreateTitle")}
+                </Text>
+                <TouchableOpacity onPress={onClose}>
+                  <Ionicons name="close" size={22} color={theme.muted} />
+                </TouchableOpacity>
+              </View>
+
+              {step === "player" && (
+                <View>
+                  <TextInput
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    placeholder={t("playerDiscountSearchPlaceholder")}
+                    placeholderTextColor={theme.dimmed}
+                    autoFocus
+                    style={{
+                      backgroundColor: theme.inputBg,
+                      borderRadius: 8,
+                      paddingHorizontal: 12,
+                      height: 40,
+                      borderWidth: 1,
+                      borderColor: theme.borderLight,
+                      color: theme.text,
+                      marginBottom: 10,
+                    }}
+                  />
+                  {searching && <ActivityIndicator color={theme.blue500} style={{ marginVertical: 12 }} />}
+                  {!searching && searchResults.length === 0 && searchQuery.length >= 2 && (
+                    <Text style={{ textAlign: "center", fontSize: 13, color: theme.dimmed, marginVertical: 12 }}>
+                      {t("playerDiscountNoResults")}
+                    </Text>
+                  )}
+                  {searchResults.map((p) => (
+                    <TouchableOpacity
+                      key={p.id}
+                      onPress={() => { setSelectedPlayer(p); setStep("discount"); }}
+                      style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 10 }}
+                    >
+                      <PlayerAvatarRN player={p} size={34} theme={theme} />
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={{ fontSize: 14, fontWeight: "500", color: theme.text }} numberOfLines={1}>{p.name}</Text>
+                        <Text style={{ fontSize: 11, color: theme.dimmed }}>{p.phone}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {step === "discount" && selectedPlayer && (
+                <View style={{ gap: 14 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: theme.inputBg, borderRadius: 10, padding: 10, borderWidth: 1, borderColor: theme.borderLight }}>
+                    <PlayerAvatarRN player={selectedPlayer} size={34} theme={theme} />
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={{ fontSize: 13, fontWeight: "600", color: theme.text }} numberOfLines={1}>{selectedPlayer.name}</Text>
+                      <Text style={{ fontSize: 11, color: theme.dimmed }}>{selectedPlayer.phone}</Text>
+                    </View>
+                    {!editing && (
+                      <TouchableOpacity onPress={() => { setStep("player"); setSelectedPlayer(null); }}>
+                        <Text style={{ fontSize: 12, color: theme.muted }}>{t("playerDiscountChange")}</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <TouchableOpacity
+                      onPress={() => setDiscountType("fixed")}
+                      style={{
+                        flex: 1,
+                        borderRadius: 8,
+                        paddingVertical: 10,
+                        alignItems: "center",
+                        backgroundColor: discountType === "fixed" ? theme.green600 : "transparent",
+                        borderWidth: discountType === "fixed" ? 0 : 1,
+                        borderColor: theme.borderLight,
+                      }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: "600", color: discountType === "fixed" ? "#fff" : theme.muted }}>
+                        {t("playerDiscountFixed")}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setDiscountType("percent")}
+                      style={{
+                        flex: 1,
+                        borderRadius: 8,
+                        paddingVertical: 10,
+                        alignItems: "center",
+                        backgroundColor: discountType === "percent" ? theme.green600 : "transparent",
+                        borderWidth: discountType === "percent" ? 0 : 1,
+                        borderColor: theme.borderLight,
+                      }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: "600", color: discountType === "percent" ? "#fff" : theme.muted }}>
+                        {t("playerDiscountPercent")}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {discountType === "fixed" ? (
+                    <View>
+                      <Text style={{ fontSize: 11, color: theme.muted, marginBottom: 4 }}>{t("playerDiscountCustomFeeLabel")}</Text>
+                      <TextInput
+                        value={customFee ? Number(customFee).toLocaleString("en") : ""}
+                        onChangeText={(v) => setCustomFee(v.replace(/[^0-9]/g, ""))}
+                        placeholder="100,000"
+                        placeholderTextColor={theme.dimmed}
+                        keyboardType="numeric"
+                        style={{
+                          backgroundColor: theme.inputBg,
+                          borderRadius: 8,
+                          paddingHorizontal: 10,
+                          height: 38,
+                          color: theme.text,
+                          fontSize: 14,
+                          borderWidth: 1,
+                          borderColor: theme.borderLight,
+                        }}
+                      />
+                      <Text style={{ fontSize: 11, color: theme.dimmed, marginTop: 4 }}>
+                        {t("playerDiscountDefaultFee", { fee: venueSessionFee.toLocaleString("vi-VN") })}
+                      </Text>
+                    </View>
+                  ) : (
+                    <View>
+                      <Text style={{ fontSize: 11, color: theme.muted, marginBottom: 4 }}>{t("playerDiscountPctLabel")}</Text>
+                      <TextInput
+                        value={discountPct}
+                        onChangeText={(v) => {
+                          const clean = v.replace(/[^0-9]/g, "");
+                          if (Number(clean) <= 99) setDiscountPct(clean);
+                        }}
+                        placeholder="20"
+                        placeholderTextColor={theme.dimmed}
+                        keyboardType="numeric"
+                        style={{
+                          backgroundColor: theme.inputBg,
+                          borderRadius: 8,
+                          paddingHorizontal: 10,
+                          height: 38,
+                          color: theme.text,
+                          fontSize: 14,
+                          borderWidth: 1,
+                          borderColor: theme.borderLight,
+                        }}
+                      />
+                      <Text style={{ fontSize: 11, color: theme.dimmed, marginTop: 4 }}>
+                        {t("playerDiscountPctResult", { price: calculatedPrice.toLocaleString("vi-VN") })}
+                      </Text>
+                    </View>
+                  )}
+
+                  <View>
+                    <Text style={{ fontSize: 11, color: theme.muted, marginBottom: 4 }}>{t("playerDiscountNoteLabel")}</Text>
+                    <TextInput
+                      value={note}
+                      onChangeText={setNote}
+                      placeholder={t("playerDiscountNotePlaceholder")}
+                      placeholderTextColor={theme.dimmed}
+                      style={{
+                        backgroundColor: theme.inputBg,
+                        borderRadius: 8,
+                        paddingHorizontal: 10,
+                        height: 38,
+                        color: theme.text,
+                        fontSize: 14,
+                        borderWidth: 1,
+                        borderColor: theme.borderLight,
+                      }}
+                    />
+                  </View>
+
+                  {saveError ? <Text style={{ fontSize: 12, color: theme.red400, textAlign: "center" }}>{saveError}</Text> : null}
+
+                  <TouchableOpacity
+                    onPress={() => void handleSave()}
+                    disabled={saving || !isValid}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 6,
+                      backgroundColor: theme.green600,
+                      height: 42,
+                      borderRadius: 10,
+                      opacity: saving || !isValid ? 0.5 : 1,
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    {saving && <ActivityIndicator size="small" color="#fff" />}
+                    <Text style={{ color: "#fff", fontSize: 14, fontWeight: "600" }}>{t("playerDiscountSave")}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }

@@ -862,8 +862,7 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
       payment_timeout: "bg-red-950",
       payment_cancelled: "bg-red-950",
     } as Record<string, string>)[step] ?? "bg-black";
-  const showRegistrationLocaleToggle =
-    step === "reg_face_preview" || step === "reg_form";
+  const showRegistrationLocaleToggle = step === "reg_face_preview";
   const isVi = i18n.language?.toLowerCase().startsWith("vi");
 
   return (
@@ -1127,7 +1126,7 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
       {/* ── REGISTRATION: FORM ──────────────────── */}
       {step === "reg_form" && (
         <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4 pb-8 sm:items-center sm:py-6">
-          <div className="mb-3 w-full max-w-md">
+          <div className="mb-3 flex w-full max-w-md items-center justify-between">
             <button
               type="button"
               onClick={() => goTo("reg_face_preview")}
@@ -1136,6 +1135,25 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
               <ArrowLeft className="h-4 w-4" />
               Retake photo
             </button>
+            <button
+              type="button"
+              onClick={() => void i18n.changeLanguage(isVi ? "en" : "vi")}
+              className="shrink-0 rounded-full border border-neutral-700/90 bg-neutral-800/80 p-1.5 text-[1.35rem] leading-none transition-colors hover:border-neutral-500 hover:bg-neutral-700/80"
+              aria-label={
+                isVi
+                  ? t("language.switchToEnglishAria")
+                  : t("language.switchToVietnameseAria")
+              }
+            >
+              <span aria-hidden className="block select-none">
+                {isVi ? "🇬🇧" : "🇻🇳"}
+              </span>
+            </button>
+          </div>
+          <div className="mb-3 flex w-full max-w-md items-center justify-between">
+            <h2 className="text-lg font-bold text-white">
+              {t("staff.courtPayCheckIn.regFormTitle")}
+            </h2>
           </div>
           <div className="w-full max-w-md space-y-4 rounded-xl border border-neutral-800 bg-neutral-900/40 p-4">
             {registrationQualityMessage ? (

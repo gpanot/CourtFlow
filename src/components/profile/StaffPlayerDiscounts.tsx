@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import staffI18n from "@/i18n/staff-i18n";
 import { api } from "@/lib/api-client";
 import {
   Loader2,
@@ -35,6 +37,7 @@ type StaffPlayerDiscountsProps = {
 };
 
 export function StaffPlayerDiscounts({ venueId }: StaffPlayerDiscountsProps) {
+  const { t } = useTranslation("translation", { i18n: staffI18n });
   const [discounts, setDiscounts] = useState<DiscountRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -57,7 +60,7 @@ export function StaffPlayerDiscounts({ venueId }: StaffPlayerDiscountsProps) {
   useEffect(() => { void fetchDiscounts(); }, [fetchDiscounts]);
 
   const handleDelete = async (playerId: string) => {
-    if (!confirm("Xoá giảm giá cho người chơi này?")) return;
+    if (!confirm(t("staff.profile.playerDiscountDeleteConfirm"))) return;
     try {
       await api.delete("/api/staff/player-discounts", { playerId });
       setDiscounts((prev) => prev.filter((d) => d.playerId !== playerId));
@@ -108,11 +111,11 @@ export function StaffPlayerDiscounts({ venueId }: StaffPlayerDiscountsProps) {
     <div className="space-y-3">
       <div className="flex items-center gap-2">
         <Tag className="h-4 w-4 text-amber-400" aria-hidden />
-        <p className="text-sm font-medium text-neutral-200">Giảm giá người chơi</p>
+        <p className="text-sm font-medium text-neutral-200">{t("staff.profile.playerDiscountTitle")}</p>
       </div>
 
       {discounts.length === 0 ? (
-        <p className="text-xs text-neutral-500">Chưa có giảm giá nào</p>
+        <p className="text-xs text-neutral-500">{t("staff.profile.playerDiscountEmpty")}</p>
       ) : (
         <div className="space-y-2">
           {discounts.map((d) => (
@@ -155,7 +158,7 @@ export function StaffPlayerDiscounts({ venueId }: StaffPlayerDiscountsProps) {
         className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-neutral-700 py-2.5 text-sm text-neutral-400 transition-colors hover:border-neutral-500 hover:text-white"
       >
         <Plus className="h-3.5 w-3.5" aria-hidden />
-        Thêm giảm giá
+        {t("staff.profile.playerDiscountAdd")}
       </button>
 
       {modalOpen && (
@@ -208,6 +211,7 @@ interface DiscountModalProps {
 }
 
 function DiscountModal({ editing, venueSessionFee, onClose, onSaved }: DiscountModalProps) {
+  const { t } = useTranslation("translation", { i18n: staffI18n });
   const [step, setStep] = useState<"player" | "discount">(editing ? "discount" : "player");
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerResult | null>(editing?.player ?? null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -262,7 +266,7 @@ function DiscountModal({ editing, venueSessionFee, onClose, onSaved }: DiscountM
       });
       onSaved(data.discount);
     } catch (e) {
-      setSaveError(e instanceof Error ? e.message : "Lỗi lưu giảm giá");
+      setSaveError(e instanceof Error ? e.message : t("staff.profile.playerDiscountSaveError"));
     } finally {
       setSaving(false);
     }
@@ -280,7 +284,7 @@ function DiscountModal({ editing, venueSessionFee, onClose, onSaved }: DiscountM
       >
         <div className="flex items-center justify-between border-b border-neutral-800 px-5 py-4">
           <p className="text-base font-bold text-white">
-            {editing ? "Sửa giảm giá" : "Tạo giảm giá"}
+            {editing ? t("staff.profile.playerDiscountEditTitle") : t("staff.profile.playerDiscountCreateTitle")}
           </p>
           <button type="button" onClick={onClose} className="text-neutral-400 hover:text-white">
             <X className="h-5 w-5" aria-hidden />
@@ -295,7 +299,7 @@ function DiscountModal({ editing, venueSessionFee, onClose, onSaved }: DiscountM
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Tìm người chơi theo tên hoặc SĐT..."
+                placeholder={t("staff.profile.playerDiscountSearchPlaceholder")}
                 autoFocus
                 className="w-full rounded-lg border border-neutral-700 bg-neutral-950 py-2.5 pl-10 pr-3 text-sm text-white placeholder:text-neutral-500 focus:border-client-primary focus:outline-none"
               />
@@ -307,7 +311,7 @@ function DiscountModal({ editing, venueSessionFee, onClose, onSaved }: DiscountM
                 </div>
               )}
               {!searching && searchResults.length === 0 && searchQuery.length >= 2 && (
-                <p className="py-4 text-center text-sm text-neutral-500">Không tìm thấy</p>
+                <p className="py-4 text-center text-sm text-neutral-500">{t("staff.profile.playerDiscountNoResults")}</p>
               )}
               {searchResults.map((p) => (
                 <button
@@ -341,7 +345,7 @@ function DiscountModal({ editing, venueSessionFee, onClose, onSaved }: DiscountM
                   onClick={() => { setStep("player"); setSelectedPlayer(null); }}
                   className="text-xs text-neutral-400 hover:text-white"
                 >
-                  Đổi
+                  {t("staff.profile.playerDiscountChange")}
                 </button>
               )}
             </div>
@@ -356,7 +360,7 @@ function DiscountModal({ editing, venueSessionFee, onClose, onSaved }: DiscountM
                     : "border border-neutral-700 text-neutral-300 hover:border-neutral-500"
                 }`}
               >
-                Giá cố định
+                {t("staff.profile.playerDiscountFixed")}
               </button>
               <button
                 type="button"
@@ -367,13 +371,13 @@ function DiscountModal({ editing, venueSessionFee, onClose, onSaved }: DiscountM
                     : "border border-neutral-700 text-neutral-300 hover:border-neutral-500"
                 }`}
               >
-                Phần trăm
+                {t("staff.profile.playerDiscountPercent")}
               </button>
             </div>
 
             {discountType === "fixed" ? (
               <div>
-                <label className="mb-1 block text-xs text-neutral-400">Giá tuỳ chỉnh (VND)</label>
+                <label className="mb-1 block text-xs text-neutral-400">{t("staff.profile.playerDiscountCustomFeeLabel")}</label>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -384,12 +388,12 @@ function DiscountModal({ editing, venueSessionFee, onClose, onSaved }: DiscountM
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:border-client-primary focus:outline-none"
                 />
                 <p className="mt-1 text-xs text-neutral-500">
-                  Giá mặc định: {venueSessionFee.toLocaleString("vi-VN")} VND
+                  {t("staff.profile.playerDiscountDefaultFee", { fee: venueSessionFee.toLocaleString("vi-VN") })}
                 </p>
               </div>
             ) : (
               <div>
-                <label className="mb-1 block text-xs text-neutral-400">Giảm giá %</label>
+                <label className="mb-1 block text-xs text-neutral-400">{t("staff.profile.playerDiscountPctLabel")}</label>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -403,19 +407,19 @@ function DiscountModal({ editing, venueSessionFee, onClose, onSaved }: DiscountM
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:border-client-primary focus:outline-none"
                 />
                 <p className="mt-1 text-xs text-neutral-500">
-                  Người chơi trả: {calculatedPrice.toLocaleString("vi-VN")} VND
-                  <span className="ml-2 text-neutral-600">(mặc định {venueSessionFee.toLocaleString("vi-VN")})</span>
+                  {t("staff.profile.playerDiscountPctResult", { price: calculatedPrice.toLocaleString("vi-VN") })}
+                  <span className="ml-2 text-neutral-600">{t("staff.profile.playerDiscountPctDefault", { fee: venueSessionFee.toLocaleString("vi-VN") })}</span>
                 </p>
               </div>
             )}
 
             <div>
-              <label className="mb-1 block text-xs text-neutral-400">Ghi chú (tuỳ chọn)</label>
+              <label className="mb-1 block text-xs text-neutral-400">{t("staff.profile.playerDiscountNoteLabel")}</label>
               <input
                 type="text"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="VD: Huấn luyện viên, Thường xuyên, Bạn bè..."
+                placeholder={t("staff.profile.playerDiscountNotePlaceholder")}
                 className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-sm text-white placeholder:text-neutral-500 focus:border-client-primary focus:outline-none"
               />
             </div>
@@ -429,7 +433,7 @@ function DiscountModal({ editing, venueSessionFee, onClose, onSaved }: DiscountM
               className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-client-primary py-2.5 text-sm font-semibold text-neutral-950 transition-opacity hover:opacity-90 disabled:opacity-50"
             >
               {saving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-              Lưu
+              {t("staff.profile.playerDiscountSave")}
             </button>
           </div>
         )}
