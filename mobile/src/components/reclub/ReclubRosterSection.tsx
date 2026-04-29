@@ -120,6 +120,28 @@ function createStyles(t: AppColors) {
       justifyContent: "space-between",
       marginBottom: 12,
     },
+    statsRow: {
+      flexDirection: "row",
+      gap: 8,
+      marginBottom: 12,
+    },
+    statCard: {
+      flex: 1,
+      backgroundColor: t.border + "40",
+      borderRadius: 10,
+      paddingVertical: 10,
+      alignItems: "center",
+    },
+    statValue: {
+      fontSize: 20,
+      fontWeight: "700",
+      color: t.text,
+    },
+    statLabel: {
+      fontSize: 11,
+      color: t.muted,
+      marginTop: 2,
+    },
     eventName: { fontSize: 14, fontWeight: "700", color: t.text, flex: 1 },
     paidCounter: { fontSize: 13, color: t.muted, marginLeft: 8 },
     refreshBtn: {
@@ -141,10 +163,8 @@ function createStyles(t: AppColors) {
       alignItems: "center",
     },
     avatarWrap: {
-      width: 52,
-      height: 52,
-      borderRadius: 26,
-      overflow: "hidden",
+      width: 56,
+      height: 56,
       position: "relative",
     },
     avatarImage: { width: 52, height: 52, borderRadius: 26 },
@@ -157,19 +177,21 @@ function createStyles(t: AppColors) {
     },
     initialsText: { color: "#fff", fontSize: 18, fontWeight: "700" },
     paidRing: {
-      borderWidth: 2.5,
+      borderWidth: 3,
       borderColor: "#22c55e",
     },
     checkBadge: {
       position: "absolute",
-      bottom: -1,
-      right: -1,
-      width: 18,
-      height: 18,
-      borderRadius: 9,
+      top: -2,
+      right: -2,
+      width: 20,
+      height: 20,
+      borderRadius: 10,
       backgroundColor: "#22c55e",
       alignItems: "center",
       justifyContent: "center",
+      borderWidth: 2,
+      borderColor: "#171717",
     },
     playerName: {
       fontSize: 11,
@@ -305,6 +327,7 @@ export function ReclubRosterSection({
   // Bottom sheet state
   const [sheetPlayer, setSheetPlayer] = useState<ReclubPlayer | null>(null);
   const [sheetMode, setSheetMode] = useState<"match" | "info" | null>(null);
+  const [showUnmatchedList, setShowUnmatchedList] = useState(false);
 
   useEffect(() => {
     setRoster(existingRoster);
@@ -367,7 +390,7 @@ export function ReclubRosterSection({
         setSheetMode(null);
         onPlayerLinked?.();
       } catch (err) {
-        Alert.alert("Error", err instanceof Error ? err.message : "Failed to link player");
+        Alert.alert("Lỗi", err instanceof Error ? err.message : "Không thể liên kết người chơi");
       } finally {
         setLinkingPlayerId(null);
       }
@@ -384,7 +407,7 @@ export function ReclubRosterSection({
         setSheetMode(null);
         onPlayerLinked?.();
       } catch (err) {
-        Alert.alert("Error", err instanceof Error ? err.message : "Failed to unlink player");
+        Alert.alert("Lỗi", err instanceof Error ? err.message : "Không thể huỷ liên kết");
       } finally {
         setLinkingPlayerId(null);
       }
@@ -395,8 +418,8 @@ export function ReclubRosterSection({
   const handleFetch = useCallback(async () => {
     if (!reclubGroupId) {
       Alert.alert(
-        "No Reclub Club",
-        "Set your default Reclub club in Profile to fetch the roster."
+        "Chưa có CLB Reclub",
+        "Vào Hồ sơ để chọn câu lạc bộ Reclub mặc định, rồi mới tải được danh sách."
       );
       return;
     }
@@ -422,7 +445,7 @@ export function ReclubRosterSection({
         setLoading(false);
       }
     } catch (err) {
-      Alert.alert("Error", err instanceof Error ? err.message : "Failed to fetch events");
+        Alert.alert("Lỗi", err instanceof Error ? err.message : "Không thể tải danh sách sự kiện");
       setLoading(false);
     }
   }, [reclubGroupId, sessionId]);
@@ -445,7 +468,7 @@ export function ReclubRosterSection({
         setRoster(data);
         onRosterSaved(data);
       } catch (err) {
-        Alert.alert("Error", err instanceof Error ? err.message : "Failed to fetch roster");
+        Alert.alert("Lỗi", err instanceof Error ? err.message : "Không thể tải danh sách người chơi");
       } finally {
         setLoading(false);
       }
@@ -468,7 +491,7 @@ export function ReclubRosterSection({
       <View style={styles.container}>
         <View style={styles.card}>
           <Text style={styles.noEventText}>
-            No Reclub event found for today. CourtPay session runs normally.
+            Hôm nay không có sự kiện Reclub. Phiên CourtPay hoạt động bình thường.
           </Text>
         </View>
       </View>
@@ -489,7 +512,7 @@ export function ReclubRosterSection({
           ) : (
             <>
               <Ionicons name="people-outline" size={18} color={theme.text} />
-              <Text style={styles.fetchBtnText}>Fetch Reclub Roster</Text>
+              <Text style={styles.fetchBtnText}>Tải danh sách Reclub</Text>
             </>
           )}
         </TouchableOpacity>
@@ -512,7 +535,7 @@ export function ReclubRosterSection({
             }}
           >
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Select Event</Text>
+              <Text style={styles.modalTitle}>Chọn sự kiện</Text>
               <FlatList
                 data={events}
                 keyExtractor={(e) => e.referenceCode}
@@ -529,7 +552,7 @@ export function ReclubRosterSection({
                       </Text>
                     </View>
                     <Text style={styles.eventItemCount}>
-                      {item.confirmedCount} confirmed
+                      {item.confirmedCount} xác nhận
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -541,15 +564,40 @@ export function ReclubRosterSection({
     );
   }
 
+  const expectedCount = roster.players.length - paidCount;
+
   return (
     <View style={styles.container}>
       <View style={styles.card}>
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{roster.players.length}</Text>
+            <Text style={styles.statLabel}>Đã đặt</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={[styles.statValue, { color: "#22c55e" }]}>{paidCount}</Text>
+            <Text style={styles.statLabel}>Đã trả</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.statCard}
+            onPress={() => unmatchedPaidCount > 0 && setShowUnmatchedList(true)}
+            activeOpacity={unmatchedPaidCount > 0 ? 0.7 : 1}
+          >
+            <Text style={[styles.statValue, { color: unmatchedPaidCount > 0 ? "#f59e0b" : theme.muted }]}>{unmatchedPaidCount}</Text>
+            <Text style={styles.statLabel}>Chưa khớp</Text>
+          </TouchableOpacity>
+          <View style={styles.statCard}>
+            <Text style={[styles.statValue, { color: expectedCount > 0 ? "#3b82f6" : theme.muted }]}>{expectedCount}</Text>
+            <Text style={styles.statLabel}>Chờ đến</Text>
+          </View>
+        </View>
+
         <View style={styles.headerRow}>
           <Text style={styles.eventName} numberOfLines={1}>
             {roster.eventName}
           </Text>
           <Text style={styles.paidCounter}>
-            {paidCount} / {roster.players.length} paid
+            {paidCount} / {roster.players.length}
           </Text>
           <TouchableOpacity
             style={styles.refreshBtn}
@@ -606,15 +654,6 @@ export function ReclubRosterSection({
           })}
         </View>
 
-        {unmatchedPaidCount > 0 && (
-          <View style={styles.bannerAmber}>
-            <Ionicons name="warning-outline" size={18} color="#fbbf24" />
-            <Text style={styles.bannerAmberText}>
-              {unmatchedPaidCount} paid player{unmatchedPaidCount > 1 ? "s" : ""} not matched to
-              roster
-            </Text>
-          </View>
-        )}
       </View>
 
       {/* Match bottom sheet — unmatched Reclub player */}
@@ -641,7 +680,7 @@ export function ReclubRosterSection({
                     <Image source={{ uri: sheetPlayer.avatarUrl }} style={styles.sheetAvatar} />
                   )}
                   <Text style={styles.sheetPlayerName}>{sheetPlayer.name}</Text>
-                  <Text style={styles.sheetSubtitle}>Who paid as this player?</Text>
+                  <Text style={styles.sheetSubtitle}>Ai đã trả cho người chơi này?</Text>
                 </View>
                 <FlatList
                   data={unmatchedPayments}
@@ -677,12 +716,12 @@ export function ReclubRosterSection({
                   )}
                   ListEmptyComponent={
                     <Text style={[styles.noEventText, { paddingVertical: 20 }]}>
-                      No unmatched payments
+                      Không có thanh toán chưa khớp
                     </Text>
                   }
                   ListFooterComponent={
                     <TouchableOpacity style={styles.skipBtn} onPress={closeSheet} activeOpacity={0.7}>
-                      <Text style={styles.skipBtnText}>Skip</Text>
+                      <Text style={styles.skipBtnText}>Bỏ qua</Text>
                     </TouchableOpacity>
                   }
                 />
@@ -721,7 +760,7 @@ export function ReclubRosterSection({
                   </View>
                   {linked && (
                     <>
-                      <Text style={styles.linkedLabel}>Linked CourtPay player</Text>
+                      <Text style={styles.linkedLabel}>Người chơi CourtPay đã liên kết</Text>
                       <View style={styles.linkedRow}>
                         {linked.facePhotoPath ? (
                           <Image source={{ uri: linked.facePhotoPath }} style={styles.paymentAvatar} />
@@ -750,7 +789,7 @@ export function ReclubRosterSection({
                         {linkingPlayerId === linked.playerId ? (
                           <ActivityIndicator size="small" color="#ef4444" />
                         ) : (
-                          <Text style={styles.unlinkBtnText}>Unlink</Text>
+                          <Text style={styles.unlinkBtnText}>Huỷ liên kết</Text>
                         )}
                       </TouchableOpacity>
                     </>
@@ -758,6 +797,48 @@ export function ReclubRosterSection({
                 </>
               );
             })()}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Unmatched paid players list */}
+      <Modal
+        visible={showUnmatchedList}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowUnmatchedList(false)}
+      >
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowUnmatchedList(false)}>
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+            <Text style={styles.modalTitle}>Chưa khớp ({unmatchedPayments.length})</Text>
+            <FlatList
+              data={unmatchedPayments}
+              keyExtractor={(item) => item.paymentId}
+              renderItem={({ item }) => (
+                <View style={styles.paymentRow}>
+                  {item.facePhotoPath ? (
+                    <Image source={{ uri: item.facePhotoPath }} style={styles.paymentAvatar} />
+                  ) : (
+                    <View style={[styles.paymentInitials, { backgroundColor: initialsColor(item.playerName) }]}>
+                      <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>
+                        {initials(item.playerName)}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={styles.paymentInfo}>
+                    <Text style={styles.paymentName}>{item.playerName}</Text>
+                    <Text style={styles.paymentDetail}>
+                      {formatVND(item.amount)} VND · {formatTime(item.confirmedAt)}
+                    </Text>
+                  </View>
+                </View>
+              )}
+              ListEmptyComponent={
+                <Text style={{ textAlign: "center", color: theme.muted, paddingVertical: 20, fontSize: 13 }}>
+                  Không có
+                </Text>
+              }
+            />
           </View>
         </TouchableOpacity>
       </Modal>

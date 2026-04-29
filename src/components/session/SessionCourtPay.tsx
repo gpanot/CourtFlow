@@ -146,7 +146,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
   }
   const [paidPlayersAll, setPaidPlayersAll] = useState<PaidPlayerFull[]>([]);
   const [sheetPlayer, setSheetPlayer] = useState<ReclubPlayer | null>(null);
-  const [sheetMode, setSheetMode] = useState<"match" | "info" | null>(null);
+  const [sheetMode, setSheetMode] = useState<"match" | "info" | "unmatched-list" | null>(null);
   const [linkingPlayerId, setLinkingPlayerId] = useState<string | null>(null);
 
   const roster = useMemo<ReclubRosterData | null>(() => {
@@ -522,7 +522,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
           {noEvents && !roster ? (
             <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
               <p className="text-center text-sm text-neutral-500">
-                No Reclub event found for today. CourtPay session runs normally.
+                Hôm nay không có sự kiện Reclub. Phiên CourtPay hoạt động bình thường.
               </p>
             </div>
           ) : !roster ? (
@@ -537,14 +537,38 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
               ) : (
                 <Users className="h-4 w-4" aria-hidden />
               )}
-              Fetch Reclub Roster
+              Tải danh sách Reclub
             </button>
           ) : (
             <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
+              {/* Stat cards */}
+              <div className="mb-3 grid grid-cols-4 gap-2">
+                <div className="rounded-lg bg-neutral-800/60 py-2.5 text-center">
+                  <p className="text-xl font-bold text-white">{roster.players.length}</p>
+                  <p className="text-[11px] text-neutral-400">Đã đặt</p>
+                </div>
+                <div className="rounded-lg bg-neutral-800/60 py-2.5 text-center">
+                  <p className="text-xl font-bold text-green-500">{paidCountInRoster}</p>
+                  <p className="text-[11px] text-neutral-400">Đã trả</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => unmatchedPaidCount > 0 && setSheetMode("unmatched-list")}
+                  className="rounded-lg bg-neutral-800/60 py-2.5 text-center transition-colors hover:bg-neutral-700/60"
+                >
+                  <p className={cn("text-xl font-bold", unmatchedPaidCount > 0 ? "text-amber-400" : "text-neutral-500")}>{unmatchedPaidCount}</p>
+                  <p className="text-[11px] text-neutral-400">Chưa khớp</p>
+                </button>
+                <div className="rounded-lg bg-neutral-800/60 py-2.5 text-center">
+                  <p className={cn("text-xl font-bold", roster.players.length - paidCountInRoster > 0 ? "text-blue-400" : "text-neutral-500")}>{roster.players.length - paidCountInRoster}</p>
+                  <p className="text-[11px] text-neutral-400">Chờ đến</p>
+                </div>
+              </div>
+
               <div className="mb-3 flex items-center gap-2">
                 <p className="flex-1 truncate text-sm font-bold text-white">{roster.eventName}</p>
                 <span className="shrink-0 text-xs text-neutral-400">
-                  {paidCountInRoster} / {roster.players.length} paid
+                  {paidCountInRoster} / {roster.players.length}
                 </span>
                 <button
                   type="button"
@@ -575,7 +599,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                           <div
                             className={cn(
                               "flex h-[52px] w-[52px] items-center justify-center rounded-full text-lg font-bold text-white",
-                              isPaid && "ring-[2.5px] ring-green-500"
+                              isPaid && "ring-[3px] ring-green-500"
                             )}
                             style={{ backgroundColor: initialsColor(player.name) }}
                           >
@@ -587,12 +611,12 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                             alt=""
                             className={cn(
                               "h-[52px] w-[52px] rounded-full object-cover",
-                              isPaid && "ring-[2.5px] ring-green-500"
+                              isPaid && "ring-[3px] ring-green-500"
                             )}
                           />
                         )}
                         {isPaid && (
-                          <div className="absolute -bottom-0.5 -right-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-green-500">
+                          <div className="absolute -top-0.5 -right-0.5 flex h-[20px] w-[20px] items-center justify-center rounded-full border-2 border-neutral-900 bg-green-500">
                             <Check className="h-3 w-3 text-white" strokeWidth={3} aria-hidden />
                           </div>
                         )}
@@ -604,15 +628,6 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                   );
                 })}
               </div>
-
-              {unmatchedPaidCount > 0 && (
-                <div className="mt-3 flex w-full items-center gap-2 rounded-lg bg-amber-500/10 px-3 py-2.5">
-                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" aria-hidden />
-                  <span className="text-[13px] text-amber-400">
-                    {unmatchedPaidCount} paid player{unmatchedPaidCount > 1 ? "s" : ""} not matched to roster
-                  </span>
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -631,7 +646,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
             className="w-full max-w-lg rounded-t-2xl border-t border-neutral-700 bg-neutral-900 pb-8"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="py-4 text-center text-base font-bold text-white">Select Event</p>
+            <p className="py-4 text-center text-base font-bold text-white">Chọn sự kiện</p>
             <div className="max-h-[50dvh] overflow-y-auto">
               {events.map((ev) => (
                 <button
@@ -649,7 +664,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                       })}
                     </p>
                   </div>
-                  <span className="text-xs text-neutral-500">{ev.confirmedCount} confirmed</span>
+                  <span className="text-xs text-neutral-500">{ev.confirmedCount} xác nhận</span>
                 </button>
               ))}
             </div>
@@ -710,11 +725,11 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                 <img src={sheetPlayer.avatarUrl} alt="" className="mb-2 h-12 w-12 rounded-full object-cover" />
               )}
               <p className="text-base font-bold text-white">{sheetPlayer.name}</p>
-              <p className="mt-1 text-sm text-neutral-400">Who paid as this player?</p>
+              <p className="mt-1 text-sm text-neutral-400">Ai đã trả cho người chơi này?</p>
             </div>
             <div className="max-h-[40dvh] overflow-y-auto">
               {unmatchedPayments.length === 0 ? (
-                <p className="py-6 text-center text-sm text-neutral-500">No unmatched payments</p>
+                <p className="py-6 text-center text-sm text-neutral-500">Không có thanh toán chưa khớp</p>
               ) : (
                 unmatchedPayments.map((p) => (
                   <button
@@ -752,7 +767,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
               onClick={closeSheet}
               className="mt-2 w-full py-3 text-center text-sm font-medium text-neutral-400 transition-colors hover:text-white"
             >
-              Skip
+              Bỏ qua
             </button>
           </div>
         </div>
@@ -782,7 +797,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
               </div>
               {linked && (
                 <div className="px-5 py-3">
-                  <p className="mb-2 text-xs font-medium text-neutral-500">Linked CourtPay player</p>
+                  <p className="mb-2 text-xs font-medium text-neutral-500">Người chơi CourtPay đã liên kết</p>
                   <div className="flex items-center gap-3">
                     {linked.facePhotoPath ? (
                       <img src={linked.facePhotoPath} alt="" className="h-10 w-10 rounded-full object-cover" />
@@ -810,7 +825,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                     {linkingPlayerId === linked.playerId ? (
                       <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
                     ) : (
-                      "Unlink"
+                      "Huỷ liên kết"
                     )}
                   </button>
                 </div>
@@ -819,6 +834,57 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
           </div>
         );
       })()}
+
+      {/* Unmatched paid players list */}
+      {sheetMode === "unmatched-list" && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={closeSheet}>
+          <div
+            className="w-full max-w-lg rounded-t-2xl border-t border-neutral-700 bg-neutral-900 pb-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-neutral-800 px-5 py-4 text-center">
+              <p className="text-base font-bold text-white">Chưa khớp ({unmatchedPayments.length})</p>
+              <p className="mt-1 text-sm text-neutral-400">Người đã trả nhưng không có trong danh sách Reclub</p>
+            </div>
+            <div className="max-h-[40dvh] overflow-y-auto">
+              {unmatchedPayments.length === 0 ? (
+                <p className="py-6 text-center text-sm text-neutral-500">Không có</p>
+              ) : (
+                unmatchedPayments.map((p) => (
+                  <div
+                    key={p.paymentId}
+                    className="flex items-center gap-3 border-b border-neutral-800 px-5 py-3"
+                  >
+                    {p.facePhotoPath ? (
+                      <img src={p.facePhotoPath} alt="" className="h-10 w-10 rounded-full object-cover" />
+                    ) : (
+                      <div
+                        className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white"
+                        style={{ backgroundColor: initialsColor(p.playerName) }}
+                      >
+                        {playerInitials(p.playerName)}
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-white">{p.playerName}</p>
+                      <p className="text-xs text-neutral-400">
+                        {p.amount.toLocaleString()} VND · {formatTime(p.confirmedAt)}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={closeSheet}
+              className="mx-auto mt-4 block rounded-lg px-6 py-2 text-sm text-neutral-400 transition-colors hover:text-white"
+            >
+              Đóng
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
