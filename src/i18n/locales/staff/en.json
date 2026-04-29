@@ -572,7 +572,12 @@
       "reclubLegend": "Legend",
       "reclubLegendMatched": "Matched & paid",
       "reclubLegendAbsent": "Absent",
-      "reclubLegendWalkIn": "Walk-in"
+      "reclubLegendWalkIn": "Walk-in",
+      "reclubLiveBooked": "Booked",
+      "reclubLivePaid": "Paid",
+      "reclubLiveUnmatched": "Unmatched",
+      "reclubLiveExpected": "Expected",
+      "reclubLoadRoster": "Load Reclub roster"
     },
     "courtPayAwaitingPayment": {
       "payTitle": "Almost there, {{name}}!",

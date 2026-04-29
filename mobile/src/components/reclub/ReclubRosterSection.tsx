@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../lib/api-client";
 import { useAppColors } from "../../theme/use-app-colors";
 import type { AppColors } from "../../theme/palettes";
+import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
 
 interface ReclubEvent {
   referenceCode: string;
@@ -315,6 +316,7 @@ export function ReclubRosterSection({
   onPlayerLinked,
 }: Props) {
   const theme = useAppColors();
+  const { t } = useTabletKioskLocale();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
   const [roster, setRoster] = useState<ReclubRosterData | null>(existingRoster);
@@ -572,11 +574,11 @@ export function ReclubRosterSection({
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <Text style={styles.statValue}>{roster.players.length}</Text>
-            <Text style={styles.statLabel}>Đã đặt</Text>
+            <Text style={styles.statLabel}>{t("reclubKpiBooked")}</Text>
           </View>
           <View style={styles.statCard}>
             <Text style={[styles.statValue, { color: "#22c55e" }]}>{paidCount}</Text>
-            <Text style={styles.statLabel}>Đã trả</Text>
+            <Text style={styles.statLabel}>{t("reclubKpiPaid")}</Text>
           </View>
           <TouchableOpacity
             style={styles.statCard}
@@ -584,11 +586,11 @@ export function ReclubRosterSection({
             activeOpacity={unmatchedPaidCount > 0 ? 0.7 : 1}
           >
             <Text style={[styles.statValue, { color: unmatchedPaidCount > 0 ? "#f59e0b" : theme.muted }]}>{unmatchedPaidCount}</Text>
-            <Text style={styles.statLabel}>Chưa khớp</Text>
+            <Text style={styles.statLabel}>{t("reclubKpiUnmatched")}</Text>
           </TouchableOpacity>
           <View style={styles.statCard}>
             <Text style={[styles.statValue, { color: expectedCount > 0 ? "#3b82f6" : theme.muted }]}>{expectedCount}</Text>
-            <Text style={styles.statLabel}>Chờ đến</Text>
+            <Text style={styles.statLabel}>{t("reclubKpiExpected")}</Text>
           </View>
         </View>
 

@@ -537,7 +537,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
               ) : (
                 <Users className="h-4 w-4" aria-hidden />
               )}
-              Tải danh sách Reclub
+              {t("staff.sessionPaymentsDetail.reclubLoadRoster")}
             </button>
           ) : (
             <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
@@ -545,11 +545,11 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
               <div className="mb-3 grid grid-cols-4 gap-2">
                 <div className="rounded-lg bg-neutral-800/60 py-2.5 text-center">
                   <p className="text-xl font-bold text-white">{roster.players.length}</p>
-                  <p className="text-[11px] text-neutral-400">Đã đặt</p>
+                  <p className="text-[11px] text-neutral-400">{t("staff.sessionPaymentsDetail.reclubLiveBooked")}</p>
                 </div>
                 <div className="rounded-lg bg-neutral-800/60 py-2.5 text-center">
                   <p className="text-xl font-bold text-green-500">{paidCountInRoster}</p>
-                  <p className="text-[11px] text-neutral-400">Đã trả</p>
+                  <p className="text-[11px] text-neutral-400">{t("staff.sessionPaymentsDetail.reclubLivePaid")}</p>
                 </div>
                 <button
                   type="button"
@@ -557,11 +557,11 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                   className="rounded-lg bg-neutral-800/60 py-2.5 text-center transition-colors hover:bg-neutral-700/60"
                 >
                   <p className={cn("text-xl font-bold", unmatchedPaidCount > 0 ? "text-amber-400" : "text-neutral-500")}>{unmatchedPaidCount}</p>
-                  <p className="text-[11px] text-neutral-400">Chưa khớp</p>
+                  <p className="text-[11px] text-neutral-400">{t("staff.sessionPaymentsDetail.reclubLiveUnmatched")}</p>
                 </button>
                 <div className="rounded-lg bg-neutral-800/60 py-2.5 text-center">
                   <p className={cn("text-xl font-bold", roster.players.length - paidCountInRoster > 0 ? "text-blue-400" : "text-neutral-500")}>{roster.players.length - paidCountInRoster}</p>
-                  <p className="text-[11px] text-neutral-400">Chờ đến</p>
+                  <p className="text-[11px] text-neutral-400">{t("staff.sessionPaymentsDetail.reclubLiveExpected")}</p>
                 </div>
               </div>
 

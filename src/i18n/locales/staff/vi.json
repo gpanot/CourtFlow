@@ -580,7 +580,12 @@
       "reclubLegend": "Chú thích",
       "reclubLegendMatched": "Khớp & đã trả",
       "reclubLegendAbsent": "Vắng mặt",
-      "reclubLegendWalkIn": "Walk-in"
+      "reclubLegendWalkIn": "Walk-in",
+      "reclubLiveBooked": "Đã đặt",
+      "reclubLivePaid": "Đã trả",
+      "reclubLiveUnmatched": "Chưa khớp",
+      "reclubLiveExpected": "Chờ đến",
+      "reclubLoadRoster": "Tải danh sách Reclub"
     },
     "courtPayAwaitingPayment": {
       "payTitle": "Sắp xong rồi, {{name}}!",

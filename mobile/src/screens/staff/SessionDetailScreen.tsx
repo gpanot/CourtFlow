@@ -620,6 +620,7 @@ function ReclubSnapshotView({
   theme: AppColors;
   insets: { bottom: number };
 }) {
+  const { t } = useTabletKioskLocale();
   const rosterPlayers = snapshot.players.filter((p) => p.reclubName);
   const walkIns = snapshot.players.filter((p) => !p.reclubName);
 
@@ -652,19 +653,19 @@ function ReclubSnapshotView({
           <View style={{ flexDirection: "row", gap: 8, marginBottom: 16 }}>
             <View style={{ flex: 1, backgroundColor: theme.card, borderRadius: 8, paddingVertical: 10, alignItems: "center" }}>
               <Text style={{ fontSize: 18, fontWeight: "700", color: "#22c55e" }}>{snapshot.totalMatched}</Text>
-              <Text style={{ fontSize: 10, color: theme.muted }}>Khớp</Text>
+              <Text style={{ fontSize: 10, color: theme.muted }}>{t("reclubKpiMatched")}</Text>
             </View>
             <View style={{ flex: 1, backgroundColor: theme.card, borderRadius: 8, paddingVertical: 10, alignItems: "center" }}>
               <Text style={{ fontSize: 18, fontWeight: "700", color: "#fff" }}>{snapshot.totalExpected - snapshot.totalMatched}</Text>
-              <Text style={{ fontSize: 10, color: theme.muted }}>Vắng</Text>
+              <Text style={{ fontSize: 10, color: theme.muted }}>{t("reclubKpiAbsent")}</Text>
             </View>
             <View style={{ flex: 1, backgroundColor: theme.card, borderRadius: 8, paddingVertical: 10, alignItems: "center" }}>
               <Text style={{ fontSize: 18, fontWeight: "700", color: snapshot.totalWalkIns > 0 ? "#f59e0b" : theme.muted }}>{snapshot.totalWalkIns}</Text>
-              <Text style={{ fontSize: 10, color: theme.muted }}>Walk-in</Text>
+              <Text style={{ fontSize: 10, color: theme.muted }}>{t("reclubKpiWalkIn")}</Text>
             </View>
             <View style={{ flex: 1, backgroundColor: theme.card, borderRadius: 8, paddingVertical: 10, alignItems: "center" }}>
               <Text style={{ fontSize: 18, fontWeight: "700", color: "#60a5fa" }}>{snapshot.totalExpected}</Text>
-              <Text style={{ fontSize: 10, color: theme.muted }}>Đã đặt</Text>
+              <Text style={{ fontSize: 10, color: theme.muted }}>{t("reclubKpiBooked")}</Text>
             </View>
           </View>
 

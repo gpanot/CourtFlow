@@ -349,6 +349,15 @@ const CHECK_IN_SCANNER_EN = {
   "playerDiscountDelete": "Delete",
   "playerDiscountCancel": "Cancel",
 
+  // ── Reclub KPIs ─────────────────────────────────────────────────────────────
+  "reclubKpiMatched": "Matched",
+  "reclubKpiAbsent": "Absent",
+  "reclubKpiWalkIn": "Walk-in",
+  "reclubKpiBooked": "Booked",
+  "reclubKpiPaid": "Paid",
+  "reclubKpiUnmatched": "Unmatched",
+  "reclubKpiExpected": "Expected",
+
   // ── Boss Dashboard ─────────────────────────────────────────────────────────
   "bossDashboardTitle": "Boss Dashboard",
   "bossDashboardTabToday": "Today",
@@ -858,6 +867,15 @@ const CHECK_IN_SCANNER_VI = {
   "playerDiscountSaveError": "Lỗi lưu giảm giá",
   "playerDiscountDelete": "Xoá",
   "playerDiscountCancel": "Huỷ",
+
+  // ── Reclub KPIs ─────────────────────────────────────────────────────────────
+  "reclubKpiMatched": "Khớp",
+  "reclubKpiAbsent": "Vắng",
+  "reclubKpiWalkIn": "Walk-in",
+  "reclubKpiBooked": "Đã đặt",
+  "reclubKpiPaid": "Đã trả",
+  "reclubKpiUnmatched": "Chưa khớp",
+  "reclubKpiExpected": "Chờ đến",
 
   // ── Boss Dashboard ─────────────────────────────────────────────────────────
   "bossDashboardTitle": "Bảng Boss",
