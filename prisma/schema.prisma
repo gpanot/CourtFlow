@@ -304,6 +304,7 @@ model Session {
   reclubReferenceCode String? @map("reclub_reference_code")
   reclubEventName     String? @map("reclub_event_name")
   reclubRoster        Json?   @map("reclub_roster")
+  reclubSnapshot      Json?   @map("reclub_snapshot")
 
   venue            Venue              @relation(fields: [venueId], references: [id])
   staff            StaffMember?       @relation(fields: [staffId], references: [id])

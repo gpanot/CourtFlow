@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
+import type { Prisma } from "@prisma/client";
 
 export async function POST(
   request: NextRequest,
@@ -18,9 +19,152 @@ export async function POST(
 
     const now = new Date();
 
+    // Build Reclub snapshot if roster data exists
+    let reclubSnapshot: Prisma.InputJsonValue | undefined;
+    if (session.reclubRoster && session.reclubReferenceCode) {
+      try {
+        const roster = session.reclubRoster as {
+          eventName: string;
+          referenceCode: string;
+          players: Array<{
+            reclubUserId: number;
+            name: string;
+            avatarUrl: string;
+            isDefaultAvatar: boolean;
+          }>;
+        };
+
+        const confirmedPayments = await prisma.pendingPayment.findMany({
+          where: { sessionId, status: "confirmed" },
+          select: {
+            id: true,
+            amount: true,
+            createdAt: true,
+            checkInPlayer: { select: { id: true, name: true, phone: true } },
+            player: { select: { id: true, name: true, phone: true, reclubUserId: true } },
+          },
+        });
+
+        // Resolve reclubUserId for payments that only have checkInPlayer
+        const checkInPhones = confirmedPayments
+          .filter((p) => p.checkInPlayer?.phone && !p.player)
+          .map((p) => p.checkInPlayer!.phone);
+        const linkedPlayers = checkInPhones.length > 0
+          ? await prisma.player.findMany({
+              where: { phone: { in: [...new Set(checkInPhones)] } },
+              select: { id: true, name: true, phone: true, reclubUserId: true },
+            })
+          : [];
+        const playerByPhone = new Map(linkedPlayers.map((p) => [p.phone, p]));
+
+        // Build a map of reclubUserId → payment info
+        const reclubToPayment = new Map<number, { playerId: string; playerName: string; amount: number; checkinTime: string }>();
+        for (const p of confirmedPayments) {
+          let reclubUserId: number | null = null;
+          let playerId: string | null = null;
+          let playerName: string | null = null;
+
+          if (p.player?.reclubUserId) {
+            reclubUserId = p.player.reclubUserId;
+            playerId = p.player.id;
+            playerName = p.player.name;
+          } else if (p.checkInPlayer?.phone) {
+            const linked = playerByPhone.get(p.checkInPlayer.phone);
+            if (linked?.reclubUserId) {
+              reclubUserId = linked.reclubUserId;
+              playerId = linked.id;
+              playerName = linked.name;
+            }
+          }
+
+          if (reclubUserId && playerId) {
+            reclubToPayment.set(reclubUserId, {
+              playerId,
+              playerName: playerName ?? "Unknown",
+              amount: p.amount,
+              checkinTime: p.createdAt.toISOString(),
+            });
+          }
+        }
+
+        // Build roster player entries
+        const rosterIds = new Set(roster.players.map((p) => p.reclubUserId));
+        const snapshotPlayers = roster.players.map((rp) => {
+          const payment = reclubToPayment.get(rp.reclubUserId);
+          return {
+            reclubUserId: rp.reclubUserId,
+            reclubName: rp.name,
+            avatarUrl: rp.avatarUrl,
+            courtpayPlayerId: payment?.playerId ?? null,
+            courtpayName: payment?.playerName ?? null,
+            paid: !!payment,
+            amount: payment?.amount ?? null,
+            checkinTime: payment?.checkinTime ?? null,
+          };
+        });
+
+        // Walk-ins: paid but not on roster
+        const walkIns: typeof snapshotPlayers = [];
+        for (const p of confirmedPayments) {
+          let reclubUserId: number | null = null;
+          let playerId: string | null = null;
+          let playerName: string | null = null;
+
+          if (p.player?.reclubUserId) {
+            reclubUserId = p.player.reclubUserId;
+            playerId = p.player.id;
+            playerName = p.player.name;
+          } else if (p.checkInPlayer?.phone) {
+            const linked = playerByPhone.get(p.checkInPlayer.phone);
+            if (linked?.reclubUserId) {
+              reclubUserId = linked.reclubUserId;
+              playerId = linked.id;
+              playerName = linked.name;
+            } else {
+              playerId = p.checkInPlayer.id;
+              playerName = p.checkInPlayer.name;
+            }
+          }
+
+          if (!reclubUserId || !rosterIds.has(reclubUserId)) {
+            walkIns.push({
+              reclubUserId: reclubUserId ?? 0,
+              reclubName: "",
+              avatarUrl: "",
+              courtpayPlayerId: playerId,
+              courtpayName: playerName,
+              paid: true,
+              amount: p.amount,
+              checkinTime: p.createdAt.toISOString(),
+            });
+          }
+        }
+
+        const totalMatched = snapshotPlayers.filter((p) => p.paid).length;
+
+        reclubSnapshot = {
+          eventName: roster.eventName,
+          referenceCode: roster.referenceCode,
+          fetchedAt: session.date.toISOString(),
+          closedAt: now.toISOString(),
+          totalExpected: roster.players.length,
+          totalMatched,
+          totalUnmatched: roster.players.length - totalMatched,
+          totalWalkIns: walkIns.length,
+          players: [...snapshotPlayers, ...walkIns],
+        } as unknown as Prisma.InputJsonValue;
+      } catch (snapshotErr) {
+        console.error("[session/close] Failed to build Reclub snapshot:", snapshotErr);
+      }
+    }
+
     const updated = await prisma.session.update({
       where: { id: sessionId },
-      data: { status: "closed", closedAt: now },
+      data: {
+        status: "closed",
+        closedAt: now,
+        ...(reclubSnapshot ? { reclubSnapshot } : {}),
+      },
     });
 
     await prisma.queueEntry.updateMany({

@@ -36,6 +36,29 @@ function devLogPaymentPartyDebug(payload: Record<string, unknown>) {
 
 type Filter = "all" | "cash" | "qr" | "subscription";
 
+interface ReclubSnapshotPlayer {
+  reclubUserId: number;
+  reclubName: string;
+  avatarUrl: string;
+  courtpayPlayerId: string | null;
+  courtpayName: string | null;
+  paid: boolean;
+  amount: number | null;
+  checkinTime: string | null;
+}
+
+interface ReclubSnapshot {
+  eventName: string;
+  referenceCode: string;
+  fetchedAt: string;
+  closedAt: string;
+  totalExpected: number;
+  totalMatched: number;
+  totalUnmatched: number;
+  totalWalkIns: number;
+  players: ReclubSnapshotPlayer[];
+}
+
 interface SessionPaymentsResponse {
   payments: PendingPayment[];
   summary: {
@@ -45,6 +68,7 @@ interface SessionPaymentsResponse {
     qr: number;
     subscription: number;
   };
+  reclubSnapshot: ReclubSnapshot | null;
 }
 
 function getDisplayPlayer(p: PendingPayment): { name: string; skillLevel: string } {
@@ -233,6 +257,8 @@ export function SessionDetailScreen() {
 
   const [payments, setPayments] = useState<PendingPayment[]>([]);
   const [summary, setSummary] = useState<SessionPaymentsResponse["summary"] | null>(null);
+  const [reclubSnapshot, setReclubSnapshot] = useState<ReclubSnapshot | null>(null);
+  const [activeTab, setActiveTab] = useState<"payments" | "reclub">("payments");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -307,6 +333,7 @@ export function SessionDetailScreen() {
       );
       setPayments(Array.isArray(data.payments) ? data.payments : []);
       setSummary(data.summary ?? null);
+      setReclubSnapshot(data.reclubSnapshot ?? null);
     } catch (err) {
       setFetchError(err instanceof Error ? err.message : "Could not load payments");
     } finally {
@@ -498,6 +525,30 @@ export function SessionDetailScreen() {
         </Text>
       </View>
 
+      {/* Top-level tabs when Reclub snapshot exists */}
+      {reclubSnapshot && (
+        <View style={{ flexDirection: "row", borderBottomWidth: 1, borderBottomColor: theme.border, backgroundColor: theme.bg }}>
+          <TouchableOpacity
+            style={{ flex: 1, paddingVertical: 10, alignItems: "center", borderBottomWidth: activeTab === "payments" ? 2 : 0, borderBottomColor: theme.blue500 }}
+            onPress={() => setActiveTab("payments")}
+            activeOpacity={0.7}
+          >
+            <Text style={{ fontSize: 13, fontWeight: "600", color: activeTab === "payments" ? "#fff" : theme.muted }}>Thanh toán</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={{ flex: 1, paddingVertical: 10, alignItems: "center", borderBottomWidth: activeTab === "reclub" ? 2 : 0, borderBottomColor: "#22c55e" }}
+            onPress={() => setActiveTab("reclub")}
+            activeOpacity={0.7}
+          >
+            <Text style={{ fontSize: 13, fontWeight: "600", color: activeTab === "reclub" ? "#fff" : theme.muted }}>Reclub</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {activeTab === "reclub" && reclubSnapshot ? (
+        <ReclubSnapshotView snapshot={reclubSnapshot} theme={theme} insets={insets} />
+      ) : (
+      <>
       {/* Filter tabs */}
       <View style={styles.filterBar}>
         {FILTERS.map(({ key, label }) => (
@@ -547,6 +598,173 @@ export function SessionDetailScreen() {
           )
         }
       />
+      </>
+      )}
     </View>
+  );
+}
+
+const INITIALS_COLORS = ["#6366f1", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981", "#06b6d4"];
+
+function ReclubSnapshotView({
+  snapshot,
+  theme,
+  insets,
+}: {
+  snapshot: ReclubSnapshot;
+  theme: AppColors;
+  insets: { bottom: number };
+}) {
+  const rosterPlayers = snapshot.players.filter((p) => p.reclubName);
+  const walkIns = snapshot.players.filter((p) => !p.reclubName);
+
+  const initialsColor = (name: string) => INITIALS_COLORS[name.charCodeAt(0) % INITIALS_COLORS.length];
+  const getInitials = (name: string) =>
+    name
+      .split(" ")
+      .map((w) => w[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase();
+
+  const avatarSize = 48;
+
+  return (
+    <FlatList
+      data={[1]}
+      keyExtractor={() => "reclub-snapshot"}
+      contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 24 }}
+      renderItem={() => (
+        <View>
+          <Text style={{ fontSize: 14, fontWeight: "700", color: "#fff", marginBottom: 2 }}>
+            {snapshot.eventName}
+          </Text>
+          <Text style={{ fontSize: 11, color: theme.muted, marginBottom: 12 }}>
+            {new Date(snapshot.closedAt).toLocaleDateString("vi-VN", { day: "2-digit", month: "short", year: "numeric" })}
+          </Text>
+
+          {/* Stats cards */}
+          <View style={{ flexDirection: "row", gap: 8, marginBottom: 16 }}>
+            <View style={{ flex: 1, backgroundColor: theme.card, borderRadius: 8, paddingVertical: 10, alignItems: "center" }}>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: "#22c55e" }}>{snapshot.totalMatched}</Text>
+              <Text style={{ fontSize: 10, color: theme.muted }}>Khớp</Text>
+            </View>
+            <View style={{ flex: 1, backgroundColor: theme.card, borderRadius: 8, paddingVertical: 10, alignItems: "center" }}>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: "#fff" }}>{snapshot.totalExpected - snapshot.totalMatched}</Text>
+              <Text style={{ fontSize: 10, color: theme.muted }}>Vắng</Text>
+            </View>
+            <View style={{ flex: 1, backgroundColor: theme.card, borderRadius: 8, paddingVertical: 10, alignItems: "center" }}>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: snapshot.totalWalkIns > 0 ? "#f59e0b" : theme.muted }}>{snapshot.totalWalkIns}</Text>
+              <Text style={{ fontSize: 10, color: theme.muted }}>Walk-in</Text>
+            </View>
+            <View style={{ flex: 1, backgroundColor: theme.card, borderRadius: 8, paddingVertical: 10, alignItems: "center" }}>
+              <Text style={{ fontSize: 18, fontWeight: "700", color: "#60a5fa" }}>{snapshot.totalExpected}</Text>
+              <Text style={{ fontSize: 10, color: theme.muted }}>Đã đặt</Text>
+            </View>
+          </View>
+
+          {/* Avatar grid */}
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            {rosterPlayers.map((p) => {
+              const isMatched = p.paid;
+              const ringColor = isMatched ? "#22c55e" : theme.border;
+              const opacity = isMatched ? 1 : 0.5;
+              return (
+                <View key={p.reclubUserId} style={{ width: (avatarSize + 12), alignItems: "center", marginBottom: 8 }}>
+                  <View style={{ position: "relative" }}>
+                    {p.avatarUrl && !p.avatarUrl.includes("default") ? (
+                      <Image
+                        source={{ uri: p.avatarUrl }}
+                        style={{ width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2, borderWidth: 3, borderColor: ringColor, opacity }}
+                      />
+                    ) : (
+                      <View
+                        style={{
+                          width: avatarSize,
+                          height: avatarSize,
+                          borderRadius: avatarSize / 2,
+                          backgroundColor: initialsColor(p.reclubName),
+                          alignItems: "center",
+                          justifyContent: "center",
+                          borderWidth: 3,
+                          borderColor: ringColor,
+                          opacity,
+                        }}
+                      >
+                        <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>{getInitials(p.reclubName)}</Text>
+                      </View>
+                    )}
+                    {isMatched && (
+                      <View
+                        style={{
+                          position: "absolute",
+                          top: -2,
+                          right: -2,
+                          width: 18,
+                          height: 18,
+                          borderRadius: 9,
+                          backgroundColor: "#22c55e",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          borderWidth: 2,
+                          borderColor: theme.bg,
+                        }}
+                      >
+                        <Ionicons name="checkmark" size={10} color="#fff" />
+                      </View>
+                    )}
+                  </View>
+                  <Text numberOfLines={1} style={{ fontSize: 10, color: theme.muted, marginTop: 3, textAlign: "center", width: avatarSize + 8 }}>
+                    {p.reclubName}
+                  </Text>
+                </View>
+              );
+            })}
+            {walkIns.map((p, i) => (
+              <View key={`walkin-${i}`} style={{ width: (avatarSize + 12), alignItems: "center", marginBottom: 8 }}>
+                <View
+                  style={{
+                    width: avatarSize,
+                    height: avatarSize,
+                    borderRadius: avatarSize / 2,
+                    backgroundColor: initialsColor(p.courtpayName ?? "W"),
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderWidth: 3,
+                    borderColor: "#f59e0b",
+                  }}
+                >
+                  <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>
+                    {getInitials(p.courtpayName ?? "W")}
+                  </Text>
+                </View>
+                <Text numberOfLines={1} style={{ fontSize: 10, color: "#f59e0b", marginTop: 3, textAlign: "center", width: avatarSize + 8 }}>
+                  {p.courtpayName ?? "Walk-in"}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          {/* Legend */}
+          <View style={{ marginTop: 16, backgroundColor: theme.card, borderRadius: 8, padding: 12, borderWidth: 1, borderColor: theme.border }}>
+            <Text style={{ fontSize: 11, fontWeight: "600", color: theme.muted, marginBottom: 6 }}>Chú thích</Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <View style={{ width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: "#22c55e" }} />
+                <Text style={{ fontSize: 11, color: theme.muted }}>Khớp & đã trả</Text>
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <View style={{ width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: theme.border, opacity: 0.5 }} />
+                <Text style={{ fontSize: 11, color: theme.muted }}>Vắng mặt</Text>
+              </View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <View style={{ width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: "#f59e0b" }} />
+                <Text style={{ fontSize: 11, color: theme.muted }}>Walk-in</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      )}
+    />
   );
 }

@@ -15,7 +15,7 @@ export async function GET(
 
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
-      select: { id: true, venueId: true, openedAt: true, closedAt: true },
+      select: { id: true, venueId: true, openedAt: true, closedAt: true, reclubSnapshot: true },
     });
     if (!session) return error("Session not found", 404);
 
@@ -149,6 +149,7 @@ export async function GET(
         qr: enriched.filter((p) => p.paymentMethod !== "cash" && p.paymentMethod !== "subscription").length,
         subscription: enriched.filter((p) => p.paymentMethod === "subscription" || p.type === "subscription").length,
       },
+      reclubSnapshot: session.reclubSnapshot ?? null,
     });
   } catch (e) {
     console.error("[Session Payments]", e);

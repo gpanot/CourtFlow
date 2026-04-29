@@ -11,7 +11,7 @@ import {
   sessionExportFilename,
 } from "@/lib/session-csv-web";
 import { cn } from "@/lib/cn";
-import { ArrowLeft, Download, Loader2, AlertTriangle, RotateCw } from "lucide-react";
+import { ArrowLeft, Download, Loader2, AlertTriangle, RotateCw, Check } from "lucide-react";
 
 type Filter = "all" | "cash" | "qr" | "subscription";
 
@@ -50,6 +50,29 @@ interface SessionPaymentRow {
   subscriptionInfo?: SubscriptionInfo | null;
 }
 
+interface ReclubSnapshotPlayer {
+  reclubUserId: number;
+  reclubName: string;
+  avatarUrl: string;
+  courtpayPlayerId: string | null;
+  courtpayName: string | null;
+  paid: boolean;
+  amount: number | null;
+  checkinTime: string | null;
+}
+
+interface ReclubSnapshot {
+  eventName: string;
+  referenceCode: string;
+  fetchedAt: string;
+  closedAt: string;
+  totalExpected: number;
+  totalMatched: number;
+  totalUnmatched: number;
+  totalWalkIns: number;
+  players: ReclubSnapshotPlayer[];
+}
+
 interface SessionPaymentsResponse {
   payments: SessionPaymentRow[];
   summary: {
@@ -59,6 +82,7 @@ interface SessionPaymentsResponse {
     qr: number;
     subscription: number;
   };
+  reclubSnapshot: ReclubSnapshot | null;
 }
 
 function getDisplayPlayer(p: SessionPaymentRow): { name: string; skillLevel: string } {
@@ -138,6 +162,8 @@ export function StaffSessionPaymentsDetail({
   const { t } = useTranslation("translation", { i18n: staffI18n });
   const [payments, setPayments] = useState<SessionPaymentRow[]>([]);
   const [summary, setSummary] = useState<SessionPaymentsResponse["summary"] | null>(null);
+  const [reclubSnapshot, setReclubSnapshot] = useState<ReclubSnapshot | null>(null);
+  const [activeTab, setActiveTab] = useState<"payments" | "reclub">("payments");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -152,6 +178,7 @@ export function StaffSessionPaymentsDetail({
       const data = await api.get<SessionPaymentsResponse>(`/api/sessions/${sessionId}/payments`);
       setPayments(Array.isArray(data.payments) ? data.payments : []);
       setSummary(data.summary ?? null);
+      setReclubSnapshot(data.reclubSnapshot ?? null);
     } catch (err) {
       setFetchError(err instanceof Error ? err.message : "Could not load payments");
     } finally {
@@ -296,6 +323,40 @@ export function StaffSessionPaymentsDetail({
         </p>
       </div>
 
+      {/* Top-level tabs (Payments / Reclub) */}
+      {reclubSnapshot && (
+        <div className="flex border-b border-neutral-800 bg-neutral-950">
+          <button
+            type="button"
+            onClick={() => setActiveTab("payments")}
+            className={cn(
+              "flex-1 py-2.5 text-center text-sm font-semibold transition-colors",
+              activeTab === "payments"
+                ? "border-b-2 border-client-primary text-white"
+                : "text-neutral-500 hover:text-neutral-300"
+            )}
+          >
+            Thanh toán
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("reclub")}
+            className={cn(
+              "flex-1 py-2.5 text-center text-sm font-semibold transition-colors",
+              activeTab === "reclub"
+                ? "border-b-2 border-green-500 text-white"
+                : "text-neutral-500 hover:text-neutral-300"
+            )}
+          >
+            Reclub
+          </button>
+        </div>
+      )}
+
+      {activeTab === "reclub" && reclubSnapshot ? (
+        <ReclubSnapshotTab snapshot={reclubSnapshot} />
+      ) : (
+      <>
       <div className="flex gap-1.5 border-b border-neutral-800 bg-neutral-950 px-3 py-2">
         {(
           [
@@ -441,7 +502,127 @@ export function StaffSessionPaymentsDetail({
           </div>
         )}
       </main>
+      </>
+      )}
 
     </div>
+  );
+}
+
+function ReclubSnapshotTab({ snapshot }: { snapshot: ReclubSnapshot }) {
+  const rosterPlayers = snapshot.players.filter((p) => p.reclubName);
+  const walkIns = snapshot.players.filter((p) => !p.reclubName);
+
+  const colors = ["#6366f1", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981", "#06b6d4"];
+  const initialsColor = (name: string) => colors[name.charCodeAt(0) % colors.length];
+  const initials = (name: string) =>
+    name
+      .split(" ")
+      .map((w) => w[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase();
+
+  return (
+    <main className="min-h-0 flex-1 overflow-y-auto p-4 pb-[calc(24px+env(safe-area-inset-bottom))]">
+      <div className="mb-3">
+        <p className="text-sm font-bold text-white">{snapshot.eventName}</p>
+        <p className="mt-0.5 text-xs text-neutral-500">
+          {new Date(snapshot.closedAt).toLocaleDateString("vi-VN", { day: "2-digit", month: "short", year: "numeric" })}
+        </p>
+      </div>
+
+      <div className="mb-4 grid grid-cols-4 gap-2">
+        <div className="rounded-lg bg-neutral-800/60 py-2.5 text-center">
+          <p className="text-lg font-bold text-green-500">{snapshot.totalMatched}</p>
+          <p className="text-[10px] text-neutral-400">Khớp</p>
+        </div>
+        <div className="rounded-lg bg-neutral-800/60 py-2.5 text-center">
+          <p className="text-lg font-bold text-white">{snapshot.totalExpected - snapshot.totalMatched}</p>
+          <p className="text-[10px] text-neutral-400">Vắng</p>
+        </div>
+        <div className="rounded-lg bg-neutral-800/60 py-2.5 text-center">
+          <p className={cn("text-lg font-bold", snapshot.totalWalkIns > 0 ? "text-amber-400" : "text-neutral-500")}>{snapshot.totalWalkIns}</p>
+          <p className="text-[10px] text-neutral-400">Walk-in</p>
+        </div>
+        <div className="rounded-lg bg-neutral-800/60 py-2.5 text-center">
+          <p className="text-lg font-bold text-blue-400">{snapshot.totalExpected}</p>
+          <p className="text-[10px] text-neutral-400">Đã đặt</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-4 gap-2">
+        {rosterPlayers.map((p) => {
+          const isMatched = p.paid;
+          const isNoShow = !p.paid;
+          return (
+            <div key={p.reclubUserId} className="flex flex-col items-center">
+              <div className="relative">
+                {p.avatarUrl && !p.avatarUrl.includes("default") ? (
+                  <img
+                    src={p.avatarUrl}
+                    alt=""
+                    className={cn(
+                      "h-[48px] w-[48px] rounded-full object-cover",
+                      isMatched && "ring-[3px] ring-green-500",
+                      isNoShow && "ring-[3px] ring-neutral-600 opacity-50"
+                    )}
+                  />
+                ) : (
+                  <div
+                    className={cn(
+                      "flex h-[48px] w-[48px] items-center justify-center rounded-full text-base font-bold text-white",
+                      isMatched && "ring-[3px] ring-green-500",
+                      isNoShow && "ring-[3px] ring-neutral-600 opacity-50"
+                    )}
+                    style={{ backgroundColor: initialsColor(p.reclubName) }}
+                  >
+                    {initials(p.reclubName)}
+                  </div>
+                )}
+                {isMatched && (
+                  <div className="absolute -top-0.5 -right-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full border-2 border-neutral-900 bg-green-500">
+                    <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} aria-hidden />
+                  </div>
+                )}
+              </div>
+              <p className="mt-1 w-full truncate text-center text-[10px] text-neutral-400">
+                {p.reclubName}
+              </p>
+            </div>
+          );
+        })}
+        {walkIns.map((p, i) => (
+          <div key={`walkin-${i}`} className="flex flex-col items-center">
+            <div className="relative">
+              <div
+                className="flex h-[48px] w-[48px] items-center justify-center rounded-full text-base font-bold text-white ring-[3px] ring-amber-500"
+                style={{ backgroundColor: initialsColor(p.courtpayName ?? "W") }}
+              >
+                {initials(p.courtpayName ?? "W")}
+              </div>
+            </div>
+            <p className="mt-1 w-full truncate text-center text-[10px] text-amber-400">
+              {p.courtpayName ?? "Walk-in"}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 rounded-lg border border-neutral-800 bg-neutral-900/50 p-3">
+        <p className="mb-2 text-xs font-medium text-neutral-400">Chú thích</p>
+        <div className="flex flex-wrap gap-3 text-[11px]">
+          <span className="flex items-center gap-1.5">
+            <span className="h-3 w-3 rounded-full ring-2 ring-green-500" /> Khớp & đã trả
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-3 w-3 rounded-full ring-2 ring-neutral-600 opacity-50" /> Vắng mặt
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-3 w-3 rounded-full ring-2 ring-amber-500" /> Walk-in
+          </span>
+        </div>
+      </div>
+    </main>
   );
 }
