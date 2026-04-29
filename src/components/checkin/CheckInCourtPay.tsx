@@ -151,6 +151,11 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
   const [registrationQualityMessage, setRegistrationQualityMessage] = useState("");
   const [registrationQualityFailures, setRegistrationQualityFailures] = useState(0);
 
+  // ── Reclub roster autocomplete ───────────────────────────────────────────
+  interface ReclubRosterEntry { reclubUserId: number; name: string; avatarUrl: string; isDefaultAvatar: boolean; gender: string; }
+  const [reclubRoster, setReclubRoster] = useState<ReclubRosterEntry[]>([]);
+  const [selectedReclubUserId, setSelectedReclubUserId] = useState<number | null>(null);
+
   const resetForm = useCallback(() => {
     stopMediaStream(newStreamRef.current);
     stopMediaStream(existingStreamRef.current);
@@ -186,7 +191,24 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
     setError("");
     setRegistrationQualityMessage("");
     setRegistrationQualityFailures(0);
+    setSelectedReclubUserId(null);
   }, []);
+
+  useEffect(() => {
+    if (!venueId) return;
+    api
+      .get<{ reclubRoster?: ReclubRosterEntry[] | null }>(
+        `/api/staff/venue-payment-settings?venueId=${venueId}`
+      )
+      .then((res) => setReclubRoster(Array.isArray(res.reclubRoster) ? res.reclubRoster : []))
+      .catch(() => {});
+  }, [venueId]);
+
+  const reclubSuggestions = useMemo(() => {
+    const q = name.trim().toLowerCase();
+    if (q.length < 2 || selectedReclubUserId != null || reclubRoster.length === 0) return [];
+    return reclubRoster.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 3);
+  }, [name, selectedReclubUserId, reclubRoster]);
 
   const pendingIdRef = useRef<string | null>(null);
   useEffect(() => {
@@ -570,6 +592,7 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
         gender,
         skillLevel,
         headCount: sessionPartyCount,
+        ...(selectedReclubUserId ? { reclubUserId: selectedReclubUserId } : {}),
       });
       setRegistrationQualityFailures(0);
       if (data.checkedIn || data.free) {
@@ -1111,12 +1134,47 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
               </div>
             ) : null}
 
-            <input
-              className="h-11 w-full rounded-lg border border-neutral-800 bg-neutral-900/60 px-3.5 text-[15px] text-white placeholder:text-neutral-600"
-              placeholder={t("staff.courtPayCheckIn.checkInPlayerName")}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
+            <div>
+              <input
+                className="h-11 w-full rounded-lg border border-neutral-800 bg-neutral-900/60 px-3.5 text-[15px] text-white placeholder:text-neutral-600"
+                placeholder={t("staff.courtPayCheckIn.checkInPlayerName")}
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  if (selectedReclubUserId != null) setSelectedReclubUserId(null);
+                }}
+              />
+              {selectedReclubUserId != null && (
+                <div className="mt-1 flex items-center gap-1">
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  <span className="text-xs font-semibold text-green-500">Reclub matched</span>
+                </div>
+              )}
+              {reclubSuggestions.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {reclubSuggestions.map((s) => (
+                    <button
+                      key={s.reclubUserId}
+                      type="button"
+                      onClick={() => {
+                        setName(s.name);
+                        setSelectedReclubUserId(s.reclubUserId);
+                      }}
+                      className="flex items-center gap-2 rounded-full border border-neutral-700 bg-neutral-800/60 px-3 py-1.5 transition-colors hover:border-neutral-600 hover:bg-neutral-800"
+                    >
+                      {s.isDefaultAvatar ? (
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-500 text-xs font-bold text-white">
+                          {s.name.split(/\s+/).filter(Boolean).map((w) => w[0]).join("").slice(0, 2).toUpperCase()}
+                        </div>
+                      ) : (
+                        <img src={s.avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover" />
+                      )}
+                      <span className="text-sm font-semibold text-neutral-200">{s.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <input
               type="tel"
               className="h-11 w-full rounded-lg border border-neutral-800 bg-neutral-900/60 px-3.5 text-[15px] text-white placeholder:text-neutral-600"

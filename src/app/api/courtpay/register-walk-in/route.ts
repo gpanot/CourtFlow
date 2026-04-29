@@ -12,6 +12,7 @@ async function createWalkInPlayerWithUniquePhone(input: {
   gender: "male" | "female";
   skillLevel: "beginner" | "intermediate" | "advanced";
   venueId: string;
+  reclubUserId?: number;
 }) {
   const maxAttempts = 8;
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -28,6 +29,7 @@ async function createWalkInPlayerWithUniquePhone(input: {
           isWalkIn: true,
           registrationAt: new Date(),
           registrationVenueId: input.venueId,
+          ...(input.reclubUserId ? { reclubUserId: input.reclubUserId } : {}),
         },
       });
       corePlayerId = corePlayer.id;
@@ -57,13 +59,16 @@ async function createWalkInPlayerWithUniquePhone(input: {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { venueCode, name, gender, skillLevel, headCount: headCountRaw } = body as {
+    const { venueCode, name, gender, skillLevel, headCount: headCountRaw, reclubUserId: reclubUserIdRaw } = body as {
       venueCode?: string;
       name?: string;
       gender?: string;
       skillLevel?: string;
       headCount?: unknown;
+      reclubUserId?: number;
     };
+
+    const reclubUserId = typeof reclubUserIdRaw === "number" ? reclubUserIdRaw : undefined;
 
     const nameTrimmed = typeof name === "string" ? name.trim() : "";
     if (!venueCode || !nameTrimmed || (gender !== "male" && gender !== "female")) {
@@ -98,6 +103,7 @@ export async function POST(req: Request) {
       name: nameTrimmed,
       gender,
       skillLevel,
+      reclubUserId,
     });
 
     const openSession = await prisma.session.findFirst({

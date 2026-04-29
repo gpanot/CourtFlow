@@ -44,8 +44,20 @@ interface SessionWithReclub extends Session {
 
 interface PaidPaymentRow {
   id: string;
-  player?: { reclubUserId?: number | null } | null;
-  checkInPlayer?: { id: string } | null;
+  amount: number;
+  confirmedAt?: string | null;
+  player?: { id: string; name: string; reclubUserId?: number | null; facePhotoPath?: string | null } | null;
+  checkInPlayer?: { id: string; name: string } | null;
+}
+
+interface PaidPlayerFull {
+  paymentId: string;
+  playerId: string;
+  playerName: string;
+  reclubUserId: number | null;
+  amount: number;
+  confirmedAt: string | null;
+  facePhotoPath: string | null;
 }
 
 function isToday(dateStr: string): boolean {
@@ -106,7 +118,7 @@ export function SessionTabScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [sessionHistory, setSessionHistory] = useState<SessionHistoryRow[]>([]);
   const [reclubGroupId, setReclubGroupId] = useState<number | null>(null);
-  const [paidPlayers, setPaidPlayers] = useState<{ reclubUserId?: number | null }[]>([]);
+  const [paidPlayers, setPaidPlayers] = useState<PaidPlayerFull[]>([]);
 
   const existingRoster = useMemo<ReclubRosterData | null>(() => {
     if (!session?.reclubReferenceCode || !session.reclubRoster) return null;
@@ -166,7 +178,13 @@ export function SessionTabScreen() {
       }>(`/api/sessions/${session.id}/payments?status=confirmed`);
       setPaidPlayers(
         (data.payments ?? []).map((p) => ({
+          paymentId: p.id,
+          playerId: p.player?.id ?? p.checkInPlayer?.id ?? "",
+          playerName: p.player?.name ?? p.checkInPlayer?.name ?? "Unknown",
           reclubUserId: p.player?.reclubUserId ?? null,
+          amount: p.amount ?? 0,
+          confirmedAt: p.confirmedAt ?? null,
+          facePhotoPath: p.player?.facePhotoPath ?? null,
         }))
       );
     } catch { /* silent */ }
@@ -310,6 +328,7 @@ export function SessionTabScreen() {
             reclubGroupId={reclubGroupId}
             existingRoster={existingRoster}
             paidPlayers={paidPlayers}
+            onPlayerLinked={() => { fetchPaidPlayers(); }}
             onRosterSaved={(roster) => {
               setSession((prev) =>
                 prev

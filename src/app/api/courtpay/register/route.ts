@@ -28,6 +28,7 @@ export async function POST(req: Request) {
       packageId,
       imageBase64,
       headCount: headCountRaw,
+      reclubUserId: reclubUserIdRaw,
     } = body as {
       venueCode?: string;
       name?: string;
@@ -37,7 +38,10 @@ export async function POST(req: Request) {
       packageId?: string;
       imageBase64?: string;
       headCount?: unknown;
+      reclubUserId?: number;
     };
+
+    const reclubUserId = typeof reclubUserIdRaw === "number" ? reclubUserIdRaw : undefined;
 
     const nameTrimmed = typeof name === "string" ? name.trim() : "";
     const phoneNorm = typeof phone === "string" ? phone.trim() : "";
@@ -126,6 +130,9 @@ export async function POST(req: Request) {
         : null;
 
       if (existingByPhone) {
+        if (reclubUserId && !existingByPhone.reclubUserId) {
+          await prisma.player.update({ where: { id: existingByPhone.id }, data: { reclubUserId } });
+        }
         if (!existingByPhone.faceSubjectId) {
           console.log("[courtpay/register] Enrolling face in collection", {
             collectionId: COLLECTION_ID,
@@ -169,6 +176,7 @@ export async function POST(req: Request) {
             skillLevel: skillVal,
             registrationAt: new Date(),
             registrationVenueId: venue.id,
+            ...(reclubUserId ? { reclubUserId } : {}),
           },
         });
         console.log("[courtpay/register] Enrolling face in collection", {

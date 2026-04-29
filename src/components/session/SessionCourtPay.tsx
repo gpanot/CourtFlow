@@ -135,6 +135,20 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
   const [paidReclubIds, setPaidReclubIds] = useState<Set<number>>(new Set());
   const [paidPlayerCount, setPaidPlayerCount] = useState(0);
 
+  interface PaidPlayerFull {
+    paymentId: string;
+    playerId: string;
+    playerName: string;
+    reclubUserId: number | null;
+    amount: number;
+    confirmedAt: string | null;
+    facePhotoPath: string | null;
+  }
+  const [paidPlayersAll, setPaidPlayersAll] = useState<PaidPlayerFull[]>([]);
+  const [sheetPlayer, setSheetPlayer] = useState<ReclubPlayer | null>(null);
+  const [sheetMode, setSheetMode] = useState<"match" | "info" | null>(null);
+  const [linkingPlayerId, setLinkingPlayerId] = useState<string | null>(null);
+
   const roster = useMemo<ReclubRosterData | null>(() => {
     if (!session?.reclubReferenceCode || !session.reclubRoster) return null;
     return {
@@ -173,17 +187,32 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
     try {
       const data = await api.get<{
         payments: Array<{
-          player?: { reclubUserId?: number | null } | null;
+          id: string;
+          amount: number;
+          confirmedAt?: string | null;
+          player?: { id: string; name: string; reclubUserId?: number | null; facePhotoPath?: string | null } | null;
+          checkInPlayer?: { id: string; name: string } | null;
         }>;
       }>(`/api/sessions/${session.id}/payments?status=confirmed`);
       const ids = new Set<number>();
       let count = 0;
+      const all: PaidPlayerFull[] = [];
       for (const p of data.payments ?? []) {
         count++;
         if (p.player?.reclubUserId) ids.add(p.player.reclubUserId);
+        all.push({
+          paymentId: p.id,
+          playerId: p.player?.id ?? p.checkInPlayer?.id ?? "",
+          playerName: p.player?.name ?? p.checkInPlayer?.name ?? "Unknown",
+          reclubUserId: p.player?.reclubUserId ?? null,
+          amount: p.amount ?? 0,
+          confirmedAt: p.confirmedAt ?? null,
+          facePhotoPath: p.player?.facePhotoPath ?? null,
+        });
       }
       setPaidReclubIds(ids);
       setPaidPlayerCount(count);
+      setPaidPlayersAll(all);
     } catch {
       /* silent */
     }
@@ -359,6 +388,59 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
     return paidPlayerCount - [...paidReclubIds].filter((id) => rosterIds.has(id)).length;
   }, [roster, paidReclubIds, paidPlayerCount]);
 
+  const unmatchedPayments = useMemo(() => {
+    if (!roster) return [];
+    const rosterIds = new Set(roster.players.map((p) => p.reclubUserId));
+    return paidPlayersAll.filter((p) => !p.reclubUserId || !rosterIds.has(p.reclubUserId));
+  }, [roster, paidPlayersAll]);
+
+  const closeSheet = () => {
+    setSheetPlayer(null);
+    setSheetMode(null);
+  };
+
+  const handleAvatarTap = (player: ReclubPlayer) => {
+    if (paidReclubIds.has(player.reclubUserId)) {
+      setSheetPlayer(player);
+      setSheetMode("info");
+    } else {
+      setSheetPlayer(player);
+      setSheetMode("match");
+    }
+  };
+
+  const handleLinkPlayer = async (courtpayPlayerId: string, reclubUserId: number) => {
+    setLinkingPlayerId(courtpayPlayerId);
+    try {
+      await api.post("/api/reclub/link-player", { courtpayPlayerId, reclubUserId });
+      closeSheet();
+      void fetchPaidPlayers();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Failed to link player");
+    } finally {
+      setLinkingPlayerId(null);
+    }
+  };
+
+  const handleUnlinkPlayer = async (courtpayPlayerId: string) => {
+    setLinkingPlayerId(courtpayPlayerId);
+    try {
+      await api.delete("/api/reclub/link-player", { courtpayPlayerId });
+      closeSheet();
+      void fetchPaidPlayers();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Failed to unlink player");
+    } finally {
+      setLinkingPlayerId(null);
+    }
+  };
+
+  const formatTime = (dateStr: string | null) => {
+    if (!dateStr) return "";
+    const d = new Date(dateStr);
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[40dvh] flex-col items-center justify-center py-16">
@@ -482,7 +564,12 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                 {roster.players.map((player) => {
                   const isPaid = paidReclubIds.has(player.reclubUserId);
                   return (
-                    <div key={player.reclubUserId} className="flex flex-col items-center">
+                    <button
+                      key={player.reclubUserId}
+                      type="button"
+                      onClick={() => handleAvatarTap(player)}
+                      className="flex flex-col items-center"
+                    >
                       <div className="relative">
                         {player.isDefaultAvatar ? (
                           <div
@@ -513,22 +600,18 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                       <p className="mt-1 w-full truncate text-center text-[11px] text-neutral-400">
                         {player.name}
                       </p>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
 
               {unmatchedPaidCount > 0 && (
-                <button
-                  type="button"
-                  onClick={() => window.alert("Matching coming soon")}
-                  className="mt-3 flex w-full items-center gap-2 rounded-lg bg-amber-500/10 px-3 py-2.5"
-                >
+                <div className="mt-3 flex w-full items-center gap-2 rounded-lg bg-amber-500/10 px-3 py-2.5">
                   <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" aria-hidden />
                   <span className="text-[13px] text-amber-400">
                     {unmatchedPaidCount} paid player{unmatchedPaidCount > 1 ? "s" : ""} not matched to roster
                   </span>
-                </button>
+                </div>
               )}
             </div>
           )}
@@ -607,6 +690,135 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
           ))}
         </div>
       ) : null}
+
+      {/* Match bottom sheet — unmatched Reclub player */}
+      {sheetMode === "match" && sheetPlayer && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={closeSheet}>
+          <div
+            className="w-full max-w-lg rounded-t-2xl border-t border-neutral-700 bg-neutral-900 pb-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col items-center border-b border-neutral-800 px-5 py-4">
+              {sheetPlayer.isDefaultAvatar ? (
+                <div
+                  className="mb-2 flex h-12 w-12 items-center justify-center rounded-full text-lg font-bold text-white"
+                  style={{ backgroundColor: initialsColor(sheetPlayer.name) }}
+                >
+                  {playerInitials(sheetPlayer.name)}
+                </div>
+              ) : (
+                <img src={sheetPlayer.avatarUrl} alt="" className="mb-2 h-12 w-12 rounded-full object-cover" />
+              )}
+              <p className="text-base font-bold text-white">{sheetPlayer.name}</p>
+              <p className="mt-1 text-sm text-neutral-400">Who paid as this player?</p>
+            </div>
+            <div className="max-h-[40dvh] overflow-y-auto">
+              {unmatchedPayments.length === 0 ? (
+                <p className="py-6 text-center text-sm text-neutral-500">No unmatched payments</p>
+              ) : (
+                unmatchedPayments.map((p) => (
+                  <button
+                    key={p.paymentId}
+                    type="button"
+                    disabled={linkingPlayerId != null}
+                    onClick={() => handleLinkPlayer(p.playerId, sheetPlayer.reclubUserId)}
+                    className="flex w-full items-center gap-3 border-b border-neutral-800 px-5 py-3 text-left transition-colors hover:bg-neutral-800/60 disabled:opacity-50"
+                  >
+                    {p.facePhotoPath ? (
+                      <img src={p.facePhotoPath} alt="" className="h-10 w-10 rounded-full object-cover" />
+                    ) : (
+                      <div
+                        className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white"
+                        style={{ backgroundColor: initialsColor(p.playerName) }}
+                      >
+                        {playerInitials(p.playerName)}
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-white">{p.playerName}</p>
+                      <p className="text-xs text-neutral-400">
+                        {p.amount.toLocaleString()} VND · {formatTime(p.confirmedAt)}
+                      </p>
+                    </div>
+                    {linkingPlayerId === p.playerId && (
+                      <Loader2 className="h-4 w-4 animate-spin text-neutral-400" aria-hidden />
+                    )}
+                  </button>
+                ))
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={closeSheet}
+              className="mt-2 w-full py-3 text-center text-sm font-medium text-neutral-400 transition-colors hover:text-white"
+            >
+              Skip
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Info bottom sheet — matched Reclub player */}
+      {sheetMode === "info" && sheetPlayer && (() => {
+        const linked = paidPlayersAll.find((p) => p.reclubUserId === sheetPlayer.reclubUserId);
+        return (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={closeSheet}>
+            <div
+              className="w-full max-w-lg rounded-t-2xl border-t border-neutral-700 bg-neutral-900 pb-8"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex flex-col items-center border-b border-neutral-800 px-5 py-4">
+                {sheetPlayer.isDefaultAvatar ? (
+                  <div
+                    className="mb-2 flex h-12 w-12 items-center justify-center rounded-full text-lg font-bold text-white"
+                    style={{ backgroundColor: initialsColor(sheetPlayer.name) }}
+                  >
+                    {playerInitials(sheetPlayer.name)}
+                  </div>
+                ) : (
+                  <img src={sheetPlayer.avatarUrl} alt="" className="mb-2 h-12 w-12 rounded-full object-cover" />
+                )}
+                <p className="text-base font-bold text-white">{sheetPlayer.name}</p>
+              </div>
+              {linked && (
+                <div className="px-5 py-3">
+                  <p className="mb-2 text-xs font-medium text-neutral-500">Linked CourtPay player</p>
+                  <div className="flex items-center gap-3">
+                    {linked.facePhotoPath ? (
+                      <img src={linked.facePhotoPath} alt="" className="h-10 w-10 rounded-full object-cover" />
+                    ) : (
+                      <div
+                        className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white"
+                        style={{ backgroundColor: initialsColor(linked.playerName) }}
+                      >
+                        {playerInitials(linked.playerName)}
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-white">{linked.playerName}</p>
+                      <p className="text-xs text-neutral-400">
+                        {linked.amount.toLocaleString()} VND · {formatTime(linked.confirmedAt)}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={linkingPlayerId != null}
+                    onClick={() => handleUnlinkPlayer(linked.playerId)}
+                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-red-500/50 py-2 text-sm font-semibold text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+                  >
+                    {linkingPlayerId === linked.playerId ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    ) : (
+                      "Unlink"
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     const openSession = await prisma.session.findFirst({
       where: { venueId, status: "open" },
       orderBy: { openedAt: "desc" },
-      select: { sessionFee: true },
+      select: { sessionFee: true, reclubRoster: true },
     });
     const latestClosedSession = openSession
       ? null
@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
       autoApprovalPhone: typeof settings.autoApprovalPhone === "string" ? settings.autoApprovalPhone : "",
       autoApprovalCCCD: typeof settings.autoApprovalCCCD === "string" ? settings.autoApprovalCCCD : "",
       showSubscriptionsInFlow: settings.showSubscriptionsInFlow !== false, // default true
+      reclubRoster: openSession?.reclubRoster ?? null,
     });
   } catch (e) {
     return error((e as Error).message, 500);

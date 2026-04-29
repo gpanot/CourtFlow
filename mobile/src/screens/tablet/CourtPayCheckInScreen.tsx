@@ -221,6 +221,11 @@ export function CourtPayCheckInScreen({
   const [alreadyPaidPlayer, setAlreadyPaidPlayer] = useState<CheckInPlayerLite | null>(null);
   const [alreadyPaidStatus, setAlreadyPaidStatus] = useState<string>("");
 
+  // ── Reclub roster autocomplete ───────────────────────────────────────────
+  interface ReclubRosterEntry { reclubUserId: number; name: string; avatarUrl: string; isDefaultAvatar: boolean; gender: string; }
+  const [reclubRoster, setReclubRoster] = useState<ReclubRosterEntry[]>([]);
+  const [selectedReclubUserId, setSelectedReclubUserId] = useState<number | null>(null);
+
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const confirmedIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const exhaustedOfferIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -335,12 +340,13 @@ export function CourtPayCheckInScreen({
   const refreshPaymentSettings = useCallback(() => {
     if (!venueId) return;
     api
-      .get<{ sessionFee?: number; showSubscriptionsInFlow?: boolean }>(
+      .get<{ sessionFee?: number; showSubscriptionsInFlow?: boolean; reclubRoster?: ReclubRosterEntry[] | null }>(
         `/api/staff/venue-payment-settings?venueId=${venueId}`
       )
       .then((res) => {
         setSessionFee(res.sessionFee ?? 0);
         setShowSubscriptionsInFlow(res.showSubscriptionsInFlow !== false);
+        setReclubRoster(Array.isArray(res.reclubRoster) ? res.reclubRoster : []);
       })
       .catch(() => {});
   }, [venueId]);
@@ -350,6 +356,12 @@ export function CourtPayCheckInScreen({
   }, [refreshPaymentSettings]);
 
   const activePackages = packages.filter((p) => p.active);
+
+  const reclubSuggestions = useMemo(() => {
+    const q = name.trim().toLowerCase();
+    if (q.length < 2 || selectedReclubUserId != null || reclubRoster.length === 0) return [];
+    return reclubRoster.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 3);
+  }, [name, selectedReclubUserId, reclubRoster]);
 
   // ── Reset ─────────────────────────────────────────────────────────────────
   const resetToHome = useCallback(() => {
@@ -381,6 +393,7 @@ export function CourtPayCheckInScreen({
     setCashSubmitting(false);
     setCashPending(false);
     setRegPhoneRequiredVisible(false);
+    setSelectedReclubUserId(null);
     setLoading(false);
     setError("");
     setRegisterPhotoQualityMessage("");
@@ -885,6 +898,7 @@ export function CourtPayCheckInScreen({
         imageBase64: imageToEnroll,
         packageId,
         headCount: packageId ? undefined : sessionPartyCount,
+        ...(selectedReclubUserId ? { reclubUserId: selectedReclubUserId } : {}),
       });
 
       setRegisterPhotoQualityFailures(0);
@@ -1446,17 +1460,84 @@ export function CourtPayCheckInScreen({
                   <Text style={[styles.regFormCardTitle, isLight && styles.regFormCardTitleLight]}>{t("regTitle")}</Text>
                 </View>
                 <Text style={[styles.regFormLabel, isLight && styles.regFormLabelLight]}>{t("regName")}</Text>
-              <TextInput
-                style={[styles.bigInput, isLight && styles.bigInputLight]}
-                value={name}
-                onChangeText={(v) => {
-                  setName(v);
-                  restartIdleTimer();
-                }}
-                placeholder={t("regNamePlaceholder")}
-                placeholderTextColor={isLight ? "#94a3b8" : "#737373"}
-                autoFocus
-              />
+              <View>
+                <TextInput
+                  style={[styles.bigInput, isLight && styles.bigInputLight]}
+                  value={name}
+                  onChangeText={(v) => {
+                    setName(v);
+                    if (selectedReclubUserId != null) setSelectedReclubUserId(null);
+                    restartIdleTimer();
+                  }}
+                  placeholder={t("regNamePlaceholder")}
+                  placeholderTextColor={isLight ? "#94a3b8" : "#737373"}
+                  autoFocus
+                />
+                {selectedReclubUserId != null && (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
+                    <Ionicons name="checkmark-circle" size={16} color="#22c55e" />
+                    <Text style={{ color: "#22c55e", fontSize: 12, fontWeight: "600" }}>Reclub matched</Text>
+                  </View>
+                )}
+                {reclubSuggestions.length > 0 && (
+                  <View style={{ flexDirection: "row", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                    {reclubSuggestions.map((s) => (
+                      <TouchableOpacity
+                        key={s.reclubUserId}
+                        onPress={() => {
+                          setName(s.name);
+                          setSelectedReclubUserId(s.reclubUserId);
+                          restartIdleTimer();
+                        }}
+                        activeOpacity={0.7}
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          gap: 8,
+                          backgroundColor: isLight ? "#f1f5f9" : "#262626",
+                          borderRadius: 20,
+                          paddingVertical: 6,
+                          paddingHorizontal: 10,
+                          borderWidth: 1,
+                          borderColor: isLight ? "#e2e8f0" : "#404040",
+                        }}
+                      >
+                        {s.isDefaultAvatar ? (
+                          <View
+                            style={{
+                              width: 36,
+                              height: 36,
+                              borderRadius: 18,
+                              backgroundColor: "#6366f1",
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>
+                              {s.name.split(/\s+/).filter(Boolean).map((w) => w[0]).join("").slice(0, 2).toUpperCase()}
+                            </Text>
+                          </View>
+                        ) : (
+                          <Image
+                            source={{ uri: s.avatarUrl }}
+                            style={{ width: 36, height: 36, borderRadius: 18 }}
+                          />
+                        )}
+                        <Text
+                          style={{
+                            color: isLight ? "#1e293b" : "#e5e5e5",
+                            fontSize: 14,
+                            fontWeight: "600",
+                          }}
+                          numberOfLines={1}
+                        >
+                          {s.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
               <Text style={[styles.regFormLabel, isLight && styles.regFormLabelLight]}>{t("regPhone")}</Text>
               <TextInput
                 style={[styles.bigInput, isLight && styles.bigInputLight]}

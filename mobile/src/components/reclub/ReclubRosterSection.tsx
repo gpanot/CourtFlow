@@ -36,16 +36,23 @@ interface ReclubRosterData {
   players: ReclubPlayer[];
 }
 
-interface PaidPlayer {
-  reclubUserId?: number | null;
+export interface PaidPlayerFull {
+  paymentId: string;
+  playerId: string;
+  playerName: string;
+  reclubUserId: number | null;
+  amount: number;
+  confirmedAt: string | null;
+  facePhotoPath: string | null;
 }
 
 interface Props {
   sessionId: string;
   reclubGroupId: number | null;
   existingRoster: ReclubRosterData | null;
-  paidPlayers: PaidPlayer[];
+  paidPlayers: PaidPlayerFull[];
   onRosterSaved: (roster: ReclubRosterData) => void;
+  onPlayerLinked?: () => void;
 }
 
 function nameHash(name: string): number {
@@ -73,6 +80,16 @@ function initials(name: string): string {
   if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return "?";
+}
+
+function formatVND(amount: number): string {
+  return new Intl.NumberFormat("vi-VN").format(amount);
+}
+
+function formatTime(dateStr: string | null): string {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 function createStyles(t: AppColors) {
@@ -208,6 +225,62 @@ function createStyles(t: AppColors) {
     eventItemName: { fontSize: 14, fontWeight: "600", color: t.text },
     eventItemTime: { fontSize: 12, color: t.muted, marginTop: 2 },
     eventItemCount: { fontSize: 12, color: t.subtle },
+    sheetHeader: {
+      alignItems: "center",
+      paddingHorizontal: 20,
+      paddingBottom: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: t.border,
+    },
+    sheetAvatar: { width: 48, height: 48, borderRadius: 24, marginBottom: 8 },
+    sheetInitials: {
+      width: 48, height: 48, borderRadius: 24,
+      alignItems: "center", justifyContent: "center", marginBottom: 8,
+    },
+    sheetPlayerName: { fontSize: 16, fontWeight: "700", color: t.text, textAlign: "center" },
+    sheetSubtitle: { fontSize: 14, color: t.muted, textAlign: "center", marginTop: 4, marginBottom: 8 },
+    paymentRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      gap: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: t.border,
+    },
+    paymentAvatar: { width: 40, height: 40, borderRadius: 20 },
+    paymentInitials: {
+      width: 40, height: 40, borderRadius: 20,
+      alignItems: "center", justifyContent: "center",
+    },
+    paymentInfo: { flex: 1 },
+    paymentName: { fontSize: 14, fontWeight: "600", color: t.text },
+    paymentDetail: { fontSize: 12, color: t.muted, marginTop: 2 },
+    skipBtn: {
+      alignItems: "center",
+      paddingVertical: 14,
+    },
+    skipBtnText: { fontSize: 14, color: t.muted, fontWeight: "500" },
+    unlinkBtn: {
+      alignSelf: "center",
+      marginTop: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: "#ef4444",
+    },
+    unlinkBtnText: { fontSize: 13, color: "#ef4444", fontWeight: "600" },
+    linkedRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+    },
+    linkedLabel: { fontSize: 13, color: t.muted, marginTop: 8, paddingHorizontal: 20 },
+    linkedName: { fontSize: 14, fontWeight: "600", color: t.text },
+    linkedDetail: { fontSize: 12, color: t.muted, marginTop: 2 },
   });
 }
 
@@ -217,6 +290,7 @@ export function ReclubRosterSection({
   existingRoster,
   paidPlayers,
   onRosterSaved,
+  onPlayerLinked,
 }: Props) {
   const theme = useAppColors();
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -226,6 +300,11 @@ export function ReclubRosterSection({
   const [events, setEvents] = useState<ReclubEvent[]>([]);
   const [showEventPicker, setShowEventPicker] = useState(false);
   const [noEvents, setNoEvents] = useState(false);
+  const [linkingPlayerId, setLinkingPlayerId] = useState<string | null>(null);
+
+  // Bottom sheet state
+  const [sheetPlayer, setSheetPlayer] = useState<ReclubPlayer | null>(null);
+  const [sheetMode, setSheetMode] = useState<"match" | "info" | null>(null);
 
   useEffect(() => {
     setRoster(existingRoster);
@@ -251,6 +330,67 @@ export function ReclubRosterSection({
       (p) => !p.reclubUserId || !rosterIds.has(p.reclubUserId)
     ).length;
   }, [roster, paidPlayers]);
+
+  const unmatchedPayments = useMemo(() => {
+    if (!roster) return [];
+    const rosterIds = new Set(roster.players.map((p) => p.reclubUserId));
+    return paidPlayers.filter((p) => !p.reclubUserId || !rosterIds.has(p.reclubUserId));
+  }, [roster, paidPlayers]);
+
+  const linkedPaymentForPlayer = useCallback(
+    (reclubUserId: number): PaidPlayerFull | undefined => {
+      return paidPlayers.find((p) => p.reclubUserId === reclubUserId);
+    },
+    [paidPlayers]
+  );
+
+  const handleAvatarTap = useCallback(
+    (player: ReclubPlayer) => {
+      const isPaid = paidReclubIds.has(player.reclubUserId);
+      if (isPaid) {
+        setSheetPlayer(player);
+        setSheetMode("info");
+      } else {
+        setSheetPlayer(player);
+        setSheetMode("match");
+      }
+    },
+    [paidReclubIds]
+  );
+
+  const handleLinkPlayer = useCallback(
+    async (courtpayPlayerId: string, reclubUserId: number) => {
+      setLinkingPlayerId(courtpayPlayerId);
+      try {
+        await api.post("/api/reclub/link-player", { courtpayPlayerId, reclubUserId });
+        setSheetPlayer(null);
+        setSheetMode(null);
+        onPlayerLinked?.();
+      } catch (err) {
+        Alert.alert("Error", err instanceof Error ? err.message : "Failed to link player");
+      } finally {
+        setLinkingPlayerId(null);
+      }
+    },
+    [onPlayerLinked]
+  );
+
+  const handleUnlinkPlayer = useCallback(
+    async (courtpayPlayerId: string) => {
+      setLinkingPlayerId(courtpayPlayerId);
+      try {
+        await api.delete("/api/reclub/link-player", { courtpayPlayerId });
+        setSheetPlayer(null);
+        setSheetMode(null);
+        onPlayerLinked?.();
+      } catch (err) {
+        Alert.alert("Error", err instanceof Error ? err.message : "Failed to unlink player");
+      } finally {
+        setLinkingPlayerId(null);
+      }
+    },
+    [onPlayerLinked]
+  );
 
   const handleFetch = useCallback(async () => {
     if (!reclubGroupId) {
@@ -316,6 +456,11 @@ export function ReclubRosterSection({
   const formatEventTime = (ts: number) => {
     const d = new Date(ts * 1000);
     return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  };
+
+  const closeSheet = () => {
+    setSheetPlayer(null);
+    setSheetMode(null);
   };
 
   if (noEvents && !roster) {
@@ -424,7 +569,12 @@ export function ReclubRosterSection({
           {roster.players.map((player) => {
             const isPaid = paidReclubIds.has(player.reclubUserId);
             return (
-              <View key={player.reclubUserId} style={styles.avatarCell}>
+              <TouchableOpacity
+                key={player.reclubUserId}
+                style={styles.avatarCell}
+                onPress={() => handleAvatarTap(player)}
+                activeOpacity={0.7}
+              >
                 <View style={styles.avatarWrap}>
                   {player.isDefaultAvatar ? (
                     <View
@@ -451,25 +601,166 @@ export function ReclubRosterSection({
                 <Text style={styles.playerName} numberOfLines={1}>
                   {player.name}
                 </Text>
-              </View>
+              </TouchableOpacity>
             );
           })}
         </View>
 
         {unmatchedPaidCount > 0 && (
-          <TouchableOpacity
-            style={styles.bannerAmber}
-            activeOpacity={0.7}
-            onPress={() => Alert.alert("Coming Soon", "Matching coming soon")}
-          >
+          <View style={styles.bannerAmber}>
             <Ionicons name="warning-outline" size={18} color="#fbbf24" />
             <Text style={styles.bannerAmberText}>
               {unmatchedPaidCount} paid player{unmatchedPaidCount > 1 ? "s" : ""} not matched to
               roster
             </Text>
-          </TouchableOpacity>
+          </View>
         )}
       </View>
+
+      {/* Match bottom sheet — unmatched Reclub player */}
+      <Modal
+        visible={sheetMode === "match" && sheetPlayer != null}
+        transparent
+        animationType="slide"
+        onRequestClose={closeSheet}
+      >
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={closeSheet}>
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+            {sheetPlayer && (
+              <>
+                <View style={styles.sheetHeader}>
+                  {sheetPlayer.isDefaultAvatar ? (
+                    <View
+                      style={[styles.sheetInitials, { backgroundColor: initialsColor(sheetPlayer.name) }]}
+                    >
+                      <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700" }}>
+                        {initials(sheetPlayer.name)}
+                      </Text>
+                    </View>
+                  ) : (
+                    <Image source={{ uri: sheetPlayer.avatarUrl }} style={styles.sheetAvatar} />
+                  )}
+                  <Text style={styles.sheetPlayerName}>{sheetPlayer.name}</Text>
+                  <Text style={styles.sheetSubtitle}>Who paid as this player?</Text>
+                </View>
+                <FlatList
+                  data={unmatchedPayments}
+                  keyExtractor={(p) => p.paymentId}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={styles.paymentRow}
+                      onPress={() => handleLinkPlayer(item.playerId, sheetPlayer.reclubUserId)}
+                      disabled={linkingPlayerId != null}
+                      activeOpacity={0.7}
+                    >
+                      {item.facePhotoPath ? (
+                        <Image source={{ uri: item.facePhotoPath }} style={styles.paymentAvatar} />
+                      ) : (
+                        <View
+                          style={[styles.paymentInitials, { backgroundColor: initialsColor(item.playerName) }]}
+                        >
+                          <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>
+                            {initials(item.playerName)}
+                          </Text>
+                        </View>
+                      )}
+                      <View style={styles.paymentInfo}>
+                        <Text style={styles.paymentName}>{item.playerName}</Text>
+                        <Text style={styles.paymentDetail}>
+                          {formatVND(item.amount)} VND · {formatTime(item.confirmedAt)}
+                        </Text>
+                      </View>
+                      {linkingPlayerId === item.playerId && (
+                        <ActivityIndicator size="small" color={theme.text} />
+                      )}
+                    </TouchableOpacity>
+                  )}
+                  ListEmptyComponent={
+                    <Text style={[styles.noEventText, { paddingVertical: 20 }]}>
+                      No unmatched payments
+                    </Text>
+                  }
+                  ListFooterComponent={
+                    <TouchableOpacity style={styles.skipBtn} onPress={closeSheet} activeOpacity={0.7}>
+                      <Text style={styles.skipBtnText}>Skip</Text>
+                    </TouchableOpacity>
+                  }
+                />
+              </>
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Info bottom sheet — already matched Reclub player */}
+      <Modal
+        visible={sheetMode === "info" && sheetPlayer != null}
+        transparent
+        animationType="slide"
+        onRequestClose={closeSheet}
+      >
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={closeSheet}>
+          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+            {sheetPlayer && (() => {
+              const linked = linkedPaymentForPlayer(sheetPlayer.reclubUserId);
+              return (
+                <>
+                  <View style={styles.sheetHeader}>
+                    {sheetPlayer.isDefaultAvatar ? (
+                      <View
+                        style={[styles.sheetInitials, { backgroundColor: initialsColor(sheetPlayer.name) }]}
+                      >
+                        <Text style={{ color: "#fff", fontSize: 18, fontWeight: "700" }}>
+                          {initials(sheetPlayer.name)}
+                        </Text>
+                      </View>
+                    ) : (
+                      <Image source={{ uri: sheetPlayer.avatarUrl }} style={styles.sheetAvatar} />
+                    )}
+                    <Text style={styles.sheetPlayerName}>{sheetPlayer.name}</Text>
+                  </View>
+                  {linked && (
+                    <>
+                      <Text style={styles.linkedLabel}>Linked CourtPay player</Text>
+                      <View style={styles.linkedRow}>
+                        {linked.facePhotoPath ? (
+                          <Image source={{ uri: linked.facePhotoPath }} style={styles.paymentAvatar} />
+                        ) : (
+                          <View
+                            style={[styles.paymentInitials, { backgroundColor: initialsColor(linked.playerName) }]}
+                          >
+                            <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>
+                              {initials(linked.playerName)}
+                            </Text>
+                          </View>
+                        )}
+                        <View style={styles.paymentInfo}>
+                          <Text style={styles.linkedName}>{linked.playerName}</Text>
+                          <Text style={styles.linkedDetail}>
+                            {formatVND(linked.amount)} VND · {formatTime(linked.confirmedAt)}
+                          </Text>
+                        </View>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.unlinkBtn}
+                        onPress={() => handleUnlinkPlayer(linked.playerId)}
+                        disabled={linkingPlayerId != null}
+                        activeOpacity={0.7}
+                      >
+                        {linkingPlayerId === linked.playerId ? (
+                          <ActivityIndicator size="small" color="#ef4444" />
+                        ) : (
+                          <Text style={styles.unlinkBtnText}>Unlink</Text>
+                        )}
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </>
+              );
+            })()}
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
