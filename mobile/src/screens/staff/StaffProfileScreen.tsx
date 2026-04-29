@@ -1,4 +1,4 @@
-import React, { useMemo, useLayoutEffect, useState, useCallback, useRef } from "react";
+import React, { useMemo, useLayoutEffect, useState, useCallback, useRef, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   TextInput,
   Vibration,
   Switch,
+  FlatList,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -234,6 +235,41 @@ function createProfileStyles(t: AppColors) {
     pushLabelWrap: { flex: 1, gap: 2 },
     pushTitle: { fontSize: 14, fontWeight: "600", color: t.text },
     pushSub: { fontSize: 12, color: t.muted, lineHeight: 16 },
+
+    reclubCard: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.card,
+      padding: 14,
+      gap: 8,
+    },
+    reclubHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+    reclubHeaderText: { fontSize: 14, fontWeight: "500", color: t.textSecondary },
+    reclubHint: { fontSize: 12, color: t.muted, lineHeight: 16 },
+    reclubValueRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 8,
+    },
+    reclubValue: { fontSize: 14, fontWeight: "500", color: t.text, flex: 1 },
+    reclubModalTitle: {
+      fontSize: 16,
+      fontWeight: "700",
+      color: t.text,
+      textAlign: "center",
+      paddingVertical: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: t.border,
+    },
+    reclubModalItem: {
+      paddingVertical: 14,
+      paddingHorizontal: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: t.border,
+    },
+    reclubModalItemText: { fontSize: 15, color: t.text },
   });
 }
 
@@ -378,6 +414,55 @@ export function StaffProfileScreen() {
 
   const { unlocked, unlock, lock } = usePinStore();
 
+  const [reclubClubs, setReclubClubs] = useState<{ groupId: number; name: string }[]>([]);
+  const [reclubGroupId, setReclubGroupId] = useState<number | null>(null);
+  const [reclubModal, setReclubModal] = useState(false);
+  const [reclubSaving, setReclubSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const [me, clubs] = await Promise.all([
+          api.get<{ reclubGroupId?: number | null }>("/api/auth/staff-me"),
+          api.get<{ groupId: number; name: string }[]>("/api/reclub/clubs"),
+        ]);
+        if (cancelled) return;
+        setReclubGroupId(me.reclubGroupId ?? null);
+        setReclubClubs(Array.isArray(clubs) ? clubs : []);
+      } catch {
+        /* silent */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const applyReclubClub = useCallback(async (gid: number | null) => {
+    setReclubSaving(true);
+    try {
+      await api.patch("/api/staff/reclub-club", { reclubGroupId: gid });
+      setReclubGroupId(gid);
+      setReclubModal(false);
+    } catch (err) {
+      const detail =
+        err instanceof ApiRequestError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Could not save";
+      Alert.alert("Error", detail);
+    } finally {
+      setReclubSaving(false);
+    }
+  }, []);
+
+  const reclubDisplayName = useMemo(() => {
+    if (reclubGroupId == null) return t("profileReclubNotSet");
+    return reclubClubs.find((c) => c.groupId === reclubGroupId)?.name ?? t("profileReclubNotSet");
+  }, [reclubGroupId, reclubClubs, t]);
+
   // Which locked screen to navigate to after successful PIN entry
   const pendingRoute = useRef<keyof StaffStackParamList | null>(null);
   const [pinVisible, setPinVisible] = useState(false);
@@ -521,6 +606,68 @@ export function StaffProfileScreen() {
             <Text style={styles.venueLabel}>{venueName}</Text>
           </View>
         </View>
+
+        {/* Reclub club (staff-level) */}
+        <View style={styles.reclubCard}>
+          <View style={styles.reclubHeader}>
+            <Ionicons name="calendar-outline" size={16} color={theme.blue400} />
+            <Text style={styles.reclubHeaderText}>{t("profileReclubClub")}</Text>
+          </View>
+          <Text style={styles.reclubHint}>{t("profileReclubClubHint")}</Text>
+          <TouchableOpacity
+            style={styles.reclubValueRow}
+            onPress={() => setReclubModal(true)}
+            disabled={reclubSaving || reclubClubs.length === 0}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.reclubValue} numberOfLines={1}>
+              {reclubDisplayName}
+            </Text>
+            <Ionicons name="chevron-forward" size={18} color={theme.dimmed} />
+          </TouchableOpacity>
+        </View>
+
+        <Modal visible={reclubModal} transparent animationType="slide" onRequestClose={() => setReclubModal(false)}>
+          <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.6)" }}>
+            <View
+              style={{
+                backgroundColor: theme.card,
+                borderTopLeftRadius: 20,
+                borderTopRightRadius: 20,
+                borderWidth: 1,
+                borderColor: theme.border,
+                maxHeight: "70%",
+                paddingBottom: 24,
+              }}
+            >
+              <Text style={styles.reclubModalTitle}>{t("profileReclubChooseTitle")}</Text>
+              <FlatList
+                style={{ maxHeight: 400 }}
+                data={[
+                  { id: "none", groupId: null as number | null, name: t("profileReclubNotSet") },
+                  ...reclubClubs.map((c) => ({ id: String(c.groupId), groupId: c.groupId, name: c.name })),
+                ]}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.reclubModalItem}
+                    onPress={() => void applyReclubClub(item.groupId)}
+                    disabled={reclubSaving}
+                  >
+                    <Text style={styles.reclubModalItemText}>{item.name}</Text>
+                  </TouchableOpacity>
+                )}
+              />
+              <TouchableOpacity
+                style={{ padding: 16, alignItems: "center" }}
+                onPress={() => setReclubModal(false)}
+                disabled={reclubSaving}
+              >
+                <Text style={{ fontSize: 15, color: theme.muted }}>{t("cancel")}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
 
         {/* Push Notifications */}
         <View style={styles.pushCard}>

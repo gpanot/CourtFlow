@@ -10,7 +10,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { api } from "../../lib/api-client";
 import { useAuthStore } from "../../stores/auth-store";
@@ -20,6 +20,33 @@ import type { AppColors } from "../../theme/palettes";
 import type { Session, CourtsState, SessionHistoryRow } from "../../types/api";
 import type { StaffStackParamList } from "../../navigation/types";
 import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
+import { ReclubRosterSection } from "../../components/reclub/ReclubRosterSection";
+
+interface ReclubPlayer {
+  reclubUserId: number;
+  name: string;
+  avatarUrl: string;
+  isDefaultAvatar: boolean;
+  gender: string;
+}
+
+interface ReclubRosterData {
+  referenceCode: string;
+  eventName: string;
+  players: ReclubPlayer[];
+}
+
+interface SessionWithReclub extends Session {
+  reclubReferenceCode?: string | null;
+  reclubEventName?: string | null;
+  reclubRoster?: ReclubPlayer[] | null;
+}
+
+interface PaidPaymentRow {
+  id: string;
+  player?: { reclubUserId?: number | null } | null;
+  checkInPlayer?: { id: string } | null;
+}
 
 function isToday(dateStr: string): boolean {
   const d = new Date(dateStr);
@@ -73,16 +100,29 @@ export function SessionTabScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<StaffStackParamList>>();
   const { t } = useTabletKioskLocale();
 
-  const [session, setSession] = useState<Session | null>(null);
+  const [session, setSession] = useState<SessionWithReclub | null>(null);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [sessionHistory, setSessionHistory] = useState<SessionHistoryRow[]>([]);
+  const [reclubGroupId, setReclubGroupId] = useState<number | null>(null);
+  const [paidPlayers, setPaidPlayers] = useState<{ reclubUserId?: number | null }[]>([]);
+
+  const existingRoster = useMemo<ReclubRosterData | null>(() => {
+    if (!session?.reclubReferenceCode || !session.reclubRoster) return null;
+    return {
+      referenceCode: session.reclubReferenceCode,
+      eventName: session.reclubEventName ?? "",
+      players: session.reclubRoster as ReclubPlayer[],
+    };
+  }, [session?.reclubReferenceCode, session?.reclubEventName, session?.reclubRoster]);
 
   const fetchState = useCallback(async () => {
     if (!venueId) return;
     try {
-      const data = await api.get<CourtsState>(`/api/courts/state?venueId=${venueId}`);
+      const data = await api.get<CourtsState & { session: SessionWithReclub | null }>(
+        `/api/courts/state?venueId=${venueId}`
+      );
       setSession(data.session);
     } catch { /* silent */ } finally {
       setLoading(false);
@@ -94,7 +134,6 @@ export function SessionTabScreen() {
     if (!venueId) return;
     try {
       const data = await api.get<SessionHistoryRow[]>(`/api/sessions/history?venueId=${venueId}`);
-      // Show only today's sessions
       const todayOnly = Array.isArray(data)
         ? data.filter((s) => isToday(s.openedAt))
         : [];
@@ -102,13 +141,49 @@ export function SessionTabScreen() {
     } catch { /* silent */ }
   }, [venueId]);
 
+  const fetchReclubGroup = useCallback(() => {
+    void api
+      .get<{ reclubGroupId?: number | null }>("/api/auth/staff-me")
+      .then((me) => setReclubGroupId(me.reclubGroupId ?? null))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetchReclubGroup();
+  }, [fetchReclubGroup]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchReclubGroup();
+    }, [fetchReclubGroup])
+  );
+
+  const fetchPaidPlayers = useCallback(async () => {
+    if (!session?.id) return;
+    try {
+      const data = await api.get<{
+        payments: PaidPaymentRow[];
+      }>(`/api/sessions/${session.id}/payments?status=confirmed`);
+      setPaidPlayers(
+        (data.payments ?? []).map((p) => ({
+          reclubUserId: p.player?.reclubUserId ?? null,
+        }))
+      );
+    } catch { /* silent */ }
+  }, [session?.id]);
+
   useEffect(() => {
     fetchState();
     fetchHistory();
   }, [fetchState, fetchHistory]);
 
+  useEffect(() => {
+    fetchPaidPlayers();
+  }, [fetchPaidPlayers]);
+
   useSocket(venueId, {
     "session:updated": () => { fetchState(); fetchHistory(); },
+    "payment:confirmed": () => { fetchPaidPlayers(); },
   });
 
   const handleOpenSession = async () => {
@@ -228,6 +303,27 @@ export function SessionTabScreen() {
             )}
           </TouchableOpacity>
         </View>
+
+        {session && isOpen && (
+          <ReclubRosterSection
+            sessionId={session.id}
+            reclubGroupId={reclubGroupId}
+            existingRoster={existingRoster}
+            paidPlayers={paidPlayers}
+            onRosterSaved={(roster) => {
+              setSession((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      reclubReferenceCode: roster.referenceCode,
+                      reclubEventName: roster.eventName,
+                      reclubRoster: roster.players,
+                    }
+                  : prev
+              );
+            }}
+          />
+        )}
 
         {sessionHistory.length > 0 && (
           <View style={styles.historySection}>

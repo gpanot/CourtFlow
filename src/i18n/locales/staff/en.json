@@ -74,6 +74,9 @@
       "yesLogOut": "Yes, Log Out",
       "staffFallback": "Staff",
       "noVenue": "No venue",
+      "reclubClub": "Reclub club",
+      "reclubClubHint": "Default club for session roster (applies to all your venues).",
+      "reclubClubNotSet": "Not set",
       "pinTitle": "Enter PIN",
       "pinSubtitle": "Enter the 4-digit boss PIN to access this menu",
       "pinIncorrect": "Incorrect PIN. Try again.",
@@ -510,7 +513,8 @@
       "sessionPlayersPaid": "players paid",
       "sessionPayments": "payments",
       "refresh": "Refresh",
-      "refreshing": "Refreshing…"
+      "refreshing": "Refreshing…",
+      "reclubNoClub": "Set your default Reclub club in Profile to fetch the roster."
     },
     "sessionPaymentsDetail": {
       "back": "Back",

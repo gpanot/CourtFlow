@@ -38,7 +38,7 @@ export async function GET(
         ],
       },
       include: {
-        player: { select: { id: true, name: true, phone: true, skillLevel: true, facePhotoPath: true } },
+        player: { select: { id: true, name: true, phone: true, skillLevel: true, facePhotoPath: true, reclubUserId: true } },
         checkInPlayer: { select: { id: true, name: true, skillLevel: true, phone: true } },
       },
       orderBy: { confirmedAt: "desc" },

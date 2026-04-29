@@ -175,6 +175,7 @@ model Player {
   createdAt             DateTime       @default(now()) @map("created_at")
   registrationAt        DateTime?      @map("registration_at")
   registrationVenueId   String?        @map("registration_venue_id")
+  reclubUserId          Int?           @map("reclub_user_id")
 
   queueEntries        QueueEntry[]
   playerRankings      PlayerRanking[]
@@ -246,6 +247,8 @@ model StaffMember {
   createdAt           DateTime  @default(now()) @map("created_at")
 
   pushNotificationsEnabled Boolean @default(false) @map("push_notifications_enabled")
+  /// Default Reclub club (group) for session roster — staff-level, not per-venue.
+  reclubGroupId Int? @map("reclub_group_id")
 
   venueAssignments StaffVenueAssignment[]
   auditLogs        AuditLog[]
@@ -296,6 +299,9 @@ model Session {
   introWarmupComplete Boolean @default(false) @map("intro_warmup_complete")
   maxPlayers   Int?          @map("max_players")
   sessionFee   Int           @default(0) @map("session_fee")
+  reclubReferenceCode String? @map("reclub_reference_code")
+  reclubEventName     String? @map("reclub_event_name")
+  reclubRoster        Json?   @map("reclub_roster")
 
   venue            Venue              @relation(fields: [venueId], references: [id])
   staff            StaffMember?       @relation(fields: [staffId], references: [id])

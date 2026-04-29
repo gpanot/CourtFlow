@@ -9,7 +9,15 @@ import { useSessionStore } from "@/stores/session-store";
 import { useSocket } from "@/hooks/use-socket";
 import { joinVenue } from "@/lib/socket-client";
 import type { StaffTabPanelProps } from "@/config/componentMap";
-import { Loader2, PlayCircle, StopCircle } from "lucide-react";
+import {
+  Loader2,
+  PlayCircle,
+  StopCircle,
+  Users,
+  RefreshCw,
+  AlertTriangle,
+  Check,
+} from "lucide-react";
 import { cn } from "@/lib/cn";
 
 interface Session {
@@ -24,6 +32,9 @@ interface Session {
   closedAt: string | null;
   staffId: string | null;
   date?: string;
+  reclubReferenceCode?: string | null;
+  reclubEventName?: string | null;
+  reclubRoster?: ReclubPlayer[] | null;
 }
 
 interface CourtsState {
@@ -42,6 +53,27 @@ interface SessionHistoryRow {
   paymentRevenue: number;
 }
 
+interface ReclubEvent {
+  referenceCode: string;
+  name: string;
+  startDatetime: number;
+  confirmedCount: number;
+}
+
+interface ReclubPlayer {
+  reclubUserId: number;
+  name: string;
+  avatarUrl: string;
+  isDefaultAvatar: boolean;
+  gender: string;
+}
+
+interface ReclubRosterData {
+  referenceCode: string;
+  eventName: string;
+  players: ReclubPlayer[];
+}
+
 function isToday(dateStr: string): boolean {
   const d = new Date(dateStr);
   const now = new Date();
@@ -57,6 +89,33 @@ function sessionDateLabel(openedAt: string, todayLabel: string): string {
   return isToday(openedAt) ? `${todayLabel} — ${dateStr}` : dateStr;
 }
 
+function nameHash(name: string): number {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) {
+    h = (h * 31 + name.charCodeAt(i)) & 0xffffff;
+  }
+  return h;
+}
+
+const INITIALS_COLORS = [
+  "#6366f1", "#8b5cf6", "#a855f7", "#d946ef",
+  "#ec4899", "#f43f5e", "#ef4444", "#f97316",
+  "#eab308", "#22c55e", "#14b8a6", "#06b6d4",
+  "#3b82f6", "#6366f1",
+];
+
+function initialsColor(name: string): string {
+  return INITIALS_COLORS[nameHash(name) % INITIALS_COLORS.length];
+}
+
+function playerInitials(name: string): string {
+  const cleaned = name.replace(/[^\p{L}\p{N}\s]/gu, "").trim();
+  const parts = cleaned.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return "?";
+}
+
 export function SessionCourtPay(props: StaffTabPanelProps) {
   void props.legacyTab;
   const { t } = useTranslation("translation", { i18n: staffI18n });
@@ -68,6 +127,22 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
   const [actionLoading, setActionLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [sessionHistory, setSessionHistory] = useState<SessionHistoryRow[]>([]);
+  const [reclubGroupId, setReclubGroupId] = useState<number | null>(null);
+  const [rosterLoading, setRosterLoading] = useState(false);
+  const [showEventPicker, setShowEventPicker] = useState(false);
+  const [events, setEvents] = useState<ReclubEvent[]>([]);
+  const [noEvents, setNoEvents] = useState(false);
+  const [paidReclubIds, setPaidReclubIds] = useState<Set<number>>(new Set());
+  const [paidPlayerCount, setPaidPlayerCount] = useState(0);
+
+  const roster = useMemo<ReclubRosterData | null>(() => {
+    if (!session?.reclubReferenceCode || !session.reclubRoster) return null;
+    return {
+      referenceCode: session.reclubReferenceCode,
+      eventName: session.reclubEventName ?? "",
+      players: session.reclubRoster,
+    };
+  }, [session?.reclubReferenceCode, session?.reclubEventName, session?.reclubRoster]);
 
   const fetchState = useCallback(async () => {
     if (!venueId) return;
@@ -93,23 +168,72 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
     }
   }, [venueId]);
 
+  const fetchPaidPlayers = useCallback(async () => {
+    if (!session?.id) return;
+    try {
+      const data = await api.get<{
+        payments: Array<{
+          player?: { reclubUserId?: number | null } | null;
+        }>;
+      }>(`/api/sessions/${session.id}/payments?status=confirmed`);
+      const ids = new Set<number>();
+      let count = 0;
+      for (const p of data.payments ?? []) {
+        count++;
+        if (p.player?.reclubUserId) ids.add(p.player.reclubUserId);
+      }
+      setPaidReclubIds(ids);
+      setPaidPlayerCount(count);
+    } catch {
+      /* silent */
+    }
+  }, [session?.id]);
+
+  const fetchReclubGroup = useCallback(() => {
+    void api
+      .get<{ reclubGroupId?: number | null }>("/api/auth/staff-me")
+      .then((me) => setReclubGroupId(me.reclubGroupId ?? null))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    void fetchReclubGroup();
+  }, [fetchReclubGroup]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const onVis = () => {
+      if (document.visibilityState === "visible") void fetchReclubGroup();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [fetchReclubGroup]);
+
   useEffect(() => {
     void fetchState();
     void fetchHistory();
   }, [fetchState, fetchHistory]);
 
+  useEffect(() => {
+    void fetchPaidPlayers();
+  }, [fetchPaidPlayers]);
+
   const { on } = useSocket();
   useEffect(() => {
     if (!venueId) return;
     joinVenue(venueId);
-    const off = on("session:updated", () => {
+    const off1 = on("session:updated", () => {
       void fetchState();
       void fetchHistory();
     });
+    const off2 = on("payment:confirmed", () => {
+      void fetchPaidPlayers();
+    });
     return () => {
-      off();
+      off1();
+      off2();
     };
-  }, [venueId, on, fetchState, fetchHistory]);
+  }, [venueId, on, fetchState, fetchHistory, fetchPaidPlayers]);
 
   const handleOpenSession = async () => {
     if (!venueId) return;
@@ -143,6 +267,64 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
     }
   };
 
+  const handleFetchReclub = async () => {
+    if (!reclubGroupId) {
+      window.alert(t("staff.courtPaySession.reclubNoClub"));
+      return;
+    }
+    setRosterLoading(true);
+    setNoEvents(false);
+    try {
+      const data = await api.get<{ events: ReclubEvent[] }>(
+        `/api/reclub/events?groupId=${reclubGroupId}`
+      );
+      if (!data.events || data.events.length === 0) {
+        setNoEvents(true);
+        setRosterLoading(false);
+        return;
+      }
+      if (data.events.length === 1) {
+        await fetchAndSaveRoster(data.events[0].referenceCode);
+      } else {
+        setEvents(data.events);
+        setShowEventPicker(true);
+        setRosterLoading(false);
+      }
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Failed to fetch events");
+      setRosterLoading(false);
+    }
+  };
+
+  const fetchAndSaveRoster = async (referenceCode: string) => {
+    setRosterLoading(true);
+    setShowEventPicker(false);
+    try {
+      const data = await api.post<ReclubRosterData>("/api/reclub/fetch-roster", {
+        referenceCode,
+      });
+      await api.patch(`/api/sessions/${session!.id}/reclub-roster`, {
+        referenceCode: data.referenceCode,
+        eventName: data.eventName,
+        roster: data.players,
+      });
+      setSession((prev) =>
+        prev
+          ? {
+              ...prev,
+              reclubReferenceCode: data.referenceCode,
+              reclubEventName: data.eventName,
+              reclubRoster: data.players,
+            }
+          : prev
+      );
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Failed to fetch roster");
+    } finally {
+      setRosterLoading(false);
+    }
+  };
+
   const openDetail = (row: SessionHistoryRow) => {
     const q = new URLSearchParams({
       openedAt: row.openedAt,
@@ -154,6 +336,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
 
   const onRefresh = () => {
     setRefreshing(true);
+    void fetchReclubGroup();
     void fetchState();
     void fetchHistory();
   };
@@ -164,6 +347,17 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
     const d = new Date(raw);
     return Number.isNaN(d.getTime()) ? "—" : d.toLocaleTimeString();
   }, [session]);
+
+  const paidCountInRoster = useMemo(() => {
+    if (!roster) return 0;
+    return roster.players.filter((p) => paidReclubIds.has(p.reclubUserId)).length;
+  }, [roster, paidReclubIds]);
+
+  const unmatchedPaidCount = useMemo(() => {
+    if (!roster) return 0;
+    const rosterIds = new Set(roster.players.map((p) => p.reclubUserId));
+    return paidPlayerCount - [...paidReclubIds].filter((id) => rosterIds.has(id)).length;
+  }, [roster, paidReclubIds, paidPlayerCount]);
 
   if (loading) {
     return (
@@ -239,6 +433,146 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
           )}
         </button>
       </div>
+
+      {/* Reclub Roster Section */}
+      {session && isOpen && (
+        <div className="mt-4">
+          {noEvents && !roster ? (
+            <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
+              <p className="text-center text-sm text-neutral-500">
+                No Reclub event found for today. CourtPay session runs normally.
+              </p>
+            </div>
+          ) : !roster ? (
+            <button
+              type="button"
+              disabled={rosterLoading}
+              onClick={handleFetchReclub}
+              className="flex h-[42px] w-full items-center justify-center gap-2 rounded-xl border border-neutral-700 bg-transparent text-sm font-semibold text-white transition-colors hover:border-neutral-600 hover:bg-neutral-900/30 disabled:opacity-50"
+            >
+              {rosterLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              ) : (
+                <Users className="h-4 w-4" aria-hidden />
+              )}
+              Fetch Reclub Roster
+            </button>
+          ) : (
+            <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <p className="flex-1 truncate text-sm font-bold text-white">{roster.eventName}</p>
+                <span className="shrink-0 text-xs text-neutral-400">
+                  {paidCountInRoster} / {roster.players.length} paid
+                </span>
+                <button
+                  type="button"
+                  disabled={rosterLoading}
+                  onClick={() => fetchAndSaveRoster(roster.referenceCode)}
+                  className="ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-neutral-400 transition-colors hover:bg-neutral-700 hover:text-white disabled:opacity-50"
+                >
+                  {rosterLoading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+                  )}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-4 gap-2">
+                {roster.players.map((player) => {
+                  const isPaid = paidReclubIds.has(player.reclubUserId);
+                  return (
+                    <div key={player.reclubUserId} className="flex flex-col items-center">
+                      <div className="relative">
+                        {player.isDefaultAvatar ? (
+                          <div
+                            className={cn(
+                              "flex h-[52px] w-[52px] items-center justify-center rounded-full text-lg font-bold text-white",
+                              isPaid && "ring-[2.5px] ring-green-500"
+                            )}
+                            style={{ backgroundColor: initialsColor(player.name) }}
+                          >
+                            {playerInitials(player.name)}
+                          </div>
+                        ) : (
+                          <img
+                            src={player.avatarUrl}
+                            alt=""
+                            className={cn(
+                              "h-[52px] w-[52px] rounded-full object-cover",
+                              isPaid && "ring-[2.5px] ring-green-500"
+                            )}
+                          />
+                        )}
+                        {isPaid && (
+                          <div className="absolute -bottom-0.5 -right-0.5 flex h-[18px] w-[18px] items-center justify-center rounded-full bg-green-500">
+                            <Check className="h-3 w-3 text-white" strokeWidth={3} aria-hidden />
+                          </div>
+                        )}
+                      </div>
+                      <p className="mt-1 w-full truncate text-center text-[11px] text-neutral-400">
+                        {player.name}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {unmatchedPaidCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => window.alert("Matching coming soon")}
+                  className="mt-3 flex w-full items-center gap-2 rounded-lg bg-amber-500/10 px-3 py-2.5"
+                >
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" aria-hidden />
+                  <span className="text-[13px] text-amber-400">
+                    {unmatchedPaidCount} paid player{unmatchedPaidCount > 1 ? "s" : ""} not matched to roster
+                  </span>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Event Picker Modal */}
+      {showEventPicker && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60"
+          onClick={() => {
+            setShowEventPicker(false);
+            setRosterLoading(false);
+          }}
+        >
+          <div
+            className="w-full max-w-lg rounded-t-2xl border-t border-neutral-700 bg-neutral-900 pb-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="py-4 text-center text-base font-bold text-white">Select Event</p>
+            <div className="max-h-[50dvh] overflow-y-auto">
+              {events.map((ev) => (
+                <button
+                  key={ev.referenceCode}
+                  type="button"
+                  onClick={() => fetchAndSaveRoster(ev.referenceCode)}
+                  className="flex w-full items-center justify-between border-b border-neutral-800 px-5 py-3.5 text-left transition-colors hover:bg-neutral-800/60"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-white">{ev.name}</p>
+                    <p className="mt-0.5 text-xs text-neutral-400">
+                      {new Date(ev.startDatetime * 1000).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                  <span className="text-xs text-neutral-500">{ev.confirmedCount} confirmed</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {sessionHistory.length > 0 ? (
         <div className="mt-6 space-y-2">

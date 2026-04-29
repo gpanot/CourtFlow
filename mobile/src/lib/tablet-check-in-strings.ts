@@ -215,6 +215,10 @@ const CHECK_IN_SCANNER_EN = {
   "profilePinSubtitle": "Enter the 4-digit boss PIN to access this menu",
   "profilePinIncorrect": "Incorrect PIN. Try again.",
   "profileLanguage": "Language",
+  "profileReclubClub": "Reclub club",
+  "profileReclubClubHint": "Default for session roster (all venues)",
+  "profileReclubNotSet": "Not set",
+  "profileReclubChooseTitle": "Choose Reclub club",
 
   // ── Session tab ────────────────────────────────────────────────────────────
   "sessionOpen": "Session Open",
@@ -698,6 +702,10 @@ const CHECK_IN_SCANNER_VI = {
   "profilePinSubtitle": "Nhập mã PIN 4 chữ số của quản lý để truy cập",
   "profilePinIncorrect": "Mã PIN sai. Thử lại.",
   "profileLanguage": "Ngôn ngữ",
+  "profileReclubClub": "Câu lạc bộ Reclub",
+  "profileReclubClubHint": "Mặc định cho danh sách buổi (mọi địa điểm)",
+  "profileReclubNotSet": "Chưa chọn",
+  "profileReclubChooseTitle": "Chọn câu lạc bộ Reclub",
 
   // ── Session tab ────────────────────────────────────────────────────────────
   "sessionOpen": "Buổi đang mở",

@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
         name: true,
         phone: true,
         pushNotificationsEnabled: true,
+        reclubGroupId: true,
         venueAssignments: {
           include: { venue: { select: { id: true, name: true } } },
         },
@@ -24,6 +25,7 @@ export async function GET(request: NextRequest) {
       name: staff.name,
       phone: staff.phone,
       pushNotificationsEnabled: staff.pushNotificationsEnabled,
+      reclubGroupId: staff.reclubGroupId,
       venues: staffAssignmentsToVenues(staff.venueAssignments),
     });
   } catch (e) {

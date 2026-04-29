@@ -74,6 +74,9 @@
       "yesLogOut": "Đăng xuất",
       "staffFallback": "Nhân viên",
       "noVenue": "Chưa có địa điểm",
+      "reclubClub": "Câu lạc bộ Reclub",
+      "reclubClubHint": "Câu lạc bộ mặc định để lấy danh sách buổi (áp dụng mọi địa điểm).",
+      "reclubClubNotSet": "Chưa chọn",
       "pinTitle": "Nhập mã PIN",
       "pinSubtitle": "Nhập mã PIN 4 chữ số của quản lý để truy cập",
       "pinIncorrect": "Mã PIN sai. Thử lại.",
@@ -518,7 +521,8 @@
       "sessionPlayersPaid": "người đã trả",
       "sessionPayments": "thanh toán",
       "refresh": "Làm mới",
-      "refreshing": "Đang làm mới…"
+      "refreshing": "Đang làm mới…",
+      "reclubNoClub": "Vào Hồ sơ để chọn câu lạc bộ Reclub mặc định, rồi mới tải được danh sách."
     },
     "sessionPaymentsDetail": {
       "back": "Quay lại",
