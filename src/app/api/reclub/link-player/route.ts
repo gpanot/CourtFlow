@@ -15,11 +15,19 @@ export async function POST(request: NextRequest) {
     if (!courtpayPlayerId?.trim()) return error("courtpayPlayerId is required");
     if (!reclubUserId || typeof reclubUserId !== "number") return error("reclubUserId is required");
 
-    const player = await prisma.player.findUnique({ where: { id: courtpayPlayerId } });
+    let player = await prisma.player.findUnique({ where: { id: courtpayPlayerId } });
+
+    if (!player) {
+      const checkInPlayer = await prisma.checkInPlayer.findUnique({ where: { id: courtpayPlayerId } });
+      if (checkInPlayer?.phone) {
+        player = await prisma.player.findFirst({ where: { phone: checkInPlayer.phone } });
+      }
+    }
+
     if (!player) return error("Player not found", 404);
 
     const updated = await prisma.player.update({
-      where: { id: courtpayPlayerId },
+      where: { id: player.id },
       data: { reclubUserId },
       select: { id: true, name: true, reclubUserId: true },
     });
@@ -41,11 +49,19 @@ export async function DELETE(request: NextRequest) {
 
     if (!courtpayPlayerId?.trim()) return error("courtpayPlayerId is required");
 
-    const player = await prisma.player.findUnique({ where: { id: courtpayPlayerId } });
+    let player = await prisma.player.findUnique({ where: { id: courtpayPlayerId } });
+
+    if (!player) {
+      const checkInPlayer = await prisma.checkInPlayer.findUnique({ where: { id: courtpayPlayerId } });
+      if (checkInPlayer?.phone) {
+        player = await prisma.player.findFirst({ where: { phone: checkInPlayer.phone } });
+      }
+    }
+
     if (!player) return error("Player not found", 404);
 
     const updated = await prisma.player.update({
-      where: { id: courtpayPlayerId },
+      where: { id: player.id },
       data: { reclubUserId: null },
       select: { id: true, name: true, reclubUserId: true },
     });

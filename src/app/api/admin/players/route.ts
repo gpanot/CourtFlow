@@ -205,6 +205,7 @@ export async function GET(request: NextRequest) {
         createdAt: player.createdAt,
         rankingScore: player.rankingScore,
         rankingCount: player.rankingCount,
+        reclubUserId: player.reclubUserId ?? null,
         totalSessions: sessions.size,
         totalGames: gameCounts[player.id] || 0,
         totalPlayMinutes,

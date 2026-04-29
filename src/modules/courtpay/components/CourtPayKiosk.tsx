@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import {
   CameraCapture,
   type CameraCaptureHandle,
@@ -82,6 +82,7 @@ interface RegistrationDraft {
   gender: "male" | "female";
   skillLevel: "beginner" | "intermediate" | "advanced";
   imageBase64: string | null;
+  reclubUserId?: number;
 }
 
 /* ─── Constants ───────────────────────────────────────────── */
@@ -148,6 +149,11 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
   const [registrationQualityMessage, setRegistrationQualityMessage] = useState("");
   const [registrationQualityFailures, setRegistrationQualityFailures] = useState(0);
 
+  // Reclub roster autocomplete
+  interface ReclubRosterEntry { reclubUserId: number; name: string; avatarUrl: string; isDefaultAvatar: boolean; gender: string; }
+  const [reclubRoster, setReclubRoster] = useState<ReclubRosterEntry[]>([]);
+  const [selectedReclubUserId, setSelectedReclubUserId] = useState<number | null>(null);
+
   // Payment state
   const [paymentLoading, setPaymentLoading] = useState(false);
 
@@ -197,6 +203,7 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
     blurRegInProgressRef.current = false;
     setRegistrationQualityMessage("");
     setRegistrationQualityFailures(0);
+    setSelectedReclubUserId(null);
   }, [clearTimers, goTo]);
 
   const scheduleReset = useCallback(
@@ -222,6 +229,22 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
   useEffect(() => {
     joinVenue(venueId);
   }, [venueId]);
+
+  // Load Reclub roster from session
+  useEffect(() => {
+    api
+      .get<{ reclubRoster?: ReclubRosterEntry[] | null }>(
+        `/api/staff/venue-payment-settings?venueId=${venueId}`
+      )
+      .then((res) => setReclubRoster(Array.isArray(res.reclubRoster) ? res.reclubRoster : []))
+      .catch(() => {});
+  }, [venueId]);
+
+  const reclubSuggestions = useMemo(() => {
+    const q = regName.trim().toLowerCase();
+    if (q.length < 2 || selectedReclubUserId != null || reclubRoster.length === 0) return [];
+    return reclubRoster.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 3);
+  }, [regName, selectedReclubUserId, reclubRoster]);
 
   /* ─── Socket: listen for payment confirmation/cancellation ──── */
   useEffect(() => {
@@ -598,6 +621,7 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
       gender: regGender,
       skillLevel: regLevel,
       imageBase64: imageToEnroll,
+      ...(selectedReclubUserId ? { reclubUserId: selectedReclubUserId } : {}),
     });
     setPlayer({
       id: "",
@@ -607,7 +631,7 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
     });
     setIsNewPlayer(true);
     goTo("subscription_offer");
-  }, [regName, regPhone, regGender, regLevel, regImage, goTo]);
+  }, [regName, regPhone, regGender, regLevel, regImage, selectedReclubUserId, goTo]);
 
   const startPaymentTimeout = useCallback(() => {
     paymentTimerRef.current = setTimeout(() => {
@@ -1134,11 +1158,44 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
                 <label className="mb-1.5 block text-xs font-medium text-neutral-400">
                   Name
                 </label>
-                <input type="text" value={regName} onChange={(e) => setRegName(e.target.value)}
+                <input type="text" value={regName} onChange={(e) => {
+                    setRegName(e.target.value);
+                    if (selectedReclubUserId != null) setSelectedReclubUserId(null);
+                  }}
                   placeholder="Your Reclub's name"
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-base text-white placeholder:text-neutral-500 focus:border-fuchsia-500 focus:outline-none"
                   autoFocus
                 />
+                {selectedReclubUserId != null && (
+                  <div className="mt-1 flex items-center gap-1">
+                    <svg className="h-4 w-4 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    <span className="text-xs font-semibold text-green-500">Reclub matched</span>
+                  </div>
+                )}
+                {reclubSuggestions.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {reclubSuggestions.map((s) => (
+                      <button
+                        key={s.reclubUserId}
+                        type="button"
+                        onClick={() => {
+                          setRegName(s.name);
+                          setSelectedReclubUserId(s.reclubUserId);
+                        }}
+                        className="flex items-center gap-2 rounded-full border border-neutral-600 bg-neutral-800/60 px-3 py-1.5 transition-colors hover:border-neutral-500 hover:bg-neutral-700"
+                      >
+                        {s.isDefaultAvatar ? (
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-500 text-xs font-bold text-white">
+                            {s.name.split(/\s+/).filter(Boolean).map((w) => w[0]).join("").slice(0, 2).toUpperCase()}
+                          </div>
+                        ) : (
+                          <img src={s.avatarUrl} alt="" className="h-8 w-8 rounded-full object-cover" />
+                        )}
+                        <span className="text-sm font-semibold text-neutral-200">{s.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <div>
                 <p className="mb-1.5 text-xs font-medium text-neutral-400">Gender</p>

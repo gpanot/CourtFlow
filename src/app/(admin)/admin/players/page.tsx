@@ -99,6 +99,7 @@ interface PlayerRecord {
   totalPlayMinutes: number;
   totalWaitMinutes: number;
   waitPlayRatio: number;
+  reclubUserId?: number | null;
   venues: { id: string; name: string }[];
   lastSeen: { date: string; venue: string } | null;
   isActiveToday: boolean;
@@ -931,6 +932,12 @@ export default function PlayersPage() {
               prev.map((p) => (p.id === detailPlayer.id ? { ...p, ...patch } : p))
             );
           }}
+          onReclubUnlinked={() => {
+            setDetailPlayer((prev) => prev ? { ...prev, reclubUserId: null } : prev);
+            setPlayers((prev) =>
+              prev.map((p) => (p.id === detailPlayer.id ? { ...p, reclubUserId: null } : p))
+            );
+          }}
         />
       )}
     </div>
@@ -1227,6 +1234,67 @@ function timelineEntryLabel(entry: CheckInInsights["timeline"][0]): string {
   }
 }
 
+function ReclubLinkSection({
+  playerId,
+  reclubUserId,
+  onUnlinked,
+}: {
+  playerId: string;
+  reclubUserId: number | null;
+  onUnlinked: () => void;
+}) {
+  const [unlinking, setUnlinking] = useState(false);
+
+  if (!reclubUserId) {
+    return (
+      <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
+        <p className="text-xs font-medium text-neutral-400 mb-1">Reclub Roster</p>
+        <p className="text-sm text-neutral-500">Not linked to a Reclub account</p>
+      </div>
+    );
+  }
+
+  const handleUnlink = async () => {
+    if (!confirm("Unlink this player from their Reclub account?")) return;
+    setUnlinking(true);
+    try {
+      await api.delete("/api/reclub/link-player", { courtpayPlayerId: playerId });
+      onUnlinked();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setUnlinking(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-3">
+      <p className="text-xs font-medium text-indigo-300 mb-2">Reclub Roster</p>
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold text-white">Reclub User ID: {reclubUserId}</p>
+          <a
+            href={`https://reclub.vn/vi/users/${reclubUserId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-indigo-400 hover:underline"
+          >
+            View on Reclub
+          </a>
+        </div>
+        <button
+          type="button"
+          onClick={() => void handleUnlink()}
+          disabled={unlinking}
+          className="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs font-semibold text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+        >
+          {unlinking ? "Unlinking..." : "Unlink"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function PlayerDetailPanel({
   player,
   sessions,
@@ -1250,6 +1318,7 @@ function PlayerDetailPanel({
   onDelete,
   deleteBusy,
   onFaceDataChange,
+  onReclubUnlinked,
 }: {
   player: PlayerRecord;
   sessions: PlayerSession[];
@@ -1276,6 +1345,7 @@ function PlayerDetailPanel({
     faceSubjectId: string | null;
     facePhotoPath?: string | null;
   }) => void;
+  onReclubUnlinked: () => void;
 }) {
   const handleDownloadCheckInPhoto = useCallback(async () => {
     const src = player.facePhotoPath;
@@ -1488,6 +1558,8 @@ function PlayerDetailPanel({
             avatarPhotoPath={player.avatarPhotoPath}
             onUpdate={onFaceDataChange}
           />
+
+          <ReclubLinkSection playerId={player.id} reclubUserId={player.reclubUserId ?? null} onUnlinked={onReclubUnlinked} />
 
           {/* Aggregate stats */}
           <div className="grid grid-cols-4 gap-2">

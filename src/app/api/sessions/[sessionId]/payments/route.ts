@@ -55,7 +55,7 @@ export async function GET(
       courtPayPhones.length > 0
         ? await prisma.player.findMany({
             where: { phone: { in: courtPayPhones } },
-            select: { phone: true, facePhotoPath: true, avatarPhotoPath: true },
+            select: { id: true, phone: true, name: true, facePhotoPath: true, avatarPhotoPath: true, reclubUserId: true },
           })
         : [];
     const faceByPhone = new Map(
@@ -63,6 +63,9 @@ export async function GET(
         p.phone,
         p.avatarPhotoPath ?? p.facePhotoPath ?? null,
       ])
+    );
+    const playerByPhone = new Map(
+      linkedPlayers.map((p) => [p.phone, p])
     );
 
     const subscriptionPlayerIds = [
@@ -113,10 +116,23 @@ export async function GET(
         ? subscriptionByPlayer.get(p.checkInPlayerId) ?? null
         : null;
       if (p.checkInPlayerId && !p.playerId && p.checkInPlayer?.phone) {
+        const resolvedPlayer = playerByPhone.get(p.checkInPlayer.phone);
         return {
           ...p,
           facePhotoUrl: faceByPhone.get(p.checkInPlayer.phone) ?? null,
           subscriptionInfo,
+          ...(resolvedPlayer
+            ? {
+                player: {
+                  id: resolvedPlayer.id,
+                  name: resolvedPlayer.name,
+                  phone: resolvedPlayer.phone,
+                  facePhotoPath: resolvedPlayer.facePhotoPath,
+                  reclubUserId: resolvedPlayer.reclubUserId,
+                  skillLevel: null,
+                },
+              }
+            : {}),
         };
       }
       return { ...p, subscriptionInfo };
