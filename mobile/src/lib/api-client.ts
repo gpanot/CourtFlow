@@ -46,6 +46,14 @@ function parseErrorMessage(
     return data.message;
   }
   const trimmed = text.trim();
+  const lower = trimmed.toLowerCase();
+  if (
+    lower.startsWith("<!doctype html") ||
+    lower.startsWith("<html") ||
+    lower.includes("<meta name=\"viewport\"")
+  ) {
+    return "API returned an HTML page instead of JSON. The endpoint may be missing on this server or the API base URL is incorrect.";
+  }
   if (trimmed.length > 0 && trimmed.length < 400) return trimmed;
   if (trimmed.length > 0) return `${trimmed.slice(0, 200)}…`;
   const st = statusText?.trim();

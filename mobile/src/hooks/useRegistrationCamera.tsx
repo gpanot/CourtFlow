@@ -7,7 +7,6 @@ import {
 } from "react";
 import { CameraView } from "expo-camera";
 import { api } from "../lib/api-client";
-import { ENV } from "../config/env";
 
 interface RelativeBoundingBox {
   left: number;
@@ -29,6 +28,8 @@ interface UseRegistrationCameraResult {
   countdown: number | null;
   captureBusy: boolean;
   resetCamera: () => void;
+  startBlurInBackground: (originalBase64: string) => void;
+  getImageForEnrollment: (originalBase64: string | null) => string | null;
 }
 
 export function useRegistrationCamera({
@@ -45,6 +46,8 @@ export function useRegistrationCamera({
   const [captureRetryKey, setCaptureRetryKey] = useState(0);
   const onPhotoCapturedRef = useRef(onPhotoCaptured);
   const onDebugMessageRef = useRef(onDebugMessage);
+  const blurredImageRef = useRef<string | null>(null);
+  const blurInProgressRef = useRef(false);
 
   useEffect(() => {
     onPhotoCapturedRef.current = onPhotoCaptured;
@@ -61,6 +64,8 @@ export function useRegistrationCamera({
   const resetCamera = useCallback(() => {
     cameraReadyRef.current = false;
     captureInFlightRef.current = false;
+    blurredImageRef.current = null;
+    blurInProgressRef.current = false;
     setCountdown(null);
     setCaptureBusy(false);
     setCaptureRetryKey((n) => n + 1);
@@ -70,6 +75,56 @@ export function useRegistrationCamera({
   const onCameraReady = useCallback(() => {
     cameraReadyRef.current = true;
   }, []);
+
+  const blurInBackground = useCallback(
+    async (originalBase64: string): Promise<void> => {
+      if (blurInProgressRef.current) return;
+      blurInProgressRef.current = true;
+      try {
+        const preview = await api.post<{
+          faceDetected?: boolean;
+          boundingBox?: RelativeBoundingBox;
+          processedImageBase64?: string;
+          blurApplied?: boolean;
+          blurRequested?: boolean;
+          blurReason?: string;
+        }>("/api/courtpay/preview-face-presence", {
+          imageBase64: originalBase64,
+          returnBoundingBox: true,
+          blurBackground: true,
+        });
+
+        if (preview.blurApplied && preview.processedImageBase64) {
+          blurredImageRef.current = preview.processedImageBase64;
+        }
+
+        if (__DEV__) {
+          console.log("[CourtPay capture] blur decision", {
+            requestedBlur: true,
+            blurRequestedByApi: preview.blurRequested === true,
+            faceDetected: preview.faceDetected,
+            blurApplied: preview.blurApplied === true,
+            blurReason: preview.blurReason ?? null,
+            hasProcessedImage: typeof preview.processedImageBase64 === "string",
+            originalLength: originalBase64.length,
+            processedLength: preview.processedImageBase64?.length ?? null,
+          });
+        }
+      } catch (err) {
+        if (__DEV__) {
+          console.warn("[CourtPay capture] background blur failed", err);
+        }
+      } finally {
+        blurInProgressRef.current = false;
+      }
+    },
+    []
+  );
+
+  const startBlurInBackground = useCallback((originalBase64: string) => {
+    if (!originalBase64?.trim()) return;
+    void blurInBackground(originalBase64);
+  }, [blurInBackground]);
 
   const captureAndProcess = useCallback(async () => {
     if (!cameraRef.current || !cameraReadyRef.current || captureInFlightRef.current) return;
@@ -85,55 +140,10 @@ export function useRegistrationCamera({
         setDebug("capture=fallback reason=no_photo_data");
         return;
       }
-
-      try {
-        const preview = await api.post<{
-          faceDetected?: boolean;
-          boundingBox?: RelativeBoundingBox;
-          processedImageBase64?: string;
-          blurApplied?: boolean;
-          blurRequested?: boolean;
-          blurReason?: string;
-        }>("/api/courtpay/preview-face-presence", {
-          imageBase64: photo.base64,
-          returnBoundingBox: true,
-          blurBackground: true,
-        });
-
-        if (preview.faceDetected) {
-          const finalImage =
-            preview.blurApplied && preview.processedImageBase64
-              ? preview.processedImageBase64
-              : photo.base64;
-          if (__DEV__) {
-            console.log("[CourtPay capture] blur decision", {
-              apiBaseUrl: ENV.API_BASE_URL,
-              requestedBlur: true,
-              blurRequestedByApi: preview.blurRequested === true,
-              faceDetected: preview.faceDetected,
-              blurApplied: preview.blurApplied === true,
-              blurReason: preview.blurReason ?? null,
-              hasProcessedImage: typeof preview.processedImageBase64 === "string",
-              usedProcessedImage: finalImage !== photo.base64,
-              originalLength: photo.base64.length,
-              processedLength: preview.processedImageBase64?.length ?? null,
-            });
-          }
-          setDebug(
-            `capture=accepted face_detected=yes blur=${preview.blurApplied ? "applied" : "original"}`
-          );
-          onPhotoCapturedRef.current(finalImage);
-        } else {
-          setDebug("capture=rejected reason=no_face_detected");
-          setCaptureRetryKey((n) => n + 1);
-        }
-      } catch (err) {
-        // Do not block flow on preview errors; keep existing behavior.
-        setDebug(
-          `capture=fallback reason=preview_api_failed err=${err instanceof Error ? err.message : "unknown"}`
-        );
-        onPhotoCapturedRef.current(photo.base64);
-      }
+      // Show preview immediately; blur can be started later from the "Looks good" step.
+      blurredImageRef.current = null;
+      onPhotoCapturedRef.current(photo.base64);
+      setDebug("capture=accepted face_detected=unknown blur=deferred");
     } finally {
       captureInFlightRef.current = false;
       setCaptureBusy(false);
@@ -192,5 +202,8 @@ export function useRegistrationCamera({
     countdown,
     captureBusy,
     resetCamera,
+    startBlurInBackground,
+    getImageForEnrollment: (originalBase64: string | null) =>
+      blurredImageRef.current ?? originalBase64,
   };
 }

@@ -4,11 +4,15 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { setPlayerAuthCookieOnResponse } from "@/lib/player-auth-cookie";
 import { logPlayerAppAuth } from "@/lib/player-app-auth-log";
+import { isWalkInSyntheticPhone } from "@/lib/walk-in-phone";
 
 export async function POST(request: NextRequest) {
   try {
     const { phone, code } = await parseBody<{ phone: string; code: string }>(request);
     if (!phone || !code) return error("Phone and code are required");
+    if (isWalkInSyntheticPhone(phone)) {
+      return error("Walk-in synthetic phone numbers cannot verify OTP", 400);
+    }
 
     const result = await verifyOtp(phone, code);
     if (!result.valid) return error(result.error || "Invalid code", 401);

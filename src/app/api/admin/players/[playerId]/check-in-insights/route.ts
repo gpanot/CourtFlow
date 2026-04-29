@@ -21,6 +21,7 @@ export async function GET(
       where: { id: playerId },
       select: {
         id: true,
+        phone: true,
         faceSubjectId: true,
         facePhotoPath: true,
         avatarPhotoPath: true,
@@ -38,7 +39,7 @@ export async function GET(
     const [
       faceRegisteredAudit,
       createdNewPlayerAttempt,
-      kioskFaceCount,
+      courtPayPlayers,
       authCounts,
       kioskAttempts,
       authLogs,
@@ -56,8 +57,9 @@ export async function GET(
         orderBy: { createdAt: "asc" },
         select: { createdAt: true },
       }),
-      prisma.faceAttempt.count({
-        where: { matchedPlayerId: playerId, resultType: "matched" },
+      prisma.checkInPlayer.findMany({
+        where: { phone: player.phone },
+        select: { id: true, venueId: true, venue: { select: { name: true } } },
       }),
       prisma.playerAppAuthLog.groupBy({
         by: ["method"],
@@ -84,6 +86,26 @@ export async function GET(
       }),
     ]);
 
+    const courtPayPlayerIds = courtPayPlayers.map((p) => p.id);
+    const [courtPayCheckInCount, courtPayCheckIns] =
+      courtPayPlayerIds.length > 0
+        ? await Promise.all([
+            prisma.checkInRecord.count({
+              where: { playerId: { in: courtPayPlayerIds } },
+            }),
+            prisma.checkInRecord.findMany({
+              where: { playerId: { in: courtPayPlayerIds } },
+              orderBy: { checkedInAt: "desc" },
+              take: 60,
+              select: {
+                checkedInAt: true,
+                source: true,
+                player: { select: { venue: { select: { name: true } } } },
+              },
+            }),
+          ])
+        : [0, []];
+
     const regFromAudit = faceRegisteredAudit?.createdAt ?? null;
     const regFromAttempt = createdNewPlayerAttempt?.createdAt ?? null;
     let faceRegisteredAt: string | null = null;
@@ -100,8 +122,31 @@ export async function GET(
       authCounts.map((r) => [r.method, r._count._all])
     ) as Record<string, number>;
 
-    type TimelineKind = "kiosk_face" | "app_face" | "wristband" | "phone_otp";
+    type TimelineKind =
+      | "courtpay_checkin"
+      | "kiosk_face"
+      | "app_face"
+      | "wristband"
+      | "phone_otp";
     const timeline: { at: string; kind: TimelineKind; detail?: string }[] = [];
+
+    for (const c of courtPayCheckIns) {
+      const sourceLabel =
+        c.source === "subscription"
+          ? "Subscription"
+          : c.source === "vietqr"
+          ? "VietQR"
+          : c.source === "cash"
+          ? "Cash"
+          : c.source;
+      timeline.push({
+        at: c.checkedInAt.toISOString(),
+        kind: "courtpay_checkin",
+        detail: c.player.venue.name
+          ? `${c.player.venue.name} · ${sourceLabel}`
+          : sourceLabel,
+      });
+    }
 
     for (const a of kioskAttempts) {
       const q = a.queueNumberAssigned;
@@ -140,7 +185,7 @@ export async function GET(
         registrationEventLoggedFaceEnrolled: registrationLoggedFaceEnrolled,
       },
       counts: {
-        kioskFaceCheckIns: kioskFaceCount,
+        courtpayCheckIns: courtPayCheckInCount,
         appFaceSignIns: countByMethod.face_pwa ?? 0,
         wristbandSignIns: countByMethod.wristband ?? 0,
         phoneOtpSignIns: countByMethod.phone_otp ?? 0,

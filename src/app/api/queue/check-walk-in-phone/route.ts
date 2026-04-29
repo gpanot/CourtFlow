@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
+import { isWalkInSyntheticPhone } from "@/lib/walk-in-phone";
 
 /**
  * GET ?phone=...
@@ -12,6 +13,9 @@ export async function GET(request: NextRequest) {
   try {
     requireStaff(request.headers);
     const raw = request.nextUrl.searchParams.get("phone")?.trim() ?? "";
+    if (isWalkInSyntheticPhone(raw)) {
+      return json({ exists: false });
+    }
     const digitsOnly = raw.replace(/\D/g, "");
     if (digitsOnly.length < 8) {
       return json({ exists: false });
@@ -21,6 +25,7 @@ export async function GET(request: NextRequest) {
       SELECT id, name
       FROM players
       WHERE phone NOT LIKE 'walkin:%'
+        AND phone NOT LIKE '%+'
         AND regexp_replace(phone, '\\D', '', 'g') = ${digitsOnly}
       LIMIT 1
     `;

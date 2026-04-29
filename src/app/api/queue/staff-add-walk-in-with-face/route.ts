@@ -193,6 +193,7 @@ export async function POST(request: NextRequest) {
           phone,
           gender,
           skillLevel,
+          isWalkIn: true,
           avatar: "🏓",
           rankingScore: initialRankingScoreForSkillLevel(skillLevel as SkillLevel),
         },

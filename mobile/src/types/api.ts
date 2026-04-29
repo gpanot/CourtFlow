@@ -111,6 +111,8 @@ export interface PendingPayment {
   confirmedBy: string | null;
   cancelReason: string | null;
   cancelledAt: string | null;
+  groupPaidByPaymentId?: string | null;
+  groupPaidByName?: string | null;
   /** Linked Player — has face photo; prefer for display when present (matches staff PWA). */
   player?: PendingPaymentPlayer | null;
   checkInPlayer?: PendingPaymentCheckInPlayer | null;

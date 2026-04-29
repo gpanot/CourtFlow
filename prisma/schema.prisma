@@ -163,6 +163,7 @@ model Player {
   gamePreference        GamePreference @default(no_preference) @map("game_preference")
   notificationsEnabled  Boolean        @default(false) @map("notifications_enabled")
   faceSubjectId         String?        @map("face_subject_id")
+  isWalkIn              Boolean        @default(false) @map("is_walk_in")
   /// Public URL path served from /uploads (e.g. /uploads/players/{id}.jpg) — set on first face check-in enrollment
   facePhotoPath         String?        @map("face_photo_path")
   /// Player-uploaded avatar photo, takes priority over facePhotoPath for display
@@ -657,6 +658,10 @@ model PendingPayment {
   expiresAt       DateTime  @map("expires_at")
   confirmedAt     DateTime? @map("confirmed_at")
   confirmedBy     String?   @map("confirmed_by")
+  /// Optional: this payment is covered by another payer's grouped payment.
+  groupPaidByPaymentId String? @map("group_paid_by_payment_id")
+  /// Snapshot of payer display name for stable UI label.
+  groupPaidByName      String? @map("group_paid_by_name")
   cancelReason    String?   @map("cancel_reason") // "refunded" | "mistake" — set when a confirmed payment is voided
   cancelledAt     DateTime? @map("cancelled_at")
 

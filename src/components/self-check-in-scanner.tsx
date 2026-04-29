@@ -997,6 +997,17 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
       {/* ── REGISTRATION: FORM ──────────────────── */}
       {step === "reg_form" && (
         <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4 pb-8 sm:items-center sm:py-6">
+          <div className="mb-3 flex w-full max-w-md items-center justify-between">
+            <button
+              type="button"
+              onClick={() => goTo("reg_face_preview")}
+              className="inline-flex items-center gap-2 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm font-medium text-neutral-300 transition-colors hover:border-neutral-500 hover:bg-neutral-800 hover:text-white"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              {t("tablet.checkInScanner.regRetake")}
+            </button>
+            <TvTabletLanguageToggle />
+          </div>
           <div className="w-full max-w-md space-y-4 rounded-xl border border-neutral-800 bg-neutral-900/40 p-4">
             <div className="flex gap-2">
               <div className="flex-1">

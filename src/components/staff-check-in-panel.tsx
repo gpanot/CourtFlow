@@ -90,6 +90,8 @@ interface PendingPaymentData {
   gender: string;
 }
 
+type NoFaceStep = 1 | 2 | 3;
+
 function courtPayQrFrameClass(skillLevel: string | null | undefined): string {
   const lvl = parseCourtPaySkillLevel(skillLevel ?? undefined);
   return lvl ? COURTPAY_LEVEL_QR_FRAME[lvl] : "";
@@ -183,6 +185,12 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
   const [pendingPayment, setPendingPayment] = useState<PendingPaymentData | null>(null);
   const [paymentMode, setPaymentMode] = useState<"vietqr" | "cash">("vietqr");
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [noFaceOpen, setNoFaceOpen] = useState(false);
+  const [noFaceStep, setNoFaceStep] = useState<NoFaceStep>(1);
+  const [noFaceName, setNoFaceName] = useState("");
+  const [noFaceGender, setNoFaceGender] = useState<"" | "male" | "female">("");
+  const [noFaceSkill, setNoFaceSkill] = useState<SkillLevelType | "">("");
+  const [noFaceLoading, setNoFaceLoading] = useState(false);
 
   const clearPaymentTimer = useCallback(() => {
     if (paymentTimerRef.current) {
@@ -202,6 +210,12 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
   /** After 8+ digits, check DB for an existing player on this number (digits-only match). */
   useEffect(() => {
     const trimmed = phone.trim();
+    if (trimmed.endsWith("+")) {
+      phoneCheckAbortRef.current?.abort();
+      phoneCheckAbortRef.current = null;
+      setPhoneDuplicate(null);
+      return;
+    }
     const digits = trimmed.replace(/\D/g, "");
     if (digits.length < 8) {
       phoneCheckAbortRef.current?.abort();
@@ -387,6 +401,88 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
 
   const submit = async () => {
     setErr(t("staff.checkIn.captureFace"));
+  };
+
+  const openNoFaceFlow = () => {
+    setNoFaceOpen(true);
+    setNoFaceStep(1);
+    setNoFaceName("");
+    setNoFaceGender("");
+    setNoFaceSkill("");
+    setErr("");
+  };
+
+  const closeNoFaceFlow = () => {
+    if (noFaceLoading) return;
+    setNoFaceOpen(false);
+    setNoFaceStep(1);
+    setNoFaceName("");
+    setNoFaceGender("");
+    setNoFaceSkill("");
+  };
+
+  const submitNoFaceWalkIn = async () => {
+    setErr("");
+    const trimmed = noFaceName.trim();
+    if (!trimmed) {
+      setErr(t("staff.checkIn.noFaceNameRequired"));
+      return;
+    }
+    if (!noFaceGender || !noFaceSkill) {
+      setErr(t("staff.checkIn.requiredFields"));
+      return;
+    }
+    if (queueNamesLower.includes(trimmed.toLowerCase())) {
+      setErr(duplicateNameMsg);
+      return;
+    }
+
+    setNoFaceLoading(true);
+    try {
+      const res = await api.post<{
+        pendingPaymentId: string | null;
+        amount: number;
+        vietQR: string | null;
+        playerName: string;
+      }>("/api/courtpay/register-walk-in", {
+        venueCode: venueId,
+        name: trimmed,
+        gender: noFaceGender,
+        skillLevel: noFaceSkill,
+        headCount: 1,
+      });
+
+      setNoFaceOpen(false);
+      setNoFaceStep(1);
+      setNoFaceName("");
+      setNoFaceGender("");
+      setNoFaceSkill("");
+
+      if (res.pendingPaymentId) {
+        setPendingPayment({
+          pendingPaymentId: res.pendingPaymentId,
+          amount: res.amount,
+          vietQR: res.vietQR,
+          playerName: res.playerName,
+          skillLevel: noFaceSkill,
+          gender: noFaceGender,
+        });
+        setPaymentMode("vietqr");
+        clearPaymentTimer();
+        paymentTimerRef.current = setTimeout(() => {
+          setPendingPayment(null);
+          setPaymentMode("vietqr");
+          setErr(t("tablet.checkInScanner.payTimeoutHint"));
+        }, PAYMENT_TIMEOUT_MS);
+      } else {
+        showFlash(t("staff.checkIn.addedFlash", { name: res.playerName || trimmed }));
+        onAdded();
+      }
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setNoFaceLoading(false);
+    }
   };
 
   const mapCameraError = (errorMessage: string) => {
@@ -1124,29 +1220,39 @@ ${test.error ? `Error: ${test.error}` : ''}
         )}
 
         {!capturedFace && (
-          <button
-            type="button"
-            onClick={submit}
-            disabled={
-              loading ||
-              testSeedLoading ||
-              !name.trim() ||
-              !gender ||
-              !skill ||
-              showDuplicateWarning ||
-              showPhoneDuplicateWarning
-            }
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50 max-sm:rounded-lg max-sm:py-2.5 max-sm:text-base"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="h-5 w-5 animate-spin max-sm:h-4 max-sm:w-4" />
-                {t("staff.checkIn.adding")}
-              </>
-            ) : (
-              t("staff.checkIn.addToQueue")
-            )}
-          </button>
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={submit}
+              disabled={
+                loading ||
+                testSeedLoading ||
+                !name.trim() ||
+                !gender ||
+                !skill ||
+                showDuplicateWarning ||
+                showPhoneDuplicateWarning
+              }
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50 max-sm:rounded-lg max-sm:py-2.5 max-sm:text-base"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin max-sm:h-4 max-sm:w-4" />
+                  {t("staff.checkIn.adding")}
+                </>
+              ) : (
+                t("staff.checkIn.addToQueue")
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={openNoFaceFlow}
+              disabled={loading || testSeedLoading || noFaceLoading}
+              className="w-full rounded-xl border border-neutral-700 bg-neutral-950 py-3 text-sm font-medium text-neutral-300 transition-colors hover:bg-neutral-800 disabled:opacity-50 max-sm:rounded-lg"
+            >
+              {t("staff.checkIn.noFaceCheckIn")}
+            </button>
+          </div>
         )}
       </div>
 
@@ -1279,6 +1385,150 @@ ${test.error ? `Error: ${test.error}` : ''}
                   </button>
                 </div>
               </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {noFaceOpen && (
+        <div
+          className="fixed inset-0 z-[95] flex items-center justify-center bg-black/70 p-4"
+          onClick={closeNoFaceFlow}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border border-neutral-700 bg-neutral-900 p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-center text-lg font-bold text-white">
+              {t("staff.checkIn.noFaceTitle")}
+            </h3>
+            <p className="mt-1 text-center text-xs text-neutral-400">
+              {t("staff.checkIn.noFaceHint")}
+            </p>
+
+            {noFaceStep === 1 && (
+              <div className="mt-4 space-y-3">
+                <p className="text-xs font-medium text-neutral-400">
+                  {t("staff.checkIn.noFaceStepName")}
+                </p>
+                <input
+                  type="text"
+                  value={noFaceName}
+                  onChange={(e) => setNoFaceName(e.target.value)}
+                  placeholder={t("staff.checkIn.playerNamePlaceholder")}
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-green-500 focus:outline-none"
+                  autoFocus
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={closeNoFaceFlow}
+                    className="flex-1 rounded-lg bg-neutral-800 py-2 text-sm text-neutral-300 hover:bg-neutral-700"
+                  >
+                    {t("staff.dashboard.cancel")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNoFaceStep(2)}
+                    disabled={!noFaceName.trim()}
+                    className="flex-1 rounded-lg bg-green-600 py-2 text-sm font-semibold text-white hover:bg-green-500 disabled:opacity-50"
+                  >
+                    {t("staff.checkIn.noFaceNext")}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {noFaceStep === 2 && (
+              <div className="mt-4 space-y-3">
+                <p className="text-xs font-medium text-neutral-400">
+                  {t("staff.checkIn.noFaceStepGender")}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {GENDERS.map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setNoFaceGender(g)}
+                      className={cn(
+                        "rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
+                        noFaceGender === g
+                          ? "border-green-500 bg-green-600/20 text-green-300"
+                          : "border-neutral-700 bg-neutral-950 text-neutral-300 hover:bg-neutral-800"
+                      )}
+                    >
+                      {genderLabel(g)}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNoFaceStep(1)}
+                    className="flex-1 rounded-lg bg-neutral-800 py-2 text-sm text-neutral-300 hover:bg-neutral-700"
+                  >
+                    {t("staff.checkIn.noFaceBack")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNoFaceStep(3)}
+                    disabled={!noFaceGender}
+                    className="flex-1 rounded-lg bg-green-600 py-2 text-sm font-semibold text-white hover:bg-green-500 disabled:opacity-50"
+                  >
+                    {t("staff.checkIn.noFaceNext")}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {noFaceStep === 3 && (
+              <div className="mt-4 space-y-3">
+                <p className="text-xs font-medium text-neutral-400">
+                  {t("staff.checkIn.noFaceStepLevel")}
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {SKILL_LEVELS.filter((level) => level !== "pro").map((level) => (
+                    <button
+                      key={level}
+                      type="button"
+                      onClick={() => setNoFaceSkill(level)}
+                      className={cn(
+                        "rounded-lg border px-2 py-2 text-xs font-medium transition-colors",
+                        noFaceSkill === level
+                          ? "border-green-500 bg-green-600/20 text-green-300"
+                          : "border-neutral-700 bg-neutral-950 text-neutral-300 hover:bg-neutral-800"
+                      )}
+                    >
+                      {skillLabel(level)}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNoFaceStep(2)}
+                    disabled={noFaceLoading}
+                    className="flex-1 rounded-lg bg-neutral-800 py-2 text-sm text-neutral-300 hover:bg-neutral-700 disabled:opacity-50"
+                  >
+                    {t("staff.checkIn.noFaceBack")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void submitNoFaceWalkIn()}
+                    disabled={!noFaceSkill || noFaceLoading}
+                    className="flex-1 rounded-lg bg-green-600 py-2 text-sm font-semibold text-white hover:bg-green-500 disabled:opacity-50"
+                  >
+                    {noFaceLoading ? (
+                      <span className="inline-flex items-center justify-center gap-1">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        {t("staff.checkIn.adding")}
+                      </span>
+                    ) : (
+                      t("staff.checkIn.noFaceProceedPayment")
+                    )}
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </div>

@@ -231,6 +231,8 @@ export function CourtPayCheckInScreen({
     countdown: regFaceCountdown,
     captureBusy: regCaptureBusy,
     resetCamera: resetRegistrationCamera,
+    startBlurInBackground,
+    getImageForEnrollment,
   } = useRegistrationCamera({
     active: step === "reg_face_capture",
     permissionGranted: !!permission?.granted,
@@ -638,6 +640,8 @@ export function CourtPayCheckInScreen({
     if (!faceBase64) return;
     setRegCheckingFace(true);
     setError("");
+    // Match web flow: start blur in background when user confirms "Looks good".
+    startBlurInBackground(faceBase64);
     try {
       const check = await api.post<{ existing: boolean; playerName?: string }>(
         "/api/courtpay/check-face",
@@ -848,6 +852,15 @@ export function CourtPayCheckInScreen({
     if (!venueId || !faceBase64 || !name.trim() || !gender || !skillLevel) {
       return;
     }
+    const imageToEnroll = getImageForEnrollment(faceBase64);
+    if (!imageToEnroll) return;
+    if (__DEV__) {
+      console.log("[CourtPay register] image selected", {
+        usingBlurredImage: imageToEnroll !== faceBase64,
+        originalLength: faceBase64.length,
+        selectedLength: imageToEnroll.length,
+      });
+    }
     setLoading(true);
     setError("");
     try {
@@ -868,7 +881,7 @@ export function CourtPayCheckInScreen({
         phone: phoneInput.trim(),
         gender,
         skillLevel,
-        imageBase64: faceBase64,
+        imageBase64: imageToEnroll,
         packageId,
         headCount: packageId ? undefined : sessionPartyCount,
       });

@@ -4,6 +4,7 @@ import {
   Image,
   Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -14,6 +15,7 @@ import {
 } from "react-native";
 import { CameraView, type CameraType, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api, ApiRequestError } from "../../lib/api-client";
 import { useAuthStore } from "../../stores/auth-store";
 import { useSocket } from "../../hooks/useSocket";
@@ -75,6 +77,7 @@ export function CheckInTabScreen() {
   const theme = useAppColors();
   const styles = useMemo(() => createCheckInStyles(theme), [theme]);
   const { t } = useTabletKioskLocale();
+  const insets = useSafeAreaInsets();
 
   const [mode, setMode] = useState<Mode>("new");
   const [step, setStep] = useState<Step>("form");
@@ -102,6 +105,14 @@ export function CheckInTabScreen() {
   const [existingCaptureBusy, setExistingCaptureBusy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [noFaceOpen, setNoFaceOpen] = useState(false);
+  const [noFaceName, setNoFaceName] = useState("");
+  const [noFaceGender, setNoFaceGender] = useState<"male" | "female" | null>(null);
+  const [noFaceSkillLevel, setNoFaceSkillLevel] = useState<
+    "beginner" | "intermediate" | "advanced" | null
+  >(null);
+  const [noFaceSubmitting, setNoFaceSubmitting] = useState(false);
+  const noFaceNameInputRef = useRef<TextInput | null>(null);
 
   const resetForm = useCallback(() => {
     setStep("form");
@@ -121,6 +132,11 @@ export function CheckInTabScreen() {
     setExistingCameraReady(false);
     setExistingCameraStarted(false);
     setExistingCaptureBusy(false);
+    setNoFaceOpen(false);
+    setNoFaceName("");
+    setNoFaceGender(null);
+    setNoFaceSkillLevel(null);
+    setNoFaceSubmitting(false);
     setLoading(false);
     setError("");
   }, []);
@@ -140,8 +156,20 @@ export function CheckInTabScreen() {
     },
   });
 
+  useEffect(() => {
+    if (!noFaceOpen) return;
+    const timer = setTimeout(() => {
+      noFaceNameInputRef.current?.focus();
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [noFaceOpen]);
+
   const handleLookupByPhone = async () => {
     if (!phone.trim()) return;
+    if (phone.trim().endsWith("+")) {
+      setError("Walk-in synthetic numbers cannot be looked up by phone.");
+      return;
+    }
     setLoading(true);
     setError("");
     console.log("[CheckIn] lookup phone:", phone.trim(), "venueId:", venueId);
@@ -503,6 +531,74 @@ export function CheckInTabScreen() {
       setStep("error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openNoFaceFlow = () => {
+    setNoFaceOpen(true);
+    setNoFaceName("");
+    setNoFaceGender(null);
+    setNoFaceSkillLevel(null);
+    setError("");
+  };
+
+  const closeNoFaceFlow = () => {
+    if (noFaceSubmitting) return;
+    setNoFaceOpen(false);
+    setNoFaceName("");
+    setNoFaceGender(null);
+    setNoFaceSkillLevel(null);
+  };
+
+  const handleNoFaceProceedToPayment = async () => {
+    if (!venueId || !noFaceName.trim() || !noFaceGender || !noFaceSkillLevel) {
+      setError(t("checkInNoFaceNameRequired"));
+      return;
+    }
+    setNoFaceSubmitting(true);
+    setError("");
+    try {
+      const data = await api.post<{
+        playerId?: string;
+        pendingPaymentId?: string;
+        amount?: number;
+        vietQR?: string | null;
+        paymentRef?: string;
+        playerName?: string | null;
+        playerPhone?: string | null;
+        skillLevel?: string | null;
+        partyCount?: number;
+        checkedIn?: boolean;
+        free?: boolean;
+      }>("/api/courtpay/register-walk-in", {
+        venueCode: venueId,
+        name: noFaceName.trim(),
+        gender: noFaceGender,
+        skillLevel: noFaceSkillLevel,
+        headCount: sessionPartyCount,
+      });
+
+      if (data.checkedIn || data.free) {
+        setNoFaceOpen(false);
+        setStep("success");
+        return;
+      }
+
+      const pid = data.playerId?.trim();
+      const payment = pid ? toPendingPayment(data, pid) : null;
+      if (payment) {
+        setSessionPartyCount(payment.partyCount);
+        setPendingPayment(payment);
+        setNoFaceOpen(false);
+        setStep("awaiting_payment");
+      } else {
+        setNoFaceOpen(false);
+        setStep("success");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Walk-in registration failed");
+    } finally {
+      setNoFaceSubmitting(false);
     }
   };
 
@@ -876,6 +972,14 @@ export function CheckInTabScreen() {
               <Text style={styles.primaryBtnText}>{t("checkInRegisterBtn")}</Text>
             )}
           </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.ghostBtn, (loading || noFaceSubmitting) && styles.disabledBtn]}
+            onPress={openNoFaceFlow}
+            disabled={loading || noFaceSubmitting}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.ghostBtnText}>{t("checkInNoFaceBtn")}</Text>
+          </TouchableOpacity>
         </>
       )}
 
@@ -946,25 +1050,151 @@ export function CheckInTabScreen() {
   );
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 96 : 0}
-    >
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={[
-          styles.scrollContent,
-          Platform.OS === "android" && styles.scrollContentAndroidKb,
-        ]}
-        keyboardShouldPersistTaps="handled"
+    <>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 96 : 0}
       >
-        {step === "form" ? renderForm() : null}
-        {step === "awaiting_payment" ? renderAwaitingPayment() : null}
-        {step === "success" ? renderSuccess() : null}
-        {step === "error" ? renderError() : null}
-      </ScrollView>
-    </KeyboardAvoidingView>
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={[
+            styles.scrollContent,
+            Platform.OS === "android" && styles.scrollContentAndroidKb,
+          ]}
+          keyboardShouldPersistTaps="handled"
+        >
+          {step === "form" ? renderForm() : null}
+          {step === "awaiting_payment" ? renderAwaitingPayment() : null}
+          {step === "success" ? renderSuccess() : null}
+          {step === "error" ? renderError() : null}
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      <Modal
+        visible={noFaceOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={closeNoFaceFlow}
+      >
+        <KeyboardAvoidingView
+          style={styles.noFaceModalOverlay}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            activeOpacity={1}
+            onPress={closeNoFaceFlow}
+          />
+          <View style={styles.noFaceModalCard}>
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ gap: 12, paddingBottom: insets.bottom + 24 }}
+            >
+              <Text style={styles.noFaceModalTitle}>{t("checkInNoFaceTitle")}</Text>
+              <Text style={styles.noFaceModalHint}>{t("checkInNoFaceHint")}</Text>
+
+              <Text style={styles.noFaceStepLabel}>{t("checkInNoFaceStepName")}</Text>
+              <TextInput
+                ref={noFaceNameInputRef}
+                style={styles.inputFull}
+                placeholder={t("checkInPlayerName")}
+                placeholderTextColor={theme.dimmed}
+                value={noFaceName}
+                onChangeText={setNoFaceName}
+                autoCapitalize="words"
+                autoFocus
+                returnKeyType="done"
+              />
+
+              <Text style={styles.noFaceStepLabel}>{t("checkInNoFaceStepGender")}</Text>
+              <View style={styles.row}>
+                <TouchableOpacity
+                  style={[
+                    styles.choiceBtn,
+                    noFaceGender === "male" && styles.choiceBtnActive,
+                  ]}
+                  onPress={() => setNoFaceGender("male")}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.choiceBtnText}>{t("regMale")}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.choiceBtn,
+                    noFaceGender === "female" && styles.choiceBtnActive,
+                  ]}
+                  onPress={() => setNoFaceGender("female")}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.choiceBtnText}>{t("regFemale")}</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.noFaceStepLabel}>{t("checkInNoFaceStepLevel")}</Text>
+              <View style={styles.row}>
+                {(["beginner", "intermediate", "advanced"] as const).map((lvl) => (
+                  <TouchableOpacity
+                    key={lvl}
+                    style={[
+                      styles.choiceBtn,
+                      noFaceSkillLevel === lvl && styles.choiceBtnActive,
+                    ]}
+                    onPress={() => setNoFaceSkillLevel(lvl)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.choiceBtnText}>
+                      {lvl === "beginner"
+                        ? t("regBeginner")
+                        : lvl === "intermediate"
+                          ? t("regIntermediate")
+                          : t("regAdvanced")}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <View style={styles.noFaceBtnRow}>
+                <TouchableOpacity
+                  style={[styles.ghostBtn, styles.noFaceBtnFlex]}
+                  onPress={closeNoFaceFlow}
+                  disabled={noFaceSubmitting}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.ghostBtnText}>{t("checkInNoFaceBack")}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.primaryBtn,
+                    styles.noFaceBtnFlex,
+                    (!noFaceName.trim() ||
+                      !noFaceGender ||
+                      !noFaceSkillLevel ||
+                      noFaceSubmitting) &&
+                      styles.disabledBtn,
+                  ]}
+                  onPress={() => void handleNoFaceProceedToPayment()}
+                  disabled={
+                    !noFaceName.trim() ||
+                    !noFaceGender ||
+                    !noFaceSkillLevel ||
+                    noFaceSubmitting
+                  }
+                  activeOpacity={0.7}
+                >
+                  {noFaceSubmitting ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.primaryBtnText}>{t("checkInNoFaceProceed")}</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </>
   );
 }
 
@@ -1008,6 +1238,16 @@ function createCheckInStyles(t: AppColors) {
     existingIconBtn: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center", backgroundColor: "#262626" },
     primaryBtn: { alignItems: "center", justifyContent: "center", backgroundColor: t.blue600, height: 44, borderRadius: 10 },
     primaryBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+    ghostBtn: {
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: "transparent",
+      height: 42,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: t.border,
+    },
+    ghostBtnText: { color: t.textSecondary, fontSize: 14, fontWeight: "600" },
     disabledBtn: { opacity: 0.5 },
     outlineBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 10, borderWidth: 1, borderColor: t.blue500, height: 42 },
     outlineBtnText: { color: t.blue500, fontSize: 14, fontWeight: "600" },
@@ -1038,5 +1278,24 @@ function createCheckInStyles(t: AppColors) {
     errorCircle: { width: 88, height: 88, borderRadius: 44, backgroundColor: "rgba(220,38,38,0.13)", justifyContent: "center", alignItems: "center" },
     resultTitle: { fontSize: 22, fontWeight: "700", color: t.text, textAlign: "center" },
     errorText: { color: t.red400, textAlign: "center", fontSize: 13 },
+    noFaceModalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.6)",
+    },
+    noFaceModalCard: {
+      borderTopLeftRadius: 18,
+      borderTopRightRadius: 18,
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.bg,
+      padding: 16,
+      marginTop: "auto",
+      maxHeight: "85%",
+    },
+    noFaceModalTitle: { color: t.text, fontSize: 18, fontWeight: "700", textAlign: "center" },
+    noFaceModalHint: { color: t.muted, fontSize: 12, textAlign: "center" },
+    noFaceStepLabel: { color: t.textSecondary, fontSize: 12, fontWeight: "700" },
+    noFaceBtnRow: { flexDirection: "row", gap: 8 },
+    noFaceBtnFlex: { flex: 1 },
   });
 }

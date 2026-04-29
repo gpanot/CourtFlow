@@ -9,6 +9,7 @@ import {
 import { activateSubscription } from "@/modules/courtpay/lib/subscription";
 import { faceRecognitionService } from "@/lib/face-recognition";
 import { persistPlayerCheckInFacePhoto } from "@/lib/persist-player-check-in-photo";
+import { COLLECTION_ID } from "@/lib/rekognition-config";
 
 export async function POST(req: Request) {
   try {
@@ -104,7 +105,6 @@ export async function POST(req: Request) {
     }
 
     // If face image provided, also create/link a Player record for face recognition
-    let corePlayerId: string | null = null;
     if (imageBase64?.trim()) {
       const faceCheck = await faceRecognitionService.recognizeFace(imageBase64);
       if (faceCheck.resultType === "matched" && faceCheck.playerId) {
@@ -121,8 +121,12 @@ export async function POST(req: Request) {
         : null;
 
       if (existingByPhone) {
-        corePlayerId = existingByPhone.id;
         if (!existingByPhone.faceSubjectId) {
+          console.log("[courtpay/register] Enrolling face in collection", {
+            collectionId: COLLECTION_ID,
+            playerId: existingByPhone.id,
+            source: "existing_player_by_phone",
+          });
           const enrollExisting = await faceRecognitionService.enrollFace(
             imageBase64,
             existingByPhone.id
@@ -153,8 +157,11 @@ export async function POST(req: Request) {
             skillLevel: skillVal,
           },
         });
-        corePlayerId = corePlayer.id;
-
+        console.log("[courtpay/register] Enrolling face in collection", {
+          collectionId: COLLECTION_ID,
+          playerId: corePlayer.id,
+          source: "new_core_player",
+        });
         const enrollment = await faceRecognitionService.enrollFace(imageBase64, corePlayer.id);
         if (!enrollment.success) {
           await prisma.player.delete({ where: { id: corePlayer.id } });

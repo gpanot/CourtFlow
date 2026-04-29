@@ -21,7 +21,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import type { MaterialTopTabNavigationProp } from "@react-navigation/material-top-tabs";
-import { api } from "../../lib/api-client";
+import { api, ApiRequestError } from "../../lib/api-client";
 import { useAuthStore } from "../../stores/auth-store";
 import { useSocket } from "../../hooks/useSocket";
 import { useAppColors } from "../../theme/use-app-colors";
@@ -166,6 +166,15 @@ function createStyles(t: AppColors) {
       borderColor: t.border,
       gap: 8,
     },
+    paidCardCompact: {
+      backgroundColor: t.card,
+      borderRadius: 12,
+      paddingHorizontal: 10,
+      paddingVertical: 9,
+      borderWidth: 1,
+      borderColor: t.border,
+      gap: 6,
+    },
     thumbRingSm: {
       width: 64,
       height: 64,
@@ -218,6 +227,38 @@ function createStyles(t: AppColors) {
     waitLine: { fontSize: 12, color: t.subtle },
     waitUrgent: { color: t.amber400 },
     amountRight: { fontSize: 15, fontWeight: "700", color: t.text },
+    amountInline: { fontSize: 13, fontWeight: "700", color: t.text },
+    paidRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
+    paidMetaCol: { flex: 1, minWidth: 0, gap: 4 },
+    paidTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 8 },
+    paidAvatarRing: {
+      width: 50,
+      height: 50,
+      borderRadius: 25,
+      justifyContent: "center",
+      alignItems: "center",
+      alignSelf: "flex-start",
+    },
+    paidAvatarRingDefault: { borderWidth: 1, borderColor: t.border },
+    paidAvatarTouch: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      overflow: "hidden",
+      backgroundColor: t.bg,
+    },
+    paidAvatarImg: { width: 44, height: 44 },
+    paidExpandedPreviewWrap: {
+      alignSelf: "stretch",
+      borderRadius: 12,
+      overflow: "hidden",
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.bg,
+      marginBottom: 4,
+    },
+    paidExpandedPreviewImg: { width: "100%", height: 180 },
+    dateLine: { fontSize: 11, color: t.subtle },
     topRow: { flexDirection: "row", justifyContent: "space-between", gap: 10 },
     cardActions: { flexDirection: "row", gap: 8, marginTop: 4 },
     confirmBtn: {
@@ -259,6 +300,12 @@ function createStyles(t: AppColors) {
       marginTop: 4,
     },
     subLeftLine: { fontSize: 12, color: t.green400, marginTop: 2, fontWeight: "600" },
+    paidByLine: {
+      fontSize: 13,
+      color: t.purple400,
+      fontWeight: "700",
+      marginTop: 4,
+    },
     dotsBtn: {
       padding: 4,
       borderRadius: 8,
@@ -289,6 +336,7 @@ function createStyles(t: AppColors) {
       paddingVertical: 10,
     },
     menuItemText: { fontSize: 14, fontWeight: "600", color: t.red400 },
+    menuItemTextNeutral: { fontSize: 14, fontWeight: "600", color: t.text },
     cancelModalOverlay: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.55)",
@@ -352,6 +400,43 @@ function createStyles(t: AppColors) {
       alignItems: "center",
     },
     cancelModalDismissText: { fontSize: 14, color: t.muted },
+    groupModalOverlay: {
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.55)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    groupModalCard: {
+      backgroundColor: t.card,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: t.border,
+      padding: 16,
+      width: "90%",
+      maxWidth: 360,
+      maxHeight: "75%",
+      gap: 8,
+    },
+    groupModalTitle: {
+      fontSize: 17,
+      fontWeight: "700",
+      color: t.text,
+      textAlign: "center",
+      marginBottom: 8,
+    },
+    groupOptionBtn: {
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.bg,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    groupOptionName: { fontSize: 14, fontWeight: "700", color: t.text },
+    groupOptionHint: { fontSize: 12, color: t.muted, marginTop: 2 },
+    groupOptionCurrent: { borderColor: t.blue500, backgroundColor: "rgba(37,99,235,0.12)" },
+    groupModalDismiss: { alignItems: "center", paddingVertical: 10 },
+    groupModalDismissText: { fontSize: 14, color: t.muted },
     cancelledTag: {
       paddingHorizontal: 6,
       paddingVertical: 2,
@@ -398,6 +483,8 @@ export function PaymentTabScreen() {
   const [menuY, setMenuY] = useState(0);
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [groupTargetId, setGroupTargetId] = useState<string | null>(null);
+  const [groupAssigning, setGroupAssigning] = useState(false);
 
   const fetchPending = useCallback(async () => {
     if (!venueId) return;
@@ -453,7 +540,7 @@ export function PaymentTabScreen() {
           })
         );
       }
-      void fetchPending();
+      void fetchAll();
     },
     "payment:confirmed": () => fetchAll(),
     "payment:cancelled": () => fetchAll(),
@@ -561,6 +648,51 @@ export function PaymentTabScreen() {
       },
     ]);
   };
+
+  const handleAssignGroupPayer = useCallback(
+    async (targetPaymentId: string, payerPaymentId: string | null) => {
+      if (!venueId) return;
+      const current = paid.find((p) => p.id === targetPaymentId) ?? null;
+      const currentGroupPayerId = current?.groupPaidByPaymentId ?? null;
+      if (currentGroupPayerId === payerPaymentId) {
+        setGroupTargetId(null);
+        return;
+      }
+      setGroupAssigning(true);
+      try {
+        const payload: {
+          venueId: string;
+          pendingPaymentId: string;
+          groupPayerPaymentId?: string | null;
+        } = {
+          venueId,
+          pendingPaymentId: targetPaymentId,
+          groupPayerPaymentId: payerPaymentId,
+        };
+        await api.post("/api/staff/payment-group", payload);
+        setGroupTargetId(null);
+        await fetchPaid();
+      } catch (err) {
+        const message =
+          err instanceof ApiRequestError
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : "Failed to assign group payer";
+        const friendly =
+          message.includes("HTML page instead of JSON")
+            ? "This server does not have /api/staff/payment-group yet. Restart/redeploy backend, then try again."
+            : message;
+        Alert.alert(
+          "Error",
+          friendly
+        );
+      } finally {
+        setGroupAssigning(false);
+      }
+    },
+    [venueId, fetchPaid, paid]
+  );
 
   const renderPendingItem = ({ item }: { item: PendingPayment }) => {
     const isActing = actionId === item.id || actionId === `${item.id}-cancel`;
@@ -705,38 +837,81 @@ export function PaymentTabScreen() {
     const skillRingPaid = paymentSkillRingStyle(item);
 
     return (
-      <View style={[styles.card, isCancelled && styles.cardCancelled]}>
-        {faceUri ? (
-          <View
-            style={[
-              expanded ? styles.thumbRingLg : styles.thumbRingSm,
-              skillRingPaid ??
-                (expanded ? styles.thumbRingLgDefault : styles.thumbRingSmDefault),
-            ]}
+      <View style={[styles.paidCardCompact, isCancelled && styles.cardCancelled]}>
+        {faceUri && expanded ? (
+          <TouchableOpacity
+            style={styles.paidExpandedPreviewWrap}
+            onPress={() => setExpandedPhotoId(null)}
+            activeOpacity={0.9}
           >
-            <TouchableOpacity
-              style={expanded ? styles.faceTouchLg : styles.faceTouchSm}
-              onPress={() =>
-                setExpandedPhotoId((prev) =>
-                  prev === `paid-${item.id}` ? null : `paid-${item.id}`
-                )
-              }
-              activeOpacity={0.85}
-            >
-              <Image
-                source={{ uri: faceUri }}
-                style={expanded ? styles.faceImgLg : styles.faceImgSm}
-                resizeMode="cover"
-              />
-            </TouchableOpacity>
-          </View>
+            <Image
+              source={{ uri: faceUri }}
+              style={styles.paidExpandedPreviewImg}
+              resizeMode="cover"
+            />
+          </TouchableOpacity>
         ) : null}
-        <View style={styles.topRow}>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <View style={styles.nameRow}>
+
+        <View style={styles.paidRow}>
+          {faceUri ? (
+            <View style={[styles.paidAvatarRing, skillRingPaid ?? styles.paidAvatarRingDefault]}>
+              <TouchableOpacity
+                style={styles.paidAvatarTouch}
+                onPress={() =>
+                  setExpandedPhotoId((prev) =>
+                    prev === `paid-${item.id}` ? null : `paid-${item.id}`
+                  )
+                }
+                activeOpacity={0.85}
+              >
+                <Image
+                  source={{ uri: faceUri }}
+                  style={styles.paidAvatarImg}
+                  resizeMode="cover"
+                />
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          <View style={styles.paidMetaCol}>
+            <View style={styles.paidTopRow}>
               <Text style={styles.cardName} numberOfLines={1}>
                 {player.name}
               </Text>
+              {!isCancelled ? (
+                <TouchableOpacity
+                  style={styles.dotsBtn}
+                  onPress={(e) => {
+                    const target = e.currentTarget as unknown as {
+                      measure?: (
+                        cb: (
+                          x: number,
+                          y: number,
+                          w: number,
+                          h: number,
+                          px: number,
+                          py: number
+                        ) => void
+                      ) => void;
+                    };
+                    if (target.measure) {
+                      target.measure((_x, _y, _w, h, _px, py) => {
+                        setMenuY(py + h);
+                        setMenuPaymentId(item.id);
+                      });
+                    } else {
+                      setMenuY(200);
+                      setMenuPaymentId(item.id);
+                    }
+                  }}
+                  activeOpacity={0.6}
+                >
+                  <Ionicons name="ellipsis-vertical" size={18} color={theme.muted} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            <View style={styles.nameRow}>
               <View
                 style={[
                   styles.badge,
@@ -767,68 +942,37 @@ export function PaymentTabScreen() {
                   {item.confirmedBy === "sepay" ? "SEPAY" : "MANUAL"}
                 </Text>
               </View>
-              {isCancelled && (
+              {isCancelled ? (
                 <View style={styles.cancelledTag}>
-                  <Text style={styles.cancelledTagText}>
-                    CANCELLED
-                  </Text>
+                  <Text style={styles.cancelledTagText}>CANCELLED</Text>
                 </View>
-              )}
+              ) : null}
             </View>
+
+            {(item.partyCount ?? 1) > 1 ? (
+              <Text style={styles.groupLine}>
+                {t("paymentGroupOf", { count: item.partyCount ?? 1 })}
+              </Text>
+            ) : null}
+            {item.groupPaidByName ? (
+              <Text style={styles.paidByLine}>
+                {t("paymentPaidBy", { name: item.groupPaidByName })}
+              </Text>
+            ) : null}
+
+            <Text style={styles.metaLine}>
+              {isNew ? t("paymentRegistration") : t("paymentCheckIn")} ·{" "}
+              <Text style={styles.amountInline}>{formatVND(item.amount)}</Text>
+            </Text>
+            <Text style={styles.dateLine}>{formatDateTime(item.confirmedAt)}</Text>
+            {subLeftText ? <Text style={styles.subLeftLine}>{subLeftText}</Text> : null}
+            {isCancelled ? (
+              <Text style={styles.cancelledAmount}>
+                -{formatVND(item.amount)} ({item.cancelReason})
+              </Text>
+            ) : null}
           </View>
-          {!isCancelled && (
-            <TouchableOpacity
-              style={styles.dotsBtn}
-              onPress={(e) => {
-                const target = e.currentTarget as unknown as {
-                  measure?: (
-                    cb: (
-                      x: number,
-                      y: number,
-                      w: number,
-                      h: number,
-                      px: number,
-                      py: number
-                    ) => void
-                  ) => void;
-                };
-                if (target.measure) {
-                  target.measure((_x, _y, _w, h, _px, py) => {
-                    setMenuY(py + h);
-                    setMenuPaymentId(item.id);
-                  });
-                } else {
-                  setMenuY(200);
-                  setMenuPaymentId(item.id);
-                }
-              }}
-              activeOpacity={0.6}
-            >
-              <Ionicons
-                name="ellipsis-vertical"
-                size={18}
-                color={theme.muted}
-              />
-            </TouchableOpacity>
-          )}
         </View>
-        {(item.partyCount ?? 1) > 1 ? (
-          <Text style={styles.groupLine}>
-            {t("paymentGroupOf", { count: item.partyCount ?? 1 })}
-          </Text>
-        ) : null}
-        <Text style={styles.metaLine}>
-          {isNew ? t("paymentRegistration") : t("paymentCheckIn")} · {formatVND(item.amount)}
-        </Text>
-        {subLeftText ? <Text style={styles.subLeftLine}>{subLeftText}</Text> : null}
-        {isCancelled && (
-          <Text style={styles.cancelledAmount}>
-            -{formatVND(item.amount)} ({item.cancelReason})
-          </Text>
-        )}
-        <Text style={styles.waitLine}>
-          {formatDateTime(item.confirmedAt)}
-        </Text>
       </View>
     );
   };
@@ -946,6 +1090,18 @@ export function PaymentTabScreen() {
               onPress={() => {
                 const id = menuPaymentId;
                 setMenuPaymentId(null);
+                if (id) setGroupTargetId(id);
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="people-outline" size={18} color={theme.text} />
+              <Text style={styles.menuItemTextNeutral}>{t("paymentGroup")}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                const id = menuPaymentId;
+                setMenuPaymentId(null);
                 if (id) setCancelTargetId(id);
               }}
               activeOpacity={0.7}
@@ -955,6 +1111,84 @@ export function PaymentTabScreen() {
             </TouchableOpacity>
           </View>
         </Pressable>
+      </Modal>
+
+      <Modal
+        visible={groupTargetId !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !groupAssigning && setGroupTargetId(null)}
+      >
+        <View style={styles.groupModalOverlay}>
+          <View style={styles.groupModalCard}>
+            <Text style={styles.groupModalTitle}>{t("paymentWhichGroup")}</Text>
+            <FlatList
+              data={[
+                {
+                  id: "__none__",
+                  name: t("paymentGroupNone"),
+                  hint: t("paymentGroupNoneHint"),
+                  partyCount: 0,
+                  amount: 0,
+                },
+                ...paid
+                  .filter(
+                    (p) =>
+                      p.id !== groupTargetId &&
+                      !p.cancelReason &&
+                      p.status === "confirmed" &&
+                      (p.partyCount ?? 1) >= 2 &&
+                      (p.partyCount ?? 1) <= 4
+                  )
+                  .map((p) => ({
+                    id: p.id,
+                    name: getDisplayPlayer(p).name,
+                    hint: `${t("paymentGroupOf", { count: p.partyCount ?? 1 })} · ${formatVND(
+                      p.amount
+                    )}`,
+                    partyCount: p.partyCount ?? 1,
+                    amount: p.amount,
+                  })),
+              ]}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={{ gap: 8 }}
+              renderItem={({ item }) => {
+                const target = paid.find((p) => p.id === groupTargetId) ?? null;
+                const isCurrent =
+                  item.id === "__none__"
+                    ? !target?.groupPaidByPaymentId
+                    : target?.groupPaidByPaymentId === item.id;
+                return (
+                  <TouchableOpacity
+                    style={[styles.groupOptionBtn, isCurrent && styles.groupOptionCurrent]}
+                    disabled={groupAssigning}
+                    onPress={() =>
+                      void handleAssignGroupPayer(
+                        groupTargetId!,
+                        item.id === "__none__" ? null : item.id
+                      )
+                    }
+                    activeOpacity={0.75}
+                  >
+                    <Text style={styles.groupOptionName}>{item.name}</Text>
+                    <Text style={styles.groupOptionHint}>{item.hint}</Text>
+                  </TouchableOpacity>
+                );
+              }}
+            />
+            <TouchableOpacity
+              style={styles.groupModalDismiss}
+              onPress={() => setGroupTargetId(null)}
+              disabled={groupAssigning}
+            >
+              {groupAssigning ? (
+                <ActivityIndicator color={theme.blue500} size="small" />
+              ) : (
+                <Text style={styles.groupModalDismissText}>{t("paymentGoBack")}</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       {/* ── Cancel reason modal ───────────────────────────────────────── */}

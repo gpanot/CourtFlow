@@ -48,6 +48,10 @@ export async function GET(req: Request) {
       const activeSub = player.subscriptions.find(
         (s) => s.status === "active" && s.expiresAt > new Date()
       ) ?? null;
+      const linkedPlayer = await prisma.player.findFirst({
+        where: { phone: player.phone },
+        select: { facePhotoPath: true, avatarPhotoPath: true },
+      });
 
       return NextResponse.json({
         player: {
@@ -57,8 +61,8 @@ export async function GET(req: Request) {
           phone: player.phone,
           gender: player.gender,
           skillLevel: player.skillLevel,
-          facePhotoPath: null,
-          avatarPhotoPath: null,
+          facePhotoPath: linkedPlayer?.facePhotoPath ?? null,
+          avatarPhotoPath: linkedPlayer?.avatarPhotoPath ?? null,
           venueName: player.venue.name,
           registeredAt: player.createdAt.toISOString(),
           checkInCount: player.checkIns.length,

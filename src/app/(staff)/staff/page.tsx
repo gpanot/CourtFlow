@@ -7,7 +7,7 @@ import { useSessionStore } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { StaffDashboard } from "./dashboard";
 import Link from "next/link";
-import { Shield, Clipboard, Grid3X3, Phone, Lock, Eye, EyeOff, Loader2, Tablet } from "lucide-react";
+import { Shield, Clipboard, Grid3X3, Phone, Lock, Eye, EyeOff, Loader2, Tablet, Sun, Moon } from "lucide-react";
 import { CourtFlowLogo } from "@/components/courtflow-logo";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 import { StaffTopBar } from "@/components/staff-top-bar";
@@ -22,6 +22,12 @@ import { useStaffPinStore } from "@/stores/staff-pin-store";
 import type { StaffAppAccessKind } from "@/lib/staff-app-access";
 import { setPersistedTabletVenueId } from "@/lib/tablet-venue-persistence";
 import { cn } from "@/lib/cn";
+import {
+  applyThemeMode,
+  getStoredThemeMode,
+  setStoredThemeMode,
+  type ThemeMode,
+} from "@/lib/theme-mode";
 
 type StaffMeStatus = "idle" | "loading" | "success" | "error";
 
@@ -59,6 +65,7 @@ export default function StaffPage() {
   const [pendingAppPickVenue, setPendingAppPickVenue] = useState<StaffVenue | null>(null);
   const [showRoleChoice, setShowRoleChoice] = useState(false);
   const [showOtherApps, setShowOtherApps] = useState(false);
+  const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
   const [loginVenues, setLoginVenues] = useState<StaffVenue[]>([]);
   /** Authoritative staff venues from GET /api/auth/staff-me (avoids tablet race with login payload only). */
   const [staffMeStatus, setStaffMeStatus] = useState<StaffMeStatus>("idle");
@@ -69,6 +76,19 @@ export default function StaffPage() {
   /** Skip staff-me bootstrap when we already resolved client for this staff+venue (e.g. single-app proceed). */
   const clientResolvedForKeyRef = useRef<string | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    const mode = getStoredThemeMode();
+    setThemeMode(mode);
+    applyThemeMode(mode);
+  }, []);
+
+  const toggleThemeMode = useCallback(() => {
+    const nextMode: ThemeMode = themeMode === "dark" ? "light" : "dark";
+    setThemeMode(nextMode);
+    setStoredThemeMode(nextMode);
+    applyThemeMode(nextMode);
+  }, [themeMode]);
 
   const proceedToVenue = useCallback(
     (v: StaffVenue) => {
@@ -388,7 +408,19 @@ export default function StaffPage() {
   if (showRoleChoice) {
     return (
       <div className="min-h-dvh bg-neutral-950">
-        <StaffTopBar />
+        <StaffTopBar
+          rightSlot={
+            <button
+              type="button"
+              onClick={toggleThemeMode}
+              className="rounded-lg border border-neutral-700/90 bg-neutral-900/90 p-2 text-neutral-300 transition-colors hover:border-neutral-600 hover:bg-neutral-800 hover:text-white"
+              aria-label={themeMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              title={themeMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {themeMode === "dark" ? <Sun className="h-4 w-4" aria-hidden /> : <Moon className="h-4 w-4" aria-hidden />}
+            </button>
+          }
+        />
         <div className="mx-auto flex w-full max-w-sm flex-col items-center justify-center space-y-8 p-6">
           <div className="flex flex-col items-center gap-4">
             <div className="inline-flex items-center rounded-full border border-green-500/30 bg-green-500/10 px-4 py-1.5">

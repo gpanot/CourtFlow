@@ -145,6 +145,7 @@ export async function POST(request: NextRequest) {
           phone,
           gender,
           skillLevel,
+          isWalkIn: true,
           avatar: normalizeWalkInAvatar(
             typeof avatarRaw === "string" ? avatarRaw : null
           ),

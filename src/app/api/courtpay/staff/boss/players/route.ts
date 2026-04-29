@@ -106,6 +106,30 @@ export async function GET(req: Request) {
       }),
     ]);
 
+    const courtPayPhones = [
+      ...new Set(
+        courtPayPlayers
+          .map((p) => p.phone?.trim() ?? "")
+          .filter((phone) => phone.length > 0)
+      ),
+    ];
+    const linkedPlayers =
+      courtPayPhones.length > 0
+        ? await prisma.player.findMany({
+            where: { phone: { in: courtPayPhones } },
+            select: { phone: true, facePhotoPath: true, avatarPhotoPath: true },
+          })
+        : [];
+    const faceByPhone = new Map(
+      linkedPlayers.map((p) => [
+        p.phone,
+        {
+          facePhotoPath: p.facePhotoPath ?? null,
+          avatarPhotoPath: p.avatarPhotoPath ?? null,
+        },
+      ])
+    );
+
     const selfHasSubscription = new Set(membershipRows.map((m) => m.playerId));
     const courtPayHasSubscription = new Set(courtSubRows.map((s) => s.playerId));
 
@@ -142,6 +166,7 @@ export async function GET(req: Request) {
         const lastSeenAt = dates.length > 0
           ? dates[dates.length - 1].toISOString()
           : null;
+        const linked = faceByPhone.get(p.phone) ?? null;
         return {
           id: p.id,
           source: "courtpay" as const,
@@ -149,8 +174,8 @@ export async function GET(req: Request) {
           phone: p.phone,
           gender: p.gender ?? null,
           skillLevel: p.skillLevel ?? null,
-          facePhotoPath: null,
-          avatarPhotoPath: null,
+          facePhotoPath: linked?.facePhotoPath ?? null,
+          avatarPhotoPath: linked?.avatarPhotoPath ?? null,
           checkInCount: p._count.checkIns,
           avgReturnDays: avgReturn,
           lastSeenAt,

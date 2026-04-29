@@ -3,6 +3,7 @@ import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { findPlayerByPhoneDigits } from "@/lib/find-player-by-phone-digits";
 import { prisma } from "@/lib/db";
+import { isWalkInSyntheticPhone } from "@/lib/walk-in-phone";
 
 /**
  * Staff-authenticated player lookup by phone.
@@ -19,6 +20,9 @@ export async function POST(request: NextRequest) {
     console.log("[Staff Player Lookup] phone:", phone, "venueId:", venueId);
 
     if (!phone?.trim()) return error("phone is required", 400);
+    if (isWalkInSyntheticPhone(phone)) {
+      return error("Walk-in synthetic phone numbers cannot be looked up", 400);
+    }
 
     const digitsOnly = phone.trim().replace(/\D/g, "");
     if (digitsOnly.length < 4) return error("Phone number too short", 400);
@@ -34,6 +38,8 @@ export async function POST(request: NextRequest) {
         SELECT id, name, phone, skill_level
         FROM check_in_players
         WHERE venue_id = ${venueId}
+          AND phone NOT LIKE 'walkin:%'
+          AND phone NOT LIKE '%+'
           AND regexp_replace(phone, '\\D', '', 'g') = ${digitsOnly}
         LIMIT 1
       `;
@@ -84,7 +90,9 @@ export async function POST(request: NextRequest) {
       checkInRows = await prisma.$queryRaw<CipRow[]>`
         SELECT id, name, phone, skill_level
         FROM check_in_players
-        WHERE regexp_replace(phone, '\\D', '', 'g') = ${digitsOnly}
+        WHERE phone NOT LIKE 'walkin:%'
+          AND phone NOT LIKE '%+'
+          AND regexp_replace(phone, '\\D', '', 'g') = ${digitsOnly}
         LIMIT 1
       `;
       const cipGlobal = checkInRows[0] ?? null;

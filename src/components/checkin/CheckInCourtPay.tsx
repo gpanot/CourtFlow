@@ -140,6 +140,13 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [noFaceOpen, setNoFaceOpen] = useState(false);
+  const [noFaceName, setNoFaceName] = useState("");
+  const [noFaceGender, setNoFaceGender] = useState<"male" | "female" | null>(null);
+  const [noFaceSkillLevel, setNoFaceSkillLevel] = useState<
+    "beginner" | "intermediate" | "advanced" | null
+  >(null);
+  const [noFaceSubmitting, setNoFaceSubmitting] = useState(false);
   /** Server-side enrollment photo quality (DetectFaces); non-empty → show retake UI, stay on form. */
   const [registrationQualityMessage, setRegistrationQualityMessage] = useState("");
   const [registrationQualityFailures, setRegistrationQualityFailures] = useState(0);
@@ -170,6 +177,11 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
     setExistingFacing("environment");
     setExistingCameraReady(false);
     setExistingCaptureBusy(false);
+    setNoFaceOpen(false);
+    setNoFaceName("");
+    setNoFaceGender(null);
+    setNoFaceSkillLevel(null);
+    setNoFaceSubmitting(false);
     setLoading(false);
     setError("");
     setRegistrationQualityMessage("");
@@ -583,6 +595,73 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
       setStep("error");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openNoFaceFlow = () => {
+    setNoFaceOpen(true);
+    setNoFaceName("");
+    setNoFaceGender(null);
+    setNoFaceSkillLevel(null);
+    setError("");
+  };
+
+  const closeNoFaceFlow = () => {
+    if (noFaceSubmitting) return;
+    setNoFaceOpen(false);
+    setNoFaceName("");
+    setNoFaceGender(null);
+    setNoFaceSkillLevel(null);
+  };
+
+  const handleNoFaceProceedToPayment = async () => {
+    if (!venueId || !noFaceName.trim() || !noFaceGender || !noFaceSkillLevel) {
+      setError(t("staff.courtPayCheckIn.noFaceNameRequired"));
+      return;
+    }
+    setNoFaceSubmitting(true);
+    setError("");
+    try {
+      const data = await api.post<{
+        playerId?: string;
+        pendingPaymentId?: string;
+        amount?: number;
+        vietQR?: string | null;
+        paymentRef?: string;
+        playerName?: string | null;
+        playerPhone?: string | null;
+        skillLevel?: string | null;
+        partyCount?: number;
+        checkedIn?: boolean;
+        free?: boolean;
+      }>("/api/courtpay/register-walk-in", {
+        venueCode: venueId,
+        name: noFaceName.trim(),
+        gender: noFaceGender,
+        skillLevel: noFaceSkillLevel,
+        headCount: sessionPartyCount,
+      });
+
+      setNoFaceOpen(false);
+
+      if (data.checkedIn || data.free) {
+        setStep("success");
+        return;
+      }
+
+      const pid = data.playerId?.trim();
+      const payment = pid ? toPendingPayment(data, pid) : null;
+      if (payment) {
+        setSessionPartyCount(payment.partyCount);
+        setPendingPayment(payment);
+        setStep("awaiting_payment");
+      } else {
+        setStep("success");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("staff.courtPayCheckIn.registrationFailed"));
+    } finally {
+      setNoFaceSubmitting(false);
     }
   };
 
@@ -1100,11 +1179,133 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
             >
               {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : t("staff.courtPayCheckIn.checkInRegisterBtn")}
             </button>
+            <button
+              type="button"
+              onClick={openNoFaceFlow}
+              disabled={loading || noFaceSubmitting}
+              className="h-11 w-full rounded-lg border border-neutral-700 bg-neutral-950/20 text-sm font-semibold text-neutral-200 hover:bg-neutral-800 disabled:opacity-50"
+            >
+              {t("staff.courtPayCheckIn.noFaceCheckIn")}
+            </button>
           </>
         )}
 
         {error ? <p className="text-center text-sm text-red-400">{error}</p> : null}
       </div>
+
+      {noFaceOpen ? (
+        <div
+          className="fixed inset-0 z-[95] flex items-center justify-center bg-black/70 p-4"
+          onClick={closeNoFaceFlow}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border border-neutral-700 bg-neutral-900 p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-center text-lg font-bold text-white">
+              {t("staff.courtPayCheckIn.noFaceTitle")}
+            </h3>
+            <p className="mt-1 text-center text-xs text-neutral-400">
+              {t("staff.courtPayCheckIn.noFaceHint")}
+            </p>
+
+            <div className="mt-4 space-y-3">
+              <p className="text-xs font-medium text-neutral-400">
+                {t("staff.courtPayCheckIn.noFaceStepName")}
+              </p>
+              <input
+                type="text"
+                value={noFaceName}
+                onChange={(e) => setNoFaceName(e.target.value)}
+                placeholder={t("staff.courtPayCheckIn.checkInPlayerName")}
+                className="h-11 w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 text-sm text-white placeholder:text-neutral-500 focus:border-client-primary focus:outline-none"
+                autoFocus
+              />
+
+              <p className="text-xs font-medium text-neutral-400">
+                {t("staff.courtPayCheckIn.noFaceStepGender")}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNoFaceGender("male")}
+                  className={cn(
+                    "h-10 rounded-lg border text-sm font-semibold",
+                    noFaceGender === "male"
+                      ? "border-client-primary bg-client-primary-muted-strong text-white"
+                      : "border-neutral-700 bg-neutral-950 text-neutral-300"
+                  )}
+                >
+                  {t("staff.courtPayCheckIn.regMale")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNoFaceGender("female")}
+                  className={cn(
+                    "h-10 rounded-lg border text-sm font-semibold",
+                    noFaceGender === "female"
+                      ? "border-client-primary bg-client-primary-muted-strong text-white"
+                      : "border-neutral-700 bg-neutral-950 text-neutral-300"
+                  )}
+                >
+                  {t("staff.courtPayCheckIn.regFemale")}
+                </button>
+              </div>
+
+              <p className="text-xs font-medium text-neutral-400">
+                {t("staff.courtPayCheckIn.noFaceStepLevel")}
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                {(["beginner", "intermediate", "advanced"] as const).map((lvl) => (
+                  <button
+                    key={lvl}
+                    type="button"
+                    onClick={() => setNoFaceSkillLevel(lvl)}
+                    className={cn(
+                      "h-10 rounded-lg border text-xs font-semibold sm:text-sm",
+                      noFaceSkillLevel === lvl
+                        ? "border-client-primary bg-client-primary-muted-strong text-white"
+                        : "border-neutral-700 bg-neutral-950 text-neutral-300"
+                    )}
+                  >
+                    {lvl === "beginner"
+                      ? t("staff.courtPayCheckIn.regBeginner")
+                      : lvl === "intermediate"
+                        ? t("staff.courtPayCheckIn.regIntermediate")
+                        : t("staff.courtPayCheckIn.regAdvanced")}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={closeNoFaceFlow}
+                  disabled={noFaceSubmitting}
+                  className="h-10 flex-1 rounded-lg bg-neutral-800 text-sm text-neutral-300 hover:bg-neutral-700 disabled:opacity-50"
+                >
+                  {t("staff.courtPayCheckIn.noFaceBack")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleNoFaceProceedToPayment()}
+                  disabled={!noFaceName.trim() || !noFaceGender || !noFaceSkillLevel || noFaceSubmitting}
+                  className="h-10 flex-1 rounded-lg bg-client-primary text-sm font-semibold text-neutral-950 disabled:opacity-50"
+                >
+                  {noFaceSubmitting ? (
+                    <span className="inline-flex items-center justify-center gap-1">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {t("staff.courtPayCheckIn.adding")}
+                    </span>
+                  ) : (
+                    t("staff.courtPayCheckIn.noFaceProceedPayment")
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -11,10 +11,6 @@ import { useSuccessChime } from "@/hooks/use-success-chime";
 import { useSocket } from "@/hooks/use-socket";
 import { joinVenue } from "@/lib/socket-client";
 import { api, ApiRequestError } from "@/lib/api-client";
-import {
-  blurBackgroundKeepFaceSharp,
-  type RelativeFaceBoundingBox,
-} from "@/lib/courtpay-face-blur";
 import { useTranslation } from "react-i18next";
 import staffI18n from "@/i18n/staff-i18n";
 import { SubscriptionOffer } from "./SubscriptionOffer";
@@ -118,6 +114,8 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
   const resetTimerRef = useRef<NodeJS.Timeout | null>(null);
   const paymentTimerRef = useRef<NodeJS.Timeout | null>(null);
   const stepRef = useRef<KioskStep>("home");
+  const blurredRegImageRef = useRef<string | null>(null);
+  const blurRegInProgressRef = useRef(false);
 
   const [step, setStep] = useState<KioskStep>("home");
   const [player, setPlayer] = useState<PlayerInfo | null>(null);
@@ -195,6 +193,8 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
     setPaymentLoading(false);
     setPackages([]);
     setRegDraft(null);
+    blurredRegImageRef.current = null;
+    blurRegInProgressRef.current = false;
     setRegistrationQualityMessage("");
     setRegistrationQualityFailures(0);
   }, [clearTimers, goTo]);
@@ -501,28 +501,9 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
     if (!frame || regFaceChecking) return;
     setRegFaceChecking(true);
     try {
-      let processedFrame = frame;
-      try {
-        const preview = await api.post<{
-          faceDetected?: boolean;
-          boundingBox?: RelativeFaceBoundingBox;
-        }>("/api/courtpay/preview-face-presence", {
-          imageBase64: frame,
-          returnBoundingBox: true,
-        });
-        if (preview.faceDetected && preview.boundingBox) {
-          processedFrame = await blurBackgroundKeepFaceSharp(frame, preview.boundingBox, {
-            blurPx: 8,
-            facePaddingRatio: 0.2,
-          });
-        }
-      } catch {
-        // Fallback to the original image without blocking enrollment.
-      }
-
       const check = await api.post<{ existing: boolean; playerName?: string | null }>(
         "/api/courtpay/check-face",
-        { imageBase64: processedFrame }
+        { imageBase64: frame }
       );
       if (check.existing) {
         cameraRef.current?.stopCamera();
@@ -532,7 +513,9 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
       }
 
       setRegistrationQualityMessage("");
-      setRegImage(processedFrame);
+      blurredRegImageRef.current = null;
+      blurRegInProgressRef.current = false;
+      setRegImage(frame);
       cameraRef.current?.stopCamera();
       goTo("reg_face_preview");
     } catch {
@@ -552,19 +535,69 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
     }
     setRegistrationQualityMessage("");
     setRegImage(null);
+    blurredRegImageRef.current = null;
+    blurRegInProgressRef.current = false;
     setRegDraft((d) => (d ? { ...d, imageBase64: null } : null));
     goTo("reg_face_capture");
   }, [goTo]);
 
+  const blurInBackground = useCallback((originalBase64: string) => {
+    if (blurRegInProgressRef.current) return;
+    blurRegInProgressRef.current = true;
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[CourtPayKiosk] blur background start");
+    }
+    void api
+      .post<{
+        processedImageBase64?: string;
+        blurApplied?: boolean;
+        blurRequested?: boolean;
+        blurReason?: string;
+      }>("/api/courtpay/preview-face-presence", {
+        imageBase64: originalBase64,
+        blurBackground: true,
+        trigger: "looks_good_click",
+      })
+      .then((preview) => {
+        if (preview.blurApplied && preview.processedImageBase64) {
+          blurredRegImageRef.current = preview.processedImageBase64;
+        }
+        if (process.env.NODE_ENV !== "production") {
+          console.log("[CourtPayKiosk] blur background result", {
+            blurRequestedByApi: preview.blurRequested === true,
+            blurApplied: preview.blurApplied === true,
+            blurReason: preview.blurReason ?? null,
+            hasProcessedImage: typeof preview.processedImageBase64 === "string",
+          });
+        }
+      })
+      .catch((err) => {
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[CourtPayKiosk] blur background failed", err);
+        }
+      })
+      .finally(() => {
+        blurRegInProgressRef.current = false;
+      });
+  }, []);
+
   /* ─── Registration: submit form ─────────────── */
   const handleRegSubmit = useCallback(async () => {
     if (!regName.trim() || !regPhone.trim() || !regGender || !regLevel) return;
+    const imageToEnroll = blurredRegImageRef.current ?? regImage;
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[CourtPayKiosk] submit image selection", {
+        usingBlurredImage: !!blurredRegImageRef.current && blurredRegImageRef.current !== regImage,
+        originalLength: regImage?.length ?? null,
+        selectedLength: imageToEnroll?.length ?? null,
+      });
+    }
     setRegDraft({
       name: regName.trim(),
       phone: regPhone.trim(),
       gender: regGender,
       skillLevel: regLevel,
-      imageBase64: regImage,
+      imageBase64: imageToEnroll,
     });
     setPlayer({
       id: "",
@@ -1025,7 +1058,18 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
             <img src={`data:image/jpeg;base64,${regImage}`} alt="" className="h-full w-full object-cover [transform:scaleX(-1)]" />
           </div>
           <div className="mt-1 flex w-full max-w-md gap-3">
-            <button type="button" onClick={() => goTo("reg_form")}
+            <button
+              type="button"
+              onClick={() => {
+                if (process.env.NODE_ENV !== "production") {
+                  console.log("[CourtPayKiosk] Looks good clicked", {
+                    hasRegImage: !!regImage,
+                    regImageLength: regImage?.length ?? null,
+                  });
+                }
+                if (regImage) blurInBackground(regImage);
+                goTo("reg_form");
+              }}
               className="flex-1 rounded-2xl bg-fuchsia-600 px-6 py-4 text-xl font-bold text-white hover:bg-fuchsia-500">
               Looks good →
             </button>
@@ -1040,6 +1084,16 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
       {/* ── REGISTRATION: FORM ──────────────────── */}
       {step === "reg_form" && (
         <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4 pb-8 sm:items-center sm:py-6">
+          <div className="mb-3 w-full max-w-md">
+            <button
+              type="button"
+              onClick={() => goTo("reg_face_preview")}
+              className="inline-flex items-center gap-2 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm font-medium text-neutral-300 transition-colors hover:border-neutral-500 hover:bg-neutral-800 hover:text-white"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Retake photo
+            </button>
+          </div>
           <div className="w-full max-w-md space-y-4 rounded-xl border border-neutral-800 bg-neutral-900/40 p-4">
             {registrationQualityMessage ? (
               <div className="space-y-2 rounded-xl border border-amber-500/45 bg-amber-500/10 p-3">

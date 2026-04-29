@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import staffI18n from "@/i18n/staff-i18n";
-import { Banknote, QrCode, Loader2, Check, Clock } from "lucide-react";
+import { Banknote, QrCode, Loader2, Check, Clock, EllipsisVertical, Users } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { api } from "@/lib/api-client";
 import { useSocket } from "@/hooks/use-socket";
@@ -15,6 +15,9 @@ interface PendingPaymentItem {
   type: string;
   checkInPlayerId: string | null;
   confirmedBy: string | null;
+  partyCount?: number;
+  groupPaidByPaymentId?: string | null;
+  groupPaidByName?: string | null;
   createdAt: string;
   player: {
     id: string;
@@ -36,6 +39,9 @@ interface PaidPaymentItem {
   type: string;
   checkInPlayerId: string | null;
   confirmedBy: string | null;
+  partyCount?: number;
+  groupPaidByPaymentId?: string | null;
+  groupPaidByName?: string | null;
   createdAt: string;
   confirmedAt: string | null;
   player: {
@@ -130,6 +136,9 @@ export function PendingPaymentsPanel({
   const [paidLoading, setPaidLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [expandedPhotoPaymentId, setExpandedPhotoPaymentId] = useState<string | null>(null);
+  const [menuPaymentId, setMenuPaymentId] = useState<string | null>(null);
+  const [groupTargetId, setGroupTargetId] = useState<string | null>(null);
+  const [groupSaving, setGroupSaving] = useState(false);
   const tickRef = useRef<NodeJS.Timeout | null>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const [, setTick] = useState(0);
@@ -146,7 +155,7 @@ export function PendingPaymentsPanel({
     } finally {
       setLoading(false);
     }
-  }, [venueId, onCountChange]);
+  }, [venueId]);
 
   const fetchPaidPayments = useCallback(async () => {
     try {
@@ -179,7 +188,10 @@ export function PendingPaymentsPanel({
 
   useEffect(() => {
     const offNew = on("payment:new", () => void fetchPayments());
-    const offUpdated = on("payment:updated", () => void fetchPayments());
+    const offUpdated = on("payment:updated", () => {
+      void fetchPayments();
+      void fetchPaidPayments();
+    });
     const offConfirmed = on("payment:confirmed", () => {
       void fetchPayments();
       void fetchPaidPayments();
@@ -233,6 +245,31 @@ export function PendingPaymentsPanel({
       setActionLoading(null);
     }
   };
+
+  const handleAssignGroupPayer = useCallback(
+    async (targetPaymentId: string, payerPaymentId: string | null) => {
+      setGroupSaving(true);
+      try {
+        const payload: {
+          venueId: string;
+          pendingPaymentId: string;
+          groupPayerPaymentId?: string | null;
+        } = {
+          venueId,
+          pendingPaymentId: targetPaymentId,
+        };
+        if (payerPaymentId) payload.groupPayerPaymentId = payerPaymentId;
+        await api.post("/api/staff/payment-group", payload);
+        setGroupTargetId(null);
+        await fetchPaidPayments();
+      } catch (e) {
+        console.error("Assign group payer failed:", e);
+      } finally {
+        setGroupSaving(false);
+      }
+    },
+    [venueId, fetchPaidPayments]
+  );
 
   return (
     <div className="flex flex-1 flex-col min-h-0 space-y-3">
@@ -431,44 +468,37 @@ export function PendingPaymentsPanel({
                 const flowTag = getFlowTag(p);
                 const approvalTag = getApprovalTag(p, true);
                 const recognitionPhoto = p.player?.facePhotoPath?.trim() || null;
-                const photoExpanded = expandedPhotoPaymentId === p.id;
 
                 return (
-                  <div key={p.id} className="px-4 py-3">
-                    {recognitionPhoto && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setExpandedPhotoPaymentId((prev) => (prev === p.id ? null : p.id))
-                        }
-                        className={cn(
-                          "overflow-hidden rounded-lg border border-neutral-700 bg-black/40 transition-all",
-                          photoExpanded ? "mb-2 w-full" : "w-14 shrink-0"
-                        )}
-                        aria-label={
-                          photoExpanded
-                            ? `Collapse recognition photo for ${player.name}`
-                            : `Expand recognition photo for ${player.name}`
-                        }
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={recognitionPhoto}
-                          alt={`${player.name} recognition`}
-                          className={cn(
-                            "w-full object-cover object-center transition-all",
-                            photoExpanded ? "h-44" : "h-14"
-                          )}
-                        />
-                      </button>
-                    )}
+                  <div key={p.id} className="px-3 py-2.5">
+                    <div className="flex items-start gap-2.5">
+                      {recognitionPhoto ? (
+                        <div className="h-11 w-11 shrink-0 overflow-hidden rounded-full border border-neutral-700 bg-black/40">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={recognitionPhoto}
+                            alt={`${player.name} recognition`}
+                            className="h-11 w-11 object-cover object-center"
+                          />
+                        </div>
+                      ) : null}
 
-                    <div className={cn("gap-3", photoExpanded ? "flex flex-col" : "flex items-start")}>
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-white truncate">
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="truncate text-sm font-semibold text-white">
                             {player.name}
                           </span>
+                          <button
+                            type="button"
+                            onClick={() => setMenuPaymentId(p.id)}
+                            className="rounded-md p-1 text-neutral-400 transition-colors hover:bg-neutral-800 hover:text-white"
+                            aria-label="Payment menu"
+                          >
+                            <EllipsisVertical className="h-4 w-4" />
+                          </button>
+                        </div>
+
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
                           <span
                             className={cn(
                               "shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase",
@@ -481,22 +511,37 @@ export function PendingPaymentsPanel({
                               ? t("staff.dashboard.paymentMethodCash")
                               : t("staff.dashboard.paymentMethodQR")}
                           </span>
-                          <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase bg-client-primary/20 text-client-primary">
+                          <span className="shrink-0 rounded bg-client-primary/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-client-primary">
                             {flowTag}
                           </span>
-                          <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold uppercase bg-emerald-600/20 text-emerald-300">
+                          <span className="shrink-0 rounded bg-emerald-600/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-300">
                             {approvalTag}
                           </span>
+                          {(p.partyCount ?? 1) > 1 ? (
+                            <span className="shrink-0 rounded bg-blue-600/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-blue-300">
+                              {t("staff.dashboard.paymentGroupOf", {
+                                count: p.partyCount ?? 1,
+                              })}
+                            </span>
+                          ) : null}
                         </div>
-                        <div className="mt-0.5 flex items-center gap-2 text-xs text-neutral-500">
-                          <span>
-                            {isNew
-                              ? t("staff.dashboard.paymentTypeRegistration")
-                              : t("staff.dashboard.paymentTypeCheckin")}
+
+                        <p className="mt-1 text-xs text-neutral-400">
+                          {isNew
+                            ? t("staff.dashboard.paymentTypeRegistration")
+                            : t("staff.dashboard.paymentTypeCheckin")}
+                          {" · "}
+                          <span className="font-semibold text-neutral-200">
+                            {formatVND(p.amount)}
                           </span>
-                          <span className="text-neutral-600">&middot;</span>
-                          <span>{formatVND(p.amount)}</span>
-                        </div>
+                        </p>
+
+                        {p.groupPaidByName ? (
+                          <p className="mt-0.5 text-xs font-semibold text-violet-300">
+                            {t("staff.dashboard.paymentPaidBy", { name: p.groupPaidByName })}
+                          </p>
+                        ) : null}
+
                         <p className="mt-0.5 text-xs text-neutral-500">
                           {formatDateTime(p.confirmedAt)}
                         </p>
@@ -507,6 +552,106 @@ export function PendingPaymentsPanel({
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {menuPaymentId && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40"
+          onClick={() => setMenuPaymentId(null)}
+        >
+          <div
+            className="absolute right-4 top-24 w-44 rounded-lg border border-neutral-700 bg-neutral-900 p-1 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                setGroupTargetId(menuPaymentId);
+                setMenuPaymentId(null);
+              }}
+              className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-neutral-200 hover:bg-neutral-800"
+            >
+              <Users className="h-4 w-4" />
+              {t("staff.dashboard.paymentGroup")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {groupTargetId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => !groupSaving && setGroupTargetId(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border border-neutral-700 bg-neutral-900 p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="mb-3 text-center text-lg font-bold text-white">
+              {t("staff.dashboard.paymentWhichGroup")}
+            </h3>
+            <div className="max-h-[50vh] space-y-2 overflow-y-auto">
+              {[
+                {
+                  id: "__none__",
+                  name: t("staff.dashboard.paymentGroupNone"),
+                  hint: t("staff.dashboard.paymentGroupNoneHint"),
+                },
+                ...paidPayments
+                  .filter(
+                    (p) =>
+                      p.id !== groupTargetId &&
+                      !p.cancelReason &&
+                      (p.partyCount ?? 1) >= 2 &&
+                      (p.partyCount ?? 1) <= 4
+                  )
+                  .map((p) => ({
+                    id: p.id,
+                    name: getDisplayPlayer(p).name,
+                    hint: `${t("staff.dashboard.paymentGroupOf", {
+                      count: p.partyCount ?? 1,
+                    })} · ${formatVND(p.amount)}`,
+                  })),
+              ].map((option) => {
+                const target = paidPayments.find((p) => p.id === groupTargetId) ?? null;
+                const isCurrent =
+                  option.id === "__none__"
+                    ? !target?.groupPaidByPaymentId
+                    : target?.groupPaidByPaymentId === option.id;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    disabled={groupSaving}
+                    onClick={() =>
+                      void handleAssignGroupPayer(
+                        groupTargetId,
+                        option.id === "__none__" ? null : option.id
+                      )
+                    }
+                    className={cn(
+                      "w-full rounded-xl border px-3 py-2 text-left transition-colors",
+                      isCurrent
+                        ? "border-client-primary bg-client-primary/10"
+                        : "border-neutral-700 bg-neutral-950 hover:bg-neutral-800"
+                    )}
+                  >
+                    <p className="text-sm font-semibold text-white">{option.name}</p>
+                    <p className="text-xs text-neutral-400">{option.hint}</p>
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={() => setGroupTargetId(null)}
+              disabled={groupSaving}
+              className="mt-3 w-full rounded-lg bg-neutral-800 py-2 text-sm font-medium text-neutral-300 hover:bg-neutral-700"
+            >
+              {groupSaving ? t("staff.dashboard.sending") : t("staff.dashboard.cancel")}
+            </button>
+          </div>
         </div>
       )}
     </div>

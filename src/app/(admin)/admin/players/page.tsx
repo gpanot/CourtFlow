@@ -83,6 +83,7 @@ interface PlayerRecord {
   phone: string;
   avatar: string;
   hasFace?: boolean;
+  isWalkIn?: boolean;
   /** AWS Rekognition indexed face id (FaceId) when enrolled */
   faceSubjectId?: string | null;
   /** First check-in face capture (staff “add with face”), served from /uploads/players */
@@ -113,12 +114,16 @@ interface CheckInInsights {
     registrationEventLoggedFaceEnrolled: boolean | null;
   };
   counts: {
-    kioskFaceCheckIns: number;
+    courtpayCheckIns: number;
     appFaceSignIns: number;
     wristbandSignIns: number;
     phoneOtpSignIns: number;
   };
-  timeline: { at: string; kind: "kiosk_face" | "app_face" | "wristband" | "phone_otp"; detail?: string }[];
+  timeline: {
+    at: string;
+    kind: "courtpay_checkin" | "kiosk_face" | "app_face" | "wristband" | "phone_otp";
+    detail?: string;
+  }[];
 }
 
 interface PlayerSession {
@@ -631,7 +636,7 @@ export default function PlayersPage() {
                   </div>
                 </td>
                 <td className="px-2.5 py-2">
-                  <FaceStatusBadge hasFace={p.hasFace ?? !!p.faceSubjectId} />
+                  <FaceStatusBadge hasFace={p.hasFace ?? !!p.faceSubjectId} isWalkIn={!!p.isWalkIn} />
                 </td>
                 <td className="px-2.5 py-2 text-neutral-400 text-[11px] tabular-nums">{p.phone}</td>
                 <td className="px-2.5 py-2">
@@ -751,7 +756,7 @@ export default function PlayersPage() {
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-400">
               <span className="tabular-nums">{p.phone}</span>
               <span className="capitalize">{p.gender}</span>
-              <FaceStatusBadge hasFace={p.hasFace ?? !!p.faceSubjectId} compact />
+              <FaceStatusBadge hasFace={p.hasFace ?? !!p.faceSubjectId} isWalkIn={!!p.isWalkIn} compact />
               <span>{p.totalSessions} sessions</span>
               <span>{p.totalGames} games</span>
               <span>{fmtMin(p.totalPlayMinutes)} play</span>
@@ -998,9 +1003,11 @@ function RatioBadge({ ratio }: { ratio: number }) {
 
 function FaceStatusBadge({
   hasFace,
+  isWalkIn,
   compact,
 }: {
   hasFace: boolean;
+  isWalkIn?: boolean;
   compact?: boolean;
 }) {
   if (hasFace) {
@@ -1012,6 +1019,18 @@ function FaceStatusBadge({
         )}
       >
         ✓
+      </span>
+    );
+  }
+  if (isWalkIn) {
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center rounded-full bg-amber-500/15 text-amber-300",
+          compact ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-0.5 text-[11px] font-medium"
+        )}
+      >
+        Walk-in
       </span>
     );
   }
@@ -1191,6 +1210,8 @@ function formatCheckInSource(action: string | null): string {
 
 function timelineEntryLabel(entry: CheckInInsights["timeline"][0]): string {
   switch (entry.kind) {
+    case "courtpay_checkin":
+      return entry.detail ? `CourtPay check-in · ${entry.detail}` : "CourtPay check-in";
     case "kiosk_face":
       return entry.detail ? `Kiosk face · ${entry.detail}` : "Kiosk face check-in";
     case "app_face":
@@ -1568,8 +1589,8 @@ function PlayerDetailPanel({
                 )}
                 <div className="grid grid-cols-2 gap-2">
                   <div className="rounded-lg border border-neutral-800 bg-neutral-950/50 px-2.5 py-2 text-center">
-                    <p className="text-lg font-bold tabular-nums text-white">{checkInInsights.counts.kioskFaceCheckIns}</p>
-                    <p className="text-[10px] text-neutral-500">Kiosk face check-ins</p>
+                    <p className="text-lg font-bold tabular-nums text-white">{checkInInsights.counts.courtpayCheckIns}</p>
+                    <p className="text-[10px] text-neutral-500">CourtPay check-ins</p>
                   </div>
                   <div className="rounded-lg border border-neutral-800 bg-neutral-950/50 px-2.5 py-2 text-center">
                     <p className="text-lg font-bold tabular-nums text-emerald-400/90">{checkInInsights.counts.appFaceSignIns}</p>
@@ -1590,7 +1611,7 @@ function PlayerDetailPanel({
                 <div>
                   <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">Recent activity</p>
                   {checkInInsights.timeline.length === 0 ? (
-                    <p className="py-2 text-center text-[11px] text-neutral-600">No kiosk or app sign-in events logged yet</p>
+                    <p className="py-2 text-center text-[11px] text-neutral-600">No CourtPay or app sign-in events logged yet</p>
                   ) : (
                     <ul className="max-h-48 space-y-1.5 overflow-y-auto pr-1">
                       {checkInInsights.timeline.map((row, i) => (
@@ -1612,7 +1633,7 @@ function PlayerDetailPanel({
                     </ul>
                   )}
                   <p className="mt-2 text-[10px] text-neutral-600">
-                    App sign-ins are recorded from this release onward. Kiosk face rows come from successful camera check-ins.
+                    CourtPay rows come from successful check-ins in the CourtPay flow. App sign-ins are recorded from this release onward.
                   </p>
                 </div>
               </div>

@@ -15,6 +15,10 @@ export async function POST(req: Request) {
     const imageBase64 = body?.imageBase64 as string | undefined;
     const returnBoundingBox = body?.returnBoundingBox === true;
     const blurBackgroundRequested = body?.blurBackground === true;
+    const trigger =
+      typeof body?.trigger === "string" && body.trigger.trim().length > 0
+        ? body.trigger.trim()
+        : undefined;
     if (!imageBase64?.trim()) {
       return NextResponse.json({ error: "imageBase64 is required" }, { status: 400 });
     }
@@ -39,6 +43,7 @@ export async function POST(req: Request) {
     }
 
     console.info("[courtpay/preview-face-presence] blur result", {
+      trigger: trigger ?? null,
       faceDetected,
       blurRequested: blurBackgroundRequested,
       blurApplied,

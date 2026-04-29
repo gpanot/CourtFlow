@@ -81,8 +81,15 @@ html.cf-theme-light .bg-neutral-700\/40 {
   background-color: #e2e8f0 !important;
 }
 
+html.cf-theme-light .bg-black {
+  background-color: #ffffff !important;
+}
+
 html.cf-theme-light .bg-black\/40,
-html.cf-theme-light .bg-black\/60 {
+html.cf-theme-light .bg-black\/55,
+html.cf-theme-light .bg-black\/60,
+html.cf-theme-light .bg-black\/75,
+html.cf-theme-light .bg-black\/80 {
   background-color: rgba(15, 23, 42, 0.08) !important;
 }
 
@@ -116,7 +123,9 @@ html.cf-theme-light .text-neutral-600 {
 html.cf-theme-light .hover\:bg-neutral-800:hover,
 html.cf-theme-light .hover\:bg-neutral-800\/50:hover,
 html.cf-theme-light .hover\:bg-neutral-800\/80:hover,
-html.cf-theme-light .hover\:bg-neutral-700:hover {
+html.cf-theme-light .hover\:bg-neutral-700:hover,
+html.cf-theme-light .hover\:bg-black\/75:hover,
+html.cf-theme-light .hover\:bg-black\/80:hover {
   background-color: #e2e8f0 !important;
 }
 

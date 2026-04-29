@@ -199,25 +199,36 @@ function ModeSelector({
   );
 }
 
-export function KioskModeGate({ venueId, children }: KioskModeGateProps) {
+export function KioskModeGate({ venueId, allowedModes: allowedModesProp, children }: KioskModeGateProps) {
   const router = useRouter();
   const [mode, setMode] = useState<KioskMode | null>(null);
   const [phase, setPhase] = useState<"loading" | "pin" | "select" | "locked">(
     "loading"
   );
   const escapeTapsRef = useRef<number[]>([]);
+  const allowedModes =
+    allowedModesProp && allowedModesProp.length > 0
+      ? allowedModesProp
+      : ALL_KIOSK_MODES;
 
   const storageKey = `kiosk-mode-${venueId}`;
 
   useEffect(() => {
     const saved = localStorage.getItem(storageKey);
-    if (saved === "entrance" || saved === "tv" || saved === "courtpay") {
+    if (
+      (saved === "entrance" || saved === "tv" || saved === "courtpay") &&
+      allowedModes.includes(saved)
+    ) {
       setMode(saved);
       setPhase("select");
     } else {
+      if (saved) {
+        localStorage.removeItem(storageKey);
+      }
+      setMode(null);
       setPhase("select");
     }
-  }, [storageKey]);
+  }, [allowedModes, storageKey]);
 
   const selectMode = useCallback(
     async (m: KioskMode) => {
@@ -276,7 +287,7 @@ export function KioskModeGate({ venueId, children }: KioskModeGateProps) {
   if (phase === "select") {
     return (
       <ModeSelector
-        allowedModes={ALL_KIOSK_MODES}
+        allowedModes={allowedModes}
         onSelect={selectMode}
         onBack={() => router.push("/tv-queue")}
       />

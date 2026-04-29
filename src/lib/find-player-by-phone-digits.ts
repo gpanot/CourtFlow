@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { isAnyWalkInPhone } from "@/lib/walk-in-phone";
 import type { Gender, SkillLevel } from "@prisma/client";
 
 export type PlayerPhoneLookupRow = {
@@ -16,6 +17,7 @@ export async function findPlayerByPhoneDigits(
   rawPhone: string,
   options?: { minimumDigits?: number }
 ): Promise<PlayerPhoneLookupRow | null> {
+  if (isAnyWalkInPhone(rawPhone)) return null;
   const digitsOnly = rawPhone.replace(/\D/g, "");
   const minimumDigits = options?.minimumDigits ?? 8;
   if (digitsOnly.length < minimumDigits) return null;
@@ -24,6 +26,7 @@ export async function findPlayerByPhoneDigits(
     SELECT id, name, phone, skill_level AS "skillLevel", gender AS gender
     FROM players
     WHERE phone NOT LIKE 'walkin:%'
+      AND phone NOT LIKE '%+'
       AND regexp_replace(phone, '\\D', '', 'g') = ${digitsOnly}
     LIMIT 1
   `;

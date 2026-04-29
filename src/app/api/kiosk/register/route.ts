@@ -6,6 +6,7 @@ import { emitToVenue } from "@/lib/socket-server";
 import { sendPaymentPushToStaff } from "@/lib/staff-push";
 import { buildVietQRUrl } from "@/lib/vietqr";
 import { persistPlayerCheckInFacePhoto } from "@/lib/persist-player-check-in-photo";
+import { COLLECTION_ID } from "@/lib/rekognition-config";
 
 const PAYMENT_TIMEOUT_MS = 3 * 60 * 1000;
 
@@ -61,6 +62,11 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    console.log("[kiosk/register] Enrolling face in collection", {
+      collectionId: COLLECTION_ID,
+      playerId: player.id,
+      source: "kiosk_register",
+    });
     const enrollment = await faceRecognitionService.enrollFace(imageBase64, player.id);
     if (!enrollment.success) {
       await prisma.player.delete({ where: { id: player.id } });

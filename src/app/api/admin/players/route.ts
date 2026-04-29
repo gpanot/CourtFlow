@@ -197,6 +197,7 @@ export async function GET(request: NextRequest) {
         avatar: player.avatar,
         hasFace: !!player.faceSubjectId,
         faceSubjectId: player.faceSubjectId,
+        isWalkIn: player.isWalkIn,
         facePhotoPath: player.facePhotoPath,
         avatarPhotoPath: player.avatarPhotoPath,
         gender: player.gender,

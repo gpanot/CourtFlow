@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { faceRecognitionService } from "@/lib/face-recognition";
 import { emitToVenue } from "@/lib/socket-server";
 import { findPlayerByPhoneDigits } from "@/lib/find-player-by-phone-digits";
+import { isWalkInSyntheticPhone } from "@/lib/walk-in-phone";
 
 async function buildAlreadyCheckedInResponse(
   sessionId: string,
@@ -84,6 +85,9 @@ export async function POST(request: NextRequest) {
       const phone = typeof body.phone === "string" ? body.phone.trim() : "";
       if (!phone) {
         return error("phone is required", 400);
+      }
+      if (isWalkInSyntheticPhone(phone)) {
+        return error("No player found with this phone number", 404);
       }
 
       const row = await findPlayerByPhoneDigits(phone);
