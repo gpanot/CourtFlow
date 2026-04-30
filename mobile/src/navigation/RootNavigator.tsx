@@ -9,6 +9,10 @@ import { ContinueAsScreen } from "../screens/auth/ContinueAsScreen";
 import { StaffNavigator } from "./StaffNavigator";
 import { TabletNavigator } from "./TabletNavigator";
 import { AdminWebViewScreen } from "../screens/admin/AdminWebViewScreen";
+import { useLocaleStore } from "../stores/locale-store";
+
+// Bootstrap locale from persisted storage once on app startup.
+void useLocaleStore.getState().bootstrap();
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 

@@ -1,37 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
-import {
-  loadTabletKioskLocale,
-  saveTabletKioskLocale,
-  type TabletKioskLocale,
-} from "../lib/tablet-kiosk-locale";
+import { useCallback } from "react";
 import { checkInScannerT, type CheckInScannerStringKey } from "../lib/tablet-check-in-strings";
+import { useLocaleStore } from "../stores/locale-store";
 
 export function useTabletKioskLocale() {
-  const [locale, setLocaleState] = useState<TabletKioskLocale>("en");
-  const [ready, setReady] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    void loadTabletKioskLocale().then((l) => {
-      if (!cancelled) {
-        setLocaleState(l);
-        setReady(true);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const setLocale = useCallback(async (next: TabletKioskLocale) => {
-    setLocaleState(next);
-    await saveTabletKioskLocale(next);
-  }, []);
-
-  const toggleLocale = useCallback(() => {
-    const next: TabletKioskLocale = locale === "vi" ? "en" : "vi";
-    void setLocale(next);
-  }, [locale, setLocale]);
+  const locale = useLocaleStore((s) => s.locale);
+  const ready = useLocaleStore((s) => s.ready);
+  const setLocale = useLocaleStore((s) => s.setLocale);
+  const toggleLocale = useLocaleStore((s) => s.toggleLocale);
 
   const t = useCallback(
     (key: CheckInScannerStringKey, params?: Record<string, string | number>) =>

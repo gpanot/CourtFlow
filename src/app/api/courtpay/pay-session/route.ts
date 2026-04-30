@@ -263,6 +263,7 @@ export async function POST(req: Request) {
         amount: sessionFee * headCount,
         type: "checkin",
         partyCount: headCount,
+        sessionId: openSession?.id,
       });
 
       return NextResponse.json({ ...payment, checkedIn: false });

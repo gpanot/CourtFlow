@@ -111,6 +111,8 @@ interface CreatePaymentInput {
   packageId?: string;
   /** Session check-in only; subscriptions ignore this (always 1 in DB). */
   partyCount?: number;
+  /** Link the payment to the active session so Reclub snapshot matching works at close time. */
+  sessionId?: string;
 }
 
 interface CreateConfirmedPaymentInput {
@@ -153,6 +155,7 @@ export async function createCheckInPayment(
       type: input.type,
       partyCount,
       expiresAt,
+      ...(input.sessionId ? { sessionId: input.sessionId } : {}),
     },
   });
 

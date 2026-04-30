@@ -23,9 +23,20 @@ export async function POST(request: NextRequest) {
 
     // CourtPay payments (no sessionId/playerId on the regular session)
     if (!payment.sessionId || !payment.playerId) {
+      // Link to the currently open session so the Reclub snapshot can match this payment.
+      const openSession = await prisma.session.findFirst({
+        where: { venueId: payment.venueId, status: "open" },
+        select: { id: true },
+      });
+
       await prisma.pendingPayment.update({
         where: { id: pendingPaymentId },
-        data: { status: "confirmed", confirmedAt: new Date(), confirmedBy: auth.id },
+        data: {
+          status: "confirmed",
+          confirmedAt: new Date(),
+          confirmedBy: auth.id,
+          ...(openSession ? { sessionId: openSession.id } : {}),
+        },
       });
 
       let updatedSub: Awaited<ReturnType<typeof getActiveSubscription>> = null;

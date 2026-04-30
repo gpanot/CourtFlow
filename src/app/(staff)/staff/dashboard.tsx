@@ -46,6 +46,7 @@ import { getHydrationSafeClientConfig, type StaffLegacyPanelId } from "@/config/
 import { useClientConfig, useClientId } from "@/config/use-client-config";
 import { componentMap } from "@/config/componentMap";
 import { StaffLegacyPanelsProvider } from "@/contexts/staff-legacy-panels-context";
+import { StaffLanguageToggle } from "./staff-language-toggle";
 
 function genderLabelForDialog(g: string, t: TFunction) {
   if (g === "male") return t("staff.dashboard.labelsGenderMale");
@@ -875,6 +876,7 @@ export function StaffDashboard() {
               <Search className="h-5 w-5" />
             </button>
           ) : null}
+          <StaffLanguageToggle variant="headerIcon" />
           <button
             type="button"
             onClick={() => {

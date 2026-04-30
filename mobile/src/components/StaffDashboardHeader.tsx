@@ -10,6 +10,7 @@ import { useAppColors } from "../theme/use-app-colors";
 import { useThemeStore } from "../stores/theme-store";
 import type { StaffStackParamList } from "../navigation/types";
 import { useTabletKioskLocale } from "../hooks/useTabletKioskLocale";
+import { TabletLanguageToggle } from "./TabletLanguageToggle";
 
 function createHeaderStyles(t: AppColors) {
   return StyleSheet.create({
@@ -75,7 +76,7 @@ export function StaffDashboardHeader() {
   const styles = useMemo(() => createHeaderStyles(theme), [theme]);
   const themeMode = useThemeStore((s) => s.mode);
   const toggleTheme = useThemeStore((s) => s.toggleMode);
-  const { t } = useTabletKioskLocale();
+  const { t, locale, toggleLocale } = useTabletKioskLocale();
 
   const venueName =
     venues.find((v) => v.id === venueId)?.name ?? t("staffSelectVenue");
@@ -103,6 +104,7 @@ export function StaffDashboardHeader() {
         </TouchableOpacity>
 
         <View style={styles.actions}>
+          <TabletLanguageToggle locale={locale} onToggle={toggleLocale} />
           <TouchableOpacity style={styles.actionBtn} onPress={toggleTheme} activeOpacity={0.7}>
             <Ionicons
               name={themeMode === "dark" ? "sunny-outline" : "moon-outline"}
