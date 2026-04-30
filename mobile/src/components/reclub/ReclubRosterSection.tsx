@@ -493,7 +493,7 @@ export function ReclubRosterSection({
       <View style={styles.container}>
         <View style={styles.card}>
           <Text style={styles.noEventText}>
-            Hôm nay không có sự kiện Reclub. Phiên CourtPay hoạt động bình thường.
+            {t("reclubNoEvents")}
           </Text>
         </View>
       </View>
@@ -514,7 +514,7 @@ export function ReclubRosterSection({
           ) : (
             <>
               <Ionicons name="people-outline" size={18} color={theme.text} />
-              <Text style={styles.fetchBtnText}>Tải danh sách Reclub</Text>
+              <Text style={styles.fetchBtnText}>{t("reclubFetchRoster")}</Text>
             </>
           )}
         </TouchableOpacity>

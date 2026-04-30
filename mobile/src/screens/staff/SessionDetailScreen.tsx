@@ -532,14 +532,14 @@ export function SessionDetailScreen() {
           onPress={() => setActiveTab("payments")}
           activeOpacity={0.7}
         >
-          <Text style={{ fontSize: 13, fontWeight: "600", color: activeTab === "payments" ? "#fff" : theme.muted }}>Thanh toán</Text>
+          <Text style={{ fontSize: 13, fontWeight: "600", color: activeTab === "payments" ? "#fff" : theme.muted }}>{t("reclubTabPayments")}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={{ flex: 1, paddingVertical: 10, alignItems: "center", borderBottomWidth: activeTab === "reclub" ? 2 : 0, borderBottomColor: "#22c55e" }}
           onPress={() => setActiveTab("reclub")}
           activeOpacity={0.7}
         >
-          <Text style={{ fontSize: 13, fontWeight: "600", color: activeTab === "reclub" ? "#fff" : theme.muted }}>Reclub</Text>
+          <Text style={{ fontSize: 13, fontWeight: "600", color: activeTab === "reclub" ? "#fff" : theme.muted }}>{t("reclubTabReclub")}</Text>
         </TouchableOpacity>
       </View>
 
@@ -548,8 +548,8 @@ export function SessionDetailScreen() {
           <ReclubSnapshotView snapshot={reclubSnapshot} theme={theme} insets={insets} />
         ) : (
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }}>
-            <Text style={{ fontSize: 13, color: theme.muted, textAlign: "center" }}>Không có dữ liệu Reclub cho phiên này.</Text>
-            <Text style={{ fontSize: 11, color: theme.subtle, textAlign: "center", marginTop: 6 }}>Snapshot sẽ được tạo khi đóng phiên có roster Reclub.</Text>
+            <Text style={{ fontSize: 13, color: theme.muted, textAlign: "center" }}>{t("reclubNoSnapshot")}</Text>
+            <Text style={{ fontSize: 11, color: theme.subtle, textAlign: "center", marginTop: 6 }}>{t("reclubNoSnapshotHint")}</Text>
           </View>
         )
       ) : (
@@ -753,19 +753,19 @@ function ReclubSnapshotView({
 
           {/* Legend */}
           <View style={{ marginTop: 16, backgroundColor: theme.card, borderRadius: 8, padding: 12, borderWidth: 1, borderColor: theme.border }}>
-            <Text style={{ fontSize: 11, fontWeight: "600", color: theme.muted, marginBottom: 6 }}>Chú thích</Text>
+            <Text style={{ fontSize: 11, fontWeight: "600", color: theme.muted, marginBottom: 6 }}>{t("reclubLegendTitle")}</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <View style={{ width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: "#22c55e" }} />
-                <Text style={{ fontSize: 11, color: theme.muted }}>Khớp & đã trả</Text>
+                <Text style={{ fontSize: 11, color: theme.muted }}>{t("reclubLegendMatchedPaid")}</Text>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <View style={{ width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: theme.border, opacity: 0.5 }} />
-                <Text style={{ fontSize: 11, color: theme.muted }}>Vắng mặt</Text>
+                <Text style={{ fontSize: 11, color: theme.muted }}>{t("reclubLegendAbsent")}</Text>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <View style={{ width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: "#f59e0b" }} />
-                <Text style={{ fontSize: 11, color: theme.muted }}>Walk-in</Text>
+                <Text style={{ fontSize: 11, color: theme.muted }}>{t("reclubLegendWalkIn")}</Text>
               </View>
             </View>
           </View>

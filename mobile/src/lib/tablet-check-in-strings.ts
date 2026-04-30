@@ -358,6 +358,18 @@ const CHECK_IN_SCANNER_EN = {
   "reclubKpiUnmatched": "Unmatched",
   "reclubKpiExpected": "Expected",
 
+  // ── Reclub Roster / Session Detail ──────────────────────────────────────────
+  "reclubFetchRoster": "Load Reclub List",
+  "reclubNoEvents": "No Reclub event today. CourtPay session running normally.",
+  "reclubLegendTitle": "Legend",
+  "reclubLegendMatchedPaid": "Matched & paid",
+  "reclubLegendAbsent": "Absent",
+  "reclubLegendWalkIn": "Walk-in",
+  "reclubTabPayments": "Payments",
+  "reclubTabReclub": "Reclub",
+  "reclubNoSnapshot": "No Reclub data for this session.",
+  "reclubNoSnapshotHint": "A snapshot is created when a session with a Reclub roster is closed.",
+
   // ── Boss Dashboard ─────────────────────────────────────────────────────────
   "bossDashboardTitle": "Boss Dashboard",
   "bossDashboardTabToday": "Today",
@@ -876,6 +888,18 @@ const CHECK_IN_SCANNER_VI = {
   "reclubKpiPaid": "Đã trả",
   "reclubKpiUnmatched": "Chưa khớp",
   "reclubKpiExpected": "Chờ đến",
+
+  // ── Reclub Roster / Session Detail ──────────────────────────────────────────
+  "reclubFetchRoster": "Tải danh sách Reclub",
+  "reclubNoEvents": "Hôm nay không có sự kiện Reclub. Phiên CourtPay hoạt động bình thường.",
+  "reclubLegendTitle": "Chú thích",
+  "reclubLegendMatchedPaid": "Khớp & đã trả",
+  "reclubLegendAbsent": "Vắng mặt",
+  "reclubLegendWalkIn": "Walk-in",
+  "reclubTabPayments": "Thanh toán",
+  "reclubTabReclub": "Reclub",
+  "reclubNoSnapshot": "Không có dữ liệu Reclub cho phiên này.",
+  "reclubNoSnapshotHint": "Snapshot sẽ được tạo khi đóng phiên có roster Reclub.",
 
   // ── Boss Dashboard ─────────────────────────────────────────────────────────
   "bossDashboardTitle": "Bảng Boss",
