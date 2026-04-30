@@ -15,9 +15,18 @@ export async function GET(
 
     const session = await prisma.session.findUnique({
       where: { id: sessionId },
-      select: { id: true, venueId: true, openedAt: true, closedAt: true, reclubSnapshot: true },
+      select: { id: true, venueId: true, openedAt: true, closedAt: true, reclubSnapshot: true, status: true },
     });
     if (!session) return error("Session not found", 404);
+
+    let isLatestClosedSession = false;
+    if (session.status === "closed") {
+      const newerClosed = await prisma.session.findFirst({
+        where: { venueId: session.venueId, status: "closed", closedAt: { gt: session.closedAt! } },
+        select: { id: true },
+      });
+      isLatestClosedSession = !newerClosed;
+    }
 
     // All confirmed payments that belong to this session:
     // 1. Directly linked by sessionId (self check-in flow)
@@ -150,6 +159,7 @@ export async function GET(
         subscription: enriched.filter((p) => p.paymentMethod === "subscription" || p.type === "subscription").length,
       },
       reclubSnapshot: session.reclubSnapshot ?? null,
+      isLatestClosedSession,
     });
   } catch (e) {
     console.error("[Session Payments]", e);

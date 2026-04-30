@@ -83,6 +83,7 @@ interface SessionPaymentsResponse {
     subscription: number;
   };
   reclubSnapshot: ReclubSnapshot | null;
+  isLatestClosedSession: boolean;
 }
 
 function getDisplayPlayer(p: SessionPaymentRow): { name: string; skillLevel: string } {
@@ -163,6 +164,7 @@ export function StaffSessionPaymentsDetail({
   const [payments, setPayments] = useState<SessionPaymentRow[]>([]);
   const [summary, setSummary] = useState<SessionPaymentsResponse["summary"] | null>(null);
   const [reclubSnapshot, setReclubSnapshot] = useState<ReclubSnapshot | null>(null);
+  const [isLatestClosedSession, setIsLatestClosedSession] = useState(false);
   const [activeTab, setActiveTab] = useState<"payments" | "reclub">("payments");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -179,6 +181,7 @@ export function StaffSessionPaymentsDetail({
       setPayments(Array.isArray(data.payments) ? data.payments : []);
       setSummary(data.summary ?? null);
       setReclubSnapshot(data.reclubSnapshot ?? null);
+      setIsLatestClosedSession(data.isLatestClosedSession ?? false);
     } catch (err) {
       setFetchError(err instanceof Error ? err.message : "Could not load payments");
     } finally {
@@ -353,7 +356,13 @@ export function StaffSessionPaymentsDetail({
 
       {activeTab === "reclub" ? (
         reclubSnapshot ? (
-          <ReclubSnapshotTab snapshot={reclubSnapshot} t={t} />
+          <ReclubSnapshotTab
+            snapshot={reclubSnapshot}
+            editable={isLatestClosedSession}
+            sessionId={sessionId}
+            onSnapshotUpdated={setReclubSnapshot}
+            t={t}
+          />
         ) : (
           <main className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
             <p className="text-sm text-neutral-500">{t("staff.sessionPaymentsDetail.reclubNoData")}</p>
@@ -514,13 +523,29 @@ export function StaffSessionPaymentsDetail({
   );
 }
 
-function ReclubSnapshotTab({ snapshot, t }: { snapshot: ReclubSnapshot; t: (key: string) => string }) {
+function ReclubSnapshotTab({
+  snapshot,
+  editable,
+  sessionId,
+  onSnapshotUpdated,
+  t,
+}: {
+  snapshot: ReclubSnapshot;
+  editable: boolean;
+  sessionId: string;
+  onSnapshotUpdated: (s: ReclubSnapshot) => void;
+  t: (key: string) => string;
+}) {
+  const [selectedWalkInIdx, setSelectedWalkInIdx] = useState<number | null>(null);
+  const [confirmTarget, setConfirmTarget] = useState<ReclubSnapshotPlayer | null>(null);
+  const [linking, setLinking] = useState(false);
+
   const rosterPlayers = snapshot.players.filter((p) => p.reclubName);
   const walkIns = snapshot.players.filter((p) => !p.reclubName);
 
   const colors = ["#6366f1", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981", "#06b6d4"];
   const initialsColor = (name: string) => colors[name.charCodeAt(0) % colors.length];
-  const initials = (name: string) =>
+  const getInitials = (name: string) =>
     name
       .split(" ")
       .map((w) => w[0])
@@ -528,8 +553,43 @@ function ReclubSnapshotTab({ snapshot, t }: { snapshot: ReclubSnapshot; t: (key:
       .join("")
       .toUpperCase();
 
+  const selectedWalkIn = selectedWalkInIdx !== null ? walkIns[selectedWalkInIdx] : null;
+
+  const unlinkedRoster = useMemo(() => {
+    if (!selectedWalkIn) return [];
+    const walkInName = (selectedWalkIn.courtpayName ?? "").toLowerCase().trim();
+    const unlinked = rosterPlayers.filter((p) => !p.paid);
+    if (!walkInName) return unlinked;
+
+    return [...unlinked].sort((a, b) => {
+      const aName = a.reclubName.toLowerCase();
+      const bName = b.reclubName.toLowerCase();
+      const aMatch = aName.includes(walkInName) || walkInName.includes(aName) ? 1 : 0;
+      const bMatch = bName.includes(walkInName) || walkInName.includes(bName) ? 1 : 0;
+      return bMatch - aMatch;
+    });
+  }, [rosterPlayers, selectedWalkIn]);
+
+  const handleLink = useCallback(async () => {
+    if (selectedWalkInIdx === null || !confirmTarget) return;
+    setLinking(true);
+    try {
+      const res = await api.patch<{ snapshot: ReclubSnapshot }>(
+        `/api/sessions/${sessionId}/reclub-snapshot`,
+        { walkInIndex: selectedWalkInIdx, reclubUserId: confirmTarget.reclubUserId }
+      );
+      onSnapshotUpdated(res.snapshot);
+      setSelectedWalkInIdx(null);
+      setConfirmTarget(null);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Failed to link");
+    } finally {
+      setLinking(false);
+    }
+  }, [selectedWalkInIdx, confirmTarget, sessionId, onSnapshotUpdated]);
+
   return (
-    <main className="min-h-0 flex-1 overflow-y-auto p-4 pb-[calc(24px+env(safe-area-inset-bottom))]">
+    <main className="relative min-h-0 flex-1 overflow-y-auto p-4 pb-[calc(24px+env(safe-area-inset-bottom))]">
       <div className="mb-3">
         <p className="text-sm font-bold text-white">{snapshot.eventName}</p>
         <p className="mt-0.5 text-xs text-neutral-500">
@@ -582,7 +642,7 @@ function ReclubSnapshotTab({ snapshot, t }: { snapshot: ReclubSnapshot; t: (key:
                     )}
                     style={{ backgroundColor: initialsColor(p.reclubName) }}
                   >
-                    {initials(p.reclubName)}
+                    {getInitials(p.reclubName)}
                   </div>
                 )}
                 {isMatched && (
@@ -598,19 +658,36 @@ function ReclubSnapshotTab({ snapshot, t }: { snapshot: ReclubSnapshot; t: (key:
           );
         })}
         {walkIns.map((p, i) => (
-          <div key={`walkin-${i}`} className="flex flex-col items-center">
+          <button
+            key={`walkin-${i}`}
+            type="button"
+            disabled={!editable}
+            onClick={() => editable && setSelectedWalkInIdx(i)}
+            className={cn(
+              "flex flex-col items-center",
+              editable && "cursor-pointer active:scale-95 transition-transform"
+            )}
+          >
             <div className="relative">
               <div
-                className="flex h-[48px] w-[48px] items-center justify-center rounded-full text-base font-bold text-white ring-[3px] ring-amber-500"
+                className={cn(
+                  "flex h-[48px] w-[48px] items-center justify-center rounded-full text-base font-bold text-white ring-[3px] ring-amber-500",
+                  editable && "ring-amber-400"
+                )}
                 style={{ backgroundColor: initialsColor(p.courtpayName ?? "W") }}
               >
-                {initials(p.courtpayName ?? "W")}
+                {getInitials(p.courtpayName ?? "W")}
               </div>
+              {editable && (
+                <div className="absolute -bottom-0.5 -right-0.5 flex h-[16px] w-[16px] items-center justify-center rounded-full border-2 border-neutral-900 bg-amber-500">
+                  <span className="text-[9px] font-bold text-black">↔</span>
+                </div>
+              )}
             </div>
             <p className="mt-1 w-full truncate text-center text-[10px] text-amber-400">
               {p.courtpayName ?? "Walk-in"}
             </p>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -628,6 +705,132 @@ function ReclubSnapshotTab({ snapshot, t }: { snapshot: ReclubSnapshot; t: (key:
           </span>
         </div>
       </div>
+
+      {/* Walk-in linking dialog: pick a Reclub member */}
+      {selectedWalkInIdx !== null && selectedWalkIn && !confirmTarget && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={() => setSelectedWalkInIdx(null)}>
+          <div
+            className="w-full max-w-lg rounded-t-2xl border-t border-neutral-700 bg-neutral-900 pb-[env(safe-area-inset-bottom)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
+              <div>
+                <p className="text-sm font-bold text-white">Liên kết Reclub</p>
+                <p className="text-xs text-amber-400">
+                  Walk-in: {selectedWalkIn.courtpayName ?? "Unknown"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedWalkInIdx(null)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-800 text-neutral-400 hover:bg-neutral-700"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="max-h-[50vh] overflow-y-auto p-3">
+              {unlinkedRoster.length === 0 ? (
+                <p className="py-6 text-center text-sm text-neutral-500">Không có thành viên Reclub chưa khớp.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {unlinkedRoster.map((rp) => {
+                    const walkInName = (selectedWalkIn.courtpayName ?? "").toLowerCase().trim();
+                    const rpName = rp.reclubName.toLowerCase();
+                    const isRecommended = walkInName && (rpName.includes(walkInName) || walkInName.includes(rpName));
+                    return (
+                      <button
+                        key={rp.reclubUserId}
+                        type="button"
+                        onClick={() => setConfirmTarget(rp)}
+                        className={cn(
+                          "flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors",
+                          isRecommended
+                            ? "border-green-700 bg-green-900/20 hover:bg-green-900/30"
+                            : "border-neutral-800 bg-neutral-800/40 hover:bg-neutral-800/70"
+                        )}
+                      >
+                        {rp.avatarUrl && !rp.avatarUrl.includes("default") ? (
+                          <img src={rp.avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
+                        ) : (
+                          <div
+                            className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white"
+                            style={{ backgroundColor: initialsColor(rp.reclubName) }}
+                          >
+                            {getInitials(rp.reclubName)}
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-white">{rp.reclubName}</p>
+                          {isRecommended && (
+                            <p className="text-[10px] font-medium text-green-400">Đề xuất</p>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm dialog */}
+      {confirmTarget && selectedWalkIn && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70" onClick={() => setConfirmTarget(null)}>
+          <div
+            className="mx-4 w-full max-w-sm rounded-2xl border border-neutral-700 bg-neutral-900 p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="mb-4 text-center text-sm font-bold text-white">Xác nhận liên kết</p>
+            <div className="mb-4 flex items-center justify-center gap-3">
+              <div className="flex flex-col items-center">
+                <div
+                  className="flex h-12 w-12 items-center justify-center rounded-full text-sm font-bold text-white ring-[3px] ring-amber-500"
+                  style={{ backgroundColor: initialsColor(selectedWalkIn.courtpayName ?? "W") }}
+                >
+                  {getInitials(selectedWalkIn.courtpayName ?? "W")}
+                </div>
+                <p className="mt-1 max-w-[80px] truncate text-[10px] text-amber-400">{selectedWalkIn.courtpayName}</p>
+              </div>
+              <span className="text-lg text-neutral-500">→</span>
+              <div className="flex flex-col items-center">
+                {confirmTarget.avatarUrl && !confirmTarget.avatarUrl.includes("default") ? (
+                  <img src={confirmTarget.avatarUrl} alt="" className="h-12 w-12 rounded-full object-cover ring-[3px] ring-neutral-600" />
+                ) : (
+                  <div
+                    className="flex h-12 w-12 items-center justify-center rounded-full text-sm font-bold text-white ring-[3px] ring-neutral-600"
+                    style={{ backgroundColor: initialsColor(confirmTarget.reclubName) }}
+                  >
+                    {getInitials(confirmTarget.reclubName)}
+                  </div>
+                )}
+                <p className="mt-1 max-w-[80px] truncate text-[10px] text-neutral-400">{confirmTarget.reclubName}</p>
+              </div>
+            </div>
+            <p className="mb-5 text-center text-xs text-neutral-400">
+              Liên kết &ldquo;{selectedWalkIn.courtpayName}&rdquo; với &ldquo;{confirmTarget.reclubName}&rdquo;?
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmTarget(null)}
+                className="flex-1 rounded-lg border border-neutral-700 bg-neutral-800 py-2.5 text-sm font-semibold text-neutral-300 hover:bg-neutral-700"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={linking}
+                onClick={() => void handleLink()}
+                className="flex-1 rounded-lg bg-green-600 py-2.5 text-sm font-semibold text-white hover:bg-green-500 disabled:opacity-50"
+              >
+                {linking ? "Đang xử lý..." : "Xác nhận"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

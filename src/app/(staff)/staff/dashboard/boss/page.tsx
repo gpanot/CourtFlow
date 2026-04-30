@@ -13,7 +13,38 @@ import {
   type CourtPayBillingPaymentCardData,
 } from "@/components/courtpay-billing-payment-card";
 
-type Tab = "today" | "history" | "subscriptions" | "billing";
+type Tab = "today" | "history" | "subscriptions" | "players" | "billing";
+
+interface PlayerRow {
+  id: string;
+  source: "self" | "courtpay";
+  name: string;
+  phone: string;
+  gender: string | null;
+  skillLevel: string | null;
+  facePhotoPath: string | null;
+  avatarPhotoPath: string | null;
+  checkInCount: number;
+  avgReturnDays: number | null;
+  lastSeenAt: string | null;
+  registeredAt: string;
+  venueName: string;
+  hasSubscription?: boolean;
+}
+
+interface PlayersData {
+  players: PlayerRow[];
+  stats: {
+    totalPlayers: number;
+    newThisWeek: number;
+    activeSubscriptions: number;
+    venueAvgReturn: number | null;
+    maleCount: number;
+    femaleCount: number;
+    venueAvgCheckIns?: number | null;
+    returnRate15d?: number | null;
+  };
+}
 
 interface TodayData {
   paymentsTodaySessionsTotal?: number;
@@ -146,6 +177,9 @@ export default function BossDashboardPage() {
   const [todayData, setTodayData] = useState<TodayData | null>(null);
   const [historyData, setHistoryData] = useState<HistoryData | null>(null);
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
+  const [playersData, setPlayersData] = useState<PlayersData | null>(null);
+  const [playerSearch, setPlayerSearch] = useState("");
+  const [genderFilter, setGenderFilter] = useState<"all" | "male" | "female">("all");
   const [billingCurrent, setBillingCurrent] = useState<BillingCurrentData | null>(null);
   const [billingInvoices, setBillingInvoices] = useState<BillingInvoiceRow[]>([]);
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceDetail | null>(null);
@@ -177,6 +211,11 @@ export default function BossDashboardPage() {
           `/api/courtpay/staff/boss/sessions?venueId=${venueId}`
         );
         setSessionData(data);
+      } else if (tab === "players") {
+        const data = await api.get<PlayersData>(
+          `/api/courtpay/staff/boss/players?venueId=${venueId}`
+        );
+        setPlayersData(data);
       } else if (tab === "billing") {
         setWeekPayments(null);
         setWeekPaymentsOpen(false);
@@ -302,6 +341,7 @@ export default function BossDashboardPage() {
               { id: "today" as const, label: "Today" },
               { id: "history" as const, label: "History" },
               { id: "subscriptions" as const, label: "Subs" },
+              { id: "players" as const, label: "Players" },
               { id: "billing" as const, label: "Billing" },
             ] as const
           ).map(({ id, label }) => (
@@ -548,6 +588,161 @@ export default function BossDashboardPage() {
                 </div>
               ))
             )}
+          </div>
+        ) : tab === "players" ? (
+          <div>
+            {/* KPI stats grid */}
+            {playersData && (
+              <div className="grid grid-cols-3 gap-2 mb-5">
+                <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-center">
+                  <p className="text-xl font-bold">{playersData.stats.totalPlayers}</p>
+                  <p className="text-[10px] text-neutral-500 mt-0.5">Total players</p>
+                </div>
+                <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-center">
+                  <p className="text-xl font-bold text-purple-400">{playersData.stats.newThisWeek}</p>
+                  <p className="text-[10px] text-neutral-500 mt-0.5">New this week</p>
+                </div>
+                <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-center">
+                  <p className="text-xl font-bold">{playersData.stats.activeSubscriptions}</p>
+                  <p className="text-[10px] text-neutral-500 mt-0.5">Subscribers</p>
+                </div>
+                <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-center">
+                  <p className="text-xl font-bold text-yellow-400">
+                    {playersData.stats.venueAvgReturn != null ? playersData.stats.venueAvgReturn : "—"}
+                  </p>
+                  <p className="text-[10px] text-neutral-500 mt-0.5">Avg return (days)</p>
+                </div>
+                <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-center">
+                  <p className="text-xl font-bold text-yellow-400">
+                    {playersData.stats.venueAvgCheckIns != null
+                      ? playersData.stats.venueAvgCheckIns.toFixed(1)
+                      : playersData.players.length > 0
+                        ? (playersData.players.reduce((s, p) => s + p.checkInCount, 0) / playersData.players.length).toFixed(1)
+                        : "—"}
+                  </p>
+                  <p className="text-[10px] text-neutral-500 mt-0.5">Avg visits / player</p>
+                </div>
+                <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-center">
+                  <p className="text-xl font-bold text-purple-400">
+                    {playersData.stats.returnRate15d != null
+                      ? `${playersData.stats.returnRate15d.toFixed(0)}%`
+                      : "—"}
+                  </p>
+                  <p className="text-[10px] text-neutral-500 mt-0.5">Returned (15d) %</p>
+                </div>
+              </div>
+            )}
+
+            {/* Gender filter */}
+            <div className="flex gap-2 mb-3">
+              {(["all", "male", "female"] as const).map((g) => {
+                const count =
+                  g === "all" ? (playersData?.stats.totalPlayers ?? 0)
+                  : g === "male" ? (playersData?.stats.maleCount ?? 0)
+                  : (playersData?.stats.femaleCount ?? 0);
+                return (
+                  <button
+                    key={g}
+                    type="button"
+                    onClick={() => setGenderFilter(g)}
+                    className={cn(
+                      "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                      genderFilter === g
+                        ? "bg-purple-600/20 text-purple-400"
+                        : "text-neutral-400 hover:bg-neutral-800/40 hover:text-white"
+                    )}
+                  >
+                    {g === "all" ? "All" : g === "male" ? "Male" : "Female"} ({count})
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Search */}
+            <div className="relative mb-4">
+              <input
+                type="text"
+                value={playerSearch}
+                onChange={(e) => setPlayerSearch(e.target.value)}
+                placeholder="Search by name or phone…"
+                className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-600"
+              />
+              {playerSearch && (
+                <button
+                  type="button"
+                  onClick={() => setPlayerSearch("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-white"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Player list */}
+            {!playersData ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin text-neutral-600" />
+              </div>
+            ) : (() => {
+              const q = playerSearch.toLowerCase().trim();
+              const filtered = playersData.players.filter((p) => {
+                const matchGender = genderFilter === "all" || p.gender?.toLowerCase() === genderFilter;
+                const matchSearch = !q || p.name.toLowerCase().includes(q) || (p.phone ?? "").includes(q);
+                return matchGender && matchSearch;
+              });
+
+              if (filtered.length === 0) {
+                return <p className="text-neutral-500 text-sm py-8 text-center">No players found.</p>;
+              }
+
+              return (
+                <div className="space-y-2">
+                  {filtered.map((p) => {
+                    const isFemale = p.gender?.toLowerCase() === "female";
+                    const isMale = p.gender?.toLowerCase() === "male";
+                    const nameColor = isFemale ? "text-pink-300" : isMale ? "text-blue-300" : "text-white";
+                    const initials = p.name.trim().charAt(0).toUpperCase();
+                    const lastSeen = p.lastSeenAt
+                      ? new Date(p.lastSeenAt).toLocaleDateString(undefined, { day: "2-digit", month: "short" })
+                      : "—";
+                    return (
+                      <div
+                        key={`${p.source}-${p.id}`}
+                        className="flex items-center gap-3 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2.5"
+                      >
+                        {/* Avatar */}
+                        <div className="flex-shrink-0 w-10 h-10 rounded-full overflow-hidden bg-purple-900/30 flex items-center justify-center">
+                          <span className="text-base font-bold text-purple-300">{initials}</span>
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className={cn("text-sm font-semibold truncate", nameColor)}>{p.name}</p>
+                            <span className={cn(
+                              "text-[10px] font-medium px-1.5 py-0.5 rounded",
+                              p.source === "courtpay"
+                                ? "bg-amber-900/30 text-amber-400"
+                                : "bg-blue-900/30 text-blue-400"
+                            )}>
+                              {p.source === "courtpay" ? "CourtPay" : "Self"}
+                            </span>
+                            {p.hasSubscription && (
+                              <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-purple-900/30 text-purple-400">Sub</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-neutral-500">{p.phone}</p>
+                          <div className="flex items-center gap-3 mt-0.5">
+                            <span className="text-[10px] text-neutral-600">{p.checkInCount} visits</span>
+                            <span className="text-[10px] text-neutral-600">Last seen: {lastSeen}</span>
+                            {p.skillLevel && <span className="text-[10px] text-neutral-600">{p.skillLevel}</span>}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         ) : tab === "billing" ? (
           <div className="space-y-6">

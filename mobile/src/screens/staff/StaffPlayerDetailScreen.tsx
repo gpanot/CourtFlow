@@ -71,6 +71,9 @@ interface PlayerDetail {
   skillLevel: string | null;
   facePhotoPath: string | null;
   avatarPhotoPath: string | null;
+  reclubUserId: number | null;
+  reclubName: string | null;
+  reclubAvatarUrl: string | null;
   venueName: string;
   registeredAt: string;
   checkInCount: number;
@@ -202,6 +205,45 @@ function createStyles(t: AppColors) {
     },
     statValue: { fontSize: 20, fontWeight: "700", color: t.text },
     statLabel: { fontSize: 11, color: t.muted, marginTop: 2 },
+
+    // ── Reclub card ──────────────────────────────────────────────────────
+    reclubCard: {
+      marginHorizontal: 14,
+      marginTop: 14,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: "rgba(34,197,94,0.35)",
+      backgroundColor: "rgba(34,197,94,0.07)",
+      padding: 14,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    reclubAvatar: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      overflow: "hidden",
+    },
+    reclubAvatarFallback: {
+      width: 48,
+      height: 48,
+      borderRadius: 24,
+      backgroundColor: "rgba(34,197,94,0.2)",
+      justifyContent: "center",
+      alignItems: "center",
+    },
+    reclubAvatarImage: { width: "100%", height: "100%" },
+    reclubLabel: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: "#22c55e",
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
+      marginBottom: 2,
+    },
+    reclubName: { fontSize: 15, fontWeight: "700", color: t.text },
+    reclubId: { fontSize: 11, color: t.muted, marginTop: 1 },
 
     // ── Active subscription card ──────────────────────────────────────────
     subCard: {
@@ -646,6 +688,31 @@ export function StaffPlayerDetailScreen() {
           </View>
         </View>
       </View>
+
+      {/* ── Reclub link ─────────────────────────────────────────────────── */}
+      {detail.reclubUserId ? (
+        <View style={styles.reclubCard}>
+          <View style={styles.reclubAvatar}>
+            {detail.reclubAvatarUrl ? (
+              <Image
+                source={{ uri: detail.reclubAvatarUrl }}
+                style={styles.reclubAvatarImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={styles.reclubAvatarFallback}>
+                <Ionicons name="person" size={22} color="#22c55e" />
+              </View>
+            )}
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.reclubLabel}>Reclub</Text>
+            <Text style={styles.reclubName}>{detail.reclubName ?? "Linked"}</Text>
+            <Text style={styles.reclubId}>ID: {detail.reclubUserId}</Text>
+          </View>
+          <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
+        </View>
+      ) : null}
 
       {/* ── Active subscription ─────────────────────────────────────────── */}
       {activeSub ? (

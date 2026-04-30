@@ -9,6 +9,8 @@ import {
   RefreshControl,
   Image,
   Alert,
+  Modal,
+  ScrollView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -69,6 +71,7 @@ interface SessionPaymentsResponse {
     subscription: number;
   };
   reclubSnapshot: ReclubSnapshot | null;
+  isLatestClosedSession: boolean;
 }
 
 function getDisplayPlayer(p: PendingPayment): { name: string; skillLevel: string } {
@@ -258,6 +261,7 @@ export function SessionDetailScreen() {
   const [payments, setPayments] = useState<PendingPayment[]>([]);
   const [summary, setSummary] = useState<SessionPaymentsResponse["summary"] | null>(null);
   const [reclubSnapshot, setReclubSnapshot] = useState<ReclubSnapshot | null>(null);
+  const [isLatestClosedSession, setIsLatestClosedSession] = useState(false);
   const [activeTab, setActiveTab] = useState<"payments" | "reclub">("payments");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -334,6 +338,7 @@ export function SessionDetailScreen() {
       setPayments(Array.isArray(data.payments) ? data.payments : []);
       setSummary(data.summary ?? null);
       setReclubSnapshot(data.reclubSnapshot ?? null);
+      setIsLatestClosedSession(data.isLatestClosedSession ?? false);
     } catch (err) {
       setFetchError(err instanceof Error ? err.message : "Could not load payments");
     } finally {
@@ -532,20 +537,27 @@ export function SessionDetailScreen() {
           onPress={() => setActiveTab("payments")}
           activeOpacity={0.7}
         >
-          <Text style={{ fontSize: 13, fontWeight: "600", color: activeTab === "payments" ? "#fff" : theme.muted }}>{t("reclubTabPayments")}</Text>
+          <Text style={{ fontSize: 13, fontWeight: "600", color: activeTab === "payments" ? theme.text : theme.muted }}>{t("reclubTabPayments")}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={{ flex: 1, paddingVertical: 10, alignItems: "center", borderBottomWidth: activeTab === "reclub" ? 2 : 0, borderBottomColor: "#22c55e" }}
           onPress={() => setActiveTab("reclub")}
           activeOpacity={0.7}
         >
-          <Text style={{ fontSize: 13, fontWeight: "600", color: activeTab === "reclub" ? "#fff" : theme.muted }}>{t("reclubTabReclub")}</Text>
+          <Text style={{ fontSize: 13, fontWeight: "600", color: activeTab === "reclub" ? theme.text : theme.muted }}>{t("reclubTabReclub")}</Text>
         </TouchableOpacity>
       </View>
 
       {activeTab === "reclub" ? (
         reclubSnapshot ? (
-          <ReclubSnapshotView snapshot={reclubSnapshot} theme={theme} insets={insets} />
+          <ReclubSnapshotView
+            snapshot={reclubSnapshot}
+            theme={theme}
+            insets={insets}
+            editable={isLatestClosedSession}
+            sessionId={sessionId}
+            onSnapshotUpdated={setReclubSnapshot}
+          />
         ) : (
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 24 }}>
             <Text style={{ fontSize: 13, color: theme.muted, textAlign: "center" }}>{t("reclubNoSnapshot")}</Text>
@@ -615,12 +627,22 @@ function ReclubSnapshotView({
   snapshot,
   theme,
   insets,
+  editable,
+  sessionId,
+  onSnapshotUpdated,
 }: {
   snapshot: ReclubSnapshot;
   theme: AppColors;
   insets: { bottom: number };
+  editable: boolean;
+  sessionId: string;
+  onSnapshotUpdated: (s: ReclubSnapshot) => void;
 }) {
   const { t } = useTabletKioskLocale();
+  const [selectedWalkInIdx, setSelectedWalkInIdx] = useState<number | null>(null);
+  const [confirmTarget, setConfirmTarget] = useState<ReclubSnapshotPlayer | null>(null);
+  const [linking, setLinking] = useState(false);
+
   const rosterPlayers = snapshot.players.filter((p) => p.reclubName);
   const walkIns = snapshot.players.filter((p) => !p.reclubName);
 
@@ -635,7 +657,42 @@ function ReclubSnapshotView({
 
   const avatarSize = 48;
 
+  const selectedWalkIn = selectedWalkInIdx !== null ? walkIns[selectedWalkInIdx] : null;
+
+  const unlinkedRoster = useMemo(() => {
+    if (!selectedWalkIn) return [];
+    const walkInName = (selectedWalkIn.courtpayName ?? "").toLowerCase().trim();
+    const unlinked = rosterPlayers.filter((p) => !p.paid);
+    if (!walkInName) return unlinked;
+    return [...unlinked].sort((a, b) => {
+      const aName = a.reclubName.toLowerCase();
+      const bName = b.reclubName.toLowerCase();
+      const aMatch = aName.includes(walkInName) || walkInName.includes(aName) ? 1 : 0;
+      const bMatch = bName.includes(walkInName) || walkInName.includes(bName) ? 1 : 0;
+      return bMatch - aMatch;
+    });
+  }, [rosterPlayers, selectedWalkIn]);
+
+  const handleLink = useCallback(async () => {
+    if (selectedWalkInIdx === null || !confirmTarget) return;
+    setLinking(true);
+    try {
+      const res = await api.patch<{ snapshot: ReclubSnapshot }>(
+        `/api/sessions/${sessionId}/reclub-snapshot`,
+        { walkInIndex: selectedWalkInIdx, reclubUserId: confirmTarget.reclubUserId }
+      );
+      onSnapshotUpdated(res.snapshot);
+      setSelectedWalkInIdx(null);
+      setConfirmTarget(null);
+    } catch (err) {
+      Alert.alert("Lỗi", err instanceof Error ? err.message : "Không thể liên kết");
+    } finally {
+      setLinking(false);
+    }
+  }, [selectedWalkInIdx, confirmTarget, sessionId, onSnapshotUpdated]);
+
   return (
+    <>
     <FlatList
       data={[1]}
       keyExtractor={() => "reclub-snapshot"}
@@ -727,27 +784,40 @@ function ReclubSnapshotView({
               );
             })}
             {walkIns.map((p, i) => (
-              <View key={`walkin-${i}`} style={{ width: (avatarSize + 12), alignItems: "center", marginBottom: 8 }}>
-                <View
-                  style={{
-                    width: avatarSize,
-                    height: avatarSize,
-                    borderRadius: avatarSize / 2,
-                    backgroundColor: initialsColor(p.courtpayName ?? "W"),
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderWidth: 3,
-                    borderColor: "#f59e0b",
-                  }}
-                >
-                  <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>
-                    {getInitials(p.courtpayName ?? "W")}
-                  </Text>
+              <TouchableOpacity
+                key={`walkin-${i}`}
+                disabled={!editable}
+                onPress={() => editable && setSelectedWalkInIdx(i)}
+                activeOpacity={0.7}
+                style={{ width: (avatarSize + 12), alignItems: "center", marginBottom: 8 }}
+              >
+                <View style={{ position: "relative" }}>
+                  <View
+                    style={{
+                      width: avatarSize,
+                      height: avatarSize,
+                      borderRadius: avatarSize / 2,
+                      backgroundColor: initialsColor(p.courtpayName ?? "W"),
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderWidth: 3,
+                      borderColor: "#f59e0b",
+                    }}
+                  >
+                    <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>
+                      {getInitials(p.courtpayName ?? "W")}
+                    </Text>
+                  </View>
+                  {editable && (
+                    <View style={{ position: "absolute", bottom: -2, right: -2, width: 16, height: 16, borderRadius: 8, backgroundColor: "#f59e0b", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: theme.bg }}>
+                      <Text style={{ fontSize: 8, fontWeight: "700", color: "#000" }}>↔</Text>
+                    </View>
+                  )}
                 </View>
                 <Text numberOfLines={1} style={{ fontSize: 10, color: "#f59e0b", marginTop: 3, textAlign: "center", width: avatarSize + 8 }}>
                   {p.courtpayName ?? "Walk-in"}
                 </Text>
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
 
@@ -772,5 +842,112 @@ function ReclubSnapshotView({
         </View>
       )}
     />
+
+    {/* Walk-in linking modal: pick a Reclub member */}
+    <Modal visible={selectedWalkInIdx !== null && !confirmTarget} transparent animationType="slide" onRequestClose={() => setSelectedWalkInIdx(null)}>
+      <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.6)" }}>
+        <View style={{ backgroundColor: theme.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: "70%", paddingBottom: insets.bottom + 16 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+            <View>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: "#fff" }}>Liên kết Reclub</Text>
+              <Text style={{ fontSize: 12, color: "#f59e0b", marginTop: 2 }}>Walk-in: {selectedWalkIn?.courtpayName ?? "Unknown"}</Text>
+            </View>
+            <TouchableOpacity onPress={() => setSelectedWalkInIdx(null)} style={{ padding: 6 }}>
+              <Ionicons name="close" size={20} color={theme.muted} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={{ paddingHorizontal: 12, paddingTop: 8 }}>
+            {unlinkedRoster.length === 0 ? (
+              <Text style={{ textAlign: "center", color: theme.muted, paddingVertical: 24, fontSize: 13 }}>Không có thành viên Reclub chưa khớp.</Text>
+            ) : (
+              unlinkedRoster.map((rp) => {
+                const walkInName = (selectedWalkIn?.courtpayName ?? "").toLowerCase().trim();
+                const rpName = rp.reclubName.toLowerCase();
+                const isRecommended = !!walkInName && (rpName.includes(walkInName) || walkInName.includes(rpName));
+                return (
+                  <TouchableOpacity
+                    key={rp.reclubUserId}
+                    onPress={() => setConfirmTarget(rp)}
+                    activeOpacity={0.7}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: 12,
+                      marginBottom: 6,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: isRecommended ? "#166534" : theme.border,
+                      backgroundColor: isRecommended ? "rgba(34,197,94,0.08)" : theme.bg,
+                    }}
+                  >
+                    {rp.avatarUrl && !rp.avatarUrl.includes("default") ? (
+                      <Image source={{ uri: rp.avatarUrl }} style={{ width: 40, height: 40, borderRadius: 20 }} />
+                    ) : (
+                      <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: initialsColor(rp.reclubName), alignItems: "center", justifyContent: "center" }}>
+                        <Text style={{ color: "#fff", fontSize: 13, fontWeight: "700" }}>{getInitials(rp.reclubName)}</Text>
+                      </View>
+                    )}
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: "600", color: "#fff" }} numberOfLines={1}>{rp.reclubName}</Text>
+                      {isRecommended && <Text style={{ fontSize: 10, color: "#22c55e", fontWeight: "600", marginTop: 1 }}>Đề xuất</Text>}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+
+    {/* Confirm dialog */}
+    <Modal visible={!!confirmTarget && !!selectedWalkIn} transparent animationType="fade" onRequestClose={() => setConfirmTarget(null)}>
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.7)", padding: 24 }}>
+        <View style={{ width: "100%", maxWidth: 320, backgroundColor: theme.card, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: theme.border }}>
+          <Text style={{ fontSize: 14, fontWeight: "700", color: "#fff", textAlign: "center", marginBottom: 16 }}>Xác nhận liên kết</Text>
+          <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 12, marginBottom: 16 }}>
+            <View style={{ alignItems: "center" }}>
+              <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: initialsColor(selectedWalkIn?.courtpayName ?? "W"), alignItems: "center", justifyContent: "center", borderWidth: 3, borderColor: "#f59e0b" }}>
+                <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>{getInitials(selectedWalkIn?.courtpayName ?? "W")}</Text>
+              </View>
+              <Text numberOfLines={1} style={{ fontSize: 10, color: "#f59e0b", marginTop: 3, maxWidth: 70, textAlign: "center" }}>{selectedWalkIn?.courtpayName}</Text>
+            </View>
+            <Text style={{ fontSize: 16, color: theme.muted }}>→</Text>
+            <View style={{ alignItems: "center" }}>
+              {confirmTarget?.avatarUrl && !confirmTarget.avatarUrl.includes("default") ? (
+                <Image source={{ uri: confirmTarget.avatarUrl }} style={{ width: 48, height: 48, borderRadius: 24, borderWidth: 3, borderColor: theme.border }} />
+              ) : (
+                <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: initialsColor(confirmTarget?.reclubName ?? "R"), alignItems: "center", justifyContent: "center", borderWidth: 3, borderColor: theme.border }}>
+                  <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>{getInitials(confirmTarget?.reclubName ?? "R")}</Text>
+                </View>
+              )}
+              <Text numberOfLines={1} style={{ fontSize: 10, color: theme.muted, marginTop: 3, maxWidth: 70, textAlign: "center" }}>{confirmTarget?.reclubName}</Text>
+            </View>
+          </View>
+          <Text style={{ fontSize: 12, color: theme.muted, textAlign: "center", marginBottom: 16 }}>
+            Liên kết &ldquo;{selectedWalkIn?.courtpayName}&rdquo; với &ldquo;{confirmTarget?.reclubName}&rdquo;?
+          </Text>
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <TouchableOpacity
+              onPress={() => setConfirmTarget(null)}
+              style={{ flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: theme.bg, borderWidth: 1, borderColor: theme.border, alignItems: "center" }}
+              activeOpacity={0.7}
+            >
+              <Text style={{ fontSize: 13, fontWeight: "600", color: theme.muted }}>Hủy</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => void handleLink()}
+              disabled={linking}
+              style={{ flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: "#22c55e", alignItems: "center", opacity: linking ? 0.5 : 1 }}
+              activeOpacity={0.7}
+            >
+              <Text style={{ fontSize: 13, fontWeight: "600", color: "#fff" }}>{linking ? "Đang xử lý..." : "Xác nhận"}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+    </>
   );
 }

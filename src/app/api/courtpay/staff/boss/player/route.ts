@@ -2,6 +2,29 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireStaff } from "@/lib/auth";
 
+const RECLUB_API = "https://api.reclub.co";
+const RECLUB_HEADERS: Record<string, string> = {
+  "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+  "x-output-casing": "camelCase",
+  Accept: "application/json",
+};
+
+async function fetchReclubProfile(reclubUserId: number): Promise<{ name: string; avatarUrl: string } | null> {
+  try {
+    const res = await fetch(
+      `${RECLUB_API}/players/userIds?userIds=${reclubUserId}&scopes=BASIC_PROFILE`,
+      { headers: RECLUB_HEADERS }
+    );
+    if (!res.ok) return null;
+    const data = await res.json() as { players?: Array<{ userId: number; name: string; imageUrl: string }> };
+    const p = data.players?.find((x) => x.userId === reclubUserId);
+    if (!p) return null;
+    return { name: p.name, avatarUrl: p.imageUrl };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * GET /api/courtpay/staff/boss/player?playerId=...&source=courtpay|self
  * PATCH /api/courtpay/staff/boss/player  { playerId, source, name, phone, gender, skillLevel }
@@ -50,8 +73,12 @@ export async function GET(req: Request) {
       ) ?? null;
       const linkedPlayer = await prisma.player.findFirst({
         where: { phone: player.phone },
-        select: { facePhotoPath: true, avatarPhotoPath: true },
+        select: { facePhotoPath: true, avatarPhotoPath: true, reclubUserId: true },
       });
+
+      const reclubProfile = linkedPlayer?.reclubUserId
+        ? await fetchReclubProfile(linkedPlayer.reclubUserId)
+        : null;
 
       return NextResponse.json({
         player: {
@@ -63,6 +90,9 @@ export async function GET(req: Request) {
           skillLevel: player.skillLevel,
           facePhotoPath: linkedPlayer?.facePhotoPath ?? null,
           avatarPhotoPath: linkedPlayer?.avatarPhotoPath ?? null,
+          reclubUserId: linkedPlayer?.reclubUserId ?? null,
+          reclubName: reclubProfile?.name ?? null,
+          reclubAvatarUrl: reclubProfile?.avatarUrl ?? null,
           venueName: player.venue.name,
           registeredAt: player.createdAt.toISOString(),
           checkInCount: player.checkIns.length,
@@ -100,7 +130,16 @@ export async function GET(req: Request) {
     // source === "self" — Self check-in player
     const player = await prisma.player.findUnique({
       where: { id: playerId },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        phone: true,
+        gender: true,
+        skillLevel: true,
+        facePhotoPath: true,
+        avatarPhotoPath: true,
+        reclubUserId: true,
+        createdAt: true,
         queueEntries: {
           orderBy: { joinedAt: "desc" },
           take: 50,
@@ -119,6 +158,10 @@ export async function GET(req: Request) {
 
     const venueName = player.queueEntries[0]?.session?.venue?.name ?? "—";
 
+    const selfReclubProfile = player.reclubUserId
+      ? await fetchReclubProfile(player.reclubUserId)
+      : null;
+
     return NextResponse.json({
       player: {
         id: player.id,
@@ -129,6 +172,9 @@ export async function GET(req: Request) {
         skillLevel: player.skillLevel,
         facePhotoPath: player.facePhotoPath,
         avatarPhotoPath: player.avatarPhotoPath,
+        reclubUserId: player.reclubUserId ?? null,
+        reclubName: selfReclubProfile?.name ?? null,
+        reclubAvatarUrl: selfReclubProfile?.avatarUrl ?? null,
         venueName,
         registeredAt: player.createdAt.toISOString(),
         checkInCount: player.queueEntries.length,
