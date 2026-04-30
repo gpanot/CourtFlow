@@ -59,6 +59,7 @@ interface ReclubSnapshotPlayer {
   paid: boolean;
   amount: number | null;
   checkinTime: string | null;
+  facePhotoUrl?: string | null;
 }
 
 interface ReclubSnapshot {
@@ -616,6 +617,7 @@ function ReclubSnapshotTab({
         </div>
       </div>
 
+      {/* Reclub members grid */}
       <div className="grid grid-cols-4 gap-2">
         {rosterPlayers.map((p) => {
           const isMatched = p.paid;
@@ -657,39 +659,67 @@ function ReclubSnapshotTab({
             </div>
           );
         })}
-        {walkIns.map((p, i) => (
-          <button
-            key={`walkin-${i}`}
-            type="button"
-            disabled={!editable}
-            onClick={() => editable && setSelectedWalkInIdx(i)}
-            className={cn(
-              "flex flex-col items-center",
-              editable && "cursor-pointer active:scale-95 transition-transform"
-            )}
-          >
-            <div className="relative">
-              <div
-                className={cn(
-                  "flex h-[48px] w-[48px] items-center justify-center rounded-full text-base font-bold text-white ring-[3px] ring-amber-500",
-                  editable && "ring-amber-400"
-                )}
-                style={{ backgroundColor: initialsColor(p.courtpayName ?? "W") }}
-              >
-                {getInitials(p.courtpayName ?? "W")}
-              </div>
-              {editable && (
-                <div className="absolute -bottom-0.5 -right-0.5 flex h-[16px] w-[16px] items-center justify-center rounded-full border-2 border-neutral-900 bg-amber-500">
-                  <span className="text-[9px] font-bold text-black">↔</span>
-                </div>
-              )}
-            </div>
-            <p className="mt-1 w-full truncate text-center text-[10px] text-amber-400">
-              {p.courtpayName ?? "Walk-in"}
-            </p>
-          </button>
-        ))}
       </div>
+
+      {/* Separator */}
+      {walkIns.length > 0 && (
+        <>
+          <div className="my-3 flex items-center gap-2">
+            <div className="h-px flex-1 bg-amber-500/30" />
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-400">
+              Walk-in ({walkIns.length})
+            </span>
+            <div className="h-px flex-1 bg-amber-500/30" />
+          </div>
+
+          <div className="grid grid-cols-4 gap-2">
+            {walkIns.map((p, i) => (
+              <button
+                key={`walkin-${i}`}
+                type="button"
+                disabled={!editable}
+                onClick={() => editable && setSelectedWalkInIdx(i)}
+                className={cn(
+                  "flex flex-col items-center",
+                  editable && "cursor-pointer active:scale-95 transition-transform"
+                )}
+              >
+                <div className="relative">
+                  {p.facePhotoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={p.facePhotoUrl}
+                      alt=""
+                      className={cn(
+                        "h-[48px] w-[48px] rounded-full object-cover ring-[3px] ring-amber-500",
+                        editable && "ring-amber-400"
+                      )}
+                    />
+                  ) : (
+                    <div
+                      className={cn(
+                        "flex h-[48px] w-[48px] items-center justify-center rounded-full text-base font-bold text-white ring-[3px] ring-amber-500",
+                        editable && "ring-amber-400"
+                      )}
+                      style={{ backgroundColor: initialsColor(p.courtpayName ?? "W") }}
+                    >
+                      {getInitials(p.courtpayName ?? "W")}
+                    </div>
+                  )}
+                  {editable && (
+                    <div className="absolute -bottom-0.5 -right-0.5 flex h-[16px] w-[16px] items-center justify-center rounded-full border-2 border-neutral-900 bg-amber-500">
+                      <span className="text-[9px] font-bold text-black">↔</span>
+                    </div>
+                  )}
+                </div>
+                <p className="mt-1 w-full truncate text-center text-[10px] text-amber-400">
+                  {p.courtpayName ?? "Walk-in"}
+                </p>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       <div className="mt-4 rounded-lg border border-neutral-800 bg-neutral-900/50 p-3">
         <p className="mb-2 text-xs font-medium text-neutral-400">{t("staff.sessionPaymentsDetail.reclubLegend")}</p>

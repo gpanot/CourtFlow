@@ -13,6 +13,7 @@ interface SnapshotPlayer {
   paid: boolean;
   amount: number | null;
   checkinTime: string | null;
+  facePhotoUrl?: string | null;
 }
 
 interface ReclubSnapshot {
@@ -82,6 +83,7 @@ export async function PATCH(
     targetRoster.paid = true;
     targetRoster.amount = walkIn.amount;
     targetRoster.checkinTime = walkIn.checkinTime;
+    targetRoster.facePhotoUrl = walkIn.facePhotoUrl;
 
     // Remove the walk-in from the list
     const walkInGlobalIdx = snapshot.players.indexOf(walkIn);

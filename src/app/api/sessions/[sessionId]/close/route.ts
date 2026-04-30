@@ -44,7 +44,7 @@ export async function POST(
             amount: true,
             createdAt: true,
             checkInPlayer: { select: { id: true, name: true, phone: true } },
-            player: { select: { id: true, name: true, phone: true, reclubUserId: true } },
+            player: { select: { id: true, name: true, phone: true, reclubUserId: true, facePhotoPath: true, avatarPhotoPath: true } },
           },
         });
 
@@ -55,28 +55,31 @@ export async function POST(
         const linkedPlayers = checkInPhones.length > 0
           ? await prisma.player.findMany({
               where: { phone: { in: [...new Set(checkInPhones)] } },
-              select: { id: true, name: true, phone: true, reclubUserId: true },
+              select: { id: true, name: true, phone: true, reclubUserId: true, facePhotoPath: true, avatarPhotoPath: true },
             })
           : [];
         const playerByPhone = new Map(linkedPlayers.map((p) => [p.phone, p]));
 
         // Build a map of reclubUserId → payment info
-        const reclubToPayment = new Map<number, { playerId: string; playerName: string; amount: number; checkinTime: string }>();
+        const reclubToPayment = new Map<number, { playerId: string; playerName: string; amount: number; checkinTime: string; facePhotoUrl: string | null }>();
         for (const p of confirmedPayments) {
           let reclubUserId: number | null = null;
           let playerId: string | null = null;
           let playerName: string | null = null;
+          let facePhotoUrl: string | null = null;
 
           if (p.player?.reclubUserId) {
             reclubUserId = p.player.reclubUserId;
             playerId = p.player.id;
             playerName = p.player.name;
+            facePhotoUrl = p.player.avatarPhotoPath ?? p.player.facePhotoPath ?? null;
           } else if (p.checkInPlayer?.phone) {
             const linked = playerByPhone.get(p.checkInPlayer.phone);
             if (linked?.reclubUserId) {
               reclubUserId = linked.reclubUserId;
               playerId = linked.id;
               playerName = linked.name;
+              facePhotoUrl = linked.avatarPhotoPath ?? linked.facePhotoPath ?? null;
             }
           }
 
@@ -86,6 +89,7 @@ export async function POST(
               playerName: playerName ?? "Unknown",
               amount: p.amount,
               checkinTime: p.createdAt.toISOString(),
+              facePhotoUrl,
             });
           }
         }
@@ -103,6 +107,7 @@ export async function POST(
             paid: !!payment,
             amount: payment?.amount ?? null,
             checkinTime: payment?.checkinTime ?? null,
+            facePhotoUrl: payment?.facePhotoUrl ?? null,
           };
         });
 
@@ -112,21 +117,29 @@ export async function POST(
           let reclubUserId: number | null = null;
           let playerId: string | null = null;
           let playerName: string | null = null;
+          let facePhotoUrl: string | null = null;
 
           if (p.player?.reclubUserId) {
             reclubUserId = p.player.reclubUserId;
             playerId = p.player.id;
             playerName = p.player.name;
+            facePhotoUrl = p.player.avatarPhotoPath ?? p.player.facePhotoPath ?? null;
           } else if (p.checkInPlayer?.phone) {
             const linked = playerByPhone.get(p.checkInPlayer.phone);
             if (linked?.reclubUserId) {
               reclubUserId = linked.reclubUserId;
               playerId = linked.id;
               playerName = linked.name;
+              facePhotoUrl = linked.avatarPhotoPath ?? linked.facePhotoPath ?? null;
             } else {
               playerId = p.checkInPlayer.id;
               playerName = p.checkInPlayer.name;
+              facePhotoUrl = linked?.avatarPhotoPath ?? linked?.facePhotoPath ?? null;
             }
+          } else if (p.player) {
+            playerId = p.player.id;
+            playerName = p.player.name;
+            facePhotoUrl = p.player.avatarPhotoPath ?? p.player.facePhotoPath ?? null;
           }
 
           if (!reclubUserId || !rosterIds.has(reclubUserId)) {
@@ -139,6 +152,7 @@ export async function POST(
               paid: true,
               amount: p.amount,
               checkinTime: p.createdAt.toISOString(),
+              facePhotoUrl,
             });
           }
         }

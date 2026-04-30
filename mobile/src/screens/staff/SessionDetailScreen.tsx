@@ -47,6 +47,7 @@ interface ReclubSnapshotPlayer {
   paid: boolean;
   amount: number | null;
   checkinTime: string | null;
+  facePhotoUrl?: string | null;
 }
 
 interface ReclubSnapshot {
@@ -783,43 +784,67 @@ function ReclubSnapshotView({
                 </View>
               );
             })}
-            {walkIns.map((p, i) => (
-              <TouchableOpacity
-                key={`walkin-${i}`}
-                disabled={!editable}
-                onPress={() => editable && setSelectedWalkInIdx(i)}
-                activeOpacity={0.7}
-                style={{ width: (avatarSize + 12), alignItems: "center", marginBottom: 8 }}
-              >
-                <View style={{ position: "relative" }}>
-                  <View
-                    style={{
-                      width: avatarSize,
-                      height: avatarSize,
-                      borderRadius: avatarSize / 2,
-                      backgroundColor: initialsColor(p.courtpayName ?? "W"),
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderWidth: 3,
-                      borderColor: "#f59e0b",
-                    }}
-                  >
-                    <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>
-                      {getInitials(p.courtpayName ?? "W")}
-                    </Text>
-                  </View>
-                  {editable && (
-                    <View style={{ position: "absolute", bottom: -2, right: -2, width: 16, height: 16, borderRadius: 8, backgroundColor: "#f59e0b", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: theme.bg }}>
-                      <Text style={{ fontSize: 8, fontWeight: "700", color: "#000" }}>↔</Text>
-                    </View>
-                  )}
-                </View>
-                <Text numberOfLines={1} style={{ fontSize: 10, color: "#f59e0b", marginTop: 3, textAlign: "center", width: avatarSize + 8 }}>
-                  {p.courtpayName ?? "Walk-in"}
-                </Text>
-              </TouchableOpacity>
-            ))}
           </View>
+
+          {/* Separator + Walk-ins */}
+          {walkIns.length > 0 && (
+            <>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginVertical: 12 }}>
+                <View style={{ flex: 1, height: 1, backgroundColor: "rgba(245,158,11,0.3)" }} />
+                <Text style={{ fontSize: 10, fontWeight: "700", color: "#f59e0b", letterSpacing: 1 }}>WALK-IN ({walkIns.length})</Text>
+                <View style={{ flex: 1, height: 1, backgroundColor: "rgba(245,158,11,0.3)" }} />
+              </View>
+
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {walkIns.map((p, i) => {
+                  const faceUri = p.facePhotoUrl ? resolveMediaUrl(p.facePhotoUrl) : null;
+                  return (
+                    <TouchableOpacity
+                      key={`walkin-${i}`}
+                      disabled={!editable}
+                      onPress={() => editable && setSelectedWalkInIdx(i)}
+                      activeOpacity={0.7}
+                      style={{ width: (avatarSize + 12), alignItems: "center", marginBottom: 8 }}
+                    >
+                      <View style={{ position: "relative" }}>
+                        {faceUri ? (
+                          <Image
+                            source={{ uri: faceUri }}
+                            style={{ width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2, borderWidth: 3, borderColor: "#f59e0b" }}
+                          />
+                        ) : (
+                          <View
+                            style={{
+                              width: avatarSize,
+                              height: avatarSize,
+                              borderRadius: avatarSize / 2,
+                              backgroundColor: initialsColor(p.courtpayName ?? "W"),
+                              alignItems: "center",
+                              justifyContent: "center",
+                              borderWidth: 3,
+                              borderColor: "#f59e0b",
+                            }}
+                          >
+                            <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>
+                              {getInitials(p.courtpayName ?? "W")}
+                            </Text>
+                          </View>
+                        )}
+                        {editable && (
+                          <View style={{ position: "absolute", bottom: -2, right: -2, width: 16, height: 16, borderRadius: 8, backgroundColor: "#f59e0b", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: theme.bg }}>
+                            <Text style={{ fontSize: 8, fontWeight: "700", color: "#000" }}>↔</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text numberOfLines={1} style={{ fontSize: 10, color: "#f59e0b", marginTop: 3, textAlign: "center", width: avatarSize + 8 }}>
+                        {p.courtpayName ?? "Walk-in"}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </>
+          )}
 
           {/* Legend */}
           <View style={{ marginTop: 16, backgroundColor: theme.card, borderRadius: 8, padding: 12, borderWidth: 1, borderColor: theme.border }}>
