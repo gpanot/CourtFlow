@@ -628,6 +628,43 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                   );
                 })}
               </div>
+
+              {unmatchedPayments.length > 0 && (
+                <>
+                  <div className="my-3 flex items-center gap-2">
+                    <div className="h-px flex-1 bg-amber-500/30" />
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-400">
+                      {t("staff.sessionPaymentsDetail.reclubWalkInSeparator")} ({unmatchedPayments.length})
+                    </span>
+                    <div className="h-px flex-1 bg-amber-500/30" />
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {unmatchedPayments.map((p) => (
+                      <div key={p.paymentId} className="flex flex-col items-center">
+                        <div className="relative">
+                          {p.facePhotoPath ? (
+                            <img
+                              src={`/face-photos/${p.facePhotoPath}`}
+                              alt=""
+                              className="h-[52px] w-[52px] rounded-full object-cover ring-[3px] ring-amber-500"
+                            />
+                          ) : (
+                            <div
+                              className="flex h-[52px] w-[52px] items-center justify-center rounded-full text-lg font-bold text-white ring-[3px] ring-amber-500"
+                              style={{ backgroundColor: initialsColor(p.playerName) }}
+                            >
+                              {playerInitials(p.playerName)}
+                            </div>
+                          )}
+                        </div>
+                        <p className="mt-1 w-full truncate text-center text-[11px] text-amber-400">
+                          {p.playerName}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

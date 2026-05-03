@@ -661,13 +661,12 @@ function ReclubSnapshotTab({
         })}
       </div>
 
-      {/* Separator */}
       {walkIns.length > 0 && (
         <>
           <div className="my-3 flex items-center gap-2">
             <div className="h-px flex-1 bg-amber-500/30" />
             <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-400">
-              Walk-in ({walkIns.length})
+              {t("staff.sessionPaymentsDetail.reclubWalkInSeparator")} ({walkIns.length})
             </span>
             <div className="h-px flex-1 bg-amber-500/30" />
           </div>

@@ -1,21 +1,17 @@
-# CourtPay Kiosk — Tablet UI/UX Specification
+# CourtPay Kiosk — Flow & Interaction Specification
 
-> **Purpose:** Complete screen-by-screen reference for Figma design review. Covers every step the player sees, from the entry screen through both flows (Registered Player and First Time), including all edge states, modals, and shared UI patterns.
+> This document describes the user flows, screen purposes, and interactions for the CourtPay tablet kiosk. UI design decisions (layout, colours, typography, components) are left to the designer.
 
 ---
 
-## Global Shell
+## Overview
 
-Every screen shares the same base layer:
+The kiosk runs on a tablet at the venue entrance. It supports two entry paths:
 
-| Layer | Details |
-|---|---|
-| **Background** | `CourtPayLiquidBackdrop` — animated ambient colour orbs, full bleed. Colour driven by the venue's accent (`green`, `purple`, `blue`, etc.). |
-| **Theme** | Light or Dark. All text, glass surfaces, and button colours flip accordingly. |
-| **Safe area** | `paddingTop: insets.top` applied per step. Bottom padding added on CTAs. |
-| **Staff escape** | Hidden overlay (`TabletStaffEscape`): 5 rapid taps anywhere → 4-digit PIN modal → returns to Staff Mode Select. |
-| **Idle timer** | 30 s inactivity on intermediate steps → auto-reset to Home. Disabled on: Home, face scan, registration steps, payment, confirmed. |
-| **Language toggle** | EN / VI flag button. Shown in the top bar on Home, and as a floating button (top-right) on `reg_face_preview` and `reg_form`. |
+- **Flow A — Registered Player**: returning players check in via face scan or phone number.
+- **Flow B — First Time Player**: new players register, then check in and pay.
+
+Both flows converge at the payment and confirmation steps.
 
 ---
 
@@ -23,48 +19,13 @@ Every screen shares the same base layer:
 
 **Step key:** `home`
 
-This is the always-on kiosk face. It never times out.
+The always-on idle screen. Never times out. Displays the venue branding and two entry options.
 
-### Layout
-
-```
-┌──────────────────────────────────────────┐
-│  [CourtFlow logo]  CourtPay  [🌙] [🇬🇧]  │  ← CourtFlowKioskTopBar
-├──────────────────────────────────────────┤
-│                                           │
-│          [Venue logo — 96×96 circle]      │  ← optional, may spin
-│              [Venue name]                 │  ← muted subtitle
-│                                           │
-│  ┌─────────────────────────────────────┐  │
-│  │  👤➕  First Time?                  │  │  ← LiquidGlassSurface card
-│  │        Register & pay to play       │  │
-│  └─────────────────────────────────────┘  │
-│                                           │
-│  ┌─────────────────────────────────────┐  │
-│  │  🔍  Registered player             │  │  ← LiquidGlassSurface card (accent tint)
-│  │       I've played here before      │  │
-│  └─────────────────────────────────────┘  │
-│                                           │
-└──────────────────────────────────────────┘
-```
-
-### UI Elements
-
-| Element | Detail |
-|---|---|
-| **Top bar** | CourtFlow monogram + "CourtPay" tagline · Dark/Light toggle (sun/moon icon) · Language flag button |
-| **Venue logo** | 96×96 circle, optional — may animate a slow spin if `logoSpin` is enabled |
-| **Venue name** | Muted text below the logo |
-| **Card 1 — First Time?** | Icon: `UserPlus` (neutral grey) · Title: "First Time?" · Sub: "Register & pay to play" · Neutral glass surface |
-| **Card 2 — Registered player** | Icon: `ScanFace` (accent colour) · Title: "Registered player" · Sub: "I've played here before" · Accent-tinted glass surface |
-| **Cards layout** | Stacked vertically, full width, gap 28 |
-
-### Interactions
-
-| Tap | Next step |
-|---|---|
-| "First Time?" card | → `reg_face_capture` |
-| "Registered player" card | → `scan_returning` |
+**Available actions:**
+- Tap "First Time?" → go to `reg_face_capture` (Flow B)
+- Tap "Registered player" → go to `scan_returning` (Flow A)
+- Toggle dark/light mode
+- Toggle language (English / Vietnamese)
 
 ---
 
@@ -74,40 +35,23 @@ This is the always-on kiosk face. It never times out.
 
 ---
 
-### Screen A1 — Face Scan (Auto)
+### Screen A1 — Face Scan
 
 **Step key:** `scan_returning`
 
-Component: `SelfCheckInReturningFaceScanner`
+The front camera opens automatically and scans for a face at regular intervals. The player does not tap anything to trigger the scan — it happens passively.
 
-```
-┌──────────────────────────────────────────┐
-│                                           │
-│    [Full-screen front camera view]        │
-│                                           │
-│    ┌────────────────────────────────┐     │
-│    │   Position your face —        │     │  ← status hint text
-│    │   scanning starts in a moment │     │
-│    └────────────────────────────────┘     │
-│                                           │
-│         [Use phone number instead]        │  ← secondary link button
-│              [← Back]                     │
-└──────────────────────────────────────────┘
-```
+Status feedback is shown to guide the player (e.g. "Look at the camera", "Scanning…", "Next scan in Xs").
 
-| Element | Detail |
-|---|---|
-| **Camera view** | Full-screen front camera, auto-starts scanning every few seconds |
-| **Status text** | Cycles between: "Position your face…", "Hold still — scanning now", "Next scan in Xs…" |
-| **"Use phone number instead"** | Accent-coloured text link with phone icon |
-| **Back** | Ghost text button → Home |
-| **Accent** | CourtPay accent colour used on borders, QR overlay elements |
+**Available actions:**
+- Tap "Use phone number instead" → go to `phone_enter`
+- Tap Back → go to Home
 
 **Outcomes after scan:**
-- Face matched → go to Subscription check (internal `goToSubscriptionOrPay`)
-- Face not found after retries → `no_face`
-- API: face recognized but no registration → `needs_registration`
-- Already paid → `already_paid`
+- Face matched → subscription check → `subscription_offer` or `awaiting_payment`
+- Face not detected after retries → `no_face`
+- Face recognised but not registered → `needs_registration`
+- Player already paid → `already_paid`
 
 ---
 
@@ -115,31 +59,12 @@ Component: `SelfCheckInReturningFaceScanner`
 
 **Step key:** `no_face`
 
-```
-┌──────────────────────────────────────────┐
-│                                           │
-│    ┌──────────────────────────────┐       │
-│    │                              │       │
-│    │  🔲  No face detected        │       │  ← amber scan icon
-│    │      Look at the camera      │       │
-│    │      and try again           │       │
-│    │                              │       │
-│    │  [      Try again      ]     │       │  ← primary CTA
-│    │  [📞 Use phone number ]      │       │  ← secondary button
-│    │       Back to Home           │       │  ← ghost link
-│    │                              │       │
-│    └──────────────────────────────┘       │
-│                                           │
-└──────────────────────────────────────────┘
-```
+Shown when the scanner could not detect a face after multiple attempts.
 
-Glass panel: `LiquidGlassSurface`, neutral accent.
-
-| Button | Action |
-|---|---|
-| Try again | → `scan_returning` |
-| Use phone number | → `phone_enter` |
-| Back to Home | → Home |
+**Available actions:**
+- Tap "Try again" → go to `scan_returning`
+- Tap "Use phone number" → go to `phone_enter`
+- Tap "Back to Home" → go to Home
 
 ---
 
@@ -147,33 +72,12 @@ Glass panel: `LiquidGlassSurface`, neutral accent.
 
 **Step key:** `needs_registration`
 
-Triggered when the face scan runs but the face is not in the database.
+Shown when a face is detected but not found in the database.
 
-```
-┌──────────────────────────────────────────┐
-│  ←                                        │
-│                                           │
-│    ┌──────────────────────────────┐       │
-│    │                              │       │
-│    │  ⚠️  Face not recognised    │       │  ← amber alert icon
-│    │   Try checking in with your  │       │
-│    │   phone number, or scan again│       │
-│    │                              │       │
-│    │  [      Scan Again     ]     │       │  ← primary accent button
-│    │  [📞 Check in with phone ]   │       │  ← darker accent button
-│    │                              │       │
-│    └──────────────────────────────┘       │
-│                                           │
-└──────────────────────────────────────────┘
-```
-
-Glass panel: `LiquidGlassSurface`, amber accent.
-
-| Button | Action |
-|---|---|
-| Scan Again | → `scan_returning` |
-| Check in with phone | → `phone_enter` |
-| ← (back arrow, top-left) | → Home |
+**Available actions:**
+- Tap "Scan Again" → go to `scan_returning`
+- Tap "Check in with phone" → go to `phone_enter`
+- Tap Back → go to Home
 
 ---
 
@@ -181,39 +85,13 @@ Glass panel: `LiquidGlassSurface`, amber accent.
 
 **Step key:** `phone_enter`
 
-Used as fallback from face scan, or directly.
+Fallback from face scan, or entry point when the player prefers phone check-in. A numeric keyboard is shown. The confirm button is disabled while the field is empty, and shows a loading state while the API call is in progress.
 
-```
-┌──────────────────────────────────────────┐
-│                                           │
-│    ┌──────────────────────────────┐       │
-│    │  ← Check in by phone        │       │  ← card header with back arrow
-│    │                              │       │
-│    │  Enter your phone number     │       │
-│    │                              │       │
-│    │  ┌──────────────────────┐    │       │
-│    │  │  Phone number        │    │       │  ← large text input, auto-focus
-│    │  └──────────────────────┘    │       │
-│    │                              │       │
-│    │  [inline error if any]       │       │
-│    │                              │       │
-│    │  [        Look up       ]    │       │  ← primary CTA, disabled when empty
-│    │                              │       │
-│    └──────────────────────────────┘       │
-│                                           │
-└──────────────────────────────────────────┘
-```
-
-Glass surface: accent-tinted. Keyboard: `phone-pad`, auto-focused.
-
-| Button | State |
-|---|---|
-| Look up | Disabled when input is empty. Shows spinner while loading. |
-| ← back | → Home |
-
-**Outcomes:**
-- Player found → `phone_preview`
-- No match → inline error "No player found with this phone number"
+**Available actions:**
+- Tap "Look up" (with phone number entered) → calls player lookup API
+  - Player found → go to `phone_preview`
+  - No match → show inline error "No player found with this phone number"
+- Tap Back → go to Home
 
 ---
 
@@ -221,28 +99,11 @@ Glass surface: accent-tinted. Keyboard: `phone-pad`, auto-focused.
 
 **Step key:** `phone_preview`
 
-```
-┌──────────────────────────────────────────┐
-│                                           │
-│    ┌──────────────────────────────┐       │
-│    │  ← [Player Name]            │       │  ← name as card title
-│    │                              │       │
-│    │  ┌──────────────────────┐    │       │
-│    │  │ Phone: 0901 234 567  │    │       │  ← info box
-│    │  │ Level: Intermediate  │    │       │
-│    │  └──────────────────────┘    │       │
-│    │                              │       │
-│    │  [   Confirm check-in   ]    │       │  ← accent primary button
-│    │                              │       │
-│    └──────────────────────────────┘       │
-│                                           │
-└──────────────────────────────────────────┘
-```
+Displays the player's name and phone number for confirmation before proceeding.
 
-| Button | Action |
-|---|---|
-| Confirm check-in | Calls pay-session API → Subscription check → `subscription_offer` or `awaiting_payment` |
-| ← back | → `phone_enter` |
+**Available actions:**
+- Tap "Confirm check-in" → calls pay-session API → subscription check → `subscription_offer` or `awaiting_payment`
+- Tap Back → go to `phone_enter`
 
 ---
 
@@ -250,54 +111,20 @@ Glass surface: accent-tinted. Keyboard: `phone-pad`, auto-focused.
 
 **Step key:** `subscription_offer`
 
-> This screen appears only if: the venue has active packages **and** "Show in CourtPay check-in" is enabled.
+> Only shown if the venue has active packages with "Show in CourtPay check-in" enabled.
 
-```
-┌──────────────────────────────────────────┐
-│  ←                                        │
-│                                           │
-│    Welcome back, [Name]!                  │  ← greeting
-│    Save with a package today?             │  ← subtitle
-│                                           │
-│    ┌──────────────────────────────┐       │
-│    │  [Best Choice] [Save 20%]   │       │  ← badge row (optional)
-│    │  Monthly Pass               │       │  ← package name
-│    │  10 sessions · 30 days      │       │  ← meta
-│    │  500,000                    │       │  ← price VND
-│    └──────────────────────────────┘       │
-│    ┌──────────────────────────────┐       │
-│    │  Quarterly Pass             │       │  ← second package card
-│    │  30 sessions · 90 days      │       │
-│    │  1,200,000                  │       │
-│    └──────────────────────────────┘       │
-│                                           │
-│    [        Continue         ]            │  ← active only when a package is selected
-│                                           │
-│    ────────── OR ──────────               │
-│                                           │
-│    ┌──────────────────────────────┐       │
-│    │  Pay for Today Only    ›     │       │  ← glass card link
-│    │  Single session — no package │       │
-│    │  150,000                     │       │
-│    └──────────────────────────────┘       │
-│                                           │
-└──────────────────────────────────────────┘
-```
+Greets the player and offers available packages. The player can select a package or skip to pay for a single session only.
 
-**Package card states:**
-- Unselected: neutral glass, lower intensity
-- Selected: green accent glass, slightly elevated, green border
+**Interaction logic:**
+- Package cards are selectable (one at a time)
+- "Continue" button is active only when a package is selected
+- "Pay for Today Only" skips package selection
 
-**Badge variations on a package card:**
-- "Best Choice" pill (accent colour background)
-- "Save X%" pill (muted grey)
-
-| Interaction | Action |
-|---|---|
-| Tap a package card | Selects it (green accent) |
-| Continue | Enabled only when a package is selected. → `awaiting_payment` with package |
-| "Pay for Today Only" card | → `awaiting_payment` single session, no package |
-| ← back | → Home (resets flow) |
+**Available actions:**
+- Select a package → enables "Continue"
+- Tap "Continue" → go to `awaiting_payment` with selected package
+- Tap "Pay for Today Only" → go to `awaiting_payment` as single session
+- Tap Back → go to Home (resets flow)
 
 ---
 
@@ -305,38 +132,18 @@ Glass surface: accent-tinted. Keyboard: `phone-pad`, auto-focused.
 
 **Step key:** `subscription_exhausted_offer`
 
-Triggered when a returning player's subscription has run out of sessions but is still within validity.
+Shown when the player's subscription has no sessions remaining (but is still within its validity period). The player is confirmed as checked in and invited to buy a new package.
 
-```
-┌──────────────────────────────────────────┐
-│  ←                                        │
-│                                           │
-│    ┌──────────────────────────────┐       │
-│    │         ✓ (circle)          │       │  ← success circle (accent colour)
-│    │  Welcome back, [Name]!      │       │
-│    │  You are in — consider      │       │
-│    │  buying a new package       │       │
-│    │  for next time.             │       │
-│    │                              │       │
-│    │  ┌────────┐  ┌────────┐     │       │
-│    │  │🎟 0    │  │📅 12   │     │       │  ← KPI cards (glass)
-│    │  │Sessions│  │Days    │     │       │
-│    │  │Left    │  │Left    │     │       │
-│    │  └────────┘  └────────┘     │       │
-│    │                              │       │
-│    │  Returning to menu in 30s…  │       │
-│    │                              │       │
-│    │  [  Show New Packages  ]    │       │  ← primary CTA
-│    │       Next time              │       │  ← ghost link → Home
-│    │                              │       │
-│    └──────────────────────────────┘       │
-│                                           │
-└──────────────────────────────────────────┘
-```
+Displays:
+- Sessions remaining: 0
+- Days remaining in current subscription
 
-If "Show New Packages" is tapped, the package list slides in below (same cards as `subscription_offer`).
+Auto-returns to Home after 30 seconds.
 
-Auto-returns Home after 30 s countdown.
+**Available actions:**
+- Tap "Show New Packages" → expands a package list inline
+- Tap "Next time" → go to Home
+- Tap Back → go to Home
 
 ---
 
@@ -344,49 +151,19 @@ Auto-returns Home after 30 s countdown.
 
 **Step key:** `awaiting_payment`
 
-Component: `CourtPaySessionAwaitingPayment` (`variant="kiosk"`)
+Displays a VietQR payment code for the player to scan with their banking app. The amount is shown clearly. A pulse animation indicates the system is waiting for payment confirmation.
 
-```
-┌──────────────────────────────────────────┐
-│                                           │
-│    Almost there, [Name]!                  │  ← new player headline
-│    (or) Payment                           │  ← returning player headline
-│                                           │
-│    ┌──────────────────────────────┐       │
-│    │                              │       │
-│    │      [VietQR code image]     │       │  ← large QR, full width
-│    │                              │       │
-│    │  Scan with your banking app  │       │
-│    │  then show staff to confirm  │       │
-│    │                              │       │
-│    │  ● ● ●  [pulse dots]        │       │  ← waiting animation (accent dots)
-│    │  Waiting for payment…        │       │
-│    │                              │       │
-│    │  150,000 VND                 │       │  ← amount in accent colour
-│    │                              │       │
-│    │  [🎖 Intermediate]          │       │  ← skill badge (optional)
-│    │                              │       │
-│    └──────────────────────────────┘       │
-│                                           │
-│   1 person  [–]  [1]  [+]  Max 4 people  │  ← party size selector
-│                                           │
-│    ──────────────── or ────────────────   │
-│                                           │
-│    [       Pay by cash         ]          │  ← secondary button
-│    Tell staff you're paying cash          │
-│                                           │
-│           [Cancel]                        │  ← ghost link
-└──────────────────────────────────────────┘
-```
+The player can adjust the party size (1–4 people); changing it regenerates the amount and QR code.
 
-**Party counter:**
-- Minus / plus buttons, current count displayed between them
-- "Max 4 people" label
-- Tapping ± re-calls pay-session API and updates amount + QR
+Payment is confirmed via a WebSocket event from the payment system.
 
-**Cash flow:** Tapping "Pay by cash" → opens the [Cash Payment Modal](#modal-1--cash-payment-overlay).
+**Available actions:**
+- Adjust party size (minus / plus) → updates amount and QR
+- Tap "Pay by cash" → opens Cash Payment Modal
+- Tap "Cancel" → go to Home
 
-**Payment completion:** WebSocket event `payment:confirmed` → `confirmed`.
+**Outcome:**
+- WebSocket `payment:confirmed` received → go to `confirmed`
 
 ---
 
@@ -394,34 +171,12 @@ Component: `CourtPaySessionAwaitingPayment` (`variant="kiosk"`)
 
 **Step key:** `confirmed`
 
-```
-┌──────────────────────────────────────────┐
-│                                           │
-│    ┌──────────────────────────────┐       │
-│    │                              │       │
-│    │    ┌─────────┐               │       │
-│    │    │    ✓    │               │       │  ← large checkmark circle, accent
-│    │    └─────────┘               │       │
-│    │                              │       │
-│    │  [Name], you are confirmed!  │       │  ← success headline
-│    │  Have fun games!             │       │  ← sub
-│    │  [context message if any]    │       │  ← e.g. "Check-in confirmed."
-│    │                              │       │
-│    │  ┌────────┐  ┌────────┐     │       │  ← KPI row (only if subscription)
-│    │  │🎟  8   │  │📅  22  │     │       │
-│    │  │Sessions│  │Days    │     │       │
-│    │  │Remaining│ │Left    │     │       │
-│    │  └────────┘  └────────┘     │       │
-│    │                              │       │
-│    │  Returning to menu in 8s…   │       │
-│    │                              │       │
-│    │  [         Done          ]   │       │  ← manual dismiss
-│    │                              │       │
-│    └──────────────────────────────┘       │
-└──────────────────────────────────────────┘
-```
+Congratulates the player. If they used a package, shows sessions remaining and days left.
 
-Auto-returns Home after 8 s countdown. "Done" button also resets immediately.
+Auto-returns to Home after 8 seconds.
+
+**Available actions:**
+- Tap "Done" → go to Home immediately
 
 ---
 
@@ -429,23 +184,10 @@ Auto-returns Home after 8 s countdown. "Done" button also resets immediately.
 
 **Step key:** `already_paid`
 
-```
-┌──────────────────────────────────────────┐
-│                                           │
-│   [Full-screen CourtPayStatusCard]        │
-│                                           │
-│   ┌────────────────────────────────┐      │
-│   │   [face photo if available]    │      │
-│   │                                │      │
-│   │   [Name] already paid          │      │  ← headline
-│   │   This player has already paid │      │  ← (or "Payment is pending…")
-│   │   for this session.            │      │
-│   │                                │      │
-│   │   [     Back to Home     ]     │      │
-│   └────────────────────────────────┘      │
-│                                           │
-└──────────────────────────────────────────┘
-```
+Shown when the face scan detects a player who has already paid for this session.
+
+**Available actions:**
+- Tap "Back to Home" → go to Home
 
 ---
 
@@ -459,55 +201,26 @@ Auto-returns Home after 8 s countdown. "Done" button also resets immediately.
 
 **Step key:** `reg_face_capture`
 
-**Sub-state: Camera permission not yet granted**
+The player's photo is taken for face registration.
 
-```
-┌──────────────────────────────────────────┐
-│    ┌──────────────────────────────┐       │
-│    │  Camera access               │       │
-│    │  Allow the camera to take    │       │
-│    │  your registration photo.    │       │
-│    │                              │       │
-│    │  [   Allow Camera   ]        │       │
-│    │       Back                   │       │
-│    └──────────────────────────────┘       │
-└──────────────────────────────────────────┘
-```
+**Sub-state: Camera permission not granted**
 
-**Main state: Camera active**
+A prompt asks the player to allow camera access.
 
-```
-┌──────────────────────────────────────────┐
-│  ←                                        │  ← back arrow to Home
-│                                           │
-│    Let's set up your account              │  ← title
-│    First, look at the camera             │  ← hint
-│                                           │
-│    ┌──────────────────────────────┐       │
-│    │  ┌──────────────────────┐    │       │
-│    │  │                      │    │       │
-│    │  │   [live camera       │    │       │  ← circular clip, front camera
-│    │  │    preview           │    │       │    size: 312×312
-│    │  │                      │    │       │
-│    │  │   [3] countdown      │    │       │  ← large countdown digit overlay
-│    │  │   or spinner         │    │       │    (shown during capture)
-│    │  └──────────────────────┘    │       │
-│    └──────────────────────────────┘       │  ← accent-coloured ring border
-│                                           │
-└──────────────────────────────────────────┘
-```
+**Available actions:**
+- Tap "Allow Camera" → request permission
+- Tap Back → go to Home
 
-Camera auto-captures after a brief countdown. No manual button.
+**Sub-state: Camera active**
 
-**Error state (photo quality failure):**
+The front camera shows a live preview. After a brief countdown, the photo is taken automatically — no manual shutter button.
 
-```
-┌─────────────────────────────────────────┐
-│  [Photo quality error message banner]    │  ← amber banner at top
-│  [After 3 failures: "Please ask staff"] │
-│  [   Try again   ]                      │
-└─────────────────────────────────────────┘
-```
+**Sub-state: Photo quality error**
+
+If the captured photo doesn't meet quality requirements, an error message is shown. After 3 consecutive failures, the player is directed to ask staff for help.
+
+**Available actions:**
+- Tap "Try again" → retake photo
 
 ---
 
@@ -515,28 +228,13 @@ Camera auto-captures after a brief countdown. No manual button.
 
 **Step key:** `reg_face_preview`
 
-```
-┌──────────────────────────────────────────┐
-│                                    [🇬🇧]  │  ← floating language toggle
-│                                           │
-│    Got your photo!                        │  ← title (accent colour)
-│                                           │
-│    ┌──────────────────────────────┐       │
-│    │  ┌──────────────────────┐    │       │
-│    │  │  [captured face      │    │       │  ← same 312×312 circle
-│    │  │   photo preview]     │    │       │
-│    │  └──────────────────────┘    │       │
-│    └──────────────────────────────┘       │  ← accent ring
-│                                           │
-│    [    Looks good →    ]                 │  ← primary accent button
-│         Retake                            │  ← ghost text link
-│                                           │
-└──────────────────────────────────────────┘
-```
+Displays the captured photo for confirmation.
 
-Tapping "Looks good →" calls the face-check API:
-- New face → `reg_form`
-- Existing face already registered → `existing_user`
+**Available actions:**
+- Tap "Looks good" → calls face-check API
+  - New face → go to `reg_form`
+  - Face already registered → go to `existing_user`
+- Tap "Retake" → go back to `reg_face_capture`
 
 ---
 
@@ -544,77 +242,47 @@ Tapping "Looks good →" calls the face-check API:
 
 **Step key:** `reg_form`
 
-```
-┌──────────────────────────────────────────┐
-│                                    [🇬🇧]  │  ← floating language toggle
-│                                           │
-│ ┌────────────────────────────────────┐    │
-│ │  ← Let's set up your account      │    │  ← card title with back arrow
-│ │                                    │    │
-│ │  Name (same as Reclub)             │    │
-│ │  ┌──────────────────────────────┐  │    │
-│ │  │  Your Reclub's name          │  │    │  ← text input, auto-focus
-│ │  └──────────────────────────────┘  │    │
-│ │  [✓ Reclub matched]                │    │  ← shown after Reclub chip selection
-│ │                                    │    │
-│ │  ┌──────┐ ┌──────┐ ┌──────┐       │    │  ← Reclub suggestion chips
-│ │  │ 👤   │ │ 👤   │ │ ...  │       │    │    (avatar + name, rounded pill)
-│ │  │ Name │ │ Name │ │      │       │    │
-│ │  └──────┘ └──────┘ └──────┘       │    │
-│ │                                    │    │
-│ │  Phone number                      │    │
-│ │  ┌──────────────────────────────┐  │    │
-│ │  │  Your phone number           │  │    │  ← phone-pad keyboard
-│ │  └──────────────────────────────┘  │    │
-│ │                                    │    │
-│ │  Gender                            │    │
-│ │  ┌────────┐  ┌────────┐           │    │  ← chip row
-│ │  │  Male  │  │ Female │           │    │
-│ │  └────────┘  └────────┘           │    │
-│ │                                    │    │
-│ │  Level                             │    │
-│ │  ┌──────────┐┌──────────┐┌───────┐│    │
-│ │  │ Beginner ││Intermediate││Advanced││   │  ← chip row
-│ │  └──────────┘└──────────┘└───────┘│    │
-│ │                                    │    │
-│ │  [         Next          ]         │    │  ← disabled until name + gender + level
-│ │                                    │    │
-│ └────────────────────────────────────┘    │
-└──────────────────────────────────────────┘
-```
+The player fills in their details to create an account.
 
-**Chip states:**
-- Unselected: neutral background, muted text
-- Gender Male selected: blue chip
-- Gender Female selected: pink/rose chip
-- Beginner selected: green chip
-- Intermediate selected: blue chip
-- Advanced selected: orange/amber chip
+**Fields:**
+- **Name** — text input; shows Reclub member suggestions as selectable chips once the user starts typing
+- **Phone number** — numeric input
+- **Gender** — single-select: Male / Female
+- **Skill level** — single-select: Beginner / Intermediate / Advanced
 
 **"Next" button logic:**
-1. If phone is empty → opens [Phone Required Modal](#modal-2--phone-required-modal)
-2. If packages exist and subscriptions enabled → `subscription_offer`
-3. Otherwise → calls register API → `awaiting_payment` or `confirmed`
+1. If phone is empty → open Phone Required Modal
+2. If packages are available and subscriptions are enabled → go to `subscription_offer`
+3. Otherwise → calls register API → go to `awaiting_payment` or `confirmed`
+
+**Available actions:**
+- Select a Reclub suggestion chip → pre-fills the name field
+- Tap "Next" (when name, gender, and level are filled) → see logic above
+- Tap Back → go to `reg_face_preview`
 
 ---
 
 ### Screen B4 — Subscription Offer *(shared with Flow A)*
 
-Same as **Screen A6**. Copy differs slightly:
-- Greeting: "Welcome to the club, [Name]!" (instead of "Welcome back")
-- Subtitle: "Want to save with a package?" (instead of "Save with a package today?")
+Same as **Screen A6**.
+
+Copy note: greeting is "Welcome to the club, [Name]!" and subtitle is "Want to save with a package?"
 
 ---
 
 ### Screen B5 — Awaiting Payment *(shared with Flow A)*
 
-Same as **Screen A8**. Headline: "Almost there, [Name]!" (new player copy).
+Same as **Screen A8**.
+
+Copy note: headline is "Almost there, [Name]!"
 
 ---
 
 ### Screen B6 — Confirmed *(shared with Flow A)*
 
-Same as **Screen A9**. On first registration, a note "Your face is registered — next time just scan to check in" may appear as the `confirmMessage`.
+Same as **Screen A9**.
+
+Copy note: an additional message may appear: "Your face is registered — next time just scan to check in."
 
 ---
 
@@ -622,49 +290,21 @@ Same as **Screen A9**. On first registration, a note "Your face is registered �
 
 **Step key:** `existing_user`
 
-Triggered when `reg_face_preview` → face-check API returns "face already registered".
+Shown when the face captured during registration already exists in the database.
 
-```
-┌──────────────────────────────────────────┐
-│                                           │
-│   [Full-screen CourtPayStatusCard]        │
-│                                           │
-│   ┌────────────────────────────────┐      │
-│   │   [face photo captured]        │      │
-│   │                                │      │
-│   │   Existing user                │      │  ← headline
-│   │   This face is already         │      │
-│   │   registered. Please use       │      │
-│   │   Registered player.           │      │
-│   │                                │      │
-│   │   [     Back to Home     ]     │      │
-│   └────────────────────────────────┘      │
-│                                           │
-└──────────────────────────────────────────┘
-```
+**Available actions:**
+- Tap "Back to Home" → go to Home
 
 ---
 
-## Error State (Both Flows)
+## Error Screen (Both Flows)
 
 **Step key:** `error`
 
-```
-┌──────────────────────────────────────────┐
-│                                           │
-│    ┌──────────────────────────────┐       │
-│    │                              │       │
-│    │  ⚠️  Something went wrong   │       │  ← red warning icon
-│    │  [error message text]        │       │
-│    │                              │       │
-│    │  [       Try again      ]    │       │  ← → Home
-│    │                              │       │
-│    └──────────────────────────────┘       │
-│                                           │
-└──────────────────────────────────────────┘
-```
+A general error screen shown when an unexpected API or system failure occurs.
 
-Glass panel: neutral accent.
+**Available actions:**
+- Tap "Try again" → go to Home
 
 ---
 
@@ -672,69 +312,26 @@ Glass panel: neutral accent.
 
 ### Modal 1 — Cash Payment Overlay
 
-Triggered when player taps "Pay by cash" on the Awaiting Payment screen.
+Triggered from the Awaiting Payment screen when the player taps "Pay by cash."
 
-```
-┌──────────────────────────────────────────┐
-│                                           │
-│  [Full-screen, same backdrop colour]      │
-│                                           │
-│    ┌──────────────────────────────┐       │
-│    │                              │       │
-│    │  ┌──────────────────────┐    │       │
-│    │  │         💵           │    │       │  ← amber cash icon, 48px
-│    │  └──────────────────────┘    │       │
-│    │                              │       │
-│    │  Cash Payment                │       │  ← title
-│    │  Please hand the cash to the │       │
-│    │  staff.                      │       │
-│    │  Waiting for staff to        │       │
-│    │  confirm…                    │       │
-│    │                              │       │
-│    │  ⏳ [amber spinner]          │       │
-│    │                              │       │
-│    │  150,000 VND                 │       │  ← amount
-│    │                              │       │
-│    │  [ Cancel — go back ]        │       │  ← ghost cancel button
-│    │                              │       │
-│    └──────────────────────────────┘       │
-│                                           │
-└──────────────────────────────────────────┘
-```
+Instructs the player to hand cash to a staff member. Shows a loading indicator while waiting for the staff to confirm in the staff app.
 
-Resolved by: WebSocket `payment:confirmed` from staff confirming in the Staff app.
+Resolved by: WebSocket `payment:confirmed` event (staff confirms in their app).
+
+**Available actions:**
+- Tap "Cancel" → dismiss modal, return to `awaiting_payment`
 
 ---
 
-### Modal 2 — Phone Required Modal
+### Modal 2 — Phone Required
 
-Triggered during registration when player taps "Next" without a phone number.
+Triggered during registration when the player taps "Next" without entering a phone number.
 
-```
-┌──────────────────────────────────────────┐
-│                                           │
-│  [Full-screen scrim, tap to dismiss]      │
-│                                           │
-│    ┌──────────────────────────────┐       │
-│    │                              │       │
-│    │  ┌──────────────────────┐    │       │
-│    │  │        📱            │    │       │  ← phone icon, accent colour, 40px
-│    │  └──────────────────────┘    │       │
-│    │                              │       │
-│    │  Phone number needed         │       │  ← title
-│    │  Your phone number is        │       │
-│    │  required so we can find     │       │
-│    │  your account.               │       │
-│    │  No Spam. No Ads.            │       │
-│    │                              │       │
-│    │  [        Got it        ]    │       │  ← primary accent CTA
-│    │                              │       │
-│    └──────────────────────────────┘       │
-│                                           │
-└──────────────────────────────────────────┘
-```
+Explains why the phone number is required. Can be dismissed.
 
-Tap outside card or "Got it" → dismisses.
+**Available actions:**
+- Tap "Got it" → dismiss and return to form
+- Tap outside the modal → dismiss
 
 ---
 
@@ -761,57 +358,48 @@ Tap outside card or "Got it" → dismisses.
     │        unrecognised]            │    Preview      │
     │             │                    └────────┬────────┘
     │             ▼                             │
-    │      ┌─────────────┐              [face OK]  [face exists]
-    │      │  A2/A3:     │                  │            │
-    │      │  Fallback   │                  ▼            ▼
-    │      │  screens    │         ┌─────────────┐  ┌────────────┐
-    │      └──────┬──────┘         │  B3: Reg    │  │  B7:       │
-    │             │                │    Form     │  │  Existing  │
-    │      [phone fallback]        └──────┬──────┘  │  User      │
-    │             │                       │          └────────────┘
-    │             ▼                       │
-    │      ┌─────────────┐                │
-    │      │  A4: Phone  │                │
-    │      │    Entry    │                │
-    │      └──────┬──────┘                │
-    │             │                       │
-    │             ▼                       │
-    │      ┌─────────────┐                │
-    │      │  A5: Phone  │                │
-    │      │    Preview  │                │
-    │      └──────┬──────┘                │
-    │             │                       │
-    └──────┬──────┘                       │
-           │                              │
-           └──────────────┬───────────────┘
-                          │
-               [packages available?]
-                 Yes │         No │
-                     ▼           ▼
-             ┌──────────┐    ┌──────────────────┐
-             │  A6/B4:  │    │  A8/B5: Awaiting │
-             │  Sub     ├───►│    Payment       │
-             │  Offer   │    └────────┬─────────┘
-             └──────────┘             │
-                                      │
-              [sub exhausted?]        │
-                     ▼                │
-             ┌──────────────┐         │
-             │ A7: Exhausted│         │
-             │    Offer     │         │
-             └──────────────┘         │
-                                      ▼
-                             ┌─────────────────┐
-                             │  A9/B6:         │
-                             │  Confirmed      │
-                             └────────┬────────┘
-                                      │
-                                  (8s auto)
-                                      │
-                                      ▼
-                             ┌─────────────────┐
-                             │   HOME SCREEN   │
-                             └─────────────────┘
+    │      ┌─────────────┐              [new]       [exists]
+    │      │  A2/A3:     │                │               │
+    │      │  Fallback   │               ▼               ▼
+    │      └──────┬──────┘        ┌─────────────┐  ┌────────────┐
+    │             │               │  B3: Reg    │  │  B7:       │
+    │      [phone fallback]       │    Form     │  │  Existing  │
+    │             │               └──────┬──────┘  │  User      │
+    │             ▼                      │          └────────────┘
+    │      ┌─────────────┐               │
+    │      │  A4: Phone  │               │
+    │      │    Entry    │               │
+    │      └──────┬──────┘               │
+    │             ▼                      │
+    │      ┌─────────────┐               │
+    │      │  A5: Phone  │               │
+    │      │    Preview  │               │
+    │      └──────┬──────┘               │
+    │             │                      │
+    └──────┬──────┘                      │
+           │                             │
+           └─────────────┬───────────────┘
+                         │
+              [packages available?]
+                Yes │         No │
+                    ▼            ▼
+            ┌──────────┐   ┌──────────────────┐
+            │  A6/B4:  │   │  A8/B5: Awaiting │
+            │  Sub     ├──►│    Payment       │
+            │  Offer   │   └────────┬─────────┘
+            └──────────┘            │
+                                    ▼
+            [sub exhausted?]   ┌─────────────────┐
+                    ▼          │  A9/B6:         │
+            ┌──────────────┐   │  Confirmed      │
+            │ A7: Exhausted│   └────────┬────────┘
+            │    Offer     │            │
+            └──────────────┘        (8s auto)
+                                        │
+                                        ▼
+                               ┌─────────────────┐
+                               │   HOME SCREEN   │
+                               └─────────────────┘
 
     Side states (either flow):
     ┌─────────────┐   ┌────────────────┐
@@ -823,48 +411,6 @@ Tap outside card or "Got it" → dismisses.
 
 ---
 
-## Design System Notes
-
-### Glass Surface (`LiquidGlassSurface`)
-
-All content panels use frosted-glass surfaces. Key parameters:
-- `accent`: `"none"` | `"green"` | `"amber"` | `"blue"` — changes the glass tint
-- `intensity`: blur intensity (iOS: 40–52, Android: 72–88)
-- `mode`: `"light"` | `"dark"` — flips all text and surface colours
-
-### Accent Theme Colours
-
-The venue owner picks an accent (`green`, `purple`, `blue`, `orange`, etc.). This drives:
-- Primary button background
-- Glass overlay tint
-- Amount text colour
-- Scanner border colour
-- Pulse animation dots
-- Success circle background
-
-### Button Types
-
-| Type | Appearance | Usage |
-|---|---|---|
-| Primary | Solid accent background, white text, rounded | Main CTA per screen |
-| Secondary | Outlined, accent border, accent text + icon | Alternative actions (e.g. phone fallback) |
-| Ghost / cancel | No background, muted text | Low-priority (Back, Cancel, Done) |
-| Status card CTA | Full-width, solid | Already Paid / Existing User screens |
-
-### Skill Level Badge Colours
-
-| Level | Colour |
-|---|---|
-| Beginner | Green |
-| Intermediate | Blue |
-| Advanced | Orange/Amber |
-
----
-
 ## Localisation
 
-All visible strings are available in both **English** and **Vietnamese**. The language toggle button is visible on the Home top bar and as a floating button on the face preview and registration form screens. There is no language selection on any other step — locale persists from the last toggle.
-
----
-
-*Generated from source: `mobile/src/screens/tablet/CourtPayCheckInScreen.tsx` and `mobile/src/lib/tablet-check-in-strings.ts`*
+All visible strings are available in both **English** and **Vietnamese**. A language toggle is accessible from the Home screen top bar and persists throughout the session.

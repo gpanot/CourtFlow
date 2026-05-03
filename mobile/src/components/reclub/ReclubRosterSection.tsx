@@ -181,6 +181,28 @@ function createStyles(t: AppColors) {
       borderWidth: 3,
       borderColor: "#22c55e",
     },
+    walkInRing: {
+      borderWidth: 3,
+      borderColor: "#f59e0b",
+    },
+    walkInSeparator: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      marginVertical: 12,
+    },
+    walkInSeparatorLine: {
+      flex: 1,
+      height: 1,
+      backgroundColor: "rgba(245,158,11,0.3)",
+    },
+    walkInSeparatorLabel: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: "#f59e0b",
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
+    },
     checkBadge: {
       position: "absolute",
       top: -2,
@@ -655,6 +677,38 @@ export function ReclubRosterSection({
             );
           })}
         </View>
+
+        {unmatchedPayments.length > 0 && (
+          <>
+            <View style={styles.walkInSeparator}>
+              <View style={styles.walkInSeparatorLine} />
+              <Text style={styles.walkInSeparatorLabel}>
+                {t("reclubWalkInSeparator")} ({unmatchedPayments.length})
+              </Text>
+              <View style={styles.walkInSeparatorLine} />
+            </View>
+            <View style={styles.grid}>
+              {unmatchedPayments.map((p) => (
+                <View key={p.paymentId} style={styles.avatarCell}>
+                  <View style={styles.avatarWrap}>
+                    <View
+                      style={[
+                        styles.initialsCircle,
+                        { backgroundColor: initialsColor(p.playerName) },
+                        styles.walkInRing,
+                      ]}
+                    >
+                      <Text style={styles.initialsText}>{initials(p.playerName)}</Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.playerName, { color: "#f59e0b" }]} numberOfLines={1}>
+                    {p.playerName}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
 
       </View>
 

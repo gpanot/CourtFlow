@@ -585,7 +585,8 @@
       "reclubLivePaid": "Đã trả",
       "reclubLiveUnmatched": "Chưa khớp",
       "reclubLiveExpected": "Chờ đến",
-      "reclubLoadRoster": "Tải danh sách Reclub"
+      "reclubLoadRoster": "Tải danh sách Reclub",
+      "reclubWalkInSeparator": "Walk-ins — không có trong Reclub"
     },
     "courtPayAwaitingPayment": {
       "payTitle": "Sắp xong rồi, {{name}}!",

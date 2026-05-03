@@ -577,7 +577,8 @@
       "reclubLivePaid": "Paid",
       "reclubLiveUnmatched": "Unmatched",
       "reclubLiveExpected": "Expected",
-      "reclubLoadRoster": "Load Reclub roster"
+      "reclubLoadRoster": "Load Reclub roster",
+      "reclubWalkInSeparator": "Walk-ins — not on Reclub"
     },
     "courtPayAwaitingPayment": {
       "payTitle": "Almost there, {{name}}!",
