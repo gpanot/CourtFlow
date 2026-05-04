@@ -216,6 +216,7 @@ function createStyles(t: AppColors) {
       borderColor: t.border,
       padding: 20,
       marginTop: "auto" as unknown as number,
+      maxHeight: "90%",
     },
     modalTitle: {
       fontSize: 17,
@@ -990,6 +991,7 @@ export function StaffSubscriptionsScreen() {
             <ScrollView
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator={false}
+              style={{ flex: 1 }}
               contentContainerStyle={{ paddingBottom: 24 }}
             >
               <Text style={styles.modalTitle}>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Loader2 } from "lucide-react";
+import { X, Loader2, Star } from "lucide-react";
 
 interface PackageFormData {
   name: string;
@@ -9,6 +9,8 @@ interface PackageFormData {
   durationDays: number;
   price: number;
   perks: string;
+  isBestChoice?: boolean;
+  discountPct?: number | null;
 }
 
 interface PackageFormProps {
@@ -26,7 +28,18 @@ export function PackageForm({ initial, onSubmit, onClose, title }: PackageFormPr
   const [unlimited, setUnlimited] = useState(initial?.sessions === null);
   const [durationDays, setDurationDays] = useState(String(initial?.durationDays || 30));
   const [price, setPrice] = useState(String(initial?.price || ""));
-  const [perks, setPerks] = useState(initial?.perks || "");
+  const [isBestChoice, setIsBestChoice] = useState(initial?.isBestChoice ?? false);
+  const [discountPct, setDiscountPct] = useState(
+    initial?.discountPct != null ? String(initial.discountPct) : ""
+  );
+
+  // 4 individual perk fields
+  const initialPerks = (initial?.perks || "").split(/[\n,]/).map((p) => p.trim()).filter(Boolean);
+  const [perk1, setPerk1] = useState(initialPerks[0] ?? "");
+  const [perk2, setPerk2] = useState(initialPerks[1] ?? "");
+  const [perk3, setPerk3] = useState(initialPerks[2] ?? "");
+  const [perk4, setPerk4] = useState(initialPerks[3] ?? "");
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -37,7 +50,13 @@ export function PackageForm({ initial, onSubmit, onClose, title }: PackageFormPr
       setUnlimited(initial.sessions === null);
       setDurationDays(String(initial.durationDays || 30));
       setPrice(String(initial.price ?? ""));
-      setPerks(initial.perks || "");
+      setIsBestChoice(initial.isBestChoice ?? false);
+      setDiscountPct(initial.discountPct != null ? String(initial.discountPct) : "");
+      const perksArr = (initial.perks || "").split(/[\n,]/).map((p) => p.trim()).filter(Boolean);
+      setPerk1(perksArr[0] ?? "");
+      setPerk2(perksArr[1] ?? "");
+      setPerk3(perksArr[2] ?? "");
+      setPerk4(perksArr[3] ?? "");
     }
   }, [initial]);
 
@@ -47,6 +66,9 @@ export function PackageForm({ initial, onSubmit, onClose, title }: PackageFormPr
     if (!durationDays || Number(durationDays) < 1) { setError("Duration is required"); return; }
     if (!unlimited && (!sessions || Number(sessions) < 1)) { setError("Sessions required (or set Unlimited)"); return; }
 
+    const perks = [perk1, perk2, perk3, perk4].map((p) => p.trim()).filter(Boolean).join("\n");
+    const discountNum = discountPct.trim() ? Number(discountPct) : null;
+
     setSaving(true);
     try {
       await onSubmit({
@@ -54,7 +76,9 @@ export function PackageForm({ initial, onSubmit, onClose, title }: PackageFormPr
         sessions: unlimited ? null : Number(sessions),
         durationDays: Number(durationDays),
         price: Number(price) || 0,
-        perks: perks.trim(),
+        perks,
+        isBestChoice,
+        discountPct: discountNum != null && discountNum > 0 && discountNum <= 99 ? discountNum : null,
       });
     } catch (e) {
       setError((e as Error).message);
@@ -63,28 +87,46 @@ export function PackageForm({ initial, onSubmit, onClose, title }: PackageFormPr
     }
   };
 
+  const inputClass = "w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-white placeholder-neutral-500 focus:border-purple-500 focus:outline-none";
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
       <div className="fixed inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative w-full max-w-md rounded-t-2xl sm:rounded-2xl border border-neutral-800 bg-neutral-950 p-6">
-        <div className="flex items-center justify-between mb-5">
+      <div className="relative w-full max-w-md rounded-t-2xl sm:rounded-2xl border border-neutral-800 bg-neutral-950 p-6 max-h-[90dvh] flex flex-col">
+        <div className="flex items-center justify-between mb-5 shrink-0">
           <h2 className="text-lg font-bold text-white">{title || "Package"}</h2>
           <button onClick={onClose} className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-white">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-neutral-300 mb-1">Package name</label>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-white placeholder-neutral-500 focus:border-purple-500 focus:outline-none"
-              placeholder="e.g. Monthly Pass"
-            />
+        <div className="overflow-y-auto flex-1 space-y-4 pr-0.5">
+          {/* Name + Most Popular toggle */}
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-neutral-300 mb-1">Package name</label>
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className={inputClass}
+                placeholder="e.g. Monthly Pass"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsBestChoice((v) => !v)}
+              className={`mb-0.5 flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-colors whitespace-nowrap ${
+                isBestChoice
+                  ? "border-fuchsia-500 bg-fuchsia-500/15 text-fuchsia-300"
+                  : "border-neutral-700 bg-neutral-900 text-neutral-400 hover:border-neutral-600 hover:text-neutral-300"
+              }`}
+            >
+              <Star className={`h-3.5 w-3.5 ${isBestChoice ? "fill-fuchsia-300 text-fuchsia-300" : ""}`} />
+              Most Popular
+            </button>
           </div>
 
+          {/* Sessions */}
           <div>
             <label className="block text-sm font-medium text-neutral-300 mb-1">Sessions included</label>
             <div className="flex items-center gap-3">
@@ -110,6 +152,7 @@ export function PackageForm({ initial, onSubmit, onClose, title }: PackageFormPr
             </div>
           </div>
 
+          {/* Duration */}
           <div>
             <label className="block text-sm font-medium text-neutral-300 mb-1">Valid for (days)</label>
             <input
@@ -123,29 +166,52 @@ export function PackageForm({ initial, onSubmit, onClose, title }: PackageFormPr
             <p className="mt-1 text-xs text-neutral-500">Days from activation</p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-neutral-300 mb-1">Price (VND)</label>
-            <input
-              type="number"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              min={0}
-              className="w-40 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-white focus:border-purple-500 focus:outline-none"
-              placeholder="900000"
-            />
+          {/* Price + Discount */}
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="block text-sm font-medium text-neutral-300 mb-1">Price (VND)</label>
+              <input
+                type="number"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                min={0}
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-white focus:border-purple-500 focus:outline-none"
+                placeholder="900000"
+              />
+            </div>
+            <div className="w-24">
+              <label className="block text-sm font-medium text-neutral-300 mb-1">Discount (%)</label>
+              <input
+                type="number"
+                value={discountPct}
+                onChange={(e) => setDiscountPct(e.target.value.replace(/[^0-9]/g, "").slice(0, 2))}
+                min={0}
+                max={99}
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-white focus:border-purple-500 focus:outline-none"
+                placeholder="0"
+              />
+            </div>
           </div>
 
+          {/* Perks — 4 individual fields */}
           <div>
-            <label className="block text-sm font-medium text-neutral-300 mb-1">Perks (optional)</label>
-            <textarea
-              value={perks}
-              onChange={(e) => setPerks(e.target.value.slice(0, 200))}
-              maxLength={200}
-              rows={2}
-              className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-white placeholder-neutral-500 focus:border-purple-500 focus:outline-none resize-none"
-              placeholder="e.g. 10% court booking discount, free water bottle"
-            />
-            <p className="text-xs text-neutral-500 text-right">{perks.length}/200</p>
+            <label className="block text-sm font-medium text-neutral-300 mb-2">Perks (optional)</label>
+            <div className="space-y-2">
+              {([
+                [perk1, setPerk1, 1],
+                [perk2, setPerk2, 2],
+                [perk3, setPerk3, 3],
+                [perk4, setPerk4, 4],
+              ] as [string, (v: string) => void, number][]).map(([val, setter, n]) => (
+                <input
+                  key={n}
+                  value={val}
+                  onChange={(e) => setter(e.target.value)}
+                  className={inputClass}
+                  placeholder={`Perk ${n}`}
+                />
+              ))}
+            </div>
           </div>
 
           {error && <p className="text-sm text-red-400">{error}</p>}

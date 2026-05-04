@@ -30,9 +30,7 @@ export function SubscriptionOffer({
   const greeting = isNew
     ? `Welcome to the club, ${playerName}!`
     : `Welcome back, ${playerName}!`;
-  const subtitle = isNew
-    ? "Want to save with a package?"
-    : "Save with a package today?";
+  const subtitle = "Play more, wait less";
 
   return (
     <div className="flex flex-col items-center px-6 py-8 text-center">

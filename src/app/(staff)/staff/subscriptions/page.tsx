@@ -20,6 +20,8 @@ interface Package {
   price: number;
   perks: string | null;
   isActive: boolean;
+  isBestChoice?: boolean;
+  discountPct?: number | null;
   _count: { subscriptions: number };
 }
 
@@ -115,13 +117,13 @@ export default function StaffSubscriptionsPage() {
     }
   };
 
-  const handleCreatePackage = async (data: { name: string; sessions: number | null; durationDays: number; price: number; perks: string }) => {
+  const handleCreatePackage = async (data: { name: string; sessions: number | null; durationDays: number; price: number; perks: string; isBestChoice?: boolean; discountPct?: number | null }) => {
     await api.post("/api/courtpay/staff/packages", { venueId, ...data });
     setShowForm(false);
     await fetchPackages();
   };
 
-  const handleEditPackage = async (data: { name: string; sessions: number | null; durationDays: number; price: number; perks: string }) => {
+  const handleEditPackage = async (data: { name: string; sessions: number | null; durationDays: number; price: number; perks: string; isBestChoice?: boolean; discountPct?: number | null }) => {
     if (!editingPkg) return;
     await api.put(`/api/courtpay/staff/packages/${editingPkg.id}`, data);
     setEditingPkg(null);
@@ -312,6 +314,8 @@ export default function StaffSubscriptionsPage() {
             durationDays: editingPkg.durationDays,
             price: editingPkg.price,
             perks: editingPkg.perks || "",
+            isBestChoice: editingPkg.isBestChoice,
+            discountPct: editingPkg.discountPct,
           }}
           onSubmit={handleEditPackage}
           onClose={() => setEditingPkg(null)}
