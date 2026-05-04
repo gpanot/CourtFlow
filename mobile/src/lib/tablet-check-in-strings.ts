@@ -302,6 +302,9 @@ const CHECK_IN_SCANNER_EN = {
   "paymentGroupNone": "No group payer",
   "paymentGroupNoneHint": "Clear 'Paid by' from this card",
   "paymentPaidBy": "Paid by {{name}}",
+  "paymentRestoreTitle": "Restore Payment",
+  "paymentRestoreMsg": "Restore this payment back to confirmed (paid) status?",
+  "paymentRestore": "Restore Payment",
 
   // ── Payment settings ───────────────────────────────────────────────────────
   "paySettingsTitle": "Payment Settings",
@@ -355,7 +358,7 @@ const CHECK_IN_SCANNER_EN = {
   "reclubKpiWalkIn": "Walk-in",
   "reclubKpiBooked": "Booked",
   "reclubKpiPaid": "Paid",
-  "reclubKpiUnmatched": "Unmatched",
+  "reclubKpiUnmatched": "Walk-ins",
   "reclubKpiExpected": "Expected",
 
   // ── Reclub Roster / Session Detail ──────────────────────────────────────────
@@ -834,6 +837,9 @@ const CHECK_IN_SCANNER_VI = {
   "paymentGroupNone": "Không chọn người trả nhóm",
   "paymentGroupNoneHint": "Xoá 'Đã trả bởi' khỏi thẻ này",
   "paymentPaidBy": "Đã trả bởi {{name}}",
+  "paymentRestoreTitle": "Khôi phục thanh toán",
+  "paymentRestoreMsg": "Khôi phục thanh toán này về trạng thái đã xác nhận?",
+  "paymentRestore": "Khôi phục thanh toán",
 
   // ── Payment settings ───────────────────────────────────────────────────────
   "paySettingsTitle": "Cài đặt thanh toán",
@@ -887,7 +893,7 @@ const CHECK_IN_SCANNER_VI = {
   "reclubKpiWalkIn": "Walk-in",
   "reclubKpiBooked": "Đã đặt",
   "reclubKpiPaid": "Đã trả",
-  "reclubKpiUnmatched": "Chưa khớp",
+  "reclubKpiUnmatched": "Walk-ins",
   "reclubKpiExpected": "Chờ đến",
 
   // ── Reclub Roster / Session Detail ──────────────────────────────────────────

@@ -19,6 +19,7 @@ import {
   Pressable,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import * as Device from "expo-device";
 import { useNavigation } from "@react-navigation/native";
 import type { MaterialTopTabNavigationProp } from "@react-navigation/material-top-tabs";
 import { api, ApiRequestError } from "../../lib/api-client";
@@ -589,8 +590,10 @@ export function PaymentTabScreen() {
   const handleConfirm = async (id: string) => {
     setActionId(id);
     try {
+      const deviceName = Device.modelName ?? Device.deviceName ?? undefined;
       await api.post("/api/staff/confirm-payment", {
         pendingPaymentId: id,
+        ...(deviceName ? { confirmedOnDevice: deviceName } : {}),
       });
       await fetchAll();
     } catch (err) {
@@ -621,6 +624,32 @@ export function PaymentTabScreen() {
     } finally {
       setCancelling(false);
     }
+  };
+
+  const handleRestorePaid = (id: string) => {
+    Alert.alert(
+      t("paymentRestoreTitle"),
+      t("paymentRestoreMsg"),
+      [
+        { text: t("back"), style: "cancel" },
+        {
+          text: t("paymentRestore"),
+          onPress: async () => {
+            try {
+              await api.post("/api/staff/restore-paid-payment", {
+                pendingPaymentId: id,
+              });
+              await fetchAll();
+            } catch (err) {
+              Alert.alert(
+                "Error",
+                err instanceof Error ? err.message : "Failed to restore payment"
+              );
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleCancel = (id: string) => {
@@ -878,37 +907,35 @@ export function PaymentTabScreen() {
               <Text style={styles.cardName} numberOfLines={1}>
                 {player.name}
               </Text>
-              {!isCancelled ? (
-                <TouchableOpacity
-                  style={styles.dotsBtn}
-                  onPress={(e) => {
-                    const target = e.currentTarget as unknown as {
-                      measure?: (
-                        cb: (
-                          x: number,
-                          y: number,
-                          w: number,
-                          h: number,
-                          px: number,
-                          py: number
-                        ) => void
-                      ) => void;
-                    };
-                    if (target.measure) {
-                      target.measure((_x, _y, _w, h, _px, py) => {
-                        setMenuY(py + h);
-                        setMenuPaymentId(item.id);
-                      });
-                    } else {
-                      setMenuY(200);
+              <TouchableOpacity
+                style={styles.dotsBtn}
+                onPress={(e) => {
+                  const target = e.currentTarget as unknown as {
+                    measure?: (
+                      cb: (
+                        x: number,
+                        y: number,
+                        w: number,
+                        h: number,
+                        px: number,
+                        py: number
+                      ) => void
+                    ) => void;
+                  };
+                  if (target.measure) {
+                    target.measure((_x, _y, _w, h, _px, py) => {
+                      setMenuY(py + h);
                       setMenuPaymentId(item.id);
-                    }
-                  }}
-                  activeOpacity={0.6}
-                >
-                  <Ionicons name="ellipsis-vertical" size={18} color={theme.muted} />
-                </TouchableOpacity>
-              ) : null}
+                    });
+                  } else {
+                    setMenuY(200);
+                    setMenuPaymentId(item.id);
+                  }
+                }}
+                activeOpacity={0.6}
+              >
+                <Ionicons name="ellipsis-vertical" size={18} color={theme.muted} />
+              </TouchableOpacity>
             </View>
 
             <View style={styles.nameRow}>
@@ -964,7 +991,10 @@ export function PaymentTabScreen() {
               {isNew ? t("paymentRegistration") : t("paymentCheckIn")} ·{" "}
               <Text style={styles.amountInline}>{formatVND(item.amount)}</Text>
             </Text>
-            <Text style={styles.dateLine}>{formatDateTime(item.confirmedAt)}</Text>
+            <Text style={styles.dateLine}>
+              {formatDateTime(item.confirmedAt)}
+              {item.confirmedOnDevice ? ` · ${item.confirmedOnDevice}` : ""}
+            </Text>
             {subLeftText ? <Text style={styles.subLeftLine}>{subLeftText}</Text> : null}
             {isCancelled ? (
               <Text style={styles.cancelledAmount}>
@@ -1085,30 +1115,47 @@ export function PaymentTabScreen() {
           onPress={() => setMenuPaymentId(null)}
         >
           <View style={[styles.menuCard, { top: menuY }]}>
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                const id = menuPaymentId;
-                setMenuPaymentId(null);
-                if (id) setGroupTargetId(id);
-              }}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="people-outline" size={18} color={theme.text} />
-              <Text style={styles.menuItemTextNeutral}>{t("paymentGroup")}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => {
-                const id = menuPaymentId;
-                setMenuPaymentId(null);
-                if (id) setCancelTargetId(id);
-              }}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="close-circle-outline" size={18} color={theme.red400} />
-              <Text style={styles.menuItemText}>{t("paymentCancel")}</Text>
-            </TouchableOpacity>
+            {paid.find((p) => p.id === menuPaymentId)?.cancelReason ? (
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  const id = menuPaymentId;
+                  setMenuPaymentId(null);
+                  if (id) handleRestorePaid(id);
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="arrow-undo-outline" size={18} color={theme.green400} />
+                <Text style={[styles.menuItemTextNeutral, { color: theme.green400 }]}>{t("paymentRestore")}</Text>
+              </TouchableOpacity>
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => {
+                    const id = menuPaymentId;
+                    setMenuPaymentId(null);
+                    if (id) setGroupTargetId(id);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="people-outline" size={18} color={theme.text} />
+                  <Text style={styles.menuItemTextNeutral}>{t("paymentGroup")}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => {
+                    const id = menuPaymentId;
+                    setMenuPaymentId(null);
+                    if (id) setCancelTargetId(id);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close-circle-outline" size={18} color={theme.red400} />
+                  <Text style={styles.menuItemText}>{t("paymentCancel")}</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </Pressable>
       </Modal>

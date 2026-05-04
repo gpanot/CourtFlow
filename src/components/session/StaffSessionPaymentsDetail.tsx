@@ -28,9 +28,12 @@ interface SessionPaymentRow {
   amount: number;
   paymentMethod: string;
   type: string;
+  status: string;
+  cancelReason?: string | null;
   checkInPlayerId: string | null;
   confirmedBy: string | null;
   confirmedAt: string | null;
+  confirmedOnDevice?: string | null;
   partyCount?: number | null;
   sessionId: string | null;
   player: {
@@ -173,7 +176,21 @@ export function StaffSessionPaymentsDetail({
   const [filter, setFilter] = useState<Filter>("all");
   const [expandedPhotoId, setExpandedPhotoId] = useState<string | null>(null);
   const [exportToast, setExportToast] = useState<string | null>(null);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleRestore = useCallback(async (paymentId: string) => {
+    if (!confirm("Restore this payment back to confirmed (paid) status?")) return;
+    setRestoringId(paymentId);
+    try {
+      await api.post("/api/staff/restore-paid-payment", { pendingPaymentId: paymentId });
+      await fetchPayments();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to restore payment");
+    } finally {
+      setRestoringId(null);
+    }
+  }, [fetchPayments]);
 
   const fetchPayments = useCallback(async () => {
     setFetchError(null);
@@ -452,7 +469,7 @@ export function StaffSessionPaymentsDetail({
               return (
                 <div
                   key={item.id}
-                  className="space-y-2 rounded-xl border border-neutral-800 bg-neutral-900/50 p-3.5"
+                  className={cn("space-y-2 rounded-xl border bg-neutral-900/50 p-3.5", item.cancelReason ? "border-red-800/50 opacity-70" : "border-neutral-800")}
                 >
                   {faceSrc ? (
                     <button
@@ -490,6 +507,11 @@ export function StaffSessionPaymentsDetail({
                     <span className="rounded bg-emerald-600/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-300">
                       {item.confirmedBy === "sepay" ? "SEPAY" : "MANUAL"}
                     </span>
+                    {item.cancelReason ? (
+                      <span className="rounded bg-red-600/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-red-400">
+                        CANCELLED · {item.cancelReason}
+                      </span>
+                    ) : null}
                   </div>
 
                   <p className="text-xs text-neutral-500">
@@ -510,7 +532,25 @@ export function StaffSessionPaymentsDetail({
                     </p>
                   ) : null}
                   {subLeftText ? <p className="text-xs font-semibold text-emerald-400">{subLeftText}</p> : null}
-                  <p className="text-xs text-neutral-500">{formatDateTime(item.confirmedAt)}</p>
+                  <p className="text-xs text-neutral-500">
+                    {formatDateTime(item.confirmedAt)}
+                    {item.confirmedOnDevice ? ` · ${item.confirmedOnDevice}` : ""}
+                  </p>
+                  {item.cancelReason ? (
+                    <button
+                      type="button"
+                      disabled={restoringId === item.id}
+                      onClick={() => void handleRestore(item.id)}
+                      className="mt-1 flex items-center gap-1.5 rounded-md border border-emerald-700/50 bg-emerald-600/10 px-2.5 py-1 text-xs font-semibold text-emerald-400 transition-colors hover:bg-emerald-600/20 disabled:opacity-50"
+                    >
+                      {restoringId === item.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <RotateCw className="h-3 w-3" />
+                      )}
+                      Restore Payment
+                    </button>
+                  ) : null}
                 </div>
               );
             })}

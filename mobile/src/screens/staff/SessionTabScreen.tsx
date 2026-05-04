@@ -45,6 +45,8 @@ interface SessionWithReclub extends Session {
 interface PaidPaymentRow {
   id: string;
   amount: number;
+  status?: string;
+  partyCount?: number;
   confirmedAt?: string | null;
   player?: { id: string; name: string; reclubUserId?: number | null; facePhotoPath?: string | null } | null;
   checkInPlayer?: { id: string; name: string } | null;
@@ -58,6 +60,8 @@ interface PaidPlayerFull {
   amount: number;
   confirmedAt: string | null;
   facePhotoPath: string | null;
+  status?: string;
+  partyCount?: number;
 }
 
 function isToday(dateStr: string): boolean {
@@ -147,7 +151,7 @@ export function SessionTabScreen() {
     try {
       const data = await api.get<SessionHistoryRow[]>(`/api/sessions/history?venueId=${venueId}`);
       const todayOnly = Array.isArray(data)
-        ? data.filter((s) => isToday(s.openedAt))
+        ? data.filter((s) => isToday(s.openedAt) && ((s.paymentPeopleTotal ?? s.paymentCount ?? 0) > 0))
         : [];
       setSessionHistory(todayOnly);
     } catch { /* silent */ }
@@ -175,7 +179,8 @@ export function SessionTabScreen() {
     try {
       const data = await api.get<{
         payments: PaidPaymentRow[];
-      }>(`/api/sessions/${session.id}/payments?status=confirmed`);
+      }>(`/api/sessions/${session.id}/payments`);
+      // Include all payments (confirmed + cancelled) so Reclub walk-in count is accurate
       setPaidPlayers(
         (data.payments ?? []).map((p) => ({
           paymentId: p.id,
@@ -185,6 +190,8 @@ export function SessionTabScreen() {
           amount: p.amount ?? 0,
           confirmedAt: p.confirmedAt ?? null,
           facePhotoPath: p.player?.facePhotoPath ?? null,
+          status: p.status,
+          partyCount: p.partyCount ?? 1,
         }))
       );
     } catch { /* silent */ }
@@ -202,6 +209,7 @@ export function SessionTabScreen() {
   useSocket(venueId, {
     "session:updated": () => { fetchState(); fetchHistory(); },
     "payment:confirmed": () => { fetchPaidPlayers(); },
+    "payment:cancelled": () => { fetchPaidPlayers(); },
   });
 
   const handleOpenSession = async () => {

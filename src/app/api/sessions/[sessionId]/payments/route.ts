@@ -28,21 +28,29 @@ export async function GET(
       isLatestClosedSession = !newerClosed;
     }
 
-    // All confirmed payments that belong to this session:
+    // All confirmed (and cancelled) payments that belong to this session:
     // 1. Directly linked by sessionId (self check-in flow)
     // 2. CourtPay payments confirmed during the session window (no sessionId FK)
+    // Cancelled payments are included so walk-in counts stay accurate in Reclub KPIs.
+    const sessionTimeFilter = {
+      checkInPlayerId: { not: null },
+      confirmedAt: {
+        gte: session.openedAt,
+        ...(session.closedAt ? { lte: session.closedAt } : {}),
+      },
+    };
     const payments = await prisma.pendingPayment.findMany({
       where: {
         venueId: session.venueId,
-        status: "confirmed",
         OR: [
-          { sessionId: session.id },
           {
-            checkInPlayerId: { not: null },
-            confirmedAt: {
-              gte: session.openedAt,
-              ...(session.closedAt ? { lte: session.closedAt } : {}),
-            },
+            status: "confirmed",
+            OR: [{ sessionId: session.id }, sessionTimeFilter],
+          },
+          {
+            status: "cancelled",
+            cancelReason: { not: null },
+            OR: [{ sessionId: session.id }, sessionTimeFilter],
           },
         ],
       },
@@ -147,16 +155,17 @@ export async function GET(
       return { ...p, subscriptionInfo };
     });
 
-    const totalRevenue = enriched.reduce((sum, p) => sum + p.amount, 0);
+    const confirmedEnriched = enriched.filter((p) => p.status === "confirmed");
+    const totalRevenue = confirmedEnriched.reduce((sum, p) => sum + p.amount, 0);
 
     return json({
       payments: enriched,
       summary: {
-        total: enriched.length,
+        total: confirmedEnriched.length,
         totalRevenue,
-        cash: enriched.filter((p) => p.paymentMethod === "cash").length,
-        qr: enriched.filter((p) => p.paymentMethod !== "cash" && p.paymentMethod !== "subscription").length,
-        subscription: enriched.filter((p) => p.paymentMethod === "subscription" || p.type === "subscription").length,
+        cash: confirmedEnriched.filter((p) => p.paymentMethod === "cash").length,
+        qr: confirmedEnriched.filter((p) => p.paymentMethod !== "cash" && p.paymentMethod !== "subscription").length,
+        subscription: confirmedEnriched.filter((p) => p.paymentMethod === "subscription" || p.type === "subscription").length,
       },
       reclubSnapshot: session.reclubSnapshot ?? null,
       isLatestClosedSession,

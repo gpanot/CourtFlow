@@ -149,7 +149,8 @@ export async function GET(request: NextRequest) {
     });
 
     const confirmed = enriched.filter((p) => p.status === "confirmed");
-    const playerCount = confirmed.length;
+    // All payments in the list represent a player who showed up — count them all (confirmed + all cancelled reasons)
+    const playerCount = enriched.reduce((sum, p) => sum + (p.partyCount ?? 1), 0);
     const totalRevenue = confirmed.reduce((sum, p) => sum + p.amount, 0);
 
     return json({

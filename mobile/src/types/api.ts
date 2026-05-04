@@ -109,6 +109,8 @@ export interface PendingPayment {
   expiresAt: string | null;
   confirmedAt: string | null;
   confirmedBy: string | null;
+  /** Device model/name of the staff phone that manually confirmed this payment (e.g. "iPhone 15 Pro"). */
+  confirmedOnDevice?: string | null;
   cancelReason: string | null;
   cancelledAt: string | null;
   groupPaidByPaymentId?: string | null;

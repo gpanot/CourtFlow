@@ -2317,7 +2317,7 @@ function SessionHistoryPanel({
   useEffect(() => {
     api
       .get<SessionHistoryItem[]>(`/api/sessions/history?venueId=${venueId}`)
-      .then(setSessions)
+      .then((data) => setSessions(Array.isArray(data) ? data.filter((s) => (s.paymentCount ?? 0) > 0) : []))
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [venueId]);

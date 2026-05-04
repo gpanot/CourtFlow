@@ -45,6 +45,8 @@ export interface PaidPlayerFull {
   amount: number;
   confirmedAt: string | null;
   facePhotoPath: string | null;
+  status?: string;
+  partyCount?: number;
 }
 
 interface Props {
@@ -216,6 +218,24 @@ function createStyles(t: AppColors) {
       borderWidth: 2,
       borderColor: "#171717",
     },
+    partyBadge: {
+      position: "absolute",
+      bottom: -2,
+      right: -4,
+      backgroundColor: "#f59e0b",
+      borderRadius: 8,
+      paddingHorizontal: 4,
+      paddingVertical: 1,
+      borderWidth: 1.5,
+      borderColor: "#171717",
+      minWidth: 20,
+      alignItems: "center",
+    },
+    partyBadgeText: {
+      fontSize: 10,
+      fontWeight: "800",
+      color: "#fff",
+    },
     playerName: {
       fontSize: 11,
       color: t.muted,
@@ -357,32 +377,36 @@ export function ReclubRosterSection({
     setRoster(existingRoster);
   }, [existingRoster]);
 
+  // Only confirmed payments count as "paid via Reclub" for matching
+  const confirmedPaidPlayers = useMemo(
+    () => paidPlayers.filter((p) => !p.status || p.status === "confirmed"),
+    [paidPlayers]
+  );
+
   const paidReclubIds = useMemo(() => {
     const ids = new Set<number>();
-    for (const p of paidPlayers) {
+    for (const p of confirmedPaidPlayers) {
       if (p.reclubUserId) ids.add(p.reclubUserId);
     }
     return ids;
-  }, [paidPlayers]);
+  }, [confirmedPaidPlayers]);
 
   const paidCount = useMemo(() => {
     if (!roster) return 0;
     return roster.players.filter((p) => paidReclubIds.has(p.reclubUserId)).length;
   }, [roster, paidReclubIds]);
 
-  const unmatchedPaidCount = useMemo(() => {
-    if (!roster) return 0;
-    const rosterIds = new Set(roster.players.map((p) => p.reclubUserId));
-    return paidPlayers.filter(
-      (p) => !p.reclubUserId || !rosterIds.has(p.reclubUserId)
-    ).length;
-  }, [roster, paidPlayers]);
-
+  // Walk-ins = all payment rows (confirmed + cancelled) not on the Reclub roster
+  // Count by partyCount so a group-of-2 payment counts as 2 walk-ins
   const unmatchedPayments = useMemo(() => {
     if (!roster) return [];
     const rosterIds = new Set(roster.players.map((p) => p.reclubUserId));
     return paidPlayers.filter((p) => !p.reclubUserId || !rosterIds.has(p.reclubUserId));
   }, [roster, paidPlayers]);
+
+  const unmatchedPaidCount = useMemo(() => {
+    return unmatchedPayments.reduce((sum, p) => sum + (p.partyCount ?? 1), 0);
+  }, [unmatchedPayments]);
 
   const linkedPaymentForPlayer = useCallback(
     (reclubUserId: number): PaidPlayerFull | undefined => {
@@ -688,24 +712,32 @@ export function ReclubRosterSection({
               <View style={styles.walkInSeparatorLine} />
             </View>
             <View style={styles.grid}>
-              {unmatchedPayments.map((p) => (
-                <View key={p.paymentId} style={styles.avatarCell}>
-                  <View style={styles.avatarWrap}>
-                    <View
-                      style={[
-                        styles.initialsCircle,
-                        { backgroundColor: initialsColor(p.playerName) },
-                        styles.walkInRing,
-                      ]}
-                    >
-                      <Text style={styles.initialsText}>{initials(p.playerName)}</Text>
+              {unmatchedPayments.map((p) => {
+                const party = p.partyCount ?? 1;
+                return (
+                  <View key={p.paymentId} style={styles.avatarCell}>
+                    <View style={styles.avatarWrap}>
+                      <View
+                        style={[
+                          styles.initialsCircle,
+                          { backgroundColor: initialsColor(p.playerName) },
+                          styles.walkInRing,
+                        ]}
+                      >
+                        <Text style={styles.initialsText}>{initials(p.playerName)}</Text>
+                      </View>
+                      {party > 1 && (
+                        <View style={styles.partyBadge}>
+                          <Text style={styles.partyBadgeText}>×{party}</Text>
+                        </View>
+                      )}
                     </View>
+                    <Text style={[styles.playerName, { color: "#f59e0b" }]} numberOfLines={1}>
+                      {p.playerName}
+                    </Text>
                   </View>
-                  <Text style={[styles.playerName, { color: "#f59e0b" }]} numberOfLines={1}>
-                    {p.playerName}
-                  </Text>
-                </View>
-              ))}
+                );
+              })}
             </View>
           </>
         )}

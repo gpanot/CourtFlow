@@ -670,8 +670,10 @@ model PendingPayment {
   status          String    @default("pending") // "pending" | "confirmed" | "cancelled" | "expired"
   createdAt       DateTime  @default(now()) @map("created_at")
   expiresAt       DateTime  @map("expires_at")
-  confirmedAt     DateTime? @map("confirmed_at")
-  confirmedBy     String?   @map("confirmed_by")
+  confirmedAt       DateTime? @map("confirmed_at")
+  confirmedBy       String?   @map("confirmed_by")
+  /// Device model/name of the staff phone that manually confirmed this payment (e.g. "iPhone 15 Pro").
+  confirmedOnDevice String?   @map("confirmed_on_device")
   /// Optional: this payment is covered by another payer's grouped payment.
   groupPaidByPaymentId String? @map("group_paid_by_payment_id")
   /// Snapshot of payer display name for stable UI label.

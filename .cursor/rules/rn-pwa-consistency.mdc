@@ -1,0 +1,32 @@
+---
+description: Keep RN mobile and PWA in sync whenever features are updated
+alwaysApply: true
+---
+
+# RN Mobile ↔ PWA Feature Parity
+
+The CourtFlow app has two client surfaces that must always stay in sync:
+
+- **RN Mobile** — `mobile/src/` (React Native / Expo)
+- **PWA** — `src/` (Next.js)
+
+## Rule
+
+Whenever you modify a feature in one surface, you MUST apply the equivalent change to the other surface before finishing.
+
+## Common pairings
+
+| Feature area | RN Mobile | PWA |
+|---|---|---|
+| Session history (tab/dashboard) | `mobile/src/screens/staff/SessionTabScreen.tsx` `mobile/src/screens/staff/StaffBossDashboardScreen.tsx` | `src/app/(staff)/staff/dashboard.tsx` |
+| Payment cards (per-session detail) | `mobile/src/screens/staff/SessionDetailScreen.tsx` | `src/components/session/StaffSessionPaymentsDetail.tsx` |
+| Reclub roster / walk-ins | `mobile/src/components/reclub/ReclubRosterSection.tsx` | `src/components/session/SessionCourtPay.tsx` |
+| Payment tab (paid/cancelled/undo) | `mobile/src/screens/staff/PaymentTabScreen.tsx` | `src/components/session/StaffSessionPaymentsDetail.tsx` |
+| i18n strings | `mobile/src/lib/tablet-check-in-strings.ts` | `src/i18n/locales/staff/en.json` + `vi.json` |
+
+## Checklist before finishing any task
+
+- [ ] Did I change logic or UI in RN? → Apply the same change in PWA.
+- [ ] Did I change logic or UI in PWA? → Apply the same change in RN.
+- [ ] Did I add/rename a translation key? → Update both `tablet-check-in-strings.ts` and `en.json`/`vi.json`.
+- [ ] Did I change an API response shape? → Update both RN types (`mobile/src/types/api.ts`) and PWA interfaces.

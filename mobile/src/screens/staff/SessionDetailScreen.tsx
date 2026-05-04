@@ -482,7 +482,10 @@ export function SessionDetailScreen() {
           <Text style={styles.groupLine}>{t("paymentGroupOf", { count: item.partyCount ?? 1 })}</Text>
         ) : null}
         {subLeftText ? <Text style={styles.subLeftLine}>{subLeftText}</Text> : null}
-        <Text style={styles.waitLine}>{formatDateTime(item.confirmedAt)}</Text>
+        <Text style={styles.waitLine}>
+          {formatDateTime(item.confirmedAt)}
+          {item.confirmedOnDevice ? ` · ${item.confirmedOnDevice}` : ""}
+        </Text>
       </View>
     );
   };

@@ -143,6 +143,8 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
     amount: number;
     confirmedAt: string | null;
     facePhotoPath: string | null;
+    partyCount?: number;
+    status?: string;
   }
   const [paidPlayersAll, setPaidPlayersAll] = useState<PaidPlayerFull[]>([]);
   const [sheetPlayer, setSheetPlayer] = useState<ReclubPlayer | null>(null);
@@ -189,17 +191,23 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
         payments: Array<{
           id: string;
           amount: number;
+          status?: string;
+          partyCount?: number;
           confirmedAt?: string | null;
           player?: { id: string; name: string; reclubUserId?: number | null; facePhotoPath?: string | null } | null;
           checkInPlayer?: { id: string; name: string } | null;
         }>;
-      }>(`/api/sessions/${session.id}/payments?status=confirmed`);
+      // Fetch all payments (confirmed + cancelled) so walk-in count includes free-pass players
+      }>(`/api/sessions/${session.id}/payments`);
       const ids = new Set<number>();
       let count = 0;
       const all: PaidPlayerFull[] = [];
       for (const p of data.payments ?? []) {
-        count++;
-        if (p.player?.reclubUserId) ids.add(p.player.reclubUserId);
+        // Only confirmed payments count toward paidPlayerCount (revenue) and Reclub matching
+        if (!p.status || p.status === "confirmed") {
+          count++;
+          if (p.player?.reclubUserId) ids.add(p.player.reclubUserId);
+        }
         all.push({
           paymentId: p.id,
           playerId: p.player?.id ?? p.checkInPlayer?.id ?? "",
@@ -208,6 +216,8 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
           amount: p.amount ?? 0,
           confirmedAt: p.confirmedAt ?? null,
           facePhotoPath: p.player?.facePhotoPath ?? null,
+          partyCount: p.partyCount ?? 1,
+          status: p.status,
         });
       }
       setPaidReclubIds(ids);
@@ -382,17 +392,16 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
     return roster.players.filter((p) => paidReclubIds.has(p.reclubUserId)).length;
   }, [roster, paidReclubIds]);
 
-  const unmatchedPaidCount = useMemo(() => {
-    if (!roster) return 0;
-    const rosterIds = new Set(roster.players.map((p) => p.reclubUserId));
-    return paidPlayerCount - [...paidReclubIds].filter((id) => rosterIds.has(id)).length;
-  }, [roster, paidReclubIds, paidPlayerCount]);
-
   const unmatchedPayments = useMemo(() => {
     if (!roster) return [];
     const rosterIds = new Set(roster.players.map((p) => p.reclubUserId));
     return paidPlayersAll.filter((p) => !p.reclubUserId || !rosterIds.has(p.reclubUserId));
   }, [roster, paidPlayersAll]);
+
+  // Walk-ins count: sum partyCount so a group-of-2 payment counts as 2 walk-ins
+  const unmatchedPaidCount = useMemo(() => {
+    return unmatchedPayments.reduce((sum, p) => sum + (p.partyCount ?? 1), 0);
+  }, [unmatchedPayments]);
 
   const closeSheet = () => {
     setSheetPlayer(null);
@@ -872,7 +881,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
         );
       })()}
 
-      {/* Unmatched paid players list */}
+      {/* Walk-ins list */}
       {sheetMode === "unmatched-list" && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60" onClick={closeSheet}>
           <div
@@ -880,36 +889,49 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="border-b border-neutral-800 px-5 py-4 text-center">
-              <p className="text-base font-bold text-white">Chưa khớp ({unmatchedPayments.length})</p>
+              <p className="text-base font-bold text-white">Walk-ins ({unmatchedPaidCount})</p>
               <p className="mt-1 text-sm text-neutral-400">Người đã trả nhưng không có trong danh sách Reclub</p>
             </div>
             <div className="max-h-[40dvh] overflow-y-auto">
               {unmatchedPayments.length === 0 ? (
                 <p className="py-6 text-center text-sm text-neutral-500">Không có</p>
               ) : (
-                unmatchedPayments.map((p) => (
+                unmatchedPayments.map((p) => {
+                  const party = p.partyCount ?? 1;
+                  return (
                   <div
                     key={p.paymentId}
                     className="flex items-center gap-3 border-b border-neutral-800 px-5 py-3"
                   >
-                    {p.facePhotoPath ? (
-                      <img src={p.facePhotoPath} alt="" className="h-10 w-10 rounded-full object-cover" />
-                    ) : (
-                      <div
-                        className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white"
-                        style={{ backgroundColor: initialsColor(p.playerName) }}
-                      >
-                        {playerInitials(p.playerName)}
-                      </div>
-                    )}
+                    <div className="relative shrink-0">
+                      {p.facePhotoPath ? (
+                        <img src={p.facePhotoPath} alt="" className="h-10 w-10 rounded-full object-cover" />
+                      ) : (
+                        <div
+                          className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold text-white"
+                          style={{ backgroundColor: initialsColor(p.playerName) }}
+                        >
+                          {playerInitials(p.playerName)}
+                        </div>
+                      )}
+                      {party > 1 && (
+                        <span className="absolute -bottom-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full border border-neutral-900 bg-amber-500 px-1 text-[10px] font-bold text-white">
+                          ×{party}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex-1">
-                      <p className="text-sm font-semibold text-white">{p.playerName}</p>
+                      <p className="text-sm font-semibold text-white">
+                        {p.playerName}
+                        {party > 1 && <span className="ml-1.5 text-xs font-normal text-amber-400">group of {party}</span>}
+                      </p>
                       <p className="text-xs text-neutral-400">
                         {p.amount.toLocaleString()} VND · {formatTime(p.confirmedAt)}
                       </p>
                     </div>
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
             <button

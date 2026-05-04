@@ -11,7 +11,10 @@ import { getActiveSubscription } from "@/modules/courtpay/lib/subscription";
 export async function POST(request: NextRequest) {
   try {
     const auth = requireStaff(request.headers);
-    const { pendingPaymentId } = await parseBody<{ pendingPaymentId: string }>(request);
+    const { pendingPaymentId, confirmedOnDevice } = await parseBody<{
+      pendingPaymentId: string;
+      confirmedOnDevice?: string;
+    }>(request);
     if (!pendingPaymentId?.trim()) return error("pendingPaymentId is required", 400);
 
     const payment = await prisma.pendingPayment.findUnique({
@@ -35,6 +38,7 @@ export async function POST(request: NextRequest) {
           status: "confirmed",
           confirmedAt: new Date(),
           confirmedBy: auth.id,
+          ...(confirmedOnDevice ? { confirmedOnDevice } : {}),
           ...(openSession ? { sessionId: openSession.id } : {}),
         },
       });
@@ -140,6 +144,7 @@ export async function POST(request: NextRequest) {
         status: "confirmed",
         confirmedAt: new Date(),
         confirmedBy: auth.id,
+        ...(confirmedOnDevice ? { confirmedOnDevice } : {}),
       },
     });
 

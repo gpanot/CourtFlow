@@ -65,37 +65,53 @@ export async function GET(request: NextRequest) {
         const payments = await prisma.pendingPayment.findMany({
           where: {
             venueId,
-            status: "confirmed",
             OR: [
-              { sessionId: s.id },
               {
-                checkInPlayerId: { not: null },
-                confirmedAt: {
-                  gte: periodStart,
-                  lte: periodEnd,
-                },
+                status: "confirmed",
+                OR: [
+                  { sessionId: s.id },
+                  {
+                    checkInPlayerId: { not: null },
+                    confirmedAt: { gte: periodStart, lte: periodEnd },
+                  },
+                ],
+              },
+              // All cancelled payments still represent players who showed up — include in people count
+              {
+                status: "cancelled",
+                cancelReason: { not: null },
+                OR: [
+                  { sessionId: s.id },
+                  {
+                    checkInPlayerId: { not: null },
+                    confirmedAt: { gte: periodStart, lte: periodEnd },
+                  },
+                ],
               },
             ],
           },
-          select: { amount: true, paymentMethod: true, type: true, partyCount: true },
+          select: { amount: true, paymentMethod: true, type: true, partyCount: true, status: true },
         });
         let qr = 0;
         let cash = 0;
         let sub = 0;
         let paymentPeopleTotal = 0;
+        const confirmedPayments = payments.filter((p) => p.status === "confirmed");
         for (const p of payments) {
+          const party = typeof p.partyCount === "number" && p.partyCount > 0 ? p.partyCount : 1;
+          // All payments in the list represent a player who showed up
+          paymentPeopleTotal += party;
+          if (p.status !== "confirmed") continue;
           const b = classifyPayment(p);
           if (b === "qr") qr += 1;
           else if (b === "cash") cash += 1;
           else sub += 1;
-          const party = typeof p.partyCount === "number" && p.partyCount > 0 ? p.partyCount : 1;
-          paymentPeopleTotal += party;
         }
         return {
           ...s,
-          paymentCount: payments.length,
+          paymentCount: confirmedPayments.length,
           paymentPeopleTotal,
-          paymentRevenue: payments.reduce((sum, p) => sum + p.amount, 0),
+          paymentRevenue: confirmedPayments.reduce((sum, p) => sum + p.amount, 0),
           paymentQrCount: qr,
           paymentCashCount: cash,
           paymentSubCount: sub,

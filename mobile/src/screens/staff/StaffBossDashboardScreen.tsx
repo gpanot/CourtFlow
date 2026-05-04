@@ -623,14 +623,14 @@ export function StaffBossDashboardScreen() {
           api.get<SessionHistoryRow[]>(`/api/sessions/history?venueId=${venueId}`),
         ]);
         setTodayData(data);
-        setSessionHistory(Array.isArray(sessions) ? sessions : []);
+        setSessionHistory(Array.isArray(sessions) ? sessions.filter((s) => (s.paymentPeopleTotal ?? s.paymentCount ?? 0) > 0) : []);
       } else if (tab === "history") {
         const [data, sessions] = await Promise.all([
           api.get<HistoryData>(`/api/courtpay/staff/boss/history?venueId=${venueId}`),
           api.get<SessionHistoryRow[]>(`/api/sessions/history?venueId=${venueId}`),
         ]);
         setHistoryData(data);
-        setSessionHistory(Array.isArray(sessions) ? sessions : []);
+        setSessionHistory(Array.isArray(sessions) ? sessions.filter((s) => (s.paymentPeopleTotal ?? s.paymentCount ?? 0) > 0) : []);
       } else if (tab === "subscriptions") {
         const data = await api.get<SessionData>(
           `/api/courtpay/staff/boss/sessions?venueId=${venueId}`
@@ -733,7 +733,7 @@ export function StaffBossDashboardScreen() {
               {/* Today's court sessions — same cards as Session tab */}
               <Text style={styles.sectionTitle}>{t("bossDashboardTodaySessions")}</Text>
               {(() => {
-                const todaySessions = sessionHistory.filter((s) => isToday(s.openedAt));
+                const todaySessions = sessionHistory.filter((s) => isToday(s.openedAt) && ((s.paymentPeopleTotal ?? s.paymentCount ?? 0) > 0));
                 if (todaySessions.length === 0) {
                   return <Text style={styles.empty}>{t("bossDashboardNoSessions")}</Text>;
                 }
