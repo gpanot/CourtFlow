@@ -173,6 +173,8 @@ export interface SubscriptionPackage {
   durationDays?: number;
   price: number;
   active: boolean;
+  /** Comma or newline separated perks text */
+  perks?: string | null;
   /** Discount percentage shown on the package card (0–99, integer) */
   discountPct?: number | null;
   /** Whether this package is highlighted as "Best Choice" */

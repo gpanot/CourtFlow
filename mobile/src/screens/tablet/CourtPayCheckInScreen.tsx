@@ -199,6 +199,7 @@ export function CourtPayCheckInScreen({
   const [showSubscriptionsInFlow, setShowSubscriptionsInFlow] = useState(true);
   const [packages, setPackages] = useState<SubscriptionPackage[]>([]);
   const [selectedPkg, setSelectedPkg] = useState<string | null>(null);
+  const [expandedPkg, setExpandedPkg] = useState<string | null>(null);
   const [player, setPlayer] = useState<CheckInPlayerLite | null>(null);
   const [isNewPlayer, setIsNewPlayer] = useState(false);
   const [pendingPayment, setPendingPayment] = useState<PendingPaymentState | null>(null);
@@ -385,6 +386,7 @@ export function CourtPayCheckInScreen({
     resetRegistrationCamera();
     setRegCheckingFace(false);
     setSelectedPkg(null);
+    setExpandedPkg(null);
     setPlayer(null);
     setIsNewPlayer(false);
     setPendingPayment(null);
@@ -1696,10 +1698,17 @@ export function CourtPayCheckInScreen({
               <View style={styles.subOfferList}>
                 {activePackages.map((pkg) => {
                   const isSelected = selectedPkg === pkg.id;
+                  const isExpanded = expandedPkg === pkg.id;
+                  const perkList = pkg.perks ? pkg.perks.split(/[\n,]/).map((p) => p.trim()).filter(Boolean).slice(0, 4) : [];
+                  const firstPerk = perkList[0];
+                  const extraCount = perkList.length - 1;
                   return (
                     <TouchableOpacity
                       key={pkg.id}
-                      onPress={() => setSelectedPkg(pkg.id)}
+                      onPress={() => {
+                        setSelectedPkg(pkg.id);
+                        setExpandedPkg((prev) => (prev === pkg.id ? null : pkg.id));
+                      }}
                       activeOpacity={0.85}
                     >
                       <LiquidGlassSurface
@@ -1745,6 +1754,22 @@ export function CourtPayCheckInScreen({
                       <Text style={[styles.pkgPrice, isLight && styles.pkgPriceLight]}>
                         {pkg.price === 0 ? "—" : formatVND(pkg.price)}
                       </Text>
+                      {perkList.length > 0 ? (
+                        isExpanded ? (
+                          <View style={styles.pkgPerksBlock}>
+                            {perkList.map((perk, i) => (
+                              <View key={i} style={styles.pkgPerkRow}>
+                                <Text style={[styles.pkgPerkDot, isLight && styles.pkgPerkDotLight]}>•</Text>
+                                <Text style={[styles.pkgPerkText, isLight && styles.pkgPerkTextLight]} numberOfLines={1}>{perk}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        ) : (
+                          <Text style={[styles.pkgPerkSummary, isLight && styles.pkgPerkSummaryLight]} numberOfLines={1}>
+                            {firstPerk}{extraCount > 0 ? `  ${t("subOfferMorePerks").replace("{{n}}", String(extraCount))}` : ""}
+                          </Text>
+                        )
+                      ) : null}
                       </LiquidGlassSurface>
                     </TouchableOpacity>
                   );
@@ -1879,10 +1904,17 @@ export function CourtPayCheckInScreen({
                   <View style={styles.subOfferList}>
                     {activePackages.map((pkg) => {
                       const isSelected = selectedPkg === pkg.id;
+                      const isExpanded = expandedPkg === pkg.id;
+                      const perkList = pkg.perks ? pkg.perks.split(/[\n,]/).map((p) => p.trim()).filter(Boolean).slice(0, 4) : [];
+                      const firstPerk = perkList[0];
+                      const extraCount = perkList.length - 1;
                       return (
                         <TouchableOpacity
                           key={pkg.id}
-                          onPress={() => setSelectedPkg(pkg.id)}
+                          onPress={() => {
+                            setSelectedPkg(pkg.id);
+                            setExpandedPkg((prev) => (prev === pkg.id ? null : pkg.id));
+                          }}
                           activeOpacity={0.85}
                         >
                           <LiquidGlassSurface
@@ -1926,6 +1958,22 @@ export function CourtPayCheckInScreen({
                             <Text style={[styles.pkgPrice, isLight && styles.pkgPriceLight]}>
                               {pkg.price === 0 ? "—" : formatVND(pkg.price)}
                             </Text>
+                            {perkList.length > 0 ? (
+                              isExpanded ? (
+                                <View style={styles.pkgPerksBlock}>
+                                  {perkList.map((perk, i) => (
+                                    <View key={i} style={styles.pkgPerkRow}>
+                                      <Text style={[styles.pkgPerkDot, isLight && styles.pkgPerkDotLight]}>•</Text>
+                                      <Text style={[styles.pkgPerkText, isLight && styles.pkgPerkTextLight]} numberOfLines={1}>{perk}</Text>
+                                    </View>
+                                  ))}
+                                </View>
+                              ) : (
+                                <Text style={[styles.pkgPerkSummary, isLight && styles.pkgPerkSummaryLight]} numberOfLines={1}>
+                                  {firstPerk}{extraCount > 0 ? `  ${t("subOfferMorePerks").replace("{{n}}", String(extraCount))}` : ""}
+                                </Text>
+                              )
+                            ) : null}
                           </LiquidGlassSurface>
                         </TouchableOpacity>
                       );
@@ -2131,7 +2179,7 @@ export function CourtPayCheckInScreen({
           onToggleTheme={toggleTheme}
         />
       ) : null}
-      {step === "reg_face_preview" || step === "reg_form" ? (
+      {step === "reg_face_preview" || step === "reg_form" || step === "subscription_offer" || step === "subscription_exhausted_offer" ? (
         <View style={[styles.floatingLocaleToggle, { top: insets.top + 8 }]}>
           <TabletLanguageToggle locale={locale} onToggle={toggleLocale} />
         </View>
@@ -2876,6 +2924,15 @@ const styles = StyleSheet.create({
   pkgMetaLight: { color: "#64748b" },
   pkgPrice: { fontSize: 18, fontWeight: "700", color: "#a855f7", marginTop: 8 },
   pkgPriceLight: { color: "#7c3aed" },
+
+  pkgPerksBlock: { marginTop: 10, gap: 3 },
+  pkgPerkRow: { flexDirection: "row", alignItems: "flex-start", gap: 5 },
+  pkgPerkDot: { fontSize: 12, color: "#a855f7", lineHeight: 18 },
+  pkgPerkDotLight: { color: "#7c3aed" },
+  pkgPerkText: { fontSize: 12, color: "#d4d4d4", lineHeight: 18, flex: 1 },
+  pkgPerkTextLight: { color: "#475569" },
+  pkgPerkSummary: { fontSize: 12, color: "#a3a3a3", marginTop: 8, fontStyle: "italic" },
+  pkgPerkSummaryLight: { color: "#64748b" },
 
   // OR separator
   orSeparator: {

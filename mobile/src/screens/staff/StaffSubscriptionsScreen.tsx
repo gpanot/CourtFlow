@@ -165,6 +165,11 @@ function createStyles(t: AppColors) {
     },
     discountTagText: { fontSize: 10, fontWeight: "700", color: "#4ade80" },
     pkgMeta: { fontSize: 13, color: t.muted, marginTop: 4 },
+    pkgPerksBlock: { marginTop: 8, gap: 2 },
+    pkgPerksLabel: { fontSize: 10, fontWeight: "600", color: t.muted, letterSpacing: 0.4, textTransform: "uppercase" as const, marginBottom: 2 },
+    pkgPerkRow: { flexDirection: "row" as const, alignItems: "flex-start" as const, gap: 4 },
+    pkgPerkDot: { fontSize: 11, color: t.purple400, lineHeight: 17 },
+    pkgPerkItem: { fontSize: 11, color: t.muted, lineHeight: 17, flex: 1 },
     pkgRow: {
       flexDirection: "row",
       justifyContent: "flex-end",
@@ -434,7 +439,10 @@ export function StaffSubscriptionsScreen() {
   const [formUnlimited, setFormUnlimited] = useState(false);
   const [formDays, setFormDays] = useState("30");
   const [formPrice, setFormPrice] = useState("");
-  const [formPerks, setFormPerks] = useState("");
+  const [formPerk1, setFormPerk1] = useState("");
+  const [formPerk2, setFormPerk2] = useState("");
+  const [formPerk3, setFormPerk3] = useState("");
+  const [formPerk4, setFormPerk4] = useState("");
   const [formDiscountPct, setFormDiscountPct] = useState("");
   const [formDiscountManual, setFormDiscountManual] = useState(false);
   const [formBestChoice, setFormBestChoice] = useState(false);
@@ -525,7 +533,10 @@ export function StaffSubscriptionsScreen() {
     setFormUnlimited(false);
     setFormDays("30");
     setFormPrice("");
-    setFormPerks("");
+    setFormPerk1("");
+    setFormPerk2("");
+    setFormPerk3("");
+    setFormPerk4("");
     setFormDiscountPct("");
     setFormDiscountManual(false);
     setFormBestChoice(false);
@@ -543,7 +554,11 @@ export function StaffSubscriptionsScreen() {
     setFormUnlimited(pkg.sessions === null);
     setFormDays(String(pkg.durationDays || 30));
     setFormPrice(pkg.price ? String(pkg.price) : "");
-    setFormPerks(pkg.perks || "");
+    const perksArr = (pkg.perks || "").split(/[\n,]/).map((p) => p.trim()).filter(Boolean);
+    setFormPerk1(perksArr[0] ?? "");
+    setFormPerk2(perksArr[1] ?? "");
+    setFormPerk3(perksArr[2] ?? "");
+    setFormPerk4(perksArr[3] ?? "");
     setFormDiscountPct(pkg.discountPct != null ? String(pkg.discountPct) : "");
     setFormDiscountManual(pkg.discountPct != null);
     setFormBestChoice(pkg.isBestChoice ?? false);
@@ -668,7 +683,7 @@ export function StaffSubscriptionsScreen() {
         sessions: formUnlimited ? null : Number(formSessions),
         durationDays: Number(formDays),
         price: Number(formPrice) || 0,
-        perks: formPerks.trim() || "",
+        perks: [formPerk1, formPerk2, formPerk3, formPerk4].map((p) => p.trim()).filter(Boolean).join("\n"),
         discountPct: discountPctNum,
         isBestChoice: formBestChoice,
       };
@@ -855,6 +870,17 @@ export function StaffSubscriptionsScreen() {
                       <Text style={[styles.pkgMeta, { fontSize: 12 }]}>
                         {t("subsActiveSubs")}: {pkg._count?.subscriptions ?? 0}
                       </Text>
+                      {pkg.perks ? (
+                        <View style={styles.pkgPerksBlock}>
+                          <Text style={styles.pkgPerksLabel}>{t("subsPerks").replace(" (optional)", "").replace(" (tùy chọn)", "")}</Text>
+                          {pkg.perks.split(/[\n,]/).map((p) => p.trim()).filter(Boolean).slice(0, 4).map((perk, i) => (
+                            <View key={i} style={styles.pkgPerkRow}>
+                              <Text style={styles.pkgPerkDot}>•</Text>
+                              <Text style={styles.pkgPerkItem} numberOfLines={1}>{perk}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      ) : null}
                       <View style={styles.pkgRow}>
                         <TouchableOpacity
                           style={styles.btnGhost}
@@ -1100,12 +1126,22 @@ export function StaffSubscriptionsScreen() {
 
               {/* ── Perks ─────────────────────────────────────────────── */}
               <Text style={styles.label}>{t("subsPerks")}</Text>
-              <TextInput
-                style={[styles.input, { height: 72 }]}
-                value={formPerks}
-                onChangeText={setFormPerks}
-                multiline
-              />
+              {([
+                [formPerk1, setFormPerk1, 1],
+                [formPerk2, setFormPerk2, 2],
+                [formPerk3, setFormPerk3, 3],
+                [formPerk4, setFormPerk4, 4],
+              ] as [string, (v: string) => void, number][]).map(([val, setter, n]) => (
+                <TextInput
+                  key={n}
+                  style={styles.input}
+                  value={val}
+                  onChangeText={setter}
+                  placeholder={t("subsPerkN").replace("{{n}}", String(n))}
+                  placeholderTextColor={theme.dimmed}
+                  returnKeyType="next"
+                />
+              ))}
 
               {/* ── Actions ───────────────────────────────────────────── */}
               <View style={styles.modalActions}>
