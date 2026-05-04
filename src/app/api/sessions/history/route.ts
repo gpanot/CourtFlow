@@ -107,9 +107,11 @@ export async function GET(request: NextRequest) {
           else if (b === "cash") cash += 1;
           else sub += 1;
         }
+        const cancelledPayments = payments.filter((p) => p.status === "cancelled");
         return {
           ...s,
           paymentCount: confirmedPayments.length,
+          cancelledCount: cancelledPayments.length,
           paymentPeopleTotal,
           paymentRevenue: confirmedPayments.reduce((sum, p) => sum + p.amount, 0),
           paymentQrCount: qr,

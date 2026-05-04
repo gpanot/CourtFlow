@@ -764,6 +764,7 @@ export function StaffBossDashboardScreen() {
                       {t("bossDashboardRevenue")}: {s.paymentRevenue?.toLocaleString() ?? "0"} VND ·{" "}
                       {s.paymentPeopleTotal ?? s.paymentCount ?? 0} {t("bossDashboardSessionPlayersPaid")} ·{" "}
                       {s.paymentCount ?? 0} {t("bossDashboardPayments")}
+                      {(s.cancelledCount ?? 0) > 0 ? ` · ${s.cancelledCount} ${t("sessionCancelledFree")}` : ""}
                     </Text>
                     <Text style={styles.sessionCardTime}>
                       {new Date(s.openedAt).toLocaleTimeString()}
@@ -884,6 +885,7 @@ export function StaffBossDashboardScreen() {
                       {t("bossDashboardRevenue")}: {s.paymentRevenue?.toLocaleString() ?? "0"} VND ·{" "}
                       {s.paymentPeopleTotal ?? s.paymentCount ?? 0} {t("bossDashboardSessionPlayersPaid")} ·{" "}
                       {s.paymentCount ?? 0} {t("bossDashboardPayments")}
+                      {(s.cancelledCount ?? 0) > 0 ? ` · ${s.cancelledCount} ${t("sessionCancelledFree")}` : ""}
                     </Text>
                     <Text style={styles.sessionCardTime}>
                       {new Date(s.openedAt).toLocaleTimeString()}

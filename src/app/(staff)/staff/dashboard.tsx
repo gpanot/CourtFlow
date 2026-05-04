@@ -2297,6 +2297,7 @@ interface SessionHistoryItem {
   playerCount: number;
   gameCount: number;
   paymentCount: number;
+  cancelledCount?: number;
   paymentRevenue: number;
 }
 
@@ -2397,7 +2398,7 @@ function SessionHistoryPanel({
                   </div>
                   <div className="text-right min-w-[88px]">
                     <p className="text-sm font-medium text-emerald-300">{formatVndCompact(s.paymentRevenue)}</p>
-                    <p className="text-[10px] text-neutral-600">{s.paymentCount} paid</p>
+                    <p className="text-[10px] text-neutral-600">{s.paymentCount} paid{(s.cancelledCount ?? 0) > 0 ? ` · ${s.cancelledCount} cancelled` : ""}</p>
                   </div>
                   <ChevronRight className="h-4 w-4 text-neutral-600" />
                 </div>

@@ -234,6 +234,7 @@ const CHECK_IN_SCANNER_EN = {
   "sessionClosed": "closed",
   "sessionRevenue": "Revenue",
   "sessionPayments": "payments",
+  "sessionCancelledFree": "Cancelled/Free",
 
   // ── Check-in tab ───────────────────────────────────────────────────────────
   "checkInNewPlayer": "New Player",
@@ -769,6 +770,7 @@ const CHECK_IN_SCANNER_VI = {
   "sessionClosed": "đã đóng",
   "sessionRevenue": "Doanh thu",
   "sessionPayments": "thanh toán",
+  "sessionCancelledFree": "Huỷ/Miễn phí",
 
   // ── Check-in tab ───────────────────────────────────────────────────────────
   "checkInNewPlayer": "Người chơi mới",

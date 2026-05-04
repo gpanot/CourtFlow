@@ -54,6 +54,7 @@ export interface SessionHistoryRow {
   playerCount: number;
   gameCount: number;
   paymentCount: number;
+  cancelledCount?: number;
   /** Sum of `partyCount` on confirmed session payments (1–4 per payment). */
   paymentPeopleTotal?: number;
   paymentRevenue: number;

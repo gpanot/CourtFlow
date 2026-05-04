@@ -367,6 +367,7 @@ export function SessionTabScreen() {
                   {t("sessionRevenue")}: {s.paymentRevenue?.toLocaleString() ?? "0"} VND ·{" "}
                   {s.paymentPeopleTotal ?? s.paymentCount ?? 0} {t("bossDashboardSessionPlayersPaid")} ·{" "}
                   {s.paymentCount ?? 0} {t("sessionPayments")}
+                  {(s.cancelledCount ?? 0) > 0 ? ` · ${s.cancelledCount} ${t("sessionCancelledFree")}` : ""}
                 </Text>
                 <Text style={styles.historyTime}>
                   {new Date(s.openedAt).toLocaleTimeString()}
