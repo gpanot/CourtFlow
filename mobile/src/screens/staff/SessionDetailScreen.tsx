@@ -42,6 +42,7 @@ interface ReclubSnapshotPlayer {
   courtpayName: string | null;
   paid: boolean;
   amount: number | null;
+  partyCount?: number | null;
   checkinTime: string | null;
   facePhotoUrl?: string | null;
 }
@@ -322,7 +323,7 @@ export function SessionDetailScreen() {
     return `${open} — ${close}`;
   })();
 
-  const renderItem = ({ item }: { item: PendingPayment }) => {
+  const renderItem = ({ item, index }: { item: PendingPayment; index: number }) => {
     const isSub = item.paymentMethod === "subscription" || item.type === "subscription";
     const isNew = item.type === "registration";
     const sub = item.subscriptionInfo;
@@ -341,9 +342,9 @@ export function SessionDetailScreen() {
         onToggleExpand={(key) =>
           setExpandedPhotoId((prev) => (prev === key ? null : key))
         }
-        showSkill
         typeLabel={typeLabel}
         subLeftText={subLeftText}
+        index={index + 1}
       />
     );
   };
@@ -356,8 +357,10 @@ export function SessionDetailScreen() {
     );
   }
 
+  const confirmedCount = summary?.total ?? (payments.length - cancelledCount);
+
   const FILTERS: { key: Filter; label: string }[] = [
-    { key: "all", label: `All (${summary?.total ?? payments.length})` },
+    { key: "all", label: `All (${payments.length})` },
     { key: "cash", label: `Cash (${summary?.cash ?? 0})` },
     { key: "qr", label: `QR (${summary?.qr ?? 0})` },
     { key: "subscription", label: `Subs (${summary?.subscription ?? 0})` },
@@ -387,7 +390,12 @@ export function SessionDetailScreen() {
       ) : null}
       {/* Revenue summary bar */}
       <View style={styles.summaryBar}>
-        <Text style={styles.summaryLabel}>{timeLabel}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.summaryLabel}>{timeLabel}</Text>
+          <Text style={[styles.summaryLabel, { fontSize: 11, marginTop: 2, opacity: 0.75 }]}>
+            {detailPartySum} {t("bossDashboardSessionPlayersPaid")} · {confirmedCount} {t("sessionPayments")}{cancelledCount > 0 ? ` · ${cancelledCount} ${t("sessionCancelledFree")}` : ""}
+          </Text>
+        </View>
         <Text style={styles.summaryValue}>
           {summary?.totalRevenue.toLocaleString("vi-VN") ?? "0"} VND
         </Text>
@@ -400,7 +408,7 @@ export function SessionDetailScreen() {
           onPress={() => setActiveTab("payments")}
           activeOpacity={0.7}
         >
-          <Text style={{ fontSize: 13, fontWeight: "600", color: activeTab === "payments" ? theme.text : theme.muted }}>{t("reclubTabPayments")}</Text>
+          <Text style={{ fontSize: 13, fontWeight: "600", color: activeTab === "payments" ? theme.text : theme.muted }}>{t("reclubTabPayments")} ({confirmedCount})</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={{ flex: 1, paddingVertical: 10, alignItems: "center", borderBottomWidth: activeTab === "reclub" ? 2 : 0, borderBottomColor: "#22c55e" }}
@@ -653,13 +661,16 @@ function ReclubSnapshotView({
             <>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginVertical: 12 }}>
                 <View style={{ flex: 1, height: 1, backgroundColor: "rgba(245,158,11,0.3)" }} />
-                <Text style={{ fontSize: 10, fontWeight: "700", color: "#f59e0b", letterSpacing: 1 }}>WALK-IN ({walkIns.length})</Text>
+                <Text style={{ fontSize: 10, fontWeight: "700", color: "#f59e0b", letterSpacing: 1 }}>
+                  WALK-IN ({walkIns.reduce((s, w) => s + (w.partyCount ?? 1), 0)})
+                </Text>
                 <View style={{ flex: 1, height: 1, backgroundColor: "rgba(245,158,11,0.3)" }} />
               </View>
 
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                 {walkIns.map((p, i) => {
                   const faceUri = p.facePhotoUrl ? resolveMediaUrl(p.facePhotoUrl) : null;
+                  const party = p.partyCount ?? 1;
                   return (
                     <TouchableOpacity
                       key={`walkin-${i}`}
@@ -668,7 +679,7 @@ function ReclubSnapshotView({
                       activeOpacity={0.7}
                       style={{ width: (avatarSize + 12), alignItems: "center", marginBottom: 8 }}
                     >
-                      <View style={{ position: "relative" }}>
+                      <View style={{ position: "relative", width: avatarSize + 4, height: avatarSize + 4 }}>
                         {faceUri ? (
                           <Image
                             source={{ uri: faceUri }}
@@ -692,7 +703,24 @@ function ReclubSnapshotView({
                             </Text>
                           </View>
                         )}
-                        {editable && (
+                        {party > 1 && (
+                          <View style={{
+                            position: "absolute",
+                            bottom: -2,
+                            right: -4,
+                            backgroundColor: "#f59e0b",
+                            borderRadius: 8,
+                            paddingHorizontal: 4,
+                            paddingVertical: 1,
+                            borderWidth: 1.5,
+                            borderColor: theme.bg,
+                            minWidth: 20,
+                            alignItems: "center",
+                          }}>
+                            <Text style={{ fontSize: 10, fontWeight: "800", color: "#000" }}>×{party}</Text>
+                          </View>
+                        )}
+                        {editable && party === 1 && (
                           <View style={{ position: "absolute", bottom: -2, right: -2, width: 16, height: 16, borderRadius: 8, backgroundColor: "#f59e0b", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: theme.bg }}>
                             <Text style={{ fontSize: 8, fontWeight: "700", color: "#000" }}>↔</Text>
                           </View>

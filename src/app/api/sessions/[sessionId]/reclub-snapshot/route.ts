@@ -12,6 +12,7 @@ interface SnapshotPlayer {
   courtpayName: string | null;
   paid: boolean;
   amount: number | null;
+  partyCount?: number | null;
   checkinTime: string | null;
   facePhotoUrl?: string | null;
 }
@@ -94,7 +95,7 @@ export async function PATCH(
     const updatedWalkIns = snapshot.players.filter((p) => !p.reclubName);
     snapshot.totalMatched = updatedRoster.filter((p) => p.paid).length;
     snapshot.totalUnmatched = updatedRoster.filter((p) => !p.paid).length;
-    snapshot.totalWalkIns = updatedWalkIns.length;
+    snapshot.totalWalkIns = updatedWalkIns.reduce((sum, w) => sum + (w.partyCount ?? 1), 0);
 
     await prisma.session.update({
       where: { id: sessionId },

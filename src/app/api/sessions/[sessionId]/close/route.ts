@@ -42,6 +42,7 @@ export async function POST(
           select: {
             id: true,
             amount: true,
+            partyCount: true,
             createdAt: true,
             checkInPlayer: { select: { id: true, name: true, phone: true } },
             player: { select: { id: true, name: true, phone: true, reclubUserId: true, facePhotoPath: true, avatarPhotoPath: true } },
@@ -151,6 +152,7 @@ export async function POST(
               courtpayName: playerName,
               paid: true,
               amount: p.amount,
+              partyCount: typeof p.partyCount === "number" && p.partyCount > 1 ? p.partyCount : 1,
               checkinTime: p.createdAt.toISOString(),
               facePhotoUrl,
             });
@@ -158,6 +160,7 @@ export async function POST(
         }
 
         const totalMatched = snapshotPlayers.filter((p) => p.paid).length;
+        const totalWalkIns = walkIns.reduce((sum, w) => sum + (w.partyCount ?? 1), 0);
 
         reclubSnapshot = {
           eventName: roster.eventName,
@@ -167,7 +170,7 @@ export async function POST(
           totalExpected: roster.players.length,
           totalMatched,
           totalUnmatched: roster.players.length - totalMatched,
-          totalWalkIns: walkIns.length,
+          totalWalkIns,
           players: [...snapshotPlayers, ...walkIns],
         } as unknown as Prisma.InputJsonValue;
       } catch (snapshotErr) {

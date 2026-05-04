@@ -731,9 +731,10 @@ model SubscriptionPackage {
   durationDays Int      @map("duration_days")
   price        Int
   perks        String?
-  isActive     Boolean  @default(true) @map("is_active")
-  discountPct  Int?     @map("discount_pct")
-  isBestChoice Boolean  @default(false) @map("is_best_choice")
+  isActive        Boolean  @default(true) @map("is_active")
+  showInCheckIn   Boolean  @default(true) @map("show_in_check_in")
+  discountPct     Int?     @map("discount_pct")
+  isBestChoice    Boolean  @default(false) @map("is_best_choice")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 

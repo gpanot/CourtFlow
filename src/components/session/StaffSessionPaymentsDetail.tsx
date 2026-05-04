@@ -61,6 +61,7 @@ interface ReclubSnapshotPlayer {
   courtpayName: string | null;
   paid: boolean;
   amount: number | null;
+  partyCount?: number | null;
   checkinTime: string | null;
   facePhotoUrl?: string | null;
 }
@@ -220,6 +221,8 @@ export function StaffSessionPaymentsDetail({
   }, []);
 
   const cancelledCount = useMemo(() => payments.filter((p) => p.status === "cancelled" || p.cancelReason).length, [payments]);
+  const confirmedCount = summary?.total ?? (payments.length - cancelledCount);
+  const playerCount = useMemo(() => payments.reduce((s, p) => s + (p.partyCount ?? 1), 0), [payments]);
 
   const filtered = useMemo(() => {
     if (filter === "all") return payments;
@@ -341,7 +344,12 @@ export function StaffSessionPaymentsDetail({
       </header>
 
       <div className="flex items-center justify-between border-b border-neutral-800 bg-neutral-900/60 px-4 py-3">
-        <p className="text-sm text-neutral-400">{timeLabel}</p>
+        <div>
+          <p className="text-sm text-neutral-400">{timeLabel}</p>
+          <p className="mt-0.5 text-[11px] text-neutral-500">
+            {playerCount} players · {confirmedCount} payments{cancelledCount > 0 ? ` · ${cancelledCount} Cancelled/Free` : ""}
+          </p>
+        </div>
         <p className="text-base font-bold text-client-primary">
           {(summary?.totalRevenue ?? 0).toLocaleString("vi-VN")} VND
         </p>
@@ -359,7 +367,7 @@ export function StaffSessionPaymentsDetail({
               : "text-neutral-500 hover:text-neutral-300"
           )}
         >
-          {t("staff.sessionPaymentsDetail.tabPayments")}
+          {t("staff.sessionPaymentsDetail.tabPayments")} ({confirmedCount})
         </button>
         <button
           type="button"
@@ -395,7 +403,7 @@ export function StaffSessionPaymentsDetail({
       <div className="flex gap-1.5 border-b border-neutral-800 bg-neutral-950 px-3 py-2">
         {(
           [
-            { key: "all" as const, label: t("staff.sessionPaymentsDetail.filterAll", { count: summary?.total ?? payments.length }) },
+            { key: "all" as const, label: t("staff.sessionPaymentsDetail.filterAll", { count: payments.length }) },
             { key: "cash" as const, label: t("staff.sessionPaymentsDetail.filterCash", { count: summary?.cash ?? 0 }) },
             { key: "qr" as const, label: t("staff.sessionPaymentsDetail.filterQr", { count: summary?.qr ?? 0 }) },
             { key: "subscription" as const, label: t("staff.sessionPaymentsDetail.filterSubs", { count: summary?.subscription ?? 0 }) },
@@ -454,14 +462,15 @@ export function StaffSessionPaymentsDetail({
             </p>
           )
         ) : (
-          <div className="space-y-2.5">
-            {filtered.map((item) => {
+          <div className="space-y-2">
+            {filtered.map((item, idx) => {
               const player = getDisplayPlayer(item);
               const faceSrc = getFacePreviewSrc(item);
               const methodBadge = getMethodBadge(item.paymentMethod);
               const isSub = methodBadge.kind === "subscription" || item.type === "subscription";
               const isNew = item.type === "registration";
               const expanded = expandedPhotoId === item.id;
+              const isCancelled = item.status === "cancelled" || !!item.cancelReason;
               const sub = item.subscriptionInfo;
               const subLeftText = sub
                 ? sub.isUnlimited
@@ -475,88 +484,120 @@ export function StaffSessionPaymentsDetail({
               return (
                 <div
                   key={item.id}
-                  className={cn("space-y-2 rounded-xl border bg-neutral-900/50 p-3.5", item.cancelReason ? "border-red-800/50 opacity-70" : "border-neutral-800")}
+                  className={cn(
+                    "relative rounded-xl border bg-neutral-900/50 px-2.5 py-2",
+                    isCancelled ? "border-red-800/50 opacity-70" : "border-neutral-800"
+                  )}
                 >
-                  {faceSrc ? (
+                  {/* Expanded photo */}
+                  {faceSrc && expanded ? (
                     <button
                       type="button"
-                      onClick={() => setExpandedPhotoId((prev) => (prev === item.id ? null : item.id))}
-                      className={cn(
-                        "overflow-hidden rounded-lg border border-neutral-700 bg-black/40 text-left transition-all",
-                        expanded ? "w-full" : "h-14 w-14"
-                      )}
+                      onClick={() => setExpandedPhotoId(null)}
+                      className="mb-2 w-full overflow-hidden rounded-lg border border-neutral-700 bg-black/40"
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={faceSrc}
-                        alt=""
-                        className={cn("w-full object-cover object-center", expanded ? "h-48" : "h-14 w-14")}
-                      />
+                      <img src={faceSrc} alt="" className="h-48 w-full object-cover object-center" />
                     </button>
                   ) : null}
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="min-w-0 text-[15px] font-bold text-white">{player.name}</span>
-                    <span
-                      className={cn(
-                        "rounded px-1.5 py-0.5 text-[10px] font-bold uppercase",
-                        methodBadge.kind === "cash" && "bg-amber-600/20 text-amber-300",
-                        methodBadge.kind === "subscription" && "bg-purple-600/20 text-purple-300",
-                        methodBadge.kind === "qr" && "bg-blue-600/20 text-blue-300"
-                      )}
-                    >
-                      {methodBadge.label}
-                    </span>
-                    <span className="rounded bg-fuchsia-600/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-fuchsia-300">
-                      {getFlowTag(item)}
-                    </span>
-                    <span className="rounded bg-emerald-600/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-300">
-                      {item.confirmedBy === "sepay" ? "SEPAY" : "MANUAL"}
-                    </span>
-                    {item.cancelReason ? (
-                      <span className="rounded bg-red-600/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-red-400">
-                        CANCELLED · {item.cancelReason}
-                      </span>
+                  {/* Horizontal row: avatar left, info right */}
+                  <div className="flex items-start gap-2.5">
+                    {faceSrc ? (
+                      <button
+                        type="button"
+                        onClick={() => setExpandedPhotoId((prev) => (prev === item.id ? null : item.id))}
+                        className="h-[50px] w-[50px] shrink-0 overflow-hidden rounded-full border-2 border-neutral-700 bg-black/40"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={faceSrc} alt="" className="h-full w-full object-cover object-center" />
+                      </button>
                     ) : null}
+
+                    {/* Meta column */}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[15px] font-bold text-white">{player.name}</p>
+
+                      {/* Badges */}
+                      <div className="mt-1 flex flex-wrap items-center gap-1">
+                        <span
+                          className={cn(
+                            "rounded px-1.5 py-0.5 text-[10px] font-bold uppercase",
+                            methodBadge.kind === "cash" && "bg-amber-600/20 text-amber-300",
+                            methodBadge.kind === "subscription" && "bg-purple-600/20 text-purple-300",
+                            methodBadge.kind === "qr" && "bg-blue-600/20 text-blue-300"
+                          )}
+                        >
+                          {methodBadge.label}
+                        </span>
+                        <span className="rounded bg-fuchsia-600/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-fuchsia-300">
+                          {getFlowTag(item)}
+                        </span>
+                        <span className="rounded bg-emerald-600/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-300">
+                          {item.confirmedBy === "sepay" ? "SEPAY" : "MANUAL"}
+                        </span>
+                        {isCancelled ? (
+                          <span className="rounded bg-red-600/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-red-400">
+                            CANCELLED
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {/* Cancel reason */}
+                      {isCancelled && item.cancelReason ? (
+                        <p className="mt-0.5 text-[11px] font-semibold text-red-400">{item.cancelReason}</p>
+                      ) : null}
+
+                      {/* Type + amount */}
+                      <p className="mt-0.5 text-xs text-neutral-400">
+                        {isSub
+                          ? t("staff.sessionPaymentsDetail.typeSubscription")
+                          : isNew
+                            ? t("staff.sessionPaymentsDetail.typeRegistration")
+                            : t("staff.sessionPaymentsDetail.typeCheckin")}
+                        {" · "}
+                        <span className="font-semibold text-white">{formatVND(item.amount)}</span>
+                      </p>
+
+                      {/* Group */}
+                      {(item.partyCount ?? 1) > 1 ? (
+                        <p className="text-xs font-bold text-blue-300">
+                          {t("staff.sessionPaymentsDetail.paymentGroupOf", { count: item.partyCount ?? 1 })}
+                        </p>
+                      ) : null}
+
+                      {/* Subscription remaining */}
+                      {subLeftText ? <p className="text-xs font-semibold text-emerald-400">{subLeftText}</p> : null}
+
+                      {/* Date + device */}
+                      <p className="text-[11px] text-neutral-500">
+                        {formatDateTime(item.confirmedAt)}
+                        {item.confirmedOnDevice ? ` · ${item.confirmedOnDevice}` : ""}
+                      </p>
+
+                      {/* Restore button */}
+                      {isCancelled ? (
+                        <button
+                          type="button"
+                          disabled={restoringId === item.id}
+                          onClick={() => void handleRestore(item.id)}
+                          className="mt-1.5 flex items-center gap-1.5 rounded-md border border-emerald-700/50 bg-emerald-600/10 px-2.5 py-1 text-xs font-semibold text-emerald-400 transition-colors hover:bg-emerald-600/20 disabled:opacity-50"
+                        >
+                          {restoringId === item.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <RotateCw className="h-3 w-3" />
+                          )}
+                          Restore Payment
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
 
-                  <p className="text-xs text-neutral-500">
-                    {t("staff.sessionPaymentsDetail.skill", { level: player.skillLevel })}
-                  </p>
-                  <p className="text-xs text-neutral-400">
-                    {isSub
-                      ? t("staff.sessionPaymentsDetail.typeSubscription")
-                      : isNew
-                        ? t("staff.sessionPaymentsDetail.typeRegistration")
-                        : t("staff.sessionPaymentsDetail.typeCheckin")}
-                    {" · "}
-                    {formatVND(item.amount)}
-                  </p>
-                  {(item.partyCount ?? 1) > 1 ? (
-                    <p className="text-xs text-neutral-500">
-                      {t("staff.sessionPaymentsDetail.paymentGroupOf", { count: item.partyCount ?? 1 })}
-                    </p>
-                  ) : null}
-                  {subLeftText ? <p className="text-xs font-semibold text-emerald-400">{subLeftText}</p> : null}
-                  <p className="text-xs text-neutral-500">
-                    {formatDateTime(item.confirmedAt)}
-                    {item.confirmedOnDevice ? ` · ${item.confirmedOnDevice}` : ""}
-                  </p>
-                  {item.cancelReason ? (
-                    <button
-                      type="button"
-                      disabled={restoringId === item.id}
-                      onClick={() => void handleRestore(item.id)}
-                      className="mt-1 flex items-center gap-1.5 rounded-md border border-emerald-700/50 bg-emerald-600/10 px-2.5 py-1 text-xs font-semibold text-emerald-400 transition-colors hover:bg-emerald-600/20 disabled:opacity-50"
-                    >
-                      {restoringId === item.id ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <RotateCw className="h-3 w-3" />
-                      )}
-                      Restore Payment
-                    </button>
-                  ) : null}
+                  {/* Index badge */}
+                  <span className="absolute bottom-1.5 right-2 rounded border border-neutral-700 bg-neutral-800 px-1.5 py-px text-[10px] font-semibold text-neutral-500">
+                    {idx + 1}
+                  </span>
                 </div>
               );
             })}
@@ -712,56 +753,63 @@ function ReclubSnapshotTab({
           <div className="my-3 flex items-center gap-2">
             <div className="h-px flex-1 bg-amber-500/30" />
             <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-400">
-              {t("staff.sessionPaymentsDetail.reclubWalkInSeparator")} ({walkIns.length})
+              {t("staff.sessionPaymentsDetail.reclubWalkInSeparator")} ({walkIns.reduce((s, w) => s + (w.partyCount ?? 1), 0)})
             </span>
             <div className="h-px flex-1 bg-amber-500/30" />
           </div>
 
           <div className="grid grid-cols-4 gap-2">
-            {walkIns.map((p, i) => (
-              <button
-                key={`walkin-${i}`}
-                type="button"
-                disabled={!editable}
-                onClick={() => editable && setSelectedWalkInIdx(i)}
-                className={cn(
-                  "flex flex-col items-center",
-                  editable && "cursor-pointer active:scale-95 transition-transform"
-                )}
-              >
-                <div className="relative">
-                  {p.facePhotoUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={p.facePhotoUrl}
-                      alt=""
-                      className={cn(
-                        "h-[48px] w-[48px] rounded-full object-cover ring-[3px] ring-amber-500",
-                        editable && "ring-amber-400"
-                      )}
-                    />
-                  ) : (
-                    <div
-                      className={cn(
-                        "flex h-[48px] w-[48px] items-center justify-center rounded-full text-base font-bold text-white ring-[3px] ring-amber-500",
-                        editable && "ring-amber-400"
-                      )}
-                      style={{ backgroundColor: initialsColor(p.courtpayName ?? "W") }}
-                    >
-                      {getInitials(p.courtpayName ?? "W")}
-                    </div>
+            {walkIns.map((p, i) => {
+              const party = p.partyCount ?? 1;
+              return (
+                <button
+                  key={`walkin-${i}`}
+                  type="button"
+                  disabled={!editable}
+                  onClick={() => editable && setSelectedWalkInIdx(i)}
+                  className={cn(
+                    "flex flex-col items-center",
+                    editable && "cursor-pointer active:scale-95 transition-transform"
                   )}
-                  {editable && (
-                    <div className="absolute -bottom-0.5 -right-0.5 flex h-[16px] w-[16px] items-center justify-center rounded-full border-2 border-neutral-900 bg-amber-500">
-                      <span className="text-[9px] font-bold text-black">↔</span>
-                    </div>
-                  )}
-                </div>
-                <p className="mt-1 w-full truncate text-center text-[10px] text-amber-400">
-                  {p.courtpayName ?? "Walk-in"}
-                </p>
-              </button>
-            ))}
+                >
+                  <div className="relative">
+                    {p.facePhotoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={p.facePhotoUrl}
+                        alt=""
+                        className={cn(
+                          "h-[48px] w-[48px] rounded-full object-cover ring-[3px] ring-amber-500",
+                          editable && "ring-amber-400"
+                        )}
+                      />
+                    ) : (
+                      <div
+                        className={cn(
+                          "flex h-[48px] w-[48px] items-center justify-center rounded-full text-base font-bold text-white ring-[3px] ring-amber-500",
+                          editable && "ring-amber-400"
+                        )}
+                        style={{ backgroundColor: initialsColor(p.courtpayName ?? "W") }}
+                      >
+                        {getInitials(p.courtpayName ?? "W")}
+                      </div>
+                    )}
+                    {party > 1 ? (
+                      <div className="absolute -bottom-0.5 -right-0.5 flex min-w-[18px] items-center justify-center rounded-full border-2 border-neutral-900 bg-amber-500 px-0.5">
+                        <span className="text-[9px] font-bold text-black">×{party}</span>
+                      </div>
+                    ) : editable ? (
+                      <div className="absolute -bottom-0.5 -right-0.5 flex h-[16px] w-[16px] items-center justify-center rounded-full border-2 border-neutral-900 bg-amber-500">
+                        <span className="text-[9px] font-bold text-black">↔</span>
+                      </div>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 w-full truncate text-center text-[10px] text-amber-400">
+                    {p.courtpayName ?? "Walk-in"}
+                  </p>
+                </button>
+              );
+            })}
           </div>
         </>
       )}

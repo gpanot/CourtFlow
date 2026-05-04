@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Trash2, Infinity, Star } from "lucide-react";
+import { Pencil, Trash2, Infinity, Star, Eye, EyeOff, Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 interface PackageCardProps {
@@ -13,6 +13,7 @@ interface PackageCardProps {
     price: number;
     perks: string | null;
     isActive: boolean;
+    showInCheckIn?: boolean;
     isBestChoice?: boolean;
     discountPct?: number | null;
     _count?: { subscriptions: number };
@@ -21,6 +22,7 @@ interface PackageCardProps {
   onEdit?: (id: string) => void;
   onDelete?: (id: string) => void;
   onSelect?: (id: string) => void;
+  onToggleVisibility?: (id: string) => Promise<void>;
   selected?: boolean;
   compact?: boolean;
 }
@@ -35,11 +37,13 @@ export function PackageCard({
   onEdit,
   onDelete,
   onSelect,
+  onToggleVisibility,
   selected,
   compact,
 }: PackageCardProps) {
   const subscriberCount = pkg._count?.subscriptions ?? 0;
   const [expanded, setExpanded] = useState(false);
+  const [togglingVisibility, setTogglingVisibility] = useState(false);
 
   const perkList = pkg.perks
     ? pkg.perks.split(/[\n,]/).map((p) => p.trim()).filter(Boolean).slice(0, 4)
@@ -54,18 +58,30 @@ export function PackageCard({
     }
   };
 
+  const isHidden = onToggleVisibility && pkg.showInCheckIn === false;
+
   return (
     <div
       onClick={onSelect ? handleClick : undefined}
       className={cn(
-        "rounded-xl border p-4 transition-all",
+        "relative rounded-xl border p-4 transition-all overflow-hidden",
         onSelect && "cursor-pointer hover:border-purple-500/50",
         selected
           ? "border-purple-500 bg-purple-500/10"
-          : "border-neutral-800 bg-neutral-900",
+          : isHidden
+            ? "border-neutral-700 bg-neutral-900/60 opacity-60"
+            : "border-neutral-800 bg-neutral-900",
         !pkg.isActive && "opacity-50"
       )}
     >
+      {/* Hidden badge — top-right, high contrast on both light and dark */}
+      {isHidden && (
+        <div className="pointer-events-none absolute right-2 top-2 flex items-center gap-1 rounded-full border border-red-500/60 bg-neutral-900 px-2 py-0.5 text-[10px] font-bold text-red-400 dark:bg-neutral-900">
+          <EyeOff className="h-3 w-3" />
+          Hidden
+        </div>
+      )}
+
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
@@ -79,6 +95,12 @@ export function PackageCard({
             {pkg.discountPct != null && pkg.discountPct > 0 && (
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-semibold whitespace-nowrap">
                 Save {pkg.discountPct}%
+              </span>
+            )}
+            {isHidden && (
+              <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-700/50 border border-neutral-600 text-neutral-400 font-semibold whitespace-nowrap">
+                <EyeOff className="h-2.5 w-2.5" />
+                Hidden
               </span>
             )}
             {!pkg.isActive && (
@@ -103,8 +125,36 @@ export function PackageCard({
           )}
         </div>
 
-        {!compact && (onEdit || onDelete) && (
-          <div className="flex gap-1 shrink-0">
+        {!compact && (onEdit || onDelete || onToggleVisibility) && (
+          <div className="flex items-center gap-1 shrink-0">
+            {/* Eye toggle — icon + label acts as a labelled toggle button */}
+            {onToggleVisibility && (
+              <button
+                type="button"
+                disabled={togglingVisibility}
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  setTogglingVisibility(true);
+                  try { await onToggleVisibility(pkg.id); } finally { setTogglingVisibility(false); }
+                }}
+                title={pkg.showInCheckIn !== false ? "Hide from check-in" : "Show in check-in"}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs font-semibold transition-colors",
+                  pkg.showInCheckIn !== false
+                    ? "border-green-700/50 bg-green-600/10 text-green-400 hover:bg-green-600/20"
+                    : "border-red-700/50 bg-red-600/10 text-red-400 hover:bg-red-600/20"
+                )}
+              >
+                {togglingVisibility ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : pkg.showInCheckIn !== false ? (
+                  <Eye className="h-3 w-3" />
+                ) : (
+                  <EyeOff className="h-3 w-3" />
+                )}
+                {pkg.showInCheckIn !== false ? "Visible" : "Hidden"}
+              </button>
+            )}
             {onEdit && (
               <button
                 onClick={(e) => { e.stopPropagation(); onEdit(pkg.id); }}

@@ -20,6 +20,7 @@ interface Package {
   price: number;
   perks: string | null;
   isActive: boolean;
+  showInCheckIn: boolean;
   isBestChoice?: boolean;
   discountPct?: number | null;
   _count: { subscriptions: number };
@@ -140,6 +141,19 @@ export default function StaffSubscriptionsPage() {
     await api.delete(`/api/courtpay/staff/packages/${id}`);
     await fetchPackages();
   };
+
+  const handleToggleVisibility = useCallback(async (id: string) => {
+    const pkg = packages.find((p) => p.id === id);
+    if (!pkg) return;
+    const newVal = !pkg.showInCheckIn;
+    setPackages((prev) => prev.map((p) => p.id === id ? { ...p, showInCheckIn: newVal } : p));
+    try {
+      await api.put(`/api/courtpay/staff/packages/${id}`, { showInCheckIn: newVal });
+    } catch (e) {
+      setPackages((prev) => prev.map((p) => p.id === id ? { ...p, showInCheckIn: !newVal } : p));
+      alert((e as Error).message);
+    }
+  }, [packages]);
 
   const copyToClipboard = async (url: string, key: string) => {
     try {
@@ -282,6 +296,7 @@ export default function StaffSubscriptionsPage() {
                       pkg={pkg}
                       onEdit={() => setEditingPkg(pkg)}
                       onDelete={handleDeletePackage}
+                      onToggleVisibility={handleToggleVisibility}
                     />
                   ))}
                 </div>

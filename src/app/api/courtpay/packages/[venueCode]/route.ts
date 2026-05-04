@@ -16,7 +16,7 @@ export async function GET(
     }
 
     const packages = await prisma.subscriptionPackage.findMany({
-      where: { venueId: venue.id, isActive: true },
+      where: { venueId: venue.id, isActive: true, showInCheckIn: true },
       orderBy: { price: "asc" },
     });
 

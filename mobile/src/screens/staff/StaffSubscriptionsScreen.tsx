@@ -45,6 +45,7 @@ interface PackageRow {
   price: number;
   perks: string | null;
   isActive: boolean;
+  showInCheckIn: boolean;
   _count: { subscriptions: number };
   discountPct?: number | null;
   isBestChoice?: boolean;
@@ -135,14 +136,6 @@ function createStyles(t: AppColors) {
     empty: { textAlign: "center", color: t.muted, marginTop: 40, fontSize: 15 },
 
     // ── Package card ────────────────────────────────────────────────────────
-    pkgCard: {
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: t.border,
-      backgroundColor: t.card,
-      padding: 14,
-      marginBottom: 10,
-    },
     pkgHeaderRow: {
       flexDirection: "row",
       alignItems: "center",
@@ -170,11 +163,68 @@ function createStyles(t: AppColors) {
     pkgPerkRow: { flexDirection: "row" as const, alignItems: "flex-start" as const, gap: 4 },
     pkgPerkDot: { fontSize: 11, color: t.purple400, lineHeight: 17 },
     pkgPerkItem: { fontSize: 11, color: t.muted, lineHeight: 17, flex: 1 },
+    pkgCard: {
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: t.border,
+      backgroundColor: t.card,
+      padding: 14,
+      marginBottom: 10,
+      position: "relative",
+      overflow: "hidden",
+    },
+    pkgCardHidden: {
+      opacity: 0.6,
+      borderColor: t.borderLight,
+    },
+    pkgHiddenOverlay: {
+      position: "absolute",
+      top: 8,
+      right: 8,
+      zIndex: 1,
+    },
+    pkgHiddenBadge: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 20,
+      backgroundColor: t.card,
+      borderWidth: 1,
+      borderColor: t.red500,
+    },
+    pkgHiddenBadgeText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: t.red400,
+    },
     pkgRow: {
       flexDirection: "row",
-      justifyContent: "flex-end",
+      alignItems: "center",
+      justifyContent: "space-between",
       gap: 8,
       marginTop: 10,
+      paddingTop: 8,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: t.border,
+    },
+    pkgRowRight: {
+      flexDirection: "row",
+      gap: 8,
+    },
+    pkgEyeRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 5,
+    },
+    pkgEyeText: {
+      fontSize: 12,
+      fontWeight: "600",
+      color: t.green400,
+    },
+    pkgEyeTextOff: {
+      color: t.red400,
     },
     btnGhost: {
       paddingHorizontal: 12,
@@ -489,13 +539,28 @@ export function StaffSubscriptionsScreen() {
         showSubscriptionsInFlow: value,
       });
     } catch {
-      // Revert on failure
       setShowSubscriptionsInFlow(!value);
       Alert.alert("Error", "Could not save setting. Please try again.");
     } finally {
       setToggleSaving(false);
     }
   }, [venueId]);
+
+  const [togglingPkgId, setTogglingPkgId] = useState<string | null>(null);
+
+  const handleTogglePkgVisibility = useCallback(async (pkg: PackageRow) => {
+    const newVal = !pkg.showInCheckIn;
+    setPackages((prev) => prev.map((p) => p.id === pkg.id ? { ...p, showInCheckIn: newVal } : p));
+    setTogglingPkgId(pkg.id);
+    try {
+      await api.put(`/api/courtpay/staff/packages/${pkg.id}`, { showInCheckIn: newVal });
+    } catch {
+      setPackages((prev) => prev.map((p) => p.id === pkg.id ? { ...p, showInCheckIn: !newVal } : p));
+      Alert.alert("Error", "Could not update package visibility. Please try again.");
+    } finally {
+      setTogglingPkgId(null);
+    }
+  }, []);
 
   useEffect(() => {
     if (!venueId) {
@@ -846,7 +911,15 @@ export function StaffSubscriptionsScreen() {
                     <Text style={styles.primaryBtnText}>{t("subsAddPackage")}</Text>
                   </TouchableOpacity>
                   {packages.map((pkg) => (
-                    <View key={pkg.id} style={styles.pkgCard}>
+                    <View key={pkg.id} style={[styles.pkgCard, !pkg.showInCheckIn && styles.pkgCardHidden]}>
+                      {!pkg.showInCheckIn && (
+                        <View style={styles.pkgHiddenOverlay} pointerEvents="none">
+                          <View style={styles.pkgHiddenBadge}>
+                            <Ionicons name="eye-off" size={18} color={theme.red400} />
+                            <Text style={styles.pkgHiddenBadgeText}>Hidden</Text>
+                          </View>
+                        </View>
+                      )}
                       <View style={styles.pkgHeaderRow}>
                         <Text style={styles.pkgTitle}>{pkg.name}</Text>
                         {pkg.isBestChoice && (
@@ -882,19 +955,41 @@ export function StaffSubscriptionsScreen() {
                           ))}
                         </View>
                       ) : null}
+
                       <View style={styles.pkgRow}>
-                        <TouchableOpacity
-                          style={styles.btnGhost}
-                          onPress={() => openEdit(pkg)}
-                        >
-                          <Text style={styles.btnGhostText}>{t("subsEdit")}</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.btnDanger}
-                          onPress={() => deletePackage(pkg)}
-                        >
-                          <Text style={styles.btnDangerText}>{t("subsDelete")}</Text>
-                        </TouchableOpacity>
+                        {/* Eye icon + label + Switch — left-aligned */}
+                        <View style={styles.pkgEyeRow}>
+                          <Ionicons
+                            name={pkg.showInCheckIn ? "eye-outline" : "eye-off-outline"}
+                            size={15}
+                            color={pkg.showInCheckIn ? theme.green400 : theme.red400}
+                          />
+                          <Text style={[styles.pkgEyeText, !pkg.showInCheckIn && styles.pkgEyeTextOff]}>
+                            {t("subsShowInCheckIn")}
+                          </Text>
+                          <Switch
+                            value={pkg.showInCheckIn}
+                            onValueChange={() => void handleTogglePkgVisibility(pkg)}
+                            disabled={togglingPkgId === pkg.id}
+                            trackColor={{ false: theme.red500, true: theme.green600 }}
+                            thumbColor="#ffffff"
+                          />
+                        </View>
+
+                        <View style={styles.pkgRowRight}>
+                          <TouchableOpacity
+                            style={styles.btnGhost}
+                            onPress={() => openEdit(pkg)}
+                          >
+                            <Text style={styles.btnGhostText}>{t("subsEdit")}</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.btnDanger}
+                            onPress={() => deletePackage(pkg)}
+                          >
+                            <Text style={styles.btnDangerText}>{t("subsDelete")}</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     </View>
                   ))}

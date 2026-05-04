@@ -22,6 +22,7 @@ export async function PUT(
         ...(body.isActive !== undefined && { isActive: body.isActive }),
         ...(body.discountPct !== undefined && { discountPct: body.discountPct }),
         ...(body.isBestChoice !== undefined && { isBestChoice: body.isBestChoice }),
+        ...(body.showInCheckIn !== undefined && { showInCheckIn: body.showInCheckIn }),
       },
     });
 

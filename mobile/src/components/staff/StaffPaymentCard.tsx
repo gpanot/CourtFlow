@@ -85,10 +85,11 @@ export function createCardStyles(t: AppColors) {
     cardFull: {
       backgroundColor: t.card,
       borderRadius: 12,
-      padding: 14,
+      paddingHorizontal: 10,
+      paddingVertical: 9,
       borderWidth: 1,
       borderColor: t.border,
-      gap: 8,
+      gap: 6,
     },
     cardCompact: {
       backgroundColor: t.card,
@@ -98,6 +99,22 @@ export function createCardStyles(t: AppColors) {
       borderWidth: 1,
       borderColor: t.border,
       gap: 6,
+    },
+    indexBadge: {
+      position: "absolute",
+      bottom: 6,
+      right: 8,
+      backgroundColor: t.cardSurface,
+      borderRadius: 6,
+      paddingHorizontal: 5,
+      paddingVertical: 1,
+      borderWidth: 1,
+      borderColor: t.border,
+    },
+    indexBadgeText: {
+      fontSize: 10,
+      fontWeight: "600",
+      color: t.subtle,
     },
     cardCancelled: { borderColor: "rgba(239,68,68,0.4)", opacity: 0.75 },
 
@@ -138,25 +155,23 @@ export function createCardStyles(t: AppColors) {
     },
     paidExpandedPreviewImg: { width: "100%", height: 180 },
 
-    // --- full layout face ---
-    faceBtnSm: {
+    // --- full variant avatar (slightly larger than compact) ---
+    fullAvatarRing: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      justifyContent: "center",
+      alignItems: "center",
       alignSelf: "flex-start",
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: t.border,
+    },
+    fullAvatarTouch: {
+      width: 50,
+      height: 50,
+      borderRadius: 25,
       overflow: "hidden",
       backgroundColor: t.bg,
     },
-    faceBtnLg: {
-      alignSelf: "stretch",
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: t.border,
-      overflow: "hidden",
-      backgroundColor: t.bg,
-    },
-    faceImgSm: { width: 56, height: 56 },
-    faceImgLg: { width: "100%", height: 200 },
+    fullAvatarImg: { width: 50, height: 50 },
 
     // --- badges ---
     nameRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6 },
@@ -217,6 +232,8 @@ export interface StaffPaymentCardProps {
   /** i18n formatter for type/sub labels. Pass pre-formatted strings. */
   typeLabel: string;
   subLeftText?: string | null;
+  /** 1-based position index shown as a badge in the bottom-right corner. */
+  index?: number;
 }
 
 export function StaffPaymentCard({
@@ -231,6 +248,7 @@ export function StaffPaymentCard({
   variant = "full",
   typeLabel,
   subLeftText,
+  index,
 }: StaffPaymentCardProps) {
   const theme = useAppColors();
   const styles = React.useMemo(() => createCardStyles(theme), [theme]);
@@ -321,7 +339,7 @@ export function StaffPaymentCard({
   // -------------------------------------------------------------------------
   if (variant === "compact") {
     return (
-      <View style={[styles.cardCompact, isCancelled && styles.cardCancelled]}>
+      <View style={[styles.cardCompact, isCancelled && styles.cardCancelled, { position: "relative" }]}>
         {/* Expanded photo above row */}
         {faceUri && expanded ? (
           <TouchableOpacity
@@ -390,39 +408,69 @@ export function StaffPaymentCard({
             {metaLines}
           </View>
         </View>
+        {index != null && (
+          <View style={styles.indexBadge}>
+            <Text style={styles.indexBadgeText}>{index}</Text>
+          </View>
+        )}
       </View>
     );
   }
 
   // -------------------------------------------------------------------------
-  // FULL variant (SessionDetailScreen)
+  // FULL variant (SessionDetailScreen) — compact horizontal row, same as
+  // compact but no dots menu and larger avatar; expanded photo goes above row.
   // -------------------------------------------------------------------------
   return (
-    <View style={[styles.cardFull, isCancelled && styles.cardCancelled]}>
-      {/* Face photo at top */}
-      {faceUri ? (
+    <View style={[styles.cardFull, isCancelled && styles.cardCancelled, { position: "relative" }]}>
+      {/* Expanded photo above the row */}
+      {faceUri && expanded ? (
         <TouchableOpacity
-          style={expanded ? styles.faceBtnLg : styles.faceBtnSm}
+          style={styles.paidExpandedPreviewWrap}
           onPress={() => onToggleExpand(expandKey)}
-          activeOpacity={0.85}
+          activeOpacity={0.9}
         >
           <Image
             source={{ uri: faceUri }}
-            style={expanded ? styles.faceImgLg : styles.faceImgSm}
+            style={styles.paidExpandedPreviewImg}
             resizeMode="cover"
           />
         </TouchableOpacity>
       ) : null}
 
-      {/* Name row */}
-      <View style={styles.nameRow}>
-        <Text style={styles.cardName} numberOfLines={1}>
-          {player.name}
-        </Text>
+      <View style={styles.paidRow}>
+        {/* Avatar — tap to expand */}
+        {faceUri ? (
+          <View style={[styles.fullAvatarRing, skillRing ?? styles.paidAvatarRingDefault]}>
+            <TouchableOpacity
+              style={styles.fullAvatarTouch}
+              onPress={() => onToggleExpand(expandKey)}
+              activeOpacity={0.85}
+            >
+              <Image
+                source={{ uri: faceUri }}
+                style={styles.fullAvatarImg}
+                resizeMode="cover"
+              />
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {/* Meta column */}
+        <View style={styles.paidMetaCol}>
+          <Text style={styles.cardName} numberOfLines={1}>
+            {player.name}
+          </Text>
+          {badgeRow}
+          {metaLines}
+        </View>
       </View>
 
-      {badgeRow}
-      {metaLines}
+      {index != null && (
+        <View style={styles.indexBadge}>
+          <Text style={styles.indexBadgeText}>{index}</Text>
+        </View>
+      )}
     </View>
   );
 }
