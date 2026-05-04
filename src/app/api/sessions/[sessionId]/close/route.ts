@@ -113,7 +113,7 @@ export async function POST(
         });
 
         // Walk-ins: paid but not on roster
-        const walkIns: typeof snapshotPlayers = [];
+        const walkIns: Array<(typeof snapshotPlayers)[number] & { partyCount?: number }> = [];
         for (const p of confirmedPayments) {
           let reclubUserId: number | null = null;
           let playerId: string | null = null;
