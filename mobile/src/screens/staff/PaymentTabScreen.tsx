@@ -27,14 +27,19 @@ import { useAuthStore } from "../../stores/auth-store";
 import { useSocket } from "../../hooks/useSocket";
 import { useAppColors } from "../../theme/use-app-colors";
 import type { AppColors } from "../../theme/palettes";
-import { resolveMediaUrl } from "../../lib/media-url";
 import type { PendingPayment, StaffPaidPaymentsResponse } from "../../types/api";
 import type { StaffTabParamList } from "../../navigation/types";
 import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
 import {
-  COURTPAY_LEVEL_QR_BORDER,
-  parseCourtPaySkillLevel,
-} from "../../lib/courtpay-skill-level-ui";
+  StaffPaymentCard,
+  getDisplayPlayer,
+  getFacePreviewUri,
+  getFlowTag,
+  getMethodBadge,
+  paymentSkillRingStyle,
+  formatVND,
+  formatDateTime,
+} from "../../components/staff/StaffPaymentCard";
 
 type SubTab = "pending" | "paid";
 
@@ -46,78 +51,12 @@ type PaymentUpdatedSocketPayload = {
   paymentRef?: string;
 };
 
-function getDisplayPlayer(p: PendingPayment): {
-  name: string;
-  skillLevel: string;
-} {
-  if (p.player?.name?.trim()) {
-    return {
-      name: p.player.name,
-      skillLevel: p.player.skillLevel ?? "—",
-    };
-  }
-  if (p.checkInPlayer?.name?.trim()) {
-    return {
-      name: p.checkInPlayer.name,
-      skillLevel: p.checkInPlayer.skillLevel ?? "—",
-    };
-  }
-  return { name: "Unknown", skillLevel: "—" };
-}
-
-function getFacePreviewUri(p: PendingPayment): string | null {
-  // Self check-in (linked Player with face photo)
-  const rawPlayer = p.player?.facePhotoPath?.trim();
-  if (rawPlayer) return resolveMediaUrl(rawPlayer);
-  // CourtPay flow (face photo resolved from Player via phone by the API)
-  const rawCourtPay = p.facePhotoUrl?.trim();
-  if (rawCourtPay) return resolveMediaUrl(rawCourtPay);
-  return null;
-}
-
-function getFlowTag(p: PendingPayment): "CourtPay" | "Self" {
-  return p.checkInPlayerId ? "CourtPay" : "Self";
-}
-
-/** Same hues as CourtPay QR / kiosk — ring around staff payment card face thumb. */
-function paymentSkillRingStyle(p: PendingPayment) {
-  const raw = p.player?.skillLevel ?? p.checkInPlayer?.skillLevel ?? undefined;
-  const lvl = parseCourtPaySkillLevel(raw);
-  return lvl ? COURTPAY_LEVEL_QR_BORDER[lvl] : null;
-}
-
-function getMethodBadge(paymentMethod: string): {
-  label: string;
-  kind: "cash" | "qr" | "subscription";
-} {
-  if (paymentMethod === "cash") return { label: "CASH", kind: "cash" };
-  if (paymentMethod === "subscription") return { label: "SUB", kind: "subscription" };
-  return { label: "QR", kind: "qr" };
-}
-
 function formatWaitTime(createdAt: string): string {
   const ms = Date.now() - new Date(createdAt).getTime();
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
   const min = Math.floor(totalSeconds / 60);
   const sec = totalSeconds % 60;
   return `${min}:${sec.toString().padStart(2, "0")}`;
-}
-
-function formatVND(amount: number): string {
-  return amount.toLocaleString("vi-VN") + " VND";
-}
-
-function formatDateTime(dateStr: string | null | undefined): string {
-  if (!dateStr) return "—";
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 function createStyles(t: AppColors) {
@@ -166,15 +105,6 @@ function createStyles(t: AppColors) {
       borderWidth: 1,
       borderColor: t.border,
       gap: 8,
-    },
-    paidCardCompact: {
-      backgroundColor: t.card,
-      borderRadius: 12,
-      paddingHorizontal: 10,
-      paddingVertical: 9,
-      borderWidth: 1,
-      borderColor: t.border,
-      gap: 6,
     },
     thumbRingSm: {
       width: 64,
@@ -229,37 +159,6 @@ function createStyles(t: AppColors) {
     waitUrgent: { color: t.amber400 },
     amountRight: { fontSize: 15, fontWeight: "700", color: t.text },
     amountInline: { fontSize: 13, fontWeight: "700", color: t.text },
-    paidRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
-    paidMetaCol: { flex: 1, minWidth: 0, gap: 4 },
-    paidTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 8 },
-    paidAvatarRing: {
-      width: 50,
-      height: 50,
-      borderRadius: 25,
-      justifyContent: "center",
-      alignItems: "center",
-      alignSelf: "flex-start",
-    },
-    paidAvatarRingDefault: { borderWidth: 1, borderColor: t.border },
-    paidAvatarTouch: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      overflow: "hidden",
-      backgroundColor: t.bg,
-    },
-    paidAvatarImg: { width: 44, height: 44 },
-    paidExpandedPreviewWrap: {
-      alignSelf: "stretch",
-      borderRadius: 12,
-      overflow: "hidden",
-      borderWidth: 1,
-      borderColor: t.border,
-      backgroundColor: t.bg,
-      marginBottom: 4,
-    },
-    paidExpandedPreviewImg: { width: "100%", height: 180 },
-    dateLine: { fontSize: 11, color: t.subtle },
     topRow: { flexDirection: "row", justifyContent: "space-between", gap: 10 },
     cardActions: { flexDirection: "row", gap: 8, marginTop: 4 },
     confirmBtn: {
@@ -301,16 +200,6 @@ function createStyles(t: AppColors) {
       marginTop: 4,
     },
     subLeftLine: { fontSize: 12, color: t.green400, marginTop: 2, fontWeight: "600" },
-    paidByLine: {
-      fontSize: 13,
-      color: t.purple400,
-      fontWeight: "700",
-      marginTop: 4,
-    },
-    dotsBtn: {
-      padding: 4,
-      borderRadius: 8,
-    },
     menuOverlay: {
       flex: 1,
     },
@@ -438,26 +327,6 @@ function createStyles(t: AppColors) {
     groupOptionCurrent: { borderColor: t.blue500, backgroundColor: "rgba(37,99,235,0.12)" },
     groupModalDismiss: { alignItems: "center", paddingVertical: 10 },
     groupModalDismissText: { fontSize: 14, color: t.muted },
-    cancelledTag: {
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-      borderRadius: 6,
-      backgroundColor: "rgba(239,68,68,0.15)",
-    },
-    cancelledTagText: {
-      fontSize: 10,
-      fontWeight: "700",
-      color: t.red400,
-    },
-    cancelledAmount: {
-      fontSize: 13,
-      fontWeight: "700",
-      color: t.red400,
-      marginTop: 2,
-    },
-    cardCancelled: {
-      opacity: 0.7,
-    },
   });
 }
 
@@ -850,160 +719,38 @@ export function PaymentTabScreen() {
   };
 
   const renderPaidItem = ({ item }: { item: PendingPayment }) => {
-    const player = getDisplayPlayer(item);
-    const faceUri = getFacePreviewUri(item);
-    const methodBadge = getMethodBadge(item.paymentMethod);
     const isNew = item.type === "registration";
-    const expanded = expandedPhotoId === `paid-${item.id}`;
-    const isCancelled = !!item.cancelReason;
+    const isSub = item.paymentMethod === "subscription" || item.type === "subscription";
     const sub = item.subscriptionInfo;
     const subLeftText = sub
       ? sub.isUnlimited
         ? `${t("paymentSubLeft")}: ${t("paymentUnlimited")} (${sub.daysRemaining} ${t("paymentDays")})`
         : `${t("paymentSubLeft")}: ${sub.sessionsRemaining ?? 0} ${t("paymentSessions")} (${sub.daysRemaining} ${t("paymentDays")})`
       : null;
-
-    const skillRingPaid = paymentSkillRingStyle(item);
+    const typeLabel = isSub
+      ? t("paymentSubLeft")
+      : isNew
+        ? t("paymentRegistration")
+        : t("paymentCheckIn");
 
     return (
-      <View style={[styles.paidCardCompact, isCancelled && styles.cardCancelled]}>
-        {faceUri && expanded ? (
-          <TouchableOpacity
-            style={styles.paidExpandedPreviewWrap}
-            onPress={() => setExpandedPhotoId(null)}
-            activeOpacity={0.9}
-          >
-            <Image
-              source={{ uri: faceUri }}
-              style={styles.paidExpandedPreviewImg}
-              resizeMode="cover"
-            />
-          </TouchableOpacity>
-        ) : null}
-
-        <View style={styles.paidRow}>
-          {faceUri ? (
-            <View style={[styles.paidAvatarRing, skillRingPaid ?? styles.paidAvatarRingDefault]}>
-              <TouchableOpacity
-                style={styles.paidAvatarTouch}
-                onPress={() =>
-                  setExpandedPhotoId((prev) =>
-                    prev === `paid-${item.id}` ? null : `paid-${item.id}`
-                  )
-                }
-                activeOpacity={0.85}
-              >
-                <Image
-                  source={{ uri: faceUri }}
-                  style={styles.paidAvatarImg}
-                  resizeMode="cover"
-                />
-              </TouchableOpacity>
-            </View>
-          ) : null}
-
-          <View style={styles.paidMetaCol}>
-            <View style={styles.paidTopRow}>
-              <Text style={styles.cardName} numberOfLines={1}>
-                {player.name}
-              </Text>
-              <TouchableOpacity
-                style={styles.dotsBtn}
-                onPress={(e) => {
-                  const target = e.currentTarget as unknown as {
-                    measure?: (
-                      cb: (
-                        x: number,
-                        y: number,
-                        w: number,
-                        h: number,
-                        px: number,
-                        py: number
-                      ) => void
-                    ) => void;
-                  };
-                  if (target.measure) {
-                    target.measure((_x, _y, _w, h, _px, py) => {
-                      setMenuY(py + h);
-                      setMenuPaymentId(item.id);
-                    });
-                  } else {
-                    setMenuY(200);
-                    setMenuPaymentId(item.id);
-                  }
-                }}
-                activeOpacity={0.6}
-              >
-                <Ionicons name="ellipsis-vertical" size={18} color={theme.muted} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.nameRow}>
-              <View
-                style={[
-                  styles.badge,
-                  methodBadge.kind === "cash"
-                    ? styles.badgeCash
-                    : methodBadge.kind === "subscription"
-                      ? styles.badgeSub
-                      : styles.badgeQr,
-                ]}
-              >
-                <Text
-                  style={
-                    methodBadge.kind === "cash"
-                      ? styles.badgeCashText
-                      : methodBadge.kind === "subscription"
-                        ? styles.badgeSubText
-                        : styles.badgeQrText
-                  }
-                >
-                  {methodBadge.label}
-                </Text>
-              </View>
-              <View style={[styles.badge, styles.badgeFlow]}>
-                <Text style={styles.badgeFlowText}>{getFlowTag(item)}</Text>
-              </View>
-              <View style={[styles.badge, styles.badgeApr]}>
-                <Text style={styles.badgeAprText}>
-                  {item.confirmedBy === "sepay" ? "SEPAY" : "MANUAL"}
-                </Text>
-              </View>
-              {isCancelled ? (
-                <View style={styles.cancelledTag}>
-                  <Text style={styles.cancelledTagText}>CANCELLED</Text>
-                </View>
-              ) : null}
-            </View>
-
-            {(item.partyCount ?? 1) > 1 ? (
-              <Text style={styles.groupLine}>
-                {t("paymentGroupOf", { count: item.partyCount ?? 1 })}
-              </Text>
-            ) : null}
-            {item.groupPaidByName ? (
-              <Text style={styles.paidByLine}>
-                {t("paymentPaidBy", { name: item.groupPaidByName })}
-              </Text>
-            ) : null}
-
-            <Text style={styles.metaLine}>
-              {isNew ? t("paymentRegistration") : t("paymentCheckIn")} ·{" "}
-              <Text style={styles.amountInline}>{formatVND(item.amount)}</Text>
-            </Text>
-            <Text style={styles.dateLine}>
-              {formatDateTime(item.confirmedAt)}
-              {item.confirmedOnDevice ? ` · ${item.confirmedOnDevice}` : ""}
-            </Text>
-            {subLeftText ? <Text style={styles.subLeftLine}>{subLeftText}</Text> : null}
-            {isCancelled ? (
-              <Text style={styles.cancelledAmount}>
-                -{formatVND(item.amount)} ({item.cancelReason})
-              </Text>
-            ) : null}
-          </View>
-        </View>
-      </View>
+      <StaffPaymentCard
+        item={item}
+        variant="compact"
+        expandedPhotoPrefix="paid"
+        expandedPhotoId={expandedPhotoId}
+        onToggleExpand={(key) =>
+          setExpandedPhotoId((prev) => (prev === key ? null : key))
+        }
+        onMenuPress={(id, y) => {
+          setMenuY(y);
+          setMenuPaymentId(id);
+        }}
+        showGroupPaidBy
+        showCancelledAmount
+        typeLabel={typeLabel}
+        subLeftText={subLeftText}
+      />
     );
   };
 

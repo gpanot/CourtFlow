@@ -13,7 +13,7 @@ import {
 import { cn } from "@/lib/cn";
 import { ArrowLeft, Download, Loader2, AlertTriangle, RotateCw, Check } from "lucide-react";
 
-type Filter = "all" | "cash" | "qr" | "subscription";
+type Filter = "all" | "cash" | "qr" | "subscription" | "cancelled";
 
 interface SubscriptionInfo {
   packageName: string;
@@ -124,6 +124,7 @@ function getFlowTag(p: SessionPaymentRow): "CourtPay" | "Self" {
 }
 
 function getPaymentFilter(p: SessionPaymentRow): Filter {
+  if (p.status === "cancelled" || p.cancelReason) return "cancelled";
   if (p.paymentMethod === "subscription" || p.type === "subscription") return "subscription";
   if (p.paymentMethod === "cash") return "cash";
   return "qr";
@@ -179,19 +180,6 @@ export function StaffSessionPaymentsDetail({
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleRestore = useCallback(async (paymentId: string) => {
-    if (!confirm("Restore this payment back to confirmed (paid) status?")) return;
-    setRestoringId(paymentId);
-    try {
-      await api.post("/api/staff/restore-paid-payment", { pendingPaymentId: paymentId });
-      await fetchPayments();
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to restore payment");
-    } finally {
-      setRestoringId(null);
-    }
-  }, [fetchPayments]);
-
   const fetchPayments = useCallback(async () => {
     setFetchError(null);
     try {
@@ -208,6 +196,19 @@ export function StaffSessionPaymentsDetail({
     }
   }, [sessionId]);
 
+  const handleRestore = useCallback(async (paymentId: string) => {
+    if (!confirm("Restore this payment back to confirmed (paid) status?")) return;
+    setRestoringId(paymentId);
+    try {
+      await api.post("/api/staff/restore-paid-payment", { pendingPaymentId: paymentId });
+      await fetchPayments();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to restore payment");
+    } finally {
+      setRestoringId(null);
+    }
+  }, [fetchPayments]);
+
   useEffect(() => {
     void fetchPayments();
   }, [fetchPayments]);
@@ -217,6 +218,8 @@ export function StaffSessionPaymentsDetail({
       if (toastTimer.current) clearTimeout(toastTimer.current);
     };
   }, []);
+
+  const cancelledCount = useMemo(() => payments.filter((p) => p.status === "cancelled" || p.cancelReason).length, [payments]);
 
   const filtered = useMemo(() => {
     if (filter === "all") return payments;
@@ -396,6 +399,7 @@ export function StaffSessionPaymentsDetail({
             { key: "cash" as const, label: t("staff.sessionPaymentsDetail.filterCash", { count: summary?.cash ?? 0 }) },
             { key: "qr" as const, label: t("staff.sessionPaymentsDetail.filterQr", { count: summary?.qr ?? 0 }) },
             { key: "subscription" as const, label: t("staff.sessionPaymentsDetail.filterSubs", { count: summary?.subscription ?? 0 }) },
+            { key: "cancelled" as const, label: t("staff.sessionPaymentsDetail.filterCancel", { count: cancelledCount }) },
           ] as const
         ).map(({ key, label }) => (
           <button
@@ -443,7 +447,9 @@ export function StaffSessionPaymentsDetail({
                           ? t("staff.sessionPaymentsDetail.filterNameQr")
                           : filter === "subscription"
                             ? t("staff.sessionPaymentsDetail.filterNameSubs")
-                            : "",
+                            : filter === "cancelled"
+                              ? t("staff.sessionPaymentsDetail.filterNameCancel")
+                              : "",
                   })}
             </p>
           )
