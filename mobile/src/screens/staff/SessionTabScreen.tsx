@@ -10,6 +10,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { getDeviceLabel } from "../../lib/device-label";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { api } from "../../lib/api-client";
@@ -92,6 +93,7 @@ function createStyles(t: AppColors) {
     infoRow: { flexDirection: "row", justifyContent: "space-between" },
     infoLabel: { fontSize: 14, color: t.muted },
     infoValue: { fontSize: 14, fontWeight: "600", color: t.text },
+    infoDeviceHint: { fontSize: 11, color: t.subtle, marginTop: 1, textAlign: "right" },
     actionBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, height: 44, borderRadius: 10 },
     openBtn: { backgroundColor: t.green600 },
     closeBtn: { backgroundColor: t.red500 },
@@ -216,7 +218,11 @@ export function SessionTabScreen() {
     if (!venueId) return;
     setActionLoading(true);
     try {
-      await api.post("/api/sessions", { venueId });
+      const deviceName = getDeviceLabel();
+      await api.post("/api/sessions", {
+        venueId,
+        ...(deviceName ? { openedOnDevice: deviceName } : {}),
+      });
       await fetchState();
       await fetchHistory();
     } catch (err) {
@@ -308,7 +314,12 @@ export function SessionTabScreen() {
               </View>
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>{t("sessionStarted")}</Text>
-                <Text style={styles.infoValue}>{sessionStartLabel}</Text>
+                <View>
+                  <Text style={styles.infoValue}>{sessionStartLabel}</Text>
+                  {session?.openedOnDevice ? (
+                    <Text style={styles.infoDeviceHint}>{session.openedOnDevice}</Text>
+                  ) : null}
+                </View>
               </View>
             </View>
           )}

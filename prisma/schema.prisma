@@ -305,6 +305,8 @@ model Session {
   reclubEventName     String? @map("reclub_event_name")
   reclubRoster        Json?   @map("reclub_roster")
   reclubSnapshot      Json?   @map("reclub_snapshot")
+  /// Device model/name of the staff phone that opened this session (e.g. "iPhone 15 Pro").
+  openedOnDevice      String? @map("opened_on_device")
 
   venue            Venue              @relation(fields: [venueId], references: [id])
   staff            StaffMember?       @relation(fields: [staffId], references: [id])

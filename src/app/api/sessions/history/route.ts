@@ -56,6 +56,7 @@ export async function GET(request: NextRequest) {
       closedAt: s.closedAt?.toISOString() ?? null,
       playerCount: s._count.queueEntries,
       gameCount: s._count.courtAssignments,
+      openedOnDevice: s.openedOnDevice ?? null,
     }));
 
     const sessionsWithPayments = await Promise.all(

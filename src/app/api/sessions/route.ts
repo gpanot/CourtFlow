@@ -22,13 +22,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const auth = requireStaff(request.headers);
-    const { venueId, courtIds, gameTypeMix, warmupMode, type, title } = await parseBody<{
+    const { venueId, courtIds, gameTypeMix, warmupMode, type, title, openedOnDevice } = await parseBody<{
       venueId: string;
       courtIds: string[];
       gameTypeMix?: { men: number; women: number; mixed: number };
       warmupMode?: "manual" | "auto";
       type?: "open_play" | "competition";
       title?: string;
+      openedOnDevice?: string;
     }>(request);
 
     const existing = await prisma.session.findFirst({
@@ -66,6 +67,7 @@ export async function POST(request: NextRequest) {
         warmupMode: warmupMode ?? "manual",
         type: type ?? "open_play",
         title: title ?? undefined,
+        openedOnDevice: openedOnDevice ?? undefined,
       },
     });
 

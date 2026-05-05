@@ -769,6 +769,7 @@ export function StaffBossDashboardScreen() {
                     <Text style={styles.sessionCardTime}>
                       {new Date(s.openedAt).toLocaleTimeString()}
                       {s.closedAt ? ` — ${new Date(s.closedAt).toLocaleTimeString()}` : ""}
+                      {s.openedOnDevice ? ` · ${s.openedOnDevice}` : ""}
                     </Text>
                   </TouchableOpacity>
                 ));
@@ -890,6 +891,7 @@ export function StaffBossDashboardScreen() {
                     <Text style={styles.sessionCardTime}>
                       {new Date(s.openedAt).toLocaleTimeString()}
                       {s.closedAt ? ` — ${new Date(s.closedAt).toLocaleTimeString()}` : ""}
+                      {s.openedOnDevice ? ` · ${s.openedOnDevice}` : ""}
                     </Text>
                   </TouchableOpacity>
                 ))

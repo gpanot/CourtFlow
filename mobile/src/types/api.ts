@@ -43,6 +43,8 @@ export interface Session {
   closedAt: string | null;
   staffId: string | null;
   date?: string;
+  /** Device model/name of the staff phone that opened this session (e.g. "iPhone 15 Pro"). */
+  openedOnDevice?: string | null;
 }
 
 /** Closed-session rows from `GET /api/sessions/history` */
@@ -61,6 +63,8 @@ export interface SessionHistoryRow {
   paymentQrCount?: number;
   paymentCashCount?: number;
   paymentSubCount?: number;
+  /** Device model/name of the staff phone that opened this session. */
+  openedOnDevice?: string | null;
 }
 
 export interface PendingPaymentPlayer {

@@ -226,6 +226,7 @@ const CHECK_IN_SCANNER_EN = {
   "sessionNoActive": "No Active Session",
   "sessionFee": "Fee",
   "sessionStarted": "Started",
+  "sessionOpenedOnDevice": "Opened on",
   "sessionOpenBtn": "Open Session",
   "sessionCloseBtn": "Close Session",
   "sessionCloseConfirmTitle": "Close Session",
@@ -366,6 +367,9 @@ const CHECK_IN_SCANNER_EN = {
   // ── Reclub Roster / Session Detail ──────────────────────────────────────────
   "reclubFetchRoster": "Load Reclub List",
   "reclubNoEvents": "No Reclub event today. CourtPay session running normally.",
+  "reclubSelectEvents": "Select events",
+  "reclubContinue": "Continue",
+  "reclubSelectedCount": "{{count}} selected",
   "reclubLegendTitle": "Legend",
   "reclubLegendMatchedPaid": "Matched & paid",
   "reclubLegendAbsent": "Absent",
@@ -907,6 +911,9 @@ const CHECK_IN_SCANNER_VI = {
   // ── Reclub Roster / Session Detail ──────────────────────────────────────────
   "reclubFetchRoster": "Tải danh sách Reclub",
   "reclubNoEvents": "Hôm nay không có sự kiện Reclub. Phiên CourtPay hoạt động bình thường.",
+  "reclubSelectEvents": "Chọn sự kiện",
+  "reclubContinue": "Tiếp tục",
+  "reclubSelectedCount": "Đã chọn {{count}}",
   "reclubLegendTitle": "Chú thích",
   "reclubLegendMatchedPaid": "Khớp & đã trả",
   "reclubLegendAbsent": "Vắng mặt",

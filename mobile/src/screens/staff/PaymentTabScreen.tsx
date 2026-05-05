@@ -19,7 +19,7 @@ import {
   Pressable,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import * as Device from "expo-device";
+import { getDeviceLabel } from "../../lib/device-label";
 import { useNavigation } from "@react-navigation/native";
 import type { MaterialTopTabNavigationProp } from "@react-navigation/material-top-tabs";
 import { api, ApiRequestError } from "../../lib/api-client";
@@ -459,7 +459,7 @@ export function PaymentTabScreen() {
   const handleConfirm = async (id: string) => {
     setActionId(id);
     try {
-      const deviceName = Device.modelName ?? Device.deviceName ?? undefined;
+      const deviceName = getDeviceLabel();
       await api.post("/api/staff/confirm-payment", {
         pendingPaymentId: id,
         ...(deviceName ? { confirmedOnDevice: deviceName } : {}),
