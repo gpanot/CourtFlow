@@ -212,6 +212,9 @@ export function CourtPayCheckInScreen({
   const [loading, setLoading] = useState(false);
   const [cashPending, setCashPending] = useState(false);
   const [regPhoneRequiredVisible, setRegPhoneRequiredVisible] = useState(false);
+  const [regPhoneDuplicateVisible, setRegPhoneDuplicateVisible] = useState(false);
+  const [regPhoneInlineWarning, setRegPhoneInlineWarning] = useState(false);
+  const phoneCheckDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [confirmedSeconds, setConfirmedSeconds] = useState(CONFIRMED_AUTO_HOME_SEC);
   const [exhaustedOfferSeconds, setExhaustedOfferSeconds] = useState(EXHAUSTED_OFFER_AUTO_HOME_SEC);
   const [error, setError] = useState("");
@@ -407,6 +410,9 @@ export function CourtPayCheckInScreen({
     setCashSubmitting(false);
     setCashPending(false);
     setRegPhoneRequiredVisible(false);
+    setRegPhoneDuplicateVisible(false);
+    setRegPhoneInlineWarning(false);
+    if (phoneCheckDebounceRef.current) clearTimeout(phoneCheckDebounceRef.current);
     setSelectedReclubUserId(null);
     setLoading(false);
     setError("");
@@ -663,6 +669,32 @@ export function CourtPayCheckInScreen({
     if (!phonePreview) return;
     goToSubscriptionOrPay(phonePreview, false, phoneActiveSub);
   };
+
+  // ── Phone duplicate check (registration form) ────────────────────────────
+  const checkPhoneDuplicate = useCallback(async (phone: string) => {
+    const trimmed = phone.trim();
+    if (!trimmed || !venueId) {
+      setRegPhoneInlineWarning(false);
+      return;
+    }
+    try {
+      const res = await api.post<{ found: boolean }>("/api/courtpay/identify", {
+        venueCode: venueId,
+        phone: trimmed,
+      });
+      setRegPhoneInlineWarning(res.found);
+    } catch {
+      setRegPhoneInlineWarning(false);
+    }
+  }, [venueId]);
+
+  const schedulePhoneCheck = useCallback((phone: string) => {
+    if (phoneCheckDebounceRef.current) clearTimeout(phoneCheckDebounceRef.current);
+    setRegPhoneInlineWarning(false);
+    phoneCheckDebounceRef.current = setTimeout(() => {
+      void checkPhoneDuplicate(phone);
+    }, 600);
+  }, [checkPhoneDuplicate]);
 
   const handleCaptureRegistrationFace = async () => {
     if (!faceBase64) return;
@@ -1566,16 +1598,24 @@ export function CourtPayCheckInScreen({
               </View>
               <Text style={[styles.regFormLabel, isLight && styles.regFormLabelLight]}>{t("regPhone")}</Text>
               <TextInput
-                style={[styles.bigInput, isLight && styles.bigInputLight]}
+                style={[styles.bigInput, isLight && styles.bigInputLight, regPhoneInlineWarning && styles.bigInputWarning]}
                 value={phoneInput}
                 onChangeText={(v) => {
                   setPhoneInput(v);
+                  setRegPhoneInlineWarning(false);
                   restartIdleTimer();
+                  schedulePhoneCheck(v);
                 }}
                 keyboardType="phone-pad"
                 placeholder={t("regPhonePlaceholder")}
                 placeholderTextColor={isLight ? "#94a3b8" : "#737373"}
               />
+              {regPhoneInlineWarning && (
+                <View style={styles.phoneInlineWarningRow}>
+                  <Ionicons name="warning-outline" size={14} color="#f59e0b" />
+                  <Text style={styles.phoneInlineWarningText}>{t("regPhoneInlineWarning")}</Text>
+                </View>
+              )}
               <Text style={[styles.regFormLabel, isLight && styles.regFormLabelLight]}>{t("regGender")}</Text>
               <View style={styles.inlineRow}>
                 <TouchableOpacity
@@ -1584,7 +1624,12 @@ export function CourtPayCheckInScreen({
                     isLight && styles.selectBtnLight,
                     gender === "male" && styles.genderMaleSelected,
                   ]}
-                  onPress={() => { Keyboard.dismiss(); setGender("male"); restartIdleTimer(); }}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setGender("male");
+                    restartIdleTimer();
+                    void checkPhoneDuplicate(phoneInput);
+                  }}
                 >
                   <Text
                     style={[
@@ -1603,7 +1648,12 @@ export function CourtPayCheckInScreen({
                     isLight && styles.selectBtnLight,
                     gender === "female" && styles.genderFemaleSelected,
                   ]}
-                  onPress={() => { Keyboard.dismiss(); setGender("female"); restartIdleTimer(); }}
+                  onPress={() => {
+                    Keyboard.dismiss();
+                    setGender("female");
+                    restartIdleTimer();
+                    void checkPhoneDuplicate(phoneInput);
+                  }}
                 >
                   <Text
                     style={[
@@ -1638,7 +1688,12 @@ export function CourtPayCheckInScreen({
                             ? styles.levelIntermediateSelected
                             : styles.levelAdvancedSelected),
                     ]}
-                    onPress={() => { Keyboard.dismiss(); setSkillLevel(lvl); restartIdleTimer(); }}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setSkillLevel(lvl);
+                      restartIdleTimer();
+                      void checkPhoneDuplicate(phoneInput);
+                    }}
                   >
                     <Text
                       style={[
@@ -1659,6 +1714,11 @@ export function CourtPayCheckInScreen({
                   if (!phoneInput.trim()) {
                     restartIdleTimer();
                     setRegPhoneRequiredVisible(true);
+                    return;
+                  }
+                  if (regPhoneInlineWarning) {
+                    restartIdleTimer();
+                    setRegPhoneDuplicateVisible(true);
                     return;
                   }
                   setIsNewPlayer(true);
@@ -2335,6 +2395,68 @@ export function CourtPayCheckInScreen({
         </View>
       </Modal>
 
+      {/* Registration: duplicate phone popup */}
+      <Modal
+        visible={regPhoneDuplicateVisible}
+        animationType="fade"
+        onRequestClose={() => setRegPhoneDuplicateVisible(false)}
+      >
+        <View
+          style={[
+            styles.phoneReqRoot,
+            { backgroundColor: isLight ? CP.backdropBaseLight : CP.backdropBase },
+          ]}
+          onTouchStart={restartIdleTimer}
+        >
+          <Pressable
+            style={StyleSheet.absoluteFillObject}
+            onPress={() => setRegPhoneDuplicateVisible(false)}
+            accessibilityRole="button"
+            accessibilityLabel={t("regPhoneRequiredDismissScrim")}
+          />
+          <View style={styles.phoneReqCardWrap} pointerEvents="box-none">
+            <View
+              style={[
+                styles.phoneReqCard,
+                isLight ? styles.phoneReqCardLight : styles.phoneReqCardDark,
+              ]}
+            >
+              <View style={styles.phoneReqInner}>
+                <View
+                  style={[
+                    styles.phoneReqIconCircle,
+                    isLight ? styles.phoneReqIconCircleLight : styles.phoneReqIconCircleDark,
+                    { backgroundColor: isLight ? "#fef3c7" : "#451a03" },
+                  ]}
+                >
+                  <Ionicons
+                    name="warning-outline"
+                    size={40}
+                    color="#f59e0b"
+                  />
+                </View>
+                <Text style={[styles.formTitle, isLight && styles.formTitleLight]}>
+                  {t("regPhoneDuplicateTitle")}
+                </Text>
+                <Text style={[styles.heroSubtitle, isLight && styles.heroSubtitleLight]}>
+                  {t("regPhoneDuplicateMsg")}
+                </Text>
+                <TouchableOpacity
+                  style={[styles.primaryBtn, dyn.primaryBtn, styles.phoneReqOkBtn]}
+                  onPress={() => {
+                    restartIdleTimer();
+                    setRegPhoneDuplicateVisible(false);
+                  }}
+                  activeOpacity={0.88}
+                >
+                  <Text style={styles.primaryBtnText}>{t("regPhoneRequiredOk")}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <TabletStaffEscape
         onVerified={() => navigation.navigate("TabletModeSelect")}
       />
@@ -2703,6 +2825,21 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.04)",
     borderColor: "rgba(0,0,0,0.12)",
     color: "#0f172a",
+  },
+  bigInputWarning: {
+    borderColor: "#f59e0b",
+  },
+  phoneInlineWarningRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginTop: 4,
+  },
+  phoneInlineWarningText: {
+    fontSize: 13,
+    color: "#f59e0b",
+    fontWeight: "500",
+    flex: 1,
   },
   regCircleOuter: {
     width: REG_FACE_CIRCLE,

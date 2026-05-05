@@ -146,6 +146,9 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
   const [regLevel, setRegLevel] = useState<"beginner" | "intermediate" | "advanced" | null>(null);
   const [regFaceChecking, setRegFaceChecking] = useState(false);
   const [regLoading, setRegLoading] = useState(false);
+  const [regPhoneInlineWarning, setRegPhoneInlineWarning] = useState(false);
+  const [regPhoneDuplicateModal, setRegPhoneDuplicateModal] = useState(false);
+  const phoneCheckDebounceRef = useRef<NodeJS.Timeout | null>(null);
 
   const [payment, setPayment] = useState<PaymentData | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
@@ -200,6 +203,9 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
     setRegGender(null);
     setRegLevel(null);
     setRegFaceChecking(false);
+    setRegPhoneInlineWarning(false);
+    setRegPhoneDuplicateModal(false);
+    if (phoneCheckDebounceRef.current) clearTimeout(phoneCheckDebounceRef.current);
     setPayment(null);
     setPaymentLoading(false);
   }, [clearTimers, goTo]);
@@ -596,6 +602,32 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
       setRegFaceChecking(false);
     }
   }, [goTo, regFaceChecking, scheduleReset]);
+
+  /* ─── Registration: phone duplicate check ───── */
+  const checkRegPhoneDuplicate = useCallback(async (phone: string) => {
+    const trimmed = phone.trim();
+    if (!trimmed || !venueId) {
+      setRegPhoneInlineWarning(false);
+      return;
+    }
+    try {
+      const res = await api.post<{ found: boolean }>("/api/courtpay/identify", {
+        venueCode: venueId,
+        phone: trimmed,
+      });
+      setRegPhoneInlineWarning(res.found);
+    } catch {
+      setRegPhoneInlineWarning(false);
+    }
+  }, [venueId]);
+
+  const scheduleRegPhoneCheck = useCallback((phone: string) => {
+    if (phoneCheckDebounceRef.current) clearTimeout(phoneCheckDebounceRef.current);
+    setRegPhoneInlineWarning(false);
+    phoneCheckDebounceRef.current = setTimeout(() => {
+      void checkRegPhoneDuplicate(phone);
+    }, 600);
+  }, [checkRegPhoneDuplicate]);
 
   /* ─── Registration: submit form ─────────────── */
   const handleRegSubmit = useCallback(async () => {
@@ -1057,7 +1089,7 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
                     <button
                       key={g}
                       type="button"
-                      onClick={() => setRegGender(g)}
+                      onClick={() => { setRegGender(g); void checkRegPhoneDuplicate(regPhone); }}
                       className={cn(
                         "flex h-10 w-12 items-center justify-center rounded-lg border-2 text-xs font-bold tracking-wide transition-colors",
                         regGender === g
@@ -1084,10 +1116,26 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
                 inputMode="tel"
                 autoComplete="tel"
                 value={regPhone}
-                onChange={(e) => setRegPhone(e.target.value)}
+                onChange={(e) => {
+                  setRegPhone(e.target.value);
+                  setRegPhoneInlineWarning(false);
+                  scheduleRegPhoneCheck(e.target.value);
+                }}
+                onBlur={() => void checkRegPhoneDuplicate(regPhone)}
                 placeholder={t("tablet.checkInScanner.regPhonePlaceholder")}
-                className="w-full rounded-lg border border-neutral-700 bg-neutral-950 px-3 py-2.5 text-base text-white placeholder:text-neutral-500 focus:border-green-500 focus:outline-none"
+                className={cn(
+                  "w-full rounded-lg border bg-neutral-950 px-3 py-2.5 text-base text-white placeholder:text-neutral-500 focus:outline-none",
+                  regPhoneInlineWarning
+                    ? "border-amber-500 focus:border-amber-400"
+                    : "border-neutral-700 focus:border-green-500"
+                )}
               />
+              {regPhoneInlineWarning && (
+                <p className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-400">
+                  <span>⚠</span>
+                  {t("tablet.checkInScanner.regPhoneInlineWarning")}
+                </p>
+              )}
             </div>
 
             <div>
@@ -1097,7 +1145,7 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
                   <button
                     key={lvl}
                     type="button"
-                    onClick={() => setRegLevel(lvl)}
+                    onClick={() => { setRegLevel(lvl); void checkRegPhoneDuplicate(regPhone); }}
                     className={cn(
                       "rounded-lg border-2 px-2 py-2 text-center text-xs font-semibold transition-colors",
                       regLevel === lvl
@@ -1114,7 +1162,13 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
             <button
               type="button"
               disabled={!regName.trim() || !regPhone.trim() || !regGender || !regLevel || regLoading}
-              onClick={() => void handleRegSubmit()}
+              onClick={() => {
+                if (regPhoneInlineWarning) {
+                  setRegPhoneDuplicateModal(true);
+                  return;
+                }
+                void handleRegSubmit();
+              }}
               className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-3 text-base font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-40"
             >
               {regLoading && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -1216,6 +1270,35 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
           </div>
           <h2 className="text-3xl font-bold text-red-300">{t("tablet.checkInScanner.payCancelled")}</h2>
           <p className="text-lg text-neutral-400">{t("tablet.checkInScanner.payCancelledHint")}</p>
+        </div>
+      )}
+      {/* ── DUPLICATE PHONE MODAL ───────────────── */}
+      {regPhoneDuplicateModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-6"
+          onClick={() => setRegPhoneDuplicateModal(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl border border-amber-500/30 bg-neutral-900 p-6 text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-500/15">
+              <span className="text-3xl">⚠</span>
+            </div>
+            <h3 className="mb-2 text-lg font-bold text-white">
+              {t("tablet.checkInScanner.regPhoneDuplicateTitle")}
+            </h3>
+            <p className="mb-6 text-sm leading-relaxed text-neutral-400">
+              {t("tablet.checkInScanner.regPhoneDuplicateMsg")}
+            </p>
+            <button
+              type="button"
+              onClick={() => setRegPhoneDuplicateModal(false)}
+              className="w-full rounded-xl bg-amber-500 py-3 text-base font-semibold text-black transition-colors hover:bg-amber-400"
+            >
+              {t("tablet.checkInScanner.regPhoneRequiredOk")}
+            </button>
+          </div>
         </div>
       )}
     </div>
