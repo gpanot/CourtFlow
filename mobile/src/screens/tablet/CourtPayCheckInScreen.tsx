@@ -347,7 +347,17 @@ export function CourtPayCheckInScreen({
       .then((res) => {
         setSessionFee(res.sessionFee ?? 0);
         setShowSubscriptionsInFlow(res.showSubscriptionsInFlow !== false);
-        setReclubRoster(Array.isArray(res.reclubRoster) ? res.reclubRoster : []);
+        if (Array.isArray(res.reclubRoster) && res.reclubRoster.length > 0) {
+          const first = res.reclubRoster[0] as unknown as Record<string, unknown>;
+          if (typeof first === "object" && first !== null && "referenceCode" in first) {
+            const entries = res.reclubRoster as unknown as Array<{ players: ReclubRosterEntry[] }>;
+            setReclubRoster(entries.flatMap((e) => e.players));
+          } else {
+            setReclubRoster(res.reclubRoster as ReclubRosterEntry[]);
+          }
+        } else {
+          setReclubRoster([]);
+        }
       })
       .catch(() => {});
   }, [venueId]);

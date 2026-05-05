@@ -4,6 +4,12 @@ import { json, error, parseBody, notFound } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { Prisma } from "@prisma/client";
 
+interface RosterEntry {
+  referenceCode: string;
+  eventName: string;
+  players: unknown;
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ sessionId: string }> }
@@ -12,23 +18,38 @@ export async function PATCH(
     requireStaff(request.headers);
     const { sessionId } = await params;
 
-    const { referenceCode, eventName, roster } = await parseBody<{
-      referenceCode: string;
-      eventName: string;
-      roster: unknown;
+    const body = await parseBody<{
+      referenceCode?: string;
+      eventName?: string;
+      roster?: unknown;
+      rosters?: RosterEntry[];
     }>(request);
-
-    if (!referenceCode) return error("referenceCode is required");
 
     const session = await prisma.session.findUnique({ where: { id: sessionId } });
     if (!session) return notFound("Session not found");
 
+    let storedRosters: RosterEntry[];
+
+    if (body.rosters && Array.isArray(body.rosters) && body.rosters.length > 0) {
+      storedRosters = body.rosters;
+    } else if (body.referenceCode) {
+      storedRosters = [{
+        referenceCode: body.referenceCode,
+        eventName: body.eventName || "",
+        players: body.roster ?? [],
+      }];
+    } else {
+      return error("rosters array or referenceCode is required");
+    }
+
+    const first = storedRosters[0];
+
     const updated = await prisma.session.update({
       where: { id: sessionId },
       data: {
-        reclubReferenceCode: referenceCode,
-        reclubEventName: eventName || null,
-        reclubRoster: (roster ?? Prisma.DbNull) as Prisma.InputJsonValue,
+        reclubReferenceCode: first.referenceCode,
+        reclubEventName: first.eventName || null,
+        reclubRoster: storedRosters as unknown as Prisma.InputJsonValue,
       },
     });
 

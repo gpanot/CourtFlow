@@ -200,7 +200,19 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
       .get<{ reclubRoster?: ReclubRosterEntry[] | null }>(
         `/api/staff/venue-payment-settings?venueId=${venueId}`
       )
-      .then((res) => setReclubRoster(Array.isArray(res.reclubRoster) ? res.reclubRoster : []))
+      .then((res) => {
+        if (Array.isArray(res.reclubRoster) && res.reclubRoster.length > 0) {
+          const first = res.reclubRoster[0] as unknown as Record<string, unknown>;
+          if (typeof first === "object" && first !== null && "referenceCode" in first) {
+            const entries = res.reclubRoster as unknown as Array<{ players: ReclubRosterEntry[] }>;
+            setReclubRoster(entries.flatMap((e) => e.players));
+          } else {
+            setReclubRoster(res.reclubRoster as ReclubRosterEntry[]);
+          }
+        } else {
+          setReclubRoster([]);
+        }
+      })
       .catch(() => {});
   }, [venueId]);
 

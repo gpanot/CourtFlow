@@ -52,9 +52,9 @@ export interface PaidPlayerFull {
 interface Props {
   sessionId: string;
   reclubGroupId: number | null;
-  existingRoster: ReclubRosterData | null;
+  existingRosters: ReclubRosterData[] | null;
   paidPlayers: PaidPlayerFull[];
-  onRosterSaved: (roster: ReclubRosterData) => void;
+  onRosterSaved: (rosters: ReclubRosterData[]) => void;
   onPlayerLinked?: () => void;
 }
 
@@ -205,6 +205,11 @@ function createStyles(t: AppColors) {
       textTransform: "uppercase",
       letterSpacing: 0.6,
     },
+    rosterDivider: {
+      height: 1,
+      backgroundColor: t.border,
+      marginVertical: 12,
+    },
     checkBadge: {
       position: "absolute",
       top: -2,
@@ -248,16 +253,6 @@ function createStyles(t: AppColors) {
       textAlign: "center",
       paddingVertical: 8,
     },
-    bannerAmber: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 8,
-      backgroundColor: "rgba(251,191,36,0.12)",
-      borderRadius: 8,
-      padding: 10,
-      marginTop: 12,
-    },
-    bannerAmberText: { fontSize: 13, color: "#fbbf24", flex: 1 },
     modalOverlay: {
       flex: 1,
       backgroundColor: "rgba(0,0,0,0.6)",
@@ -290,6 +285,31 @@ function createStyles(t: AppColors) {
     eventItemName: { fontSize: 14, fontWeight: "600", color: t.text },
     eventItemTime: { fontSize: 12, color: t.muted, marginTop: 2 },
     eventItemCount: { fontSize: 12, color: t.subtle },
+    checkbox: {
+      width: 24,
+      height: 24,
+      borderRadius: 6,
+      borderWidth: 2,
+      borderColor: t.muted,
+      alignItems: "center",
+      justifyContent: "center",
+      marginRight: 12,
+    },
+    checkboxChecked: {
+      backgroundColor: "#3b82f6",
+      borderColor: "#3b82f6",
+    },
+    continueBtn: {
+      marginHorizontal: 20,
+      marginTop: 12,
+      height: 44,
+      borderRadius: 10,
+      backgroundColor: "#3b82f6",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    continueBtnDisabled: { opacity: 0.4 },
+    continueBtnText: { color: "#fff", fontSize: 15, fontWeight: "600" },
     sheetHeader: {
       alignItems: "center",
       paddingHorizontal: 20,
@@ -352,7 +372,7 @@ function createStyles(t: AppColors) {
 export function ReclubRosterSection({
   sessionId,
   reclubGroupId,
-  existingRoster,
+  existingRosters,
   paidPlayers,
   onRosterSaved,
   onPlayerLinked,
@@ -361,23 +381,22 @@ export function ReclubRosterSection({
   const { t } = useTabletKioskLocale();
   const styles = useMemo(() => createStyles(theme), [theme]);
 
-  const [roster, setRoster] = useState<ReclubRosterData | null>(existingRoster);
+  const [rosters, setRosters] = useState<ReclubRosterData[]>(existingRosters ?? []);
   const [loading, setLoading] = useState(false);
   const [events, setEvents] = useState<ReclubEvent[]>([]);
   const [showEventPicker, setShowEventPicker] = useState(false);
+  const [selectedEventCodes, setSelectedEventCodes] = useState<Set<string>>(new Set());
   const [noEvents, setNoEvents] = useState(false);
   const [linkingPlayerId, setLinkingPlayerId] = useState<string | null>(null);
 
-  // Bottom sheet state
   const [sheetPlayer, setSheetPlayer] = useState<ReclubPlayer | null>(null);
   const [sheetMode, setSheetMode] = useState<"match" | "info" | null>(null);
   const [showUnmatchedList, setShowUnmatchedList] = useState(false);
 
   useEffect(() => {
-    setRoster(existingRoster);
-  }, [existingRoster]);
+    setRosters(existingRosters ?? []);
+  }, [existingRosters]);
 
-  // Only confirmed payments count as "paid via Reclub" for matching
   const confirmedPaidPlayers = useMemo(
     () => paidPlayers.filter((p) => !p.status || p.status === "confirmed"),
     [paidPlayers]
@@ -391,40 +410,53 @@ export function ReclubRosterSection({
     return ids;
   }, [confirmedPaidPlayers]);
 
-  const paidCount = useMemo(() => {
-    if (!roster) return 0;
-    return roster.players.filter((p) => paidReclubIds.has(p.reclubUserId)).length;
-  }, [roster, paidReclubIds]);
+  // Aggregated KPIs across all rosters
+  const allRosterPlayers = useMemo(
+    () => rosters.flatMap((r) => r.players),
+    [rosters]
+  );
 
-  // Walk-ins = all payment rows (confirmed + cancelled) not on the Reclub roster
-  // Count by partyCount so a group-of-2 payment counts as 2 walk-ins
+  const totalBooked = allRosterPlayers.length;
+
+  const totalPaid = useMemo(
+    () => allRosterPlayers.filter((p) => paidReclubIds.has(p.reclubUserId)).length,
+    [allRosterPlayers, paidReclubIds]
+  );
+
+  const allRosterIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const p of allRosterPlayers) ids.add(p.reclubUserId);
+    return ids;
+  }, [allRosterPlayers]);
+
   const unmatchedPayments = useMemo(() => {
-    if (!roster) return [];
-    const rosterIds = new Set(roster.players.map((p) => p.reclubUserId));
-    return paidPlayers.filter((p) => !p.reclubUserId || !rosterIds.has(p.reclubUserId));
-  }, [roster, paidPlayers]);
+    if (rosters.length === 0) return [];
+    return paidPlayers.filter((p) => !p.reclubUserId || !allRosterIds.has(p.reclubUserId));
+  }, [rosters, paidPlayers, allRosterIds]);
 
-  const unmatchedPaidCount = useMemo(() => {
-    return unmatchedPayments.reduce((sum, p) => sum + (p.partyCount ?? 1), 0);
-  }, [unmatchedPayments]);
+  const unmatchedPaidCount = useMemo(
+    () => unmatchedPayments.reduce((sum, p) => sum + (p.partyCount ?? 1), 0),
+    [unmatchedPayments]
+  );
+
+  const totalExpected = totalBooked - totalPaid;
+
+  const paidCountForRoster = useCallback(
+    (roster: ReclubRosterData) =>
+      roster.players.filter((p) => paidReclubIds.has(p.reclubUserId)).length,
+    [paidReclubIds]
+  );
 
   const linkedPaymentForPlayer = useCallback(
-    (reclubUserId: number): PaidPlayerFull | undefined => {
-      return paidPlayers.find((p) => p.reclubUserId === reclubUserId);
-    },
+    (reclubUserId: number): PaidPlayerFull | undefined =>
+      paidPlayers.find((p) => p.reclubUserId === reclubUserId),
     [paidPlayers]
   );
 
   const handleAvatarTap = useCallback(
     (player: ReclubPlayer) => {
-      const isPaid = paidReclubIds.has(player.reclubUserId);
-      if (isPaid) {
-        setSheetPlayer(player);
-        setSheetMode("info");
-      } else {
-        setSheetPlayer(player);
-        setSheetMode("match");
-      }
+      setSheetPlayer(player);
+      setSheetMode(paidReclubIds.has(player.reclubUserId) ? "info" : "match");
     },
     [paidReclubIds]
   );
@@ -486,35 +518,40 @@ export function ReclubRosterSection({
       }
 
       if (data.events.length === 1) {
-        await fetchAndSaveRoster(data.events[0].referenceCode);
+        await fetchAndSaveRosters([data.events[0].referenceCode]);
       } else {
         setEvents(data.events);
+        setSelectedEventCodes(new Set());
         setShowEventPicker(true);
         setLoading(false);
       }
     } catch (err) {
-        Alert.alert("Lỗi", err instanceof Error ? err.message : "Không thể tải danh sách sự kiện");
+      Alert.alert("Lỗi", err instanceof Error ? err.message : "Không thể tải danh sách sự kiện");
       setLoading(false);
     }
   }, [reclubGroupId, sessionId]);
 
-  const fetchAndSaveRoster = useCallback(
-    async (referenceCode: string) => {
+  const fetchAndSaveRosters = useCallback(
+    async (referenceCodes: string[]) => {
       setLoading(true);
       setShowEventPicker(false);
       try {
-        const data = await api.post<ReclubRosterData>("/api/reclub/fetch-roster", {
-          referenceCode,
-        });
+        const fetched: ReclubRosterData[] = await Promise.all(
+          referenceCodes.map((code) =>
+            api.post<ReclubRosterData>("/api/reclub/fetch-roster", { referenceCode: code })
+          )
+        );
 
         await api.patch(`/api/sessions/${sessionId}/reclub-roster`, {
-          referenceCode: data.referenceCode,
-          eventName: data.eventName,
-          roster: data.players,
+          rosters: fetched.map((r) => ({
+            referenceCode: r.referenceCode,
+            eventName: r.eventName,
+            players: r.players,
+          })),
         });
 
-        setRoster(data);
-        onRosterSaved(data);
+        setRosters(fetched);
+        onRosterSaved(fetched);
       } catch (err) {
         Alert.alert("Lỗi", err instanceof Error ? err.message : "Không thể tải danh sách người chơi");
       } finally {
@@ -523,6 +560,43 @@ export function ReclubRosterSection({
     },
     [sessionId, onRosterSaved]
   );
+
+  const refreshSingleRoster = useCallback(
+    async (referenceCode: string) => {
+      setLoading(true);
+      try {
+        const data = await api.post<ReclubRosterData>("/api/reclub/fetch-roster", { referenceCode });
+        const updated = rosters.map((r) =>
+          r.referenceCode === referenceCode ? data : r
+        );
+
+        await api.patch(`/api/sessions/${sessionId}/reclub-roster`, {
+          rosters: updated.map((r) => ({
+            referenceCode: r.referenceCode,
+            eventName: r.eventName,
+            players: r.players,
+          })),
+        });
+
+        setRosters(updated);
+        onRosterSaved(updated);
+      } catch (err) {
+        Alert.alert("Lỗi", err instanceof Error ? err.message : "Không thể tải danh sách người chơi");
+      } finally {
+        setLoading(false);
+      }
+    },
+    [sessionId, rosters, onRosterSaved]
+  );
+
+  const toggleEventSelection = useCallback((code: string) => {
+    setSelectedEventCodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  }, []);
 
   const formatEventTime = (ts: number) => {
     const d = new Date(ts * 1000);
@@ -534,19 +608,19 @@ export function ReclubRosterSection({
     setSheetMode(null);
   };
 
-  if (noEvents && !roster) {
+  // ─── No events found ────────────────────────────────────────────
+  if (noEvents && rosters.length === 0) {
     return (
       <View style={styles.container}>
         <View style={styles.card}>
-          <Text style={styles.noEventText}>
-            {t("reclubNoEvents")}
-          </Text>
+          <Text style={styles.noEventText}>{t("reclubNoEvents")}</Text>
         </View>
       </View>
     );
   }
 
-  if (!roster) {
+  // ─── No roster loaded yet — show fetch button + multi-select picker ──
+  if (rosters.length === 0) {
     return (
       <View style={styles.container}>
         <TouchableOpacity
@@ -582,29 +656,51 @@ export function ReclubRosterSection({
               setLoading(false);
             }}
           >
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Chọn sự kiện</Text>
+            <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
+              <Text style={styles.modalTitle}>{t("reclubSelectEvents")}</Text>
               <FlatList
                 data={events}
                 keyExtractor={(e) => e.referenceCode}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.eventItem}
-                    onPress={() => fetchAndSaveRoster(item.referenceCode)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.eventItemName}>{item.name}</Text>
-                      <Text style={styles.eventItemTime}>
-                        {formatEventTime(item.startDatetime)}
+                renderItem={({ item }) => {
+                  const selected = selectedEventCodes.has(item.referenceCode);
+                  return (
+                    <TouchableOpacity
+                      style={styles.eventItem}
+                      onPress={() => toggleEventSelection(item.referenceCode)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.checkbox, selected && styles.checkboxChecked]}>
+                        {selected && <Ionicons name="checkmark" size={16} color="#fff" />}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.eventItemName}>{item.name}</Text>
+                        <Text style={styles.eventItemTime}>
+                          {formatEventTime(item.startDatetime)}
+                        </Text>
+                      </View>
+                      <Text style={styles.eventItemCount}>
+                        {item.confirmedCount} xác nhận
                       </Text>
-                    </View>
-                    <Text style={styles.eventItemCount}>
-                      {item.confirmedCount} xác nhận
-                    </Text>
-                  </TouchableOpacity>
-                )}
+                    </TouchableOpacity>
+                  );
+                }}
               />
+              <TouchableOpacity
+                style={[
+                  styles.continueBtn,
+                  selectedEventCodes.size === 0 && styles.continueBtnDisabled,
+                ]}
+                onPress={() => fetchAndSaveRosters([...selectedEventCodes])}
+                disabled={selectedEventCodes.size === 0}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.continueBtnText}>
+                  {t("reclubContinue")}
+                  {selectedEventCodes.size > 0
+                    ? ` (${t("reclubSelectedCount", { count: selectedEventCodes.size })})`
+                    : ""}
+                </Text>
+              </TouchableOpacity>
             </View>
           </TouchableOpacity>
         </Modal>
@@ -612,18 +708,19 @@ export function ReclubRosterSection({
     );
   }
 
-  const expectedCount = roster.players.length - paidCount;
+  // ─── Roster(s) loaded — display KPIs + grids ────────────────────
 
   return (
     <View style={styles.container}>
       <View style={styles.card}>
+        {/* Aggregated KPIs */}
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>{roster.players.length}</Text>
+            <Text style={styles.statValue}>{totalBooked}</Text>
             <Text style={styles.statLabel}>{t("reclubKpiBooked")}</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={[styles.statValue, { color: "#22c55e" }]}>{paidCount}</Text>
+            <Text style={[styles.statValue, { color: "#22c55e" }]}>{totalPaid}</Text>
             <Text style={styles.statLabel}>{t("reclubKpiPaid")}</Text>
           </View>
           <TouchableOpacity
@@ -631,77 +728,92 @@ export function ReclubRosterSection({
             onPress={() => unmatchedPaidCount > 0 && setShowUnmatchedList(true)}
             activeOpacity={unmatchedPaidCount > 0 ? 0.7 : 1}
           >
-            <Text style={[styles.statValue, { color: unmatchedPaidCount > 0 ? "#f59e0b" : theme.muted }]}>{unmatchedPaidCount}</Text>
+            <Text style={[styles.statValue, { color: unmatchedPaidCount > 0 ? "#f59e0b" : theme.muted }]}>
+              {unmatchedPaidCount}
+            </Text>
             <Text style={styles.statLabel}>{t("reclubKpiUnmatched")}</Text>
           </TouchableOpacity>
           <View style={styles.statCard}>
-            <Text style={[styles.statValue, { color: expectedCount > 0 ? "#3b82f6" : theme.muted }]}>{expectedCount}</Text>
+            <Text style={[styles.statValue, { color: totalExpected > 0 ? "#3b82f6" : theme.muted }]}>
+              {totalExpected}
+            </Text>
             <Text style={styles.statLabel}>{t("reclubKpiExpected")}</Text>
           </View>
         </View>
 
-        <View style={styles.headerRow}>
-          <Text style={styles.eventName} numberOfLines={1}>
-            {roster.eventName}
-          </Text>
-          <Text style={styles.paidCounter}>
-            {paidCount} / {roster.players.length}
-          </Text>
-          <TouchableOpacity
-            style={styles.refreshBtn}
-            onPress={() => fetchAndSaveRoster(roster.referenceCode)}
-            disabled={loading}
-            activeOpacity={0.7}
-          >
-            {loading ? (
-              <ActivityIndicator size="small" color={theme.muted} />
-            ) : (
-              <Ionicons name="refresh" size={16} color={theme.muted} />
-            )}
-          </TouchableOpacity>
-        </View>
+        {/* Roster sections */}
+        {rosters.map((roster, idx) => {
+          const rosterPaid = paidCountForRoster(roster);
+          return (
+            <View key={roster.referenceCode}>
+              {idx > 0 && <View style={styles.rosterDivider} />}
 
-        <View style={styles.grid}>
-          {roster.players.map((player) => {
-            const isPaid = paidReclubIds.has(player.reclubUserId);
-            return (
-              <TouchableOpacity
-                key={player.reclubUserId}
-                style={styles.avatarCell}
-                onPress={() => handleAvatarTap(player)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.avatarWrap}>
-                  {player.isDefaultAvatar ? (
-                    <View
-                      style={[
-                        styles.initialsCircle,
-                        { backgroundColor: initialsColor(player.name) },
-                        isPaid && styles.paidRing,
-                      ]}
-                    >
-                      <Text style={styles.initialsText}>{initials(player.name)}</Text>
-                    </View>
-                  ) : (
-                    <Image
-                      source={{ uri: player.avatarUrl }}
-                      style={[styles.avatarImage, isPaid && styles.paidRing]}
-                    />
-                  )}
-                  {isPaid && (
-                    <View style={styles.checkBadge}>
-                      <Ionicons name="checkmark" size={12} color="#fff" />
-                    </View>
-                  )}
-                </View>
-                <Text style={styles.playerName} numberOfLines={1}>
-                  {player.name}
+              <View style={styles.headerRow}>
+                <Text style={styles.eventName} numberOfLines={1}>
+                  {roster.eventName}
                 </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+                <Text style={styles.paidCounter}>
+                  {rosterPaid} / {roster.players.length}
+                </Text>
+                <TouchableOpacity
+                  style={styles.refreshBtn}
+                  onPress={() => refreshSingleRoster(roster.referenceCode)}
+                  disabled={loading}
+                  activeOpacity={0.7}
+                >
+                  {loading ? (
+                    <ActivityIndicator size="small" color={theme.muted} />
+                  ) : (
+                    <Ionicons name="refresh" size={16} color={theme.muted} />
+                  )}
+                </TouchableOpacity>
+              </View>
 
+              <View style={styles.grid}>
+                {roster.players.map((player) => {
+                  const isPaid = paidReclubIds.has(player.reclubUserId);
+                  return (
+                    <TouchableOpacity
+                      key={player.reclubUserId}
+                      style={styles.avatarCell}
+                      onPress={() => handleAvatarTap(player)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.avatarWrap}>
+                        {player.isDefaultAvatar ? (
+                          <View
+                            style={[
+                              styles.initialsCircle,
+                              { backgroundColor: initialsColor(player.name) },
+                              isPaid && styles.paidRing,
+                            ]}
+                          >
+                            <Text style={styles.initialsText}>{initials(player.name)}</Text>
+                          </View>
+                        ) : (
+                          <Image
+                            source={{ uri: player.avatarUrl }}
+                            style={[styles.avatarImage, isPaid && styles.paidRing]}
+                          />
+                        )}
+                        {isPaid && (
+                          <View style={styles.checkBadge}>
+                            <Ionicons name="checkmark" size={12} color="#fff" />
+                          </View>
+                        )}
+                      </View>
+                      <Text style={styles.playerName} numberOfLines={1}>
+                        {player.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          );
+        })}
+
+        {/* Walk-ins section below all rosters */}
         {unmatchedPayments.length > 0 && (
           <>
             <View style={styles.walkInSeparator}>
@@ -741,7 +853,6 @@ export function ReclubRosterSection({
             </View>
           </>
         )}
-
       </View>
 
       {/* Match bottom sheet — unmatched Reclub player */}

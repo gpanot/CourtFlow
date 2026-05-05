@@ -580,7 +580,10 @@
       "reclubLiveUnmatched": "Walk-ins",
       "reclubLiveExpected": "Expected",
       "reclubLoadRoster": "Load Reclub roster",
-      "reclubWalkInSeparator": "Walk-ins — not on Reclub"
+      "reclubWalkInSeparator": "Walk-ins — not on Reclub",
+      "reclubSelectEvents": "Select events",
+      "reclubContinue": "Continue",
+      "reclubSelectedCount": "{{count}} selected"
     },
     "courtPayAwaitingPayment": {
       "payTitle": "Almost there, {{name}}!",

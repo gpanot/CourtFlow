@@ -20,6 +20,12 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 
+interface StoredRosterEntry {
+  referenceCode: string;
+  eventName: string;
+  players: ReclubPlayer[];
+}
+
 interface Session {
   id: string;
   venueId: string;
@@ -34,7 +40,7 @@ interface Session {
   date?: string;
   reclubReferenceCode?: string | null;
   reclubEventName?: string | null;
-  reclubRoster?: ReclubPlayer[] | null;
+  reclubRoster?: ReclubPlayer[] | StoredRosterEntry[] | null;
 }
 
 interface CourtsState {
@@ -150,14 +156,28 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
   const [sheetPlayer, setSheetPlayer] = useState<ReclubPlayer | null>(null);
   const [sheetMode, setSheetMode] = useState<"match" | "info" | "unmatched-list" | null>(null);
   const [linkingPlayerId, setLinkingPlayerId] = useState<string | null>(null);
+  const [selectedEventCodes, setSelectedEventCodes] = useState<Set<string>>(new Set());
 
-  const roster = useMemo<ReclubRosterData | null>(() => {
-    if (!session?.reclubReferenceCode || !session.reclubRoster) return null;
-    return {
-      referenceCode: session.reclubReferenceCode,
-      eventName: session.reclubEventName ?? "",
-      players: session.reclubRoster,
-    };
+  const rosters = useMemo<ReclubRosterData[]>(() => {
+    if (!session?.reclubRoster) return [];
+    const raw = session.reclubRoster as unknown;
+    if (
+      Array.isArray(raw) &&
+      raw.length > 0 &&
+      typeof raw[0] === "object" &&
+      raw[0] !== null &&
+      "referenceCode" in raw[0]
+    ) {
+      return raw as ReclubRosterData[];
+    }
+    if (Array.isArray(raw) && session.reclubReferenceCode) {
+      return [{
+        referenceCode: session.reclubReferenceCode,
+        eventName: session.reclubEventName ?? "",
+        players: raw as ReclubPlayer[],
+      }];
+    }
+    return [];
   }, [session?.reclubReferenceCode, session?.reclubEventName, session?.reclubRoster]);
 
   const fetchState = useCallback(async () => {
@@ -323,9 +343,10 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
         return;
       }
       if (data.events.length === 1) {
-        await fetchAndSaveRoster(data.events[0].referenceCode);
+        await fetchAndSaveRosters([data.events[0].referenceCode]);
       } else {
         setEvents(data.events);
+        setSelectedEventCodes(new Set());
         setShowEventPicker(true);
         setRosterLoading(false);
       }
@@ -335,30 +356,71 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
     }
   };
 
-  const fetchAndSaveRoster = async (referenceCode: string) => {
+  const fetchAndSaveRosters = async (referenceCodes: string[]) => {
     setRosterLoading(true);
     setShowEventPicker(false);
     try {
-      const data = await api.post<ReclubRosterData>("/api/reclub/fetch-roster", {
-        referenceCode,
-      });
+      const fetched: ReclubRosterData[] = await Promise.all(
+        referenceCodes.map((code) =>
+          api.post<ReclubRosterData>("/api/reclub/fetch-roster", { referenceCode: code })
+        )
+      );
       await api.patch(`/api/sessions/${session!.id}/reclub-roster`, {
-        referenceCode: data.referenceCode,
-        eventName: data.eventName,
-        roster: data.players,
+        rosters: fetched.map((r) => ({
+          referenceCode: r.referenceCode,
+          eventName: r.eventName,
+          players: r.players,
+        })),
       });
       setSession((prev) =>
         prev
           ? {
               ...prev,
-              reclubReferenceCode: data.referenceCode,
-              reclubEventName: data.eventName,
-              reclubRoster: data.players,
+              reclubReferenceCode: fetched[0]?.referenceCode ?? null,
+              reclubEventName: fetched[0]?.eventName ?? null,
+              reclubRoster: fetched.map((r) => ({
+                referenceCode: r.referenceCode,
+                eventName: r.eventName,
+                players: r.players,
+              })),
             }
           : prev
       );
     } catch (err) {
       window.alert(err instanceof Error ? err.message : "Failed to fetch roster");
+    } finally {
+      setRosterLoading(false);
+    }
+  };
+
+  const refreshSingleRoster = async (referenceCode: string) => {
+    setRosterLoading(true);
+    try {
+      const data = await api.post<ReclubRosterData>("/api/reclub/fetch-roster", { referenceCode });
+      const updated = rosters.map((r) =>
+        r.referenceCode === referenceCode ? data : r
+      );
+      await api.patch(`/api/sessions/${session!.id}/reclub-roster`, {
+        rosters: updated.map((r) => ({
+          referenceCode: r.referenceCode,
+          eventName: r.eventName,
+          players: r.players,
+        })),
+      });
+      setSession((prev) =>
+        prev
+          ? {
+              ...prev,
+              reclubRoster: updated.map((r) => ({
+                referenceCode: r.referenceCode,
+                eventName: r.eventName,
+                players: r.players,
+              })),
+            }
+          : prev
+      );
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "Failed to refresh roster");
     } finally {
       setRosterLoading(false);
     }
@@ -387,21 +449,38 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
     return Number.isNaN(d.getTime()) ? "—" : d.toLocaleTimeString();
   }, [session]);
 
-  const paidCountInRoster = useMemo(() => {
-    if (!roster) return 0;
-    return roster.players.filter((p) => paidReclubIds.has(p.reclubUserId)).length;
-  }, [roster, paidReclubIds]);
+  const allRosterPlayers = useMemo(
+    () => rosters.flatMap((r) => r.players),
+    [rosters]
+  );
+
+  const totalBooked = allRosterPlayers.length;
+
+  const totalPaid = useMemo(
+    () => allRosterPlayers.filter((p) => paidReclubIds.has(p.reclubUserId)).length,
+    [allRosterPlayers, paidReclubIds]
+  );
+
+  const allRosterIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const p of allRosterPlayers) ids.add(p.reclubUserId);
+    return ids;
+  }, [allRosterPlayers]);
 
   const unmatchedPayments = useMemo(() => {
-    if (!roster) return [];
-    const rosterIds = new Set(roster.players.map((p) => p.reclubUserId));
-    return paidPlayersAll.filter((p) => !p.reclubUserId || !rosterIds.has(p.reclubUserId));
-  }, [roster, paidPlayersAll]);
+    if (rosters.length === 0) return [];
+    return paidPlayersAll.filter((p) => !p.reclubUserId || !allRosterIds.has(p.reclubUserId));
+  }, [rosters, paidPlayersAll, allRosterIds]);
 
-  // Walk-ins count: sum partyCount so a group-of-2 payment counts as 2 walk-ins
-  const unmatchedPaidCount = useMemo(() => {
-    return unmatchedPayments.reduce((sum, p) => sum + (p.partyCount ?? 1), 0);
-  }, [unmatchedPayments]);
+  const unmatchedPaidCount = useMemo(
+    () => unmatchedPayments.reduce((sum, p) => sum + (p.partyCount ?? 1), 0),
+    [unmatchedPayments]
+  );
+
+  const totalExpected = totalBooked - totalPaid;
+
+  const paidCountForRoster = (roster: ReclubRosterData) =>
+    roster.players.filter((p) => paidReclubIds.has(p.reclubUserId)).length;
 
   const closeSheet = () => {
     setSheetPlayer(null);
@@ -528,13 +607,13 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
       {/* Reclub Roster Section */}
       {session && isOpen && (
         <div className="mt-4">
-          {noEvents && !roster ? (
+          {noEvents && rosters.length === 0 ? (
             <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
               <p className="text-center text-sm text-neutral-500">
                 Hôm nay không có sự kiện Reclub. Phiên CourtPay hoạt động bình thường.
               </p>
             </div>
-          ) : !roster ? (
+          ) : rosters.length === 0 ? (
             <button
               type="button"
               disabled={rosterLoading}
@@ -550,14 +629,14 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
             </button>
           ) : (
             <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
-              {/* Stat cards */}
+              {/* Aggregated stat cards */}
               <div className="mb-3 grid grid-cols-4 gap-2">
                 <div className="rounded-lg bg-neutral-800/60 py-2.5 text-center">
-                  <p className="text-xl font-bold text-white">{roster.players.length}</p>
+                  <p className="text-xl font-bold text-white">{totalBooked}</p>
                   <p className="text-[11px] text-neutral-400">{t("staff.sessionPaymentsDetail.reclubLiveBooked")}</p>
                 </div>
                 <div className="rounded-lg bg-neutral-800/60 py-2.5 text-center">
-                  <p className="text-xl font-bold text-green-500">{paidCountInRoster}</p>
+                  <p className="text-xl font-bold text-green-500">{totalPaid}</p>
                   <p className="text-[11px] text-neutral-400">{t("staff.sessionPaymentsDetail.reclubLivePaid")}</p>
                 </div>
                 <button
@@ -569,74 +648,84 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                   <p className="text-[11px] text-neutral-400">{t("staff.sessionPaymentsDetail.reclubLiveUnmatched")}</p>
                 </button>
                 <div className="rounded-lg bg-neutral-800/60 py-2.5 text-center">
-                  <p className={cn("text-xl font-bold", roster.players.length - paidCountInRoster > 0 ? "text-blue-400" : "text-neutral-500")}>{roster.players.length - paidCountInRoster}</p>
+                  <p className={cn("text-xl font-bold", totalExpected > 0 ? "text-blue-400" : "text-neutral-500")}>{totalExpected}</p>
                   <p className="text-[11px] text-neutral-400">{t("staff.sessionPaymentsDetail.reclubLiveExpected")}</p>
                 </div>
               </div>
 
-              <div className="mb-3 flex items-center gap-2">
-                <p className="flex-1 truncate text-sm font-bold text-white">{roster.eventName}</p>
-                <span className="shrink-0 text-xs text-neutral-400">
-                  {paidCountInRoster} / {roster.players.length}
-                </span>
-                <button
-                  type="button"
-                  disabled={rosterLoading}
-                  onClick={() => fetchAndSaveRoster(roster.referenceCode)}
-                  className="ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-neutral-400 transition-colors hover:bg-neutral-700 hover:text-white disabled:opacity-50"
-                >
-                  {rosterLoading ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                  ) : (
-                    <RefreshCw className="h-3.5 w-3.5" aria-hidden />
-                  )}
-                </button>
-              </div>
+              {/* Per-roster sections */}
+              {rosters.map((roster, idx) => {
+                const rosterPaid = paidCountForRoster(roster);
+                return (
+                  <div key={roster.referenceCode}>
+                    {idx > 0 && <div className="my-3 h-px bg-neutral-800" />}
 
-              <div className="grid grid-cols-4 gap-2">
-                {roster.players.map((player) => {
-                  const isPaid = paidReclubIds.has(player.reclubUserId);
-                  return (
-                    <button
-                      key={player.reclubUserId}
-                      type="button"
-                      onClick={() => handleAvatarTap(player)}
-                      className="flex flex-col items-center"
-                    >
-                      <div className="relative">
-                        {player.isDefaultAvatar ? (
-                          <div
-                            className={cn(
-                              "flex h-[52px] w-[52px] items-center justify-center rounded-full text-lg font-bold text-white",
-                              isPaid && "ring-[3px] ring-green-500"
-                            )}
-                            style={{ backgroundColor: initialsColor(player.name) }}
-                          >
-                            {playerInitials(player.name)}
-                          </div>
+                    <div className="mb-3 flex items-center gap-2">
+                      <p className="flex-1 truncate text-sm font-bold text-white">{roster.eventName}</p>
+                      <span className="shrink-0 text-xs text-neutral-400">
+                        {rosterPaid} / {roster.players.length}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={rosterLoading}
+                        onClick={() => refreshSingleRoster(roster.referenceCode)}
+                        className="ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-neutral-800 text-neutral-400 transition-colors hover:bg-neutral-700 hover:text-white disabled:opacity-50"
+                      >
+                        {rosterLoading ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
                         ) : (
-                          <img
-                            src={player.avatarUrl}
-                            alt=""
-                            className={cn(
-                              "h-[52px] w-[52px] rounded-full object-cover",
-                              isPaid && "ring-[3px] ring-green-500"
-                            )}
-                          />
+                          <RefreshCw className="h-3.5 w-3.5" aria-hidden />
                         )}
-                        {isPaid && (
-                          <div className="absolute -top-0.5 -right-0.5 flex h-[20px] w-[20px] items-center justify-center rounded-full border-2 border-neutral-900 bg-green-500">
-                            <Check className="h-3 w-3 text-white" strokeWidth={3} aria-hidden />
-                          </div>
-                        )}
-                      </div>
-                      <p className="mt-1 w-full truncate text-center text-[11px] text-neutral-400">
-                        {player.name}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-2">
+                      {roster.players.map((player) => {
+                        const isPaid = paidReclubIds.has(player.reclubUserId);
+                        return (
+                          <button
+                            key={player.reclubUserId}
+                            type="button"
+                            onClick={() => handleAvatarTap(player)}
+                            className="flex flex-col items-center"
+                          >
+                            <div className="relative">
+                              {player.isDefaultAvatar ? (
+                                <div
+                                  className={cn(
+                                    "flex h-[52px] w-[52px] items-center justify-center rounded-full text-lg font-bold text-white",
+                                    isPaid && "ring-[3px] ring-green-500"
+                                  )}
+                                  style={{ backgroundColor: initialsColor(player.name) }}
+                                >
+                                  {playerInitials(player.name)}
+                                </div>
+                              ) : (
+                                <img
+                                  src={player.avatarUrl}
+                                  alt=""
+                                  className={cn(
+                                    "h-[52px] w-[52px] rounded-full object-cover",
+                                    isPaid && "ring-[3px] ring-green-500"
+                                  )}
+                                />
+                              )}
+                              {isPaid && (
+                                <div className="absolute -top-0.5 -right-0.5 flex h-[20px] w-[20px] items-center justify-center rounded-full border-2 border-neutral-900 bg-green-500">
+                                  <Check className="h-3 w-3 text-white" strokeWidth={3} aria-hidden />
+                                </div>
+                              )}
+                            </div>
+                            <p className="mt-1 w-full truncate text-center text-[11px] text-neutral-400">
+                              {player.name}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
 
               {unmatchedPayments.length > 0 && (
                 <>
@@ -679,7 +768,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
         </div>
       )}
 
-      {/* Event Picker Modal */}
+      {/* Event Picker Modal — multi-select */}
       {showEventPicker && (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/60"
@@ -692,27 +781,56 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
             className="w-full max-w-lg rounded-t-2xl border-t border-neutral-700 bg-neutral-900 pb-8"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="py-4 text-center text-base font-bold text-white">Chọn sự kiện</p>
+            <p className="py-4 text-center text-base font-bold text-white">
+              {t("staff.sessionPaymentsDetail.reclubSelectEvents")}
+            </p>
             <div className="max-h-[50dvh] overflow-y-auto">
-              {events.map((ev) => (
-                <button
-                  key={ev.referenceCode}
-                  type="button"
-                  onClick={() => fetchAndSaveRoster(ev.referenceCode)}
-                  className="flex w-full items-center justify-between border-b border-neutral-800 px-5 py-3.5 text-left transition-colors hover:bg-neutral-800/60"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-white">{ev.name}</p>
-                    <p className="mt-0.5 text-xs text-neutral-400">
-                      {new Date(ev.startDatetime * 1000).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </p>
-                  </div>
-                  <span className="text-xs text-neutral-500">{ev.confirmedCount} xác nhận</span>
-                </button>
-              ))}
+              {events.map((ev) => {
+                const selected = selectedEventCodes.has(ev.referenceCode);
+                return (
+                  <button
+                    key={ev.referenceCode}
+                    type="button"
+                    onClick={() => {
+                      setSelectedEventCodes((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(ev.referenceCode)) next.delete(ev.referenceCode);
+                        else next.add(ev.referenceCode);
+                        return next;
+                      });
+                    }}
+                    className="flex w-full items-center gap-3 border-b border-neutral-800 px-5 py-3.5 text-left transition-colors hover:bg-neutral-800/60"
+                  >
+                    <div className={cn(
+                      "flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2",
+                      selected ? "border-blue-500 bg-blue-500" : "border-neutral-600"
+                    )}>
+                      {selected && <Check className="h-4 w-4 text-white" strokeWidth={3} aria-hidden />}
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-white">{ev.name}</p>
+                      <p className="mt-0.5 text-xs text-neutral-400">
+                        {new Date(ev.startDatetime * 1000).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                    </div>
+                    <span className="text-xs text-neutral-500">{ev.confirmedCount} xác nhận</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="px-5 pt-3">
+              <button
+                type="button"
+                disabled={selectedEventCodes.size === 0}
+                onClick={() => fetchAndSaveRosters([...selectedEventCodes])}
+                className="flex h-11 w-full items-center justify-center rounded-lg bg-blue-500 text-[15px] font-semibold text-white transition-opacity disabled:opacity-40"
+              >
+                {t("staff.sessionPaymentsDetail.reclubContinue")}
+                {selectedEventCodes.size > 0 && ` (${t("staff.sessionPaymentsDetail.reclubSelectedCount", { count: selectedEventCodes.size })})`}
+              </button>
             </div>
           </div>
         </div>

@@ -37,10 +37,16 @@ interface ReclubRosterData {
   players: ReclubPlayer[];
 }
 
+interface StoredRosterEntry {
+  referenceCode: string;
+  eventName: string;
+  players: ReclubPlayer[];
+}
+
 interface SessionWithReclub extends Session {
   reclubReferenceCode?: string | null;
   reclubEventName?: string | null;
-  reclubRoster?: ReclubPlayer[] | null;
+  reclubRoster?: ReclubPlayer[] | StoredRosterEntry[] | null;
 }
 
 interface PaidPaymentRow {
@@ -126,13 +132,28 @@ export function SessionTabScreen() {
   const [reclubGroupId, setReclubGroupId] = useState<number | null>(null);
   const [paidPlayers, setPaidPlayers] = useState<PaidPlayerFull[]>([]);
 
-  const existingRoster = useMemo<ReclubRosterData | null>(() => {
-    if (!session?.reclubReferenceCode || !session.reclubRoster) return null;
-    return {
-      referenceCode: session.reclubReferenceCode,
-      eventName: session.reclubEventName ?? "",
-      players: session.reclubRoster as ReclubPlayer[],
-    };
+  const existingRosters = useMemo<ReclubRosterData[] | null>(() => {
+    if (!session?.reclubRoster) return null;
+    const raw = session.reclubRoster as unknown;
+    // New format: array of roster objects with referenceCode
+    if (
+      Array.isArray(raw) &&
+      raw.length > 0 &&
+      typeof raw[0] === "object" &&
+      raw[0] !== null &&
+      "referenceCode" in raw[0]
+    ) {
+      return raw as ReclubRosterData[];
+    }
+    // Old format: flat array of players — wrap with legacy fields
+    if (Array.isArray(raw) && session.reclubReferenceCode) {
+      return [{
+        referenceCode: session.reclubReferenceCode,
+        eventName: session.reclubEventName ?? "",
+        players: raw as ReclubPlayer[],
+      }];
+    }
+    return null;
   }, [session?.reclubReferenceCode, session?.reclubEventName, session?.reclubRoster]);
 
   const fetchState = useCallback(async () => {
@@ -345,17 +366,21 @@ export function SessionTabScreen() {
           <ReclubRosterSection
             sessionId={session.id}
             reclubGroupId={reclubGroupId}
-            existingRoster={existingRoster}
+            existingRosters={existingRosters}
             paidPlayers={paidPlayers}
             onPlayerLinked={() => { fetchPaidPlayers(); }}
-            onRosterSaved={(roster) => {
+            onRosterSaved={(savedRosters) => {
               setSession((prev) =>
                 prev
                   ? {
                       ...prev,
-                      reclubReferenceCode: roster.referenceCode,
-                      reclubEventName: roster.eventName,
-                      reclubRoster: roster.players,
+                      reclubReferenceCode: savedRosters[0]?.referenceCode ?? null,
+                      reclubEventName: savedRosters[0]?.eventName ?? null,
+                      reclubRoster: savedRosters.map((r) => ({
+                        referenceCode: r.referenceCode,
+                        eventName: r.eventName,
+                        players: r.players,
+                      })),
                     }
                   : prev
               );
