@@ -54,6 +54,8 @@ interface PendingPaymentState {
   playerName?: string | null;
   playerPhone?: string | null;
   skillLevel?: CourtPaySkillLevelUI;
+  bankBin?: string | null;
+  bankAccount?: string | null;
 }
 
 function toPendingPayment(
@@ -66,6 +68,8 @@ function toPendingPayment(
     playerPhone?: string | null;
     skillLevel?: string | null;
     partyCount?: number;
+    bankBin?: string | null;
+    bankAccount?: string | null;
   } | null,
   checkInPlayerId: string
 ): PendingPaymentState | null {
@@ -81,6 +85,8 @@ function toPendingPayment(
     partyCount,
     playerName: data.playerName ?? null,
     playerPhone: data.playerPhone ?? null,
+    bankBin: data.bankBin ?? null,
+    bankAccount: data.bankAccount ?? null,
     ...(parsedLevel ? { skillLevel: parsedLevel } : {}),
   };
 }
@@ -432,6 +438,8 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
             partyCount?: number;
             checkedIn?: boolean;
             free?: boolean;
+            bankBin?: string | null;
+            bankAccount?: string | null;
           }>("/api/courtpay/pay-session", {
             venueCode: venueId,
             playerId: data.player.id,
@@ -539,6 +547,8 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
         partyCount?: number;
         checkedIn?: boolean;
         free?: boolean;
+        bankBin?: string | null;
+        bankAccount?: string | null;
       }>("/api/courtpay/pay-session", {
         venueCode: venueId,
         playerId: checkInPlayerId,
@@ -596,6 +606,8 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
         partyCount?: number;
         checkedIn?: boolean;
         free?: boolean;
+        bankBin?: string | null;
+        bankAccount?: string | null;
       }>("/api/courtpay/register", {
         venueCode: venueId,
         imageBase64: faceBase64,
@@ -669,6 +681,8 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
         partyCount?: number;
         checkedIn?: boolean;
         free?: boolean;
+        bankBin?: string | null;
+        bankAccount?: string | null;
       }>("/api/courtpay/register-walk-in", {
         venueCode: venueId,
         name: noFaceName.trim(),
@@ -715,6 +729,8 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
           vietQR?: string | null;
           skillLevel?: string | null;
           partyCount?: number;
+          bankBin?: string | null;
+          bankAccount?: string | null;
         }>("/api/courtpay/pay-session", {
           venueCode: venueId,
           playerId: pendingPayment.checkInPlayerId,
@@ -733,6 +749,8 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
             qrUrl: res.vietQR ?? prev.qrUrl,
             partyCount: pc,
             skillLevel: lvl ?? prev.skillLevel,
+            bankBin: res.bankBin ?? prev.bankBin,
+            bankAccount: res.bankAccount ?? prev.bankAccount,
           };
         });
       } catch (err) {
@@ -802,6 +820,8 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
             amount: pendingPayment.amount,
             paymentRef: pendingPayment.paymentRef,
             skillLevel: pendingPayment.skillLevel,
+            bankBin: pendingPayment.bankBin,
+            bankAccount: pendingPayment.bankAccount,
           }}
           partyCount={sessionPartyCount}
           partyAdjusting={partyAdjusting}

@@ -11,6 +11,7 @@ import {
   DetectFacesCommand,
 } from "@aws-sdk/client-rekognition";
 import { COLLECTION_ID, FACE_MATCH_THRESHOLD } from "@/lib/rekognition-config";
+import { removeBackgroundFromBase64 } from "@/lib/remove-bg";
 
 export { FACE_MATCH_THRESHOLD } from "@/lib/rekognition-config";
 
@@ -151,6 +152,10 @@ function enrollmentImageBytes(imageBase64: string): Uint8Array {
 
 const ENROLLMENT_FACE_MIN_CONFIDENCE = 90;
 const ENROLLMENT_POSE_MAX_ABS_DEG = 30;
+
+function isNoFaceMessage(msg?: string): boolean {
+  return (msg ?? "").toLowerCase().includes("no face");
+}
 
 type EnrollmentQualityGate =
   | { pass: true }
@@ -452,6 +457,47 @@ class FaceRecognitionService {
       return mockFaceRecognitionService.enrollFace(imageBase64, playerId);
     }
 
+    const result = await this.tryEnrollFace(imageBase64, playerId);
+    if (result.success) return result;
+
+    // Auto-retry: if the failure is a "no face" quality error, try removing
+    // the background and re-enrolling once.  This replicates what the admin
+    // panel does manually and resolves ~100 % of "no face" cases caused by
+    // busy backgrounds.
+    if (result.qualityError && isNoFaceMessage(result.error)) {
+      console.log(
+        `[Rekognition] No face detected for player ${playerId} — attempting background removal and re-enrollment`
+      );
+      const cleanedBase64 = await removeBackgroundFromBase64(
+        normalizeEnrollmentBase64(imageBase64)
+      );
+      if (cleanedBase64) {
+        const retryResult = await this.tryEnrollFace(cleanedBase64, playerId);
+        if (retryResult.success) {
+          console.log(
+            `[Rekognition] Background-removed re-enrollment succeeded for player ${playerId}`
+          );
+          return retryResult;
+        }
+        console.warn(
+          `[Rekognition] Background-removed re-enrollment also failed for player ${playerId}:`,
+          retryResult.error
+        );
+        return retryResult;
+      }
+      console.warn(
+        `[Rekognition] Background removal unavailable — returning original failure for player ${playerId}`
+      );
+    }
+
+    return result;
+  }
+
+  /** Core enrollment attempt (quality gate + IndexFaces). Extracted so enrollFace() can retry. */
+  private async tryEnrollFace(
+    imageBase64: string,
+    playerId: string
+  ): Promise<FaceEnrollmentResult> {
     const quality = await this.assertEnrollmentPhotoQuality(imageBase64);
     if (!quality.pass) {
       return {

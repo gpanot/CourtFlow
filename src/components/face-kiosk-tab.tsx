@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { QRCodeSVG } from "qrcode.react";
+import { buildVietQRPayload } from "@/lib/vietqr-payload";
 import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
@@ -67,6 +69,9 @@ type ProcessFaceResponse = {
   alreadyCheckedIn?: boolean;
   playerName?: string;
   error?: string;
+  bankBin?: string | null;
+  bankAccount?: string | null;
+  paymentRef?: string | null;
 };
 
 type PaymentData = {
@@ -75,6 +80,9 @@ type PaymentData = {
   vietQR: string | null;
   playerName: string;
   skillLevel?: string | null;
+  bankBin?: string | null;
+  bankAccount?: string | null;
+  paymentRef?: string | null;
 };
 
 type PhoneLookupResponse = {
@@ -137,6 +145,17 @@ export function FaceKioskTab({ venueId, hasSession = true }: FaceKioskTabProps) 
   const [phoneFormError, setPhoneFormError] = useState("");
   const [payment, setPayment] = useState<PaymentData | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const paymentQRPayload = useMemo(() => {
+    if (payment?.bankBin && payment.bankAccount && payment.paymentRef) {
+      return buildVietQRPayload({
+        bankBin: payment.bankBin,
+        accountNumber: payment.bankAccount,
+        amount: payment.amount,
+        paymentRef: payment.paymentRef,
+      });
+    }
+    return null;
+  }, [payment?.bankBin, payment?.bankAccount, payment?.amount, payment?.paymentRef]);
 
   const clearPaymentTimer = useCallback(() => {
     if (paymentTimerRef.current) {
@@ -192,6 +211,9 @@ export function FaceKioskTab({ venueId, hasSession = true }: FaceKioskTabProps) 
           vietQR: response.vietQR || null,
           playerName: response.playerName || response.displayName || "",
           skillLevel: response.skillLevel ?? null,
+          bankBin: response.bankBin ?? null,
+          bankAccount: response.bankAccount ?? null,
+          paymentRef: response.paymentRef ?? null,
         });
         setState("payment_waiting");
         cameraRef.current?.stopCamera();
@@ -367,6 +389,9 @@ export function FaceKioskTab({ venueId, hasSession = true }: FaceKioskTabProps) 
           vietQR: response.vietQR || null,
           playerName: response.playerName || phonePreview?.player.name || "",
           skillLevel: response.skillLevel ?? phonePreview?.player.skillLevel ?? null,
+          bankBin: response.bankBin ?? null,
+          bankAccount: response.bankAccount ?? null,
+          paymentRef: response.paymentRef ?? null,
         });
         setState("payment_waiting");
         paymentTimerRef.current = setTimeout(() => {
@@ -694,14 +719,14 @@ export function FaceKioskTab({ venueId, hasSession = true }: FaceKioskTabProps) 
             {state === "payment_waiting" && payment ? (
               <div className="flex w-full max-w-md flex-col gap-4 rounded-xl border border-neutral-800 bg-neutral-900 p-6 text-center">
                 <h3 className="text-xl font-semibold text-white">{t("tablet.checkInScanner.payReturningTitle")}</h3>
-                {payment.vietQR ? (
+                {paymentQRPayload ? (
                   <div
                     className={cn(
                       "mx-auto rounded-2xl bg-white p-3",
                       courtPayQrFrameClass(payment.skillLevel)
                     )}
                   >
-                    <img src={payment.vietQR} alt="VietQR" className="w-60 max-w-[70vw] object-contain" />
+                    <QRCodeSVG value={paymentQRPayload} size={240} level="M" className="max-w-[70vw]" />
                   </div>
                 ) : (
                   <div className="rounded-2xl border-2 border-dashed border-neutral-600 bg-neutral-950 p-6 text-center">

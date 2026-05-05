@@ -101,6 +101,8 @@ interface PendingPaymentState {
   playerName: string;
   partyCount: number;
   skillLevel?: CourtPaySkillLevelUI;
+  bankBin?: string | null;
+  bankAccount?: string | null;
 }
 
 interface ActiveSubInfo {
@@ -710,6 +712,8 @@ export function CourtPayCheckInScreen({
         free?: boolean;
         subscription?: ActiveSubInfo | null;
         latestSubscription?: ActiveSubInfo | null;
+        bankBin?: string | null;
+        bankAccount?: string | null;
       }>("/api/courtpay/pay-session", {
         venueCode: venueId,
         playerId: targetPlayer.id,
@@ -753,6 +757,8 @@ export function CourtPayCheckInScreen({
           playerName: targetPlayer.name,
           partyCount: pc,
           skillLevel: parseCourtPaySkillLevel(levelRaw),
+          bankBin: res.bankBin ?? null,
+          bankAccount: res.bankAccount ?? null,
         });
         setConfirmedSubInfo(null);
         setStep("awaiting_payment");
@@ -818,6 +824,8 @@ export function CourtPayCheckInScreen({
           vietQR?: string | null;
           skillLevel?: string | null;
           partyCount?: number;
+          bankBin?: string | null;
+          bankAccount?: string | null;
         }>("/api/courtpay/pay-session", {
           venueCode: venueId,
           playerId: player.id,
@@ -846,6 +854,8 @@ export function CourtPayCheckInScreen({
             qrUrl: res.vietQR ?? prev.qrUrl,
             partyCount: pc,
             skillLevel: lvl ?? prev.skillLevel,
+            bankBin: res.bankBin ?? prev.bankBin,
+            bankAccount: res.bankAccount ?? prev.bankAccount,
           };
         });
       } catch (err) {
@@ -901,6 +911,8 @@ export function CourtPayCheckInScreen({
         partyCount?: number;
         checkedIn?: boolean;
         subscription?: ActiveSubInfo | null;
+        bankBin?: string | null;
+        bankAccount?: string | null;
       }>("/api/courtpay/register", {
         venueCode: venueId,
         name: name.trim(),
@@ -940,6 +952,8 @@ export function CourtPayCheckInScreen({
           playerName: registeredPlayer.name,
           partyCount: pc,
           skillLevel: parseCourtPaySkillLevel(levelRaw),
+          bankBin: reg.bankBin ?? null,
+          bankAccount: reg.bankAccount ?? null,
         });
         setConfirmedSubInfo(null);
         setStep("awaiting_payment");
@@ -2040,6 +2054,8 @@ export function CourtPayCheckInScreen({
               amount: pendingPayment.amount,
               paymentRef: pendingPayment.paymentRef,
               skillLevel: pendingPayment.skillLevel,
+              bankBin: pendingPayment.bankBin,
+              bankAccount: pendingPayment.bankAccount,
             }}
             partyCount={sessionPartyCount}
             partyAdjusting={partyAdjusting}

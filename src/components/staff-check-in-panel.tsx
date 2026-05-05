@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
+import { buildVietQRPayload } from "@/lib/vietqr-payload";
 import { useTranslation } from "react-i18next";
 import { api, ApiRequestError } from "@/lib/api-client";
 import {
@@ -88,6 +90,10 @@ interface PendingPaymentData {
   playerName: string;
   skillLevel: string;
   gender: string;
+  bankBin?: string | null;
+  bankAccount?: string | null;
+  /** Payment description used as addInfo in the QR (matches what Sepay watches for). */
+  paymentRef?: string | null;
 }
 
 type NoFaceStep = 1 | 2 | 3;
@@ -183,6 +189,17 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
   const phoneCheckAbortRef = useRef<AbortController | null>(null);
   const paymentTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [pendingPayment, setPendingPayment] = useState<PendingPaymentData | null>(null);
+  const pendingQRPayload = useMemo(() => {
+    if (pendingPayment?.bankBin && pendingPayment.bankAccount && pendingPayment.paymentRef) {
+      return buildVietQRPayload({
+        bankBin: pendingPayment.bankBin,
+        accountNumber: pendingPayment.bankAccount,
+        amount: pendingPayment.amount,
+        paymentRef: pendingPayment.paymentRef,
+      });
+    }
+    return null;
+  }, [pendingPayment?.bankBin, pendingPayment?.bankAccount, pendingPayment?.amount, pendingPayment?.paymentRef]);
   const [paymentMode, setPaymentMode] = useState<"vietqr" | "cash">("vietqr");
   const [paymentLoading, setPaymentLoading] = useState(false);
   const [noFaceOpen, setNoFaceOpen] = useState(false);
@@ -369,6 +386,8 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
         amount: number;
         vietQR: string | null;
         playerName: string;
+        bankBin?: string | null;
+        bankAccount?: string | null;
       }>("/api/kiosk/register", {
         venueId,
         name: trimmed,
@@ -384,6 +403,9 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
         playerName: res.playerName,
         skillLevel: skill,
         gender,
+        bankBin: res.bankBin ?? null,
+        bankAccount: res.bankAccount ?? null,
+        paymentRef: `${trimmed} NEW ${new Date().toISOString().slice(0, 10)}`,
       });
       setPaymentMode("vietqr");
       clearPaymentTimer();
@@ -444,6 +466,9 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
         amount: number;
         vietQR: string | null;
         playerName: string;
+        paymentRef?: string | null;
+        bankBin?: string | null;
+        bankAccount?: string | null;
       }>("/api/courtpay/register-walk-in", {
         venueCode: venueId,
         name: trimmed,
@@ -466,6 +491,9 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
           playerName: res.playerName,
           skillLevel: noFaceSkill,
           gender: noFaceGender,
+          bankBin: res.bankBin ?? null,
+          bankAccount: res.bankAccount ?? null,
+          paymentRef: res.paymentRef ?? null,
         });
         setPaymentMode("vietqr");
         clearPaymentTimer();
@@ -1540,14 +1568,14 @@ ${test.error ? `Error: ${test.error}` : ''}
             <h3 className="text-xl font-bold text-white">{t("tablet.checkInScanner.payTitle", { name: pendingPayment.playerName })}</h3>
             {paymentMode === "vietqr" ? (
               <>
-                {pendingPayment.vietQR ? (
+                {pendingQRPayload ? (
                   <div
                     className={cn(
                       "mx-auto mt-4 w-fit rounded-xl bg-white p-2",
                       courtPayQrFrameClass(pendingPayment.skillLevel)
                     )}
                   >
-                    <img src={pendingPayment.vietQR} alt="VietQR" className="h-56 w-56 object-contain" />
+                    <QRCodeSVG value={pendingQRPayload} size={224} level="M" />
                   </div>
                 ) : (
                   <p className="mt-4 text-sm text-amber-300">QR unavailable - switch to cash payment.</p>

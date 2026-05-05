@@ -130,6 +130,7 @@ export async function POST(request: NextRequest) {
         amount: existingPending.amount,
         description: `${playerName} ${today}`,
       });
+      const resumePaymentRef = `${playerName} ${new Date().toISOString().slice(0, 10)}`;
       return json({
         pendingPaymentId: existingPending.id,
         playerId,
@@ -140,9 +141,9 @@ export async function POST(request: NextRequest) {
         skillLevel: playerRecord.skillLevel,
         isReturning: true,
         resuming: true,
-        bankName: venue.bankName,
+        bankBin: venue.bankName,
         bankAccount: venue.bankAccount,
-        bankOwnerName: venue.bankOwnerName,
+        paymentRef: resumePaymentRef,
       });
     }
 
@@ -193,9 +194,9 @@ export async function POST(request: NextRequest) {
       playerPhone,
       skillLevel: playerRecord.skillLevel,
       isReturning: true,
-      bankName: venue.bankName,
+      bankBin: venue.bankName,
       bankAccount: venue.bankAccount,
-      bankOwnerName: venue.bankOwnerName,
+      paymentRef: `${playerName} ${today}`,
     });
   } catch (e) {
     console.error("[Kiosk Checkin Payment] Error:", e);

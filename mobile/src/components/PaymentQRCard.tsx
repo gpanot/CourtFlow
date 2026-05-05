@@ -1,5 +1,7 @@
-import React from "react";
-import { View, Text, Image, StyleSheet, ActivityIndicator } from "react-native";
+import React, { useMemo } from "react";
+import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
+import QRCode from "react-native-qrcode-svg";
+import { buildVietQRPayload } from "../lib/vietqr-payload";
 
 interface Props {
   qrUrl: string | null;
@@ -8,18 +10,23 @@ interface Props {
   waiting?: boolean;
   refLabel?: string;
   waitingLabel?: string;
+  bankBin?: string | null;
+  bankAccount?: string | null;
 }
 
-export function PaymentQRCard({ qrUrl, amount, paymentRef, waiting, refLabel = "Ref:", waitingLabel = "Waiting for payment..." }: Props) {
+export function PaymentQRCard({ qrUrl, amount, paymentRef, waiting, refLabel = "Ref:", waitingLabel = "Waiting for payment...", bankBin, bankAccount }: Props) {
+  const qrPayload = useMemo(() => {
+    if (bankBin && bankAccount) {
+      return buildVietQRPayload({ bankBin, accountNumber: bankAccount, amount, paymentRef });
+    }
+    return null;
+  }, [bankBin, bankAccount, amount, paymentRef]);
+
   return (
     <View style={styles.container}>
-      {qrUrl ? (
+      {qrPayload ? (
         <View style={styles.qrWrap}>
-          <Image
-            source={{ uri: qrUrl }}
-            style={styles.qrImage}
-            resizeMode="contain"
-          />
+          <QRCode value={qrPayload} size={240} backgroundColor="#ffffff" color="#000000" ecl="M" />
         </View>
       ) : null}
       <Text style={styles.amount}>{amount.toLocaleString()} VND</Text>
@@ -44,10 +51,6 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 8,
-  },
-  qrImage: {
-    width: 240,
-    height: 240,
   },
   amount: {
     fontSize: 24,

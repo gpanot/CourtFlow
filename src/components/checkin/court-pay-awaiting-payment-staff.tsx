@@ -1,10 +1,13 @@
 "use client";
 
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { QRCodeSVG } from "qrcode.react";
 import staffI18n from "@/i18n/staff-i18n";
 import { cn } from "@/lib/cn";
 import { COURTPAY_LEVEL_QR_FRAME, type CourtPaySkillLevelUI } from "@/modules/courtpay/lib/skill-level-ui";
 import { Loader2, Minus, Plus, Wallet } from "lucide-react";
+import { buildVietQRPayload } from "@/lib/vietqr-payload";
 
 export const COURTPAY_SESSION_PARTY_MAX = 4;
 
@@ -13,6 +16,9 @@ export interface CourtPayAwaitingPaymentData {
   amount: number;
   paymentRef: string;
   skillLevel?: CourtPaySkillLevelUI;
+  /** Used for client-side QR generation (no CDN round-trip). */
+  bankBin?: string | null;
+  bankAccount?: string | null;
 }
 
 function formatVND(amount: number) {
@@ -39,6 +45,18 @@ export function CourtPayAwaitingPaymentStaff({
   onCancel: () => void;
 }) {
   const { t } = useTranslation("translation", { i18n: staffI18n });
+
+  const qrPayload = useMemo(() => {
+    if (pending.bankBin && pending.bankAccount) {
+      return buildVietQRPayload({
+        bankBin: pending.bankBin,
+        accountNumber: pending.bankAccount,
+        amount: pending.amount,
+        paymentRef: pending.paymentRef,
+      });
+    }
+    return null;
+  }, [pending.bankBin, pending.bankAccount, pending.amount, pending.paymentRef]);
 
   const title = playerName.trim()
     ? t("staff.courtPayAwaitingPayment.payTitle", { name: playerName.trim() })
@@ -91,15 +109,19 @@ export function CourtPayAwaitingPaymentStaff({
           </button>
         </div>
 
-        {pending.qrUrl ? (
+        {qrPayload ? (
           <div
             className={cn(
               "rounded-2xl bg-white p-3",
               pending.skillLevel ? COURTPAY_LEVEL_QR_FRAME[pending.skillLevel] : ""
             )}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={pending.qrUrl} alt="" className="mx-auto h-56 w-56 max-w-[70vw] object-contain sm:h-64 sm:w-64" />
+            <QRCodeSVG
+              value={qrPayload}
+              size={224}
+              level="M"
+              className="mx-auto block max-w-[70vw]"
+            />
           </div>
         ) : null}
 

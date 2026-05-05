@@ -19,6 +19,7 @@ import {
   Platform,
   Switch,
   Share,
+  Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import QRCode from "react-native-qrcode-svg";
@@ -257,7 +258,7 @@ function createStyles(t: AppColors) {
     linkText: { color: t.muted, fontSize: 13 },
 
     // ── Form modal ──────────────────────────────────────────────────────────
-    modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)" },
+    modalOverlay: { flex: 1, justifyContent: "flex-end" as const, backgroundColor: "rgba(0,0,0,0.55)" },
     modalCard: {
       backgroundColor: t.bg,
       borderTopLeftRadius: 16,
@@ -265,8 +266,7 @@ function createStyles(t: AppColors) {
       borderWidth: 1,
       borderColor: t.border,
       padding: 20,
-      marginTop: "auto" as unknown as number,
-      maxHeight: "90%",
+      maxHeight: Math.round(Dimensions.get("window").height * 0.85),
     },
     modalTitle: {
       fontSize: 17,
@@ -1077,18 +1077,18 @@ export function StaffSubscriptionsScreen() {
       </Modal>
 
       {/* ── Create / Edit Modal ───────────────────────────────────────────── */}
-      <Modal visible={showForm} animationType="slide" transparent>
+      <Modal visible={showForm} animationType="slide" transparent onRequestClose={() => { setShowForm(false); setEditing(null); }}>
         <KeyboardAvoidingView
-          style={styles.modalOverlay}
+          style={{ flex: 1 }}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
-          <View style={styles.modalCard}>
-            <ScrollView
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-              style={{ flex: 1 }}
-              contentContainerStyle={{ paddingBottom: 24 }}
-            >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 24 }}
+              >
               <Text style={styles.modalTitle}>
                 {editing ? t("subsModalEditTitle") : t("subsModalCreateTitle")}
               </Text>
@@ -1265,7 +1265,8 @@ export function StaffSubscriptionsScreen() {
                   )}
                 </TouchableOpacity>
               </View>
-            </ScrollView>
+              </ScrollView>
+            </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>

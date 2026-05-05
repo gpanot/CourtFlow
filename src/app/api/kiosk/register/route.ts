@@ -71,8 +71,12 @@ export async function POST(request: NextRequest) {
     });
     const enrollment = await faceRecognitionService.enrollFace(imageBase64, player.id);
     if (!enrollment.success) {
-      await prisma.player.delete({ where: { id: player.id } });
-      return error(enrollment.error || "Face enrollment failed", 400);
+      // Non-blocking — player can still proceed to payment even without face enrollment.
+      console.warn("[kiosk/register] Non-blocking face enrollment failure:", {
+        playerId: player.id,
+        error: enrollment.error ?? null,
+        qualityError: enrollment.qualityError === true,
+      });
     }
 
     try {
@@ -126,9 +130,8 @@ export async function POST(request: NextRequest) {
       vietQR,
       playerName: player.name,
       playerPhone: player.phone,
-      bankName: venue.bankName,
+      bankBin: venue.bankName,
       bankAccount: venue.bankAccount,
-      bankOwnerName: venue.bankOwnerName,
     });
   } catch (e) {
     console.error("[Kiosk Register] Error:", e);

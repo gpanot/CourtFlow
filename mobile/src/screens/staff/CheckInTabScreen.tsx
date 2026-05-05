@@ -56,6 +56,8 @@ interface PendingPaymentState {
   playerName?: string | null;
   playerPhone?: string | null;
   skillLevel?: CourtPaySkillLevelUI;
+  bankBin?: string | null;
+  bankAccount?: string | null;
 }
 
 type FaceQualityTier = "good" | "fair" | "poor";
@@ -202,6 +204,8 @@ export function CheckInTabScreen() {
       playerPhone?: string | null;
       skillLevel?: string | null;
       partyCount?: number;
+      bankBin?: string | null;
+      bankAccount?: string | null;
     } | null,
     checkInPlayerId: string
   ) => {
@@ -217,6 +221,8 @@ export function CheckInTabScreen() {
       partyCount,
       playerName: data.playerName ?? null,
       playerPhone: data.playerPhone ?? null,
+      bankBin: data.bankBin ?? null,
+      bankAccount: data.bankAccount ?? null,
       ...(parsedLevel ? { skillLevel: parsedLevel } : {}),
     };
   };
@@ -633,6 +639,8 @@ export function CheckInTabScreen() {
             amount: res.amount ?? prev.amount,
             paymentRef: res.paymentRef ?? prev.paymentRef,
             qrUrl: res.vietQR ?? prev.qrUrl,
+            bankBin: res.bankBin ?? prev.bankBin,
+            bankAccount: res.bankAccount ?? prev.bankAccount,
             partyCount: pc,
             skillLevel: lvl ?? prev.skillLevel,
           };
@@ -1004,6 +1012,8 @@ export function CheckInTabScreen() {
             amount: pendingPayment.amount,
             paymentRef: pendingPayment.paymentRef,
             skillLevel: pendingPayment.skillLevel,
+            bankBin: pendingPayment.bankBin,
+            bankAccount: pendingPayment.bankAccount,
           }}
           partyCount={sessionPartyCount}
           partyAdjusting={partyAdjusting}

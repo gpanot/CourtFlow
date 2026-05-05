@@ -1,6 +1,9 @@
 "use client";
 
+import { useMemo } from "react";
 import { Loader2, Banknote } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
+import { buildVietQRPayload } from "@/lib/vietqr-payload";
 
 interface PaymentScreenProps {
   amount: number;
@@ -10,6 +13,8 @@ interface PaymentScreenProps {
   waiting: boolean;
   onCashPayment: () => void;
   onCancel: () => void;
+  bankBin?: string | null;
+  bankAccount?: string | null;
 }
 
 function formatVND(amount: number) {
@@ -24,7 +29,16 @@ export function PaymentScreen({
   waiting,
   onCashPayment,
   onCancel,
+  bankBin,
+  bankAccount,
 }: PaymentScreenProps) {
+  const qrPayload = useMemo(() => {
+    if (bankBin && bankAccount) {
+      return buildVietQRPayload({ bankBin, accountNumber: bankAccount, amount, paymentRef });
+    }
+    return null;
+  }, [bankBin, bankAccount, amount, paymentRef]);
+
   return (
     <div className="flex flex-col items-center px-6 py-8 text-center">
       <h2 className="text-xl font-bold text-white">Payment</h2>
@@ -36,13 +50,11 @@ export function PaymentScreen({
         </p>
         <p className="mt-1 text-xs text-neutral-500 font-mono">{paymentRef}</p>
 
-        {vietQR && (
+        {qrPayload && (
           <div className="mt-4">
-            <img
-              src={vietQR}
-              alt="VietQR Payment"
-              className="mx-auto h-48 w-48 rounded-lg bg-white p-2"
-            />
+            <div className="mx-auto w-fit rounded-lg bg-white p-2">
+              <QRCodeSVG value={qrPayload} size={192} level="M" />
+            </div>
             <p className="mt-2 text-xs text-neutral-500">
               Scan with your banking app
             </p>

@@ -203,6 +203,8 @@ export async function createCheckInPayment(
     playerName: checkInPlayer?.name,
     playerPhone: checkInPlayer?.phone,
     skillLevel: checkInPlayer?.skillLevel ?? null,
+    bankBin: venue.bankName || null,
+    bankAccount: venue.bankAccount || null,
   };
 }
 
@@ -293,6 +295,8 @@ export async function updatePendingCheckinSessionPaymentHeadcount(input: {
     playerName: checkInPlayer?.name,
     playerPhone: checkInPlayer?.phone,
     skillLevel: checkInPlayer?.skillLevel ?? null,
+    bankBin: venue.bankName || null,
+    bankAccount: venue.bankAccount || null,
   };
 }
 

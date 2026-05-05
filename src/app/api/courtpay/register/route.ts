@@ -11,10 +11,6 @@ import { faceRecognitionService } from "@/lib/face-recognition";
 import { persistPlayerCheckInFacePhoto } from "@/lib/persist-player-check-in-photo";
 import { COLLECTION_ID } from "@/lib/rekognition-config";
 
-function isNoFaceEnrollmentError(error?: string): boolean {
-  const msg = (error ?? "").toLowerCase();
-  return msg.includes("no face");
-}
 
 export async function POST(req: Request) {
   try {
@@ -144,15 +140,7 @@ export async function POST(req: Request) {
             existingByPhone.id
           );
           if (!enrollExisting.success) {
-            if (isNoFaceEnrollmentError(enrollExisting.error)) {
-              return NextResponse.json(
-                {
-                  error: enrollExisting.error || "Face enrollment failed",
-                  qualityError: enrollExisting.qualityError === true,
-                },
-                { status: 400 }
-              );
-            }
+            // Non-blocking — player can still proceed to payment even without face enrollment.
             console.warn("[courtpay/register] Non-blocking face enrollment failure (existing):", {
               playerId: existingByPhone.id,
               error: enrollExisting.error ?? null,
@@ -186,16 +174,10 @@ export async function POST(req: Request) {
         });
         const enrollment = await faceRecognitionService.enrollFace(imageBase64, corePlayer.id);
         if (!enrollment.success) {
-          if (isNoFaceEnrollmentError(enrollment.error)) {
-            await prisma.player.delete({ where: { id: corePlayer.id } });
-            return NextResponse.json(
-              {
-                error: enrollment.error || "Face enrollment failed",
-                qualityError: enrollment.qualityError === true,
-              },
-              { status: 400 }
-            );
-          }
+          // After auto-retry with background removal inside enrollFace(), a remaining
+          // "no face" failure means the photo is genuinely unusable.  Do NOT block
+          // registration — the player can still pay and be approved by staff.
+          // They will appear as "no face" in the admin panel for manual re-enrollment later.
           console.warn("[courtpay/register] Non-blocking face enrollment failure (new):", {
             playerId: corePlayer.id,
             error: enrollment.error ?? null,

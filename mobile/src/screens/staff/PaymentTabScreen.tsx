@@ -327,6 +327,17 @@ function createStyles(t: AppColors) {
     groupOptionCurrent: { borderColor: t.blue500, backgroundColor: "rgba(37,99,235,0.12)" },
     groupModalDismiss: { alignItems: "center", paddingVertical: 10 },
     groupModalDismissText: { fontSize: 14, color: t.muted },
+    groupQuickBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: t.blue500,
+    },
+    groupQuickBtnText: { fontSize: 12, fontWeight: "600", color: t.blue500 },
   });
 }
 
@@ -354,6 +365,7 @@ export function PaymentTabScreen() {
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [groupTargetId, setGroupTargetId] = useState<string | null>(null);
+  const [groupTargetIsPending, setGroupTargetIsPending] = useState(false);
   const [groupAssigning, setGroupAssigning] = useState(false);
 
   const fetchPending = useCallback(async () => {
@@ -550,26 +562,39 @@ export function PaymentTabScreen() {
   const handleAssignGroupPayer = useCallback(
     async (targetPaymentId: string, payerPaymentId: string | null) => {
       if (!venueId) return;
-      const current = paid.find((p) => p.id === targetPaymentId) ?? null;
-      const currentGroupPayerId = current?.groupPaidByPaymentId ?? null;
-      if (currentGroupPayerId === payerPaymentId) {
-        setGroupTargetId(null);
-        return;
+
+      const isPending = groupTargetIsPending;
+
+      if (!isPending) {
+        const current = paid.find((p) => p.id === targetPaymentId) ?? null;
+        const currentGroupPayerId = current?.groupPaidByPaymentId ?? null;
+        if (currentGroupPayerId === payerPaymentId) {
+          setGroupTargetId(null);
+          return;
+        }
       }
+
       setGroupAssigning(true);
       try {
-        const payload: {
-          venueId: string;
-          pendingPaymentId: string;
-          groupPayerPaymentId?: string | null;
-        } = {
-          venueId,
-          pendingPaymentId: targetPaymentId,
-          groupPayerPaymentId: payerPaymentId,
-        };
-        await api.post("/api/staff/payment-group", payload);
+        if (isPending) {
+          const deviceName = getDeviceLabel();
+          await api.post("/api/staff/confirm-payment", {
+            pendingPaymentId: targetPaymentId,
+            ...(deviceName ? { confirmedOnDevice: deviceName } : {}),
+          });
+        }
+
+        if (payerPaymentId) {
+          await api.post("/api/staff/payment-group", {
+            venueId,
+            pendingPaymentId: targetPaymentId,
+            groupPayerPaymentId: payerPaymentId,
+          });
+        }
+
         setGroupTargetId(null);
-        await fetchPaid();
+        setGroupTargetIsPending(false);
+        await fetchAll();
       } catch (err) {
         const message =
           err instanceof ApiRequestError
@@ -581,15 +606,12 @@ export function PaymentTabScreen() {
           message.includes("HTML page instead of JSON")
             ? "This server does not have /api/staff/payment-group yet. Restart/redeploy backend, then try again."
             : message;
-        Alert.alert(
-          "Error",
-          friendly
-        );
+        Alert.alert("Error", friendly);
       } finally {
         setGroupAssigning(false);
       }
     },
-    [venueId, fetchPaid, paid]
+    [venueId, fetchAll, paid, groupTargetIsPending]
   );
 
   const renderPendingItem = ({ item }: { item: PendingPayment }) => {
@@ -677,9 +699,22 @@ export function PaymentTabScreen() {
               {t("paymentWaiting")} {formatWaitTime(item.createdAt)}
             </Text>
           </View>
-          <Text style={styles.amountRight}>
-            {item.amount?.toLocaleString()} VND
-          </Text>
+          <View style={{ alignItems: "flex-end", gap: 6 }}>
+            <Text style={styles.amountRight}>
+              {item.amount?.toLocaleString()} VND
+            </Text>
+            <TouchableOpacity
+              style={styles.groupQuickBtn}
+              onPress={() => {
+                setGroupTargetIsPending(true);
+                setGroupTargetId(item.id);
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="people-outline" size={14} color={theme.blue500} />
+              <Text style={styles.groupQuickBtnText}>{t("paymentGroup")}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.cardActions}>
@@ -882,6 +917,7 @@ export function PaymentTabScreen() {
                   onPress={() => {
                     const id = menuPaymentId;
                     setMenuPaymentId(null);
+                    setGroupTargetIsPending(false);
                     if (id) setGroupTargetId(id);
                   }}
                   activeOpacity={0.7}
@@ -911,20 +947,22 @@ export function PaymentTabScreen() {
         visible={groupTargetId !== null}
         transparent
         animationType="fade"
-        onRequestClose={() => !groupAssigning && setGroupTargetId(null)}
+        onRequestClose={() => { if (!groupAssigning) { setGroupTargetId(null); setGroupTargetIsPending(false); } }}
       >
         <View style={styles.groupModalOverlay}>
           <View style={styles.groupModalCard}>
             <Text style={styles.groupModalTitle}>{t("paymentWhichGroup")}</Text>
             <FlatList
               data={[
-                {
-                  id: "__none__",
-                  name: t("paymentGroupNone"),
-                  hint: t("paymentGroupNoneHint"),
-                  partyCount: 0,
-                  amount: 0,
-                },
+                ...(groupTargetIsPending
+                  ? []
+                  : [{
+                      id: "__none__",
+                      name: t("paymentGroupNone"),
+                      hint: t("paymentGroupNoneHint"),
+                      partyCount: 0,
+                      amount: 0,
+                    }]),
                 ...paid
                   .filter(
                     (p) =>
@@ -946,12 +984,17 @@ export function PaymentTabScreen() {
               ]}
               keyExtractor={(item) => item.id}
               contentContainerStyle={{ gap: 8 }}
+              ListEmptyComponent={
+                <Text style={styles.groupOptionHint}>{t("paymentGroupNoEligible")}</Text>
+              }
               renderItem={({ item }) => {
                 const target = paid.find((p) => p.id === groupTargetId) ?? null;
                 const isCurrent =
-                  item.id === "__none__"
-                    ? !target?.groupPaidByPaymentId
-                    : target?.groupPaidByPaymentId === item.id;
+                  !groupTargetIsPending && (
+                    item.id === "__none__"
+                      ? !target?.groupPaidByPaymentId
+                      : target?.groupPaidByPaymentId === item.id
+                  );
                 return (
                   <TouchableOpacity
                     style={[styles.groupOptionBtn, isCurrent && styles.groupOptionCurrent]}
@@ -972,7 +1015,7 @@ export function PaymentTabScreen() {
             />
             <TouchableOpacity
               style={styles.groupModalDismiss}
-              onPress={() => setGroupTargetId(null)}
+              onPress={() => { setGroupTargetId(null); setGroupTargetIsPending(false); }}
               disabled={groupAssigning}
             >
               {groupAssigning ? (

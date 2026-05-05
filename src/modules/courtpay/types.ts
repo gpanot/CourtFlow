@@ -52,6 +52,10 @@ export interface PaymentResult {
   playerPhone?: string;
   /** CheckInPlayer skill level — VietQR frame tint on kiosk. */
   skillLevel?: string | null;
+  /** Bank BIN for client-side QR generation (avoids VietQR CDN round-trip). */
+  bankBin?: string | null;
+  /** Bank account number for client-side QR generation. */
+  bankAccount?: string | null;
 }
 
 export interface SepayWebhookPayload {

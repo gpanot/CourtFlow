@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { QRCodeSVG } from "qrcode.react";
+import { buildVietQRPayload } from "@/lib/vietqr-payload";
 import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api-client";
 import {
@@ -75,6 +77,9 @@ interface PaymentData {
   isNew: boolean;
   /** Raw player skill (beginner | intermediate | advanced) for VietQR frame. */
   skillLevel?: string | null;
+  bankBin?: string | null;
+  bankAccount?: string | null;
+  paymentRef?: string | null;
 }
 
 type VenueTabletSettings = { logoSpin?: boolean };
@@ -144,6 +149,17 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
 
   const [payment, setPayment] = useState<PaymentData | null>(null);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const paymentQRPayload = useMemo(() => {
+    if (payment?.bankBin && payment.bankAccount && payment.paymentRef) {
+      return buildVietQRPayload({
+        bankBin: payment.bankBin,
+        accountNumber: payment.bankAccount,
+        amount: payment.amount,
+        paymentRef: payment.paymentRef,
+      });
+    }
+    return null;
+  }, [payment?.bankBin, payment?.bankAccount, payment?.amount, payment?.paymentRef]);
 
   const [cachedCheckIn, setCachedCheckIn] = useState<CheckInResult | null>(null);
   const [venueName, setVenueName] = useState("");
@@ -300,6 +316,9 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
           skillLevel?: string;
           error?: string;
           resuming?: boolean;
+          bankBin?: string | null;
+          bankAccount?: string | null;
+          paymentRef?: string | null;
         }>("/api/kiosk/checkin-payment", body);
 
         if (res.resultType === "needs_registration") {
@@ -341,6 +360,9 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
             playerName: res.playerName || "",
             isNew: false,
             skillLevel: res.skillLevel ?? null,
+            bankBin: res.bankBin ?? null,
+            bankAccount: res.bankAccount ?? null,
+            paymentRef: res.paymentRef ?? null,
           });
           goTo("payment_waiting");
           paymentTimerRef.current = setTimeout(() => {
@@ -586,6 +608,8 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
         amount: number;
         vietQR: string | null;
         playerName: string;
+        bankBin?: string | null;
+        bankAccount?: string | null;
       }>("/api/kiosk/register", {
         venueId,
         imageBase64: regImage,
@@ -602,6 +626,9 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
         playerName: res.playerName,
         isNew: true,
         skillLevel: regLevel,
+        bankBin: res.bankBin ?? null,
+        bankAccount: res.bankAccount ?? null,
+        paymentRef: `${regName.trim()} NEW ${new Date().toISOString().slice(0, 10)}`,
       });
       goTo("payment_waiting");
       paymentTimerRef.current = setTimeout(() => {
@@ -1110,11 +1137,11 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
               : t("tablet.checkInScanner.payReturningTitle")}
           </h2>
 
-          {payment.vietQR ? (
+          {paymentQRPayload ? (
             <div
               className={cn("rounded-2xl bg-white p-3", courtPayQrFrameClass(payment.skillLevel))}
             >
-              <img src={payment.vietQR} alt="VietQR" className="w-72 max-w-[70vw] object-contain" />
+              <QRCodeSVG value={paymentQRPayload} size={288} level="M" className="max-w-[70vw]" />
             </div>
           ) : (
             <div className="rounded-2xl border-2 border-dashed border-neutral-600 bg-neutral-900 p-8 text-center">

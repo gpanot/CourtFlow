@@ -56,6 +56,10 @@ export interface PaymentResult {
   partyCount?: number;
   playerName?: string;
   playerPhone?: string;
+  /** Bank BIN for client-side QR generation (avoids VietQR CDN round-trip). */
+  bankBin?: string | null;
+  /** Bank account number for client-side QR generation. */
+  bankAccount?: string | null;
 }
 
 export interface SepayWebhookPayload {

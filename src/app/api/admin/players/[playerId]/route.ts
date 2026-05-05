@@ -111,6 +111,23 @@ export async function DELETE(
     await prisma.coachLesson.deleteMany({ where: { playerId } });
     await prisma.booking.deleteMany({ where: { playerId } });
     await prisma.membership.deleteMany({ where: { playerId } });
+
+    // Remove any CourtPay check-in player records sharing the same phone number
+    // so the player can re-register at the kiosk without hitting a duplicate conflict.
+    if (existing.phone) {
+      const checkInPlayers = await prisma.checkInPlayer.findMany({
+        where: { phone: existing.phone },
+        select: { id: true },
+      });
+      if (checkInPlayers.length > 0) {
+        const checkInIds = checkInPlayers.map((c) => c.id);
+        await prisma.pendingPayment.deleteMany({ where: { checkInPlayerId: { in: checkInIds } } });
+        await prisma.checkInRecord.deleteMany({ where: { playerId: { in: checkInIds } } });
+        await prisma.playerSubscription.deleteMany({ where: { playerId: { in: checkInIds } } });
+        await prisma.checkInPlayer.deleteMany({ where: { id: { in: checkInIds } } });
+      }
+    }
+
     await prisma.player.delete({ where: { id: playerId } });
 
     return json({ success: true });

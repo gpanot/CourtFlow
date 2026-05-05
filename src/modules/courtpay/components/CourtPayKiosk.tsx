@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { QRCodeSVG } from "qrcode.react";
+import { buildVietQRPayload } from "@/lib/vietqr-payload";
 import {
   CameraCapture,
   type CameraCaptureHandle,
@@ -64,6 +66,8 @@ interface PaymentInfo {
   paymentRef: string;
   /** Session skill level — colored QR frame for staff. */
   skillLevel?: CourtPaySkillLevelUI;
+  bankBin?: string | null;
+  bankAccount?: string | null;
 }
 
 interface Package {
@@ -123,6 +127,17 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
   const [activeSub, setActiveSub] = useState<SubscriptionInfo | null>(null);
   const [packages, setPackages] = useState<Package[]>([]);
   const [payment, setPayment] = useState<PaymentInfo | null>(null);
+  const paymentQRPayload = useMemo(() => {
+    if (payment?.bankBin && payment.bankAccount && payment.paymentRef) {
+      return buildVietQRPayload({
+        bankBin: payment.bankBin,
+        accountNumber: payment.bankAccount,
+        amount: payment.amount,
+        paymentRef: payment.paymentRef,
+      });
+    }
+    return null;
+  }, [payment?.bankBin, payment?.bankAccount, payment?.amount, payment?.paymentRef]);
   const [isNewPlayer, setIsNewPlayer] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -666,6 +681,8 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
           vietQR?: string | null;
           paymentRef?: string | null;
           error?: string;
+          bankBin?: string | null;
+          bankAccount?: string | null;
         }>("/api/courtpay/register", {
           venueCode: venueId,
           ...regDraft,
@@ -695,6 +712,8 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
             vietQR: data.vietQR ?? null,
             paymentRef: data.paymentRef ?? "",
             skillLevel: parseCourtPaySkillLevel(regDraft.skillLevel),
+            bankBin: data.bankBin ?? null,
+            bankAccount: data.bankAccount ?? null,
           });
           goTo("payment_waiting");
           startPaymentTimeout();
@@ -722,6 +741,8 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
         vietQR: data.vietQR,
         paymentRef: data.paymentRef,
         skillLevel: parseCourtPaySkillLevel(player.skillLevel),
+        bankBin: data.bankBin ?? null,
+        bankAccount: data.bankAccount ?? null,
       });
       goTo("payment_waiting");
       startPaymentTimeout();
@@ -753,6 +774,8 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
           vietQR?: string | null;
           paymentRef?: string | null;
           error?: string;
+          bankBin?: string | null;
+          bankAccount?: string | null;
         }>("/api/courtpay/register", {
           venueCode: venueId,
           ...regDraft,
@@ -781,6 +804,8 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
             vietQR: data.vietQR ?? null,
             paymentRef: data.paymentRef ?? "",
             skillLevel: parseCourtPaySkillLevel(regDraft.skillLevel),
+            bankBin: data.bankBin ?? null,
+            bankAccount: data.bankAccount ?? null,
           });
           goTo("payment_waiting");
           startPaymentTimeout();
@@ -807,6 +832,8 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
         vietQR: data.vietQR,
         paymentRef: data.paymentRef,
         skillLevel: parseCourtPaySkillLevel(player.skillLevel),
+        bankBin: data.bankBin ?? null,
+        bankAccount: data.bankAccount ?? null,
       });
       goTo("payment_waiting");
       startPaymentTimeout();
@@ -1331,15 +1358,14 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
             {isNewPlayer ? `Payment — ${player?.name || ""}` : "Session Payment"}
           </h2>
 
-          {payment.vietQR ? (
+          {paymentQRPayload ? (
             <div
               className={cn(
                 "rounded-2xl bg-white p-3",
                 payment.skillLevel ? COURTPAY_LEVEL_QR_FRAME[payment.skillLevel] : ""
               )}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={payment.vietQR} alt="VietQR" className="w-72 max-w-[70vw] object-contain" />
+              <QRCodeSVG value={paymentQRPayload} size={288} level="M" className="max-w-[70vw]" />
             </div>
           ) : (
             <div

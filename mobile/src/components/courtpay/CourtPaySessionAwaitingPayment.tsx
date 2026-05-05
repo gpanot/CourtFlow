@@ -5,12 +5,13 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Image,
   Platform,
   useWindowDimensions,
   Animated,
   Easing,
 } from "react-native";
+import QRCode from "react-native-qrcode-svg";
+import { buildVietQRPayload } from "../../lib/vietqr-payload";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LiquidGlassSurface } from "./LiquidGlassSurface";
@@ -29,6 +30,9 @@ export interface CourtPaySessionAwaitingPaymentData {
   amount: number;
   paymentRef: string;
   skillLevel?: CourtPaySkillLevelUI;
+  /** Used for client-side QR generation (no CDN round-trip). */
+  bankBin?: string | null;
+  bankAccount?: string | null;
 }
 
 export interface CourtPaySessionAwaitingKioskTheme {
@@ -202,7 +206,19 @@ export function CourtPaySessionAwaitingPayment({
     </View>
   );
 
-  const qrBlock = pending.qrUrl ? (
+  const qrPayload = useMemo(() => {
+    if (pending.bankBin && pending.bankAccount) {
+      return buildVietQRPayload({
+        bankBin: pending.bankBin,
+        accountNumber: pending.bankAccount,
+        amount: pending.amount,
+        paymentRef: pending.paymentRef,
+      });
+    }
+    return null;
+  }, [pending.bankBin, pending.bankAccount, pending.amount, pending.paymentRef]);
+
+  const qrBlock = qrPayload ? (
     <View
       style={[
         styles.qrWrap,
@@ -210,10 +226,12 @@ export function CourtPaySessionAwaitingPayment({
         pending.skillLevel ? COURTPAY_LEVEL_QR_BORDER[pending.skillLevel] : null,
       ]}
     >
-      <Image
-        source={{ uri: pending.qrUrl }}
-        style={[styles.qrImage, { width: qrSize, height: qrSize }]}
-        resizeMode="contain"
+      <QRCode
+        value={qrPayload}
+        size={qrSize}
+        backgroundColor="#ffffff"
+        color="#000000"
+        ecl="M"
       />
     </View>
   ) : null;
@@ -500,7 +518,6 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
   },
-  qrImage: { width: 260, height: 260, maxWidth: "100%" },
   amount: { fontSize: 36, fontWeight: "700", color: "transparent" },
   ref: { fontSize: 14, color: "#737373", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" },
   refLight: { color: "#64748b" },
