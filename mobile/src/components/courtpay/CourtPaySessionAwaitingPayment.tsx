@@ -81,19 +81,17 @@ export function CourtPaySessionAwaitingPayment({
 
   /** Short phones: less vertical padding + smaller QR so content clears status + home areas. */
   const compact = windowHeight < 720;
-  const qrSize = compact ? 210 : 260;
+  const qrSize = compact ? 180 : 230;
 
   const kioskSafeStyle = useMemo(
     () => ({
       width: "100%" as const,
       maxWidth: 440,
       alignSelf: "center" as const,
-      paddingTop: insets.top + (compact ? 6 : 10),
-      paddingBottom: insets.bottom + (compact ? 12 : 16),
-      paddingLeft: insets.left,
-      paddingRight: insets.right,
+      /** Cap height so the card never extends under the status bar or home gesture area. */
+      maxHeight: windowHeight - insets.top - insets.bottom - 24,
     }),
-    [insets.top, insets.bottom, insets.left, insets.right, compact]
+    [windowHeight, insets.top, insets.bottom]
   );
 
   const staffSafeStyle = useMemo(
@@ -336,34 +334,10 @@ export function CourtPaySessionAwaitingPayment({
     </TouchableOpacity>
   );
 
-  const innerPadStyle =
-    variant === "kiosk"
-      ? [
-          styles.payWaitGlassInner,
-          compact && styles.payWaitGlassInnerCompact,
-        ]
-      : [staffStyles.inner, compact && staffStyles.innerCompact];
-
-  const inner = (
-    <View style={innerPadStyle}>
-      <Text
-        style={[
-          styles.formTitle,
-          variant === "kiosk" && kioskTheme?.isLight && styles.formTitleLight,
-          variant === "staff" && staffStyles.formTitle,
-        ]}
-      >
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.payScanHint,
-          variant === "kiosk" && kioskTheme?.isLight && styles.payScanHintLight,
-          variant === "staff" && staffStyles.payScanHint,
-        ]}
-      >
-        {t("payScanQR")}
-      </Text>
+  const staffInner = (
+    <View style={[staffStyles.inner, compact && staffStyles.innerCompact]}>
+      <Text style={staffStyles.formTitle}>{title}</Text>
+      <Text style={staffStyles.payScanHint}>{t("payScanQR")}</Text>
       {counter}
       {qrBlock}
       {amountEl}
@@ -376,21 +350,49 @@ export function CourtPaySessionAwaitingPayment({
 
   if (variant === "kiosk" && kioskTheme) {
     return (
-      <View style={kioskSafeStyle}>
-        <LiquidGlassSurface
-          style={styles.payWaitGlass}
-          tintColor={kioskTheme.glassTint}
-          mode={kioskTheme.themeMode}
+      <LiquidGlassSurface
+        style={[styles.payWaitGlass, kioskSafeStyle]}
+        tintColor={kioskTheme.glassTint}
+        mode={kioskTheme.themeMode}
+      >
+        <View
+          style={[
+            styles.payWaitGlassInner,
+            compact && styles.payWaitGlassInnerCompact,
+            { paddingTop: insets.top + (compact ? 6 : 10), paddingBottom: insets.bottom + (compact ? 6 : 10) },
+          ]}
         >
-          {inner}
-        </LiquidGlassSurface>
-      </View>
+          <Text
+            style={[
+              styles.formTitle,
+              kioskTheme?.isLight && styles.formTitleLight,
+            ]}
+          >
+            {title}
+          </Text>
+          <Text
+            style={[
+              styles.payScanHint,
+              kioskTheme?.isLight && styles.payScanHintLight,
+            ]}
+          >
+            {t("payScanQR")}
+          </Text>
+          {counter}
+          {qrBlock}
+          {amountEl}
+          {refEl}
+          {waitingRow}
+          {cashBtn}
+          {cancelBtn}
+        </View>
+      </LiquidGlassSurface>
     );
   }
 
   return (
     <View style={[staffStyles.outer, staffSafeStyle]}>
-      {inner}
+      {staffInner}
     </View>
   );
 }
@@ -473,19 +475,19 @@ const styles = StyleSheet.create({
     ...(Platform.OS === "ios" ? ({ borderCurve: "continuous" } as const) : null),
   },
   payWaitGlassInner: {
-    paddingVertical: 24,
+    paddingVertical: 20,
     paddingHorizontal: 20,
     alignItems: "center",
-    gap: 16,
+    gap: 12,
   },
   payWaitGlassInnerCompact: {
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 16,
-    gap: 10,
+    gap: 9,
   },
-  formTitle: { fontSize: 22, fontWeight: "800", color: "#fff", textAlign: "center" },
+  formTitle: { fontSize: 20, fontWeight: "800", color: "#fff", textAlign: "center" },
   formTitleLight: { color: "#0f172a" },
-  payScanHint: { fontSize: 14, color: "#a3a3a3", textAlign: "center", paddingHorizontal: 8 },
+  payScanHint: { fontSize: 13, color: "#a3a3a3", textAlign: "center", paddingHorizontal: 8 },
   payScanHintLight: { color: "#64748b" },
   counterCard: {
     flexDirection: "row",
@@ -493,32 +495,32 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 320,
     backgroundColor: "#fff",
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
   },
   counterSideBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: 43,
+    height: 43,
+    borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#f4f4f5",
   },
   counterSideBtnDisabled: { opacity: 0.5 },
   counterCenter: { flex: 1, alignItems: "center" },
-  counterNumber: { fontSize: 36, fontWeight: "800", color: "#2563eb" },
-  counterHint: { fontSize: 12, color: "#737373", marginTop: 2 },
+  counterNumber: { fontSize: 32, fontWeight: "800", color: "#2563eb" },
+  counterHint: { fontSize: 11, color: "#737373", marginTop: 2 },
   qrWrap: {
     backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 20,
+    borderRadius: 16,
+    padding: 16,
     shadowColor: "#000",
     shadowOpacity: 0.2,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
   },
-  amount: { fontSize: 36, fontWeight: "700", color: "transparent" },
+  amount: { fontSize: 30, fontWeight: "700", color: "transparent" },
   ref: { fontSize: 14, color: "#737373", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" },
   refLight: { color: "#64748b" },
   payWaitingRow: { flexDirection: "row", alignItems: "center", gap: 10 },

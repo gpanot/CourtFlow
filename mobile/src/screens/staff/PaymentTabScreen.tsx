@@ -42,6 +42,7 @@ import {
 } from "../../components/staff/StaffPaymentCard";
 
 type SubTab = "pending" | "paid";
+type PaidFilter = "all" | "group" | "cash" | "name";
 
 /** Socket `payment:updated` payload (headcount / amount change on same pending row). */
 type PaymentUpdatedSocketPayload = {
@@ -338,6 +339,27 @@ function createStyles(t: AppColors) {
       borderColor: t.blue500,
     },
     groupQuickBtnText: { fontSize: 12, fontWeight: "600", color: t.blue500 },
+    filterRow: {
+      flexDirection: "row",
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      paddingBottom: 2,
+      gap: 6,
+    },
+    filterChip: {
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 20,
+      backgroundColor: t.card,
+      borderWidth: 1,
+      borderColor: t.border,
+    },
+    filterChipActive: {
+      backgroundColor: t.green600,
+      borderColor: t.green600,
+    },
+    filterChipText: { fontSize: 12, fontWeight: "600", color: t.muted },
+    filterChipTextActive: { color: "#fff" },
   });
 }
 
@@ -350,6 +372,7 @@ export function PaymentTabScreen() {
   const { t } = useTabletKioskLocale();
 
   const [subTab, setSubTab] = useState<SubTab>("pending");
+  const [paidFilter, setPaidFilter] = useState<PaidFilter>("all");
   const [pending, setPending] = useState<PendingPayment[]>([]);
   const [paid, setPaid] = useState<PendingPayment[]>([]);
   const [paidSummary, setPaidSummary] = useState({
@@ -367,6 +390,28 @@ export function PaymentTabScreen() {
   const [groupTargetId, setGroupTargetId] = useState<string | null>(null);
   const [groupTargetIsPending, setGroupTargetIsPending] = useState(false);
   const [groupAssigning, setGroupAssigning] = useState(false);
+
+  const filteredPaid = useMemo(() => {
+    if (paidFilter === "all") return paid;
+    if (paidFilter === "group") {
+      const grouped = paid.filter((p) => p.groupPaidByPaymentId);
+      const others = paid.filter((p) => !p.groupPaidByPaymentId);
+      return [...grouped, ...others];
+    }
+    if (paidFilter === "cash") {
+      const cash = paid.filter((p) => p.paymentMethod === "cash");
+      const others = paid.filter((p) => p.paymentMethod !== "cash");
+      return [...cash, ...others];
+    }
+    if (paidFilter === "name") {
+      return [...paid].sort((a, b) => {
+        const nameA = (a.player?.name ?? a.checkInPlayer?.name ?? "").toLowerCase();
+        const nameB = (b.player?.name ?? b.checkInPlayer?.name ?? "").toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+    }
+    return paid;
+  }, [paid, paidFilter]);
 
   const fetchPending = useCallback(async () => {
     if (!venueId) return;
@@ -841,6 +886,23 @@ export function PaymentTabScreen() {
         </TouchableOpacity>
       </View>
 
+      {subTab === "paid" ? (
+        <View style={styles.filterRow}>
+          {(["all", "group", "cash", "name"] as PaidFilter[]).map((f) => (
+            <TouchableOpacity
+              key={f}
+              style={[styles.filterChip, paidFilter === f && styles.filterChipActive]}
+              onPress={() => setPaidFilter(f)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.filterChipText, paidFilter === f && styles.filterChipTextActive]}>
+                {f === "all" ? "All" : f === "group" ? "Group" : f === "cash" ? "Cash" : "Name"}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : null}
+
       {subTab === "pending" ? (
         <FlatList
           data={pending}
@@ -864,10 +926,10 @@ export function PaymentTabScreen() {
         />
       ) : (
         <FlatList
-          data={paid}
+          data={filteredPaid}
           keyExtractor={(p) => p.id}
           renderItem={renderPaidItem}
-          extraData={[expandedPhotoId, menuPaymentId]}
+          extraData={[expandedPhotoId, menuPaymentId, paidFilter]}
           contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl

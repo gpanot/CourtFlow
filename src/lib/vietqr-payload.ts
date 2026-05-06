@@ -49,11 +49,15 @@ export function buildVietQRPayload(
   const serviceCode = "QRIBFTTA";
   const message = params.paymentRef.slice(0, 50);
 
+  // NAPAS IBFT v1.5.2: field 38.01 wraps BIN (00) + account (01) as nested TLVs.
+  const beneficiaryOrg =
+    tlv("00", params.bankBin) +
+    tlv("01", params.accountNumber);
+
   const consumerAccountInfo =
     tlv("00", NAPAS_GUID) +
-    tlv("01", params.bankBin) +
-    tlv("02", params.accountNumber) +
-    tlv("03", serviceCode);
+    tlv("01", beneficiaryOrg) +
+    tlv("02", serviceCode);
 
   let payload = "";
   payload += tlv("00", "01"); // Payload Format Indicator

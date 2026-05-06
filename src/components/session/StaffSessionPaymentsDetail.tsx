@@ -13,7 +13,7 @@ import {
 import { cn } from "@/lib/cn";
 import { ArrowLeft, Download, Loader2, AlertTriangle, RotateCw, Check } from "lucide-react";
 
-type Filter = "all" | "cash" | "qr" | "subscription" | "cancelled";
+type Filter = "all" | "cash" | "qr" | "subscription" | "cancelled" | "group" | "name";
 
 interface SubscriptionInfo {
   packageName: string;
@@ -36,6 +36,7 @@ interface SessionPaymentRow {
   confirmedOnDevice?: string | null;
   partyCount?: number | null;
   sessionId: string | null;
+  groupPaidByPaymentId?: string | null;
   player: {
     id: string;
     name: string;
@@ -226,6 +227,18 @@ export function StaffSessionPaymentsDetail({
 
   const filtered = useMemo(() => {
     if (filter === "all") return payments;
+    if (filter === "group") {
+      const grouped = payments.filter((p) => p.groupPaidByPaymentId);
+      const others = payments.filter((p) => !p.groupPaidByPaymentId);
+      return [...grouped, ...others];
+    }
+    if (filter === "name") {
+      return [...payments].sort((a, b) => {
+        const nameA = getDisplayPlayer(a).name.toLowerCase();
+        const nameB = getDisplayPlayer(b).name.toLowerCase();
+        return nameA.localeCompare(nameB);
+      });
+    }
     return payments.filter((p) => getPaymentFilter(p) === filter);
   }, [payments, filter]);
 
@@ -400,30 +413,54 @@ export function StaffSessionPaymentsDetail({
         )
       ) : (
       <>
-      <div className="flex gap-1.5 border-b border-neutral-800 bg-neutral-950 px-3 py-2">
-        {(
-          [
-            { key: "all" as const, label: t("staff.sessionPaymentsDetail.filterAll", { count: payments.length }) },
-            { key: "cash" as const, label: t("staff.sessionPaymentsDetail.filterCash", { count: summary?.cash ?? 0 }) },
-            { key: "qr" as const, label: t("staff.sessionPaymentsDetail.filterQr", { count: summary?.qr ?? 0 }) },
-            { key: "subscription" as const, label: t("staff.sessionPaymentsDetail.filterSubs", { count: summary?.subscription ?? 0 }) },
-            { key: "cancelled" as const, label: t("staff.sessionPaymentsDetail.filterCancel", { count: cancelledCount }) },
-          ] as const
-        ).map(({ key, label }) => (
-          <button
-            key={key}
-            type="button"
-            onClick={() => setFilter(key)}
-            className={cn(
-              "min-w-0 flex-1 rounded-lg border px-1 py-2 text-center text-xs font-semibold transition-colors",
-              filter === key
-                ? "border-client-primary bg-client-primary-muted-strong text-white"
-                : "border-neutral-700 bg-neutral-900 text-neutral-400 hover:border-neutral-600"
-            )}
-          >
-            <span className="line-clamp-2">{label}</span>
-          </button>
-        ))}
+      <div className="border-b border-neutral-800 bg-neutral-950 px-3 py-2 space-y-1.5">
+        <div className="flex gap-1.5">
+          {(
+            [
+              { key: "all" as const, label: t("staff.sessionPaymentsDetail.filterAll", { count: payments.length }) },
+              { key: "cash" as const, label: t("staff.sessionPaymentsDetail.filterCash", { count: summary?.cash ?? 0 }) },
+              { key: "qr" as const, label: t("staff.sessionPaymentsDetail.filterQr", { count: summary?.qr ?? 0 }) },
+              { key: "subscription" as const, label: t("staff.sessionPaymentsDetail.filterSubs", { count: summary?.subscription ?? 0 }) },
+              { key: "cancelled" as const, label: t("staff.sessionPaymentsDetail.filterCancel", { count: cancelledCount }) },
+            ] as const
+          ).map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setFilter(key)}
+              className={cn(
+                "min-w-0 flex-1 rounded-lg border px-1 py-2 text-center text-xs font-semibold transition-colors",
+                filter === key
+                  ? "border-client-primary bg-client-primary-muted-strong text-white"
+                  : "border-neutral-700 bg-neutral-900 text-neutral-400 hover:border-neutral-600"
+              )}
+            >
+              <span className="line-clamp-2">{label}</span>
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-1.5">
+          {(
+            [
+              { key: "group" as const, label: "Group" },
+              { key: "name" as const, label: "Name A–Z" },
+            ] as const
+          ).map(({ key, label }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setFilter((prev) => prev === key ? "all" : key)}
+              className={cn(
+                "rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+                filter === key
+                  ? "border-emerald-600 bg-emerald-900/40 text-emerald-300"
+                  : "border-neutral-700 bg-neutral-900 text-neutral-500 hover:border-neutral-600 hover:text-neutral-400"
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <main className="min-h-0 flex-1 overflow-y-auto p-3 pb-[calc(24px+env(safe-area-inset-bottom))]">
@@ -445,7 +482,7 @@ export function StaffSessionPaymentsDetail({
             </div>
           ) : (
             <p className="mt-10 text-center text-sm text-neutral-500">
-              {filter === "all"
+              {filter === "all" || filter === "group" || filter === "name"
                 ? t("staff.sessionPaymentsDetail.emptyAll")
                 : t("staff.sessionPaymentsDetail.emptyFiltered", {
                     filter:
