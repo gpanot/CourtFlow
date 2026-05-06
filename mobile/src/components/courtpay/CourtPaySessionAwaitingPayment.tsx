@@ -79,19 +79,37 @@ export function CourtPaySessionAwaitingPayment({
   const { height: windowHeight } = useWindowDimensions();
   const staffStyles = useMemo(() => createStaffStyles(theme), [theme]);
 
-  /** Short phones: less vertical padding + smaller QR so content clears status + home areas. */
   const compact = windowHeight < 720;
-  const qrSize = compact ? 180 : 230;
+
+  /**
+   * Compute QR size dynamically so ALL content fits without scrolling.
+   *
+   * Budget = window height minus safe areas.
+   * Fixed content heights (title + hint + counter + amount + ref + waiting + cash + cancel):
+   *   24 + 16 + 56 + 34 + 16 + 20 + 36 + 21 = 223
+   * Gaps: 7 gaps × 10px = 70 (compact: 8px = 56)
+   * Inner padding top+bottom (from insets computed separately, here just base):
+   *   base padding 16 (compact: 8)
+   * QR wrap padding: 24 (12 × 2)
+   */
+  const qrSize = useMemo(() => {
+    const safeHeight = windowHeight - insets.top - insets.bottom;
+    const fixedContent = 223;
+    const gaps = compact ? 56 : 70;
+    const innerPad = compact ? 8 + 8 : 8 + 16; // top+bottom base
+    const qrPad = 24;
+    const available = safeHeight - fixedContent - gaps - innerPad - qrPad;
+    const clamped = Math.max(150, Math.min(220, available));
+    return Math.floor(clamped);
+  }, [windowHeight, insets.top, insets.bottom, compact]);
 
   const kioskSafeStyle = useMemo(
     () => ({
       width: "100%" as const,
       maxWidth: 440,
       alignSelf: "center" as const,
-      /** Cap height so the card never extends under the status bar or home gesture area. */
-      maxHeight: windowHeight - insets.top - insets.bottom - 24,
     }),
-    [windowHeight, insets.top, insets.bottom]
+    []
   );
 
   const staffSafeStyle = useMemo(
@@ -359,7 +377,10 @@ export function CourtPaySessionAwaitingPayment({
           style={[
             styles.payWaitGlassInner,
             compact && styles.payWaitGlassInnerCompact,
-            { paddingTop: insets.top + (compact ? 6 : 10), paddingBottom: insets.bottom + (compact ? 6 : 10) },
+            {
+              paddingTop: insets.top + (compact ? 4 : 8),
+              paddingBottom: insets.bottom + (compact ? 4 : 8),
+            },
           ]}
         >
           <Text
@@ -475,19 +496,18 @@ const styles = StyleSheet.create({
     ...(Platform.OS === "ios" ? ({ borderCurve: "continuous" } as const) : null),
   },
   payWaitGlassInner: {
-    paddingVertical: 20,
+    paddingVertical: 0,
     paddingHorizontal: 20,
     alignItems: "center",
-    gap: 12,
+    gap: 10,
   },
   payWaitGlassInnerCompact: {
-    paddingVertical: 12,
     paddingHorizontal: 16,
-    gap: 9,
+    gap: 8,
   },
-  formTitle: { fontSize: 20, fontWeight: "800", color: "#fff", textAlign: "center" },
+  formTitle: { fontSize: 19, fontWeight: "800", color: "#fff", textAlign: "center" },
   formTitleLight: { color: "#0f172a" },
-  payScanHint: { fontSize: 13, color: "#a3a3a3", textAlign: "center", paddingHorizontal: 8 },
+  payScanHint: { fontSize: 12, color: "#a3a3a3", textAlign: "center", paddingHorizontal: 8 },
   payScanHintLight: { color: "#64748b" },
   counterCard: {
     flexDirection: "row",
@@ -495,37 +515,37 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 320,
     backgroundColor: "#fff",
-    borderRadius: 14,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
   },
   counterSideBtn: {
-    width: 43,
-    height: 43,
-    borderRadius: 11,
+    width: 40,
+    height: 40,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#f4f4f5",
   },
   counterSideBtnDisabled: { opacity: 0.5 },
   counterCenter: { flex: 1, alignItems: "center" },
-  counterNumber: { fontSize: 32, fontWeight: "800", color: "#2563eb" },
-  counterHint: { fontSize: 11, color: "#737373", marginTop: 2 },
+  counterNumber: { fontSize: 30, fontWeight: "800", color: "#2563eb" },
+  counterHint: { fontSize: 11, color: "#737373", marginTop: 1 },
   qrWrap: {
     backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 16,
+    borderRadius: 14,
+    padding: 12,
     shadowColor: "#000",
     shadowOpacity: 0.2,
-    shadowRadius: 10,
+    shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
   },
-  amount: { fontSize: 30, fontWeight: "700", color: "transparent" },
-  ref: { fontSize: 14, color: "#737373", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" },
+  amount: { fontSize: 28, fontWeight: "700", color: "transparent" },
+  ref: { fontSize: 12, color: "#737373", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" },
   refLight: { color: "#64748b" },
-  payWaitingRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  payPulseDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: "transparent" },
-  waitText: { color: "#a3a3a3", fontSize: 15 },
+  payWaitingRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  payPulseDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "transparent" },
+  waitText: { color: "#a3a3a3", fontSize: 13 },
   waitTextLight: { color: "#475569" },
   cashBtn: {
     flexDirection: "row",
@@ -533,16 +553,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8,
     backgroundColor: "rgba(217,119,6,0.12)",
-    height: 40,
-    borderRadius: 12,
+    height: 36,
+    borderRadius: 10,
     paddingHorizontal: 14,
     borderWidth: 1,
     borderColor: "rgba(217,119,6,0.30)",
   },
-  cashText: { color: "#fbbf24", fontSize: 16, fontWeight: "600" },
+  cashText: { color: "#fbbf24", fontSize: 14, fontWeight: "600" },
   cashTextLight: { color: "#b45309" },
-  cancelBtn: { paddingVertical: 8 },
-  cancelText: { fontSize: 15, color: "#a3a3a3", textDecorationLine: "underline" },
+  cancelBtn: { paddingVertical: 4 },
+  cancelText: { fontSize: 13, color: "#a3a3a3", textDecorationLine: "underline" },
   cancelTextLight: { color: "#64748b" },
   disabledOpacity: { opacity: 0.55 },
 });

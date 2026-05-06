@@ -588,7 +588,7 @@
     "courtPayAwaitingPayment": {
       "payTitle": "Almost there, {{name}}!",
       "payReturningTitle": "Payment",
-      "payScanQR": "Scan with your banking app then show staff to confirm",
+      "payScanQR": "Scan with your banking app",
       "payPartyPerson": "person",
       "payPartyPeople": "people",
       "payPartyMaxPeople": "Max 4 people",

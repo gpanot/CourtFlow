@@ -596,7 +596,7 @@
     "courtPayAwaitingPayment": {
       "payTitle": "Sắp xong rồi, {{name}}!",
       "payReturningTitle": "Thanh toán",
-      "payScanQR": "Quét bằng ứng dụng ngân hàng rồi cho nhân viên xác nhận",
+      "payScanQR": "Quét bằng ứng dụng ngân hàng",
       "payPartyPerson": "người",
       "payPartyPeople": "người",
       "payPartyMaxPeople": "Tối đa 4 người",
