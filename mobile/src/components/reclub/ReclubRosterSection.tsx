@@ -498,10 +498,9 @@ export function ReclubRosterSection({
   const handleAvatarTap = useCallback(
     (player: ReclubPlayer) => {
       setSheetPlayer(player);
-      const isLinked = paidReclubIds.has(player.reclubUserId) || cancelledReclubIds.has(player.reclubUserId);
-      setSheetMode(isLinked ? "info" : "match");
+      setSheetMode(paidReclubIds.has(player.reclubUserId) ? "info" : "match");
     },
-    [paidReclubIds, cancelledReclubIds]
+    [paidReclubIds]
   );
 
   const handleLinkPlayer = useCallback(
@@ -808,8 +807,9 @@ export function ReclubRosterSection({
 
               <View style={styles.grid}>
                 {roster.players.map((player) => {
-                  const isPaid = paidReclubIds.has(player.reclubUserId);
-                  const isCancelled = !isPaid && cancelledReclubIds.has(player.reclubUserId);
+                  const isConfirmedPaid = confirmedPaidPlayers.some((p) => p.reclubUserId === player.reclubUserId);
+                  const isFreePass = cancelledReclubIds.has(player.reclubUserId);
+                  const hasRing = isConfirmedPaid || isFreePass;
                   return (
                     <TouchableOpacity
                       key={player.reclubUserId}
@@ -823,8 +823,7 @@ export function ReclubRosterSection({
                             style={[
                               styles.initialsCircle,
                               { backgroundColor: initialsColor(player.name) },
-                              isPaid && styles.paidRing,
-                              isCancelled && styles.cancelledRing,
+                              hasRing && styles.paidRing,
                             ]}
                           >
                             <Text style={styles.initialsText}>{initials(player.name)}</Text>
@@ -834,17 +833,16 @@ export function ReclubRosterSection({
                             source={{ uri: player.avatarUrl }}
                             style={[
                               styles.avatarImage,
-                              isPaid && styles.paidRing,
-                              isCancelled && styles.cancelledRing,
+                              hasRing && styles.paidRing,
                             ]}
                           />
                         )}
-                        {isPaid && (
+                        {isConfirmedPaid && (
                           <View style={styles.checkBadge}>
                             <Ionicons name="checkmark" size={12} color="#fff" />
                           </View>
                         )}
-                        {isCancelled && (
+                        {isFreePass && (
                           <View style={styles.freeBadge}>
                             <Text style={styles.freeBadgeText}>$0</Text>
                           </View>

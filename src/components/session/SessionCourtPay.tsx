@@ -694,8 +694,11 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
 
                     <div className="grid grid-cols-4 gap-2">
                       {roster.players.map((player) => {
-                        const isPaid = paidReclubIds.has(player.reclubUserId);
-                        const isCancelled = !isPaid && cancelledReclubIds.has(player.reclubUserId);
+                        const isConfirmedPaid = paidPlayersAll.some(
+                          (p) => (!p.status || p.status === "confirmed") && p.reclubUserId === player.reclubUserId
+                        );
+                        const isFreePass = cancelledReclubIds.has(player.reclubUserId);
+                        const hasRing = isConfirmedPaid || isFreePass;
                         return (
                           <button
                             key={player.reclubUserId}
@@ -708,8 +711,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                                 <div
                                   className={cn(
                                     "flex h-[52px] w-[52px] items-center justify-center rounded-full text-lg font-bold text-white",
-                                    isPaid && "ring-[3px] ring-green-500",
-                                    isCancelled && "ring-[3px] ring-green-500"
+                                    hasRing && "ring-[3px] ring-green-500"
                                   )}
                                   style={{ backgroundColor: initialsColor(player.name) }}
                                 >
@@ -721,17 +723,16 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                                   alt=""
                                   className={cn(
                                     "h-[52px] w-[52px] rounded-full object-cover",
-                                    isPaid && "ring-[3px] ring-green-500",
-                                    isCancelled && "ring-[3px] ring-green-500"
+                                    hasRing && "ring-[3px] ring-green-500"
                                   )}
                                 />
                               )}
-                              {isPaid && (
+                              {isConfirmedPaid && (
                                 <div className="absolute -top-0.5 -right-0.5 flex h-[20px] w-[20px] items-center justify-center rounded-full border-2 border-neutral-900 bg-green-500">
                                   <Check className="h-3 w-3 text-white" strokeWidth={3} aria-hidden />
                                 </div>
                               )}
-                              {isCancelled && (
+                              {isFreePass && (
                                 <div className="absolute -bottom-1 -right-1 rounded bg-red-500 px-1 py-px text-[9px] font-bold leading-tight text-white">
                                   $0
                                 </div>
