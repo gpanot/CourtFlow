@@ -863,7 +863,7 @@ export function ReclubRosterSection({
             <View style={styles.walkInSeparator}>
               <View style={styles.walkInSeparatorLine} />
               <Text style={styles.walkInSeparatorLabel}>
-                {t("reclubWalkInSeparator")} ({unmatchedPayments.length})
+                {t("reclubWalkInSeparator")} ({unmatchedPaidCount})
               </Text>
               <View style={styles.walkInSeparatorLine} />
             </View>
@@ -1062,7 +1062,7 @@ export function ReclubRosterSection({
       >
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowUnmatchedList(false)}>
           <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
-            <Text style={styles.modalTitle}>Chưa khớp ({unmatchedPayments.length})</Text>
+            <Text style={styles.modalTitle}>Chưa khớp ({unmatchedPaidCount})</Text>
             <FlatList
               data={unmatchedPayments}
               keyExtractor={(item) => item.paymentId}

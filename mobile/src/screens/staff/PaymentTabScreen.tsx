@@ -405,7 +405,9 @@ export function PaymentTabScreen() {
   const [groupAssigning, setGroupAssigning] = useState(false);
 
   const walkInsCount = useMemo(
-    () => paid.filter((p) => p.checkInPlayerId !== null).length,
+    () => paid
+      .filter((p) => p.checkInPlayerId !== null && !p.player?.reclubUserId)
+      .reduce((sum, p) => sum + (p.partyCount ?? 1), 0),
     [paid]
   );
 
@@ -453,7 +455,7 @@ export function PaymentTabScreen() {
       });
     }
     if (paidFilter === "walkins") {
-      return paid.filter((p) => p.checkInPlayerId !== null);
+      return paid.filter((p) => p.checkInPlayerId !== null && !p.player?.reclubUserId);
     }
     return paid;
   }, [paid, paidFilter]);

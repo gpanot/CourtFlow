@@ -748,7 +748,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                   <div className="my-3 flex items-center gap-2">
                     <div className="h-px flex-1 bg-amber-500/30" />
                     <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-400">
-                      {t("staff.sessionPaymentsDetail.reclubWalkInSeparator")} ({unmatchedPayments.length})
+                      {t("staff.sessionPaymentsDetail.reclubWalkInSeparator")} ({unmatchedPaidCount})
                     </span>
                     <div className="h-px flex-1 bg-amber-500/30" />
                   </div>
