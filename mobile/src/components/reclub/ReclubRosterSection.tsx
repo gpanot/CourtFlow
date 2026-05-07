@@ -243,13 +243,13 @@ function createStyles(t: AppColors) {
     },
     cancelledRing: {
       borderWidth: 3,
-      borderColor: "#6b7280",
+      borderColor: "#22c55e",
     },
     freeBadge: {
       position: "absolute",
       top: -4,
       left: -4,
-      backgroundColor: "#6b7280",
+      backgroundColor: "#ef4444",
       borderRadius: 6,
       paddingHorizontal: 3,
       paddingVertical: 1,
@@ -895,7 +895,7 @@ export function ReclubRosterSection({
                       )}
                     </View>
                     <Text
-                      style={[styles.playerName, { color: isFree ? "#6b7280" : "#f59e0b" }]}
+                      style={[styles.playerName, { color: "#f59e0b" }]}
                       numberOfLines={1}
                     >
                       {p.playerName}

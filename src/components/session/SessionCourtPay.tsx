@@ -704,7 +704,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                                   className={cn(
                                     "flex h-[52px] w-[52px] items-center justify-center rounded-full text-lg font-bold text-white",
                                     isPaid && "ring-[3px] ring-green-500",
-                                    isCancelled && "ring-[3px] ring-neutral-500"
+                                    isCancelled && "ring-[3px] ring-green-500"
                                   )}
                                   style={{ backgroundColor: initialsColor(player.name) }}
                                 >
@@ -717,7 +717,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                                   className={cn(
                                     "h-[52px] w-[52px] rounded-full object-cover",
                                     isPaid && "ring-[3px] ring-green-500",
-                                    isCancelled && "ring-[3px] ring-neutral-500"
+                                    isCancelled && "ring-[3px] ring-green-500"
                                   )}
                                 />
                               )}
@@ -727,7 +727,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                                 </div>
                               )}
                               {isCancelled && (
-                                <div className="absolute -top-1 -left-1 rounded bg-neutral-600 px-1 py-px text-[9px] font-bold leading-tight text-white">
+                                <div className="absolute -top-1 -left-1 rounded bg-red-500 px-1 py-px text-[9px] font-bold leading-tight text-white">
                                   $0
                                 </div>
                               )}
@@ -764,14 +764,14 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                                 alt=""
                                 className={cn(
                                   "h-[52px] w-[52px] rounded-full object-cover",
-                                  isFree ? "ring-[3px] ring-neutral-500" : "ring-[3px] ring-amber-500"
+                                  "ring-[3px] ring-amber-500"
                                 )}
                               />
                             ) : (
                               <div
                                 className={cn(
                                   "flex h-[52px] w-[52px] items-center justify-center rounded-full text-lg font-bold text-white",
-                                  isFree ? "ring-[3px] ring-neutral-500" : "ring-[3px] ring-amber-500"
+                                  "ring-[3px] ring-amber-500"
                                 )}
                                 style={{ backgroundColor: initialsColor(p.playerName) }}
                               >
@@ -779,15 +779,12 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                               </div>
                             )}
                             {isFree && (
-                              <div className="absolute -top-1 -left-1 rounded bg-neutral-600 px-1 py-px text-[9px] font-bold leading-tight text-white">
+                              <div className="absolute -top-1 -left-1 rounded bg-red-500 px-1 py-px text-[9px] font-bold leading-tight text-white">
                                 $0
                               </div>
                             )}
                           </div>
-                          <p className={cn(
-                            "mt-1 w-full truncate text-center text-[11px]",
-                            isFree ? "text-neutral-500" : "text-amber-400"
-                          )}>
+                          <p className="mt-1 w-full truncate text-center text-[11px] text-amber-400">
                             {p.playerName}
                           </p>
                         </div>
