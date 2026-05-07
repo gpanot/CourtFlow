@@ -131,6 +131,8 @@ export function SubscribersList({
   const [loadingMore, setLoadingMore] = useState(false);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  // track whether the first load has completed so useFocusEffect only re-fetches on return
+  const initialLoadDoneRef = useRef(false);
   // debounce search to avoid spamming the API
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -185,12 +187,15 @@ export function SubscribersList({
     [venueId, isSelfManaged]
   );
 
-  // Initial load + search change
+  // Initial load + search change — debounced
   useEffect(() => {
     if (!isSelfManaged) return;
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
     searchDebounceRef.current = setTimeout(() => {
-      void fetchPage(0, search, true);
+      initialLoadDoneRef.current = false;
+      void fetchPage(0, search, true).then(() => {
+        initialLoadDoneRef.current = true;
+      });
     }, 300);
     return () => {
       if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
@@ -208,10 +213,10 @@ export function SubscribersList({
     void fetchPage(0, search, true).finally(() => setRefreshing(false));
   }, [isSelfManaged, fetchPage, search]);
 
-  // When coming back from subscription detail, re-fetch current list
+  // Re-fetch when returning from subscription detail — skip on first mount
   useFocusEffect(
     useCallback(() => {
-      if (!isSelfManaged) return;
+      if (!isSelfManaged || !initialLoadDoneRef.current) return;
       void fetchPage(0, search, true);
     }, [isSelfManaged, fetchPage, search])
   );

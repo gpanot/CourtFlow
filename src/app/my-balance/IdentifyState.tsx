@@ -4,33 +4,13 @@ import { useState, useRef, useCallback } from "react";
 import { Loader2, Camera, X } from "lucide-react";
 import { CameraCapture, type CameraCaptureHandle } from "@/components/camera-capture";
 import { cn } from "@/lib/cn";
+import type { IdentifyResult } from "./types";
 
-export interface BalanceData {
-  found: boolean;
-  venueName: string;
-  playerName: string;
-  phone?: string;
-  subscription: {
-    packageName: string;
-    sessionsTotal: number | null;
-    sessionsRemaining: number | null;
-    sessionsUsed: number;
-    expiresAt: string;
-    daysRemaining: number;
-    isUnlimited: boolean;
-    isExpiringSoon: boolean;
-  } | null;
-  lastCheckIn: string | null;
-  totalSessions: number;
+interface IdentifyStateProps {
+  onIdentified: (result: IdentifyResult, phone: string) => void;
 }
 
-interface LandingStateProps {
-  venueCode: string;
-  venueName: string;
-  onIdentified: (data: BalanceData, phone: string) => void;
-}
-
-export function LandingState({ venueCode, venueName, onIdentified }: LandingStateProps) {
+export function IdentifyState({ onIdentified }: IdentifyStateProps) {
   const [phone, setPhone] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -48,7 +28,7 @@ export function LandingState({ venueCode, venueName, onIdentified }: LandingStat
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams({ venueCode, phone: trimmed });
+      const params = new URLSearchParams({ phone: trimmed });
       const res = await fetch(`/api/balance/identify?${params}`);
       const data = await res.json();
       if (!res.ok) {
@@ -56,16 +36,16 @@ export function LandingState({ venueCode, venueName, onIdentified }: LandingStat
         return;
       }
       if (data.found) {
-        onIdentified(data as BalanceData, trimmed);
+        onIdentified(data as IdentifyResult, trimmed);
       } else {
-        setError(`Phone number not found. Have you checked in at ${venueName} before?`);
+        setError("Phone number not found. Have you checked in before?");
       }
     } catch {
       setError("Connection error. Please try again.");
     } finally {
       setLoading(false);
     }
-  }, [phone, venueCode, venueName, onIdentified]);
+  }, [phone, onIdentified]);
 
   const handleFaceScan = useCallback(async () => {
     if (faceScanning) return;
@@ -78,7 +58,7 @@ export function LandingState({ venueCode, venueName, onIdentified }: LandingStat
       const res = await fetch("/api/balance/identify-face", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ venueCode, imageBase64: frame }),
+        body: JSON.stringify({ imageBase64: frame }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -88,7 +68,7 @@ export function LandingState({ venueCode, venueName, onIdentified }: LandingStat
       if (data.found && data.phone) {
         cameraRef.current?.stopCamera();
         setShowCamera(false);
-        onIdentified(data as BalanceData, data.phone);
+        onIdentified(data as IdentifyResult, data.phone);
       } else {
         setFaceError("Face not recognised. Try entering your phone number.");
       }
@@ -97,7 +77,7 @@ export function LandingState({ venueCode, venueName, onIdentified }: LandingStat
     } finally {
       setFaceScanning(false);
     }
-  }, [faceScanning, venueCode, onIdentified]);
+  }, [faceScanning, onIdentified]);
 
   const closeCamera = useCallback(() => {
     cameraRef.current?.stopCamera();
@@ -107,7 +87,6 @@ export function LandingState({ venueCode, venueName, onIdentified }: LandingStat
 
   return (
     <div className="flex min-h-dvh flex-col items-center bg-[#0e0e0e] px-6 py-10">
-      <p className="text-sm text-neutral-500">{venueName}</p>
       <h1 className="mt-2 text-2xl font-bold text-white">Check your balance</h1>
 
       {showCamera ? (
@@ -148,7 +127,6 @@ export function LandingState({ venueCode, venueName, onIdentified }: LandingStat
         </div>
       ) : (
         <>
-          {/* Phone input */}
           <div className="mt-8 w-full max-w-sm">
             <label className="mb-2 block text-sm text-neutral-400">
               Enter your phone number
@@ -180,14 +158,12 @@ export function LandingState({ venueCode, venueName, onIdentified }: LandingStat
             </button>
           </div>
 
-          {/* Divider */}
           <div className="my-8 flex w-full max-w-sm items-center gap-3">
             <div className="h-px flex-1 bg-neutral-800" />
             <span className="text-xs text-neutral-600">or</span>
             <div className="h-px flex-1 bg-neutral-800" />
           </div>
 
-          {/* Face scan */}
           <div className="w-full max-w-sm text-center">
             <button
               onClick={() => { setShowCamera(true); setFaceError(""); }}

@@ -12,24 +12,17 @@ export async function POST(req: NextRequest) {
 
     const { venueCode, imageBase64 } = await req.json();
 
-    if (!venueCode?.trim() || !imageBase64?.trim()) {
+    if (!imageBase64?.trim()) {
       return NextResponse.json(
-        { error: "venueCode and imageBase64 are required" },
+        { error: "imageBase64 is required" },
         { status: 400 }
       );
     }
 
-    const venue = await prisma.venue.findFirst({
-      where: { id: venueCode, active: true },
-      select: { id: true, name: true },
-    });
-    if (!venue) {
-      return NextResponse.json({ error: "Venue not found" }, { status: 404 });
-    }
-
-    const recognition = await faceRecognitionService.recognizeFace(imageBase64, {
-      venueId: venue.id,
-    });
+    const recognition = await faceRecognitionService.recognizeFace(
+      imageBase64,
+      venueCode ? { venueId: venueCode } : undefined
+    );
 
     let player: { id: string; name: string; phone: string } | null = null;
 
@@ -50,62 +43,37 @@ export async function POST(req: NextRequest) {
     }
 
     if (!player) {
-      return NextResponse.json({ found: false, venueName: venue.name });
+      return NextResponse.json({ found: false });
     }
 
-    const checkInPlayer = await prisma.checkInPlayer.findUnique({
-      where: { phone_venueId: { phone: player.phone, venueId: venue.id } },
+    const checkInPlayers = await prisma.checkInPlayer.findMany({
+      where: { phone: player.phone },
+      include: { venue: { select: { id: true, name: true, active: true } } },
     });
 
-    if (!checkInPlayer) {
-      return NextResponse.json({ found: false, venueName: venue.name });
+    const activePlayers = checkInPlayers.filter((p) => p.venue.active);
+
+    if (activePlayers.length === 0) {
+      return NextResponse.json({ found: false });
     }
 
-    const activeSub = await prisma.playerSubscription.findFirst({
-      where: {
-        playerId: checkInPlayer.id,
-        status: "active",
-        expiresAt: { gt: new Date() },
-      },
-      include: { package: true, _count: { select: { usages: true } } },
-      orderBy: { activatedAt: "desc" },
-    });
+    const firstName = activePlayers[0].name.split(" ")[0];
+    const venues = activePlayers.map((p) => ({
+      id: p.venue.id,
+      name: p.venue.name,
+    }));
 
-    const lastCheckInRecord = await prisma.checkInRecord.findFirst({
-      where: { playerId: checkInPlayer.id, venueId: venue.id },
-      orderBy: { checkedInAt: "desc" },
-      select: { checkedInAt: true },
-    });
-
-    const totalSessions = await prisma.checkInRecord.count({
-      where: { playerId: checkInPlayer.id, venueId: venue.id },
-    });
-
-    const firstName = checkInPlayer.name.split(" ")[0];
-
-    const daysRemaining = activeSub
-      ? Math.max(0, Math.ceil((activeSub.expiresAt.getTime() - Date.now()) / 86_400_000))
-      : 0;
+    if (activePlayers.length === 1) {
+      const cp = activePlayers[0];
+      const payload = await buildBalancePayload(cp, cp.venue);
+      return NextResponse.json({ ...payload, phone: player.phone, venues });
+    }
 
     return NextResponse.json({
       found: true,
-      venueName: venue.name,
       playerName: firstName,
-      phone: checkInPlayer.phone,
-      subscription: activeSub
-        ? {
-            packageName: activeSub.package.name,
-            sessionsTotal: activeSub.package.sessions,
-            sessionsRemaining: activeSub.sessionsRemaining,
-            sessionsUsed: activeSub._count.usages,
-            expiresAt: activeSub.expiresAt.toISOString(),
-            daysRemaining,
-            isUnlimited: activeSub.package.sessions === null,
-            isExpiringSoon: daysRemaining <= 7,
-          }
-        : null,
-      lastCheckIn: lastCheckInRecord?.checkedInAt?.toISOString() ?? null,
-      totalSessions,
+      phone: player.phone,
+      venues,
     });
   } catch (err) {
     console.error("[balance/identify-face]", err);
@@ -114,4 +82,55 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+async function buildBalancePayload(
+  player: { id: string; name: string },
+  venue: { id: string; name: string }
+) {
+  const activeSub = await prisma.playerSubscription.findFirst({
+    where: {
+      playerId: player.id,
+      status: "active",
+      expiresAt: { gt: new Date() },
+    },
+    include: { package: true, _count: { select: { usages: true } } },
+    orderBy: { activatedAt: "desc" },
+  });
+
+  const lastCheckInRecord = await prisma.checkInRecord.findFirst({
+    where: { playerId: player.id, venueId: venue.id },
+    orderBy: { checkedInAt: "desc" },
+    select: { checkedInAt: true },
+  });
+
+  const totalSessions = await prisma.checkInRecord.count({
+    where: { playerId: player.id, venueId: venue.id },
+  });
+
+  const firstName = player.name.split(" ")[0];
+
+  const daysRemaining = activeSub
+    ? Math.max(0, Math.ceil((activeSub.expiresAt.getTime() - Date.now()) / 86_400_000))
+    : 0;
+
+  return {
+    found: true,
+    venueName: venue.name,
+    playerName: firstName,
+    subscription: activeSub
+      ? {
+          packageName: activeSub.package.name,
+          sessionsTotal: activeSub.package.sessions,
+          sessionsRemaining: activeSub.sessionsRemaining,
+          sessionsUsed: activeSub._count.usages,
+          expiresAt: activeSub.expiresAt.toISOString(),
+          daysRemaining,
+          isUnlimited: activeSub.package.sessions === null,
+          isExpiringSoon: daysRemaining <= 7,
+        }
+      : null,
+    lastCheckIn: lastCheckInRecord?.checkedInAt?.toISOString() ?? null,
+    totalSessions,
+  };
 }
