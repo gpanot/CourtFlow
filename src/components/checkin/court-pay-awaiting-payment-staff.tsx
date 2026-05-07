@@ -31,6 +31,7 @@ export function CourtPayAwaitingPaymentStaff({
   partyCount,
   partyAdjusting = false,
   cashLoading = false,
+  isPackage = false,
   onPartyCountChange,
   onCash,
   onCancel,
@@ -40,6 +41,8 @@ export function CourtPayAwaitingPaymentStaff({
   partyCount: number;
   partyAdjusting?: boolean;
   cashLoading?: boolean;
+  /** When true (package purchase), the +/- party counter is locked at 1 — packages are individual. */
+  isPackage?: boolean;
   onPartyCountChange: (next: number) => void | Promise<void>;
   onCash: () => void;
   onCancel: () => void;
@@ -62,15 +65,16 @@ export function CourtPayAwaitingPaymentStaff({
     ? t("staff.courtPayAwaitingPayment.payTitle", { name: playerName.trim() })
     : t("staff.courtPayAwaitingPayment.payReturningTitle");
 
-  const sublabel =
-    partyCount >= COURTPAY_SESSION_PARTY_MAX
+  const sublabel = isPackage
+    ? t("staff.courtPayAwaitingPayment.payPartyIndividual")
+    : partyCount >= COURTPAY_SESSION_PARTY_MAX
       ? t("staff.courtPayAwaitingPayment.payPartyMaxPeople")
       : partyCount === 1
         ? t("staff.courtPayAwaitingPayment.payPartyPerson")
         : t("staff.courtPayAwaitingPayment.payPartyPeople");
 
-  const minusDisabled = partyCount <= 1 || partyAdjusting;
-  const plusDisabled = partyCount >= COURTPAY_SESSION_PARTY_MAX || partyAdjusting;
+  const minusDisabled = isPackage || partyCount <= 1 || partyAdjusting;
+  const plusDisabled = isPackage || partyCount >= COURTPAY_SESSION_PARTY_MAX || partyAdjusting;
 
   return (
     <div className="w-full max-w-md overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/80">

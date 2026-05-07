@@ -56,6 +56,7 @@ interface PendingPaymentState {
   skillLevel?: CourtPaySkillLevelUI;
   bankBin?: string | null;
   bankAccount?: string | null;
+  isPackage?: boolean;
 }
 
 function toPendingPayment(
@@ -826,6 +827,7 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
           partyCount={sessionPartyCount}
           partyAdjusting={partyAdjusting}
           cashLoading={cashSubmitting}
+          isPackage={pendingPayment.isPackage}
           onPartyCountChange={handleSessionPartyCountChange}
           onCash={() => void handleCashPayment()}
           onCancel={resetForm}

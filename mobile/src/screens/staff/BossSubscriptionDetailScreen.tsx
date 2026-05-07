@@ -7,6 +7,12 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Image,
+  Alert,
+  Modal,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  TextInput,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -60,6 +66,14 @@ function formatDateTime(dateStr: string): string {
   });
 }
 
+/** Format a Date as YYYY-MM-DD for TextInput display */
+function toDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function createStyles(t: AppColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: t.bg },
@@ -87,7 +101,7 @@ function createStyles(t: AppColors) {
       gap: 6,
     },
 
-    // Avatar — compact circle; tap to expand to full-width
+    // Avatar
     avatarCompact: {
       width: 56,
       height: 56,
@@ -200,6 +214,51 @@ function createStyles(t: AppColors) {
       paddingVertical: 32,
     },
     listFooter: { height: 32 },
+
+    // ── Edit modal ────────────────────────────────────────────────────────────
+    modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.6)" },
+    modalCard: {
+      backgroundColor: t.bg,
+      borderTopLeftRadius: 16,
+      borderTopRightRadius: 16,
+      borderWidth: 1,
+      borderColor: t.border,
+      padding: 20,
+    },
+    modalTitle: { fontSize: 17, fontWeight: "700", color: t.text, marginBottom: 16 },
+    label: { fontSize: 12, color: t.muted, marginBottom: 4 },
+    input: {
+      borderWidth: 1,
+      borderColor: t.border,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      height: 44,
+      color: t.text,
+      marginBottom: 14,
+      backgroundColor: t.inputBg,
+      fontSize: 15,
+    },
+    modalActions: { flexDirection: "row", gap: 10, marginTop: 4 },
+    btnGhost: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: t.border,
+      alignItems: "center",
+    },
+    btnGhostText: { color: t.textSecondary, fontWeight: "600", fontSize: 14 },
+    btnPrimary: {
+      flex: 1,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 6,
+      paddingVertical: 12,
+      borderRadius: 10,
+      backgroundColor: "#9333ea",
+    },
+    btnPrimaryText: { color: "#fff", fontWeight: "700", fontSize: 14 },
   });
 }
 
@@ -217,6 +276,88 @@ export function BossSubscriptionDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [avatarExpanded, setAvatarExpanded] = useState(false);
 
+  // Edit modal
+  const [showEdit, setShowEdit] = useState(false);
+  const [editSessions, setEditSessions] = useState("0");
+  const [editExpiry, setEditExpiry] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+
+  const isUnlimited = detail?.totalSessions === null;
+
+  const openEditModal = () => {
+    if (!detail) return;
+    setEditSessions(detail.sessionsRemaining != null ? String(detail.sessionsRemaining) : "0");
+    setEditExpiry(toDateString(new Date(detail.expiresAt)));
+    setShowEdit(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!detail) return;
+    setEditSaving(true);
+    try {
+      const body: Record<string, unknown> = {
+        expiresAt: new Date(editExpiry).toISOString(),
+        status: "active",
+      };
+      if (!isUnlimited) {
+        body.sessionsRemaining = Math.max(0, parseInt(editSessions, 10) || 0);
+      }
+      await api.patch(`/api/courtpay/staff/subscribers/${detail.id}`, body);
+      setShowEdit(false);
+      await fetchDetail();
+    } catch (e) {
+      Alert.alert("Error", e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    if (!detail) return;
+    Alert.alert(
+      t("bossSubDetailCancelTitle"),
+      t("bossSubDetailCancelMsg"),
+      [
+        { text: t("bossSubDetailNo"), style: "cancel" },
+        {
+          text: t("bossSubDetailYesCancel"),
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await api.patch(`/api/courtpay/staff/subscribers/${detail.id}`, { status: "cancelled" });
+              await fetchDetail();
+            } catch (e) {
+              Alert.alert("Error", e instanceof Error ? e.message : "Failed");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDelete = () => {
+    if (!detail) return;
+    Alert.alert(
+      t("bossSubDetailDeleteTitle"),
+      t("bossSubDetailDeleteMsg"),
+      [
+        { text: t("bossSubDetailNo"), style: "cancel" },
+        {
+          text: t("bossSubDetailYesDelete"),
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await api.delete(`/api/courtpay/staff/subscribers/${detail.id}`);
+              navigation.goBack();
+            } catch (e) {
+              Alert.alert("Error", e instanceof Error ? e.message : "Failed");
+            }
+          },
+        },
+      ]
+    );
+  };
+
   useLayoutEffect(() => {
     navigation.setOptions({
       title: t("bossSubDetailTitle"),
@@ -225,8 +366,38 @@ export function BossSubscriptionDetailScreen() {
       headerTitleStyle: { color: theme.text, fontWeight: "700" },
       headerShadowVisible: false,
       headerBackTitle: "",
+      headerRight: () => (
+        <TouchableOpacity
+          onPress={() => {
+            Alert.alert(
+              t("bossSubDetailActionsTitle"),
+              undefined,
+              [
+                {
+                  text: t("bossSubDetailEdit"),
+                  onPress: openEditModal,
+                },
+                {
+                  text: t("bossSubDetailCancelTitle"),
+                  onPress: handleCancel,
+                },
+                {
+                  text: t("bossSubDetailDeleteTitle"),
+                  style: "destructive",
+                  onPress: handleDelete,
+                },
+                { text: t("bossSubDetailNo"), style: "cancel" },
+              ]
+            );
+          }}
+          style={{ paddingHorizontal: 8 }}
+        >
+          <Ionicons name="ellipsis-vertical" size={20} color={theme.text} />
+        </TouchableOpacity>
+      ),
     });
-  }, [navigation, theme, t]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigation, theme, t, detail]);
 
   const fetchDetail = useCallback(async () => {
     setError(null);
@@ -356,41 +527,111 @@ export function BossSubscriptionDetailScreen() {
   );
 
   return (
-    <FlatList
-      style={styles.container}
-      data={detail.usages}
-      keyExtractor={(u) => u.id}
-      ListHeaderComponent={renderHeader}
-      contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-      ListEmptyComponent={
-        <Text style={styles.emptyText}>{t("bossSubDetailNoCheckIns")}</Text>
-      }
-      renderItem={({ item, index }) => (
-        <View style={styles.checkInCard}>
-          <View style={styles.checkInIconBox}>
-            <Ionicons name="checkmark-circle" size={20} color="#a855f7" />
+    <>
+      <FlatList
+        style={styles.container}
+        data={detail.usages}
+        keyExtractor={(u) => u.id}
+        ListHeaderComponent={renderHeader}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>{t("bossSubDetailNoCheckIns")}</Text>
+        }
+        renderItem={({ item, index }) => (
+          <View style={styles.checkInCard}>
+            <View style={styles.checkInIconBox}>
+              <Ionicons name="checkmark-circle" size={20} color="#a855f7" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.checkInIndex}>#{detail.usages.length - index}</Text>
+              <Text style={styles.checkInDate}>
+                {formatDate(item.checkedInAt)}
+              </Text>
+              <Text style={styles.checkInTime}>
+                {new Date(item.checkedInAt).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </Text>
+              <View style={styles.subBadge}>
+                <Text style={styles.subBadgeText}>SUBSCRIPTION</Text>
+              </View>
+            </View>
+            <Text style={{ fontSize: 13, color: theme.muted }}>
+              {formatDateTime(item.checkedInAt).split(",")[0]}
+            </Text>
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.checkInIndex}>#{detail.usages.length - index}</Text>
-            <Text style={styles.checkInDate}>
-              {formatDate(item.checkedInAt)}
-            </Text>
-            <Text style={styles.checkInTime}>
-              {new Date(item.checkedInAt).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </Text>
-            <View style={styles.subBadge}>
-              <Text style={styles.subBadgeText}>SUBSCRIPTION</Text>
+        )}
+        ListFooterComponent={<View style={styles.listFooter} />}
+      />
+
+      {/* ── Edit modal ─────────────────────────────────────────────────────── */}
+      <Modal
+        visible={showEdit}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowEdit(false)}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalCard, { marginTop: "auto" }]}>
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
+              >
+                <Text style={styles.modalTitle}>{t("bossSubDetailEditTitle")}</Text>
+
+                {!isUnlimited && (
+                  <>
+                    <Text style={styles.label}>{t("bossSubDetailSessionsRemaining")}</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editSessions}
+                      onChangeText={(v) => setEditSessions(v.replace(/[^0-9]/g, ""))}
+                      keyboardType="number-pad"
+                      placeholder="0"
+                      placeholderTextColor={theme.dimmed}
+                    />
+                  </>
+                )}
+
+                <Text style={styles.label}>{t("bossSubDetailExpiryDate")}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editExpiry}
+                  onChangeText={setEditExpiry}
+                  placeholder="YYYY-MM-DD"
+                  placeholderTextColor={theme.dimmed}
+                  autoCapitalize="none"
+                />
+
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={styles.btnGhost}
+                    onPress={() => setShowEdit(false)}
+                  >
+                    <Text style={styles.btnGhostText}>{t("bossSubDetailNo")}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.btnPrimary}
+                    onPress={handleSaveEdit}
+                    disabled={editSaving || !editExpiry}
+                  >
+                    {editSaving ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : null}
+                    <Text style={styles.btnPrimaryText}>{t("bossSubDetailSave")}</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
             </View>
           </View>
-          <Text style={{ fontSize: 13, color: theme.muted }}>
-            {formatDateTime(item.checkedInAt).split(",")[0]}
-          </Text>
-        </View>
-      )}
-      ListFooterComponent={<View style={styles.listFooter} />}
-    />
+        </KeyboardAvoidingView>
+      </Modal>
+    </>
   );
 }

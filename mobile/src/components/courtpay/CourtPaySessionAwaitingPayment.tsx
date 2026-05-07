@@ -52,6 +52,8 @@ type Props = {
   partyCount: number;
   partyAdjusting?: boolean;
   cashLoading?: boolean;
+  /** When true (package purchase), the +/- party counter is locked at 1 — packages are individual. */
+  isPackage?: boolean;
   onPartyCountChange: (next: number) => void | Promise<void>;
   onCash: () => void;
   onCancel: () => void;
@@ -69,6 +71,7 @@ export function CourtPaySessionAwaitingPayment({
   partyCount,
   partyAdjusting = false,
   cashLoading = false,
+  isPackage = false,
   onPartyCountChange,
   onCash,
   onCancel,
@@ -150,15 +153,16 @@ export function CourtPaySessionAwaitingPayment({
     ? t("payTitle", { name: playerName.trim() })
     : t("payReturningTitle");
 
-  const sublabel =
-    partyCount >= COURTPAY_SESSION_PARTY_MAX
+  const sublabel = isPackage
+    ? t("payPartyIndividual")
+    : partyCount >= COURTPAY_SESSION_PARTY_MAX
       ? t("payPartyMaxPeople")
       : partyCount === 1
         ? t("payPartyPerson")
         : t("payPartyPeople");
 
-  const minusDisabled = partyCount <= 1 || partyAdjusting;
-  const plusDisabled = partyCount >= COURTPAY_SESSION_PARTY_MAX || partyAdjusting;
+  const minusDisabled = isPackage || partyCount <= 1 || partyAdjusting;
+  const plusDisabled = isPackage || partyCount >= COURTPAY_SESSION_PARTY_MAX || partyAdjusting;
 
   const counter = (
     <View

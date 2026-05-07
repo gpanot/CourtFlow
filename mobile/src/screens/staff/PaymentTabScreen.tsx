@@ -17,6 +17,7 @@ import {
   Image,
   Modal,
   Pressable,
+  ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { getDeviceLabel } from "../../lib/device-label";
@@ -42,7 +43,7 @@ import {
 } from "../../components/staff/StaffPaymentCard";
 
 type SubTab = "pending" | "paid";
-type PaidFilter = "all" | "group" | "cash" | "name" | "walkins";
+type PaidFilter = "all" | "group" | "cash" | "name" | "walkins" | "cancelled";
 
 /** A row in the paid FlatList — either a standalone payment or a group payer with members embedded. */
 type PaidListItem =
@@ -344,11 +345,15 @@ function createStyles(t: AppColors) {
       borderColor: t.blue500,
     },
     groupQuickBtnText: { fontSize: 12, fontWeight: "600", color: t.blue500 },
+    filterScrollWrap: { width: "100%" },
+    filterScroll: { width: "100%" },
     filterRow: {
       flexDirection: "row",
-      paddingHorizontal: 16,
+      alignItems: "center",
+      paddingLeft: 16,
+      paddingRight: 20,
       paddingTop: 8,
-      paddingBottom: 2,
+      paddingBottom: 8,
       gap: 6,
     },
     filterChip: {
@@ -362,6 +367,10 @@ function createStyles(t: AppColors) {
     filterChipActive: {
       backgroundColor: t.green600,
       borderColor: t.green600,
+    },
+    filterChipActiveCancelled: {
+      backgroundColor: t.red500,
+      borderColor: t.red500,
     },
     filterChipText: { fontSize: 12, fontWeight: "600", color: t.muted },
     filterChipTextActive: { color: "#fff" },
@@ -405,9 +414,12 @@ export function PaymentTabScreen() {
   const [groupAssigning, setGroupAssigning] = useState(false);
 
   const walkInsCount = useMemo(
-    () => paid
-      .filter((p) => p.checkInPlayerId !== null && !p.player?.reclubUserId)
-      .reduce((sum, p) => sum + (p.partyCount ?? 1), 0),
+    () => paid.filter((p) => p.checkInPlayerId !== null).length,
+    [paid]
+  );
+
+  const cancelledCount = useMemo(
+    () => paid.filter((p) => p.status === "cancelled" || !!p.cancelReason).length,
     [paid]
   );
 
@@ -455,7 +467,10 @@ export function PaymentTabScreen() {
       });
     }
     if (paidFilter === "walkins") {
-      return paid.filter((p) => p.checkInPlayerId !== null && !p.player?.reclubUserId);
+      return paid.filter((p) => p.checkInPlayerId !== null);
+    }
+    if (paidFilter === "cancelled") {
+      return paid.filter((p) => p.status === "cancelled" || !!p.cancelReason);
     }
     return paid;
   }, [paid, paidFilter]);
@@ -1012,19 +1027,40 @@ export function PaymentTabScreen() {
       </View>
 
       {subTab === "paid" ? (
-        <View style={styles.filterRow}>
-          {(["all", "group", "cash", "name", "walkins"] as PaidFilter[]).map((f) => (
+        <View style={styles.filterScrollWrap}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          style={styles.filterScroll}
+          contentContainerStyle={styles.filterRow}
+        >
+          {(["all", "group", "cash", "name", "walkins", "cancelled"] as PaidFilter[]).map((f) => (
             <TouchableOpacity
               key={f}
-              style={[styles.filterChip, paidFilter === f && styles.filterChipActive]}
+              style={[
+                styles.filterChip,
+                paidFilter === f && (f === "cancelled" ? styles.filterChipActiveCancelled : styles.filterChipActive),
+              ]}
               onPress={() => setPaidFilter(f)}
               activeOpacity={0.7}
             >
               <Text style={[styles.filterChipText, paidFilter === f && styles.filterChipTextActive]}>
-                {f === "all" ? "All" : f === "group" ? "Group" : f === "cash" ? "Cash" : f === "name" ? "Name" : `Walk-ins(${walkInsCount})`}
+                {f === "all"
+                  ? t("paymentFilterAll")
+                  : f === "group"
+                    ? t("paymentFilterGroup")
+                    : f === "cash"
+                      ? t("paymentFilterCash")
+                      : f === "name"
+                        ? t("paymentFilterName")
+                        : f === "walkins"
+                          ? `${t("paymentFilterWalkins")}(${walkInsCount})`
+                          : `${t("paymentFilterCancelled")}(${cancelledCount})`}
               </Text>
             </TouchableOpacity>
           ))}
+        </ScrollView>
         </View>
       ) : null}
 

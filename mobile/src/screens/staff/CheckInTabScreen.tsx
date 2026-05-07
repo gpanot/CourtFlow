@@ -58,6 +58,7 @@ interface PendingPaymentState {
   skillLevel?: CourtPaySkillLevelUI;
   bankBin?: string | null;
   bankAccount?: string | null;
+  isPackage?: boolean;
 }
 
 type FaceQualityTier = "good" | "fair" | "poor";
@@ -1018,6 +1019,7 @@ export function CheckInTabScreen() {
           partyCount={sessionPartyCount}
           partyAdjusting={partyAdjusting}
           cashLoading={cashSubmitting}
+          isPackage={pendingPayment.isPackage}
           onPartyCountChange={handleSessionPartyCountChange}
           onCash={() => void handleCashPayment()}
           onCancel={resetForm}

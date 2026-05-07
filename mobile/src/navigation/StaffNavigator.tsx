@@ -60,7 +60,7 @@ function StaffTabs() {
   return (
     <View style={{ flex: 1, backgroundColor: theme.bg }}>
       <StaffDashboardHeader />
-      <Tab.Navigator screenOptions={tabOptions}>
+      <Tab.Navigator screenOptions={{ ...tabOptions, swipeEnabled: false }}>
         <Tab.Screen
           name="SessionTab"
           component={SessionTabScreen}

@@ -308,6 +308,7 @@ export default function StaffSubscriptionsPage() {
             subscribers={subscribers}
             search={search}
             onSearchChange={setSearch}
+            onRefresh={fetchSubscribers}
           />
         )}
       </div>

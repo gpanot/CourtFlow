@@ -592,6 +592,7 @@
       "payPartyPerson": "person",
       "payPartyPeople": "people",
       "payPartyMaxPeople": "Max 4 people",
+      "payPartyIndividual": "Individual package",
       "payByCash": "Pay by cash",
       "payWaitingForStaff": "Waiting for staff to confirm",
       "or": "or",

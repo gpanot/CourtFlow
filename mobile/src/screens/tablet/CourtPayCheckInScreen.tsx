@@ -103,6 +103,7 @@ interface PendingPaymentState {
   skillLevel?: CourtPaySkillLevelUI;
   bankBin?: string | null;
   bankAccount?: string | null;
+  isPackage?: boolean;
 }
 
 interface ActiveSubInfo {
@@ -791,6 +792,7 @@ export function CourtPayCheckInScreen({
           skillLevel: parseCourtPaySkillLevel(levelRaw),
           bankBin: res.bankBin ?? null,
           bankAccount: res.bankAccount ?? null,
+          isPackage: !!packageId,
         });
         setConfirmedSubInfo(null);
         setStep("awaiting_payment");
@@ -986,6 +988,7 @@ export function CourtPayCheckInScreen({
           skillLevel: parseCourtPaySkillLevel(levelRaw),
           bankBin: reg.bankBin ?? null,
           bankAccount: reg.bankAccount ?? null,
+          isPackage: !!packageId,
         });
         setConfirmedSubInfo(null);
         setStep("awaiting_payment");
@@ -2120,6 +2123,7 @@ export function CourtPayCheckInScreen({
             partyCount={sessionPartyCount}
             partyAdjusting={partyAdjusting}
             cashLoading={cashSubmitting}
+            isPackage={pendingPayment.isPackage}
             onPartyCountChange={handleSessionPartyCountChange}
             onCash={() => void handleCash()}
             onCancel={() => void handleCancelPayment()}
