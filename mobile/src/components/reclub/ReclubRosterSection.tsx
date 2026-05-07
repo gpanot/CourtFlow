@@ -241,6 +241,26 @@ function createStyles(t: AppColors) {
       fontWeight: "800",
       color: "#fff",
     },
+    cancelledRing: {
+      borderWidth: 3,
+      borderColor: "#6b7280",
+    },
+    freeBadge: {
+      position: "absolute",
+      top: -4,
+      left: -4,
+      backgroundColor: "#6b7280",
+      borderRadius: 6,
+      paddingHorizontal: 3,
+      paddingVertical: 1,
+      borderWidth: 1.5,
+      borderColor: "#171717",
+    },
+    freeBadgeText: {
+      fontSize: 9,
+      fontWeight: "800",
+      color: "#fff",
+    },
     playerName: {
       fontSize: 11,
       color: t.muted,
@@ -410,6 +430,15 @@ export function ReclubRosterSection({
     return ids;
   }, [confirmedPaidPlayers]);
 
+  // Cancelled payments whose player is linked to a Reclub account (free-pass roster members)
+  const cancelledReclubIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const p of paidPlayers) {
+      if (p.status === "cancelled" && p.reclubUserId) ids.add(p.reclubUserId);
+    }
+    return ids;
+  }, [paidPlayers]);
+
   // Aggregated KPIs across all rosters
   const allRosterPlayers = useMemo(
     () => rosters.flatMap((r) => r.players),
@@ -431,7 +460,10 @@ export function ReclubRosterSection({
 
   const unmatchedPayments = useMemo(() => {
     if (rosters.length === 0) return [];
-    return paidPlayers.filter((p) => !p.reclubUserId || !allRosterIds.has(p.reclubUserId));
+    // Exclude players whose reclubUserId is on the roster — those show in the roster grid with a $0 badge
+    return paidPlayers.filter(
+      (p) => !p.reclubUserId || !allRosterIds.has(p.reclubUserId)
+    );
   }, [rosters, paidPlayers, allRosterIds]);
 
   const unmatchedPaidCount = useMemo(
@@ -456,9 +488,10 @@ export function ReclubRosterSection({
   const handleAvatarTap = useCallback(
     (player: ReclubPlayer) => {
       setSheetPlayer(player);
-      setSheetMode(paidReclubIds.has(player.reclubUserId) ? "info" : "match");
+      const isLinked = paidReclubIds.has(player.reclubUserId) || cancelledReclubIds.has(player.reclubUserId);
+      setSheetMode(isLinked ? "info" : "match");
     },
-    [paidReclubIds]
+    [paidReclubIds, cancelledReclubIds]
   );
 
   const handleLinkPlayer = useCallback(
@@ -772,6 +805,7 @@ export function ReclubRosterSection({
               <View style={styles.grid}>
                 {roster.players.map((player) => {
                   const isPaid = paidReclubIds.has(player.reclubUserId);
+                  const isCancelled = !isPaid && cancelledReclubIds.has(player.reclubUserId);
                   return (
                     <TouchableOpacity
                       key={player.reclubUserId}
@@ -786,6 +820,7 @@ export function ReclubRosterSection({
                               styles.initialsCircle,
                               { backgroundColor: initialsColor(player.name) },
                               isPaid && styles.paidRing,
+                              isCancelled && styles.cancelledRing,
                             ]}
                           >
                             <Text style={styles.initialsText}>{initials(player.name)}</Text>
@@ -793,12 +828,21 @@ export function ReclubRosterSection({
                         ) : (
                           <Image
                             source={{ uri: player.avatarUrl }}
-                            style={[styles.avatarImage, isPaid && styles.paidRing]}
+                            style={[
+                              styles.avatarImage,
+                              isPaid && styles.paidRing,
+                              isCancelled && styles.cancelledRing,
+                            ]}
                           />
                         )}
                         {isPaid && (
                           <View style={styles.checkBadge}>
                             <Ionicons name="checkmark" size={12} color="#fff" />
+                          </View>
+                        )}
+                        {isCancelled && (
+                          <View style={styles.freeBadge}>
+                            <Text style={styles.freeBadgeText}>$0</Text>
                           </View>
                         )}
                       </View>
@@ -826,6 +870,7 @@ export function ReclubRosterSection({
             <View style={styles.grid}>
               {unmatchedPayments.map((p) => {
                 const party = p.partyCount ?? 1;
+                const isFree = p.status === "cancelled";
                 return (
                   <View key={p.paymentId} style={styles.avatarCell}>
                     <View style={styles.avatarWrap}>
@@ -833,18 +878,26 @@ export function ReclubRosterSection({
                         style={[
                           styles.initialsCircle,
                           { backgroundColor: initialsColor(p.playerName) },
-                          styles.walkInRing,
+                          isFree ? styles.cancelledRing : styles.walkInRing,
                         ]}
                       >
                         <Text style={styles.initialsText}>{initials(p.playerName)}</Text>
                       </View>
+                      {isFree && (
+                        <View style={styles.freeBadge}>
+                          <Text style={styles.freeBadgeText}>$0</Text>
+                        </View>
+                      )}
                       {party > 1 && (
                         <View style={styles.partyBadge}>
                           <Text style={styles.partyBadgeText}>×{party}</Text>
                         </View>
                       )}
                     </View>
-                    <Text style={[styles.playerName, { color: "#f59e0b" }]} numberOfLines={1}>
+                    <Text
+                      style={[styles.playerName, { color: isFree ? "#6b7280" : "#f59e0b" }]}
+                      numberOfLines={1}
+                    >
                       {p.playerName}
                     </Text>
                   </View>

@@ -467,6 +467,14 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
     return ids;
   }, [allRosterPlayers]);
 
+  const cancelledReclubIds = useMemo(() => {
+    const ids = new Set<number>();
+    for (const p of paidPlayersAll) {
+      if (p.status === "cancelled" && p.reclubUserId) ids.add(p.reclubUserId);
+    }
+    return ids;
+  }, [paidPlayersAll]);
+
   const unmatchedPayments = useMemo(() => {
     if (rosters.length === 0) return [];
     return paidPlayersAll.filter((p) => !p.reclubUserId || !allRosterIds.has(p.reclubUserId));
@@ -488,7 +496,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
   };
 
   const handleAvatarTap = (player: ReclubPlayer) => {
-    if (paidReclubIds.has(player.reclubUserId)) {
+    if (paidReclubIds.has(player.reclubUserId) || cancelledReclubIds.has(player.reclubUserId)) {
       setSheetPlayer(player);
       setSheetMode("info");
     } else {
@@ -682,6 +690,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                     <div className="grid grid-cols-4 gap-2">
                       {roster.players.map((player) => {
                         const isPaid = paidReclubIds.has(player.reclubUserId);
+                        const isCancelled = !isPaid && cancelledReclubIds.has(player.reclubUserId);
                         return (
                           <button
                             key={player.reclubUserId}
@@ -694,7 +703,8 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                                 <div
                                   className={cn(
                                     "flex h-[52px] w-[52px] items-center justify-center rounded-full text-lg font-bold text-white",
-                                    isPaid && "ring-[3px] ring-green-500"
+                                    isPaid && "ring-[3px] ring-green-500",
+                                    isCancelled && "ring-[3px] ring-neutral-500"
                                   )}
                                   style={{ backgroundColor: initialsColor(player.name) }}
                                 >
@@ -706,13 +716,19 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                                   alt=""
                                   className={cn(
                                     "h-[52px] w-[52px] rounded-full object-cover",
-                                    isPaid && "ring-[3px] ring-green-500"
+                                    isPaid && "ring-[3px] ring-green-500",
+                                    isCancelled && "ring-[3px] ring-neutral-500"
                                   )}
                                 />
                               )}
                               {isPaid && (
                                 <div className="absolute -top-0.5 -right-0.5 flex h-[20px] w-[20px] items-center justify-center rounded-full border-2 border-neutral-900 bg-green-500">
                                   <Check className="h-3 w-3 text-white" strokeWidth={3} aria-hidden />
+                                </div>
+                              )}
+                              {isCancelled && (
+                                <div className="absolute -top-1 -left-1 rounded bg-neutral-600 px-1 py-px text-[9px] font-bold leading-tight text-white">
+                                  $0
                                 </div>
                               )}
                             </div>
@@ -737,29 +753,46 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                     <div className="h-px flex-1 bg-amber-500/30" />
                   </div>
                   <div className="grid grid-cols-4 gap-2">
-                    {unmatchedPayments.map((p) => (
-                      <div key={p.paymentId} className="flex flex-col items-center">
-                        <div className="relative">
-                          {p.facePhotoPath ? (
-                            <img
-                              src={`/face-photos/${p.facePhotoPath}`}
-                              alt=""
-                              className="h-[52px] w-[52px] rounded-full object-cover ring-[3px] ring-amber-500"
-                            />
-                          ) : (
-                            <div
-                              className="flex h-[52px] w-[52px] items-center justify-center rounded-full text-lg font-bold text-white ring-[3px] ring-amber-500"
-                              style={{ backgroundColor: initialsColor(p.playerName) }}
-                            >
-                              {playerInitials(p.playerName)}
-                            </div>
-                          )}
+                    {unmatchedPayments.map((p) => {
+                      const isFree = p.status === "cancelled";
+                      return (
+                        <div key={p.paymentId} className="flex flex-col items-center">
+                          <div className="relative">
+                            {p.facePhotoPath ? (
+                              <img
+                                src={`/face-photos/${p.facePhotoPath}`}
+                                alt=""
+                                className={cn(
+                                  "h-[52px] w-[52px] rounded-full object-cover",
+                                  isFree ? "ring-[3px] ring-neutral-500" : "ring-[3px] ring-amber-500"
+                                )}
+                              />
+                            ) : (
+                              <div
+                                className={cn(
+                                  "flex h-[52px] w-[52px] items-center justify-center rounded-full text-lg font-bold text-white",
+                                  isFree ? "ring-[3px] ring-neutral-500" : "ring-[3px] ring-amber-500"
+                                )}
+                                style={{ backgroundColor: initialsColor(p.playerName) }}
+                              >
+                                {playerInitials(p.playerName)}
+                              </div>
+                            )}
+                            {isFree && (
+                              <div className="absolute -top-1 -left-1 rounded bg-neutral-600 px-1 py-px text-[9px] font-bold leading-tight text-white">
+                                $0
+                              </div>
+                            )}
+                          </div>
+                          <p className={cn(
+                            "mt-1 w-full truncate text-center text-[11px]",
+                            isFree ? "text-neutral-500" : "text-amber-400"
+                          )}>
+                            {p.playerName}
+                          </p>
                         </div>
-                        <p className="mt-1 w-full truncate text-center text-[11px] text-amber-400">
-                          {p.playerName}
-                        </p>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </>
               )}
