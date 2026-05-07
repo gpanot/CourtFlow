@@ -456,6 +456,12 @@ export function ReclubRosterSection({
     [allRosterPlayers, paidReclubIds]
   );
 
+  // Total people physically playing = sum of partyCount across all payments (confirmed + cancelled)
+  const totalPlayingCount = useMemo(
+    () => paidPlayers.reduce((sum, p) => sum + (p.partyCount ?? 1), 0),
+    [paidPlayers]
+  );
+
   const allRosterIds = useMemo(() => {
     const ids = new Set<number>();
     for (const p of allRosterPlayers) ids.add(p.reclubUserId);
@@ -757,7 +763,7 @@ export function ReclubRosterSection({
             <Text style={styles.statLabel}>{t("reclubKpiBooked")}</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={[styles.statValue, { color: "#22c55e" }]}>{totalPaid}</Text>
+            <Text style={[styles.statValue, { color: "#22c55e" }]}>{totalPlayingCount}</Text>
             <Text style={styles.statLabel}>{t("reclubKpiPaid")}</Text>
           </View>
           <TouchableOpacity
@@ -770,12 +776,6 @@ export function ReclubRosterSection({
             </Text>
             <Text style={styles.statLabel}>{t("reclubKpiUnmatched")}</Text>
           </TouchableOpacity>
-          <View style={styles.statCard}>
-            <Text style={[styles.statValue, { color: totalExpected > 0 ? "#3b82f6" : theme.muted }]}>
-              {totalExpected}
-            </Text>
-            <Text style={styles.statLabel}>{t("reclubKpiExpected")}</Text>
-          </View>
         </View>
 
         {/* Roster sections */}

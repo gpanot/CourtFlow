@@ -490,6 +490,12 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
 
   const totalExpected = totalBooked - totalPaid;
 
+  // Total people physically playing = sum of partyCount across all payments (confirmed + cancelled)
+  const totalPlayingCount = useMemo(
+    () => paidPlayersAll.reduce((sum, p) => sum + (p.partyCount ?? 1), 0),
+    [paidPlayersAll]
+  );
+
   const paidCountForRoster = (roster: ReclubRosterData) =>
     roster.players.filter((p) => paidReclubIds.has(p.reclubUserId)).length;
 
@@ -641,13 +647,13 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
           ) : (
             <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4">
               {/* Aggregated stat cards */}
-              <div className="mb-3 grid grid-cols-4 gap-2">
+              <div className="mb-3 grid grid-cols-3 gap-2">
                 <div className="rounded-lg bg-neutral-800/60 py-2.5 text-center">
                   <p className="text-xl font-bold text-white">{totalBooked}</p>
                   <p className="text-[11px] text-neutral-400">{t("staff.sessionPaymentsDetail.reclubLiveBooked")}</p>
                 </div>
                 <div className="rounded-lg bg-neutral-800/60 py-2.5 text-center">
-                  <p className="text-xl font-bold text-green-500">{totalPaid}</p>
+                  <p className="text-xl font-bold text-green-500">{totalPlayingCount}</p>
                   <p className="text-[11px] text-neutral-400">{t("staff.sessionPaymentsDetail.reclubLivePaid")}</p>
                 </div>
                 <button
@@ -658,10 +664,6 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                   <p className={cn("text-xl font-bold", unmatchedPaidCount > 0 ? "text-amber-400" : "text-neutral-500")}>{unmatchedPaidCount}</p>
                   <p className="text-[11px] text-neutral-400">{t("staff.sessionPaymentsDetail.reclubLiveUnmatched")}</p>
                 </button>
-                <div className="rounded-lg bg-neutral-800/60 py-2.5 text-center">
-                  <p className={cn("text-xl font-bold", totalExpected > 0 ? "text-blue-400" : "text-neutral-500")}>{totalExpected}</p>
-                  <p className="text-[11px] text-neutral-400">{t("staff.sessionPaymentsDetail.reclubLiveExpected")}</p>
-                </div>
               </div>
 
               {/* Per-roster sections */}

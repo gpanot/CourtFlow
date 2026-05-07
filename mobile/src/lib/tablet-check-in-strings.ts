@@ -363,8 +363,8 @@ const CHECK_IN_SCANNER_EN = {
   "reclubKpiMatched": "Matched",
   "reclubKpiAbsent": "Absent",
   "reclubKpiWalkIn": "Walk-in",
-  "reclubKpiBooked": "Booked",
-  "reclubKpiPaid": "Paid",
+  "reclubKpiBooked": "Expected",
+  "reclubKpiPaid": "Playing",
   "reclubKpiUnmatched": "Walk-ins",
   "reclubKpiExpected": "Expected",
 
@@ -911,8 +911,8 @@ const CHECK_IN_SCANNER_VI = {
   "reclubKpiMatched": "Khớp",
   "reclubKpiAbsent": "Vắng",
   "reclubKpiWalkIn": "Walk-in",
-  "reclubKpiBooked": "Đã đặt",
-  "reclubKpiPaid": "Đã trả",
+  "reclubKpiBooked": "Dự kiến",
+  "reclubKpiPaid": "Đang chơi",
   "reclubKpiUnmatched": "Walk-ins",
   "reclubKpiExpected": "Chờ đến",
 
