@@ -223,10 +223,13 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
       let count = 0;
       const all: PaidPlayerFull[] = [];
       for (const p of data.payments ?? []) {
-        // Only confirmed payments count toward paidPlayerCount (revenue) and Reclub matching
         if (!p.status || p.status === "confirmed") {
           count++;
           if (p.player?.reclubUserId) ids.add(p.player.reclubUserId);
+        }
+        // Cancelled (free-pass) players count as checked in for KPI purposes
+        if (p.status === "cancelled" && p.player?.reclubUserId) {
+          ids.add(p.player.reclubUserId);
         }
         all.push({
           paymentId: p.id,

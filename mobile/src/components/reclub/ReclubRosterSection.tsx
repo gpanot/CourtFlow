@@ -427,8 +427,12 @@ export function ReclubRosterSection({
     for (const p of confirmedPaidPlayers) {
       if (p.reclubUserId) ids.add(p.reclubUserId);
     }
+    // Include cancelled (free-pass) players — they checked in at $0
+    for (const p of paidPlayers) {
+      if (p.status === "cancelled" && p.reclubUserId) ids.add(p.reclubUserId);
+    }
     return ids;
-  }, [confirmedPaidPlayers]);
+  }, [confirmedPaidPlayers, paidPlayers]);
 
   // Cancelled payments whose player is linked to a Reclub account (free-pass roster members)
   const cancelledReclubIds = useMemo(() => {
