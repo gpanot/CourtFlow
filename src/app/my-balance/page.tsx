@@ -9,25 +9,49 @@ import type { BalanceData, VenueInfo, IdentifyResult } from "./types";
 
 type Screen = "loading" | "identify" | "pick-venue" | "balance";
 
-const STORAGE_KEY = "cf_balance_phone";
+const SESSION_KEY = "cf_balance_session";
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-function migrateOldStorageKeys(): string | null {
+interface CachedSession {
+  phone: string;
+  playerName: string;
+  venues: VenueInfo[];
+  identifiedAt: number;
+  venuesRefreshedAt: number;
+}
+
+function loadSession(): CachedSession | null {
   try {
-    for (let i = 0; i < localStorage.length; i++) {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const session = JSON.parse(raw) as CachedSession;
+    if (Date.now() - session.identifiedAt > SESSION_TTL_MS) {
+      localStorage.removeItem(SESSION_KEY);
+      return null;
+    }
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+function saveSession(session: CachedSession) {
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  } catch {}
+}
+
+function clearSession() {
+  try {
+    localStorage.removeItem(SESSION_KEY);
+    // Also clean up old per-venue keys from the previous implementation
+    for (let i = localStorage.length - 1; i >= 0; i--) {
       const key = localStorage.key(i);
-      if (key?.startsWith("cf_balance_phone_")) {
-        const phone = localStorage.getItem(key);
-        if (phone) {
-          localStorage.setItem(STORAGE_KEY, phone);
-        }
+      if (key?.startsWith("cf_balance_phone")) {
         localStorage.removeItem(key);
-        return phone;
       }
     }
-  } catch {
-    // localStorage unavailable (SSR, private browsing)
-  }
-  return null;
+  } catch {}
 }
 
 export default function MyBalancePage() {
@@ -49,77 +73,87 @@ export default function MyBalancePage() {
     []
   );
 
+  // Silently refresh the venues list in the background using the cached phone.
+  // This ensures new packages/venues picked up by the player are reflected.
+  const refreshVenuesInBackground = useCallback(
+    async (cachedPhone: string, session: CachedSession) => {
+      try {
+        const params = new URLSearchParams({ phone: cachedPhone });
+        const res = await fetch(`/api/balance/identify?${params}`);
+        if (!res.ok) return;
+        const data: IdentifyResult = await res.json();
+        if (!data.found || !data.venues) return;
+        const updatedSession: CachedSession = {
+          ...session,
+          venues: data.venues,
+          venuesRefreshedAt: Date.now(),
+        };
+        saveSession(updatedSession);
+        setVenues(data.venues);
+      } catch {}
+    },
+    []
+  );
+
   useEffect(() => {
     let cancelled = false;
 
     async function init() {
-      migrateOldStorageKeys();
+      const session = loadSession();
 
-      const savedPhone = localStorage.getItem(STORAGE_KEY);
-      if (!savedPhone) {
+      if (!session) {
         if (!cancelled) setScreen("identify");
         return;
       }
 
-      try {
-        const params = new URLSearchParams({ phone: savedPhone });
-        const res = await fetch(`/api/balance/identify?${params}`);
-        if (!res.ok) {
-          if (!cancelled) {
-            localStorage.removeItem(STORAGE_KEY);
+      // Session is valid — restore state immediately
+      if (!cancelled) {
+        setPhone(session.phone);
+        setPlayerName(session.playerName);
+        setVenues(session.venues);
+
+        if (session.venues.length > 1) {
+          setScreen("pick-venue");
+        } else if (session.venues.length === 1) {
+          const data = await fetchBalanceForVenue(session.phone, session.venues[0].id);
+          if (cancelled) return;
+          if (data) {
+            setBalanceData(data);
+            setScreen("balance");
+          } else {
             setScreen("identify");
           }
-          return;
-        }
-
-        const data: IdentifyResult = await res.json();
-        if (cancelled) return;
-
-        if (!data.found) {
-          localStorage.removeItem(STORAGE_KEY);
-          setScreen("identify");
-          return;
-        }
-
-        setPlayerName(data.playerName ?? "");
-        setPhone(savedPhone);
-
-        if (data.venues) {
-          setVenues(data.venues);
-        }
-
-        if (data.venues && data.venues.length > 1) {
-          setScreen("pick-venue");
-        } else if (data.venueName && data.subscription !== undefined) {
-          setBalanceData(data as BalanceData);
-          setScreen("balance");
         } else {
-          localStorage.removeItem(STORAGE_KEY);
           setScreen("identify");
         }
-      } catch {
-        if (!cancelled) {
-          localStorage.removeItem(STORAGE_KEY);
-          setScreen("identify");
-        }
+      }
+
+      // Always silently refresh venues in the background to catch new packages/venues
+      if (!cancelled) {
+        refreshVenuesInBackground(session.phone, session);
       }
     }
 
     init();
     return () => { cancelled = true; };
-  }, []);
+  }, [fetchBalanceForVenue, refreshVenuesInBackground]);
 
   const handleIdentified = useCallback(
     (result: IdentifyResult, identifiedPhone: string) => {
-      localStorage.setItem(STORAGE_KEY, identifiedPhone);
+      const sessionVenues = result.venues ?? [];
+      const session: CachedSession = {
+        phone: identifiedPhone,
+        playerName: result.playerName ?? "",
+        venues: sessionVenues,
+        identifiedAt: Date.now(),
+        venuesRefreshedAt: Date.now(),
+      };
+      saveSession(session);
       setPhone(identifiedPhone);
       setPlayerName(result.playerName ?? "");
+      setVenues(sessionVenues);
 
-      if (result.venues) {
-        setVenues(result.venues);
-      }
-
-      if (result.venues && result.venues.length > 1) {
+      if (sessionVenues.length > 1) {
         setScreen("pick-venue");
       } else if (result.venueName && result.subscription !== undefined) {
         setBalanceData(result as BalanceData);
@@ -144,7 +178,7 @@ export default function MyBalancePage() {
   );
 
   const handleLogout = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
+    clearSession();
     setPhone("");
     setPlayerName("");
     setVenues([]);
@@ -165,13 +199,10 @@ export default function MyBalancePage() {
     if (!phone || !balanceData) return;
     setRefreshing(true);
     try {
-      const venue = venues.find((v) => v.name === balanceData.venueName);
-      const venueId = venue?.id ?? venues[0]?.id;
-      if (!venueId) return;
-      const data = await fetchBalanceForVenue(phone, venueId);
-      if (data) {
-        setBalanceData(data);
-      }
+      const venue = venues.find((v) => v.name === balanceData.venueName) ?? venues[0];
+      if (!venue) return;
+      const data = await fetchBalanceForVenue(phone, venue.id);
+      if (data) setBalanceData(data);
     } finally {
       setRefreshing(false);
     }
@@ -179,8 +210,11 @@ export default function MyBalancePage() {
 
   if (screen === "loading") {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-[#0e0e0e]">
-        <Loader2 className="h-8 w-8 animate-spin text-neutral-600" />
+      <div
+        className="flex min-h-dvh items-center justify-center"
+        style={{ background: "var(--bal-bg)" }}
+      >
+        <Loader2 className="h-8 w-8 animate-spin" style={{ color: "var(--bal-dimmed)" }} />
       </div>
     );
   }
@@ -207,6 +241,7 @@ export default function MyBalancePage() {
         onRefresh={handleRefresh}
         onBack={handleBackToVenues}
         refreshing={refreshing}
+        showBackToVenues={venues.length > 1}
       />
     );
   }

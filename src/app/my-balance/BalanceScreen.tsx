@@ -1,7 +1,9 @@
 "use client";
 
-import { RefreshCw, ChevronLeft } from "lucide-react";
+import { RefreshCw } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { SubscriptionCard } from "@/components/balance/SubscriptionCard";
+import { BalanceTopBar } from "./BalanceTopBar";
 import type { BalanceData } from "./types";
 
 interface BalanceScreenProps {
@@ -9,13 +11,20 @@ interface BalanceScreenProps {
   onRefresh: () => void;
   onBack: () => void;
   refreshing: boolean;
+  showBackToVenues: boolean;
 }
 
-function formatRelativeTime(iso: string): string {
+function formatRelativeTime(iso: string, locale: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60_000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins} min${mins !== 1 ? "s" : ""} ago`;
+  const isVi = locale.startsWith("vi");
+
+  if (mins < 1) return isVi ? "Vừa xong" : "Just now";
+  if (mins < 60) {
+    return isVi
+      ? `${mins} phút trước`
+      : `${mins} min${mins !== 1 ? "s" : ""} ago`;
+  }
   const hours = Math.floor(mins / 60);
   if (hours < 24) {
     const d = new Date(iso);
@@ -25,32 +34,31 @@ function formatRelativeTime(iso: string): string {
       d.getMonth() === today.getMonth() &&
       d.getFullYear() === today.getFullYear();
     if (isToday) {
-      return `Today, ${d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+      return (isVi ? "Hôm nay, " : "Today, ") +
+        d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
     }
-    return `${hours} hour${hours !== 1 ? "s" : ""} ago`;
+    return isVi
+      ? `${hours} giờ trước`
+      : `${hours} hour${hours !== 1 ? "s" : ""} ago`;
   }
   const days = Math.floor(hours / 24);
-  if (days === 1) return "Yesterday";
-  return `${days} days ago`;
+  if (days === 1) return isVi ? "Hôm qua" : "Yesterday";
+  return isVi ? `${days} ngày trước` : `${days} days ago`;
 }
 
-export function BalanceScreen({ data, onRefresh, onBack, refreshing }: BalanceScreenProps) {
+export function BalanceScreen({ data, onRefresh, onBack, refreshing, showBackToVenues }: BalanceScreenProps) {
+  const { t, i18n } = useTranslation();
+
   return (
-    <div className="flex min-h-dvh flex-col bg-[#0e0e0e]">
-      <div className="flex items-center gap-3 border-b border-neutral-800 px-4 py-3">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1 text-sm text-neutral-400 hover:text-white"
-        >
-          <ChevronLeft className="h-5 w-5" />
-          Back
-        </button>
-        <span className="text-sm text-neutral-500">{data.venueName}</span>
-      </div>
+    <div
+      className="flex min-h-dvh flex-col"
+      style={{ background: "var(--bal-bg)" }}
+    >
+      <BalanceTopBar label={data.venueName} onBack={onBack} />
 
       <div className="flex flex-1 flex-col px-6 py-8">
-        <h1 className="text-2xl font-bold text-white">
-          Hi {data.playerName}
+        <h1 className="text-2xl font-bold" style={{ color: "var(--bal-text)" }}>
+          {t("home.hi", { name: data.playerName })}
         </h1>
 
         <div className="mt-6">
@@ -65,10 +73,18 @@ export function BalanceScreen({ data, onRefresh, onBack, refreshing }: BalanceSc
               isUnlimited={data.subscription.isUnlimited}
             />
           ) : (
-            <div className="rounded-2xl border border-neutral-700 bg-neutral-900 px-6 py-8 text-center">
-              <p className="text-lg font-semibold text-white">No active package</p>
-              <p className="mt-2 text-sm text-neutral-400">
-                You are currently on pay-per-session
+            <div
+              className="rounded-2xl border px-6 py-8 text-center"
+              style={{
+                borderColor: "var(--bal-border)",
+                background: "var(--bal-card)",
+              }}
+            >
+              <p className="text-lg font-semibold" style={{ color: "var(--bal-text)" }}>
+                {t("balance.noPackage")}
+              </p>
+              <p className="mt-2 text-sm" style={{ color: "var(--bal-muted)" }}>
+                {t("balance.noPackageSub")}
               </p>
             </div>
           )}
@@ -76,18 +92,28 @@ export function BalanceScreen({ data, onRefresh, onBack, refreshing }: BalanceSc
 
         <div className="mt-6 space-y-3">
           {data.lastCheckIn && (
-            <div className="flex items-center justify-between rounded-xl bg-neutral-900/50 px-4 py-3">
-              <span className="text-sm text-neutral-500">Last check-in</span>
-              <span className="text-sm text-neutral-300">
-                {formatRelativeTime(data.lastCheckIn)}
+            <div
+              className="flex items-center justify-between rounded-xl px-4 py-3"
+              style={{ background: "var(--bal-card-surface)" }}
+            >
+              <span className="text-sm" style={{ color: "var(--bal-subtle)" }}>
+                {t("balance.lastCheckIn")}
+              </span>
+              <span className="text-sm" style={{ color: "var(--bal-text-secondary)" }}>
+                {formatRelativeTime(data.lastCheckIn, i18n.language)}
               </span>
             </div>
           )}
 
           {data.subscription && (
-            <div className="flex items-center justify-between rounded-xl bg-neutral-900/50 px-4 py-3">
-              <span className="text-sm text-neutral-500">Sessions used this package</span>
-              <span className="text-sm text-neutral-300">
+            <div
+              className="flex items-center justify-between rounded-xl px-4 py-3"
+              style={{ background: "var(--bal-card-surface)" }}
+            >
+              <span className="text-sm" style={{ color: "var(--bal-subtle)" }}>
+                {t("balance.sessionsUsed")}
+              </span>
+              <span className="text-sm" style={{ color: "var(--bal-text-secondary)" }}>
                 {data.subscription.sessionsUsed}
               </span>
             </div>
@@ -98,17 +124,23 @@ export function BalanceScreen({ data, onRefresh, onBack, refreshing }: BalanceSc
           <button
             onClick={onRefresh}
             disabled={refreshing}
-            className="flex items-center gap-2 rounded-xl border border-neutral-700 bg-neutral-900 px-6 py-2.5 text-sm font-medium text-neutral-300 hover:bg-neutral-800 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl border px-6 py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
+            style={{
+              borderColor: "var(--bal-border)",
+              background: "var(--bal-card)",
+              color: "var(--bal-text-secondary)",
+            }}
           >
             <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-            Refresh
+            {t("balance.refresh")}
           </button>
 
           <button
             onClick={onBack}
-            className="text-sm text-neutral-500 hover:text-neutral-300"
+            className="text-sm transition-colors"
+            style={{ color: "var(--bal-subtle)" }}
           >
-            Switch venue
+            {showBackToVenues ? t("balance.switchVenue") : t("balance.logout")}
           </button>
         </div>
       </div>

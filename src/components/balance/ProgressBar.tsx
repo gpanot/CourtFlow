@@ -20,13 +20,16 @@ export function ProgressBar({ sessionsUsed, sessionsTotal }: ProgressBarProps) {
 
   return (
     <div className="w-full">
-      <div className="h-2.5 w-full overflow-hidden rounded-full bg-neutral-700">
+      <div
+        className="h-2.5 w-full overflow-hidden rounded-full"
+        style={{ background: "var(--bal-border, #404040)" }}
+      >
         <div
           className={cn("h-full rounded-full transition-all", barColor)}
           style={{ width: `${Math.min(pct, 100)}%` }}
         />
       </div>
-      <p className="mt-1.5 text-right text-xs text-neutral-500">
+      <p className="mt-1.5 text-right text-xs" style={{ color: "var(--bal-subtle, #737373)" }}>
         {sessionsUsed} / {sessionsTotal}
       </p>
     </div>
