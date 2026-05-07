@@ -73,6 +73,7 @@ export interface PendingPaymentPlayer {
   phone?: string;
   skillLevel: string | null;
   facePhotoPath: string | null;
+  reclubUserId?: number | null;
 }
 
 export interface PendingPaymentCheckInPlayer {

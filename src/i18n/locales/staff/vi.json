@@ -594,7 +594,7 @@
       "reclubSelectedCount": "Đã chọn {{count}}"
     },
     "courtPayAwaitingPayment": {
-      "payTitle": "Sắp xong rồi, {{name}}!",
+      "payTitle": "🤩 {{name}} 🎉",
       "payReturningTitle": "Thanh toán",
       "payScanQR": "Quét bằng ứng dụng ngân hàng",
       "payPartyPerson": "người",

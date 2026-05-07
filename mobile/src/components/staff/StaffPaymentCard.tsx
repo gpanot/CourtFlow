@@ -117,6 +117,8 @@ export function createCardStyles(t: AppColors) {
       color: t.subtle,
     },
     cardCancelled: { borderColor: "rgba(239,68,68,0.4)", opacity: 0.75 },
+    cardGroupPayer: { borderColor: "rgba(99,102,241,0.6)", borderWidth: 1.5 },
+    cardGroupMember: { borderColor: "rgba(99,102,241,0.35)", borderWidth: 1.5 },
 
     // --- compact layout ---
     paidRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
@@ -185,6 +187,8 @@ export function createCardStyles(t: AppColors) {
     badgeSubText: { fontSize: 10, fontWeight: "700", color: t.purple400 },
     badgeFlow: { backgroundColor: "rgba(217,70,239,0.2)" },
     badgeFlowText: { fontSize: 10, fontWeight: "700", color: t.fuchsia300 },
+    badgeReclub: { backgroundColor: "rgba(20,184,166,0.2)" },
+    badgeReclubText: { fontSize: 10, fontWeight: "700", color: "#2dd4bf" },
     badgeApr: { backgroundColor: "rgba(22,163,74,0.2)" },
     badgeAprText: { fontSize: 10, fontWeight: "700", color: t.green400 },
     badgeCancelledTag: { backgroundColor: "rgba(239,68,68,0.2)" },
@@ -200,6 +204,13 @@ export function createCardStyles(t: AppColors) {
     cancelReasonLine: { fontSize: 11, color: t.red500, fontWeight: "600" },
     cancelledAmount: { fontSize: 13, fontWeight: "700", color: t.red400, marginTop: 2 },
     amountInline: { fontSize: 13, fontWeight: "700", color: t.text },
+    paidByInline: { fontSize: 12, fontWeight: "600", color: t.purple400 },
+
+    // --- group member card ---
+    cardMember: { backgroundColor: t.card, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 9, borderWidth: 1, borderColor: t.border, gap: 6 },
+    memberChevronBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, backgroundColor: "rgba(99,102,241,0.15)", marginTop: 4, alignSelf: "flex-start" },
+    memberChevronText: { fontSize: 12, fontWeight: "700", color: "#818cf8" },
+    avatarChevronWrap: { alignItems: "center", gap: 4 },
 
     // --- dots menu button ---
     dotsBtn: { padding: 4, borderRadius: 8 },
@@ -234,6 +245,14 @@ export interface StaffPaymentCardProps {
   subLeftText?: string | null;
   /** 1-based position index shown as a badge in the bottom-right corner. */
   index?: number;
+  /** Number of group members under this payer — shows expand chevron when > 0. */
+  groupMemberCount?: number;
+  /** Whether the group is currently expanded. */
+  groupExpanded?: boolean;
+  /** Called when the user taps the expand/collapse chevron. */
+  onGroupToggle?: () => void;
+  /** Render as a group member (indented, muted background). */
+  isMember?: boolean;
 }
 
 export function StaffPaymentCard({
@@ -249,6 +268,10 @@ export function StaffPaymentCard({
   typeLabel,
   subLeftText,
   index,
+  groupMemberCount,
+  groupExpanded,
+  onGroupToggle,
+  isMember = false,
 }: StaffPaymentCardProps) {
   const theme = useAppColors();
   const styles = React.useMemo(() => createCardStyles(theme), [theme]);
@@ -290,6 +313,11 @@ export function StaffPaymentCard({
       <View style={[styles.badge, styles.badgeFlow]}>
         <Text style={styles.badgeFlowText}>{getFlowTag(item)}</Text>
       </View>
+      {item.player?.reclubUserId ? (
+        <View style={[styles.badge, styles.badgeReclub]}>
+          <Text style={styles.badgeReclubText}>RECLUB</Text>
+        </View>
+      ) : null}
       <View style={[styles.badge, styles.badgeApr]}>
         <Text style={styles.badgeAprText}>
           {item.confirmedBy === "sepay" ? "SEPAY" : "MANUAL"}
@@ -313,13 +341,15 @@ export function StaffPaymentCard({
         <Text style={styles.skillMuted}>Skill: {player.skillLevel}</Text>
       ) : null}
       <Text style={styles.metaLine}>
-        {typeLabel} · <Text style={styles.amountInline}>{formatVND(item.amount)}</Text>
+        {typeLabel}
+        {item.groupPaidByPaymentId ? (
+          <Text style={styles.paidByInline}> · Paid by: {item.groupPaidByName ?? "group"}</Text>
+        ) : (
+          <Text> · <Text style={styles.amountInline}>{formatVND(item.amount)}</Text></Text>
+        )}
       </Text>
       {(item.partyCount ?? 1) > 1 ? (
         <Text style={styles.groupLine}>Group of {item.partyCount}</Text>
-      ) : null}
-      {showGroupPaidBy && item.groupPaidByName ? (
-        <Text style={styles.paidByLine}>Paid by: {item.groupPaidByName}</Text>
       ) : null}
       <Text style={styles.dateLine}>
         {formatDateTime(item.confirmedAt)}
@@ -337,9 +367,16 @@ export function StaffPaymentCard({
   // -------------------------------------------------------------------------
   // COMPACT variant (PaymentTabScreen)
   // -------------------------------------------------------------------------
+  const isGroupPayer = (groupMemberCount ?? 0) > 0;
+  const groupBorderStyle = isGroupPayer
+    ? styles.cardGroupPayer
+    : isMember
+      ? styles.cardGroupMember
+      : null;
+
   if (variant === "compact") {
-    return (
-      <View style={[styles.cardCompact, isCancelled && styles.cardCancelled, { position: "relative" }]}>
+    const cardContent = (
+      <>
         {/* Expanded photo above row */}
         {faceUri && expanded ? (
           <TouchableOpacity
@@ -356,22 +393,34 @@ export function StaffPaymentCard({
         ) : null}
 
         <View style={styles.paidRow}>
-          {/* Avatar ring */}
-          {faceUri ? (
-            <View style={[styles.paidAvatarRing, skillRing ?? styles.paidAvatarRingDefault]}>
-              <TouchableOpacity
-                style={styles.paidAvatarTouch}
-                onPress={() => onToggleExpand(expandKey)}
-                activeOpacity={0.85}
-              >
-                <Image
-                  source={{ uri: faceUri }}
-                  style={styles.paidAvatarImg}
-                  resizeMode="cover"
+          {/* Avatar + chevron pill stacked below */}
+          <View style={styles.avatarChevronWrap}>
+            {faceUri ? (
+              <View style={[styles.paidAvatarRing, skillRing ?? styles.paidAvatarRingDefault]}>
+                <TouchableOpacity
+                  style={styles.paidAvatarTouch}
+                  onPress={() => onToggleExpand(expandKey)}
+                  activeOpacity={0.85}
+                >
+                  <Image
+                    source={{ uri: faceUri }}
+                    style={styles.paidAvatarImg}
+                    resizeMode="cover"
+                  />
+                </TouchableOpacity>
+              </View>
+            ) : null}
+            {isGroupPayer && onGroupToggle ? (
+              <View style={styles.memberChevronBtn}>
+                <Ionicons
+                  name={groupExpanded ? "chevron-up" : "chevron-down"}
+                  size={13}
+                  color="#818cf8"
                 />
-              </TouchableOpacity>
-            </View>
-          ) : null}
+                <Text style={styles.memberChevronText}>{groupMemberCount}</Text>
+              </View>
+            ) : null}
+          </View>
 
           {/* Meta column */}
           <View style={styles.paidMetaCol}>
@@ -413,6 +462,24 @@ export function StaffPaymentCard({
             <Text style={styles.indexBadgeText}>{index}</Text>
           </View>
         )}
+      </>
+    );
+
+    if (isGroupPayer && onGroupToggle) {
+      return (
+        <TouchableOpacity
+          style={[isMember ? styles.cardMember : styles.cardCompact, isCancelled && styles.cardCancelled, groupBorderStyle, { position: "relative" }]}
+          onPress={onGroupToggle}
+          activeOpacity={0.85}
+        >
+          {cardContent}
+        </TouchableOpacity>
+      );
+    }
+
+    return (
+      <View style={[isMember ? styles.cardMember : styles.cardCompact, isCancelled && styles.cardCancelled, groupBorderStyle, { position: "relative" }]}>
+        {cardContent}
       </View>
     );
   }

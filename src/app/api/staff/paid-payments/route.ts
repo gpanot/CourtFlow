@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
         ],
       },
       include: {
-        player: { select: { id: true, name: true, skillLevel: true, facePhotoPath: true } },
+        player: { select: { id: true, name: true, phone: true, skillLevel: true, facePhotoPath: true, reclubUserId: true } },
         checkInPlayer: { select: { id: true, name: true, skillLevel: true, phone: true } },
       },
       orderBy: { confirmedAt: "desc" },
@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
       courtPayPhones.length > 0
         ? await prisma.player.findMany({
             where: { phone: { in: courtPayPhones } },
-            select: { phone: true, facePhotoPath: true, avatarPhotoPath: true },
+            select: { id: true, phone: true, name: true, facePhotoPath: true, avatarPhotoPath: true, reclubUserId: true },
           })
         : [];
     const faceByPhone = new Map(
@@ -111,6 +111,7 @@ export async function GET(request: NextRequest) {
         p.avatarPhotoPath ?? p.facePhotoPath ?? null,
       ])
     );
+    const playerByPhone = new Map(linkedPlayers.map((p) => [p.phone, p]));
 
     // Identify discounted payments
     const sessionRecord = await prisma.session.findUnique({
@@ -141,11 +142,29 @@ export async function GET(request: NextRequest) {
       const subscriptionInfo = p.checkInPlayerId
         ? subscriptionByPlayer.get(p.checkInPlayerId) ?? null
         : null;
-      const facePhotoUrl = (p.checkInPlayerId && !p.playerId && p.checkInPlayer?.phone)
-        ? (faceByPhone.get(p.checkInPlayer.phone) ?? null)
-        : null;
       const discounted = discountedPaymentIds.has(p.id) || undefined;
-      return { ...p, subscriptionInfo, facePhotoUrl, discounted };
+      if (p.checkInPlayerId && !p.playerId && p.checkInPlayer?.phone) {
+        const resolvedPlayer = playerByPhone.get(p.checkInPlayer.phone);
+        return {
+          ...p,
+          facePhotoUrl: faceByPhone.get(p.checkInPlayer.phone) ?? null,
+          subscriptionInfo,
+          discounted,
+          ...(resolvedPlayer
+            ? {
+                player: {
+                  id: resolvedPlayer.id,
+                  name: resolvedPlayer.name,
+                  phone: resolvedPlayer.phone,
+                  facePhotoPath: resolvedPlayer.facePhotoPath,
+                  reclubUserId: resolvedPlayer.reclubUserId,
+                  skillLevel: null,
+                },
+              }
+            : {}),
+        };
+      }
+      return { ...p, subscriptionInfo, facePhotoUrl: null, discounted };
     });
 
     const confirmed = enriched.filter((p) => p.status === "confirmed");

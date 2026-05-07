@@ -586,7 +586,7 @@
       "reclubSelectedCount": "{{count}} selected"
     },
     "courtPayAwaitingPayment": {
-      "payTitle": "Almost there, {{name}}!",
+      "payTitle": "🤩 {{name}} 🎉",
       "payReturningTitle": "Payment",
       "payScanQR": "Scan with your banking app",
       "payPartyPerson": "person",

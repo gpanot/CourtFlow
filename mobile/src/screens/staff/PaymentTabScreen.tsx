@@ -42,7 +42,12 @@ import {
 } from "../../components/staff/StaffPaymentCard";
 
 type SubTab = "pending" | "paid";
-type PaidFilter = "all" | "group" | "cash" | "name";
+type PaidFilter = "all" | "group" | "cash" | "name" | "walkins";
+
+/** A row in the paid FlatList — either a standalone payment or a group payer with members embedded. */
+type PaidListItem =
+  | { kind: "standalone"; payment: PendingPayment }
+  | { kind: "group-payer"; payment: PendingPayment; members: PendingPayment[] };
 
 /** Socket `payment:updated` payload (headcount / amount change on same pending row). */
 type PaymentUpdatedSocketPayload = {
@@ -360,6 +365,14 @@ function createStyles(t: AppColors) {
     },
     filterChipText: { fontSize: 12, fontWeight: "600", color: t.muted },
     filterChipTextActive: { color: "#fff" },
+
+    // --- group member tree ---
+    memberRow: { flexDirection: "row", marginTop: 4 },
+    memberConnector: { width: 20, alignItems: "center" },
+    memberLine: { width: 2, flex: 1, backgroundColor: "rgba(99,102,241,0.4)", marginBottom: 0 },
+    memberLineShort: { marginBottom: 8 },
+    memberElbow: { width: 10, height: 2, backgroundColor: "rgba(99,102,241,0.4)", alignSelf: "flex-end", marginBottom: 16 },
+    memberCardWrap: { flex: 1 },
   });
 }
 
@@ -391,12 +404,41 @@ export function PaymentTabScreen() {
   const [groupTargetIsPending, setGroupTargetIsPending] = useState(false);
   const [groupAssigning, setGroupAssigning] = useState(false);
 
+  const walkInsCount = useMemo(
+    () => paid.filter((p) => p.checkInPlayerId !== null).length,
+    [paid]
+  );
+
+  const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(new Set());
+
+  const toggleGroupExpand = useCallback((payerId: string) => {
+    setExpandedGroupIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(payerId)) next.delete(payerId);
+      else next.add(payerId);
+      return next;
+    });
+  }, []);
+
+  // Auto-expand newly appearing group payers
+  useEffect(() => {
+    const memberPayerIds = new Set(paid.map((p) => p.groupPaidByPaymentId).filter((id): id is string => !!id));
+    if (memberPayerIds.size === 0) return;
+    setExpandedGroupIds((prev) => {
+      let changed = false;
+      const next = new Set(prev);
+      for (const id of memberPayerIds) {
+        if (!next.has(id)) { next.add(id); changed = true; }
+      }
+      return changed ? next : prev;
+    });
+  }, [paid]);
+
   const filteredPaid = useMemo(() => {
     if (paidFilter === "all") return paid;
     if (paidFilter === "group") {
-      const grouped = paid.filter((p) => p.groupPaidByPaymentId);
-      const others = paid.filter((p) => !p.groupPaidByPaymentId);
-      return [...grouped, ...others];
+      const memberPaymentIds = new Set(paid.map((p) => p.groupPaidByPaymentId).filter(Boolean));
+      return paid.filter((p) => p.groupPaidByPaymentId || memberPaymentIds.has(p.id));
     }
     if (paidFilter === "cash") {
       const cash = paid.filter((p) => p.paymentMethod === "cash");
@@ -410,8 +452,36 @@ export function PaymentTabScreen() {
         return nameA.localeCompare(nameB);
       });
     }
+    if (paidFilter === "walkins") {
+      return paid.filter((p) => p.checkInPlayerId !== null);
+    }
     return paid;
   }, [paid, paidFilter]);
+
+  /** Build the flat FlatList item array, grouping members under their payer. */
+  const paidListItems = useMemo<PaidListItem[]>(() => {
+    // Build a map: payerPaymentId → member payments
+    const membersByPayer = new Map<string, PendingPayment[]>();
+    for (const p of filteredPaid) {
+      if (p.groupPaidByPaymentId) {
+        const arr = membersByPayer.get(p.groupPaidByPaymentId) ?? [];
+        arr.push(p);
+        membersByPayer.set(p.groupPaidByPaymentId, arr);
+      }
+    }
+    const memberIds = new Set(filteredPaid.filter((p) => p.groupPaidByPaymentId).map((p) => p.id));
+    const items: PaidListItem[] = [];
+    for (const p of filteredPaid) {
+      if (memberIds.has(p.id)) continue; // rendered under the payer
+      const members = membersByPayer.get(p.id);
+      if (members && members.length > 0) {
+        items.push({ kind: "group-payer", payment: p, members });
+      } else {
+        items.push({ kind: "standalone", payment: p });
+      }
+    }
+    return items;
+  }, [filteredPaid]);
 
   const fetchPending = useCallback(async () => {
     if (!venueId) return;
@@ -798,39 +868,92 @@ export function PaymentTabScreen() {
     );
   };
 
-  const renderPaidItem = ({ item }: { item: PendingPayment }) => {
+  const buildTypeLabel = useCallback((item: PendingPayment) => {
     const isNew = item.type === "registration";
     const isSub = item.paymentMethod === "subscription" || item.type === "subscription";
+    return isSub ? t("paymentSubLeft") : isNew ? t("paymentRegistration") : t("paymentCheckIn");
+  }, [t]);
+
+  const buildSubLeftText = useCallback((item: PendingPayment) => {
     const sub = item.subscriptionInfo;
-    const subLeftText = sub
-      ? sub.isUnlimited
-        ? `${t("paymentSubLeft")}: ${t("paymentUnlimited")} (${sub.daysRemaining} ${t("paymentDays")})`
-        : `${t("paymentSubLeft")}: ${sub.sessionsRemaining ?? 0} ${t("paymentSessions")} (${sub.daysRemaining} ${t("paymentDays")})`
-      : null;
-    const typeLabel = isSub
-      ? t("paymentSubLeft")
-      : isNew
-        ? t("paymentRegistration")
-        : t("paymentCheckIn");
+    if (!sub) return null;
+    return sub.isUnlimited
+      ? `${t("paymentSubLeft")}: ${t("paymentUnlimited")} (${sub.daysRemaining} ${t("paymentDays")})`
+      : `${t("paymentSubLeft")}: ${sub.sessionsRemaining ?? 0} ${t("paymentSessions")} (${sub.daysRemaining} ${t("paymentDays")})`;
+  }, [t]);
+
+  const renderMemberCard = useCallback((member: PendingPayment, isLast: boolean) => (
+    <View key={member.id} style={styles.memberRow}>
+      {/* Vertical connector line */}
+      <View style={styles.memberConnector}>
+        <View style={[styles.memberLine, isLast && styles.memberLineShort]} />
+        <View style={styles.memberElbow} />
+      </View>
+      <View style={styles.memberCardWrap}>
+        <StaffPaymentCard
+          item={member}
+          variant="compact"
+          expandedPhotoPrefix="paid-member"
+          expandedPhotoId={expandedPhotoId}
+          onToggleExpand={(key) => setExpandedPhotoId((prev) => (prev === key ? null : key))}
+          onMenuPress={(id, y) => { setMenuY(y); setMenuPaymentId(id); }}
+          showGroupPaidBy
+          showCancelledAmount
+          typeLabel={buildTypeLabel(member)}
+          subLeftText={buildSubLeftText(member)}
+          isMember
+        />
+      </View>
+    </View>
+  ), [expandedPhotoId, buildTypeLabel, buildSubLeftText, styles]);
+
+  const renderPaidItem = ({ item }: { item: PaidListItem }) => {
+    const payment = item.payment;
+    const typeLabel = buildTypeLabel(payment);
+    const subLeftText = buildSubLeftText(payment);
+
+    if (item.kind === "standalone") {
+      return (
+        <StaffPaymentCard
+          item={payment}
+          variant="compact"
+          expandedPhotoPrefix="paid"
+          expandedPhotoId={expandedPhotoId}
+          onToggleExpand={(key) => setExpandedPhotoId((prev) => (prev === key ? null : key))}
+          onMenuPress={(id, y) => { setMenuY(y); setMenuPaymentId(id); }}
+          showGroupPaidBy
+          showCancelledAmount
+          typeLabel={typeLabel}
+          subLeftText={subLeftText}
+        />
+      );
+    }
+
+    // group-payer with members
+    const isExpanded = expandedGroupIds.has(payment.id);
+    const memberCount = item.members.length;
 
     return (
-      <StaffPaymentCard
-        item={item}
-        variant="compact"
-        expandedPhotoPrefix="paid"
-        expandedPhotoId={expandedPhotoId}
-        onToggleExpand={(key) =>
-          setExpandedPhotoId((prev) => (prev === key ? null : key))
-        }
-        onMenuPress={(id, y) => {
-          setMenuY(y);
-          setMenuPaymentId(id);
-        }}
-        showGroupPaidBy
-        showCancelledAmount
-        typeLabel={typeLabel}
-        subLeftText={subLeftText}
-      />
+      <View>
+        <StaffPaymentCard
+          item={payment}
+          variant="compact"
+          expandedPhotoPrefix="paid"
+          expandedPhotoId={expandedPhotoId}
+          onToggleExpand={(key) => setExpandedPhotoId((prev) => (prev === key ? null : key))}
+          onMenuPress={(id, y) => { setMenuY(y); setMenuPaymentId(id); }}
+          showGroupPaidBy
+          showCancelledAmount
+          typeLabel={typeLabel}
+          subLeftText={subLeftText}
+          groupMemberCount={memberCount}
+          groupExpanded={isExpanded}
+          onGroupToggle={() => toggleGroupExpand(payment.id)}
+        />
+        {isExpanded
+          ? item.members.map((m, i) => renderMemberCard(m, i === item.members.length - 1))
+          : null}
+      </View>
     );
   };
 
@@ -888,7 +1011,7 @@ export function PaymentTabScreen() {
 
       {subTab === "paid" ? (
         <View style={styles.filterRow}>
-          {(["all", "group", "cash", "name"] as PaidFilter[]).map((f) => (
+          {(["all", "group", "cash", "name", "walkins"] as PaidFilter[]).map((f) => (
             <TouchableOpacity
               key={f}
               style={[styles.filterChip, paidFilter === f && styles.filterChipActive]}
@@ -896,7 +1019,7 @@ export function PaymentTabScreen() {
               activeOpacity={0.7}
             >
               <Text style={[styles.filterChipText, paidFilter === f && styles.filterChipTextActive]}>
-                {f === "all" ? "All" : f === "group" ? "Group" : f === "cash" ? "Cash" : "Name"}
+                {f === "all" ? "All" : f === "group" ? "Group" : f === "cash" ? "Cash" : f === "name" ? "Name" : `Walk-ins(${walkInsCount})`}
               </Text>
             </TouchableOpacity>
           ))}
@@ -926,10 +1049,10 @@ export function PaymentTabScreen() {
         />
       ) : (
         <FlatList
-          data={filteredPaid}
-          keyExtractor={(p) => p.id}
+          data={paidListItems}
+          keyExtractor={(item) => item.payment.id}
           renderItem={renderPaidItem}
-          extraData={[expandedPhotoId, menuPaymentId, paidFilter]}
+          extraData={[expandedPhotoId, menuPaymentId, paidFilter, expandedGroupIds]}
           contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl

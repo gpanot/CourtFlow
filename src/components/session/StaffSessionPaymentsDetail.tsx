@@ -13,7 +13,7 @@ import {
 import { cn } from "@/lib/cn";
 import { ArrowLeft, Download, Loader2, AlertTriangle, RotateCw, Check } from "lucide-react";
 
-type Filter = "all" | "cash" | "qr" | "subscription" | "cancelled" | "group" | "name";
+type Filter = "all" | "cash" | "qr" | "subscription" | "cancelled" | "group" | "name" | "walkins";
 
 interface SubscriptionInfo {
   packageName: string;
@@ -37,12 +37,14 @@ interface SessionPaymentRow {
   partyCount?: number | null;
   sessionId: string | null;
   groupPaidByPaymentId?: string | null;
+  groupPaidByName?: string | null;
   player: {
     id: string;
     name: string;
     phone?: string | null;
     skillLevel: string | null;
     facePhotoPath: string | null;
+    reclubUserId?: number | null;
   } | null;
   checkInPlayer: {
     id: string;
@@ -225,12 +227,16 @@ export function StaffSessionPaymentsDetail({
   const confirmedCount = summary?.total ?? (payments.length - cancelledCount);
   const playerCount = useMemo(() => payments.reduce((s, p) => s + (p.partyCount ?? 1), 0), [payments]);
 
+  const walkInsCount = useMemo(
+    () => payments.filter((p) => p.checkInPlayerId !== null).length,
+    [payments]
+  );
+
   const filtered = useMemo(() => {
     if (filter === "all") return payments;
     if (filter === "group") {
-      const grouped = payments.filter((p) => p.groupPaidByPaymentId);
-      const others = payments.filter((p) => !p.groupPaidByPaymentId);
-      return [...grouped, ...others];
+      const memberPaymentIds = new Set(payments.map((p) => p.groupPaidByPaymentId).filter(Boolean));
+      return payments.filter((p) => p.groupPaidByPaymentId || memberPaymentIds.has(p.id));
     }
     if (filter === "name") {
       return [...payments].sort((a, b) => {
@@ -238,6 +244,9 @@ export function StaffSessionPaymentsDetail({
         const nameB = getDisplayPlayer(b).name.toLowerCase();
         return nameA.localeCompare(nameB);
       });
+    }
+    if (filter === "walkins") {
+      return payments.filter((p) => p.checkInPlayerId !== null);
     }
     return payments.filter((p) => getPaymentFilter(p) === filter);
   }, [payments, filter]);
@@ -444,6 +453,7 @@ export function StaffSessionPaymentsDetail({
             [
               { key: "group" as const, label: "Group" },
               { key: "name" as const, label: "Name A–Z" },
+              { key: "walkins" as const, label: `Walk-ins(${walkInsCount})` },
             ] as const
           ).map(({ key, label }) => (
             <button
@@ -482,7 +492,7 @@ export function StaffSessionPaymentsDetail({
             </div>
           ) : (
             <p className="mt-10 text-center text-sm text-neutral-500">
-              {filter === "all" || filter === "group" || filter === "name"
+              {filter === "all" || filter === "group" || filter === "name" || filter === "walkins"
                 ? t("staff.sessionPaymentsDetail.emptyAll")
                 : t("staff.sessionPaymentsDetail.emptyFiltered", {
                     filter:
@@ -570,6 +580,11 @@ export function StaffSessionPaymentsDetail({
                         <span className="rounded bg-fuchsia-600/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-fuchsia-300">
                           {getFlowTag(item)}
                         </span>
+                        {item.player?.reclubUserId ? (
+                          <span className="rounded bg-teal-600/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-teal-300">
+                            RECLUB
+                          </span>
+                        ) : null}
                         <span className="rounded bg-emerald-600/20 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-300">
                           {item.confirmedBy === "sepay" ? "SEPAY" : "MANUAL"}
                         </span>
@@ -592,8 +607,16 @@ export function StaffSessionPaymentsDetail({
                           : isNew
                             ? t("staff.sessionPaymentsDetail.typeRegistration")
                             : t("staff.sessionPaymentsDetail.typeCheckin")}
-                        {" · "}
-                        <span className="font-semibold text-white">{formatVND(item.amount)}</span>
+                        {item.groupPaidByPaymentId ? (
+                          <span className="font-semibold text-purple-400">
+                            {" · Paid by: "}{item.groupPaidByName ?? "group"}
+                          </span>
+                        ) : (
+                          <span>
+                            {" · "}
+                            <span className="font-semibold text-white">{formatVND(item.amount)}</span>
+                          </span>
+                        )}
                       </p>
 
                       {/* Group */}
