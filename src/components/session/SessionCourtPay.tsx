@@ -727,7 +727,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                                 </div>
                               )}
                               {isCancelled && (
-                                <div className="absolute -top-1 -left-1 rounded bg-red-500 px-1 py-px text-[9px] font-bold leading-tight text-white">
+                                <div className="absolute -top-1 -right-1 rounded bg-red-500 px-1 py-px text-[9px] font-bold leading-tight text-white">
                                   $0
                                 </div>
                               )}
@@ -779,7 +779,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                               </div>
                             )}
                             {isFree && (
-                              <div className="absolute -top-1 -left-1 rounded bg-red-500 px-1 py-px text-[9px] font-bold leading-tight text-white">
+                              <div className="absolute -top-1 -right-1 rounded bg-red-500 px-1 py-px text-[9px] font-bold leading-tight text-white">
                                 $0
                               </div>
                             )}

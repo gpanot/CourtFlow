@@ -248,7 +248,7 @@ function createStyles(t: AppColors) {
     freeBadge: {
       position: "absolute",
       top: -4,
-      left: -4,
+      right: -4,
       backgroundColor: "#ef4444",
       borderRadius: 6,
       paddingHorizontal: 3,
