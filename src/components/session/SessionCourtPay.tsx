@@ -460,7 +460,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
   const totalBooked = allRosterPlayers.length;
 
   const totalPaid = useMemo(
-    () => allRosterPlayers.filter((p) => paidReclubIds.has(p.reclubUserId)).length,
+    () => allRosterPlayers.filter((p) => p.reclubUserId !== null && paidReclubIds.has(p.reclubUserId)).length,
     [allRosterPlayers, paidReclubIds]
   );
 
@@ -499,7 +499,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
   );
 
   const paidCountForRoster = (roster: ReclubRosterData) =>
-    roster.players.filter((p) => paidReclubIds.has(p.reclubUserId)).length;
+    roster.players.filter((p) => p.reclubUserId !== null && paidReclubIds.has(p.reclubUserId)).length;
 
   const closeSheet = () => {
     setSheetPlayer(null);

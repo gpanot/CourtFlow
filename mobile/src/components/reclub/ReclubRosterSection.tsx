@@ -452,7 +452,7 @@ export function ReclubRosterSection({
   const totalBooked = allRosterPlayers.length;
 
   const totalPaid = useMemo(
-    () => allRosterPlayers.filter((p) => paidReclubIds.has(p.reclubUserId)).length,
+    () => allRosterPlayers.filter((p) => p.reclubUserId !== null && paidReclubIds.has(p.reclubUserId)).length,
     [allRosterPlayers, paidReclubIds]
   );
 
@@ -487,7 +487,7 @@ export function ReclubRosterSection({
 
   const paidCountForRoster = useCallback(
     (roster: ReclubRosterData) =>
-      roster.players.filter((p) => paidReclubIds.has(p.reclubUserId)).length,
+      roster.players.filter((p) => p.reclubUserId !== null && paidReclubIds.has(p.reclubUserId)).length,
     [paidReclubIds]
   );
 
@@ -500,7 +500,7 @@ export function ReclubRosterSection({
   const handleAvatarTap = useCallback(
     (player: ReclubPlayer) => {
       setSheetPlayer(player);
-      setSheetMode(paidReclubIds.has(player.reclubUserId) ? "info" : "match");
+      setSheetMode(player.reclubUserId !== null && paidReclubIds.has(player.reclubUserId) ? "info" : "match");
     },
     [paidReclubIds]
   );
@@ -810,7 +810,7 @@ export function ReclubRosterSection({
               <View style={styles.grid}>
                 {roster.players.map((player) => {
                   const isConfirmedPaid = confirmedPaidPlayers.some((p) => p.reclubUserId === player.reclubUserId);
-                  const isFreePass = cancelledReclubIds.has(player.reclubUserId);
+                  const isFreePass = player.reclubUserId !== null && cancelledReclubIds.has(player.reclubUserId);
                   const hasRing = isConfirmedPaid || isFreePass;
                   return (
                     <TouchableOpacity
