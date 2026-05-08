@@ -507,7 +507,10 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
   };
 
   const handleAvatarTap = (player: ReclubPlayer) => {
-    if (paidReclubIds.has(player.reclubUserId) || cancelledReclubIds.has(player.reclubUserId)) {
+    if (
+      player.reclubUserId !== null &&
+      (paidReclubIds.has(player.reclubUserId) || cancelledReclubIds.has(player.reclubUserId))
+    ) {
       setSheetPlayer(player);
       setSheetMode("info");
     } else {
@@ -699,7 +702,8 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                         const isConfirmedPaid = paidPlayersAll.some(
                           (p) => (!p.status || p.status === "confirmed") && p.reclubUserId === player.reclubUserId
                         );
-                        const isFreePass = cancelledReclubIds.has(player.reclubUserId);
+                        const isFreePass =
+                          player.reclubUserId !== null && cancelledReclubIds.has(player.reclubUserId);
                         const hasRing = isConfirmedPaid || isFreePass;
                         return (
                           <button
