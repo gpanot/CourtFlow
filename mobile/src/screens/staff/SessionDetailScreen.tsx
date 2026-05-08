@@ -671,6 +671,7 @@ function ReclubSnapshotView({
                 {walkIns.map((p, i) => {
                   const faceUri = p.facePhotoUrl ? resolveMediaUrl(p.facePhotoUrl) : null;
                   const party = p.partyCount ?? 1;
+                  const hasReclubLink = p.reclubUserId > 0;
                   return (
                     <TouchableOpacity
                       key={`walkin-${i}`}
@@ -726,9 +727,18 @@ function ReclubSnapshotView({
                           </View>
                         )}
                       </View>
-                      <Text numberOfLines={1} style={{ fontSize: 10, color: "#f59e0b", marginTop: 3, textAlign: "center", width: avatarSize + 8 }}>
-                        {p.courtpayName ?? "Walk-in"}
-                      </Text>
+                      <View style={{ marginTop: 3, alignItems: "center", gap: 2 }}>
+                        <Text numberOfLines={1} style={{ fontSize: 10, color: "#f59e0b", textAlign: "center", width: avatarSize + 8 }}>
+                          {p.courtpayName ?? "Walk-in"}
+                        </Text>
+                        {hasReclubLink && (
+                          <View style={{ backgroundColor: "rgba(14,165,233,0.2)", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 }}>
+                            <Text style={{ fontSize: 9, fontWeight: "700", color: "#7dd3fc", letterSpacing: 0.5, textTransform: "uppercase" }}>
+                              Reclub
+                            </Text>
+                          </View>
+                        )}
+                      </View>
                     </TouchableOpacity>
                   );
                 })}

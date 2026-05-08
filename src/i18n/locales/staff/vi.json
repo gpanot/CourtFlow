@@ -588,7 +588,7 @@
       "reclubLiveUnmatched": "Walk-ins",
       "reclubLiveExpected": "Chờ đến",
       "reclubLoadRoster": "Tải danh sách Reclub",
-      "reclubWalkInSeparator": "Walk-ins — không có trong Reclub",
+      "reclubWalkInSeparator": "Walk-in",
       "reclubSelectEvents": "Chọn sự kiện",
       "reclubContinue": "Tiếp tục",
       "reclubSelectedCount": "Đã chọn {{count}}"

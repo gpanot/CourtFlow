@@ -821,6 +821,7 @@ function ReclubSnapshotTab({
           <div className="grid grid-cols-4 gap-2">
             {walkIns.map((p, i) => {
               const party = p.partyCount ?? 1;
+              const hasReclubLink = p.reclubUserId > 0;
               return (
                 <button
                   key={`walkin-${i}`}
@@ -864,9 +865,16 @@ function ReclubSnapshotTab({
                       </div>
                     ) : null}
                   </div>
-                  <p className="mt-1 w-full truncate text-center text-[10px] text-amber-400">
-                    {p.courtpayName ?? "Walk-in"}
-                  </p>
+                  <div className="mt-1 flex w-full flex-col items-center gap-0.5">
+                    <p className="w-full truncate text-center text-[10px] text-amber-400">
+                      {p.courtpayName ?? "Walk-in"}
+                    </p>
+                    {hasReclubLink && (
+                      <span className="rounded bg-sky-500/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-sky-300">
+                        Reclub
+                      </span>
+                    )}
+                  </div>
                 </button>
               );
             })}

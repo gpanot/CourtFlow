@@ -698,7 +698,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                     </div>
 
                     <div className="grid grid-cols-4 gap-2">
-                      {roster.players.map((player) => {
+                      {roster.players.map((player, playerIdx) => {
                         const isConfirmedPaid = paidPlayersAll.some(
                           (p) => (!p.status || p.status === "confirmed") && p.reclubUserId === player.reclubUserId
                         );
@@ -707,7 +707,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                         const hasRing = isConfirmedPaid || isFreePass;
                         return (
                           <button
-                            key={player.reclubUserId ?? `guest-${player.name}`}
+                            key={`${roster.referenceCode}-${player.reclubUserId ?? `guest-${player.name}`}-${playerIdx}`}
                             type="button"
                             onClick={() => handleAvatarTap(player)}
                             className="flex flex-col items-center"
@@ -767,6 +767,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                   <div className="grid grid-cols-4 gap-2">
                     {unmatchedPayments.map((p) => {
                       const isFree = p.status === "cancelled";
+                      const hasReclubLink = p.reclubUserId !== null;
                       return (
                         <div key={p.paymentId} className="flex flex-col items-center">
                           <div className="relative">
@@ -796,9 +797,16 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                               </div>
                             )}
                           </div>
-                          <p className="mt-1 w-full truncate text-center text-[11px] text-amber-400">
-                            {p.playerName}
-                          </p>
+                          <div className="mt-1 flex w-full flex-col items-center gap-0.5">
+                            <p className="w-full truncate text-center text-[11px] text-amber-400">
+                              {p.playerName}
+                            </p>
+                            {hasReclubLink && (
+                              <span className="rounded bg-sky-500/20 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-sky-300">
+                                Reclub
+                              </span>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
@@ -1058,6 +1066,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
               ) : (
                 unmatchedPayments.map((p) => {
                   const party = p.partyCount ?? 1;
+                  const hasReclubLink = p.reclubUserId !== null;
                   return (
                   <div
                     key={p.paymentId}
@@ -1081,10 +1090,17 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                       )}
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm font-semibold text-white">
-                        {p.playerName}
-                        {party > 1 && <span className="ml-1.5 text-xs font-normal text-amber-400">group of {party}</span>}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-white">
+                          {p.playerName}
+                          {party > 1 && <span className="ml-1.5 text-xs font-normal text-amber-400">group of {party}</span>}
+                        </p>
+                        {hasReclubLink && (
+                          <span className="rounded bg-sky-500/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-300">
+                            Reclub
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-neutral-400">
                         {p.amount.toLocaleString()} VND · {formatTime(p.confirmedAt)}
                       </p>

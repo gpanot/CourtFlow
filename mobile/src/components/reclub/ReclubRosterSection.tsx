@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../lib/api-client";
+import { resolveMediaUrl } from "../../lib/media-url";
 import { useAppColors } from "../../theme/use-app-colors";
 import type { AppColors } from "../../theme/palettes";
 import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
@@ -266,6 +267,24 @@ function createStyles(t: AppColors) {
       color: t.muted,
       marginTop: 4,
       textAlign: "center",
+    },
+    walkInNameWrap: {
+      marginTop: 4,
+      alignItems: "center",
+      gap: 2,
+    },
+    reclubTag: {
+      backgroundColor: "rgba(14, 165, 233, 0.2)",
+      borderRadius: 6,
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+    },
+    reclubTagText: {
+      fontSize: 9,
+      fontWeight: "700",
+      color: "#7dd3fc",
+      textTransform: "uppercase",
+      letterSpacing: 0.5,
     },
     noEventText: {
       fontSize: 13,
@@ -808,13 +827,13 @@ export function ReclubRosterSection({
               </View>
 
               <View style={styles.grid}>
-                {roster.players.map((player) => {
+                {roster.players.map((player, playerIdx) => {
                   const isConfirmedPaid = confirmedPaidPlayers.some((p) => p.reclubUserId === player.reclubUserId);
                   const isFreePass = player.reclubUserId !== null && cancelledReclubIds.has(player.reclubUserId);
                   const hasRing = isConfirmedPaid || isFreePass;
                   return (
                     <TouchableOpacity
-                      key={player.reclubUserId ?? `guest-${player.name}`}
+                      key={`${roster.referenceCode}-${player.reclubUserId ?? `guest-${player.name}`}-${playerIdx}`}
                       style={styles.avatarCell}
                       onPress={() => handleAvatarTap(player)}
                       activeOpacity={0.7}
@@ -875,18 +894,30 @@ export function ReclubRosterSection({
               {unmatchedPayments.map((p) => {
                 const party = p.partyCount ?? 1;
                 const isFree = p.status === "cancelled";
+                const hasReclubLink = p.reclubUserId !== null;
+                const avatarUri = resolveMediaUrl(p.facePhotoPath);
                 return (
                   <View key={p.paymentId} style={styles.avatarCell}>
                     <View style={styles.avatarWrap}>
-                      <View
-                        style={[
-                          styles.initialsCircle,
-                          { backgroundColor: initialsColor(p.playerName) },
-                          isFree ? styles.cancelledRing : styles.walkInRing,
-                        ]}
-                      >
-                        <Text style={styles.initialsText}>{initials(p.playerName)}</Text>
-                      </View>
+                      {avatarUri ? (
+                        <Image
+                          source={{ uri: avatarUri }}
+                          style={[
+                            styles.avatarImage,
+                            isFree ? styles.cancelledRing : styles.walkInRing,
+                          ]}
+                        />
+                      ) : (
+                        <View
+                          style={[
+                            styles.initialsCircle,
+                            { backgroundColor: initialsColor(p.playerName) },
+                            isFree ? styles.cancelledRing : styles.walkInRing,
+                          ]}
+                        >
+                          <Text style={styles.initialsText}>{initials(p.playerName)}</Text>
+                        </View>
+                      )}
                       {isFree && (
                         <View style={styles.freeBadge}>
                           <Text style={styles.freeBadgeText}>$0</Text>
@@ -898,12 +929,19 @@ export function ReclubRosterSection({
                         </View>
                       )}
                     </View>
-                    <Text
-                      style={[styles.playerName, { color: "#f59e0b" }]}
-                      numberOfLines={1}
-                    >
-                      {p.playerName}
-                    </Text>
+                    <View style={styles.walkInNameWrap}>
+                      <Text
+                        style={[styles.playerName, { color: "#f59e0b", marginTop: 0 }]}
+                        numberOfLines={1}
+                      >
+                        {p.playerName}
+                      </Text>
+                      {hasReclubLink && (
+                        <View style={styles.reclubTag}>
+                          <Text style={styles.reclubTagText}>Reclub</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
                 );
               })}
@@ -1072,8 +1110,8 @@ export function ReclubRosterSection({
               keyExtractor={(item) => item.paymentId}
               renderItem={({ item }) => (
                 <View style={styles.paymentRow}>
-                  {item.facePhotoPath ? (
-                    <Image source={{ uri: item.facePhotoPath }} style={styles.paymentAvatar} />
+                  {resolveMediaUrl(item.facePhotoPath) ? (
+                    <Image source={{ uri: resolveMediaUrl(item.facePhotoPath)! }} style={styles.paymentAvatar} />
                   ) : (
                     <View style={[styles.paymentInitials, { backgroundColor: initialsColor(item.playerName) }]}>
                       <Text style={{ color: "#fff", fontSize: 14, fontWeight: "700" }}>
@@ -1082,7 +1120,14 @@ export function ReclubRosterSection({
                     </View>
                   )}
                   <View style={styles.paymentInfo}>
-                    <Text style={styles.paymentName}>{item.playerName}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <Text style={styles.paymentName}>{item.playerName}</Text>
+                      {item.reclubUserId !== null && (
+                        <View style={styles.reclubTag}>
+                          <Text style={styles.reclubTagText}>Reclub</Text>
+                        </View>
+                      )}
+                    </View>
                     <Text style={styles.paymentDetail}>
                       {formatVND(item.amount)} VND · {formatTime(item.confirmedAt)}
                     </Text>
