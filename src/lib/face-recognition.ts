@@ -153,9 +153,6 @@ function enrollmentImageBytes(imageBase64: string): Uint8Array {
 const ENROLLMENT_FACE_MIN_CONFIDENCE = 90;
 const ENROLLMENT_POSE_MAX_ABS_DEG = 30;
 
-function isNoFaceMessage(msg?: string): boolean {
-  return (msg ?? "").toLowerCase().includes("no face");
-}
 
 type EnrollmentQualityGate =
   | { pass: true }
@@ -460,13 +457,13 @@ class FaceRecognitionService {
     const result = await this.tryEnrollFace(imageBase64, playerId);
     if (result.success) return result;
 
-    // Auto-retry: if the failure is a "no face" quality error, try removing
-    // the background and re-enrolling once.  This replicates what the admin
-    // panel does manually and resolves ~100 % of "no face" cases caused by
-    // busy backgrounds.
-    if (result.qualityError && isNoFaceMessage(result.error)) {
+    // Auto-retry: on any quality-gate failure (no face, low confidence, bad pose,
+    // multiple faces) try removing the background and re-enrolling once.
+    // A busy or cluttered background is the root cause of the vast majority of
+    // these failures, not just "no face" ones.
+    if (result.qualityError) {
       console.log(
-        `[Rekognition] No face detected for player ${playerId} — attempting background removal and re-enrollment`
+        `[Rekognition] Quality gate failed for player ${playerId} (${result.error ?? "unknown"}) — attempting background removal and re-enrollment`
       );
       const cleanedBase64 = await removeBackgroundFromBase64(
         normalizeEnrollmentBase64(imageBase64)

@@ -81,7 +81,8 @@ export async function fetchReclubEvents(groupId: number): Promise<ReclubEvent[]>
 }
 
 export interface ReclubPlayer {
-  reclubUserId: number;
+  /** null for guests added by name (no Reclub account) or players added by another user */
+  reclubUserId: number | null;
   name: string;
   avatarUrl: string;
   isDefaultAvatar: boolean;
@@ -114,6 +115,11 @@ export async function fetchReclubRoster(
   const raw: unknown[] = JSON.parse(nuxtMatch[1]);
 
   const userIds = new Set<number>();
+  // Synthetic players for: (a) guests added by name with no Reclub account (referenceId=null),
+  // and (b) players added by another user ("bring a friend", externalReference.name is set).
+  // In both cases we skip adding to userIds to avoid double-counting the adder.
+  const syntheticPlayers: ReclubPlayer[] = [];
+
   for (const item of raw) {
     if (
       item &&
@@ -124,7 +130,35 @@ export async function fetchReclubRoster(
       const rec = item as Record<string, number>;
       const status = raw[rec.status];
       const userId = raw[rec.referenceId];
-      if (status === 1 && typeof userId === "number" && userId > 1000) {
+
+      if (status !== 1) continue;
+
+      // Resolve externalReference — present for "added by" and manual-guest entries
+      const extRefIndex = (rec as Record<string, unknown>).externalReference as number | undefined;
+      const extRef = extRefIndex !== undefined ? raw[extRefIndex] : undefined;
+      if (
+        extRef &&
+        typeof extRef === "object" &&
+        !Array.isArray(extRef) &&
+        "name" in extRef
+      ) {
+        const extObj = extRef as Record<string, number>;
+        const name = raw[extObj.name];
+        const gender = raw[extObj.gender];
+        if (typeof name === "string" && name.trim()) {
+          syntheticPlayers.push({
+            reclubUserId: typeof userId === "number" && userId > 1000 ? userId : null,
+            name: name.trim(),
+            avatarUrl: "",
+            isDefaultAvatar: true,
+            gender: typeof gender === "string" ? gender : "",
+          });
+        }
+        // Skip — do not also add userId to the batch-fetch set
+        continue;
+      }
+
+      if (typeof userId === "number" && userId > 1000) {
         userIds.add(userId);
       }
     }
@@ -154,6 +188,9 @@ export async function fetchReclubRoster(
       });
     }
   }
+
+  // Append synthetic players (guests + added-by entries) after real profiles
+  players.push(...syntheticPlayers);
 
   const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
   const eventName = titleMatch

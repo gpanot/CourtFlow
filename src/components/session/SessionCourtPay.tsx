@@ -67,7 +67,7 @@ interface ReclubEvent {
 }
 
 interface ReclubPlayer {
-  reclubUserId: number;
+  reclubUserId: number | null;
   name: string;
   avatarUrl: string;
   isDefaultAvatar: boolean;
@@ -466,7 +466,9 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
 
   const allRosterIds = useMemo(() => {
     const ids = new Set<number>();
-    for (const p of allRosterPlayers) ids.add(p.reclubUserId);
+    for (const p of allRosterPlayers) {
+      if (p.reclubUserId !== null) ids.add(p.reclubUserId);
+    }
     return ids;
   }, [allRosterPlayers]);
 
@@ -701,7 +703,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                         const hasRing = isConfirmedPaid || isFreePass;
                         return (
                           <button
-                            key={player.reclubUserId}
+                            key={player.reclubUserId ?? `guest-${player.name}`}
                             type="button"
                             onClick={() => handleAvatarTap(player)}
                             className="flex flex-col items-center"
@@ -936,7 +938,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                     key={p.paymentId}
                     type="button"
                     disabled={linkingPlayerId != null}
-                    onClick={() => handleLinkPlayer(p.playerId, sheetPlayer.reclubUserId)}
+                    onClick={() => sheetPlayer.reclubUserId !== null && handleLinkPlayer(p.playerId, sheetPlayer.reclubUserId)}
                     className="flex w-full items-center gap-3 border-b border-neutral-800 px-5 py-3 text-left transition-colors hover:bg-neutral-800/60 disabled:opacity-50"
                   >
                     {p.facePhotoPath ? (

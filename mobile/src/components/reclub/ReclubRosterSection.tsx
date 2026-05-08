@@ -24,7 +24,7 @@ interface ReclubEvent {
 }
 
 interface ReclubPlayer {
-  reclubUserId: number;
+  reclubUserId: number | null;
   name: string;
   avatarUrl: string;
   isDefaultAvatar: boolean;
@@ -464,7 +464,9 @@ export function ReclubRosterSection({
 
   const allRosterIds = useMemo(() => {
     const ids = new Set<number>();
-    for (const p of allRosterPlayers) ids.add(p.reclubUserId);
+    for (const p of allRosterPlayers) {
+      if (p.reclubUserId !== null) ids.add(p.reclubUserId);
+    }
     return ids;
   }, [allRosterPlayers]);
 
@@ -490,8 +492,8 @@ export function ReclubRosterSection({
   );
 
   const linkedPaymentForPlayer = useCallback(
-    (reclubUserId: number): PaidPlayerFull | undefined =>
-      paidPlayers.find((p) => p.reclubUserId === reclubUserId),
+    (reclubUserId: number | null): PaidPlayerFull | undefined =>
+      reclubUserId !== null ? paidPlayers.find((p) => p.reclubUserId === reclubUserId) : undefined,
     [paidPlayers]
   );
 
@@ -812,7 +814,7 @@ export function ReclubRosterSection({
                   const hasRing = isConfirmedPaid || isFreePass;
                   return (
                     <TouchableOpacity
-                      key={player.reclubUserId}
+                      key={player.reclubUserId ?? `guest-${player.name}`}
                       style={styles.avatarCell}
                       onPress={() => handleAvatarTap(player)}
                       activeOpacity={0.7}
@@ -942,7 +944,7 @@ export function ReclubRosterSection({
                   renderItem={({ item }) => (
                     <TouchableOpacity
                       style={styles.paymentRow}
-                      onPress={() => handleLinkPlayer(item.playerId, sheetPlayer.reclubUserId)}
+                      onPress={() => sheetPlayer.reclubUserId !== null && handleLinkPlayer(item.playerId, sheetPlayer.reclubUserId)}
                       disabled={linkingPlayerId != null}
                       activeOpacity={0.7}
                     >

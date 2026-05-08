@@ -296,4 +296,102 @@ if __name__ == "__main__":
 - **Nuxt payload format is fragile** — if Reclub updates their frontend, the `__NUXT_DATA__` structure may change. The index-dereferencing pattern has been stable since late 2025 but verify if results look wrong.
 - **Rate limiting** — be polite. Add `time.sleep(0.3)` between batch calls if fetching many events. On HTTP 429, back off.
 
+---
+
+## Invited players and manually-added guests (discovered: May 8, 2026)
+
+The `participantsStatusCount.joined` count on Reclub includes **three types** of confirmed participants, not just Reclub account holders:
+
+### Type 1 — Regular Reclub users (own account)
+- `referenceId` resolves to a numeric `userId > 1000`
+- `externalReference` is `null`
+- Covered by the existing flow (Step 2 → Step 3)
+
+### Type 2 — Players added by another player ("bring a friend")
+- **Same `userId` as the adder** (Reclub reuses the adder's userId for the slot)
+- `externalReference` is an object: `{ name: "Display Name", gender: "M"|"F", level: <int> }`
+- These appear as **duplicate userIds** in the Nuxt array — the adder has their own entry (extRef = null) plus one entry per person they added (extRef = name)
+- **Were previously lost** by the `Set<number>` deduplication
+
+### Type 3 — Manually-added guests (no Reclub account)
+- `referenceId` resolves to `null`
+- `referenceType` resolves to `2` (guest type, vs `9` for real users)
+- `externalReference` is an object: `{ name: "Display Name", gender: "M"|"F" }`
+- **Were previously dropped** by the `typeof userId === "number" && userId > 1000` guard
+
+### Real example — Ace Squad E52MQB (May 8, 2026)
+
+Reclub shows **51 confirmed**. Breakdown:
+- 45 unique Reclub users (own accounts) → fetched normally
+- 4 "added by" slots: **C Chi** and **C Tuyết** (added by Lê Phi Japan, userId 1322554), **Selena go out** (added by Romain, userId 9850), **Xị** (added by Danny, userId 437115)
+- 2 manual guests: **Anh Dương** and **Anh dương + 1** (referenceId = null)
+
+### Updated parsing logic (Step 2)
+
+To capture all three types, iterate the raw array once and collect both numeric-userId entries **and** externalReference-name entries separately. For "added by" entries, the key signal is: `status === 1` AND the entry has an `externalReference` with a resolved `name` AND the `userId` is a duplicate of another entry (or you can simply emit a synthetic player for every extRef-name entry regardless of whether the userId is a dupe — duplicates without extRef are the "self" entry):
+
+```python
+def get_all_participants(reference_code):
+    """
+    Returns list of dicts:  { userId, name, gender, is_guest }
+    Covers:
+      - real Reclub users (own account)
+      - players added by another user ("bring a friend")
+      - manually-added guests (no Reclub account)
+    """
+    url = f"https://reclub.co/m/{reference_code}"
+    req = urllib.request.Request(url, headers={
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+        "Accept": "text/html",
+    })
+    html = urllib.request.urlopen(req, timeout=20).read().decode()
+    match = re.search(r'<script[^>]*id="__NUXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL)
+    raw = json.loads(match.group(1))
+
+    reclub_user_ids = set()   # for batch-profile fetch
+    named_entries   = []      # synthetic players with a name from externalReference
+
+    for item in raw:
+        if not isinstance(item, dict) or "referenceId" not in item:
+            continue
+
+        status  = raw[item["status"]]
+        user_id = raw[item["referenceId"]]   # int for real users, None for guests
+
+        if status != 1:
+            continue
+
+        # Resolve externalReference (name supplied by adder / admin)
+        ext_raw = item.get("externalReference")
+        ext_ref = raw[ext_raw] if ext_raw is not None else None
+        if isinstance(ext_ref, dict):
+            name   = raw.get(ext_ref["name"])   if "name"   in ext_ref else None
+            gender = raw.get(ext_ref["gender"]) if "gender" in ext_ref else None
+            if name:
+                named_entries.append({
+                    "userId":   user_id,   # may be None (guest) or int (added-by)
+                    "name":     name,
+                    "gender":   gender or "",
+                    "is_guest": user_id is None,
+                })
+                continue   # do NOT also add their userId to the batch-fetch set
+
+        # Plain Reclub user — collect for batch profile fetch
+        if isinstance(user_id, int) and user_id > 1000:
+            reclub_user_ids.add(user_id)
+
+    # Batch-fetch real profiles
+    profile_players = get_profiles(sorted(reclub_user_ids))
+
+    # Combine: real profiles + synthetic named entries
+    all_players = profile_players + named_entries
+    return all_players
+```
+
+**Key rule:** when an entry has a non-null `externalReference.name`, emit a synthetic player from that name and **skip** adding the `userId` to the batch-fetch set. This prevents the adder from being counted twice (their own entry — with `extRef = null` — is still collected normally).
+
+*Updated: May 8, 2026*
+
+---
+
 *Created: April 29, 2026*

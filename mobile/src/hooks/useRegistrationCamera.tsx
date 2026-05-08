@@ -6,7 +6,29 @@ import {
   type RefObject,
 } from "react";
 import { CameraView } from "expo-camera";
+import * as ImageManipulator from "expo-image-manipulator";
 import { api } from "../lib/api-client";
+
+const MAX_SIDE_PX = 1200;
+const JPEG_QUALITY = 0.82;
+const MAX_BYTES = 1 * 1024 * 1024; // 1 MB
+
+async function compressToUnder1MB(uri: string): Promise<string> {
+  const result = await ImageManipulator.manipulateAsync(
+    uri,
+    [{ resize: { width: MAX_SIDE_PX } }],
+    { compress: JPEG_QUALITY, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+  );
+  if (result.base64 && result.base64.length * 0.75 > MAX_BYTES) {
+    const harder = await ImageManipulator.manipulateAsync(
+      result.uri,
+      [],
+      { compress: 0.65, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+    );
+    return harder.base64 ?? result.base64;
+  }
+  return result.base64 ?? "";
+}
 
 interface RelativeBoundingBox {
   left: number;
@@ -132,17 +154,27 @@ export function useRegistrationCamera({
     setCaptureBusy(true);
     try {
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.72,
-        base64: true,
+        quality: 1,
+        base64: false,
       });
-      if (!photo?.base64) {
+      if (!photo?.uri) {
         setCaptureRetryKey((n) => n + 1);
         setDebug("capture=fallback reason=no_photo_data");
         return;
       }
+      const compressed = await compressToUnder1MB(photo.uri);
+      if (!compressed) {
+        setCaptureRetryKey((n) => n + 1);
+        setDebug("capture=fallback reason=compression_failed");
+        return;
+      }
+      if (__DEV__) {
+        const approxKB = Math.round((compressed.length * 0.75) / 1024);
+        console.log(`[CourtPay capture] compressed to ~${approxKB} KB`);
+      }
       // Show preview immediately; blur can be started later from the "Looks good" step.
       blurredImageRef.current = null;
-      onPhotoCapturedRef.current(photo.base64);
+      onPhotoCapturedRef.current(compressed);
       setDebug("capture=accepted face_detected=unknown blur=deferred");
     } finally {
       captureInFlightRef.current = false;
