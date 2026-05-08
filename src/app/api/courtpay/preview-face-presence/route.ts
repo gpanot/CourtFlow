@@ -23,17 +23,36 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "imageBase64 is required" }, { status: 400 });
     }
 
+    console.info("[courtpay/preview-face-presence] aws_preview_check_start", {
+      trigger: trigger ?? null,
+      blurRequested: blurBackgroundRequested,
+      imageBytes: Buffer.byteLength(imageBase64, "base64"),
+    });
     const { faceDetected, boundingBox } =
       await faceRecognitionService.detectFacePresentForCourtPayPreview(imageBase64);
+    console.info("[courtpay/preview-face-presence] aws_preview_check_result", {
+      trigger: trigger ?? null,
+      faceDetected,
+      hasBoundingBox: !!boundingBox,
+    });
 
     let processedImageBase64: string | undefined;
     let blurApplied = false;
     let blurReason = "not_requested_or_no_face";
     if (blurBackgroundRequested && faceDetected) {
       try {
+        console.info("[courtpay/preview-face-presence] blur_call_start", {
+          trigger: trigger ?? null,
+        });
         processedImageBase64 = await blurBackground(imageBase64);
         blurApplied = true;
         blurReason = "fapihub_success";
+        console.info("[courtpay/preview-face-presence] blur_call_success", {
+          trigger: trigger ?? null,
+          processedBytes: processedImageBase64
+            ? Buffer.byteLength(processedImageBase64, "base64")
+            : null,
+        });
       } catch (err) {
         console.warn("[courtpay/preview-face-presence] FapiHub blur failed:", err);
         processedImageBase64 = imageBase64;

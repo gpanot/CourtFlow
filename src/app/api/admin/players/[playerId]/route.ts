@@ -121,10 +121,23 @@ export async function DELETE(
       });
       if (checkInPlayers.length > 0) {
         const checkInIds = checkInPlayers.map((c) => c.id);
-        await prisma.pendingPayment.deleteMany({ where: { checkInPlayerId: { in: checkInIds } } });
-        await prisma.checkInRecord.deleteMany({ where: { playerId: { in: checkInIds } } });
-        await prisma.playerSubscription.deleteMany({ where: { playerId: { in: checkInIds } } });
-        await prisma.checkInPlayer.deleteMany({ where: { id: { in: checkInIds } } });
+        const subscriptions = await prisma.playerSubscription.findMany({
+          where: { playerId: { in: checkInIds } },
+          select: { id: true },
+        });
+        const subscriptionIds = subscriptions.map((s) => s.id);
+
+        await prisma.$transaction(async (tx) => {
+          await tx.pendingPayment.deleteMany({ where: { checkInPlayerId: { in: checkInIds } } });
+          await tx.checkInRecord.deleteMany({ where: { playerId: { in: checkInIds } } });
+          if (subscriptionIds.length > 0) {
+            await tx.subscriptionUsage.deleteMany({
+              where: { subscriptionId: { in: subscriptionIds } },
+            });
+          }
+          await tx.playerSubscription.deleteMany({ where: { playerId: { in: checkInIds } } });
+          await tx.checkInPlayer.deleteMany({ where: { id: { in: checkInIds } } });
+        });
       }
     }
 

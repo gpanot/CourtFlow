@@ -702,12 +702,20 @@ export function CourtPayCheckInScreen({
     setRegCheckingFace(true);
     setError("");
     // Match web flow: start blur in background when user confirms "Looks good".
+    console.info("[CourtPay][Registration][Flow] blur_start_requested", {
+      imageBytes: Math.round(faceBase64.length * 0.75),
+    });
     startBlurInBackground(faceBase64);
     try {
+      console.info("[CourtPay][Registration][Flow] aws_check_face_start");
       const check = await api.post<{ existing: boolean; playerName?: string }>(
         "/api/courtpay/check-face",
         { imageBase64: faceBase64 }
       );
+      console.info("[CourtPay][Registration][Flow] aws_check_face_result", {
+        existing: check.existing === true,
+        playerName: check.playerName ?? null,
+      });
       if (check.existing) {
         setConfirmMessage(
           check.playerName
@@ -719,6 +727,7 @@ export function CourtPayCheckInScreen({
         setStep("reg_form");
       }
     } catch (err) {
+      console.warn("[CourtPay][Registration][Flow] aws_check_face_failed", err);
       setError(err instanceof Error ? err.message : "Face verification failed");
       setStep("error");
     } finally {
@@ -924,13 +933,12 @@ export function CourtPayCheckInScreen({
     }
     const imageToEnroll = getImageForEnrollment(faceBase64);
     if (!imageToEnroll) return;
-    if (__DEV__) {
-      console.log("[CourtPay register] image selected", {
-        usingBlurredImage: imageToEnroll !== faceBase64,
-        originalLength: faceBase64.length,
-        selectedLength: imageToEnroll.length,
-      });
-    }
+    console.info("[CourtPay][Registration][Flow] register_submit_start", {
+      usingBlurredImage: imageToEnroll !== faceBase64,
+      originalBytes: Math.round(faceBase64.length * 0.75),
+      selectedBytes: Math.round(imageToEnroll.length * 0.75),
+      hasPackage: Boolean(packageId),
+    });
     setLoading(true);
     setError("");
     try {
@@ -957,6 +965,11 @@ export function CourtPayCheckInScreen({
         packageId,
         headCount: packageId ? undefined : sessionPartyCount,
         ...(selectedReclubUserId ? { reclubUserId: selectedReclubUserId } : {}),
+      });
+      console.info("[CourtPay][Registration][Flow] register_submit_result", {
+        playerId: reg.playerId ?? null,
+        checkedIn: reg.checkedIn === true,
+        hasPendingPayment: Boolean(reg.pendingPaymentId),
       });
 
       setRegisterPhotoQualityFailures(0);
@@ -998,6 +1011,7 @@ export function CourtPayCheckInScreen({
         setStep("confirmed");
       }
     } catch (err) {
+      console.warn("[CourtPay][Registration][Flow] register_submit_failed", err);
       if (err instanceof Error && err.message === "already_checked_in") {
         setConfirmedSubInfo(null);
         setConfirmMessage(t("alreadyCheckedInMsg", { name: name.trim() }));

@@ -454,8 +454,19 @@ class FaceRecognitionService {
       return mockFaceRecognitionService.enrollFace(imageBase64, playerId);
     }
 
+    console.info("[Rekognition][EnrollFlow] start", {
+      playerId,
+      inputBytes: enrollmentImageBytes(imageBase64).byteLength,
+      collectionId: COLLECTION_ID,
+    });
     const result = await this.tryEnrollFace(imageBase64, playerId);
-    if (result.success) return result;
+    if (result.success) {
+      console.info("[Rekognition][EnrollFlow] initial_enroll_succeeded", {
+        playerId,
+        subjectId: result.subjectId ?? null,
+      });
+      return result;
+    }
 
     // Auto-retry: on any quality-gate failure (no face, low confidence, bad pose,
     // multiple faces) try removing the background and re-enrolling once.
@@ -465,28 +476,52 @@ class FaceRecognitionService {
       console.log(
         `[Rekognition] Quality gate failed for player ${playerId} (${result.error ?? "unknown"}) — attempting background removal and re-enrollment`
       );
+      console.info("[Rekognition][EnrollFlow] remove_background_call_start", {
+        playerId,
+        reason: result.error ?? "quality_error",
+      });
       const cleanedBase64 = await removeBackgroundFromBase64(
         normalizeEnrollmentBase64(imageBase64)
       );
       if (cleanedBase64) {
+        console.info("[Rekognition][EnrollFlow] remove_background_call_success", {
+          playerId,
+          cleanedBytes: enrollmentImageBytes(cleanedBase64).byteLength,
+        });
+        console.info("[Rekognition][EnrollFlow] aws_reenrollment_start", { playerId });
         const retryResult = await this.tryEnrollFace(cleanedBase64, playerId);
         if (retryResult.success) {
           console.log(
             `[Rekognition] Background-removed re-enrollment succeeded for player ${playerId}`
           );
+          console.info("[Rekognition][EnrollFlow] aws_reenrollment_success", {
+            playerId,
+            subjectId: retryResult.subjectId ?? null,
+          });
           return retryResult;
         }
         console.warn(
           `[Rekognition] Background-removed re-enrollment also failed for player ${playerId}:`,
           retryResult.error
         );
+        console.warn("[Rekognition][EnrollFlow] aws_reenrollment_failed", {
+          playerId,
+          error: retryResult.error ?? null,
+          qualityError: retryResult.qualityError === true,
+        });
         return retryResult;
       }
       console.warn(
         `[Rekognition] Background removal unavailable — returning original failure for player ${playerId}`
       );
+      console.warn("[Rekognition][EnrollFlow] remove_background_call_failed", { playerId });
     }
 
+    console.warn("[Rekognition][EnrollFlow] final_result_not_enrolled", {
+      playerId,
+      error: result.error ?? null,
+      qualityError: result.qualityError === true,
+    });
     return result;
   }
 

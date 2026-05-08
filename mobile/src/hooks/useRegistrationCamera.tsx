@@ -14,17 +14,34 @@ const JPEG_QUALITY = 0.82;
 const MAX_BYTES = 1 * 1024 * 1024; // 1 MB
 
 async function compressToUnder1MB(uri: string): Promise<string> {
+  console.info("[CourtPay][Registration][Capture] resize_compress_start", {
+    uri,
+    targetMaxSidePx: MAX_SIDE_PX,
+    targetMaxBytes: MAX_BYTES,
+    quality: JPEG_QUALITY,
+  });
   const result = await ImageManipulator.manipulateAsync(
     uri,
     [{ resize: { width: MAX_SIDE_PX } }],
     { compress: JPEG_QUALITY, format: ImageManipulator.SaveFormat.JPEG, base64: true }
   );
+  const firstPassBytes = result.base64 ? result.base64.length * 0.75 : 0;
+  console.info("[CourtPay][Registration][Capture] resize_compress_first_pass", {
+    bytes: Math.round(firstPassBytes),
+    withinLimit: firstPassBytes <= MAX_BYTES,
+  });
   if (result.base64 && result.base64.length * 0.75 > MAX_BYTES) {
     const harder = await ImageManipulator.manipulateAsync(
       result.uri,
       [],
       { compress: 0.65, format: ImageManipulator.SaveFormat.JPEG, base64: true }
     );
+    const secondPassBytes = harder.base64 ? harder.base64.length * 0.75 : firstPassBytes;
+    console.info("[CourtPay][Registration][Capture] resize_compress_second_pass", {
+      bytes: Math.round(secondPassBytes),
+      withinLimit: secondPassBytes <= MAX_BYTES,
+      quality: 0.65,
+    });
     return harder.base64 ?? result.base64;
   }
   return result.base64 ?? "";
@@ -103,6 +120,9 @@ export function useRegistrationCamera({
       if (blurInProgressRef.current) return;
       blurInProgressRef.current = true;
       try {
+        console.info("[CourtPay][Registration][Capture] blur_check_and_blur_start", {
+          imageBytes: Math.round(originalBase64.length * 0.75),
+        });
         const preview = await api.post<{
           faceDetected?: boolean;
           boundingBox?: RelativeBoundingBox;
@@ -120,22 +140,20 @@ export function useRegistrationCamera({
           blurredImageRef.current = preview.processedImageBase64;
         }
 
-        if (__DEV__) {
-          console.log("[CourtPay capture] blur decision", {
-            requestedBlur: true,
-            blurRequestedByApi: preview.blurRequested === true,
-            faceDetected: preview.faceDetected,
-            blurApplied: preview.blurApplied === true,
-            blurReason: preview.blurReason ?? null,
-            hasProcessedImage: typeof preview.processedImageBase64 === "string",
-            originalLength: originalBase64.length,
-            processedLength: preview.processedImageBase64?.length ?? null,
-          });
-        }
+        console.info("[CourtPay][Registration][Capture] blur_check_and_blur_result", {
+          requestedBlur: true,
+          blurRequestedByApi: preview.blurRequested === true,
+          faceDetected: preview.faceDetected,
+          blurApplied: preview.blurApplied === true,
+          blurReason: preview.blurReason ?? null,
+          hasProcessedImage: typeof preview.processedImageBase64 === "string",
+          originalBytes: Math.round(originalBase64.length * 0.75),
+          processedBytes: preview.processedImageBase64
+            ? Math.round(preview.processedImageBase64.length * 0.75)
+            : null,
+        });
       } catch (err) {
-        if (__DEV__) {
-          console.warn("[CourtPay capture] background blur failed", err);
-        }
+        console.warn("[CourtPay][Registration][Capture] blur_check_and_blur_failed", err);
       } finally {
         blurInProgressRef.current = false;
       }
@@ -153,6 +171,7 @@ export function useRegistrationCamera({
     captureInFlightRef.current = true;
     setCaptureBusy(true);
     try {
+      console.info("[CourtPay][Registration][Capture] camera_capture_start");
       const photo = await cameraRef.current.takePictureAsync({
         quality: 1,
         base64: false,
@@ -168,10 +187,10 @@ export function useRegistrationCamera({
         setDebug("capture=fallback reason=compression_failed");
         return;
       }
-      if (__DEV__) {
-        const approxKB = Math.round((compressed.length * 0.75) / 1024);
-        console.log(`[CourtPay capture] compressed to ~${approxKB} KB`);
-      }
+      const approxKB = Math.round((compressed.length * 0.75) / 1024);
+      console.info("[CourtPay][Registration][Capture] camera_capture_ready", {
+        compressedKb: approxKB,
+      });
       // Show preview immediately; blur can be started later from the "Looks good" step.
       blurredImageRef.current = null;
       onPhotoCapturedRef.current(compressed);

@@ -111,7 +111,16 @@ export async function POST(req: Request) {
 
     // If face image provided, also create/link a Player record for face recognition
     if (imageBase64?.trim()) {
+      console.info("[courtpay/register][enroll-flow] aws_check_start", {
+        venueId: venue.id,
+        hasPhone: Boolean(phoneNorm),
+        imageBytes: Buffer.byteLength(imageBase64, "base64"),
+      });
       const faceCheck = await faceRecognitionService.recognizeFace(imageBase64);
+      console.info("[courtpay/register][enroll-flow] aws_check_result", {
+        resultType: faceCheck.resultType,
+        matchedPlayerId: faceCheck.playerId ?? null,
+      });
       if (faceCheck.resultType === "matched" && faceCheck.playerId) {
         return NextResponse.json(
           { error: "This face is already registered. Please use Check In instead." },
@@ -139,6 +148,13 @@ export async function POST(req: Request) {
             imageBase64,
             existingByPhone.id
           );
+          console.info("[courtpay/register][enroll-flow] enrollment_final_result", {
+            playerId: existingByPhone.id,
+            source: "existing_player_by_phone",
+            enrolled: enrollExisting.success === true,
+            error: enrollExisting.error ?? null,
+            qualityError: enrollExisting.qualityError === true,
+          });
           if (!enrollExisting.success) {
             // Non-blocking — player can still proceed to payment even without face enrollment.
             console.warn("[courtpay/register] Non-blocking face enrollment failure (existing):", {
@@ -173,6 +189,13 @@ export async function POST(req: Request) {
           source: "new_core_player",
         });
         const enrollment = await faceRecognitionService.enrollFace(imageBase64, corePlayer.id);
+        console.info("[courtpay/register][enroll-flow] enrollment_final_result", {
+          playerId: corePlayer.id,
+          source: "new_core_player",
+          enrolled: enrollment.success === true,
+          error: enrollment.error ?? null,
+          qualityError: enrollment.qualityError === true,
+        });
         if (!enrollment.success) {
           // After auto-retry with background removal inside enrollFace(), a remaining
           // "no face" failure means the photo is genuinely unusable.  Do NOT block

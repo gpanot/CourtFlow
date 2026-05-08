@@ -265,6 +265,9 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
     }
     setCapturedFacePresent(null);
     setCapturedFacePresenceLoading(true);
+    console.info("[CourtPay][Registration][Web] aws_preview_check_start", {
+      imageBytes: Math.round(faceBase64.length * 0.75),
+    });
     void api
       .post<{ faceDetected?: boolean }>("/api/courtpay/preview-face-presence", {
         imageBase64: faceBase64,
@@ -272,10 +275,14 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
       .then((response) => {
         if (cancelled) return;
         setCapturedFacePresent(response.faceDetected === true);
+        console.info("[CourtPay][Registration][Web] aws_preview_check_result", {
+          faceDetected: response.faceDetected === true,
+        });
       })
       .catch(() => {
         if (cancelled) return;
         setCapturedFacePresent(true);
+        console.warn("[CourtPay][Registration][Web] aws_preview_check_failed_fallback_true");
       })
       .finally(() => {
         if (!cancelled) setCapturedFacePresenceLoading(false);
@@ -490,6 +497,9 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
       }
       let processed = b64;
       try {
+        console.info("[CourtPay][Registration][Web] blur_prepare_start", {
+          imageBytes: Math.round(b64.length * 0.75),
+        });
         const preview = await api.post<{
           faceDetected?: boolean;
           boundingBox?: RelativeFaceBoundingBox;
@@ -502,9 +512,20 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
             blurPx: 8,
             facePaddingRatio: 0.2,
           });
+          console.info("[CourtPay][Registration][Web] blur_prepare_result", {
+            blurApplied: true,
+            originalBytes: Math.round(b64.length * 0.75),
+            processedBytes: Math.round(processed.length * 0.75),
+          });
+        } else {
+          console.info("[CourtPay][Registration][Web] blur_prepare_result", {
+            blurApplied: false,
+            reason: "no_face_or_no_box",
+          });
         }
       } catch {
         // Fallback to original image if preview API is unavailable.
+        console.warn("[CourtPay][Registration][Web] blur_prepare_failed_fallback_original");
       }
 
       setFaceBase64(processed);
@@ -592,6 +613,11 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
 
   const handleNewRegistration = async () => {
     if (!venueId || !name.trim() || !phone.trim() || !gender || !skillLevel || !faceBase64) return;
+    console.info("[CourtPay][Registration][Web] register_submit_start", {
+      imageBytes: Math.round(faceBase64.length * 0.75),
+      headCount: sessionPartyCount,
+      hasReclubUserId: Boolean(selectedReclubUserId),
+    });
     setLoading(true);
     setError("");
     try {
@@ -619,6 +645,11 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
         headCount: sessionPartyCount,
         ...(selectedReclubUserId ? { reclubUserId: selectedReclubUserId } : {}),
       });
+      console.info("[CourtPay][Registration][Web] register_submit_result", {
+        playerId: data.playerId ?? null,
+        checkedIn: data.checkedIn === true,
+        hasPendingPayment: Boolean(data.pendingPaymentId),
+      });
       setRegistrationQualityFailures(0);
       if (data.checkedIn || data.free) {
         setStep("success");
@@ -635,10 +666,14 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
       }
     } catch (err) {
       if (err instanceof ApiRequestError && err.qualityError) {
+        console.warn("[CourtPay][Registration][Web] register_submit_quality_error", {
+          message: err.message,
+        });
         setRegistrationQualityFailures((n) => n + 1);
         setRegistrationQualityMessage(err.message);
         return;
       }
+      console.warn("[CourtPay][Registration][Web] register_submit_failed", err);
       setError(err instanceof Error ? err.message : t("staff.courtPayCheckIn.registrationFailed"));
       setStep("error");
     } finally {

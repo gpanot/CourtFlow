@@ -16,6 +16,8 @@ export async function removeBackgroundFromBase64(
   imageBase64: string
 ): Promise<string | null> {
   const apiKey = process.env.FAPIHUB_API_KEY?.trim();
+  const inputBytes = Buffer.byteLength(imageBase64, "base64");
+  console.info("[remove-bg] start", { inputBytes });
   if (!apiKey) {
     console.warn("[remove-bg] FAPIHUB_API_KEY not configured — skipping background removal");
     return null;
@@ -42,6 +44,10 @@ export async function removeBackgroundFromBase64(
     }
 
     const outBytes = Buffer.from(await res.arrayBuffer());
+    console.info("[remove-bg] success", {
+      inputBytes,
+      outputBytes: outBytes.byteLength,
+    });
     return outBytes.toString("base64");
   } catch (err) {
     console.error("[remove-bg] Background removal failed:", err);
