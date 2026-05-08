@@ -5,6 +5,89 @@ import { initialRankingScoreForSkillLevel } from "@/lib/ranking";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
 
+interface AdminPlayersStatsPayload {
+  totalPlayers: number;
+  activeToday: number;
+  newThisWeek: number;
+  newThisMonth: number;
+  totalPlayMinutes: number;
+  totalWaitMinutes: number;
+  waitPlayRatio: number;
+  skillDistribution: Record<string, number>;
+}
+
+const ADMIN_PLAYERS_STATS_TTL_MS = 30_000;
+let adminPlayersStatsCache: { expiresAt: number; stats: AdminPlayersStatsPayload } | null = null;
+
+async function getAdminPlayersStats(now: Date): Promise<AdminPlayersStatsPayload> {
+  if (adminPlayersStatsCache && adminPlayersStatsCache.expiresAt > now.getTime()) {
+    return adminPlayersStatsCache.stats;
+  }
+
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+  const [totalPlayers, newThisWeek, newThisMonth, skillCounts, activeEntries, globalPresenceAgg] = await Promise.all([
+    prisma.player.count(),
+    prisma.player.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
+    prisma.player.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
+    prisma.player.groupBy({ by: ["skillLevel"], _count: true }),
+    prisma.queueEntry.findMany({
+      where: {
+        session: { status: "open" },
+        status: { in: ["waiting", "on_break", "playing", "assigned"] },
+      },
+      select: { playerId: true },
+      distinct: ["playerId"],
+    }),
+    prisma.$queryRaw<Array<{ globalPlayMinutes: bigint | number | null; globalWaitMinutes: bigint | number | null }>>`
+      SELECT
+        COALESCE(SUM(q.total_play_minutes_today), 0) AS "globalPlayMinutes",
+        COALESCE(
+          SUM(
+            GREATEST(
+              0,
+              (EXTRACT(EPOCH FROM (COALESCE(s.closed_at, NOW()) - q.joined_at)) / 60)::int
+              - q.total_play_minutes_today
+            )
+          ),
+          0
+        ) AS "globalWaitMinutes"
+      FROM queue_entries q
+      JOIN sessions s ON s.id = q.session_id
+    `,
+  ]);
+
+  const globalAgg = globalPresenceAgg[0];
+  const globalPlayMinutes = Number(globalAgg?.globalPlayMinutes ?? 0);
+  const globalWaitMinutes = Number(globalAgg?.globalWaitMinutes ?? 0);
+  const totalPresence = globalWaitMinutes + globalPlayMinutes;
+  const waitPlayRatio = totalPresence > 0
+    ? Math.round((globalWaitMinutes / totalPresence) * 100)
+    : 0;
+
+  const stats: AdminPlayersStatsPayload = {
+    totalPlayers,
+    activeToday: activeEntries.length,
+    newThisWeek,
+    newThisMonth,
+    totalPlayMinutes: globalPlayMinutes,
+    totalWaitMinutes: globalWaitMinutes,
+    waitPlayRatio,
+    skillDistribution: Object.fromEntries(
+      skillCounts.map((s) => [s.skillLevel, s._count])
+    ),
+  };
+
+  adminPlayersStatsCache = {
+    stats,
+    expiresAt: now.getTime() + ADMIN_PLAYERS_STATS_TTL_MS,
+  };
+  return stats;
+}
+
 export async function GET(request: NextRequest) {
   try {
     requireSuperAdmin(request.headers);
@@ -58,12 +141,8 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const [players, total, totalPlayers, newThisWeek, newThisMonth, skillCounts, activeEntries, playTimeAgg, waitingEntries] = await Promise.all([
+    const now = new Date();
+    const [players, total, stats] = await Promise.all([
       prisma.player.findMany({
         where,
         orderBy: { createdAt: "desc" },
@@ -71,9 +150,17 @@ export async function GET(request: NextRequest) {
         take: limit,
         include: {
           queueEntries: {
-            include: {
+            select: {
+              sessionId: true,
+              joinedAt: true,
+              totalPlayMinutesToday: true,
+              status: true,
               session: {
-                include: { venue: { select: { id: true, name: true } } },
+                select: {
+                  status: true,
+                  closedAt: true,
+                  venue: { select: { id: true, name: true } },
+                },
               },
             },
             orderBy: { joinedAt: "desc" },
@@ -81,59 +168,8 @@ export async function GET(request: NextRequest) {
         },
       }),
       prisma.player.count({ where }),
-      prisma.player.count(),
-      prisma.player.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
-      prisma.player.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
-      prisma.player.groupBy({ by: ["skillLevel"], _count: true }),
-      prisma.queueEntry.findMany({
-        where: {
-          session: { status: "open" },
-          status: { in: ["waiting", "on_break", "playing", "assigned"] },
-        },
-        select: { playerId: true },
-        distinct: ["playerId"],
-      }),
-      prisma.queueEntry.aggregate({ _sum: { totalPlayMinutesToday: true } }),
-      prisma.queueEntry.findMany({
-        select: {
-          joinedAt: true,
-          totalPlayMinutesToday: true,
-          status: true,
-          session: { select: { status: true, closedAt: true } },
-        },
-      }),
+      getAdminPlayersStats(now),
     ]);
-
-    const now = new Date();
-    let globalPlayMinutes = 0;
-    let globalWaitMinutes = 0;
-    for (const entry of waitingEntries) {
-      const sessionEnd = entry.session.closedAt ?? now;
-      const presenceMin = Math.max(
-        0,
-        Math.round((sessionEnd.getTime() - entry.joinedAt.getTime()) / 60000)
-      );
-      const playMin = entry.totalPlayMinutesToday;
-      globalPlayMinutes += playMin;
-      globalWaitMinutes += Math.max(0, presenceMin - playMin);
-    }
-    const totalPresence = globalWaitMinutes + globalPlayMinutes;
-    const waitPlayRatio = totalPresence > 0
-      ? Math.round((globalWaitMinutes / totalPresence) * 100)
-      : 0;
-
-    const stats = {
-      totalPlayers,
-      activeToday: activeEntries.length,
-      newThisWeek,
-      newThisMonth,
-      totalPlayMinutes: playTimeAgg._sum.totalPlayMinutesToday ?? 0,
-      totalWaitMinutes: globalWaitMinutes,
-      waitPlayRatio,
-      skillDistribution: Object.fromEntries(
-        skillCounts.map((s) => [s.skillLevel, s._count])
-      ),
-    };
 
     const playerIds = players.map((p) => p.id);
     const gameAssignments = playerIds.length > 0

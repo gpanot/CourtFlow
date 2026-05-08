@@ -766,11 +766,11 @@ function ReclubSnapshotTab({
 
       {/* Reclub members grid */}
       <div className="grid grid-cols-4 gap-2">
-        {rosterPlayers.map((p) => {
+        {rosterPlayers.map((p, idx) => {
           const isMatched = p.paid;
           const isNoShow = !p.paid;
           return (
-            <div key={p.reclubUserId} className="flex flex-col items-center">
+            <div key={`roster-${p.reclubUserId}-${idx}`} className="flex flex-col items-center">
               <div className="relative">
                 {p.avatarUrl && !p.avatarUrl.includes("default") ? (
                   <img
@@ -916,13 +916,13 @@ function ReclubSnapshotTab({
                 <p className="py-6 text-center text-sm text-neutral-500">Không có thành viên Reclub chưa khớp.</p>
               ) : (
                 <div className="space-y-1.5">
-                  {unlinkedRoster.map((rp) => {
+                  {unlinkedRoster.map((rp, idx) => {
                     const walkInName = (selectedWalkIn.courtpayName ?? "").toLowerCase().trim();
                     const rpName = rp.reclubName.toLowerCase();
                     const isRecommended = walkInName && (rpName.includes(walkInName) || walkInName.includes(rpName));
                     return (
                       <button
-                        key={rp.reclubUserId}
+                        key={`unlinked-${rp.reclubUserId}-${idx}`}
                         type="button"
                         onClick={() => setConfirmTarget(rp)}
                         className={cn(

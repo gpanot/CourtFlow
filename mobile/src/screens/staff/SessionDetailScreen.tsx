@@ -599,12 +599,12 @@ function ReclubSnapshotView({
 
           {/* Avatar grid */}
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {rosterPlayers.map((p) => {
+            {rosterPlayers.map((p, idx) => {
               const isMatched = p.paid;
               const ringColor = isMatched ? "#22c55e" : theme.border;
               const opacity = isMatched ? 1 : 0.5;
               return (
-                <View key={p.reclubUserId} style={{ width: (avatarSize + 12), alignItems: "center", marginBottom: 8 }}>
+                <View key={`roster-${p.reclubUserId}-${idx}`} style={{ width: (avatarSize + 12), alignItems: "center", marginBottom: 8 }}>
                   <View style={{ position: "relative" }}>
                     {p.avatarUrl && !p.avatarUrl.includes("default") ? (
                       <Image
@@ -775,13 +775,13 @@ function ReclubSnapshotView({
             {unlinkedRoster.length === 0 ? (
               <Text style={{ textAlign: "center", color: theme.muted, paddingVertical: 24, fontSize: 13 }}>Không có thành viên Reclub chưa khớp.</Text>
             ) : (
-              unlinkedRoster.map((rp) => {
+              unlinkedRoster.map((rp, idx) => {
                 const walkInName = (selectedWalkIn?.courtpayName ?? "").toLowerCase().trim();
                 const rpName = rp.reclubName.toLowerCase();
                 const isRecommended = !!walkInName && (rpName.includes(walkInName) || walkInName.includes(rpName));
                 return (
                   <TouchableOpacity
-                    key={rp.reclubUserId}
+                    key={`unlinked-${rp.reclubUserId}-${idx}`}
                     onPress={() => setConfirmTarget(rp)}
                     activeOpacity={0.7}
                     style={{
