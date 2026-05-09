@@ -1,0 +1,3 @@
+rembg==2.0.75
+Pillow==12.2.0
+onnxruntime==1.26.0
