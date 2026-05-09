@@ -11,14 +11,14 @@ const VALID_MODELS = ["gpt-image-2", "gpt-image-1.5", "gpt-image-1-mini", "gpt-i
 type StickerModel = (typeof VALID_MODELS)[number];
 
 const MODEL_COSTS: Record<StickerModel, number> = {
-  "gpt-image-2": 0.10,
-  "gpt-image-1.5": 0.032,
-  "gpt-image-1-mini": 0.02,
-  "gpt-image-1": 0.04,
+  "gpt-image-2": 0.02,
+  "gpt-image-1.5": 0.008,
+  "gpt-image-1-mini": 0.004,
+  "gpt-image-1": 0.008,
 };
 
-if (!process.env.OPENAI_API_KEY) {
-  console.warn("[sticker-generate] WARNING: OPENAI_API_KEY environment variable is not set. Sticker generation will fail.");
+if (!process.env.WAVESPEED_API_KEY) {
+  console.warn("[sticker-generate] WARNING: WAVESPEED_API_KEY environment variable is not set. Sticker generation will fail.");
 }
 
 /**
@@ -35,8 +35,8 @@ export async function POST(
     requireSuperAdmin(request.headers);
     const { playerId } = await params;
 
-    if (!process.env.OPENAI_API_KEY) {
-      return error("OPENAI_API_KEY is not configured on this server.", 503);
+    if (!process.env.WAVESPEED_API_KEY) {
+      return error("WAVESPEED_API_KEY is not configured on this server.", 503);
     }
 
     const player = await prisma.player.findUnique({ where: { id: playerId } });
@@ -44,7 +44,7 @@ export async function POST(
 
     const body = await parseBody<{ photo_id?: string; prompt?: string; model?: string }>(request);
     const { photo_id, prompt } = body;
-    const modelRaw = body.model ?? "gpt-image-2";
+    const modelRaw = body.model ?? "gpt-image-1.5";
 
     if (!VALID_MODELS.includes(modelRaw as StickerModel)) {
       return error(`Invalid model "${modelRaw}". Accepted: ${VALID_MODELS.join(", ")}`, 400);
@@ -69,63 +69,44 @@ export async function POST(
       imageAbsPath = path.join(process.cwd(), urlPath);
     }
 
-    // Read image as base64 for the GPT image models API format
-    const { readFile } = await import("fs/promises");
-    let imageBase64: string;
-    try {
-      const buf = await readFile(imageAbsPath);
-      imageBase64 = buf.toString("base64");
-    } catch {
-      return error("Could not read the reference photo from disk", 500);
-    }
-    const ext = path.extname(imageAbsPath).toLowerCase().replace(".", "");
-    const mimeType = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
-
     const startTime = Date.now();
 
     let openaiResult: { imageData: Buffer; elapsed: number };
     try {
-      // GPT image models use the /images/edits endpoint with images as an array
-      // of { image_url: "data:<mime>;base64,..." } objects. The legacy file-stream
-      // form only works with dall-e-2. We POST raw multipart via the OpenAI SDK's
-      // low-level request helper to stay compatible with all four models.
-      const { default: OpenAI } = await import("openai");
-      const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const WaveSpeed = require("wavespeed");
+      const client = new WaveSpeed();
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await (client as any).post("/images/edits", {
-        body: {
-          model: selectedModel,
-          prompt: prompt.trim(),
-          n: 1,
-          size: "1024x1024",
-          images: [{ image_url: `data:${mimeType};base64,${imageBase64}` }],
-        },
-        headers: { "Content-Type": "application/json" },
+      const appUrl = process.env.APP_URL ?? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
+      const imagePublicUrl = `${appUrl}${imageAbsPath.replace(process.cwd(), "").replace(/\\/g, "/")}`;
+
+      const wavespeedModel = `openai/${selectedModel}/edit`;
+      const result = await client.run(wavespeedModel, {
+        background: "opaque",
+        enable_base64_output: false,
+        enable_sync_mode: false,
+        images: [imagePublicUrl],
+        input_fidelity: "high",
+        output_format: "png",
+        prompt: prompt.trim(),
+        quality: "medium",
+        size: "1024*1024",
       });
 
       const elapsed = (Date.now() - startTime) / 1000;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const item = (result as any).data?.[0];
-      if (!item) throw new Error("OpenAI returned no image data");
+      const outputUrl = result.outputs[0];
+      if (!outputUrl) throw new Error("WaveSpeed returned no output URL");
 
-      let imageData: Buffer;
-      if (item.b64_json) {
-        imageData = Buffer.from(item.b64_json as string, "base64");
-      } else if (item.url) {
-        const res = await fetch(item.url as string);
-        if (!res.ok) throw new Error(`Failed to download generated image: HTTP ${res.status}`);
-        imageData = Buffer.from(await res.arrayBuffer());
-      } else {
-        throw new Error("OpenAI returned neither b64_json nor url");
-      }
+      const imgRes = await fetch(outputUrl);
+      if (!imgRes.ok) throw new Error(`Failed to download generated image from WaveSpeed: HTTP ${imgRes.status}`);
+      const imageData = Buffer.from(await imgRes.arrayBuffer());
 
       openaiResult = { imageData, elapsed };
     } catch (e) {
       const msg = (e as Error).message ?? String(e);
-      console.error("[sticker-generate] OpenAI error:", msg);
+      console.error("[sticker-generate] WaveSpeed error:", msg);
       return json(
-        { error: `Image generation failed. Check your OpenAI API key and quota. Details: ${msg}` },
+        { error: `Image generation failed. Check your WaveSpeed API key and quota. Details: ${msg}` },
         502
       );
     }

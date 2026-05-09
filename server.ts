@@ -70,6 +70,26 @@ app.prepare().then(() => {
 
   expressApp.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
+  // In dev, proxy /uploads to production when the file doesn't exist locally
+  if (dev) {
+    const productionBase = (process.env.APP_URL ?? "").replace(/\/$/, "");
+    if (productionBase) {
+      expressApp.use("/uploads", async (req, res) => {
+        const remoteUrl = `${productionBase}/uploads${req.path}`;
+        try {
+          const upstream = await fetch(remoteUrl);
+          if (!upstream.ok) { res.status(upstream.status).end(); return; }
+          const contentType = upstream.headers.get("content-type") ?? "application/octet-stream";
+          res.setHeader("Content-Type", contentType);
+          const buf = Buffer.from(await upstream.arrayBuffer());
+          res.send(buf);
+        } catch {
+          res.status(502).end();
+        }
+      });
+    }
+  }
+
   expressApp.all("/{*path}", (req, res) => {
     return handle(req, res);
   });

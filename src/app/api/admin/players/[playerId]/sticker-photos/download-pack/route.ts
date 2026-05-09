@@ -57,11 +57,11 @@ export async function GET(
     const zipFilename = `stickers_${playerName.replace(/[^a-zA-Z0-9]/g, "_")}.zip`;
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { ZipArchive } = require("archiver");
+    const archiver = require("archiver");
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { createReadStream } = require("fs");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const archive: any = new ZipArchive({ zlib: { level: 6 } });
+    const archive: any = archiver("zip", { zlib: { level: 6 } });
     const chunks: Uint8Array[] = [];
 
     await new Promise<void>((resolve, reject) => {

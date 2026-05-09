@@ -54,6 +54,7 @@
     "socket.io": "^4.8.0",
     "socket.io-client": "^4.8.0",
     "tailwind-merge": "^3.2.0",
+    "wavespeed": "^0.2.3",
     "web-push": "^3.6.7",
     "zustand": "^5.0.0"
   },
