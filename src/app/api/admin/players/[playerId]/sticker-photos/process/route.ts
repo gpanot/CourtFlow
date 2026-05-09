@@ -58,21 +58,19 @@ export async function POST(
     const ts = Date.now();
 
     for (const { index, buffer } of croppedBuffers) {
-      const formData = new FormData();
-      formData.append(
-        "file",
-        new Blob([new Uint8Array(buffer)], { type: "image/png" }),
-        `sticker_${index}.png`
-      );
+      const base64 = buffer.toString("base64");
+
+      console.log("[split-stickers] calling FastAPI at:", `${fastapiUrl}/internal/remove-background`);
 
       const res = await fetch(`${fastapiUrl}/internal/remove-background`, {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image_base64: base64 }),
       });
 
       if (!res.ok) {
-        const detail = await res.text().catch(() => res.statusText);
-        throw new Error(`Background removal failed for sticker ${index}: ${detail}`);
+        const text = await res.text();
+        throw new Error(`Background removal failed for sticker ${index}: ${text}`);
       }
 
       const processedBuffer = Buffer.from(await res.arrayBuffer());
