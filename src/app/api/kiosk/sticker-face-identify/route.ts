@@ -26,22 +26,46 @@ export async function POST(request: NextRequest) {
     console.log("[sticker-face-identify] recognition result:", JSON.stringify({
       resultType: recognition.resultType,
       playerId: recognition.playerId ?? null,
+      faceSubjectId: recognition.faceSubjectId ?? null,
       success: recognition.success,
       confidence: (recognition as unknown as Record<string, unknown>).confidence ?? null,
     }));
 
-    if (recognition.resultType !== "matched" || !recognition.playerId) {
+    // No face detected or hard error — give up immediately
+    if (recognition.resultType === "error") {
+      console.log("[sticker-face-identify] recognition error:", recognition.error);
+      return json({ matched: false });
+    }
+
+    let resolvedPlayerId: string | null = null;
+
+    if (recognition.resultType === "matched" && recognition.playerId) {
+      resolvedPlayerId = recognition.playerId;
+    } else if (recognition.resultType === "new_player" && recognition.faceSubjectId) {
+      // Same fallback as CourtPay check-in: AWS found a face but the ExternalImageId
+      // didn't resolve to a player — look up by the raw FaceId stored on the player row.
+      const byFace = await prisma.player.findFirst({
+        where: { faceSubjectId: recognition.faceSubjectId },
+        select: { id: true },
+      });
+      if (byFace) {
+        console.log("[sticker-face-identify] resolved via faceSubjectId fallback:", byFace.id);
+        resolvedPlayerId = byFace.id;
+      }
+    }
+
+    if (!resolvedPlayerId) {
       console.log("[sticker-face-identify] no match — resultType:", recognition.resultType);
       return json({ matched: false });
     }
 
     const player = await prisma.player.findUnique({
-      where: { id: recognition.playerId },
+      where: { id: resolvedPlayerId },
       select: { id: true, name: true },
     });
 
     if (!player) {
-      console.log("[sticker-face-identify] playerId", recognition.playerId, "not found in DB");
+      console.log("[sticker-face-identify] playerId", resolvedPlayerId, "not found in DB");
       return json({ matched: false });
     }
 

@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { mkdir, writeFile, unlink } from "fs/promises";
+import { mkdir, writeFile, unlink, readFile } from "fs/promises";
 import path from "path";
 import { prisma } from "@/lib/db";
 import { json, error, notFound, parseBody } from "@/lib/api-helpers";
@@ -77,15 +77,27 @@ export async function POST(
       const WaveSpeed = require("wavespeed");
       const client = new WaveSpeed.Client();
 
-      const appUrl = process.env.APP_URL ?? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
-      const imagePublicUrl = `${appUrl}${imageAbsPath.replace(process.cwd(), "").replace(/\\/g, "/")}`;
+      // On production use the public URL (WaveSpeed fetches it remotely).
+      // In local dev RAILWAY_PUBLIC_DOMAIN is absent and the local server isn't
+      // reachable by WaveSpeed, so read the file from disk and send base64 instead.
+      const isPubliclyReachable = !!process.env.RAILWAY_PUBLIC_DOMAIN;
+      let imageInput: string;
+      if (isPubliclyReachable) {
+        const appUrl = process.env.APP_URL ?? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
+        imageInput = `${appUrl}${imageAbsPath.replace(process.cwd(), "").replace(/\\/g, "/")}`;
+      } else {
+        const imageBytes = await readFile(imageAbsPath);
+        const ext = path.extname(imageAbsPath).slice(1).toLowerCase() || "jpeg";
+        const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+        imageInput = `data:${mime};base64,${imageBytes.toString("base64")}`;
+      }
 
       const wavespeedModel = `openai/${selectedModel}/edit`;
       const result = await client.run(wavespeedModel, {
         background: "opaque",
         enable_base64_output: false,
         enable_sync_mode: false,
-        images: [imagePublicUrl],
+        images: [imageInput],
         input_fidelity: "high",
         output_format: "png",
         prompt: prompt.trim(),
