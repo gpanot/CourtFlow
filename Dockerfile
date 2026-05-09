@@ -1,13 +1,11 @@
 FROM node:20-alpine AS base
 
-# ── Python layer (shared across stages) ────────────────────────────────────
-FROM base AS python-deps
-RUN apk add --no-cache python3 py3-pip gcc musl-dev linux-headers libffi-dev
-# Install sticker-processing dependencies into /opt/sticker-venv
+# ── Python layer: use Debian (glibc) because onnxruntime has no musl wheels ──
+FROM python:3.12-slim AS python-deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc g++ && rm -rf /var/lib/apt/lists/*
 COPY scripts/requirements-stickers.txt /tmp/requirements-stickers.txt
-RUN python3 -m venv /opt/sticker-venv && \
-    /opt/sticker-venv/bin/pip install --no-cache-dir --upgrade pip && \
-    /opt/sticker-venv/bin/pip install --no-cache-dir -r /tmp/requirements-stickers.txt
+RUN pip install --no-cache-dir -r /tmp/requirements-stickers.txt
 
 FROM base AS deps
 WORKDIR /app
@@ -23,15 +21,18 @@ COPY . .
 RUN npx prisma generate
 RUN npm run build
 
-FROM base AS runner
+# ── Runner: Debian-slim for glibc compatibility with onnxruntime ──
+FROM node:20-slim AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Install Python runtime (alpine packages, no build tools needed in runner)
-RUN apk add --no-cache python3
+# Install Python runtime
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-venv libgomp1 && rm -rf /var/lib/apt/lists/*
 
-# Copy the pre-built Python venv from the python-deps stage
-COPY --from=python-deps /opt/sticker-venv /opt/sticker-venv
+# Copy installed Python packages from the python-deps stage
+COPY --from=python-deps /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/dist-packages
+COPY --from=python-deps /usr/local/bin/rembg /usr/local/bin/rembg
 
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
@@ -49,7 +50,9 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 # STICKER_PYTHON_BIN tells the process route which Python to use
-ENV STICKER_PYTHON_BIN="/opt/sticker-venv/bin/python3"
+ENV STICKER_PYTHON_BIN="/usr/bin/python3"
+# PYTHONPATH so the system python3 can find the installed rembg/onnxruntime packages
+ENV PYTHONPATH="/usr/local/lib/python3.12/dist-packages"
 # Railway mounts a persistent volume at /app/uploads. The volume is owned by
 # root, so the container runs as root to guarantee write access for face photos
 # and avatars. Sub-dirs are created at startup in case the volume is fresh.
