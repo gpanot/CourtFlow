@@ -9,7 +9,7 @@ import { CameraView } from "expo-camera";
 import * as ImageManipulator from "expo-image-manipulator";
 import { api } from "../lib/api-client";
 
-const MAX_SIDE_PX = 1200;
+const MAX_SIDE_PX = 2000;
 const JPEG_QUALITY = 0.82;
 const MAX_BYTES = 1 * 1024 * 1024; // 1 MB
 
