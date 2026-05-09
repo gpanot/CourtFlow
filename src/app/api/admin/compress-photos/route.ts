@@ -1,5 +1,6 @@
 /**
- * ONE-TIME admin utility — bulk resize + compress all player face photos on the server.
+ * ONE-TIME admin utility — bulk resize + compress player face photos on the server.
+ * Processes in batches via ?skip=N&take=N to stay within Railway's 60s request timeout.
  * Max width: 2000px (skipped if already ≤ 2000px wide).
  * JPEG quality: 82% (mozjpeg).
  * Skips photos that would grow in size after compression.
@@ -15,15 +16,26 @@ import { requireSuperAdmin } from "@/lib/auth";
 
 const MAX_WIDTH = 2000;
 const JPEG_QUALITY = 82;
+const DEFAULT_BATCH = 50;
 
 export async function POST(request: NextRequest) {
   try {
     requireSuperAdmin(request.headers);
 
+    const { searchParams } = new URL(request.url);
+    const skip = parseInt(searchParams.get("skip") ?? "0", 10);
+    const take = parseInt(searchParams.get("take") ?? String(DEFAULT_BATCH), 10);
+
+    const total = await prisma.player.count({
+      where: { facePhotoPath: { startsWith: "/uploads/players/" } },
+    });
+
     const players = await prisma.player.findMany({
       where: { facePhotoPath: { startsWith: "/uploads/players/" } },
       select: { id: true, name: true, facePhotoPath: true },
       orderBy: { createdAt: "asc" },
+      skip,
+      take,
     });
 
     const results: {
@@ -98,18 +110,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const compressed = results.filter((r) => r.status === "compressed");
-    const skippedMissing = results.filter((r) => r.status === "skipped_missing");
-    const skippedNotSmaller = results.filter((r) => r.status === "skipped_not_smaller");
-    const errors = results.filter((r) => r.status === "error");
-
     return json({
+      batch: { skip, take, processedCount: players.length, totalPlayers: total, hasMore: skip + take < total, nextSkip: skip + take },
       summary: {
-        total: players.length,
-        compressed: compressed.length,
-        skippedMissing: skippedMissing.length,
-        skippedNotSmaller: skippedNotSmaller.length,
-        errors: errors.length,
+        compressed: results.filter((r) => r.status === "compressed").length,
+        skippedMissing: results.filter((r) => r.status === "skipped_missing").length,
+        skippedNotSmaller: results.filter((r) => r.status === "skipped_not_smaller").length,
+        errors: results.filter((r) => r.status === "error").length,
         totalSavedMB: (totalSavedBytes / 1024 / 1024).toFixed(2),
       },
       results,
