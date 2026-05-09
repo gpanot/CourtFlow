@@ -34,6 +34,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@prisma/client": "^6.5.0",
+    "adm-zip": "^0.5.17",
     "archiver": "^8.0.0",
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",

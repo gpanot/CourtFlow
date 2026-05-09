@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import path from "path";
-import { stat } from "fs/promises";
+import { stat, readFile } from "fs/promises";
 import { prisma } from "@/lib/db";
 import { error, notFound } from "@/lib/api-helpers";
 import { verifyToken } from "@/lib/auth";
@@ -57,25 +57,17 @@ export async function GET(
     const zipFilename = `stickers_${playerName.replace(/[^a-zA-Z0-9]/g, "_")}.zip`;
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const archiver = require("archiver");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { createReadStream } = require("fs");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const archive: any = archiver("zip", { zlib: { level: 6 } });
-    const chunks: Uint8Array[] = [];
+    const AdmZip = require("adm-zip");
+    const zip = new AdmZip();
 
-    await new Promise<void>((resolve, reject) => {
-      archive.on("data", (chunk: Buffer) => chunks.push(chunk));
-      archive.on("end", resolve);
-      archive.on("error", reject);
+    for (const file of files) {
+      const fileBuffer = await readFile(file.absPath);
+      zip.addFile(file.name, fileBuffer);
+      console.log(`[download-pack] Added ${file.name} (${fileBuffer.length} bytes)`);
+    }
 
-      for (const file of files) {
-        archive.append(createReadStream(file.absPath), { name: file.name });
-      }
-      archive.finalize();
-    });
-
-    const zipBuffer = Buffer.concat(chunks);
+    const zipBuffer: Buffer = zip.toBuffer();
+    console.log(`[download-pack] ZIP ready: ${zipBuffer.length} bytes, filename: ${zipFilename}`);
 
     return new NextResponse(zipBuffer, {
       status: 200,
