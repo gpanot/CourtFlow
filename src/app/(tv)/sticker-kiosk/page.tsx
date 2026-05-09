@@ -314,10 +314,11 @@ function IdleScreen({ onScan }: { onScan: () => void }) {
 // Scanning screen
 // ---------------------------------------------------------------------------
 
-// Wait for camera to stabilise before the first capture attempt
-const CAMERA_WARMUP_MS = 2000;
-const CAPTURE_INTERVAL_MS = 2500;
-const MAX_NO_MATCH = 6;
+// Minimal warmup — just enough for first real video frame to be available
+const CAMERA_WARMUP_MS = 500;
+// Pause between the end of one request and the start of the next
+const BETWEEN_ATTEMPT_MS = 300;
+const MAX_NO_MATCH = 8;
 
 type ScanStatus = "warming" | "scanning" | "sending";
 
@@ -344,23 +345,23 @@ function ScanningScreen({
     if (!streamReady) return;
     scanning.current = true;
 
-    // Give the video a moment to show real frames before capturing
-    const warmup = setTimeout(() => {
-      if (!scanning.current) return;
+    let warmupTimer: ReturnType<typeof setTimeout>;
+
+    const runLoop = async () => {
       setScanStatus("scanning");
 
-      const timer = setInterval(async () => {
-        if (!scanning.current) return;
+      while (scanning.current) {
         const frame = cameraRef.current?.captureFrame();
         if (!frame) {
-          console.debug("[StickerKiosk] captureFrame returned null — video not ready yet");
-          return;
+          // Video not ready yet — wait a tick and retry
+          await new Promise((r) => setTimeout(r, 100));
+          continue;
         }
 
         setScanStatus("sending");
 
         try {
-          console.debug("[StickerKiosk] Sending frame to identify endpoint, attempt", noMatchCount.current + 1);
+          console.debug("[StickerKiosk] Sending frame, attempt", noMatchCount.current + 1);
           const res = await kioskFetch("/api/kiosk/sticker-face-identify", {
             method: "POST",
             body: JSON.stringify({ imageBase64: frame }),
@@ -372,35 +373,34 @@ function ScanningScreen({
             playerId?: string;
             displayName?: string;
             hasStickerPack?: boolean;
-            debug?: Record<string, unknown>;
           };
 
           console.debug("[StickerKiosk] identify response:", JSON.stringify(data));
 
-          setScanStatus("scanning");
+          if (!scanning.current) return;
 
           if (!data.matched) {
             noMatchCount.current += 1;
             console.debug(`[StickerKiosk] no match (${noMatchCount.current}/${MAX_NO_MATCH})`);
             if (noMatchCount.current >= MAX_NO_MATCH) {
               scanning.current = false;
-              clearInterval(timer);
               onNotFound({ hasStickerPack: true });
+              return;
             }
-            return;
+            setScanStatus("scanning");
+            await new Promise((r) => setTimeout(r, BETWEEN_ATTEMPT_MS));
+            continue;
           }
+
+          scanning.current = false;
 
           if (!data.hasStickerPack) {
             console.debug("[StickerKiosk] matched but no sticker pack for", data.displayName);
-            scanning.current = false;
-            clearInterval(timer);
             onNotFound({ hasStickerPack: false });
             return;
           }
 
           console.debug("[StickerKiosk] matched:", data.displayName, "— creating session");
-          scanning.current = false;
-          clearInterval(timer);
 
           const sessionRes = await kioskFetch("/api/kiosk/sticker-session", {
             method: "POST",
@@ -413,26 +413,30 @@ function ScanningScreen({
           }
           const session = await sessionRes.json() as SessionData;
           onIdentified(session);
+          return;
         } catch (err) {
           console.error("[StickerKiosk] network error during face identify:", err);
+          if (!scanning.current) return;
           setScanStatus("scanning");
-          // keep scanning
+          await new Promise((r) => setTimeout(r, BETWEEN_ATTEMPT_MS));
         }
-      }, CAPTURE_INTERVAL_MS);
+      }
+    };
 
-      scanning.current && (scanning.current = true); // ensure flag still set
-      return () => clearInterval(timer);
+    // Minimal warmup so first video frame is ready
+    warmupTimer = setTimeout(() => {
+      if (scanning.current) void runLoop();
     }, CAMERA_WARMUP_MS);
 
     return () => {
       scanning.current = false;
-      clearTimeout(warmup);
+      clearTimeout(warmupTimer);
     };
   }, [streamReady, onIdentified, onNotFound]);
 
   const statusLabel: Record<ScanStatus, string> = {
     warming: "Getting camera ready…",
-    scanning: "Hold still for 2 seconds",
+    scanning: "Look at the camera",
     sending: "Checking…",
   };
 
@@ -589,8 +593,8 @@ function IdentifiedScreen({
         alignItems: "center",
         height: "100dvh",
         background: C.bg,
-        overflowY: "auto",
-        padding: "0 24px 32px",
+        overflow: "hidden",
+        padding: "0 20px 16px",
       }}
       onClick={(e) => {
         const target = e.target as HTMLElement;
@@ -599,31 +603,28 @@ function IdentifiedScreen({
     >
       <p
         style={{
-          fontSize: 28,
+          fontSize: 24,
           fontWeight: 700,
           color: C.text,
           textAlign: "center",
-          marginTop: 24,
-          marginBottom: 4,
+          marginTop: 16,
+          marginBottom: 2,
         }}
       >
         Hi {session.playerName}! 👋
       </p>
-      <p style={{ fontSize: 16, color: C.muted, textAlign: "center", marginBottom: 16 }}>
+      <p style={{ fontSize: 14, color: C.muted, textAlign: "center", marginBottom: 10 }}>
         Your sticker pack is ready
       </p>
 
       {/* Sticker 2x2 grid */}
       <div
         style={{
-          background: C.card,
-          borderRadius: 16,
-          padding: 16,
-          maxWidth: 340,
+          maxWidth: 432,
           width: "100%",
         }}
       >
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
           {Array.from({ length: 4 }).map((_, i) => {
             const url = session.stickers[i];
             return (
@@ -633,9 +634,11 @@ function IdentifiedScreen({
                   position: "relative",
                   width: "100%",
                   aspectRatio: "1",
-                  borderRadius: 12,
+                  borderRadius: 10,
                   overflow: "hidden",
-                  ...CHECKERED,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
                 {url && (
@@ -643,7 +646,12 @@ function IdentifiedScreen({
                   <img
                     src={url}
                     alt={`Sticker ${i + 1}`}
-                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "contain",
+                      display: "block",
+                    }}
                   />
                 )}
                 <div
@@ -659,7 +667,7 @@ function IdentifiedScreen({
                   <span
                     style={{
                       color: "#fff",
-                      fontSize: 18,
+                      fontSize: 16,
                       fontWeight: 700,
                       opacity: 0.25,
                       transform: "rotate(-35deg)",
@@ -679,25 +687,45 @@ function IdentifiedScreen({
       {/* QR Code */}
       <div
         data-qr
-        style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "center" }}
+        style={{ marginTop: 12, display: "flex", flexDirection: "column", alignItems: "center" }}
       >
-        <div style={{ background: "#ffffff", padding: 16, borderRadius: 12, display: "inline-block" }}>
-          <QRCodeSVG value={session.shopUrl} size={180} bgColor="#ffffff" fgColor="#000000" />
+        <div style={{ background: "#ffffff", padding: 12, borderRadius: 12, display: "inline-block" }}>
+          <QRCodeSVG value={session.shopUrl} size={148} bgColor="#ffffff" fgColor="#000000" />
         </div>
-        <p style={{ fontSize: 18, fontWeight: 600, color: C.text, textAlign: "center", marginTop: 12 }}>
+        <p style={{ fontSize: 16, fontWeight: 600, color: C.text, textAlign: "center", marginTop: 8 }}>
           Scan with your phone
         </p>
-        <p style={{ fontSize: 14, color: C.muted, textAlign: "center" }}>
+        <p style={{ fontSize: 13, color: C.muted, textAlign: "center", marginTop: 2 }}>
           Get your sticker pack for 30,000 VND
         </p>
       </div>
 
+      {/* Cancel / go back */}
+      <button
+        onClick={onReset}
+        style={{
+          marginTop: 12,
+          background: "transparent",
+          border: `1px solid ${C.border}`,
+          color: C.muted,
+          fontSize: 15,
+          fontWeight: 500,
+          cursor: "pointer",
+          borderRadius: 12,
+          padding: "9px 32px",
+          width: "100%",
+          maxWidth: 432,
+        }}
+      >
+        Cancel
+      </button>
+
       <p
         style={{
-          fontSize: 12,
+          fontSize: 11,
           color: C.dim,
           textAlign: "center",
-          marginTop: 16,
+          marginTop: 8,
           visibility: countdown <= 10 ? "visible" : "hidden",
         }}
       >
