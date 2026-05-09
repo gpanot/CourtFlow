@@ -14,17 +14,14 @@ export async function POST(request: NextRequest) {
       return error("Unauthorized", 401);
     }
 
-    const body = await request.json() as { venueId?: string; imageBase64?: string };
-    const { venueId, imageBase64 } = body;
+    const body = await request.json() as { imageBase64?: string };
+    const { imageBase64 } = body;
 
     if (!imageBase64?.trim()) {
       return error("imageBase64 is required", 400);
     }
 
-    const recognition = await faceRecognitionService.recognizeFace(
-      imageBase64,
-      venueId ? { venueId } : undefined
-    );
+    const recognition = await faceRecognitionService.recognizeFace(imageBase64);
 
     if (recognition.resultType !== "matched" || !recognition.playerId) {
       return json({ matched: false });

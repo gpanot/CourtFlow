@@ -13,6 +13,7 @@ import {
   Download,
 } from "lucide-react";
 import { api } from "@/lib/api-client";
+import { useSessionStore } from "@/stores/session-store";
 
 const DEFAULT_PROMPT =
   `Create Zalo/WhatsApp sticker-style images using the real face of the uploaded person. Black background. A total of 4 diverse expressions: • "Just joking" (meaning: Sarcastic (Negative): Sometimes this phrase is used to imply that the other person is overly sensitive, "difficult," or has no sense of humor) • "Take it and buy Ticket" (hand holding a 100 usd bill) • "Shut down and go to sleep" (hand pointing straight at the person opposite, meaning to scold the other person to turn off their phone and go to sleep) • "Why don't we go Da Nang?!" (surprised, wondering expression) Each expression should include cute English/Vietnamese… text matching the slang context (not to be interpreted literally). Move the text to the bottom, forming a unified block with the character — text and image fused together as one complete sticker. Bubble-style font, bold/eye-catching colors, cute and adorable style.`;
@@ -48,6 +49,8 @@ interface Props {
 }
 
 export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstName }: Props) {
+  const sessionToken = useSessionStore((s) => s.token);
+
   // ── uploaded extra photos (slots 2–4)
   const [uploadedPhotos, setUploadedPhotos] = useState<StickerPhoto[]>([]);
   const [loadingPhotos, setLoadingPhotos] = useState(true);
@@ -203,16 +206,53 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstNa
     }
   }, [playerId]);
 
-  const handleDownloadPack = useCallback(() => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
-    const url = `/api/admin/players/${playerId}/sticker-photos/download-pack`;
-    const a = document.createElement("a");
-    a.href = url + (token ? `?token=${encodeURIComponent(token)}` : "");
-    a.download = `stickers_${playerFirstName ?? "player"}.zip`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  }, [playerId, playerFirstName]);
+  const [downloading, setDownloading] = useState(false);
+
+  const handleDownloadPack = useCallback(async () => {
+    const token = sessionToken;
+    console.log("[DownloadPack] token present:", !!token, "| token prefix:", token?.slice(0, 20));
+
+    if (!token) {
+      console.error("[DownloadPack] No auth token found in session store — cannot download.");
+      alert("Not authenticated. Please log out and log in again.");
+      return;
+    }
+
+    const url = `/api/admin/players/${playerId}/sticker-photos/download-pack?token=${encodeURIComponent(token)}`;
+    console.log("[DownloadPack] Fetching:", url.replace(/token=.*/, "token=***"));
+
+    setDownloading(true);
+    try {
+      const res = await fetch(url);
+      console.log("[DownloadPack] Response status:", res.status, res.statusText);
+      console.log("[DownloadPack] Content-Type:", res.headers.get("content-type"));
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("[DownloadPack] Server error:", errText);
+        alert(`Download failed (${res.status}): ${errText}`);
+        return;
+      }
+
+      const blob = await res.blob();
+      console.log("[DownloadPack] Blob size:", blob.size, "bytes, type:", blob.type);
+
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = `stickers_${playerFirstName ?? "player"}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 5000);
+      console.log("[DownloadPack] Download triggered successfully.");
+    } catch (e) {
+      console.error("[DownloadPack] Fetch error:", e);
+      alert(`Download error: ${(e as Error).message}`);
+    } finally {
+      setDownloading(false);
+    }
+  }, [playerId, playerFirstName, sessionToken]);
 
   const fmtDate = (iso: string) => {
     const d = new Date(iso);
@@ -547,10 +587,15 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstNa
               <button
                 type="button"
                 onClick={handleDownloadPack}
-                className="w-full flex items-center justify-center gap-2 rounded-lg bg-emerald-600 py-2.5 text-sm font-medium text-white hover:bg-emerald-500 transition-colors"
+                disabled={downloading}
+                className="w-full flex items-center justify-center gap-2 rounded-lg bg-emerald-600 py-2.5 text-sm font-medium text-white hover:bg-emerald-500 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <Download className="h-4 w-4" />
-                Download pack (.zip)
+                {downloading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Download className="h-4 w-4" />
+                )}
+                {downloading ? "Downloading…" : "Download pack (.zip)"}
               </button>
             </div>
           )}

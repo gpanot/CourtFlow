@@ -5,7 +5,6 @@ import {
   useRef,
   useState,
   useCallback,
-  use,
 } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { Camera, X } from "lucide-react";
@@ -103,7 +102,7 @@ function kioskFetch(url: string, options?: RequestInit) {
 }
 
 // ---------------------------------------------------------------------------
-// Idle — scrolling showcase rows
+// CSS animations (injected once at page level)
 // ---------------------------------------------------------------------------
 
 const CSS_ANIMATIONS = `
@@ -124,11 +123,11 @@ const CSS_ANIMATIONS = `
   50%  { opacity: 0.7; }
   100% { opacity: 0.4; }
 }
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.3; }
-}
 `;
+
+// ---------------------------------------------------------------------------
+// Idle — scrolling showcase rows
+// ---------------------------------------------------------------------------
 
 function StickerRow({
   stickers,
@@ -139,12 +138,7 @@ function StickerRow({
 }) {
   const doubled = [...stickers, ...stickers];
   return (
-    <div
-      style={{
-        overflow: "hidden",
-        width: "100%",
-      }}
-    >
+    <div style={{ overflow: "hidden", width: "100%" }}>
       <div
         style={{
           display: "flex",
@@ -153,12 +147,10 @@ function StickerRow({
           width: "max-content",
         }}
         onMouseEnter={(e) =>
-          ((e.currentTarget as HTMLDivElement).style.animationPlayState =
-            "paused")
+          ((e.currentTarget as HTMLDivElement).style.animationPlayState = "paused")
         }
         onMouseLeave={(e) =>
-          ((e.currentTarget as HTMLDivElement).style.animationPlayState =
-            "running")
+          ((e.currentTarget as HTMLDivElement).style.animationPlayState = "running")
         }
       >
         {doubled.map((url, i) => (
@@ -177,11 +169,7 @@ function StickerRow({
             <img
               src={url}
               alt=""
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "contain",
-              }}
+              style={{ width: "100%", height: "100%", objectFit: "contain" }}
             />
           </div>
         ))}
@@ -212,27 +200,17 @@ function ShimmerRow() {
   );
 }
 
-function IdleScreen({
-  venueName,
-  onScan,
-}: {
-  venueName: string;
-  onScan: () => void;
-}) {
+function IdleScreen({ onScan }: { onScan: () => void }) {
   const [stickers, setStickers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const venueId =
-    typeof window !== "undefined"
-      ? window.location.pathname.split("/").pop() ?? ""
-      : "";
 
   useEffect(() => {
-    fetch(`/api/kiosk/sticker-showcase?venueId=${venueId}`)
+    fetch("/api/kiosk/sticker-showcase")
       .then((r) => r.json())
       .then((d: { stickers: string[] }) => setStickers(d.stickers ?? []))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [venueId]);
+  }, []);
 
   const half = Math.ceil(stickers.length / 2);
   const rowA = stickers.slice(0, half);
@@ -256,11 +234,10 @@ function IdleScreen({
           justifyContent: "center",
           borderBottom: `1px solid ${C.border}`,
           flexShrink: 0,
-          position: "relative",
         }}
       >
         <span style={{ fontSize: 16, fontWeight: 600, color: C.text }}>
-          {venueName}
+          Pickleball HCMC
         </span>
       </div>
 
@@ -341,12 +318,10 @@ const CAPTURE_INTERVAL_MS = 1500;
 const MAX_NO_MATCH = 5;
 
 function ScanningScreen({
-  venueId,
   onIdentified,
   onNotFound,
   onCancel,
 }: {
-  venueId: string;
   onIdentified: (session: SessionData) => void;
   onNotFound: (reason: NotFoundReason) => void;
   onCancel: () => void;
@@ -356,14 +331,10 @@ function ScanningScreen({
   const noMatchCount = useRef(0);
   const scanning = useRef(true);
 
-  // Cleanup on unmount
   useEffect(() => {
-    return () => {
-      scanning.current = false;
-    };
+    return () => { scanning.current = false; };
   }, []);
 
-  // Start scanning loop when stream is ready
   useEffect(() => {
     if (!streamReady) return;
     scanning.current = true;
@@ -376,13 +347,12 @@ function ScanningScreen({
       try {
         const res = await kioskFetch("/api/kiosk/sticker-face-identify", {
           method: "POST",
-          body: JSON.stringify({ venueId, imageBase64: frame }),
+          body: JSON.stringify({ imageBase64: frame }),
         });
         if (!scanning.current) return;
         const data = await res.json() as {
           matched: boolean;
           playerId?: string;
-          displayName?: string;
           hasStickerPack?: boolean;
         };
 
@@ -403,7 +373,6 @@ function ScanningScreen({
           return;
         }
 
-        // Matched and has sticker pack — create session
         scanning.current = false;
         clearInterval(timer);
 
@@ -426,7 +395,7 @@ function ScanningScreen({
       scanning.current = false;
       clearInterval(timer);
     };
-  }, [streamReady, venueId, onIdentified, onNotFound]);
+  }, [streamReady, onIdentified, onNotFound]);
 
   const viewfinderSize = "min(70vw, 380px)";
 
@@ -441,7 +410,6 @@ function ScanningScreen({
         paddingTop: 16,
       }}
     >
-      {/* Close button */}
       <div
         style={{
           width: "100%",
@@ -468,7 +436,6 @@ function ScanningScreen({
         </button>
       </div>
 
-      {/* Title */}
       <p
         style={{
           fontSize: 22,
@@ -481,7 +448,6 @@ function ScanningScreen({
         Look at the camera
       </p>
 
-      {/* Viewfinder */}
       <div
         style={{
           position: "relative",
@@ -518,12 +484,7 @@ function ScanningScreen({
                 ? { top: 12, right: 12, borderTopWidth: 2, borderRightWidth: 2 }
                 : pos === "bl"
                 ? { bottom: 12, left: 12, borderBottomWidth: 2, borderLeftWidth: 2 }
-                : {
-                    bottom: 12,
-                    right: 12,
-                    borderBottomWidth: 2,
-                    borderRightWidth: 2,
-                  }),
+                : { bottom: 12, right: 12, borderBottomWidth: 2, borderRightWidth: 2 }),
               borderRadius: 4,
             }}
           />
@@ -543,14 +504,7 @@ function ScanningScreen({
         />
       </div>
 
-      <p
-        style={{
-          fontSize: 14,
-          color: C.muted,
-          textAlign: "center",
-          marginTop: 16,
-        }}
-      >
+      <p style={{ fontSize: 14, color: C.muted, textAlign: "center", marginTop: 16 }}>
         Hold still for 2 seconds
       </p>
 
@@ -587,7 +541,6 @@ function IdentifiedScreen({
   onReset: () => void;
 }) {
   const [countdown, setCountdown] = useState(AUTO_RESET_S);
-
   const resetCountdown = useCallback(() => setCountdown(AUTO_RESET_S), []);
 
   useEffect(() => {
@@ -616,12 +569,10 @@ function IdentifiedScreen({
         padding: "0 24px 32px",
       }}
       onClick={(e) => {
-        // Reset countdown on tap, but not if clicking the QR area
         const target = e.target as HTMLElement;
         if (!target.closest("[data-qr]")) resetCountdown();
       }}
     >
-      {/* Header */}
       <p
         style={{
           fontSize: 28,
@@ -634,14 +585,7 @@ function IdentifiedScreen({
       >
         Hi {session.playerName}! 👋
       </p>
-      <p
-        style={{
-          fontSize: 16,
-          color: C.muted,
-          textAlign: "center",
-          marginBottom: 16,
-        }}
-      >
+      <p style={{ fontSize: 16, color: C.muted, textAlign: "center", marginBottom: 16 }}>
         Your sticker pack is ready
       </p>
 
@@ -655,13 +599,7 @@ function IdentifiedScreen({
           width: "100%",
         }}
       >
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 8,
-          }}
-        >
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           {Array.from({ length: 4 }).map((_, i) => {
             const url = session.stickers[i];
             return (
@@ -681,14 +619,9 @@ function IdentifiedScreen({
                   <img
                     src={url}
                     alt={`Sticker ${i + 1}`}
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "contain",
-                    }}
+                    style={{ width: "100%", height: "100%", objectFit: "contain" }}
                   />
                 )}
-                {/* PREVIEW watermark */}
                 <div
                   style={{
                     position: "absolute",
@@ -722,37 +655,12 @@ function IdentifiedScreen({
       {/* QR Code */}
       <div
         data-qr
-        style={{
-          marginTop: 20,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-        }}
+        style={{ marginTop: 20, display: "flex", flexDirection: "column", alignItems: "center" }}
       >
-        <div
-          style={{
-            background: "#ffffff",
-            padding: 16,
-            borderRadius: 12,
-            display: "inline-block",
-          }}
-        >
-          <QRCodeSVG
-            value={session.shopUrl}
-            size={180}
-            bgColor="#ffffff"
-            fgColor="#000000"
-          />
+        <div style={{ background: "#ffffff", padding: 16, borderRadius: 12, display: "inline-block" }}>
+          <QRCodeSVG value={session.shopUrl} size={180} bgColor="#ffffff" fgColor="#000000" />
         </div>
-        <p
-          style={{
-            fontSize: 18,
-            fontWeight: 600,
-            color: C.text,
-            textAlign: "center",
-            marginTop: 12,
-          }}
-        >
+        <p style={{ fontSize: 18, fontWeight: 600, color: C.text, textAlign: "center", marginTop: 12 }}>
           Scan with your phone
         </p>
         <p style={{ fontSize: 14, color: C.muted, textAlign: "center" }}>
@@ -760,7 +668,6 @@ function IdentifiedScreen({
         </p>
       </div>
 
-      {/* Countdown (show only when <10s) */}
       <p
         style={{
           fontSize: 12,
@@ -816,26 +723,10 @@ function NotFoundScreen({
       <p style={{ fontSize: 22, fontWeight: 600, color: C.text, margin: 0 }}>
         We didn&apos;t find your stickers
       </p>
-      <p
-        style={{
-          fontSize: 15,
-          color: C.muted,
-          maxWidth: 260,
-          margin: 0,
-        }}
-      >
+      <p style={{ fontSize: 15, color: C.muted, maxWidth: 260, margin: 0 }}>
         {message}
       </p>
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-          width: "100%",
-          maxWidth: 340,
-          marginTop: 8,
-        }}
-      >
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, width: "100%", maxWidth: 340, marginTop: 8 }}>
         {reason.hasStickerPack && (
           <button style={BTN_PRIMARY} onClick={onTryAgain}>
             Try again
@@ -850,38 +741,17 @@ function NotFoundScreen({
 }
 
 // ---------------------------------------------------------------------------
-// Main page — state machine + transitions
+// Main page — state machine + slide/flip transitions
 // ---------------------------------------------------------------------------
 
-export default function StickerKioskPage({
-  params,
-}: {
-  params: Promise<{ venueId: string }>;
-}) {
-  const { venueId } = use(params);
-
+export default function StickerKioskPage() {
   const [kioskState, setKioskState] = useState<KioskState>("idle");
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
-  const [notFoundReason, setNotFoundReason] = useState<NotFoundReason>({
-    hasStickerPack: true,
-  });
-  const [venueName, setVenueName] = useState("Pickleball HCMC");
+  const [notFoundReason, setNotFoundReason] = useState<NotFoundReason>({ hasStickerPack: true });
 
-  // Slide transition: idle ↕ scanning
-  const [slideOffset, setSlideOffset] = useState<"idle" | "scanning" | "animating-to-scan" | "animating-to-idle">("idle");
-
-  // Flip transition: scanning ↔ identified
+  type SlideOffset = "idle" | "scanning" | "animating-to-scan" | "animating-to-idle";
+  const [slideOffset, setSlideOffset] = useState<SlideOffset>("idle");
   const [flipped, setFlipped] = useState(false);
-
-  // Fetch venue name on mount
-  useEffect(() => {
-    fetch(`/api/venues/${venueId}`)
-      .then((r) => r.json())
-      .then((d: { name?: string }) => {
-        if (d.name) setVenueName(d.name);
-      })
-      .catch(() => {});
-  }, [venueId]);
 
   const goToScanning = useCallback(() => {
     setSlideOffset("animating-to-scan");
@@ -917,7 +787,6 @@ export default function StickerKioskPage({
     setSlideOffset("scanning");
   }, []);
 
-  // Slide offset styles
   const idleSlideStyle: React.CSSProperties = {
     position: "absolute",
     inset: 0,
@@ -948,12 +817,11 @@ export default function StickerKioskPage({
         <div style={{ position: "relative", width: "100vw", height: "100dvh", overflow: "hidden" }}>
           {/* Idle layer */}
           <div style={idleSlideStyle}>
-            <IdleScreen venueName={venueName} onScan={goToScanning} />
+            <IdleScreen onScan={goToScanning} />
           </div>
 
           {/* Scanning / Identified layer (flip wrapper) */}
           <div style={scanSlideStyle}>
-            {/* Flip wrapper */}
             <div style={{ perspective: 1000, width: "100%", height: "100%" }}>
               <div
                 style={{
@@ -976,7 +844,6 @@ export default function StickerKioskPage({
                 >
                   {(kioskState === "scanning" || kioskState === "identified") && (
                     <ScanningScreen
-                      venueId={venueId}
                       onIdentified={goToIdentified}
                       onNotFound={goToNotFound}
                       onCancel={goToIdle}

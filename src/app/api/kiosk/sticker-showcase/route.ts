@@ -1,4 +1,3 @@
-import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
 
@@ -11,8 +10,7 @@ function fisherYates<T>(arr: T[]): T[] {
   return a;
 }
 
-// venueId query param is reserved for future filtering; ignored for now
-export async function GET(_request: NextRequest) {
+export async function GET() {
   try {
     const packs = await prisma.playerStickerPack.findMany({
       where: {
