@@ -6,6 +6,7 @@ RUN apk add --no-cache python3 py3-pip gcc musl-dev linux-headers libffi-dev
 # Install sticker-processing dependencies into /opt/sticker-venv
 COPY scripts/requirements-stickers.txt /tmp/requirements-stickers.txt
 RUN python3 -m venv /opt/sticker-venv && \
+    /opt/sticker-venv/bin/pip install --no-cache-dir --upgrade pip && \
     /opt/sticker-venv/bin/pip install --no-cache-dir -r /tmp/requirements-stickers.txt
 
 FROM base AS deps
