@@ -69,43 +69,88 @@ export async function POST(
       imageAbsPath = path.join(process.cwd(), urlPath);
     }
 
+    // Read image file as base64 (used by both API paths)
+    const { readFile } = await import("fs/promises");
+    let imageBase64: string;
+    try {
+      const buf = await readFile(imageAbsPath);
+      imageBase64 = buf.toString("base64");
+    } catch {
+      return error("Could not read the reference photo from disk", 500);
+    }
+
+    // Detect MIME type from extension
+    const ext = path.extname(imageAbsPath).toLowerCase().replace(".", "");
+    const mimeType = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+
     const startTime = Date.now();
 
-    // Dynamic import to avoid errors if openai package is missing at startup
     let openaiResult: { imageData: Buffer; elapsed: number };
     try {
       const { default: OpenAI } = await import("openai");
       const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-      const { createReadStream } = await import("fs");
-      const imageStream = createReadStream(imageAbsPath);
+      if (selectedModel === "gpt-image-1") {
+        // Legacy path: images.edit() supports only gpt-image-1 (and dall-e-2)
+        const { createReadStream } = await import("fs");
+        const imageStream = createReadStream(imageAbsPath);
 
-      const result = await client.images.edit({
-        model: selectedModel,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        image: imageStream as any,
-        prompt: prompt.trim(),
-        n: 1,
-        size: "1024x1024",
-      });
+        const result = await client.images.edit({
+          model: "gpt-image-1",
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          image: imageStream as any,
+          prompt: prompt.trim(),
+          n: 1,
+          size: "1024x1024",
+        });
 
-      const elapsed = (Date.now() - startTime) / 1000;
+        const elapsed = (Date.now() - startTime) / 1000;
+        const item = result.data?.[0];
+        if (!item) throw new Error("OpenAI returned no image data");
 
-      const item = result.data?.[0];
-      if (!item) throw new Error("OpenAI returned no image data");
-
-      let imageData: Buffer;
-      if (item.b64_json) {
-        imageData = Buffer.from(item.b64_json, "base64");
-      } else if (item.url) {
-        const res = await fetch(item.url);
-        if (!res.ok) throw new Error(`Failed to download generated image: HTTP ${res.status}`);
-        imageData = Buffer.from(await res.arrayBuffer());
+        let imageData: Buffer;
+        if (item.b64_json) {
+          imageData = Buffer.from(item.b64_json, "base64");
+        } else if (item.url) {
+          const res = await fetch(item.url);
+          if (!res.ok) throw new Error(`Failed to download generated image: HTTP ${res.status}`);
+          imageData = Buffer.from(await res.arrayBuffer());
+        } else {
+          throw new Error("OpenAI returned neither b64_json nor url");
+        }
+        openaiResult = { imageData, elapsed };
       } else {
-        throw new Error("OpenAI returned neither b64_json nor url");
-      }
+        // Modern path: responses.create() with image_generation tool.
+        // gpt-image-2, gpt-image-1.5, gpt-image-1-mini use the Responses API.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const response = await (client as any).responses.create({
+          model: selectedModel,
+          input: [
+            {
+              role: "user",
+              content: [
+                { type: "input_text", text: prompt.trim() },
+                {
+                  type: "input_image",
+                  image_url: `data:${mimeType};base64,${imageBase64}`,
+                },
+              ],
+            },
+          ],
+          tools: [{ type: "image_generation" }],
+        });
 
-      openaiResult = { imageData, elapsed };
+        const elapsed = (Date.now() - startTime) / 1000;
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const imageOutputs = (response.output as any[]).filter(
+          (o: { type: string }) => o.type === "image_generation_call"
+        );
+        if (imageOutputs.length === 0) throw new Error("OpenAI Responses API returned no image_generation_call output");
+
+        const b64 = imageOutputs[0].result as string;
+        openaiResult = { imageData: Buffer.from(b64, "base64"), elapsed };
+      }
     } catch (e) {
       const msg = (e as Error).message ?? String(e);
       console.error("[sticker-generate] OpenAI error:", msg);
