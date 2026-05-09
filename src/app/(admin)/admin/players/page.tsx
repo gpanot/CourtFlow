@@ -5,7 +5,8 @@ import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { PlayerAvatarThumb } from "@/components/player-avatar-thumb";
 import { PlayerDetailFaceRecognition } from "@/components/admin/player-detail-face-recognition";
-import { Search, X, SlidersHorizontal, Users, UserPlus, Clock, Activity, Hourglass, Gauge, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Gamepad2, Star, MapPin, CalendarDays, Timer, Plus, Pencil, Trash2, Fingerprint, Smartphone, Download } from "lucide-react";
+import { Search, X, SlidersHorizontal, Users, UserPlus, Clock, Activity, Hourglass, Gauge, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Gamepad2, Star, MapPin, CalendarDays, Timer, Plus, Pencil, Trash2, Fingerprint, Smartphone, Download, Sticker, LayoutList } from "lucide-react";
+import { PlayerDetailStickersTab } from "@/components/admin/player-detail-stickers-tab";
 
 type SortKey = "name" | "phone" | "gender" | "skillLevel" | "totalSessions" | "totalGames" | "totalPlayMinutes" | "totalWaitMinutes" | "waitPlayRatio" | "venues";
 type SortDir = "asc" | "desc";
@@ -1347,6 +1348,8 @@ function PlayerDetailPanel({
   }) => void;
   onReclubUnlinked: () => void;
 }) {
+  const [detailTab, setDetailTab] = useState<"profile" | "stickers">("profile");
+
   const handleDownloadCheckInPhoto = useCallback(async () => {
     const src = player.facePhotoPath;
     if (!src?.trim()) return;
@@ -1384,7 +1387,8 @@ function PlayerDetailPanel({
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
       <div className="relative w-full max-w-md animate-in slide-in-from-right overflow-y-auto bg-neutral-950 border-l border-neutral-800 shadow-2xl">
-          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-800 bg-neutral-950 px-4 py-3">
+          <div className="sticky top-0 z-10 border-b border-neutral-800 bg-neutral-950">
+          <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3 min-w-0">
             <PlayerAvatarThumb
               avatarPhotoPath={player.avatarPhotoPath}
@@ -1425,8 +1429,48 @@ function PlayerDetailPanel({
               <X className="h-5 w-5" />
             </button>
           </div>
+          </div>
+          {/* Tab bar */}
+          <div className="flex border-t border-neutral-800">
+            <button
+              type="button"
+              onClick={() => setDetailTab("profile")}
+              className={cn(
+                "flex flex-1 items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-medium transition-colors",
+                detailTab === "profile"
+                  ? "border-b-2 border-purple-500 text-purple-400"
+                  : "border-b-2 border-transparent text-neutral-500 hover:text-neutral-300"
+              )}
+            >
+              <LayoutList className="h-3.5 w-3.5" />
+              Profile
+            </button>
+            <button
+              type="button"
+              onClick={() => setDetailTab("stickers")}
+              className={cn(
+                "flex flex-1 items-center justify-center gap-1.5 px-3 py-2.5 text-xs font-medium transition-colors",
+                detailTab === "stickers"
+                  ? "border-b-2 border-purple-500 text-purple-400"
+                  : "border-b-2 border-transparent text-neutral-500 hover:text-neutral-300"
+              )}
+            >
+              <Sticker className="h-3.5 w-3.5" />
+              Stickers
+            </button>
+          </div>
         </div>
 
+        {/* Stickers tab */}
+        {detailTab === "stickers" && (
+          <PlayerDetailStickersTab
+            playerId={player.id}
+            facePhotoPath={player.facePhotoPath}
+          />
+        )}
+
+        {/* Profile tab */}
+        {detailTab === "profile" && (
         <div className="p-4 space-y-4">
           {player.facePhotoPath && (
             <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
@@ -1861,6 +1905,7 @@ function PlayerDetailPanel({
             )}
           </div>
         </div>
+        )}
       </div>
     </div>
   );

@@ -189,6 +189,8 @@ model Player {
   pendingPayments       PendingPayment[]
   faceRecognitionLogs   FaceRecognitionLog[]
   customPrices          PlayerCustomPrice[]
+  stickerPhotos         PlayerStickerPhoto[]
+  stickerResult         PlayerStickerResult?
 
   @@index([registrationVenueId])
   @@map("players")
@@ -908,4 +910,36 @@ model PlayerCustomPrice {
 
   @@unique([playerId, staffId])
   @@map("player_custom_prices")
+}
+
+// ─── AI Sticker Generation ─────────────────────────────────────────
+
+model PlayerStickerPhoto {
+  id        String   @id @default(cuid())
+  playerId  String   @map("player_id")
+  imageUrl  String   @map("image_url")
+  slotIndex Int      @map("slot_index")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, slotIndex])
+  @@map("player_sticker_photos")
+}
+
+model PlayerStickerResult {
+  id                    String   @id @default(cuid())
+  playerId              String   @unique @map("player_id")
+  imageUrl              String   @map("image_url")
+  prompt                String
+  model                 String   @default("gpt-image-1")
+  size                  String   @default("1024x1024")
+  costUsd               Decimal  @default(0.04) @map("cost_usd") @db.Decimal(6, 4)
+  generationTimeSeconds Decimal? @map("generation_time_seconds") @db.Decimal(6, 2)
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@map("player_sticker_results")
 }
