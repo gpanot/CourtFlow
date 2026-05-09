@@ -191,6 +191,7 @@ model Player {
   customPrices          PlayerCustomPrice[]
   stickerPhotos         PlayerStickerPhoto[]
   stickerResult         PlayerStickerResult?
+  stickerPack           PlayerStickerPack?
 
   @@index([registrationVenueId])
   @@map("players")
@@ -939,7 +940,25 @@ model PlayerStickerResult {
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
 
-  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  player      Player             @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  stickerPack PlayerStickerPack?
 
   @@map("player_sticker_results")
+}
+
+model PlayerStickerPack {
+  id         String   @id @default(cuid())
+  playerId   String   @unique @map("player_id")
+  resultId   String   @unique @map("result_id")
+  sticker1Url String? @map("sticker_1_url")
+  sticker2Url String? @map("sticker_2_url")
+  sticker3Url String? @map("sticker_3_url")
+  sticker4Url String? @map("sticker_4_url")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  player Player              @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  result PlayerStickerResult @relation(fields: [resultId], references: [id], onDelete: Cascade)
+
+  @@map("player_sticker_packs")
 }

@@ -1466,6 +1466,7 @@ function PlayerDetailPanel({
           <PlayerDetailStickersTab
             playerId={player.id}
             facePhotoPath={player.facePhotoPath}
+            playerFirstName={player.name?.split(" ")[0]}
           />
         )}
 

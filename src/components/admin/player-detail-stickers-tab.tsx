@@ -9,6 +9,8 @@ import {
   Sparkles,
   Check,
   AlertCircle,
+  Grid2x2,
+  Download,
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 
@@ -31,12 +33,21 @@ interface StickerResult {
   createdAt: string;
 }
 
+interface StickerPack {
+  id: string;
+  sticker1Url: string | null;
+  sticker2Url: string | null;
+  sticker3Url: string | null;
+  sticker4Url: string | null;
+}
+
 interface Props {
   playerId: string;
   facePhotoPath: string | null | undefined;
+  playerFirstName?: string;
 }
 
-export function PlayerDetailStickersTab({ playerId, facePhotoPath }: Props) {
+export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstName }: Props) {
   // ── uploaded extra photos (slots 2–4)
   const [uploadedPhotos, setUploadedPhotos] = useState<StickerPhoto[]>([]);
   const [loadingPhotos, setLoadingPhotos] = useState(true);
@@ -64,20 +75,28 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath }: Props) {
   const [deletingResult, setDeletingResult] = useState(false);
   const [showDeleteResultConfirm, setShowDeleteResultConfirm] = useState(false);
 
+  // ── sticker pack (split)
+  const [stickerPack, setStickerPack] = useState<StickerPack | null>(null);
+  const [splitting, setSplitting] = useState(false);
+  const [splitError, setSplitError] = useState<string | null>(null);
+
   const fileInputRefs = useRef<(HTMLInputElement | null)[]>([null, null, null]);
 
-  // ── Load existing uploaded photos and saved result on mount
+  // ── Load existing uploaded photos, saved result, and pack on mount
   useEffect(() => {
     let cancelled = false;
     setLoadingPhotos(true);
 
     Promise.all([
       api.get<StickerPhoto[]>(`/api/admin/players/${playerId}/sticker-photos`).catch(() => [] as StickerPhoto[]),
-      api.get<StickerResult>(`/api/admin/players/${playerId}/sticker-photos/result`).catch(() => null),
+      api.get<StickerResult & { pack?: StickerPack }>(`/api/admin/players/${playerId}/sticker-photos/result`).catch(() => null),
     ]).then(([photos, savedResult]) => {
       if (cancelled) return;
       setUploadedPhotos(photos ?? []);
-      if (savedResult) setResult(savedResult);
+      if (savedResult) {
+        setResult(savedResult);
+        if (savedResult.pack) setStickerPack(savedResult.pack);
+      }
     }).finally(() => {
       if (!cancelled) setLoadingPhotos(false);
     });
@@ -139,6 +158,8 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath }: Props) {
     if (!prompt.trim()) return;
     setGenerating(true);
     setGenError(null);
+    setStickerPack(null);
+    setSplitError(null);
     try {
       const data = await api.post<StickerResult>(
         `/api/admin/players/${playerId}/sticker-photos/generate`,
@@ -157,6 +178,7 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath }: Props) {
     try {
       await api.delete(`/api/admin/players/${playerId}/sticker-photos/result`);
       setResult(null);
+      setStickerPack(null);
       setShowDeleteResultConfirm(false);
     } catch (e) {
       alert(`Delete failed: ${(e as Error).message}`);
@@ -164,6 +186,33 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath }: Props) {
       setDeletingResult(false);
     }
   }, [playerId]);
+
+  const handleSplit = useCallback(async () => {
+    setSplitting(true);
+    setSplitError(null);
+    try {
+      const data = await api.post<StickerPack>(
+        `/api/admin/players/${playerId}/sticker-photos/process`,
+        {}
+      );
+      setStickerPack(data);
+    } catch (e) {
+      setSplitError((e as Error).message ?? "Splitting failed");
+    } finally {
+      setSplitting(false);
+    }
+  }, [playerId]);
+
+  const handleDownloadPack = useCallback(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("admin_token") : null;
+    const url = `/api/admin/players/${playerId}/sticker-photos/download-pack`;
+    const a = document.createElement("a");
+    a.href = url + (token ? `?token=${encodeURIComponent(token)}` : "");
+    a.download = `stickers_${playerFirstName ?? "player"}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }, [playerId, playerFirstName]);
 
   const fmtDate = (iso: string) => {
     const d = new Date(iso);
@@ -435,6 +484,76 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath }: Props) {
               Generated on {fmtDate(result.createdAt)}
             </p>
           </div>
+
+          {/* ── Split Stickers Button ── */}
+          <button
+            type="button"
+            onClick={() => void handleSplit()}
+            disabled={splitting}
+            className="w-full flex items-center justify-center gap-2 rounded-lg border border-neutral-700 bg-neutral-800 py-2.5 text-sm font-medium text-neutral-200 hover:bg-neutral-700 hover:border-neutral-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {splitting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Splitting…
+              </>
+            ) : (
+              <>
+                <Grid2x2 className="h-4 w-4" />
+                Split stickers
+              </>
+            )}
+          </button>
+
+          {/* Split error */}
+          {splitError && (
+            <div className="flex items-start gap-2 rounded-lg border border-red-900/50 bg-red-950/30 px-3 py-2.5 text-xs text-red-300">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-400" />
+              <span>{splitError}</span>
+            </div>
+          )}
+
+          {/* ── Sticker Pack Grid ── */}
+          {stickerPack && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                {[stickerPack.sticker1Url, stickerPack.sticker2Url, stickerPack.sticker3Url, stickerPack.sticker4Url].map((url, i) => (
+                  <div
+                    key={i}
+                    className="relative h-[150px] w-full rounded-xl overflow-hidden border border-neutral-800"
+                    style={{
+                      backgroundImage: "linear-gradient(45deg, #2a2a2a 25%, transparent 25%), linear-gradient(-45deg, #2a2a2a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #2a2a2a 75%), linear-gradient(-45deg, transparent 75%, #2a2a2a 75%)",
+                      backgroundSize: "16px 16px",
+                      backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px",
+                    }}
+                  >
+                    {url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={url}
+                        alt={`Sticker ${i + 1}`}
+                        className="h-full w-full object-contain"
+                      />
+                    ) : (
+                      <div className="h-full w-full flex items-center justify-center text-neutral-600 text-xs">
+                        Missing
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Download button */}
+              <button
+                type="button"
+                onClick={handleDownloadPack}
+                className="w-full flex items-center justify-center gap-2 rounded-lg bg-emerald-600 py-2.5 text-sm font-medium text-white hover:bg-emerald-500 transition-colors"
+              >
+                <Download className="h-4 w-4" />
+                Download pack (.zip)
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
