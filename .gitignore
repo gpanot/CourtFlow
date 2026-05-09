@@ -53,3 +53,4 @@ CREDENTIALS.md
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+fastapi/__pycache__/

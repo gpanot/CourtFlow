@@ -1,59 +1,24 @@
 import { NextRequest } from "next/server";
-import { execFile } from "child_process";
-import { promisify } from "util";
+import sharp from "sharp";
 import path from "path";
-import { access } from "fs/promises";
+import { mkdir, writeFile } from "fs/promises";
 import { prisma } from "@/lib/db";
 import { json, error, notFound } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
 
-const execFileAsync = promisify(execFile);
-
 const PACKS_DIR = path.join(process.cwd(), "uploads", "players", "sticker-packs");
-const SCRIPT_PATH = path.join(process.cwd(), "scripts", "split-stickers.py");
+
+const QUADRANTS = [
+  { index: 1, left: 0,   top: 0   },
+  { index: 2, left: 512, top: 0   },
+  { index: 3, left: 0,   top: 512 },
+  { index: 4, left: 512, top: 512 },
+];
 
 /**
- * Resolve the Python binary to use for sticker processing.
- * All paths are constructed at runtime (not statically) so Turbopack
- * never tries to resolve them as module imports during the build.
- *
- * Priority:
- *  1. STICKER_PYTHON_BIN env var (set in Dockerfile for production)
- *  2. Local .venv (development)
- *  3. Common system paths
- *  4. Bare command as last resort
- */
-async function resolvePythonBin(): Promise<string> {
-  const cwd = process.cwd();
-
-  // Build candidate list at runtime — never at module-evaluation time
-  const candidates: string[] = [];
-
-  const envBin = process.env["STICKER_PYTHON_BIN"];
-  if (envBin) candidates.push(envBin);
-
-  // Construct local venv path at runtime to avoid Turbopack following symlinks
-  candidates.push([cwd, ".venv", "bin", "python3"].join(path.sep));
-  candidates.push(["", "usr", "bin", "python3"].join(path.sep));
-  candidates.push(["", "usr", "local", "bin", "python3"].join(path.sep));
-  candidates.push(["", "opt", "sticker-venv", "bin", "python3"].join(path.sep));
-
-  for (const candidate of candidates) {
-    try {
-      await access(candidate);
-      return candidate;
-    } catch {
-      // not found, try next
-    }
-  }
-
-  // Bare commands as final fallback (no fs check needed)
-  return "python3";
-}
-
-/**
- * POST: Split the player's generated sticker result into 4 quadrants,
- * remove background, save as 512x512 webp stickers.
+ * POST: Split the player's generated sticker result into 4 quadrants using
+ * Sharp, then remove each background via the FastAPI /internal/remove-background
+ * endpoint, save as 512x512 webp, and upsert the PlayerStickerPack record.
  */
 export async function POST(
   request: NextRequest,
@@ -68,46 +33,79 @@ export async function POST(
 
     const resultImagePath = path.join(process.cwd(), result.imageUrl.split("?")[0]);
     const outputDir = path.join(PACKS_DIR, playerId);
+    await mkdir(outputDir, { recursive: true });
 
-    const pythonBin = await resolvePythonBin();
-    console.log(`[sticker-process] Using Python: ${pythonBin}`);
+    // ── Step 1: get image dimensions ──────────────────────────────────────
+    const metadata = await sharp(resultImagePath).metadata();
+    const imgW = metadata.width ?? 1024;
+    const imgH = metadata.height ?? 1024;
+    const quadW = Math.floor(imgW / 2);
+    const quadH = Math.floor(imgH / 2);
 
-    const { stdout, stderr } = await execFileAsync(pythonBin, [
-      SCRIPT_PATH,
-      resultImagePath,
-      outputDir,
-    ], { timeout: 120_000 });
-
-    if (stderr) {
-      console.warn("[sticker-process] Python stderr:", stderr);
+    // ── Step 2: crop quadrants with Sharp ─────────────────────────────────
+    const croppedBuffers: { index: number; buffer: Buffer }[] = [];
+    for (const q of QUADRANTS) {
+      const buffer = await sharp(resultImagePath)
+        .extract({ left: q.left === 0 ? 0 : quadW, top: q.top === 0 ? 0 : quadH, width: quadW, height: quadH })
+        .png()
+        .toBuffer();
+      croppedBuffers.push({ index: q.index, buffer });
     }
 
-    let outputPaths: string[];
-    try {
-      outputPaths = JSON.parse(stdout.trim());
-    } catch {
-      console.error("[sticker-process] Failed to parse Python output:", stdout);
-      return error("Processing script returned invalid output", 500);
+    // ── Step 3: remove background via FastAPI ─────────────────────────────
+    const fastapiUrl = process.env["FASTAPI_URL"] ?? "http://localhost:8000";
+    const stickerUrls: Record<string, string> = {};
+    const ts = Date.now();
+
+    for (const { index, buffer } of croppedBuffers) {
+      const formData = new FormData();
+      formData.append(
+        "file",
+        new Blob([new Uint8Array(buffer)], { type: "image/png" }),
+        `sticker_${index}.png`
+      );
+
+      const res = await fetch(`${fastapiUrl}/internal/remove-background`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const detail = await res.text().catch(() => res.statusText);
+        throw new Error(`Background removal failed for sticker ${index}: ${detail}`);
+      }
+
+      const processedBuffer = Buffer.from(await res.arrayBuffer());
+
+      // Resize to exactly 512×512 and save as webp
+      const webpBuffer = await sharp(processedBuffer)
+        .resize(512, 512, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+        .webp({ quality: 90 })
+        .toBuffer();
+
+      const filename = `sticker_${index}.webp`;
+      await writeFile(path.join(outputDir, filename), webpBuffer);
+      stickerUrls[`sticker${index}Url`] =
+        `/uploads/players/sticker-packs/${playerId}/${filename}?t=${ts}`;
     }
 
-    const baseUrl = `/uploads/players/sticker-packs/${playerId}`;
-    const stickerUrls = {
-      sticker1Url: `${baseUrl}/sticker_1.webp?t=${Date.now()}`,
-      sticker2Url: `${baseUrl}/sticker_2.webp?t=${Date.now()}`,
-      sticker3Url: `${baseUrl}/sticker_3.webp?t=${Date.now()}`,
-      sticker4Url: `${baseUrl}/sticker_4.webp?t=${Date.now()}`,
-    };
-
+    // ── Step 4: upsert pack record ────────────────────────────────────────
     const pack = await prisma.playerStickerPack.upsert({
       where: { playerId },
       create: {
         playerId,
         resultId: result.id,
-        ...stickerUrls,
+        sticker1Url: stickerUrls["sticker1Url"],
+        sticker2Url: stickerUrls["sticker2Url"],
+        sticker3Url: stickerUrls["sticker3Url"],
+        sticker4Url: stickerUrls["sticker4Url"],
       },
       update: {
         resultId: result.id,
-        ...stickerUrls,
+        sticker1Url: stickerUrls["sticker1Url"],
+        sticker2Url: stickerUrls["sticker2Url"],
+        sticker3Url: stickerUrls["sticker3Url"],
+        sticker4Url: stickerUrls["sticker4Url"],
         updatedAt: new Date(),
       },
     });
