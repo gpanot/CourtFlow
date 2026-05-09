@@ -5,7 +5,7 @@ import { Loader2 } from "lucide-react";
 import { IdentifyState } from "./IdentifyState";
 import { VenuePicker } from "./VenuePicker";
 import { BalanceScreen } from "./BalanceScreen";
-import type { BalanceData, VenueInfo, IdentifyResult } from "./types";
+import type { BalanceData, VenueInfo, IdentifyResult, StickerData } from "./types";
 
 type Screen = "loading" | "identify" | "pick-venue" | "balance";
 
@@ -61,6 +61,9 @@ export default function MyBalancePage() {
   const [venues, setVenues] = useState<VenueInfo[]>([]);
   const [balanceData, setBalanceData] = useState<BalanceData | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [stickerData, setStickerData] = useState<StickerData | null>(null);
+  const [stickerToken, setStickerToken] = useState<string | null>(null);
+  const [stickerExpiredNotice, setStickerExpiredNotice] = useState(false);
 
   const fetchBalanceForVenue = useCallback(
     async (savedPhone: string, venueId: string): Promise<BalanceData | null> => {
@@ -99,6 +102,39 @@ export default function MyBalancePage() {
     let cancelled = false;
 
     async function init() {
+      // Check for sticker_token in URL — bypass normal identify flow
+      const urlParams = new URLSearchParams(window.location.search);
+      const token = urlParams.get("sticker_token");
+
+      if (token) {
+        try {
+          const res = await fetch(`/api/player/sticker-session?token=${encodeURIComponent(token)}`);
+          if (!cancelled) {
+            if (res.ok) {
+              const data = await res.json() as StickerData;
+              setStickerData(data);
+              setStickerToken(token);
+              // Jump straight to balance screen with a minimal BalanceData shell
+              setBalanceData({
+                found: true,
+                venueName: "",
+                playerName: data.playerName,
+                subscription: null,
+                lastCheckIn: null,
+                totalSessions: 0,
+              });
+              setScreen("balance");
+              return;
+            } else if (res.status === 401) {
+              setStickerExpiredNotice(true);
+            }
+            // 404 or other — fall through silently
+          }
+        } catch {
+          // network error — fall through to normal flow
+        }
+      }
+
       const session = loadSession();
 
       if (!session) {
@@ -220,7 +256,48 @@ export default function MyBalancePage() {
   }
 
   if (screen === "identify") {
-    return <IdentifyState onIdentified={handleIdentified} />;
+    return (
+      <>
+        {stickerExpiredNotice && (
+          <div
+            style={{
+              position: "fixed",
+              top: 16,
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: "#1a1a1a",
+              border: "1px solid #2a2a2a",
+              borderRadius: 12,
+              padding: "10px 16px",
+              fontSize: 14,
+              color: "#9ca3af",
+              zIndex: 9999,
+              maxWidth: "90vw",
+              textAlign: "center",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            Your kiosk session expired — please identify yourself.
+            <button
+              onClick={() => setStickerExpiredNotice(false)}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#6b7280",
+                cursor: "pointer",
+                fontSize: 16,
+                lineHeight: 1,
+              }}
+            >
+              ×
+            </button>
+          </div>
+        )}
+        <IdentifyState onIdentified={handleIdentified} />
+      </>
+    );
   }
 
   if (screen === "pick-venue") {
@@ -242,6 +319,8 @@ export default function MyBalancePage() {
         onBack={handleBackToVenues}
         refreshing={refreshing}
         showBackToVenues={venues.length > 1}
+        stickerData={stickerData}
+        stickerToken={stickerToken ?? undefined}
       />
     );
   }

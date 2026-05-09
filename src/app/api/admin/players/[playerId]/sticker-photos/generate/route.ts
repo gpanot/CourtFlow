@@ -75,7 +75,7 @@ export async function POST(
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const WaveSpeed = require("wavespeed");
-      const client = new WaveSpeed();
+      const client = new WaveSpeed.Client();
 
       const appUrl = process.env.APP_URL ?? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
       const imagePublicUrl = `${appUrl}${imageAbsPath.replace(process.cwd(), "").replace(/\\/g, "/")}`;

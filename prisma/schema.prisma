@@ -193,6 +193,7 @@ model Player {
   stickerPhotos         PlayerStickerPhoto[]
   stickerResult         PlayerStickerResult?
   stickerPack           PlayerStickerPack?
+  stickerSessions       StickerSession[]
 
   @@index([registrationVenueId])
   @@map("players")
@@ -962,4 +963,15 @@ model PlayerStickerPack {
   result PlayerStickerResult @relation(fields: [resultId], references: [id], onDelete: Cascade)
 
   @@map("player_sticker_packs")
+}
+
+model StickerSession {
+  id        String   @id @default(cuid())
+  playerId  String   @map("player_id")
+  token     String   @unique @default(cuid())
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@map("sticker_sessions")
 }

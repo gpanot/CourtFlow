@@ -33,3 +33,10 @@ export interface IdentifyResult {
   lastCheckIn?: string | null;
   totalSessions?: number;
 }
+
+export interface StickerData {
+  playerId: string;
+  playerName: string;
+  stickers: string[];
+  price: number;
+}
