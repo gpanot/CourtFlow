@@ -165,6 +165,7 @@ export async function GET(request: NextRequest) {
             },
             orderBy: { joinedAt: "desc" },
           },
+          stickerPack: { select: { sticker1Url: true, sticker2Url: true, sticker3Url: true, sticker4Url: true } },
         },
       }),
       prisma.player.count({ where }),
@@ -250,6 +251,12 @@ export async function GET(request: NextRequest) {
         venues: Array.from(venueMap.values()),
         lastSeen: lastSeenDate ? { date: lastSeenDate, venue: lastSeenVenue } : null,
         isActiveToday,
+        hasStickers: !!(
+          player.stickerPack?.sticker1Url ||
+          player.stickerPack?.sticker2Url ||
+          player.stickerPack?.sticker3Url ||
+          player.stickerPack?.sticker4Url
+        ),
       };
     });
 

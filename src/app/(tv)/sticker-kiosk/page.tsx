@@ -314,8 +314,12 @@ function IdleScreen({ onScan }: { onScan: () => void }) {
 // Scanning screen
 // ---------------------------------------------------------------------------
 
-const CAPTURE_INTERVAL_MS = 1500;
-const MAX_NO_MATCH = 5;
+// Wait for camera to stabilise before the first capture attempt
+const CAMERA_WARMUP_MS = 2000;
+const CAPTURE_INTERVAL_MS = 2500;
+const MAX_NO_MATCH = 6;
+
+type ScanStatus = "warming" | "scanning" | "sending";
 
 function ScanningScreen({
   onIdentified,
@@ -328,6 +332,7 @@ function ScanningScreen({
 }) {
   const cameraRef = useRef<CameraCaptureHandle>(null);
   const [streamReady, setStreamReady] = useState(false);
+  const [scanStatus, setScanStatus] = useState<ScanStatus>("warming");
   const noMatchCount = useRef(0);
   const scanning = useRef(true);
 
@@ -339,63 +344,97 @@ function ScanningScreen({
     if (!streamReady) return;
     scanning.current = true;
 
-    const timer = setInterval(async () => {
+    // Give the video a moment to show real frames before capturing
+    const warmup = setTimeout(() => {
       if (!scanning.current) return;
-      const frame = cameraRef.current?.captureFrame();
-      if (!frame) return;
+      setScanStatus("scanning");
 
-      try {
-        const res = await kioskFetch("/api/kiosk/sticker-face-identify", {
-          method: "POST",
-          body: JSON.stringify({ imageBase64: frame }),
-        });
+      const timer = setInterval(async () => {
         if (!scanning.current) return;
-        const data = await res.json() as {
-          matched: boolean;
-          playerId?: string;
-          hasStickerPack?: boolean;
-        };
+        const frame = cameraRef.current?.captureFrame();
+        if (!frame) {
+          console.debug("[StickerKiosk] captureFrame returned null — video not ready yet");
+          return;
+        }
 
-        if (!data.matched) {
-          noMatchCount.current += 1;
-          if (noMatchCount.current >= MAX_NO_MATCH) {
+        setScanStatus("sending");
+
+        try {
+          console.debug("[StickerKiosk] Sending frame to identify endpoint, attempt", noMatchCount.current + 1);
+          const res = await kioskFetch("/api/kiosk/sticker-face-identify", {
+            method: "POST",
+            body: JSON.stringify({ imageBase64: frame }),
+          });
+          if (!scanning.current) return;
+
+          const data = await res.json() as {
+            matched: boolean;
+            playerId?: string;
+            displayName?: string;
+            hasStickerPack?: boolean;
+            debug?: Record<string, unknown>;
+          };
+
+          console.debug("[StickerKiosk] identify response:", JSON.stringify(data));
+
+          setScanStatus("scanning");
+
+          if (!data.matched) {
+            noMatchCount.current += 1;
+            console.debug(`[StickerKiosk] no match (${noMatchCount.current}/${MAX_NO_MATCH})`);
+            if (noMatchCount.current >= MAX_NO_MATCH) {
+              scanning.current = false;
+              clearInterval(timer);
+              onNotFound({ hasStickerPack: true });
+            }
+            return;
+          }
+
+          if (!data.hasStickerPack) {
+            console.debug("[StickerKiosk] matched but no sticker pack for", data.displayName);
             scanning.current = false;
             clearInterval(timer);
-            onNotFound({ hasStickerPack: true });
+            onNotFound({ hasStickerPack: false });
+            return;
           }
-          return;
-        }
 
-        if (!data.hasStickerPack) {
+          console.debug("[StickerKiosk] matched:", data.displayName, "— creating session");
           scanning.current = false;
           clearInterval(timer);
-          onNotFound({ hasStickerPack: false });
-          return;
-        }
 
-        scanning.current = false;
-        clearInterval(timer);
-
-        const sessionRes = await kioskFetch("/api/kiosk/sticker-session", {
-          method: "POST",
-          body: JSON.stringify({ playerId: data.playerId }),
-        });
-        if (!sessionRes.ok) {
-          onNotFound({ hasStickerPack: true });
-          return;
+          const sessionRes = await kioskFetch("/api/kiosk/sticker-session", {
+            method: "POST",
+            body: JSON.stringify({ playerId: data.playerId }),
+          });
+          if (!sessionRes.ok) {
+            console.error("[StickerKiosk] sticker-session creation failed", sessionRes.status);
+            onNotFound({ hasStickerPack: true });
+            return;
+          }
+          const session = await sessionRes.json() as SessionData;
+          onIdentified(session);
+        } catch (err) {
+          console.error("[StickerKiosk] network error during face identify:", err);
+          setScanStatus("scanning");
+          // keep scanning
         }
-        const session = await sessionRes.json() as SessionData;
-        onIdentified(session);
-      } catch {
-        // network error — keep scanning
-      }
-    }, CAPTURE_INTERVAL_MS);
+      }, CAPTURE_INTERVAL_MS);
+
+      scanning.current && (scanning.current = true); // ensure flag still set
+      return () => clearInterval(timer);
+    }, CAMERA_WARMUP_MS);
 
     return () => {
       scanning.current = false;
-      clearInterval(timer);
+      clearTimeout(warmup);
     };
   }, [streamReady, onIdentified, onNotFound]);
+
+  const statusLabel: Record<ScanStatus, string> = {
+    warming: "Getting camera ready…",
+    scanning: "Hold still for 2 seconds",
+    sending: "Checking…",
+  };
 
   const viewfinderSize = "min(70vw, 380px)";
 
@@ -448,14 +487,20 @@ function ScanningScreen({
         Look at the camera
       </p>
 
+      {/* Circle viewfinder */}
       <div
         style={{
           position: "relative",
           width: viewfinderSize,
           height: viewfinderSize,
-          borderRadius: 24,
+          borderRadius: "50%",
           overflow: "hidden",
           flexShrink: 0,
+          border: `3px solid ${scanStatus === "sending" ? C.green : C.border}`,
+          transition: "border-color 300ms ease",
+          boxShadow: scanStatus === "sending"
+            ? `0 0 0 4px rgba(74,222,128,0.2)`
+            : "none",
         }}
       >
         <CameraCapture
@@ -467,45 +512,24 @@ function ScanningScreen({
           videoClassName="w-full h-full object-cover"
         />
 
-        {/* Corner brackets */}
-        {(["tl", "tr", "bl", "br"] as const).map((pos) => (
+        {/* Scanning line — only shown while actively scanning */}
+        {scanStatus !== "warming" && (
           <div
-            key={pos}
             style={{
               position: "absolute",
-              width: 28,
-              height: 28,
-              borderColor: C.green,
-              borderStyle: "solid",
-              borderWidth: 0,
-              ...(pos === "tl"
-                ? { top: 12, left: 12, borderTopWidth: 2, borderLeftWidth: 2 }
-                : pos === "tr"
-                ? { top: 12, right: 12, borderTopWidth: 2, borderRightWidth: 2 }
-                : pos === "bl"
-                ? { bottom: 12, left: 12, borderBottomWidth: 2, borderLeftWidth: 2 }
-                : { bottom: 12, right: 12, borderBottomWidth: 2, borderRightWidth: 2 }),
-              borderRadius: 4,
+              left: 0,
+              right: 0,
+              height: 2,
+              background: C.green,
+              opacity: 0.6,
+              animation: "scan-line 1.5s linear infinite",
             }}
           />
-        ))}
-
-        {/* Scanning line */}
-        <div
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            height: 2,
-            background: C.green,
-            opacity: 0.8,
-            animation: "scan-line 1.5s linear infinite",
-          }}
-        />
+        )}
       </div>
 
       <p style={{ fontSize: 14, color: C.muted, textAlign: "center", marginTop: 16 }}>
-        Hold still for 2 seconds
+        {statusLabel[scanStatus]}
       </p>
 
       <button

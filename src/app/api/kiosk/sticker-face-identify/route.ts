@@ -23,7 +23,15 @@ export async function POST(request: NextRequest) {
 
     const recognition = await faceRecognitionService.recognizeFace(imageBase64);
 
+    console.log("[sticker-face-identify] recognition result:", JSON.stringify({
+      resultType: recognition.resultType,
+      playerId: recognition.playerId ?? null,
+      success: recognition.success,
+      confidence: (recognition as Record<string, unknown>).confidence ?? null,
+    }));
+
     if (recognition.resultType !== "matched" || !recognition.playerId) {
+      console.log("[sticker-face-identify] no match — resultType:", recognition.resultType);
       return json({ matched: false });
     }
 
@@ -33,6 +41,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!player) {
+      console.log("[sticker-face-identify] playerId", recognition.playerId, "not found in DB");
       return json({ matched: false });
     }
 
@@ -54,6 +63,8 @@ export async function POST(request: NextRequest) {
         stickerPack.sticker3Url,
         stickerPack.sticker4Url,
       ].some(Boolean);
+
+    console.log("[sticker-face-identify] matched player:", player.name, "| hasStickerPack:", hasStickerPack);
 
     return json({
       matched: true,

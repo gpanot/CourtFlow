@@ -8,7 +8,7 @@ import { PlayerDetailFaceRecognition } from "@/components/admin/player-detail-fa
 import { Search, X, SlidersHorizontal, Users, UserPlus, Clock, Activity, Hourglass, Gauge, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Gamepad2, Star, MapPin, CalendarDays, Timer, Plus, Pencil, Trash2, Fingerprint, Smartphone, Download, Sticker, LayoutList } from "lucide-react";
 import { PlayerDetailStickersTab } from "@/components/admin/player-detail-stickers-tab";
 
-type SortKey = "name" | "phone" | "gender" | "skillLevel" | "totalSessions" | "totalGames" | "totalPlayMinutes" | "totalWaitMinutes" | "waitPlayRatio" | "venues";
+type SortKey = "name" | "phone" | "gender" | "skillLevel" | "totalSessions" | "totalGames" | "totalPlayMinutes" | "totalWaitMinutes" | "waitPlayRatio" | "venues" | "stickers";
 type SortDir = "asc" | "desc";
 const SKILL_ORDER: Record<string, number> = { beginner: 0, intermediate: 1, advanced: 2, pro: 3 };
 
@@ -104,6 +104,7 @@ interface PlayerRecord {
   venues: { id: string; name: string }[];
   lastSeen: { date: string; venue: string } | null;
   isActiveToday: boolean;
+  hasStickers?: boolean;
 }
 
 interface CheckInInsights {
@@ -261,6 +262,9 @@ export default function PlayersPage() {
           break;
         case "venues":
           cmp = a.venues.length - b.venues.length;
+          break;
+        case "stickers":
+          cmp = (a.hasStickers ? 1 : 0) - (b.hasStickers ? 1 : 0);
           break;
       }
       return sortDir === "asc" ? cmp : -cmp;
@@ -609,7 +613,7 @@ export default function PlayersPage() {
               <SortableHeader label="Player" sortKey="name" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
               <th className="px-2.5 py-2.5">Face</th>
               <SortableHeader label="Phone" sortKey="phone" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
-              <SortableHeader label="Skill" sortKey="skillLevel" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
+              <SortableHeader label="Sticker" sortKey="stickers" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
               <SortableHeader label="Gender" sortKey="gender" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
               <SortableHeader label="Sess." sortKey="totalSessions" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
               <SortableHeader label="Games" sortKey="totalGames" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
@@ -643,16 +647,10 @@ export default function PlayersPage() {
                   <FaceStatusBadge hasFace={p.hasFace ?? !!p.faceSubjectId} isWalkIn={!!p.isWalkIn} />
                 </td>
                 <td className="px-2.5 py-2 text-neutral-400 text-[11px] tabular-nums">{p.phone}</td>
-                <td className="px-2.5 py-2">
-                  <SkillBadge
-                    playerId={p.id}
-                    level={p.skillLevel}
-                    editing={editingSkillId === p.id}
-                    saving={savingSkillId === p.id}
-                    onToggle={() => setEditingSkillId(editingSkillId === p.id ? null : p.id)}
-                    onSelect={(level) => updateSkillLevel(p.id, level)}
-                    onClose={() => setEditingSkillId(null)}
-                  />
+                <td className="px-2.5 py-2 text-center">
+                  {p.hasStickers && (
+                    <span className="inline-flex items-center rounded-full bg-purple-500/15 px-2 py-0.5 text-[11px] font-medium text-purple-300">✓</span>
+                  )}
                 </td>
                 <td className="px-2.5 py-2 text-neutral-400 capitalize">{p.gender === "female" ? "F" : p.gender === "male" ? "M" : p.gender}</td>
                 <td className="px-2.5 py-2 text-right tabular-nums">{p.totalSessions}</td>
