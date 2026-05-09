@@ -30,10 +30,14 @@ export async function POST(
 
     const result = await prisma.playerStickerResult.findUnique({ where: { playerId } });
     if (!result) return notFound("No sticker result found. Generate stickers first.");
+    console.log("[split-stickers] found result id:", result.id, "imageUrl:", result.imageUrl);
 
     const resultImagePath = path.join(process.cwd(), result.imageUrl.split("?")[0]);
+    console.log("[split-stickers] resolved image path:", resultImagePath);
+
     const outputDir = path.join(PACKS_DIR, playerId);
     await mkdir(outputDir, { recursive: true });
+    console.log("[split-stickers] output dir:", outputDir);
 
     // ── Step 1: get image dimensions ──────────────────────────────────────
     const metadata = await sharp(resultImagePath).metadata();
@@ -41,6 +45,7 @@ export async function POST(
     const imgH = metadata.height ?? 1024;
     const quadW = Math.floor(imgW / 2);
     const quadH = Math.floor(imgH / 2);
+    console.log(`[split-stickers] image ${imgW}x${imgH} → quadrant ${quadW}x${quadH}`);
 
     // ── Step 2: crop quadrants with Sharp ─────────────────────────────────
     const croppedBuffers: { index: number; buffer: Buffer }[] = [];
@@ -49,31 +54,37 @@ export async function POST(
         .extract({ left: q.left === 0 ? 0 : quadW, top: q.top === 0 ? 0 : quadH, width: quadW, height: quadH })
         .png()
         .toBuffer();
+      console.log(`[split-stickers] cropped quadrant ${q.index}: ${buffer.length} bytes`);
       croppedBuffers.push({ index: q.index, buffer });
     }
 
     // ── Step 3: remove background via FastAPI ─────────────────────────────
-    const fastapiUrl = process.env["FASTAPI_URL"] ?? "http://localhost:8000";
+    const fastapiUrl = (process.env["FASTAPI_URL"] ?? "http://localhost:8000").replace(/\/$/, "");
+    console.log("[split-stickers] FASTAPI_URL:", fastapiUrl);
     const stickerUrls: Record<string, string> = {};
     const ts = Date.now();
 
     for (const { index, buffer } of croppedBuffers) {
       const base64 = buffer.toString("base64");
+      const endpoint = `${fastapiUrl}/internal/remove-background`;
+      console.log(`[split-stickers] sticker ${index}: calling ${endpoint} (base64 length: ${base64.length})`);
 
-      console.log("[split-stickers] calling FastAPI at:", `${fastapiUrl}/internal/remove-background`);
-
-      const res = await fetch(`${fastapiUrl}/internal/remove-background`, {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ image_base64: base64 }),
       });
 
+      console.log(`[split-stickers] sticker ${index}: response status ${res.status} ${res.statusText}`);
+
       if (!res.ok) {
         const text = await res.text();
+        console.error(`[split-stickers] sticker ${index}: error body:`, text);
         throw new Error(`Background removal failed for sticker ${index}: ${text}`);
       }
 
       const processedBuffer = Buffer.from(await res.arrayBuffer());
+      console.log(`[split-stickers] sticker ${index}: received ${processedBuffer.length} bytes from FastAPI`);
 
       // Resize to exactly 512×512 and save as webp
       const webpBuffer = await sharp(processedBuffer)
