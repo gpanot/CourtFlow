@@ -314,13 +314,14 @@ function IdleScreen({ onScan }: { onScan: () => void }) {
 // Scanning screen
 // ---------------------------------------------------------------------------
 
-// Minimal warmup — just enough for first real video frame to be available
-const CAMERA_WARMUP_MS = 500;
-// Pause between the end of one request and the start of the next
-const BETWEEN_ATTEMPT_MS = 300;
-const MAX_NO_MATCH = 8;
+// Mirrors CourtPay registered-player scan constants exactly
+const CAMERA_WARMUP_MS = 1500;
+const CAPTURE_POLL_MS = 120;
+const CAPTURE_MAX_ATTEMPTS = 45;
+const MAX_FACE_ATTEMPTS = 3;
+const RETRY_IDLE_MS = 2000;
 
-type ScanStatus = "warming" | "scanning" | "sending";
+type ScanPhase = "adjust" | "capturing" | "between_retries";
 
 function ScanningScreen({
   onIdentified,
@@ -332,41 +333,45 @@ function ScanningScreen({
   onCancel: () => void;
 }) {
   const cameraRef = useRef<CameraCaptureHandle>(null);
-  const [streamReady, setStreamReady] = useState(false);
-  const [scanStatus, setScanStatus] = useState<ScanStatus>("warming");
-  const noMatchCount = useRef(0);
-  const scanning = useRef(true);
+  const [scanPhase, setScanPhase] = useState<ScanPhase>("adjust");
+  const [retrySecondsLeft, setRetrySecondsLeft] = useState<number | null>(null);
 
   useEffect(() => {
-    return () => { scanning.current = false; };
-  }, []);
+    let cancelled = false;
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-  useEffect(() => {
-    if (!streamReady) return;
-    scanning.current = true;
+    (async () => {
+      for (let attempt = 1; attempt <= MAX_FACE_ATTEMPTS && !cancelled; attempt++) {
+        // Adjust phase — show camera, wait for stable frame
+        setScanPhase("adjust");
+        await sleep(CAMERA_WARMUP_MS);
+        if (cancelled) return;
 
-    let warmupTimer: ReturnType<typeof setTimeout>;
+        setScanPhase("capturing");
 
-    const runLoop = async () => {
-      setScanStatus("scanning");
+        // Poll until a frame is available
+        let frame: string | null = null;
+        for (let i = 0; i < CAPTURE_MAX_ATTEMPTS && !cancelled; i++) {
+          frame = cameraRef.current?.captureFrame() ?? null;
+          if (frame) break;
+          await sleep(CAPTURE_POLL_MS);
+        }
+        if (cancelled) return;
 
-      while (scanning.current) {
-        const frame = cameraRef.current?.captureFrame();
         if (!frame) {
-          // Video not ready yet — wait a tick and retry
-          await new Promise((r) => setTimeout(r, 100));
-          continue;
+          // Camera never produced a frame — give up
+          onNotFound({ hasStickerPack: true });
+          return;
         }
 
-        setScanStatus("sending");
+        console.debug("[StickerKiosk] Sending frame, attempt", attempt);
 
         try {
-          console.debug("[StickerKiosk] Sending frame, attempt", noMatchCount.current + 1);
           const res = await kioskFetch("/api/kiosk/sticker-face-identify", {
             method: "POST",
             body: JSON.stringify({ imageBase64: frame }),
           });
-          if (!scanning.current) return;
+          if (cancelled) return;
 
           const data = await res.json() as {
             matched: boolean;
@@ -376,71 +381,64 @@ function ScanningScreen({
           };
 
           console.debug("[StickerKiosk] identify response:", JSON.stringify(data));
+          if (cancelled) return;
 
-          if (!scanning.current) return;
+          if (data.matched) {
+            if (!data.hasStickerPack) {
+              console.debug("[StickerKiosk] matched but no sticker pack for", data.displayName);
+              onNotFound({ hasStickerPack: false });
+              return;
+            }
 
-          if (!data.matched) {
-            noMatchCount.current += 1;
-            console.debug(`[StickerKiosk] no match (${noMatchCount.current}/${MAX_NO_MATCH})`);
-            if (noMatchCount.current >= MAX_NO_MATCH) {
-              scanning.current = false;
+            console.debug("[StickerKiosk] matched:", data.displayName, "— creating session");
+            const sessionRes = await kioskFetch("/api/kiosk/sticker-session", {
+              method: "POST",
+              body: JSON.stringify({ playerId: data.playerId }),
+            });
+            if (cancelled) return;
+            if (!sessionRes.ok) {
+              console.error("[StickerKiosk] sticker-session creation failed", sessionRes.status);
               onNotFound({ hasStickerPack: true });
               return;
             }
-            setScanStatus("scanning");
-            await new Promise((r) => setTimeout(r, BETWEEN_ATTEMPT_MS));
-            continue;
-          }
-
-          scanning.current = false;
-
-          if (!data.hasStickerPack) {
-            console.debug("[StickerKiosk] matched but no sticker pack for", data.displayName);
-            onNotFound({ hasStickerPack: false });
+            const session = await sessionRes.json() as SessionData;
+            onIdentified(session);
             return;
           }
 
-          console.debug("[StickerKiosk] matched:", data.displayName, "— creating session");
-
-          const sessionRes = await kioskFetch("/api/kiosk/sticker-session", {
-            method: "POST",
-            body: JSON.stringify({ playerId: data.playerId }),
-          });
-          if (!sessionRes.ok) {
-            console.error("[StickerKiosk] sticker-session creation failed", sessionRes.status);
-            onNotFound({ hasStickerPack: true });
-            return;
-          }
-          const session = await sessionRes.json() as SessionData;
-          onIdentified(session);
-          return;
+          // No match — retry with countdown if attempts remain
+          console.debug(`[StickerKiosk] no match (attempt ${attempt}/${MAX_FACE_ATTEMPTS})`);
         } catch (err) {
           console.error("[StickerKiosk] network error during face identify:", err);
-          if (!scanning.current) return;
-          setScanStatus("scanning");
-          await new Promise((r) => setTimeout(r, BETWEEN_ATTEMPT_MS));
+          if (cancelled) return;
+        }
+
+        if (attempt < MAX_FACE_ATTEMPTS) {
+          setScanPhase("between_retries");
+          const steps = Math.ceil(RETRY_IDLE_MS / 1000);
+          for (let s = steps; s >= 1 && !cancelled; s--) {
+            setRetrySecondsLeft(s);
+            await sleep(1000);
+          }
+          setRetrySecondsLeft(null);
+          if (cancelled) return;
         }
       }
-    };
 
-    // Minimal warmup so first video frame is ready
-    warmupTimer = setTimeout(() => {
-      if (scanning.current) void runLoop();
-    }, CAMERA_WARMUP_MS);
+      // All attempts exhausted
+      if (!cancelled) onNotFound({ hasStickerPack: true });
+    })();
 
-    return () => {
-      scanning.current = false;
-      clearTimeout(warmupTimer);
-    };
-  }, [streamReady, onIdentified, onNotFound]);
-
-  const statusLabel: Record<ScanStatus, string> = {
-    warming: "Getting camera ready…",
-    scanning: "Look at the camera",
-    sending: "Checking…",
-  };
+    return () => { cancelled = true; };
+  }, [onIdentified, onNotFound]);
 
   const viewfinderSize = "min(70vw, 380px)";
+
+  const statusLabel: Record<ScanPhase, string> = {
+    adjust: "Position your face in the frame",
+    capturing: "Hold still…",
+    between_retries: "No match yet — retrying…",
+  };
 
   return (
     <div
@@ -488,7 +486,7 @@ function ScanningScreen({
           marginBottom: 24,
         }}
       >
-        Look at the camera
+        {scanPhase === "between_retries" ? "No match yet — retrying…" : "Look at the camera"}
       </p>
 
       {/* Circle viewfinder */}
@@ -500,9 +498,9 @@ function ScanningScreen({
           borderRadius: "50%",
           overflow: "hidden",
           flexShrink: 0,
-          border: `3px solid ${scanStatus === "sending" ? C.green : C.border}`,
+          border: `3px solid ${scanPhase === "capturing" ? C.green : C.border}`,
           transition: "border-color 300ms ease",
-          boxShadow: scanStatus === "sending"
+          boxShadow: scanPhase === "capturing"
             ? `0 0 0 4px rgba(74,222,128,0.2)`
             : "none",
         }}
@@ -511,13 +509,12 @@ function ScanningScreen({
           ref={cameraRef}
           active
           facingMode="user"
-          onStreamReady={() => setStreamReady(true)}
           className="w-full h-full"
           videoClassName="w-full h-full object-cover"
         />
 
-        {/* Scanning line — only shown while actively scanning */}
-        {scanStatus !== "warming" && (
+        {/* Scanning line — only during adjust/capturing */}
+        {scanPhase !== "between_retries" && (
           <div
             style={{
               position: "absolute",
@@ -530,10 +527,30 @@ function ScanningScreen({
             }}
           />
         )}
+
+        {/* Retry overlay */}
+        {scanPhase === "between_retries" && retrySecondsLeft != null && (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "rgba(0,0,0,0.55)",
+            }}
+          >
+            <p style={{ fontSize: 18, fontWeight: 600, color: C.text }}>Next scan in</p>
+            <p style={{ fontSize: 52, fontWeight: 700, color: C.green, lineHeight: 1, marginTop: 4 }}>
+              {retrySecondsLeft}
+            </p>
+          </div>
+        )}
       </div>
 
       <p style={{ fontSize: 14, color: C.muted, textAlign: "center", marginTop: 16 }}>
-        {statusLabel[scanStatus]}
+        {statusLabel[scanPhase]}
       </p>
 
       <button
