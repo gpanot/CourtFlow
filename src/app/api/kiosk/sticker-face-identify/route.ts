@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
       resultType: recognition.resultType,
       playerId: recognition.playerId ?? null,
       success: recognition.success,
-      confidence: (recognition as Record<string, unknown>).confidence ?? null,
+      confidence: (recognition as unknown as Record<string, unknown>).confidence ?? null,
     }));
 
     if (recognition.resultType !== "matched" || !recognition.playerId) {
