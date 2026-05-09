@@ -69,7 +69,13 @@ export async function GET(
     const zipBuffer: Buffer = zip.toBuffer();
     console.log(`[download-pack] ZIP ready: ${zipBuffer.length} bytes, filename: ${zipFilename}`);
 
-    return new NextResponse(zipBuffer, {
+    // Copy into a plain ArrayBuffer so TypeScript accepts it as BodyInit
+    const arrayBuffer = zipBuffer.buffer.slice(
+      zipBuffer.byteOffset,
+      zipBuffer.byteOffset + zipBuffer.byteLength
+    );
+
+    return new NextResponse(arrayBuffer as ArrayBuffer, {
       status: 200,
       headers: {
         "Content-Type": "application/zip",
