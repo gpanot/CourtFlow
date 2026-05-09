@@ -80,8 +80,21 @@ export function ProfileCourtPay({ legacyTab, onOpenSessionHistory, variant = "ta
         if (cancelled) return;
         if (venueRes) setVenueName(venueRes.name);
         setAuth({ staffName: meRes.name, staffPhone: meRes.phone });
-        setReclubGroupId(meRes.reclubGroupId ?? null);
-        if (Array.isArray(clubsRes) && clubsRes.length) setReclubClubs(clubsRes);
+        const clubList = Array.isArray(clubsRes) && clubsRes.length ? clubsRes : [];
+        setReclubClubs(clubList);
+
+        const currentId = meRes.reclubGroupId ?? null;
+        if (currentId) {
+          setReclubGroupId(currentId);
+        } else {
+          const next11 = clubList.find((c) => c.name.toLowerCase().includes("next11"));
+          if (next11) {
+            setReclubGroupId(next11.groupId);
+            void api.patch("/api/staff/reclub-club", { reclubGroupId: next11.groupId }).catch(() => {});
+          } else {
+            setReclubGroupId(null);
+          }
+        }
       } catch {
         /* silent */
       } finally {

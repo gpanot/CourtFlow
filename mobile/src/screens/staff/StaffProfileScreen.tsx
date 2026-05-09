@@ -428,8 +428,19 @@ export function StaffProfileScreen() {
           api.get<{ groupId: number; name: string }[]>("/api/reclub/clubs"),
         ]);
         if (cancelled) return;
-        setReclubGroupId(me.reclubGroupId ?? null);
-        setReclubClubs(Array.isArray(clubs) ? clubs : []);
+        const clubList = Array.isArray(clubs) ? clubs : [];
+        setReclubClubs(clubList);
+
+        const currentId = me.reclubGroupId ?? null;
+        if (currentId) {
+          setReclubGroupId(currentId);
+        } else {
+          const next11 = clubList.find((c) => c.name.toLowerCase().includes("next11"));
+          if (next11) {
+            setReclubGroupId(next11.groupId);
+            void api.patch("/api/staff/reclub-club", { reclubGroupId: next11.groupId }).catch(() => {});
+          }
+        }
       } catch {
         /* silent */
       }
