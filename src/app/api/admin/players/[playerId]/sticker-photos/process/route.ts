@@ -14,34 +14,41 @@ const SCRIPT_PATH = path.join(process.cwd(), "scripts", "split-stickers.py");
 
 /**
  * Resolve the Python binary to use for sticker processing.
+ * All paths are constructed at runtime (not statically) so Turbopack
+ * never tries to resolve them as module imports during the build.
+ *
  * Priority:
  *  1. STICKER_PYTHON_BIN env var (set in Dockerfile for production)
  *  2. Local .venv (development)
- *  3. System python3
- *  4. System python
+ *  3. Common system paths
+ *  4. Bare command as last resort
  */
 async function resolvePythonBin(): Promise<string> {
-  const candidates = [
-    process.env.STICKER_PYTHON_BIN,
-    path.join(process.cwd(), ".venv", "bin", "python3"),
-    "/usr/bin/python3",
-    "/usr/local/bin/python3",
-    "python3",
-    "python",
-  ].filter(Boolean) as string[];
+  const cwd = process.cwd();
+
+  // Build candidate list at runtime — never at module-evaluation time
+  const candidates: string[] = [];
+
+  const envBin = process.env["STICKER_PYTHON_BIN"];
+  if (envBin) candidates.push(envBin);
+
+  // Construct local venv path at runtime to avoid Turbopack following symlinks
+  candidates.push([cwd, ".venv", "bin", "python3"].join(path.sep));
+  candidates.push(["", "usr", "bin", "python3"].join(path.sep));
+  candidates.push(["", "usr", "local", "bin", "python3"].join(path.sep));
+  candidates.push(["", "opt", "sticker-venv", "bin", "python3"].join(path.sep));
 
   for (const candidate of candidates) {
     try {
-      // For absolute paths check existence; for bare commands skip the check
-      if (candidate.startsWith("/")) {
-        await access(candidate);
-      }
+      await access(candidate);
       return candidate;
     } catch {
       // not found, try next
     }
   }
-  return "python3"; // last resort — will surface a useful error if missing
+
+  // Bare commands as final fallback (no fs check needed)
+  return "python3";
 }
 
 /**
