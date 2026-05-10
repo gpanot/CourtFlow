@@ -11,12 +11,20 @@ import {
   AlertCircle,
   Grid2x2,
   Download,
+  BookTemplate,
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { useSessionStore } from "@/stores/session-store";
 
 const DEFAULT_PROMPT =
   `Create Zalo/WhatsApp sticker-style images using the real face of the uploaded person. Black background. A total of 4 diverse expressions: • "Just joking" (meaning: Sarcastic (Negative): Sometimes this phrase is used to imply that the other person is overly sensitive, "difficult," or has no sense of humor) • "Take it and buy Ticket" (hand holding a 100 usd bill) • "Shut down and go to sleep" (hand pointing straight at the person opposite, meaning to scold the other person to turn off their phone and go to sleep) • "Why don't we go Da Nang?!" (surprised, wondering expression) Each expression should include cute English/Vietnamese… text matching the slang context (not to be interpreted literally). Move the text to the bottom, forming a unified block with the character — text and image fused together as one complete sticker. Bubble-style font, bold/eye-catching colors, cute and adorable style.`;
+
+interface StickerTemplateOption {
+  id: string;
+  name: string;
+  malePrompt: string;
+  femalePrompt: string;
+}
 
 interface StickerPhoto {
   id: string;
@@ -40,15 +48,17 @@ interface StickerPack {
   sticker2Url: string | null;
   sticker3Url: string | null;
   sticker4Url: string | null;
+  createdAt?: string;
 }
 
 interface Props {
   playerId: string;
   facePhotoPath: string | null | undefined;
   playerFirstName?: string;
+  playerGender?: string | null;
 }
 
-export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstName }: Props) {
+export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstName, playerGender }: Props) {
   const sessionToken = useSessionStore((s) => s.token);
 
   // ── uploaded extra photos (slots 2–4)
@@ -62,6 +72,10 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstNa
   // ── slot upload states
   const [uploadingSlot, setUploadingSlot] = useState<number | null>(null);
   const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
+
+  // ── templates
+  const [templates, setTemplates] = useState<StickerTemplateOption[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("custom");
 
   // ── prompt
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
@@ -78,12 +92,25 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstNa
   const [deletingResult, setDeletingResult] = useState(false);
   const [showDeleteResultConfirm, setShowDeleteResultConfirm] = useState(false);
 
-  // ── sticker pack (split)
-  const [stickerPack, setStickerPack] = useState<StickerPack | null>(null);
+  // ── sticker packs (multiple, accumulate over time)
+  const [stickerPacks, setStickerPacks] = useState<StickerPack[]>([]);
   const [splitting, setSplitting] = useState(false);
   const [splitError, setSplitError] = useState<string | null>(null);
+  const [deletingPackId, setDeletingPackId] = useState<string | null>(null);
 
   const fileInputRefs = useRef<(HTMLInputElement | null)[]>([null, null, null]);
+
+  // ── Load sticker templates
+  useEffect(() => {
+    void (async () => {
+      try {
+        const data = await api.get<StickerTemplateOption[]>("/api/admin/sticker-templates");
+        setTemplates(data ?? []);
+      } catch {
+        // silent — templates are optional
+      }
+    })();
+  }, []);
 
   // ── Load existing uploaded photos, saved result, and pack on mount
   useEffect(() => {
@@ -92,13 +119,13 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstNa
 
     Promise.all([
       api.get<StickerPhoto[]>(`/api/admin/players/${playerId}/sticker-photos`).catch(() => [] as StickerPhoto[]),
-      api.get<StickerResult & { pack?: StickerPack }>(`/api/admin/players/${playerId}/sticker-photos/result`).catch(() => null),
+      api.get<StickerResult & { packs?: StickerPack[] }>(`/api/admin/players/${playerId}/sticker-photos/result`).catch(() => null),
     ]).then(([photos, savedResult]) => {
       if (cancelled) return;
       setUploadedPhotos(photos ?? []);
       if (savedResult) {
         setResult(savedResult);
-        if (savedResult.pack) setStickerPack(savedResult.pack);
+        if (savedResult.packs) setStickerPacks(savedResult.packs);
       }
     }).finally(() => {
       if (!cancelled) setLoadingPhotos(false);
@@ -157,11 +184,28 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstNa
     [playerId, selectedPhotoId]
   );
 
+  // ── filtered templates by player gender
+  const filteredTemplates = templates.filter((t) => {
+    if (!playerGender || playerGender === "other") return true;
+    return true; // show all templates; gender determines which prompt field is used
+  });
+
+  const handleTemplateSelect = useCallback(
+    (templateId: string) => {
+      setSelectedTemplateId(templateId);
+      if (templateId === "custom") return;
+      const tpl = templates.find((t) => t.id === templateId);
+      if (!tpl) return;
+      const isFemale = playerGender === "female";
+      setPrompt(isFemale ? tpl.femalePrompt : tpl.malePrompt);
+    },
+    [templates, playerGender]
+  );
+
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim()) return;
     setGenerating(true);
     setGenError(null);
-    setStickerPack(null);
     setSplitError(null);
     try {
       const data = await api.post<StickerResult>(
@@ -181,12 +225,25 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstNa
     try {
       await api.delete(`/api/admin/players/${playerId}/sticker-photos/result`);
       setResult(null);
-      setStickerPack(null);
+      setStickerPacks([]);
       setShowDeleteResultConfirm(false);
     } catch (e) {
       alert(`Delete failed: ${(e as Error).message}`);
     } finally {
       setDeletingResult(false);
+    }
+  }, [playerId]);
+
+  const handleDeletePack = useCallback(async (packId: string) => {
+    if (!confirm("Delete this sticker pack? This cannot be undone.")) return;
+    setDeletingPackId(packId);
+    try {
+      await api.delete(`/api/admin/players/${playerId}/sticker-photos/packs/${packId}`);
+      setStickerPacks((prev) => prev.filter((p) => p.id !== packId));
+    } catch (e) {
+      alert(`Delete failed: ${(e as Error).message}`);
+    } finally {
+      setDeletingPackId(null);
     }
   }, [playerId]);
 
@@ -198,7 +255,7 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstNa
         `/api/admin/players/${playerId}/sticker-photos/process`,
         {}
       );
-      setStickerPack(data);
+      setStickerPacks((prev) => [data, ...prev]);
     } catch (e) {
       setSplitError((e as Error).message ?? "Splitting failed");
     } finally {
@@ -409,13 +466,43 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstNa
 
       {/* ── Prompt ── */}
       <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
-        <div className="mb-2 flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-amber-400/90" />
-          <p className="text-xs font-medium text-neutral-200">Prompt</p>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-amber-400/90" />
+            <p className="text-xs font-medium text-neutral-200">Prompt</p>
+          </div>
+          {playerGender && (
+            <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${playerGender === "female" ? "bg-pink-900/40 text-pink-300" : playerGender === "male" ? "bg-blue-900/40 text-blue-300" : "bg-neutral-800 text-neutral-400"}`}>
+              {playerGender}
+            </span>
+          )}
         </div>
+
+        {/* Template dropdown */}
+        {filteredTemplates.length > 0 && (
+          <div className="mb-2">
+            <label className="mb-0.5 block text-[11px] text-neutral-500">
+              <BookTemplate className="inline h-3 w-3 mr-1 opacity-60" />
+              Template
+            </label>
+            <select
+              value={selectedTemplateId}
+              onChange={(e) => handleTemplateSelect(e.target.value)}
+              className="w-full rounded-md border border-neutral-700 bg-neutral-800 px-2.5 py-1.5 text-xs text-white focus:border-purple-500 focus:outline-none"
+            >
+              <option value="custom">Custom (no template)</option>
+              {filteredTemplates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} — {playerGender === "female" ? "Female prompt" : "Male prompt"}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <textarea
           value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
+          onChange={(e) => { setPrompt(e.target.value); setSelectedTemplateId("custom"); }}
           rows={6}
           className="w-full resize-y rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder-neutral-500 focus:border-purple-500 focus:outline-none"
           placeholder="Describe the sticker style…"
@@ -553,50 +640,75 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstNa
             </div>
           )}
 
-          {/* ── Sticker Pack Grid ── */}
-          {stickerPack && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                {[stickerPack.sticker1Url, stickerPack.sticker2Url, stickerPack.sticker3Url, stickerPack.sticker4Url].map((url, i) => (
-                  <div
-                    key={i}
-                    className="relative h-[150px] w-full rounded-xl overflow-hidden border border-neutral-800"
-                    style={{
-                      backgroundImage: "linear-gradient(45deg, #2a2a2a 25%, transparent 25%), linear-gradient(-45deg, #2a2a2a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #2a2a2a 75%), linear-gradient(-45deg, transparent 75%, #2a2a2a 75%)",
-                      backgroundSize: "16px 16px",
-                      backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px",
-                    }}
-                  >
-                    {url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={url}
-                        alt={`Sticker ${i + 1}`}
-                        className="h-full w-full object-contain"
-                      />
-                    ) : (
-                      <div className="h-full w-full flex items-center justify-center text-neutral-600 text-xs">
-                        Missing
-                      </div>
-                    )}
+          {/* ── Sticker Packs (all accumulated) ── */}
+          {stickerPacks.length > 0 && (
+            <div className="space-y-4">
+              <p className="text-xs font-medium text-neutral-400">
+                Sticker Packs ({stickerPacks.length})
+              </p>
+              {stickerPacks.map((pack, packIdx) => (
+                <div key={pack.id} className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-neutral-500">
+                      Pack {stickerPacks.length - packIdx}
+                      {pack.createdAt ? ` — ${fmtDate(pack.createdAt)}` : ""}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => void handleDeletePack(pack.id)}
+                      disabled={deletingPackId === pack.id}
+                      className="flex items-center gap-1 rounded px-2 py-0.5 text-[11px] text-red-400 hover:bg-red-950/40 hover:text-red-300 transition-colors disabled:opacity-50"
+                      title="Delete this pack"
+                    >
+                      {deletingPackId === pack.id ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3 w-3" />
+                      )}
+                      Delete pack
+                    </button>
                   </div>
-                ))}
-              </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[pack.sticker1Url, pack.sticker2Url, pack.sticker3Url, pack.sticker4Url].map((url, i) => (
+                      <div
+                        key={i}
+                        className="relative aspect-square rounded-lg overflow-hidden border border-neutral-800 flex items-center justify-center"
+                        style={{
+                          backgroundImage: "linear-gradient(45deg, #2a2a2a 25%, transparent 25%), linear-gradient(-45deg, #2a2a2a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #2a2a2a 75%), linear-gradient(-45deg, transparent 75%, #2a2a2a 75%)",
+                          backgroundSize: "16px 16px",
+                          backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px",
+                        }}
+                      >
+                        {url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={url}
+                            alt={`Sticker ${i + 1}`}
+                            className="absolute inset-0 h-full w-full object-contain"
+                          />
+                        ) : (
+                          <span className="text-neutral-600 text-[10px]">—</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
 
-              {/* Download button */}
-              <button
-                type="button"
-                onClick={handleDownloadPack}
-                disabled={downloading}
-                className="w-full flex items-center justify-center gap-2 rounded-lg bg-emerald-600 py-2.5 text-sm font-medium text-white hover:bg-emerald-500 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                {downloading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Download className="h-4 w-4" />
-                )}
-                {downloading ? "Downloading…" : "Download pack (.zip)"}
-              </button>
+                  {/* Download button for this pack */}
+                  <button
+                    type="button"
+                    onClick={handleDownloadPack}
+                    disabled={downloading}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600/80 py-1.5 text-xs font-medium text-white hover:bg-emerald-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {downloading ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5" />
+                    )}
+                    {downloading ? "Downloading…" : "Download (.zip)"}
+                  </button>
+                </div>
+              ))}
             </div>
           )}
         </div>

@@ -23,32 +23,29 @@ export async function GET(request: NextRequest) {
       return error("Session expired", 401);
     }
 
-    const stickerPack = await prisma.playerStickerPack.findUnique({
+    const stickerPack = await prisma.playerStickerPack.findFirst({
       where: { playerId: session.playerId },
-      include: { player: { select: { name: true } } },
+      orderBy: { createdAt: "desc" },
     });
 
     if (!stickerPack) {
       return error("No sticker pack found", 404);
     }
 
-    const playerName = stickerPack.player.name.split(" ")[0];
+    const packPlayer = await prisma.player.findUnique({ where: { id: session.playerId }, select: { name: true } });
+    const playerName = packPlayer?.name?.split(" ")[0] ?? "player";
     const zipFilename = `stickers_${playerName.replace(/[^a-zA-Z0-9]/g, "_")}.zip`;
 
-    const packDir = path.join(
-      process.cwd(),
-      "uploads",
-      "players",
-      "sticker-packs",
-      session.playerId
-    );
-
+    const urls = [stickerPack.sticker1Url, stickerPack.sticker2Url, stickerPack.sticker3Url, stickerPack.sticker4Url];
     const files: { absPath: string; name: string }[] = [];
-    for (let i = 1; i <= 4; i++) {
-      const absPath = path.join(packDir, `sticker_${i}.webp`);
+    for (let i = 0; i < urls.length; i++) {
+      const stickerUrl = urls[i];
+      if (!stickerUrl) continue;
+      const relPath = stickerUrl.split("?")[0];
+      const absPath = path.join(process.cwd(), relPath);
       try {
         await stat(absPath);
-        files.push({ absPath, name: `sticker_${i}.webp` });
+        files.push({ absPath, name: `sticker_${i + 1}.webp` });
       } catch {
         // skip missing files
       }

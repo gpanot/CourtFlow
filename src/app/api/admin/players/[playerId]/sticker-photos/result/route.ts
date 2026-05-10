@@ -20,7 +20,11 @@ export async function GET(
 
     const result = await prisma.playerStickerResult.findUnique({
       where: { playerId },
-      include: { stickerPack: true },
+      include: {
+        stickerPacks: {
+          orderBy: { createdAt: "desc" },
+        },
+      },
     });
     if (!result) return notFound("No sticker result found");
 
@@ -33,17 +37,15 @@ export async function GET(
       costUsd: Number(result.costUsd),
       generationTimeSeconds: result.generationTimeSeconds ? Number(result.generationTimeSeconds) : null,
       createdAt: result.createdAt.toISOString(),
+      packs: result.stickerPacks.map((p) => ({
+        id: p.id,
+        sticker1Url: p.sticker1Url,
+        sticker2Url: p.sticker2Url,
+        sticker3Url: p.sticker3Url,
+        sticker4Url: p.sticker4Url,
+        createdAt: p.createdAt.toISOString(),
+      })),
     };
-
-    if (result.stickerPack) {
-      response.pack = {
-        id: result.stickerPack.id,
-        sticker1Url: result.stickerPack.sticker1Url,
-        sticker2Url: result.stickerPack.sticker2Url,
-        sticker3Url: result.stickerPack.sticker3Url,
-        sticker4Url: result.stickerPack.sticker4Url,
-      };
-    }
 
     return json(response);
   } catch (e) {
@@ -66,17 +68,14 @@ export async function DELETE(
     const result = await prisma.playerStickerResult.findUnique({ where: { playerId } });
     if (!result) return notFound("No sticker result found");
 
-    // Delete sticker pack files and record
-    const pack = await prisma.playerStickerPack.findUnique({ where: { playerId } });
-    if (pack) {
-      const packDir = path.join(process.cwd(), "uploads", "players", "sticker-packs", playerId);
-      try {
-        await rm(packDir, { recursive: true, force: true });
-      } catch {
-        // directory may not exist
-      }
-      await prisma.playerStickerPack.delete({ where: { playerId } });
+    // Delete all sticker packs for this player (files + records)
+    const packDir = path.join(process.cwd(), "uploads", "players", "sticker-packs", playerId);
+    try {
+      await rm(packDir, { recursive: true, force: true });
+    } catch {
+      // directory may not exist
     }
+    await prisma.playerStickerPack.deleteMany({ where: { playerId } });
 
     // Delete result image file
     const urlPath = result.imageUrl.split("?")[0];

@@ -27,11 +27,12 @@ export async function GET(
 
     const { playerId } = await params;
 
-    const pack = await prisma.playerStickerPack.findUnique({
+    const pack = await prisma.playerStickerPack.findFirst({
       where: { playerId },
-      include: { player: { select: { name: true } } },
+      orderBy: { createdAt: "desc" },
     });
     if (!pack) return notFound("No sticker pack found. Run 'Split stickers' first.");
+    const packPlayer = await prisma.player.findUnique({ where: { id: playerId }, select: { name: true } });
 
     const urls = [pack.sticker1Url, pack.sticker2Url, pack.sticker3Url, pack.sticker4Url];
     const files: { absPath: string; name: string }[] = [];
@@ -53,7 +54,7 @@ export async function GET(
       return error("No sticker files found on disk", 404);
     }
 
-    const playerName = pack.player?.name?.split(" ")[0] ?? "player";
+    const playerName = packPlayer?.name?.split(" ")[0] ?? "player";
     const zipFilename = `stickers_${playerName.replace(/[^a-zA-Z0-9]/g, "_")}.zip`;
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports

@@ -69,8 +69,9 @@ export async function POST(request: NextRequest) {
       return json({ matched: false });
     }
 
-    const stickerPack = await prisma.playerStickerPack.findUnique({
+    const stickerPack = await prisma.playerStickerPack.findFirst({
       where: { playerId: player.id },
+      orderBy: { createdAt: "desc" },
       select: {
         sticker1Url: true,
         sticker2Url: true,

@@ -20,8 +20,10 @@ export async function POST(request: NextRequest) {
       return error("playerId is required", 400);
     }
 
-    const stickerPack = await prisma.playerStickerPack.findUnique({
+    // Use the most recently created pack for this player
+    const stickerPack = await prisma.playerStickerPack.findFirst({
       where: { playerId },
+      orderBy: { createdAt: "desc" },
       include: { player: { select: { name: true } } },
     });
 

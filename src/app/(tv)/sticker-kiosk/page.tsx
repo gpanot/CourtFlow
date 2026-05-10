@@ -6,12 +6,14 @@ import {
   useState,
   useCallback,
 } from "react";
+import { useFaceScanner } from "@/hooks/useFaceScanner";
 import { QRCodeSVG } from "qrcode.react";
 import { Camera, X } from "lucide-react";
 import {
   CameraCapture,
   type CameraCaptureHandle,
 } from "@/components/camera-capture";
+import { buildVietQRPayload } from "@/lib/vietqr-payload";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -24,6 +26,13 @@ interface SessionData {
   shopUrl: string;
   playerName: string;
   stickers: string[];
+}
+
+interface KioskSettings {
+  stickerPrice: number;
+  bankBin: string;
+  bankAccount: string;
+  bankOwnerName: string;
 }
 
 interface NotFoundReason {
@@ -314,14 +323,9 @@ function IdleScreen({ onScan }: { onScan: () => void }) {
 // Scanning screen
 // ---------------------------------------------------------------------------
 
-// Mirrors CourtPay registered-player scan constants exactly
-const CAMERA_WARMUP_MS = 1500;
-const CAPTURE_POLL_MS = 120;
-const CAPTURE_MAX_ATTEMPTS = 45;
-const MAX_FACE_ATTEMPTS = 3;
-const RETRY_IDLE_MS = 2000;
+const KIOSK_HEADERS = { "x-kiosk-secret": KIOSK_SECRET };
 
-type ScanPhase = "adjust" | "capturing" | "between_retries";
+type ScanPhase = "idle" | "adjust" | "capturing" | "between_retries" | "matched" | "failed";
 
 function ScanningScreen({
   onIdentified,
@@ -333,111 +337,64 @@ function ScanningScreen({
   onCancel: () => void;
 }) {
   const cameraRef = useRef<CameraCaptureHandle>(null);
-  const [scanPhase, setScanPhase] = useState<ScanPhase>("adjust");
-  const [retrySecondsLeft, setRetrySecondsLeft] = useState<number | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  type IdentifyResponse = {
+    matched: boolean;
+    playerId?: string;
+    displayName?: string;
+    hasStickerPack?: boolean;
+  };
 
-    (async () => {
-      for (let attempt = 1; attempt <= MAX_FACE_ATTEMPTS && !cancelled; attempt++) {
-        // Adjust phase — show camera, wait for stable frame
-        setScanPhase("adjust");
-        await sleep(CAMERA_WARMUP_MS);
-        if (cancelled) return;
+  const { phase: scanPhase, retrySecondsLeft } = useFaceScanner({
+    cameraRef,
+    active: true,
+    endpoint: "/api/kiosk/sticker-face-identify",
+    headers: KIOSK_HEADERS,
+    onMatch: useCallback(
+      (raw: unknown): boolean => {
+        const data = raw as IdentifyResponse | null;
+        if (!data?.matched) return false;
 
-        setScanPhase("capturing");
-
-        // Poll until a frame is available
-        let frame: string | null = null;
-        for (let i = 0; i < CAPTURE_MAX_ATTEMPTS && !cancelled; i++) {
-          frame = cameraRef.current?.captureFrame() ?? null;
-          if (frame) break;
-          await sleep(CAPTURE_POLL_MS);
-        }
-        if (cancelled) return;
-
-        if (!frame) {
-          // Camera never produced a frame — give up
-          onNotFound({ hasStickerPack: true });
-          return;
+        if (!data.hasStickerPack) {
+          console.debug("[StickerKiosk] matched but no sticker pack for", data.displayName);
+          onNotFound({ hasStickerPack: false });
+          return true;
         }
 
-        console.debug("[StickerKiosk] Sending frame, attempt", attempt);
-
-        try {
-          const res = await kioskFetch("/api/kiosk/sticker-face-identify", {
-            method: "POST",
-            body: JSON.stringify({ imageBase64: frame }),
-          });
-          if (cancelled) return;
-
-          const data = await res.json() as {
-            matched: boolean;
-            playerId?: string;
-            displayName?: string;
-            hasStickerPack?: boolean;
-          };
-
-          console.debug("[StickerKiosk] identify response:", JSON.stringify(data));
-          if (cancelled) return;
-
-          if (data.matched) {
-            if (!data.hasStickerPack) {
-              console.debug("[StickerKiosk] matched but no sticker pack for", data.displayName);
-              onNotFound({ hasStickerPack: false });
-              return;
-            }
-
-            console.debug("[StickerKiosk] matched:", data.displayName, "— creating session");
-            const sessionRes = await kioskFetch("/api/kiosk/sticker-session", {
-              method: "POST",
-              body: JSON.stringify({ playerId: data.playerId }),
-            });
-            if (cancelled) return;
-            if (!sessionRes.ok) {
-              console.error("[StickerKiosk] sticker-session creation failed", sessionRes.status);
+        console.debug("[StickerKiosk] matched:", data.displayName, "— creating session");
+        void kioskFetch("/api/kiosk/sticker-session", {
+          method: "POST",
+          body: JSON.stringify({ playerId: data.playerId }),
+        })
+          .then((r) => {
+            if (!r.ok) {
+              console.error("[StickerKiosk] sticker-session creation failed", r.status);
               onNotFound({ hasStickerPack: true });
               return;
             }
-            const session = await sessionRes.json() as SessionData;
-            onIdentified(session);
-            return;
-          }
+            return r.json() as Promise<SessionData>;
+          })
+          .then((session) => { if (session) onIdentified(session); })
+          .catch(() => { onNotFound({ hasStickerPack: true }); });
 
-          // No match — retry with countdown if attempts remain
-          console.debug(`[StickerKiosk] no match (attempt ${attempt}/${MAX_FACE_ATTEMPTS})`);
-        } catch (err) {
-          console.error("[StickerKiosk] network error during face identify:", err);
-          if (cancelled) return;
-        }
-
-        if (attempt < MAX_FACE_ATTEMPTS) {
-          setScanPhase("between_retries");
-          const steps = Math.ceil(RETRY_IDLE_MS / 1000);
-          for (let s = steps; s >= 1 && !cancelled; s--) {
-            setRetrySecondsLeft(s);
-            await sleep(1000);
-          }
-          setRetrySecondsLeft(null);
-          if (cancelled) return;
-        }
-      }
-
-      // All attempts exhausted
-      if (!cancelled) onNotFound({ hasStickerPack: true });
-    })();
-
-    return () => { cancelled = true; };
-  }, [onIdentified, onNotFound]);
+        return true;
+      },
+      [onIdentified, onNotFound]
+    ),
+    onMaxAttemptsReached: useCallback(() => {
+      onNotFound({ hasStickerPack: true });
+    }, [onNotFound]),
+  });
 
   const viewfinderSize = "min(70vw, 380px)";
 
   const statusLabel: Record<ScanPhase, string> = {
+    idle: "",
     adjust: "Position your face in the frame",
     capturing: "Hold still…",
     between_retries: "No match yet — retrying…",
+    matched: "",
+    failed: "",
   };
 
   return (
@@ -573,34 +530,129 @@ function ScanningScreen({
 }
 
 // ---------------------------------------------------------------------------
-// Identified screen
+// Identified screen — payment phase then QR reveal phase
 // ---------------------------------------------------------------------------
 
 const AUTO_RESET_S = 60;
+const PAYMENT_TIMER_S = 5;
+
+function StickerGrid({ stickers }: { stickers: string[] }) {
+  return (
+    <div style={{ maxWidth: 432, width: "100%" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+        {Array.from({ length: 4 }).map((_, i) => {
+          const url = stickers[i];
+          return (
+            <div
+              key={i}
+              style={{
+                position: "relative",
+                width: "100%",
+                aspectRatio: "1",
+                borderRadius: 10,
+                overflow: "hidden",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={url}
+                  alt={`Sticker ${i + 1}`}
+                  style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }}
+                />
+              )}
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  pointerEvents: "none",
+                }}
+              >
+                <span
+                  style={{
+                    color: "#fff",
+                    fontSize: 16,
+                    fontWeight: 700,
+                    opacity: 0.25,
+                    transform: "rotate(-35deg)",
+                    userSelect: "none",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  PREVIEW
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function IdentifiedScreen({
   session,
+  kioskSettings,
   onReset,
 }: {
   session: SessionData;
+  kioskSettings: KioskSettings | null;
   onReset: () => void;
 }) {
+  // "payment" → show payment QR + timer; "confirmed" → show shopUrl QR
+  const [paymentPhase, setPaymentPhase] = useState<"payment" | "confirmed">("payment");
+  const [paymentTimer, setPaymentTimer] = useState(PAYMENT_TIMER_S);
+  const [showPaidButton, setShowPaidButton] = useState(false);
   const [countdown, setCountdown] = useState(AUTO_RESET_S);
-  const resetCountdown = useCallback(() => setCountdown(AUTO_RESET_S), []);
 
+  // Payment countdown (5s → show "I just paid")
   useEffect(() => {
+    if (paymentPhase !== "payment") return;
     const interval = setInterval(() => {
-      setCountdown((n) => {
+      setPaymentTimer((n) => {
         if (n <= 1) {
           clearInterval(interval);
-          onReset();
+          setShowPaidButton(true);
           return 0;
         }
         return n - 1;
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [onReset]);
+  }, [paymentPhase]);
+
+  // Auto-reset after confirmed
+  useEffect(() => {
+    if (paymentPhase !== "confirmed") return;
+    const interval = setInterval(() => {
+      setCountdown((n) => {
+        if (n <= 1) { clearInterval(interval); onReset(); return 0; }
+        return n - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [paymentPhase, onReset]);
+
+  const price = kioskSettings?.stickerPrice ?? 30000;
+  const paymentQRPayload = kioskSettings
+    ? buildVietQRPayload({
+        bankBin: kioskSettings.bankBin,
+        accountNumber: kioskSettings.bankAccount,
+        amount: price,
+        paymentRef: `Sticker ${session.playerName}`.slice(0, 50),
+      })
+    : null;
+
+  const handlePaid = useCallback(() => {
+    setCountdown(AUTO_RESET_S);
+    setPaymentPhase("confirmed");
+  }, []);
 
   return (
     <div
@@ -612,10 +664,6 @@ function IdentifiedScreen({
         background: C.bg,
         overflow: "hidden",
         padding: "0 20px 16px",
-      }}
-      onClick={(e) => {
-        const target = e.target as HTMLElement;
-        if (!target.closest("[data-qr]")) resetCountdown();
       }}
     >
       <p
@@ -631,123 +679,126 @@ function IdentifiedScreen({
         Hi {session.playerName}! 👋
       </p>
       <p style={{ fontSize: 14, color: C.muted, textAlign: "center", marginBottom: 10 }}>
-        Your sticker pack is ready
+        {paymentPhase === "payment" ? "Complete payment to get your sticker pack" : "Payment received! Scan to access your stickers"}
       </p>
 
-      {/* Sticker 2x2 grid */}
-      <div
-        style={{
-          maxWidth: 432,
-          width: "100%",
-        }}
-      >
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-          {Array.from({ length: 4 }).map((_, i) => {
-            const url = session.stickers[i];
-            return (
-              <div
-                key={i}
-                style={{
-                  position: "relative",
-                  width: "100%",
-                  aspectRatio: "1",
-                  borderRadius: 10,
-                  overflow: "hidden",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                {url && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={url}
-                    alt={`Sticker ${i + 1}`}
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "contain",
-                      display: "block",
-                    }}
-                  />
-                )}
-                <div
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    pointerEvents: "none",
-                  }}
-                >
-                  <span
-                    style={{
-                      color: "#fff",
-                      fontSize: 16,
-                      fontWeight: 700,
-                      opacity: 0.25,
-                      transform: "rotate(-35deg)",
-                      userSelect: "none",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    PREVIEW
-                  </span>
-                </div>
+      {/* Sticker grid preview */}
+      <StickerGrid stickers={session.stickers} />
+
+      {/* Payment phase */}
+      {paymentPhase === "payment" && (
+        <div
+          style={{ marginTop: 12, display: "flex", flexDirection: "column", alignItems: "center", width: "100%", maxWidth: 432 }}
+        >
+          {paymentQRPayload ? (
+            <>
+              <div style={{ background: "#ffffff", padding: 12, borderRadius: 12, display: "inline-block" }}>
+                <QRCodeSVG value={paymentQRPayload} size={148} bgColor="#ffffff" fgColor="#000000" />
               </div>
-            );
-          })}
+              <p style={{ fontSize: 16, fontWeight: 600, color: C.text, textAlign: "center", marginTop: 8 }}>
+                Scan to pay {price.toLocaleString("vi-VN")} VND
+              </p>
+              <p style={{ fontSize: 13, color: C.muted, textAlign: "center", marginTop: 2 }}>
+                Use any Vietnamese banking app
+              </p>
+            </>
+          ) : (
+            <p style={{ fontSize: 13, color: C.muted, textAlign: "center", marginTop: 8 }}>
+              Payment QR not configured — contact staff.
+            </p>
+          )}
+
+          {/* Timer / paid button */}
+          {!showPaidButton ? (
+            <div style={{ marginTop: 16, textAlign: "center" }}>
+              <p style={{ fontSize: 13, color: C.dim }}>
+                You can confirm payment in {paymentTimer}s…
+              </p>
+            </div>
+          ) : (
+            <button
+              onClick={handlePaid}
+              style={{
+                ...BTN_PRIMARY,
+                marginTop: 16,
+                maxWidth: 432,
+              }}
+            >
+              I just paid ✓
+            </button>
+          )}
+
+          {/* Cancel */}
+          <button
+            onClick={onReset}
+            style={{
+              marginTop: 10,
+              background: "transparent",
+              border: `1px solid ${C.border}`,
+              color: C.muted,
+              fontSize: 15,
+              fontWeight: 500,
+              cursor: "pointer",
+              borderRadius: 12,
+              padding: "9px 32px",
+              width: "100%",
+            }}
+          >
+            Cancel
+          </button>
         </div>
-      </div>
+      )}
 
-      {/* QR Code */}
-      <div
-        data-qr
-        style={{ marginTop: 12, display: "flex", flexDirection: "column", alignItems: "center" }}
-      >
-        <div style={{ background: "#ffffff", padding: 12, borderRadius: 12, display: "inline-block" }}>
-          <QRCodeSVG value={session.shopUrl} size={148} bgColor="#ffffff" fgColor="#000000" />
+      {/* Confirmed phase — shopUrl QR */}
+      {paymentPhase === "confirmed" && (
+        <div
+          data-qr
+          style={{ marginTop: 12, display: "flex", flexDirection: "column", alignItems: "center", width: "100%", maxWidth: 432 }}
+        >
+          <div style={{ background: "#ffffff", padding: 12, borderRadius: 12, display: "inline-block" }}>
+            <QRCodeSVG value={session.shopUrl} size={160} bgColor="#ffffff" fgColor="#000000" />
+          </div>
+          <p style={{ fontSize: 16, fontWeight: 600, color: C.green, textAlign: "center", marginTop: 8 }}>
+            Payment confirmed!
+          </p>
+          <p style={{ fontSize: 14, fontWeight: 500, color: C.text, textAlign: "center", marginTop: 4 }}>
+            Scan with your phone to access your sticker pack
+          </p>
+          <p style={{ fontSize: 12, color: C.muted, textAlign: "center", marginTop: 2 }}>
+            Download your stickers directly from the app
+          </p>
+
+          <button
+            onClick={onReset}
+            style={{
+              marginTop: 16,
+              background: "transparent",
+              border: `1px solid ${C.border}`,
+              color: C.muted,
+              fontSize: 15,
+              fontWeight: 500,
+              cursor: "pointer",
+              borderRadius: 12,
+              padding: "9px 32px",
+              width: "100%",
+            }}
+          >
+            Done
+          </button>
+
+          <p
+            style={{
+              fontSize: 11,
+              color: C.dim,
+              textAlign: "center",
+              marginTop: 8,
+              visibility: countdown <= 15 ? "visible" : "hidden",
+            }}
+          >
+            Screen resets in {countdown}s
+          </p>
         </div>
-        <p style={{ fontSize: 16, fontWeight: 600, color: C.text, textAlign: "center", marginTop: 8 }}>
-          Scan with your phone
-        </p>
-        <p style={{ fontSize: 13, color: C.muted, textAlign: "center", marginTop: 2 }}>
-          Get your sticker pack for 30,000 VND
-        </p>
-      </div>
-
-      {/* Cancel / go back */}
-      <button
-        onClick={onReset}
-        style={{
-          marginTop: 12,
-          background: "transparent",
-          border: `1px solid ${C.border}`,
-          color: C.muted,
-          fontSize: 15,
-          fontWeight: 500,
-          cursor: "pointer",
-          borderRadius: 12,
-          padding: "9px 32px",
-          width: "100%",
-          maxWidth: 432,
-        }}
-      >
-        Cancel
-      </button>
-
-      <p
-        style={{
-          fontSize: 11,
-          color: C.dim,
-          textAlign: "center",
-          marginTop: 8,
-          visibility: countdown <= 10 ? "visible" : "hidden",
-        }}
-      >
-        Screen resets in {countdown}s
-      </p>
+      )}
     </div>
   );
 }
@@ -817,6 +868,15 @@ export default function StickerKioskPage() {
   const [kioskState, setKioskState] = useState<KioskState>("idle");
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
   const [notFoundReason, setNotFoundReason] = useState<NotFoundReason>({ hasStickerPack: true });
+  const [kioskSettings, setKioskSettings] = useState<KioskSettings | null>(null);
+
+  // Fetch kiosk settings once on mount
+  useEffect(() => {
+    void kioskFetch("/api/kiosk/settings")
+      .then((r) => r.ok ? r.json() as Promise<KioskSettings> : null)
+      .then((data) => { if (data) setKioskSettings(data); })
+      .catch(() => {});
+  }, []);
 
   type SlideOffset = "idle" | "scanning" | "animating-to-scan" | "animating-to-idle";
   const [slideOffset, setSlideOffset] = useState<SlideOffset>("idle");
@@ -931,7 +991,7 @@ export default function StickerKioskPage() {
                   }}
                 >
                   {sessionData && (
-                    <IdentifiedScreen session={sessionData} onReset={goToIdle} />
+                    <IdentifiedScreen session={sessionData} kioskSettings={kioskSettings} onReset={goToIdle} />
                   )}
                 </div>
               </div>

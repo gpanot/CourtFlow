@@ -62,7 +62,10 @@ export async function POST(
     const fastapiUrl = (process.env["FASTAPI_URL"] ?? "http://localhost:8000").replace(/\/$/, "");
     console.log("[split-stickers] FASTAPI_URL:", fastapiUrl);
     const stickerUrls: Record<string, string> = {};
+    // Each split run gets its own timestamped subfolder so packs are never overwritten
     const ts = Date.now();
+    const packSubDir = path.join(outputDir, String(ts));
+    await mkdir(packSubDir, { recursive: true });
 
     for (const { index, buffer } of croppedBuffers) {
       const base64 = buffer.toString("base64");
@@ -86,36 +89,28 @@ export async function POST(
       const processedBuffer = Buffer.from(await res.arrayBuffer());
       console.log(`[split-stickers] sticker ${index}: received ${processedBuffer.length} bytes from FastAPI`);
 
-      // Resize to exactly 512×512 and save as webp
+      // Trim transparent border left by rembg, then resize to 512×512
       const webpBuffer = await sharp(processedBuffer)
+        .trim()
         .resize(512, 512, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
         .webp({ quality: 90 })
         .toBuffer();
 
       const filename = `sticker_${index}.webp`;
-      await writeFile(path.join(outputDir, filename), webpBuffer);
+      await writeFile(path.join(packSubDir, filename), webpBuffer);
       stickerUrls[`sticker${index}Url`] =
-        `/uploads/players/sticker-packs/${playerId}/${filename}?t=${ts}`;
+        `/uploads/players/sticker-packs/${playerId}/${ts}/${filename}?t=${ts}`;
     }
 
-    // ── Step 4: upsert pack record ────────────────────────────────────────
-    const pack = await prisma.playerStickerPack.upsert({
-      where: { playerId },
-      create: {
+    // ── Step 4: always create a NEW pack record (packs accumulate, admin deletes manually) ──
+    const pack = await prisma.playerStickerPack.create({
+      data: {
         playerId,
         resultId: result.id,
         sticker1Url: stickerUrls["sticker1Url"],
         sticker2Url: stickerUrls["sticker2Url"],
         sticker3Url: stickerUrls["sticker3Url"],
         sticker4Url: stickerUrls["sticker4Url"],
-      },
-      update: {
-        resultId: result.id,
-        sticker1Url: stickerUrls["sticker1Url"],
-        sticker2Url: stickerUrls["sticker2Url"],
-        sticker3Url: stickerUrls["sticker3Url"],
-        sticker4Url: stickerUrls["sticker4Url"],
-        updatedAt: new Date(),
       },
     });
 

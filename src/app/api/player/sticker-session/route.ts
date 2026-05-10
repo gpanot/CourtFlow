@@ -21,16 +21,17 @@ export async function GET(request: NextRequest) {
       return json({ error: "expired" }, 401);
     }
 
-    const stickerPack = await prisma.playerStickerPack.findUnique({
+    const stickerPack = await prisma.playerStickerPack.findFirst({
       where: { playerId: session.playerId },
-      include: { player: { select: { name: true } } },
+      orderBy: { createdAt: "desc" },
     });
 
     if (!stickerPack) {
       return json({ error: "not_found" }, 404);
     }
 
-    const playerName = stickerPack.player.name.split(" ")[0];
+    const packPlayer = await prisma.player.findUnique({ where: { id: session.playerId }, select: { name: true } });
+    const playerName = packPlayer?.name?.split(" ")[0] ?? "player";
     const stickers = [
       stickerPack.sticker1Url,
       stickerPack.sticker2Url,

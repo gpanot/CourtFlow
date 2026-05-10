@@ -192,7 +192,7 @@ model Player {
   customPrices          PlayerCustomPrice[]
   stickerPhotos         PlayerStickerPhoto[]
   stickerResult         PlayerStickerResult?
-  stickerPack           PlayerStickerPack?
+  stickerPacks          PlayerStickerPack[]
   stickerSessions       StickerSession[]
 
   @@index([registrationVenueId])
@@ -942,26 +942,27 @@ model PlayerStickerResult {
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
 
-  player      Player             @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  stickerPack PlayerStickerPack?
+  player       Player              @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  stickerPacks PlayerStickerPack[]
 
   @@map("player_sticker_results")
 }
 
 model PlayerStickerPack {
-  id         String   @id @default(cuid())
-  playerId   String   @unique @map("player_id")
-  resultId   String   @unique @map("result_id")
-  sticker1Url String? @map("sticker_1_url")
-  sticker2Url String? @map("sticker_2_url")
-  sticker3Url String? @map("sticker_3_url")
-  sticker4Url String? @map("sticker_4_url")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id          String   @id @default(cuid())
+  playerId    String   @map("player_id")
+  resultId    String   @map("result_id")
+  sticker1Url String?  @map("sticker_1_url")
+  sticker2Url String?  @map("sticker_2_url")
+  sticker3Url String?  @map("sticker_3_url")
+  sticker4Url String?  @map("sticker_4_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   player Player              @relation(fields: [playerId], references: [id], onDelete: Cascade)
   result PlayerStickerResult @relation(fields: [resultId], references: [id], onDelete: Cascade)
 
+  @@index([playerId])
   @@map("player_sticker_packs")
 }
 
@@ -974,4 +975,26 @@ model StickerSession {
   player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
 
   @@map("sticker_sessions")
+}
+
+model KioskSettings {
+  id            String   @id @default("global")
+  stickerPrice  Int      @default(30000) @map("sticker_price")
+  bankBin       String   @default("") @map("bank_bin")
+  bankAccount   String   @default("") @map("bank_account")
+  bankOwnerName String   @default("") @map("bank_owner_name")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  @@map("kiosk_settings")
+}
+
+model StickerTemplate {
+  id           String   @id @default(cuid())
+  name         String
+  malePrompt   String   @map("male_prompt") @db.Text
+  femalePrompt String   @map("female_prompt") @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("sticker_templates")
 }

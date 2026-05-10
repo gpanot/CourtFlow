@@ -1384,7 +1384,7 @@ function PlayerDetailPanel({
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative w-full max-w-md animate-in slide-in-from-right overflow-y-auto bg-neutral-950 border-l border-neutral-800 shadow-2xl">
+      <div className="relative w-full max-w-2xl animate-in slide-in-from-right overflow-y-auto bg-neutral-950 border-l border-neutral-800 shadow-2xl">
           <div className="sticky top-0 z-10 border-b border-neutral-800 bg-neutral-950">
           <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3 min-w-0">
@@ -1465,6 +1465,7 @@ function PlayerDetailPanel({
             playerId={player.id}
             facePhotoPath={player.facePhotoPath}
             playerFirstName={player.name?.split(" ")[0]}
+            playerGender={player.gender}
           />
         )}
 
