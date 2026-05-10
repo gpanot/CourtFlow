@@ -14,10 +14,10 @@ const VALID_MODELS = ["gpt-image-2", "gpt-image-1.5", "gpt-image-1-mini", "gpt-i
 type StickerModel = (typeof VALID_MODELS)[number];
 
 const MODEL_COSTS: Record<StickerModel, number> = {
-  "gpt-image-2": 0.02,
-  "gpt-image-1.5": 0.008,
-  "gpt-image-1-mini": 0.004,
-  "gpt-image-1": 0.008,
+  "gpt-image-2": 0.07,
+  "gpt-image-1.5": 0.07,
+  "gpt-image-1-mini": 0.07,
+  "gpt-image-1": 0.07,
 };
 
 if (!process.env.WAVESPEED_API_KEY) {

@@ -8,12 +8,89 @@ import {
 } from "react";
 import { useFaceScanner } from "@/hooks/useFaceScanner";
 import { QRCodeSVG } from "qrcode.react";
-import { Camera, X } from "lucide-react";
+import { Camera, X, Moon, Sun } from "lucide-react";
 import {
   CameraCapture,
   type CameraCaptureHandle,
 } from "@/components/camera-capture";
 import { buildVietQRPayload } from "@/lib/vietqr-payload";
+
+// ---------------------------------------------------------------------------
+// i18n — Vietnamese / English strings
+// ---------------------------------------------------------------------------
+
+type Lang = "vi" | "en";
+
+const STRINGS = {
+  en: {
+    scanBtn: "Scan to see your stickers",
+    loading: "Loading…",
+    hero: "Your face. Your stickers.",
+    heroSub: "See your personalized sticker pack in seconds",
+    lookCamera: "Look at the camera",
+    noMatchRetry: "No match yet — retrying…",
+    nextScanIn: "Next scan in",
+    statusAdjust: "Position your face in the frame",
+    statusCapturing: "Hold still…",
+    cancel: "Cancel",
+    hiPlayer: (name: string) => `Hi ${name}! 👋`,
+    paySubtitle: "Complete payment to get your sticker pack",
+    confirmedSubtitle: "Payment received! Scan to access your stickers",
+    scanToPay: (price: string) => `Scan to pay ${price} VND`,
+    anyApp: "Use any Vietnamese banking app",
+    noQR: "Payment QR not configured — contact staff.",
+    confirmIn: (n: number) => `You can confirm payment in ${n}s…`,
+    iPaid: "I just paid ✓",
+    cancelBtn: "Cancel",
+    confirmed: "Payment confirmed!",
+    scanPhone: "Scan with your phone to access your sticker pack",
+    downloadApp: "Download your stickers directly from the app",
+    done: "Done",
+    resetIn: (n: number) => `Screen resets in ${n}s`,
+    notFoundTitle: "We didn't find your stickers",
+    notFoundNoFace: "We couldn't recognize your face. Try again with better lighting.",
+    notFoundNoPack: "Ask a staff member to set up your sticker pack first.",
+    tryAgain: "Try again",
+    goBack: "Go back",
+    langAria: "Switch to Vietnamese",
+    darkAria: "Switch to dark mode",
+    lightAria: "Switch to light mode",
+  },
+  vi: {
+    scanBtn: "Quét mặt để xem sticker",
+    loading: "Đang tải…",
+    hero: "Khuôn mặt bạn. Sticker của bạn.",
+    heroSub: "Xem bộ sticker cá nhân trong vài giây",
+    lookCamera: "Nhìn vào camera",
+    noMatchRetry: "Chưa nhận dạng được — đang thử lại…",
+    nextScanIn: "Quét tiếp trong",
+    statusAdjust: "Đưa mặt vào khung hình",
+    statusCapturing: "Giữ nguyên…",
+    cancel: "Huỷ",
+    hiPlayer: (name: string) => `Chào ${name}! 👋`,
+    paySubtitle: "Hoàn thành thanh toán để nhận bộ sticker",
+    confirmedSubtitle: "Đã thanh toán! Quét để truy cập sticker",
+    scanToPay: (price: string) => `Quét để thanh toán ${price} VND`,
+    anyApp: "Dùng app ngân hàng Việt Nam bất kỳ",
+    noQR: "Chưa cấu hình mã QR — liên hệ nhân viên.",
+    confirmIn: (n: number) => `Bạn có thể xác nhận thanh toán sau ${n}s…`,
+    iPaid: "Tôi đã thanh toán ✓",
+    cancelBtn: "Huỷ",
+    confirmed: "Thanh toán thành công!",
+    scanPhone: "Quét bằng điện thoại để truy cập bộ sticker",
+    downloadApp: "Tải sticker trực tiếp từ ứng dụng",
+    done: "Xong",
+    resetIn: (n: number) => `Màn hình đặt lại sau ${n}s`,
+    notFoundTitle: "Không tìm thấy sticker của bạn",
+    notFoundNoFace: "Không nhận dạng được khuôn mặt. Thử lại ở nơi sáng hơn.",
+    notFoundNoPack: "Nhờ nhân viên thiết lập bộ sticker trước nhé.",
+    tryAgain: "Thử lại",
+    goBack: "Quay lại",
+    langAria: "Switch to English",
+    darkAria: "Chuyển chế độ tối",
+    lightAria: "Chuyển chế độ sáng",
+  },
+} as const;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,18 +117,26 @@ interface NotFoundReason {
 }
 
 // ---------------------------------------------------------------------------
-// Design tokens
+// Design tokens (dark / light aware)
 // ---------------------------------------------------------------------------
 
-const C = {
-  bg: "#000000",
-  card: "#1a1a1a",
-  border: "#2a2a2a",
-  text: "#ffffff",
-  muted: "#9ca3af",
-  dim: "#6b7280",
-  green: "#4ade80",
-} as const;
+function getColors(dark: boolean) {
+  return {
+    bg:     dark ? "#000000" : "#f5f5f5",
+    card:   dark ? "#1a1a1a" : "#ffffff",
+    border: dark ? "#2a2a2a" : "#e5e7eb",
+    text:   dark ? "#ffffff" : "#111111",
+    muted:  dark ? "#9ca3af" : "#6b7280",
+    dim:    dark ? "#6b7280" : "#9ca3af",
+    green:  "#16a34a",
+    headerBg: dark ? "#111111" : "#ffffff",
+    headerBorder: dark ? "#2a2a2a" : "#e5e7eb",
+  };
+}
+
+// Keep the old C alias so existing style references below still compile
+// (we replace them per-component using the `c` local from props)
+const C = getColors(true);
 
 const BTN_BASE: React.CSSProperties = {
   height: 56,
@@ -71,15 +156,12 @@ const BTN_BASE: React.CSSProperties = {
 const BTN_PRIMARY: React.CSSProperties = {
   ...BTN_BASE,
   background: C.green,
-  color: "#000000",
+  color: "#ffffff",
 };
 
-const BTN_SECONDARY: React.CSSProperties = {
-  ...BTN_BASE,
-  background: "transparent",
-  color: C.text,
-  border: `1px solid ${C.border}`,
-};
+function btnSecondary(c: ReturnType<typeof getColors>): React.CSSProperties {
+  return { ...BTN_BASE, background: "transparent", color: c.text, border: `1px solid ${c.border}` };
+}
 
 const CHECKERED: React.CSSProperties = {
   backgroundImage: `
@@ -130,6 +212,107 @@ const CSS_ANIMATIONS = `
   100% { opacity: 0.4; }
 }
 `;
+
+// ---------------------------------------------------------------------------
+// Shared TopBar (CourtPay-style: logo/title + dark/light toggle + language)
+// ---------------------------------------------------------------------------
+
+function KioskTopBar({
+  dark,
+  onToggleDark,
+  lang,
+  onToggleLang,
+  c,
+}: {
+  dark: boolean;
+  onToggleDark: () => void;
+  lang: Lang;
+  onToggleLang: () => void;
+  c: ReturnType<typeof getColors>;
+}) {
+  const s = STRINGS[lang];
+  return (
+    <div
+      style={{
+        height: 56,
+        flexShrink: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "0 16px",
+        borderBottom: `1px solid ${c.headerBorder}`,
+        background: c.headerBg,
+      }}
+    >
+      {/* Left: logo + title */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: "50%",
+            background: "#16a34a",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 16,
+          }}
+        >
+          🏓
+        </div>
+        <span style={{ fontSize: 15, fontWeight: 700, color: c.text, letterSpacing: "-0.3px" }}>
+          Pickleball HCMC
+        </span>
+      </div>
+
+      {/* Right: toggles */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {/* Dark/light toggle */}
+        <button
+          onClick={onToggleDark}
+          aria-label={dark ? s.lightAria : s.darkAria}
+          style={{
+            background: "transparent",
+            border: `1px solid ${c.border}`,
+            borderRadius: 20,
+            width: 36,
+            height: 36,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            color: c.muted,
+            flexShrink: 0,
+          }}
+        >
+          {dark ? <Sun size={16} /> : <Moon size={16} />}
+        </button>
+
+        {/* Language toggle */}
+        <button
+          onClick={onToggleLang}
+          aria-label={s.langAria}
+          style={{
+            background: "transparent",
+            border: `1px solid ${c.border}`,
+            borderRadius: 20,
+            width: 36,
+            height: 36,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            fontSize: 18,
+            lineHeight: 1,
+            flexShrink: 0,
+          }}
+        >
+          {lang === "vi" ? "🇬🇧" : "🇻🇳"}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Idle — scrolling showcase rows
@@ -206,9 +389,25 @@ function ShimmerRow() {
   );
 }
 
-function IdleScreen({ onScan, secretReady }: { onScan: () => void; secretReady: boolean }) {
+function IdleScreen({
+  onScan,
+  secretReady,
+  dark,
+  onToggleDark,
+  lang,
+  onToggleLang,
+}: {
+  onScan: () => void;
+  secretReady: boolean;
+  dark: boolean;
+  onToggleDark: () => void;
+  lang: Lang;
+  onToggleLang: () => void;
+}) {
   const [stickers, setStickers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  const c = getColors(dark);
+  const s = STRINGS[lang];
 
   useEffect(() => {
     fetch("/api/kiosk/sticker-showcase")
@@ -218,36 +417,17 @@ function IdleScreen({ onScan, secretReady }: { onScan: () => void; secretReady: 
       .finally(() => setLoading(false));
   }, []);
 
-  const half = Math.ceil(stickers.length / 2);
-  const rowA = stickers.slice(0, half);
-  const rowB = stickers.slice(half);
+  // Split into 3 bands
+  const third = Math.ceil(stickers.length / 3);
+  const rowA = stickers.slice(0, third);
+  const rowB = stickers.slice(third, third * 2);
+  const rowC = stickers.slice(third * 2);
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100dvh",
-        background: C.bg,
-      }}
-    >
-      {/* Header */}
-      <div
-        style={{
-          height: 56,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          borderBottom: `1px solid ${C.border}`,
-          flexShrink: 0,
-        }}
-      >
-        <span style={{ fontSize: 16, fontWeight: 600, color: C.text }}>
-          Pickleball HCMC
-        </span>
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", height: "100dvh", background: c.bg }}>
+      <KioskTopBar dark={dark} onToggleDark={onToggleDark} lang={lang} onToggleLang={onToggleLang} c={c} />
 
-      {/* Showcase rows */}
+      {/* Showcase rows — 3 bands */}
       <div
         style={{
           flex: "0 0 auto",
@@ -256,7 +436,7 @@ function IdleScreen({ onScan, secretReady }: { onScan: () => void; secretReady: 
           flexDirection: "column",
           justifyContent: "center",
           gap: 8,
-          padding: "16px 0",
+          padding: "12px 0",
           overflow: "hidden",
         }}
       >
@@ -264,11 +444,13 @@ function IdleScreen({ onScan, secretReady }: { onScan: () => void; secretReady: 
           <>
             <ShimmerRow />
             <ShimmerRow />
+            <ShimmerRow />
           </>
         ) : (
           <>
             <StickerRow stickers={rowA.length > 0 ? rowA : stickers} direction="ltr" />
             <StickerRow stickers={rowB.length > 0 ? rowB : stickers} direction="rtl" />
+            <StickerRow stickers={rowC.length > 0 ? rowC : stickers} direction="ltr" />
           </>
         )}
       </div>
@@ -284,26 +466,11 @@ function IdleScreen({ onScan, secretReady }: { onScan: () => void; secretReady: 
           padding: "0 32px",
         }}
       >
-        <p
-          style={{
-            fontSize: 26,
-            fontWeight: 700,
-            color: C.text,
-            textAlign: "center",
-            marginBottom: 8,
-          }}
-        >
-          Your face. Your stickers.
+        <p style={{ fontSize: 26, fontWeight: 700, color: c.text, textAlign: "center", marginBottom: 8 }}>
+          {s.hero}
         </p>
-        <p
-          style={{
-            fontSize: 15,
-            color: C.muted,
-            textAlign: "center",
-            marginBottom: 32,
-          }}
-        >
-          See your personalized sticker pack in seconds
+        <p style={{ fontSize: 15, color: c.muted, textAlign: "center", marginBottom: 32 }}>
+          {s.heroSub}
         </p>
         <div style={{ maxWidth: 340, width: "100%" }}>
           <button
@@ -311,7 +478,7 @@ function IdleScreen({ onScan, secretReady }: { onScan: () => void; secretReady: 
             onClick={secretReady ? onScan : undefined}
           >
             <Camera size={20} />
-            {secretReady ? "Scan to see your stickers" : "Loading…"}
+            {secretReady ? s.scanBtn : s.loading}
           </button>
         </div>
       </div>
@@ -330,12 +497,22 @@ function ScanningScreen({
   onIdentified,
   onNotFound,
   onCancel,
+  dark,
+  onToggleDark,
+  lang,
+  onToggleLang,
 }: {
   kioskSecret: string;
   onIdentified: (session: SessionData) => void;
   onNotFound: (reason: NotFoundReason) => void;
   onCancel: () => void;
+  dark: boolean;
+  onToggleDark: () => void;
+  lang: Lang;
+  onToggleLang: () => void;
 }) {
+  const c = getColors(dark);
+  const s = STRINGS[lang];
   const cameraRef = useRef<CameraCaptureHandle>(null);
 
   type IdentifyResponse = {
@@ -390,143 +567,64 @@ function ScanningScreen({
 
   const viewfinderSize = "min(70vw, 380px)";
 
-  const statusLabel: Record<ScanPhase, string> = {
-    idle: "",
-    adjust: "Position your face in the frame",
-    capturing: "Hold still…",
-    between_retries: "No match yet — retrying…",
-    matched: "",
-    failed: "",
-  };
-
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        height: "100dvh",
-        background: C.bg,
-        paddingTop: 16,
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          display: "flex",
-          alignItems: "center",
-          padding: "0 16px",
-          marginBottom: 16,
-        }}
-      >
-        <button
-          onClick={onCancel}
+    <div style={{ display: "flex", flexDirection: "column", height: "100dvh", background: c.bg }}>
+      <KioskTopBar dark={dark} onToggleDark={onToggleDark} lang={lang} onToggleLang={onToggleLang} c={c} />
+
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1, paddingTop: 16 }}>
+        {/* X button */}
+        <div style={{ width: "100%", display: "flex", alignItems: "center", padding: "0 16px", marginBottom: 16 }}>
+          <button
+            onClick={onCancel}
+            style={{ background: "transparent", border: "none", color: c.text, cursor: "pointer", padding: 8, borderRadius: 8, display: "flex", alignItems: "center" }}
+          >
+            <X size={24} />
+          </button>
+        </div>
+
+        <p style={{ fontSize: 22, fontWeight: 600, color: c.text, textAlign: "center", marginBottom: 24 }}>
+          {scanPhase === "between_retries" ? s.noMatchRetry : s.lookCamera}
+        </p>
+
+        {/* Circle viewfinder */}
+        <div
           style={{
-            background: "transparent",
-            border: "none",
-            color: C.text,
-            cursor: "pointer",
-            padding: 8,
-            borderRadius: 8,
-            display: "flex",
-            alignItems: "center",
+            position: "relative",
+            width: viewfinderSize,
+            height: viewfinderSize,
+            borderRadius: "50%",
+            overflow: "hidden",
+            flexShrink: 0,
+            border: `3px solid ${scanPhase === "capturing" ? c.green : c.border}`,
+            transition: "border-color 300ms ease",
+            boxShadow: scanPhase === "capturing" ? `0 0 0 4px rgba(22,163,74,0.2)` : "none",
           }}
         >
-          <X size={24} />
+          <CameraCapture ref={cameraRef} active facingMode="user" className="w-full h-full" videoClassName="w-full h-full object-cover" />
+
+          {scanPhase !== "between_retries" && (
+            <div style={{ position: "absolute", left: 0, right: 0, height: 2, background: c.green, opacity: 0.6, animation: "scan-line 1.5s linear infinite" }} />
+          )}
+
+          {scanPhase === "between_retries" && retrySecondsLeft != null && (
+            <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.55)" }}>
+              <p style={{ fontSize: 18, fontWeight: 600, color: "#ffffff" }}>{s.nextScanIn}</p>
+              <p style={{ fontSize: 52, fontWeight: 700, color: c.green, lineHeight: 1, marginTop: 4 }}>{retrySecondsLeft}</p>
+            </div>
+          )}
+        </div>
+
+        <p style={{ fontSize: 14, color: c.muted, textAlign: "center", marginTop: 16 }}>
+          {scanPhase === "adjust" ? s.statusAdjust : scanPhase === "capturing" ? s.statusCapturing : ""}
+        </p>
+
+        <button
+          onClick={onCancel}
+          style={{ background: "transparent", border: "none", color: c.muted, fontSize: 16, cursor: "pointer", textDecoration: "underline", marginTop: "auto", marginBottom: 32 }}
+        >
+          {s.cancel}
         </button>
       </div>
-
-      <p
-        style={{
-          fontSize: 22,
-          fontWeight: 600,
-          color: C.text,
-          textAlign: "center",
-          marginBottom: 24,
-        }}
-      >
-        {scanPhase === "between_retries" ? "No match yet — retrying…" : "Look at the camera"}
-      </p>
-
-      {/* Circle viewfinder */}
-      <div
-        style={{
-          position: "relative",
-          width: viewfinderSize,
-          height: viewfinderSize,
-          borderRadius: "50%",
-          overflow: "hidden",
-          flexShrink: 0,
-          border: `3px solid ${scanPhase === "capturing" ? C.green : C.border}`,
-          transition: "border-color 300ms ease",
-          boxShadow: scanPhase === "capturing"
-            ? `0 0 0 4px rgba(74,222,128,0.2)`
-            : "none",
-        }}
-      >
-        <CameraCapture
-          ref={cameraRef}
-          active
-          facingMode="user"
-          className="w-full h-full"
-          videoClassName="w-full h-full object-cover"
-        />
-
-        {/* Scanning line — only during adjust/capturing */}
-        {scanPhase !== "between_retries" && (
-          <div
-            style={{
-              position: "absolute",
-              left: 0,
-              right: 0,
-              height: 2,
-              background: C.green,
-              opacity: 0.6,
-              animation: "scan-line 1.5s linear infinite",
-            }}
-          />
-        )}
-
-        {/* Retry overlay */}
-        {scanPhase === "between_retries" && retrySecondsLeft != null && (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "rgba(0,0,0,0.55)",
-            }}
-          >
-            <p style={{ fontSize: 18, fontWeight: 600, color: C.text }}>Next scan in</p>
-            <p style={{ fontSize: 52, fontWeight: 700, color: C.green, lineHeight: 1, marginTop: 4 }}>
-              {retrySecondsLeft}
-            </p>
-          </div>
-        )}
-      </div>
-
-      <p style={{ fontSize: 14, color: C.muted, textAlign: "center", marginTop: 16 }}>
-        {statusLabel[scanPhase]}
-      </p>
-
-      <button
-        onClick={onCancel}
-        style={{
-          background: "transparent",
-          border: "none",
-          color: C.muted,
-          fontSize: 16,
-          cursor: "pointer",
-          textDecoration: "underline",
-          marginTop: "auto",
-          marginBottom: 32,
-        }}
-      >
-        Cancel
-      </button>
     </div>
   );
 }
@@ -536,7 +634,7 @@ function ScanningScreen({
 // ---------------------------------------------------------------------------
 
 const AUTO_RESET_S = 60;
-const PAYMENT_TIMER_S = 5;
+const PAYMENT_TIMER_S = 20;
 
 function StickerGrid({ stickers }: { stickers: string[] }) {
   return (
@@ -602,11 +700,21 @@ function IdentifiedScreen({
   session,
   kioskSettings,
   onReset,
+  dark,
+  onToggleDark,
+  lang,
+  onToggleLang,
 }: {
   session: SessionData;
   kioskSettings: KioskSettings | null;
   onReset: () => void;
+  dark: boolean;
+  onToggleDark: () => void;
+  lang: Lang;
+  onToggleLang: () => void;
 }) {
+  const c = getColors(dark);
+  const s = STRINGS[lang];
   // "payment" → show payment QR + timer; "confirmed" → show shopUrl QR
   const [paymentPhase, setPaymentPhase] = useState<"payment" | "confirmed">("payment");
   const [paymentTimer, setPaymentTimer] = useState(PAYMENT_TIMER_S);
@@ -657,150 +765,78 @@ function IdentifiedScreen({
   }, []);
 
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        height: "100dvh",
-        background: C.bg,
-        overflow: "hidden",
-        padding: "0 20px 16px",
-      }}
-    >
-      <p
-        style={{
-          fontSize: 24,
-          fontWeight: 700,
-          color: C.text,
-          textAlign: "center",
-          marginTop: 16,
-          marginBottom: 2,
-        }}
-      >
-        Hi {session.playerName}! 👋
-      </p>
-      <p style={{ fontSize: 14, color: C.muted, textAlign: "center", marginBottom: 10 }}>
-        {paymentPhase === "payment" ? "Complete payment to get your sticker pack" : "Payment received! Scan to access your stickers"}
-      </p>
+    <div style={{ display: "flex", flexDirection: "column", height: "100dvh", background: c.bg, overflow: "hidden" }}>
+      <KioskTopBar dark={dark} onToggleDark={onToggleDark} lang={lang} onToggleLang={onToggleLang} c={c} />
 
-      {/* Sticker grid preview */}
-      <StickerGrid stickers={session.stickers} />
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1, overflow: "hidden", padding: "0 20px 16px" }}>
+        <p style={{ fontSize: 24, fontWeight: 700, color: c.text, textAlign: "center", marginTop: 16, marginBottom: 2 }}>
+          {s.hiPlayer(session.playerName)}
+        </p>
+        <p style={{ fontSize: 14, color: c.muted, textAlign: "center", marginBottom: 10 }}>
+          {paymentPhase === "payment" ? s.paySubtitle : s.confirmedSubtitle}
+        </p>
 
-      {/* Payment phase */}
-      {paymentPhase === "payment" && (
-        <div
-          style={{ marginTop: 12, display: "flex", flexDirection: "column", alignItems: "center", width: "100%", maxWidth: 432 }}
-        >
-          {paymentQRPayload ? (
-            <>
-              <div style={{ background: "#ffffff", padding: 12, borderRadius: 12, display: "inline-block" }}>
-                <QRCodeSVG value={paymentQRPayload} size={148} bgColor="#ffffff" fgColor="#000000" />
+        <StickerGrid stickers={session.stickers} />
+
+        {/* Payment phase */}
+        {paymentPhase === "payment" && (
+          <div style={{ marginTop: 12, display: "flex", flexDirection: "column", alignItems: "center", width: "100%", maxWidth: 432 }}>
+            {paymentQRPayload ? (
+              <>
+                <div style={{ background: "#ffffff", padding: 12, borderRadius: 12, display: "inline-block" }}>
+                  <QRCodeSVG value={paymentQRPayload} size={148} bgColor="#ffffff" fgColor="#000000" />
+                </div>
+                <p style={{ fontSize: 16, fontWeight: 600, color: c.text, textAlign: "center", marginTop: 8 }}>
+                  {s.scanToPay(price.toLocaleString("vi-VN"))}
+                </p>
+                <p style={{ fontSize: 13, color: c.muted, textAlign: "center", marginTop: 2 }}>{s.anyApp}</p>
+              </>
+            ) : (
+              <p style={{ fontSize: 13, color: c.muted, textAlign: "center", marginTop: 8 }}>{s.noQR}</p>
+            )}
+
+            {!showPaidButton ? (
+              <div style={{ marginTop: 16, textAlign: "center" }}>
+                <p style={{ fontSize: 13, color: c.dim }}>{s.confirmIn(paymentTimer)}</p>
               </div>
-              <p style={{ fontSize: 16, fontWeight: 600, color: C.text, textAlign: "center", marginTop: 8 }}>
-                Scan to pay {price.toLocaleString("vi-VN")} VND
-              </p>
-              <p style={{ fontSize: 13, color: C.muted, textAlign: "center", marginTop: 2 }}>
-                Use any Vietnamese banking app
-              </p>
-            </>
-          ) : (
-            <p style={{ fontSize: 13, color: C.muted, textAlign: "center", marginTop: 8 }}>
-              Payment QR not configured — contact staff.
-            </p>
-          )}
+            ) : (
+              <button onClick={handlePaid} style={{ ...BTN_PRIMARY, marginTop: 16, maxWidth: 432 }}>
+                {s.iPaid}
+              </button>
+            )}
 
-          {/* Timer / paid button */}
-          {!showPaidButton ? (
-            <div style={{ marginTop: 16, textAlign: "center" }}>
-              <p style={{ fontSize: 13, color: C.dim }}>
-                You can confirm payment in {paymentTimer}s…
-              </p>
-            </div>
-          ) : (
             <button
-              onClick={handlePaid}
-              style={{
-                ...BTN_PRIMARY,
-                marginTop: 16,
-                maxWidth: 432,
-              }}
+              onClick={onReset}
+              style={{ marginTop: 10, background: "transparent", border: `1px solid ${c.border}`, color: c.muted, fontSize: 15, fontWeight: 500, cursor: "pointer", borderRadius: 12, padding: "9px 32px", width: "100%" }}
             >
-              I just paid ✓
+              {s.cancelBtn}
             </button>
-          )}
-
-          {/* Cancel */}
-          <button
-            onClick={onReset}
-            style={{
-              marginTop: 10,
-              background: "transparent",
-              border: `1px solid ${C.border}`,
-              color: C.muted,
-              fontSize: 15,
-              fontWeight: 500,
-              cursor: "pointer",
-              borderRadius: 12,
-              padding: "9px 32px",
-              width: "100%",
-            }}
-          >
-            Cancel
-          </button>
-        </div>
-      )}
-
-      {/* Confirmed phase — shopUrl QR */}
-      {paymentPhase === "confirmed" && (
-        <div
-          data-qr
-          style={{ marginTop: 12, display: "flex", flexDirection: "column", alignItems: "center", width: "100%", maxWidth: 432 }}
-        >
-          <div style={{ background: "#ffffff", padding: 12, borderRadius: 12, display: "inline-block" }}>
-            <QRCodeSVG value={session.shopUrl} size={160} bgColor="#ffffff" fgColor="#000000" />
           </div>
-          <p style={{ fontSize: 16, fontWeight: 600, color: C.green, textAlign: "center", marginTop: 8 }}>
-            Payment confirmed!
-          </p>
-          <p style={{ fontSize: 14, fontWeight: 500, color: C.text, textAlign: "center", marginTop: 4 }}>
-            Scan with your phone to access your sticker pack
-          </p>
-          <p style={{ fontSize: 12, color: C.muted, textAlign: "center", marginTop: 2 }}>
-            Download your stickers directly from the app
-          </p>
+        )}
 
-          <button
-            onClick={onReset}
-            style={{
-              marginTop: 16,
-              background: "transparent",
-              border: `1px solid ${C.border}`,
-              color: C.muted,
-              fontSize: 15,
-              fontWeight: 500,
-              cursor: "pointer",
-              borderRadius: 12,
-              padding: "9px 32px",
-              width: "100%",
-            }}
-          >
-            Done
-          </button>
+        {/* Confirmed phase */}
+        {paymentPhase === "confirmed" && (
+          <div data-qr style={{ marginTop: 12, display: "flex", flexDirection: "column", alignItems: "center", width: "100%", maxWidth: 432 }}>
+            <div style={{ background: "#ffffff", padding: 12, borderRadius: 12, display: "inline-block" }}>
+              <QRCodeSVG value={session.shopUrl} size={160} bgColor="#ffffff" fgColor="#000000" />
+            </div>
+            <p style={{ fontSize: 16, fontWeight: 600, color: c.green, textAlign: "center", marginTop: 8 }}>{s.confirmed}</p>
+            <p style={{ fontSize: 14, fontWeight: 500, color: c.text, textAlign: "center", marginTop: 4 }}>{s.scanPhone}</p>
+            <p style={{ fontSize: 12, color: c.muted, textAlign: "center", marginTop: 2 }}>{s.downloadApp}</p>
 
-          <p
-            style={{
-              fontSize: 11,
-              color: C.dim,
-              textAlign: "center",
-              marginTop: 8,
-              visibility: countdown <= 15 ? "visible" : "hidden",
-            }}
-          >
-            Screen resets in {countdown}s
-          </p>
-        </div>
-      )}
+            <button
+              onClick={onReset}
+              style={{ marginTop: 16, background: "transparent", border: `1px solid ${c.border}`, color: c.muted, fontSize: 15, fontWeight: 500, cursor: "pointer", borderRadius: 12, padding: "9px 32px", width: "100%" }}
+            >
+              {s.done}
+            </button>
+
+            <p style={{ fontSize: 11, color: c.dim, textAlign: "center", marginTop: 8, visibility: countdown <= 15 ? "visible" : "hidden" }}>
+              {s.resetIn(countdown)}
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -813,50 +849,42 @@ function NotFoundScreen({
   reason,
   onTryAgain,
   onGoBack,
+  dark,
+  onToggleDark,
+  lang,
+  onToggleLang,
 }: {
   reason: NotFoundReason;
   onTryAgain: () => void;
   onGoBack: () => void;
+  dark: boolean;
+  onToggleDark: () => void;
+  lang: Lang;
+  onToggleLang: () => void;
 }) {
+  const c = getColors(dark);
+  const s = STRINGS[lang];
+
   useEffect(() => {
     const t = setTimeout(onGoBack, 15000);
     return () => clearTimeout(t);
   }, [onGoBack]);
 
-  const message = reason.hasStickerPack
-    ? "We couldn't recognize your face. Try again with better lighting."
-    : "Ask a staff member to set up your sticker pack first.";
-
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        height: "100dvh",
-        background: C.bg,
-        padding: "0 32px",
-        textAlign: "center",
-        gap: 16,
-      }}
-    >
-      <span style={{ fontSize: 64, lineHeight: 1 }}>⚠️</span>
-      <p style={{ fontSize: 22, fontWeight: 600, color: C.text, margin: 0 }}>
-        We didn&apos;t find your stickers
-      </p>
-      <p style={{ fontSize: 15, color: C.muted, maxWidth: 260, margin: 0 }}>
-        {message}
-      </p>
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, width: "100%", maxWidth: 340, marginTop: 8 }}>
-        {reason.hasStickerPack && (
-          <button style={BTN_PRIMARY} onClick={onTryAgain}>
-            Try again
-          </button>
-        )}
-        <button style={BTN_SECONDARY} onClick={onGoBack}>
-          Go back
-        </button>
+    <div style={{ display: "flex", flexDirection: "column", height: "100dvh", background: c.bg }}>
+      <KioskTopBar dark={dark} onToggleDark={onToggleDark} lang={lang} onToggleLang={onToggleLang} c={c} />
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, padding: "0 32px", textAlign: "center", gap: 16 }}>
+        <span style={{ fontSize: 64, lineHeight: 1 }}>⚠️</span>
+        <p style={{ fontSize: 22, fontWeight: 600, color: c.text, margin: 0 }}>{s.notFoundTitle}</p>
+        <p style={{ fontSize: 15, color: c.muted, maxWidth: 260, margin: 0 }}>
+          {reason.hasStickerPack ? s.notFoundNoFace : s.notFoundNoPack}
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, width: "100%", maxWidth: 340, marginTop: 8 }}>
+          {reason.hasStickerPack && (
+            <button style={BTN_PRIMARY} onClick={onTryAgain}>{s.tryAgain}</button>
+          )}
+          <button style={btnSecondary(c)} onClick={onGoBack}>{s.goBack}</button>
+        </div>
       </div>
     </div>
   );
@@ -872,6 +900,10 @@ export default function StickerKioskPage() {
   const [notFoundReason, setNotFoundReason] = useState<NotFoundReason>({ hasStickerPack: true });
   const [kioskSettings, setKioskSettings] = useState<KioskSettings | null>(null);
   const [kioskSecret, setKioskSecret] = useState<string | null>(null);
+  const [dark, setDark] = useState(true);
+  const [lang, setLang] = useState<Lang>("vi");
+  const onToggleDark = useCallback(() => setDark((d) => !d), []);
+  const onToggleLang = useCallback(() => setLang((l) => (l === "vi" ? "en" : "vi")), []);
 
   // Fetch secret from server on mount (avoids NEXT_PUBLIC_ build-time baking issue)
   useEffect(() => {
@@ -957,7 +989,14 @@ export default function StickerKioskPage() {
         <div style={{ position: "relative", width: "100vw", height: "100dvh", overflow: "hidden" }}>
           {/* Idle layer */}
           <div style={idleSlideStyle}>
-            <IdleScreen onScan={goToScanning} secretReady={kioskSecret !== null} />
+            <IdleScreen
+              onScan={goToScanning}
+              secretReady={kioskSecret !== null}
+              dark={dark}
+              onToggleDark={onToggleDark}
+              lang={lang}
+              onToggleLang={onToggleLang}
+            />
           </div>
 
           {/* Scanning / Identified layer (flip wrapper) */}
@@ -974,36 +1013,33 @@ export default function StickerKioskPage() {
                 }}
               >
                 {/* Front — scanning */}
-                <div
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    backfaceVisibility: "hidden",
-                    WebkitBackfaceVisibility: "hidden",
-                  }}
-                >
+                <div style={{ position: "absolute", inset: 0, backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}>
                   {(kioskState === "scanning" || kioskState === "identified") && kioskSecret !== null && (
                     <ScanningScreen
                       kioskSecret={kioskSecret}
                       onIdentified={goToIdentified}
                       onNotFound={goToNotFound}
                       onCancel={goToIdle}
+                      dark={dark}
+                      onToggleDark={onToggleDark}
+                      lang={lang}
+                      onToggleLang={onToggleLang}
                     />
                   )}
                 </div>
 
                 {/* Back — identified */}
-                <div
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    backfaceVisibility: "hidden",
-                    WebkitBackfaceVisibility: "hidden",
-                    transform: "rotateY(180deg)",
-                  }}
-                >
+                <div style={{ position: "absolute", inset: 0, backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", transform: "rotateY(180deg)" }}>
                   {sessionData && (
-                    <IdentifiedScreen session={sessionData} kioskSettings={kioskSettings} onReset={goToIdle} />
+                    <IdentifiedScreen
+                      session={sessionData}
+                      kioskSettings={kioskSettings}
+                      onReset={goToIdle}
+                      dark={dark}
+                      onToggleDark={onToggleDark}
+                      lang={lang}
+                      onToggleLang={onToggleLang}
+                    />
                   )}
                 </div>
               </div>
@@ -1017,6 +1053,10 @@ export default function StickerKioskPage() {
           reason={notFoundReason}
           onTryAgain={goToScanningFromNotFound}
           onGoBack={goToIdle}
+          dark={dark}
+          onToggleDark={onToggleDark}
+          lang={lang}
+          onToggleLang={onToggleLang}
         />
       )}
     </>
