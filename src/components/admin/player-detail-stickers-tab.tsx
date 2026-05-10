@@ -211,9 +211,14 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstNa
       // The generate endpoint streams NDJSON heartbeats to keep the connection
       // alive during long generations (gpt-image-2 can take 60–120s).
       // We read line-by-line and use the last non-heartbeat line as the result.
+      const token = useSessionStore.getState().token;
       const res = await fetch(`/api/admin/players/${playerId}/sticker-photos/generate`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ photo_id: selectedPhotoId, prompt, model }),
       });
       if (!res.ok || !res.body) {
