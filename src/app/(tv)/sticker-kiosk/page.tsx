@@ -806,7 +806,9 @@ function IdentifiedScreen({
         </div>
       </div>
 
-      <StickerGrid stickers={session.stickers} compact />
+      <div style={{ display: "flex", justifyContent: "center", width: "100%", flexShrink: 0 }}>
+        <StickerGrid stickers={session.stickers} compact />
+      </div>
 
       {/* Payment phase */}
       {paymentPhase === "payment" && (

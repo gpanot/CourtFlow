@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { RefreshCw, Download, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { QRCodeSVG } from "qrcode.react";
 import { SubscriptionCard } from "@/components/balance/SubscriptionCard";
 import { BalanceTopBar } from "./BalanceTopBar";
 import type { BalanceData, StickerData } from "./types";
@@ -16,6 +15,7 @@ interface BalanceScreenProps {
   showBackToVenues: boolean;
   stickerData?: StickerData | null;
   stickerToken?: string;
+  stickerPaid?: boolean;
 }
 
 type ShopState = "idle" | "payment" | "success";
@@ -65,29 +65,29 @@ const CHECKERED: React.CSSProperties = {
   backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px",
 };
 
-const ZALO_STEPS = [
-  "Download the sticker pack",
-  "Open Zalo, go to a chat",
-  "Tap the sticker icon, then plus",
-  "Select Import from Gallery",
-  "Pick your downloaded stickers",
+const WHATSAPP_STEPS = [
+  { en: "Tap the Download button below", vi: "Nhấn nút Tải xuống bên dưới" },
+  { en: "Open WhatsApp, go to any chat", vi: "Mở WhatsApp, vào bất kỳ cuộc trò chuyện nào" },
+  { en: "Tap the attachment (📎) icon", vi: "Nhấn biểu tượng đính kèm (📎)" },
+  { en: "Choose 'Photos & Videos' and select your stickers", vi: "Chọn 'Ảnh & Video' rồi chọn sticker của bạn" },
+  { en: "Send and enjoy! 🎉", vi: "Gửi và tận hưởng! 🎉" },
 ];
 
 function StickerShopSection({
   stickerData,
   stickerToken,
+  paid,
 }: {
   stickerData: StickerData;
   stickerToken?: string;
+  paid?: boolean;
 }) {
-  const [shopState, setShopState] = useState<ShopState>("idle");
+  const [shopState, setShopState] = useState<ShopState>(paid ? "success" : "idle");
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
-  const [zaloOpen, setZaloOpen] = useState(false);
+  const [howToOpen, setHowToOpen] = useState(false);
 
-  const handleBuy = () => {
-    setShopState("payment");
-    setTimeout(() => setShopState("success"), 5000);
-  };
+  // Detect browser language for instructions
+  const isVi = typeof navigator !== "undefined" && navigator.language.startsWith("vi");
 
   const handleDownload = () => {
     if (!stickerToken) return;
@@ -95,39 +95,20 @@ function StickerShopSection({
   };
 
   return (
-    <div style={{ marginTop: 32 }}>
+    <div style={{ marginTop: 28 }}>
       {/* Section header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 12,
-        }}
-      >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <span style={{ fontSize: 20, fontWeight: 600, color: "#ffffff" }}>
           Your Sticker Pack
         </span>
-        <span style={{ fontSize: 14, color: shopState === "success" ? "#4ade80" : "#4ade80" }}>
+        <span style={{ fontSize: 14, color: "#4ade80" }}>
           {shopState === "success" ? "Yours forever ✓" : "4 stickers ready"}
         </span>
       </div>
 
-      {/* Sticker 2x2 grid */}
-      <div
-        style={{
-          background: "#1a1a1a",
-          borderRadius: 16,
-          padding: 16,
-        }}
-      >
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 8,
-          }}
-        >
+      {/* Stickers — horizontal row when paid, 2x2 grid otherwise */}
+      {shopState === "success" ? (
+        <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
           {Array.from({ length: 4 }).map((_, i) => {
             const url = stickerData.stickers[i];
             return (
@@ -135,308 +116,89 @@ function StickerShopSection({
                 key={i}
                 onClick={() => url && setPreviewIndex(i)}
                 style={{
-                  position: "relative",
-                  width: "100%",
+                  flex: "0 0 calc(25% - 6px)",
+                  minWidth: 72,
                   aspectRatio: "1",
                   borderRadius: 12,
                   overflow: "hidden",
                   cursor: url ? "pointer" : "default",
+                  position: "relative",
                   ...CHECKERED,
                 }}
               >
                 {url && (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={url}
-                    alt={`Sticker ${i + 1}`}
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "contain",
-                    }}
-                  />
+                  <img src={url} alt={`Sticker ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
                 )}
-
-                {/* PREVIEW watermark — hidden after success */}
-                {shopState !== "success" && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      inset: 0,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      pointerEvents: "none",
-                    }}
-                  >
-                    <span
-                      style={{
-                        color: "#fff",
-                        fontSize: 16,
-                        fontWeight: 700,
-                        opacity: 0.25,
-                        transform: "rotate(-35deg)",
-                        userSelect: "none",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      PREVIEW
-                    </span>
-                  </div>
-                )}
-
-                {/* Green checkmark badge on success */}
-                {shopState === "success" && (
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: 6,
-                      right: 6,
-                      width: 20,
-                      height: 20,
-                      borderRadius: "50%",
-                      background: "#4ade80",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <CheckCircle2 size={14} color="#000" />
-                  </div>
-                )}
+                <div style={{ position: "absolute", top: 4, right: 4, width: 18, height: 18, borderRadius: "50%", background: "#4ade80", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <CheckCircle2 size={12} color="#000" />
+                </div>
               </div>
             );
           })}
         </div>
-        <p
-          style={{
-            fontSize: 12,
-            color: "#6b7280",
-            textAlign: "center",
-            marginTop: 8,
-          }}
-        >
-          Tap any sticker to preview
-        </p>
-      </div>
-
-      {/* Shop state: idle */}
-      {shopState === "idle" && (
-        <div style={{ marginTop: 16 }}>
-          <button
-            onClick={handleBuy}
-            style={{
-              width: "100%",
-              height: 56,
-              borderRadius: 16,
-              background: "#4ade80",
-              color: "#000",
-              fontSize: 16,
-              fontWeight: 600,
-              border: "none",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            Buy for 30,000 VND
-          </button>
-          <p
-            style={{
-              fontSize: 14,
-              color: "#9ca3af",
-              textAlign: "center",
-              marginTop: 8,
-            }}
-          >
-            Pay once, keep forever
+      ) : (
+        <div style={{ background: "#1a1a1a", borderRadius: 16, padding: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {Array.from({ length: 4 }).map((_, i) => {
+              const url = stickerData.stickers[i];
+              return (
+                <div
+                  key={i}
+                  onClick={() => url && setPreviewIndex(i)}
+                  style={{ position: "relative", width: "100%", aspectRatio: "1", borderRadius: 12, overflow: "hidden", cursor: url ? "pointer" : "default", ...CHECKERED }}
+                >
+                  {url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={url} alt={`Sticker ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                  )}
+                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+                    <span style={{ color: "#fff", fontSize: 16, fontWeight: 700, opacity: 0.25, transform: "rotate(-35deg)", userSelect: "none", whiteSpace: "nowrap" }}>
+                      PREVIEW
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p style={{ fontSize: 12, color: "#6b7280", textAlign: "center", marginTop: 8 }}>
+            Tap any sticker to preview
           </p>
         </div>
       )}
 
-      {/* Shop state: payment */}
-      {shopState === "payment" && (
-        <div style={{ marginTop: 16 }}>
-          <div
-            style={{
-              background: "#1a1a1a",
-              borderRadius: 16,
-              padding: 20,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 12,
-            }}
-          >
-            <p
-              style={{
-                fontSize: 20,
-                fontWeight: 600,
-                color: "#ffffff",
-                textAlign: "center",
-                margin: 0,
-              }}
-            >
-              Pay 30,000 VND
-            </p>
-
-            <div
-              style={{
-                background: "#ffffff",
-                padding: 16,
-                borderRadius: 12,
-              }}
-            >
-              <QRCodeSVG
-                value="https://payment.placeholder"
-                size={200}
-                bgColor="#ffffff"
-                fgColor="#000000"
-              />
-            </div>
-
-            <p style={{ fontSize: 14, color: "#9ca3af", margin: 0, textAlign: "center" }}>
-              MB Bank · 0123456789
-            </p>
-
-            <p
-              style={{
-                fontSize: 24,
-                fontWeight: 700,
-                color: "#4ade80",
-                margin: 0,
-              }}
-            >
-              30,000 VND
-            </p>
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <span
-                style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: "50%",
-                  background: "#4ade80",
-                  display: "inline-block",
-                  animation: "pulse-dot 1.2s ease-in-out infinite",
-                }}
-              />
-              <span style={{ fontSize: 16, color: "#ffffff" }}>
-                Waiting for payment...
-              </span>
-            </div>
-
-            <p style={{ fontSize: 12, color: "#9ca3af", margin: 0 }}>
-              We will detect it automatically
-            </p>
-          </div>
-
-          <button
-            onClick={() => setShopState("idle")}
-            style={{
-              width: "100%",
-              height: 56,
-              borderRadius: 16,
-              background: "transparent",
-              color: "#ffffff",
-              fontSize: 16,
-              fontWeight: 500,
-              border: "1px solid #2a2a2a",
-              cursor: "pointer",
-              marginTop: 12,
-            }}
-          >
-            Cancel
-          </button>
-        </div>
-      )}
-
-      {/* Shop state: success */}
+      {/* Download button + instructions — only in success state */}
       {shopState === "success" && (
         <div style={{ marginTop: 16 }}>
           <button
             onClick={handleDownload}
-            style={{
-              width: "100%",
-              height: 56,
-              borderRadius: 16,
-              background: "#4ade80",
-              color: "#000",
-              fontSize: 16,
-              fontWeight: 600,
-              border: "none",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 8,
-            }}
+            style={{ width: "100%", height: 56, borderRadius: 16, background: "#4ade80", color: "#000", fontSize: 16, fontWeight: 600, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
           >
             <Download size={20} />
-            Download sticker pack
+            {isVi ? "Tải bộ sticker về máy" : "Download your sticker pack"}
           </button>
 
-          {/* How to add to Zalo */}
-          <div
-            style={{
-              background: "#1a1a1a",
-              borderRadius: 16,
-              padding: 16,
-              marginTop: 12,
-            }}
-          >
+          {/* How to use on WhatsApp */}
+          <div style={{ background: "#1a1a1a", borderRadius: 16, padding: 16, marginTop: 12 }}>
             <button
-              onClick={() => setZaloOpen((o) => !o)}
-              style={{
-                width: "100%",
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                padding: 0,
-              }}
+              onClick={() => setHowToOpen((o) => !o)}
+              style={{ width: "100%", background: "transparent", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", padding: 0 }}
             >
               <span style={{ fontSize: 16, fontWeight: 600, color: "#ffffff" }}>
-                How to add to Zalo
+                {isVi ? "📲 Cách dùng trên WhatsApp?" : "📲 How to use on WhatsApp?"}
               </span>
-              {zaloOpen ? (
-                <ChevronUp size={18} color="#9ca3af" />
-              ) : (
-                <ChevronDown size={18} color="#9ca3af" />
-              )}
+              {howToOpen ? <ChevronUp size={18} color="#9ca3af" /> : <ChevronDown size={18} color="#9ca3af" />}
             </button>
 
-            {zaloOpen && (
+            {howToOpen && (
               <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-                {ZALO_STEPS.map((step, i) => (
+                {WHATSAPP_STEPS.map((step, i) => (
                   <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                    <div
-                      style={{
-                        width: 24,
-                        height: 24,
-                        borderRadius: "50%",
-                        background: "#4ade80",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                      }}
-                    >
-                      <span style={{ fontSize: 14, fontWeight: 700, color: "#000" }}>
-                        {i + 1}
-                      </span>
+                    <div style={{ width: 26, height: 26, borderRadius: "50%", background: "#4ade80", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "#000" }}>{i + 1}</span>
                     </div>
-                    <span style={{ fontSize: 16, color: "#9ca3af", paddingTop: 2 }}>
-                      {step}
+                    <span style={{ fontSize: 15, color: "#9ca3af", paddingTop: 3, lineHeight: 1.4 }}>
+                      {isVi ? step.vi : step.en}
                     </span>
                   </div>
                 ))}
@@ -446,31 +208,24 @@ function StickerShopSection({
         </div>
       )}
 
+      {/* Idle: show buy button (fallback for non-kiosk flow) */}
+      {shopState === "idle" && (
+        <div style={{ marginTop: 16 }}>
+          <p style={{ fontSize: 14, color: "#9ca3af", textAlign: "center" }}>
+            {isVi ? "Thanh toán tại quầy kiosk để tải về." : "Pay at the kiosk to download your pack."}
+          </p>
+        </div>
+      )}
+
       {/* Full-screen sticker preview modal */}
       {previewIndex !== null && (
         <div
           onClick={() => setPreviewIndex(null)}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.92)",
-            zIndex: 9999,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}
         >
           {stickerData.stickers[previewIndex] && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={stickerData.stickers[previewIndex]}
-              alt={`Sticker ${previewIndex + 1}`}
-              style={{
-                maxWidth: "90vw",
-                maxHeight: "90vw",
-                objectFit: "contain",
-              }}
-            />
+            <img src={stickerData.stickers[previewIndex]} alt={`Sticker ${previewIndex + 1}`} style={{ maxWidth: "90vw", maxHeight: "90vw", objectFit: "contain" }} />
           )}
         </div>
       )}
@@ -486,6 +241,7 @@ export function BalanceScreen({
   showBackToVenues,
   stickerData,
   stickerToken,
+  stickerPaid,
 }: BalanceScreenProps) {
   const { t, i18n } = useTranslation();
 
@@ -573,6 +329,7 @@ export function BalanceScreen({
           <StickerShopSection
             stickerData={stickerData}
             stickerToken={stickerToken}
+            paid={stickerPaid}
           />
         )}
 

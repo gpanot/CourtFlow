@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     const appUrl =
       process.env.APP_URL ??
       (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : "");
-    const shopUrl = `${appUrl}/my-balance?sticker_token=${session.token}`;
+    const shopUrl = `${appUrl}/my-balance?sticker_token=${session.token}&paid=true`;
     const playerName = stickerPack.player.name.split(" ")[0];
 
     const stickers = [

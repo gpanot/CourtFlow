@@ -63,6 +63,7 @@ export default function MyBalancePage() {
   const [refreshing, setRefreshing] = useState(false);
   const [stickerData, setStickerData] = useState<StickerData | null>(null);
   const [stickerToken, setStickerToken] = useState<string | null>(null);
+  const [stickerPaid, setStickerPaid] = useState(false);
   const [stickerExpiredNotice, setStickerExpiredNotice] = useState(false);
 
   const fetchBalanceForVenue = useCallback(
@@ -114,6 +115,7 @@ export default function MyBalancePage() {
               const data = await res.json() as StickerData;
               setStickerData(data);
               setStickerToken(token);
+              setStickerPaid(urlParams.get("paid") === "true");
               // Jump straight to balance screen with a minimal BalanceData shell
               setBalanceData({
                 found: true,
@@ -321,6 +323,7 @@ export default function MyBalancePage() {
         showBackToVenues={venues.length > 1}
         stickerData={stickerData}
         stickerToken={stickerToken ?? undefined}
+        stickerPaid={stickerPaid}
       />
     );
   }
