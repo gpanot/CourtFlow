@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import path from "path";
-import { stat } from "fs/promises";
 import { prisma } from "@/lib/db";
 import { error } from "@/lib/api-helpers";
 
@@ -32,33 +30,55 @@ export async function GET(request: NextRequest) {
       return error("No sticker pack found", 404);
     }
 
-    const packPlayer = await prisma.player.findUnique({ where: { id: session.playerId }, select: { name: true } });
+    const packPlayer = await prisma.player.findUnique({
+      where: { id: session.playerId },
+      select: { name: true },
+    });
     const playerName = packPlayer?.name?.split(" ")[0] ?? "player";
     const zipFilename = `stickers_${playerName.replace(/[^a-zA-Z0-9]/g, "_")}.zip`;
 
-    const urls = [stickerPack.sticker1Url, stickerPack.sticker2Url, stickerPack.sticker3Url, stickerPack.sticker4Url];
-    const files: { absPath: string; name: string }[] = [];
-    for (let i = 0; i < urls.length; i++) {
-      const stickerUrl = urls[i];
-      if (!stickerUrl) continue;
-      const relPath = stickerUrl.split("?")[0];
-      const absPath = path.join(process.cwd(), relPath);
-      try {
-        await stat(absPath);
-        files.push({ absPath, name: `sticker_${i + 1}.webp` });
-      } catch {
-        // skip missing files
-      }
+    // Resolve the base URL to fetch sticker files from their public path
+    const baseUrl =
+      process.env.APP_URL ??
+      (process.env.RAILWAY_PUBLIC_DOMAIN
+        ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+        : `http://localhost:${process.env.PORT ?? 3000}`);
+
+    const stickerUrls = [
+      stickerPack.sticker1Url,
+      stickerPack.sticker2Url,
+      stickerPack.sticker3Url,
+      stickerPack.sticker4Url,
+    ].filter(Boolean) as string[];
+
+    if (stickerUrls.length === 0) {
+      return error("No sticker files found", 404);
     }
 
-    if (files.length === 0) {
-      return error("No sticker files found on disk", 404);
+    // Fetch each sticker from its public URL and collect as buffers
+    const fileEntries: { name: string; buffer: Buffer }[] = [];
+    await Promise.all(
+      stickerUrls.map(async (url, i) => {
+        const publicUrl = url.startsWith("http") ? url : `${baseUrl}${url.split("?")[0]}`;
+        try {
+          const res = await fetch(publicUrl);
+          if (!res.ok) return;
+          const buf = Buffer.from(await res.arrayBuffer());
+          fileEntries[i] = { name: `sticker_${i + 1}.webp`, buffer: buf };
+        } catch {
+          // skip failed fetches
+        }
+      })
+    );
+
+    const validFiles = fileEntries.filter(Boolean);
+    if (validFiles.length === 0) {
+      return error("Could not fetch sticker files", 404);
     }
 
+    // Build ZIP in memory
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const archiver = require("archiver");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { createReadStream } = require("fs");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const archive: any = archiver("zip", { zlib: { level: 6 } });
     const chunks: Uint8Array[] = [];
@@ -68,8 +88,8 @@ export async function GET(request: NextRequest) {
       archive.on("end", resolve);
       archive.on("error", reject);
 
-      for (const file of files) {
-        archive.append(createReadStream(file.absPath), { name: file.name });
+      for (const file of validFiles) {
+        archive.append(file.buffer, { name: file.name });
       }
       archive.finalize();
     });

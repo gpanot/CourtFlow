@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { RefreshCw, Download, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
+import { RefreshCw, Download, ChevronDown, ChevronUp } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { SubscriptionCard } from "@/components/balance/SubscriptionCard";
 import { BalanceTopBar } from "./BalanceTopBar";
@@ -54,16 +54,6 @@ function formatRelativeTime(iso: string, locale: string): string {
   return isVi ? `${days} ngày trước` : `${days} days ago`;
 }
 
-const CHECKERED: React.CSSProperties = {
-  backgroundImage: `
-    linear-gradient(45deg, #333 25%, transparent 25%),
-    linear-gradient(-45deg, #333 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, #333 75%),
-    linear-gradient(-45deg, transparent 75%, #333 75%)
-  `,
-  backgroundSize: "16px 16px",
-  backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px",
-};
 
 const WHATSAPP_STEPS = [
   { en: "Tap the Download button below", vi: "Nhấn nút Tải xuống bên dưới" },
@@ -123,16 +113,13 @@ function StickerShopSection({
                   overflow: "hidden",
                   cursor: url ? "pointer" : "default",
                   position: "relative",
-                  ...CHECKERED,
+                  background: "transparent",
                 }}
               >
                 {url && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={url} alt={`Sticker ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
                 )}
-                <div style={{ position: "absolute", top: 4, right: 4, width: 18, height: 18, borderRadius: "50%", background: "#4ade80", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <CheckCircle2 size={12} color="#000" />
-                </div>
               </div>
             );
           })}
@@ -146,7 +133,7 @@ function StickerShopSection({
                 <div
                   key={i}
                   onClick={() => url && setPreviewIndex(i)}
-                  style={{ position: "relative", width: "100%", aspectRatio: "1", borderRadius: 12, overflow: "hidden", cursor: url ? "pointer" : "default", ...CHECKERED }}
+                  style={{ position: "relative", width: "100%", aspectRatio: "1", borderRadius: 12, overflow: "hidden", cursor: url ? "pointer" : "default", background: "transparent" }}
                 >
                   {url && (
                     // eslint-disable-next-line @next/next/no-img-element
