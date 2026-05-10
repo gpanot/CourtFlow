@@ -224,12 +224,14 @@ function KioskTopBar({
   lang,
   onToggleLang,
   c,
+  onBack,
 }: {
   dark: boolean;
   onToggleDark: () => void;
   lang: Lang;
   onToggleLang: () => void;
   c: ReturnType<typeof getColors>;
+  onBack?: () => void;
 }) {
   const s = STRINGS[lang];
   const isLight = !dark;
@@ -262,17 +264,27 @@ function KioskTopBar({
       {/* Three-column row: left slot | brand | right slot */}
       <div style={{ display: "flex", alignItems: "center", minHeight: 40 }}>
 
-        {/* Left — dark/light toggle */}
+        {/* Left — back button or dark/light toggle */}
         <div style={{ width: 52, display: "flex", alignItems: "center", justifyContent: "flex-start" }}>
-          <button
-            onClick={onToggleDark}
-            aria-label={dark ? s.lightAria : s.darkAria}
-            style={pillBase}
-          >
-            {isLight
-              ? <Moon size={20} color="#334155" />
-              : <Sun size={20} color="#facc15" />}
-          </button>
+          {onBack ? (
+            <button
+              onClick={onBack}
+              aria-label="Back"
+              style={{ ...pillBase, fontSize: 20, color: isLight ? "#334155" : "#e2e8f0", fontWeight: 600 }}
+            >
+              ‹
+            </button>
+          ) : (
+            <button
+              onClick={onToggleDark}
+              aria-label={dark ? s.lightAria : s.darkAria}
+              style={pillBase}
+            >
+              {isLight
+                ? <Moon size={20} color="#334155" />
+                : <Sun size={20} color="#facc15" />}
+            </button>
+          )}
         </div>
 
         {/* Center — CourtFlow mark + "CourtPay" */}
@@ -626,10 +638,10 @@ function ScanningScreen({
 const AUTO_RESET_S = 60;
 const PAYMENT_TIMER_S = 20;
 
-function StickerGrid({ stickers }: { stickers: string[] }) {
+function StickerGrid({ stickers, compact }: { stickers: string[]; compact?: boolean }) {
   return (
-    <div style={{ maxWidth: 432, width: "100%" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+    <div style={{ maxWidth: compact ? 320 : 432, width: "100%" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: compact ? 4 : 6 }}>
         {Array.from({ length: 4 }).map((_, i) => {
           const url = stickers[i];
           return (
@@ -740,7 +752,8 @@ function IdentifiedScreen({
   }, [paymentPhase, onReset]);
 
   const price = kioskSettings?.stickerPrice ?? 30000;
-  const paymentQRPayload = kioskSettings
+  console.log("[IdentifiedScreen] kioskSettings:", JSON.stringify(kioskSettings));
+  const paymentQRPayload = kioskSettings?.bankBin && kioskSettings?.bankAccount
     ? buildVietQRPayload({
         bankBin: kioskSettings.bankBin,
         accountNumber: kioskSettings.bankAccount,
@@ -754,79 +767,99 @@ function IdentifiedScreen({
     setPaymentPhase("confirmed");
   }, []);
 
+  const isLight = !dark;
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100dvh", background: c.bg, overflow: "hidden" }}>
-      <KioskTopBar dark={dark} onToggleDark={onToggleDark} lang={lang} onToggleLang={onToggleLang} c={c} />
+    <div style={{ display: "flex", flexDirection: "column", height: "100dvh", background: c.bg, overflow: "hidden", padding: "16px 20px 16px" }}>
 
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1, overflow: "hidden", padding: "0 20px 16px" }}>
-        <p style={{ fontSize: 24, fontWeight: 700, color: c.text, textAlign: "center", marginTop: 16, marginBottom: 2 }}>
-          {s.hiPlayer(session.playerName)}
-        </p>
-        <p style={{ fontSize: 14, color: c.muted, textAlign: "center", marginBottom: 10 }}>
-          {paymentPhase === "payment" ? s.paySubtitle : s.confirmedSubtitle}
-        </p>
-
-        <StickerGrid stickers={session.stickers} />
-
-        {/* Payment phase */}
-        {paymentPhase === "payment" && (
-          <div style={{ marginTop: 12, display: "flex", flexDirection: "column", alignItems: "center", width: "100%", maxWidth: 432 }}>
-            {paymentQRPayload ? (
-              <>
-                <div style={{ background: "#ffffff", padding: 12, borderRadius: 12, display: "inline-block" }}>
-                  <QRCodeSVG value={paymentQRPayload} size={148} bgColor="#ffffff" fgColor="#000000" />
-                </div>
-                <p style={{ fontSize: 16, fontWeight: 600, color: c.text, textAlign: "center", marginTop: 8 }}>
-                  {s.scanToPay(price.toLocaleString("vi-VN"))}
-                </p>
-                <p style={{ fontSize: 13, color: c.muted, textAlign: "center", marginTop: 2 }}>{s.anyApp}</p>
-              </>
-            ) : (
-              <p style={{ fontSize: 13, color: c.muted, textAlign: "center", marginTop: 8 }}>{s.noQR}</p>
-            )}
-
-            {!showPaidButton ? (
-              <div style={{ marginTop: 16, textAlign: "center" }}>
-                <p style={{ fontSize: 13, color: c.dim }}>{s.confirmIn(paymentTimer)}</p>
-              </div>
-            ) : (
-              <button onClick={handlePaid} style={{ ...BTN_PRIMARY, marginTop: 16, maxWidth: 432 }}>
-                {s.iPaid}
-              </button>
-            )}
-
-            <button
-              onClick={onReset}
-              style={{ marginTop: 10, background: "transparent", border: `1px solid ${c.border}`, color: c.muted, fontSize: 15, fontWeight: 500, cursor: "pointer", borderRadius: 12, padding: "9px 32px", width: "100%" }}
-            >
-              {s.cancelBtn}
-            </button>
-          </div>
-        )}
-
-        {/* Confirmed phase */}
-        {paymentPhase === "confirmed" && (
-          <div data-qr style={{ marginTop: 12, display: "flex", flexDirection: "column", alignItems: "center", width: "100%", maxWidth: 432 }}>
-            <div style={{ background: "#ffffff", padding: 12, borderRadius: 12, display: "inline-block" }}>
-              <QRCodeSVG value={session.shopUrl} size={160} bgColor="#ffffff" fgColor="#000000" />
-            </div>
-            <p style={{ fontSize: 16, fontWeight: 600, color: c.green, textAlign: "center", marginTop: 8 }}>{s.confirmed}</p>
-            <p style={{ fontSize: 14, fontWeight: 500, color: c.text, textAlign: "center", marginTop: 4 }}>{s.scanPhone}</p>
-            <p style={{ fontSize: 12, color: c.muted, textAlign: "center", marginTop: 2 }}>{s.downloadApp}</p>
-
-            <button
-              onClick={onReset}
-              style={{ marginTop: 16, background: "transparent", border: `1px solid ${c.border}`, color: c.muted, fontSize: 15, fontWeight: 500, cursor: "pointer", borderRadius: 12, padding: "9px 32px", width: "100%" }}
-            >
-              {s.done}
-            </button>
-
-            <p style={{ fontSize: 11, color: c.dim, textAlign: "center", marginTop: 8, visibility: countdown <= 15 ? "visible" : "hidden" }}>
-              {s.resetIn(countdown)}
-            </p>
-          </div>
-        )}
+      {/* Inline header: back button + title + subtitle */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexShrink: 0 }}>
+        <button
+          onClick={onReset}
+          aria-label="Back"
+          style={{
+            flexShrink: 0,
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            border: "none",
+            background: isLight ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.12)",
+            color: isLight ? "#334155" : "#e2e8f0",
+            fontSize: 22,
+            fontWeight: 600,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            lineHeight: 1,
+          }}
+        >
+          ‹
+        </button>
+        <div style={{ flex: 1 }}>
+          <p style={{ fontSize: 20, fontWeight: 700, color: c.text, margin: 0, lineHeight: 1.2 }}>
+            {s.hiPlayer(session.playerName)}
+          </p>
+          <p style={{ fontSize: 12, color: c.muted, margin: "2px 0 0" }}>
+            {paymentPhase === "payment" ? s.paySubtitle : s.confirmedSubtitle}
+          </p>
+        </div>
       </div>
+
+      <StickerGrid stickers={session.stickers} compact />
+
+      {/* Payment phase */}
+      {paymentPhase === "payment" && (
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", maxWidth: 432, alignSelf: "center", marginTop: 8, flex: 1 }}>
+          {paymentQRPayload ? (
+            <>
+              <div style={{ background: "#ffffff", padding: 10, borderRadius: 12, display: "inline-block" }}>
+                <QRCodeSVG value={paymentQRPayload} size={130} bgColor="#ffffff" fgColor="#000000" />
+              </div>
+              <p style={{ fontSize: 14, fontWeight: 600, color: c.text, textAlign: "center", marginTop: 6 }}>
+                {s.scanToPay(price.toLocaleString("vi-VN"))}
+              </p>
+              <p style={{ fontSize: 11, color: c.muted, textAlign: "center", marginTop: 2 }}>{s.anyApp}</p>
+            </>
+          ) : (
+            <p style={{ fontSize: 13, color: c.muted, textAlign: "center", marginTop: 8 }}>{s.noQR}</p>
+          )}
+
+          <div style={{ flex: 1 }} />
+
+          {!showPaidButton ? (
+            <p style={{ fontSize: 13, color: c.dim, textAlign: "center", marginBottom: 4 }}>{s.confirmIn(paymentTimer)}</p>
+          ) : (
+            <button onClick={handlePaid} style={{ ...BTN_PRIMARY, width: "100%", maxWidth: 432 }}>
+              {s.iPaid}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Confirmed phase */}
+      {paymentPhase === "confirmed" && (
+        <div data-qr style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", maxWidth: 432, alignSelf: "center", marginTop: 8, flex: 1 }}>
+          <div style={{ background: "#ffffff", padding: 12, borderRadius: 12, display: "inline-block" }}>
+            <QRCodeSVG value={session.shopUrl} size={180} bgColor="#ffffff" fgColor="#000000" />
+          </div>
+          <p style={{ fontSize: 16, fontWeight: 600, color: c.green, textAlign: "center", marginTop: 8 }}>{s.confirmed}</p>
+          <p style={{ fontSize: 14, fontWeight: 500, color: c.text, textAlign: "center", marginTop: 4 }}>{s.scanPhone}</p>
+          <p style={{ fontSize: 12, color: c.muted, textAlign: "center", marginTop: 2 }}>{s.downloadApp}</p>
+
+          <div style={{ flex: 1 }} />
+
+          <button
+            onClick={onReset}
+            style={{ background: "transparent", border: `1px solid ${c.border}`, color: c.muted, fontSize: 15, fontWeight: 500, cursor: "pointer", borderRadius: 12, padding: "9px 32px", width: "100%", maxWidth: 432 }}
+          >
+            {s.done}
+          </button>
+          <p style={{ fontSize: 11, color: c.dim, textAlign: "center", marginTop: 8, visibility: countdown <= 15 ? "visible" : "hidden" }}>
+            {s.resetIn(countdown)}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -903,13 +936,23 @@ export default function StickerKioskPage() {
       .catch(() => setKioskSecret(""));
   }, []);
 
-  // Fetch kiosk settings once on mount
+  // Fetch kiosk settings once the secret is available — settings endpoint requires x-kiosk-secret
   useEffect(() => {
-    void fetch("/api/kiosk/settings")
-      .then((r) => r.ok ? r.json() as Promise<KioskSettings> : null)
-      .then((data) => { if (data) setKioskSettings(data); })
-      .catch(() => {});
-  }, []);
+    if (kioskSecret === null) return; // wait for secret to load
+    const secret = kioskSecret;
+    void fetch("/api/kiosk/settings", {
+      headers: { "x-kiosk-secret": secret },
+    })
+      .then((r) => {
+        console.log("[kiosk/settings] status:", r.status, "ok:", r.ok);
+        return r.ok ? r.json() as Promise<KioskSettings> : null;
+      })
+      .then((data) => {
+        console.log("[kiosk/settings] data:", JSON.stringify(data));
+        if (data) setKioskSettings(data);
+      })
+      .catch((e) => console.error("[kiosk/settings] fetch error:", e));
+  }, [kioskSecret]);
 
   type SlideOffset = "idle" | "scanning" | "animating-to-scan" | "animating-to-idle";
   const [slideOffset, setSlideOffset] = useState<SlideOffset>("idle");

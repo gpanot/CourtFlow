@@ -39,7 +39,9 @@ export async function POST(request: NextRequest) {
       data: { playerId, expiresAt },
     });
 
-    const appUrl = process.env.APP_URL ?? "";
+    const appUrl =
+      process.env.APP_URL ??
+      (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : "");
     const shopUrl = `${appUrl}/my-balance?sticker_token=${session.token}`;
     const playerName = stickerPack.player.name.split(" ")[0];
 
