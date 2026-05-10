@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { mkdir, writeFile, unlink, readFile } from "fs/promises";
 import path from "path";
 import { prisma } from "@/lib/db";
-import { json, error, notFound, parseBody } from "@/lib/api-helpers";
+import { error, notFound, parseBody } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
 
 // Allow up to 5 minutes — gpt-image-2 can take 60–120s on WaveSpeed
@@ -25,10 +25,13 @@ if (!process.env.WAVESPEED_API_KEY) {
 }
 
 /**
- * POST: generate a sticker image using OpenAI images.edit.
+ * POST: generate a sticker image using WaveSpeed / OpenAI images.edit.
  * Body: { photo_id: string, prompt: string, model?: string }
- *   photo_id can be "checkin" to use the player's facePhotoPath,
- *   or a PlayerStickerPhoto UUID for an uploaded photo.
+ *
+ * Response: newline-delimited JSON stream.
+ * Each line is either a heartbeat `{"status":"generating"}` or the final result.
+ * The client must parse the last non-empty line as the actual result.
+ * This keeps Railway's 60s idle-connection timeout from killing long generations.
  */
 export async function POST(
   request: NextRequest,
@@ -74,102 +77,119 @@ export async function POST(
 
     const startTime = Date.now();
 
-    let openaiResult: { imageData: Buffer; elapsed: number };
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const WaveSpeed = require("wavespeed");
-      const client = new WaveSpeed.Client();
+    // Stream response so Railway proxy doesn't close the connection at 60s
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        // Heartbeat every 5s to prevent idle timeout
+        const heartbeat = setInterval(() => {
+          try {
+            controller.enqueue(encoder.encode(JSON.stringify({ status: "generating" }) + "\n"));
+          } catch { /* stream may already be closed */ }
+        }, 5000);
 
-      // On production use the public URL (WaveSpeed fetches it remotely).
-      // In local dev RAILWAY_PUBLIC_DOMAIN is absent and the local server isn't
-      // reachable by WaveSpeed, so read the file from disk and send base64 instead.
-      const isPubliclyReachable = !!process.env.RAILWAY_PUBLIC_DOMAIN;
-      let imageInput: string;
-      if (isPubliclyReachable) {
-        const appUrl = process.env.APP_URL ?? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
-        imageInput = `${appUrl}${imageAbsPath.replace(process.cwd(), "").replace(/\\/g, "/")}`;
-      } else {
-        const imageBytes = await readFile(imageAbsPath);
-        const ext = path.extname(imageAbsPath).slice(1).toLowerCase() || "jpeg";
-        const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
-        imageInput = `data:${mime};base64,${imageBytes.toString("base64")}`;
-      }
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const WaveSpeed = require("wavespeed");
+          const client = new WaveSpeed.Client();
 
-      const wavespeedModel = `openai/${selectedModel}/edit`;
-      const result = await client.run(wavespeedModel, {
-        background: "opaque",
-        enable_base64_output: false,
-        enable_sync_mode: false,
-        images: [imageInput],
-        input_fidelity: "high",
-        output_format: "png",
-        prompt: prompt.trim(),
-        quality: "medium",
-        size: "1024*1024",
-      });
+          const isPubliclyReachable = !!process.env.RAILWAY_PUBLIC_DOMAIN;
+          let imageInput: string;
+          if (isPubliclyReachable) {
+            const appUrl = process.env.APP_URL ?? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
+            imageInput = `${appUrl}${imageAbsPath.replace(process.cwd(), "").replace(/\\/g, "/")}`;
+          } else {
+            const imageBytes = await readFile(imageAbsPath);
+            const ext = path.extname(imageAbsPath).slice(1).toLowerCase() || "jpeg";
+            const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+            imageInput = `data:${mime};base64,${imageBytes.toString("base64")}`;
+          }
 
-      const elapsed = (Date.now() - startTime) / 1000;
-      const outputUrl = result.outputs[0];
-      if (!outputUrl) throw new Error("WaveSpeed returned no output URL");
+          const wavespeedModel = `openai/${selectedModel}/edit`;
+          const result = await client.run(wavespeedModel, {
+            background: "opaque",
+            enable_base64_output: false,
+            enable_sync_mode: false,
+            images: [imageInput],
+            input_fidelity: "high",
+            output_format: "png",
+            prompt: prompt.trim(),
+            quality: "medium",
+            size: "1024*1024",
+          });
 
-      const imgRes = await fetch(outputUrl);
-      if (!imgRes.ok) throw new Error(`Failed to download generated image from WaveSpeed: HTTP ${imgRes.status}`);
-      const imageData = Buffer.from(await imgRes.arrayBuffer());
+          const elapsed = (Date.now() - startTime) / 1000;
+          const outputUrl = result.outputs[0];
+          if (!outputUrl) throw new Error("WaveSpeed returned no output URL");
 
-      openaiResult = { imageData, elapsed };
-    } catch (e) {
-      const msg = (e as Error).message ?? String(e);
-      console.error("[sticker-generate] WaveSpeed error:", msg);
-      return json(
-        { error: `Image generation failed. Check your WaveSpeed API key and quota. Details: ${msg}` },
-        502
-      );
-    }
+          const imgRes = await fetch(outputUrl);
+          if (!imgRes.ok) throw new Error(`Failed to download generated image from WaveSpeed: HTTP ${imgRes.status}`);
+          const imageData = Buffer.from(await imgRes.arrayBuffer());
 
-    // Save the generated image to disk
-    await mkdir(STICKER_RESULTS_DIR, { recursive: true });
-    const filename = `${playerId}_result.png`;
-    const filePath = path.join(STICKER_RESULTS_DIR, filename);
-    await writeFile(filePath, openaiResult.imageData);
-    const imageUrl = `/uploads/players/sticker-results/${filename}?t=${Date.now()}`;
+          // Save to disk
+          await mkdir(STICKER_RESULTS_DIR, { recursive: true });
+          const filename = `${playerId}_result.png`;
+          const filePath = path.join(STICKER_RESULTS_DIR, filename);
+          await writeFile(filePath, imageData);
+          const imageUrl = `/uploads/players/sticker-results/${filename}?t=${Date.now()}`;
 
-    // Delete old result file if different filename (same here but for safety)
-    const existingResult = await prisma.playerStickerResult.findUnique({ where: { playerId } });
-    if (existingResult) {
-      const oldPath = existingResult.imageUrl.split("?")[0];
-      if (oldPath !== `/uploads/players/sticker-results/${filename}`) {
-        try { await unlink(path.join(process.cwd(), oldPath)); } catch { /* ignore */ }
-      }
-    }
+          const existingResult = await prisma.playerStickerResult.findUnique({ where: { playerId } });
+          if (existingResult) {
+            const oldPath = existingResult.imageUrl.split("?")[0];
+            if (oldPath !== `/uploads/players/sticker-results/${filename}`) {
+              try { await unlink(path.join(process.cwd(), oldPath)); } catch { /* ignore */ }
+            }
+          }
 
-    const saved = await prisma.playerStickerResult.upsert({
-      where: { playerId },
-      create: {
-        playerId,
-        imageUrl,
-        prompt: prompt.trim(),
-        model: selectedModel,
-        size: "1024x1024",
-        costUsd,
-        generationTimeSeconds: Math.round(openaiResult.elapsed * 10) / 10,
-      },
-      update: {
-        imageUrl,
-        prompt: prompt.trim(),
-        model: selectedModel,
-        costUsd,
-        generationTimeSeconds: Math.round(openaiResult.elapsed * 10) / 10,
-        updatedAt: new Date(),
+          const saved = await prisma.playerStickerResult.upsert({
+            where: { playerId },
+            create: {
+              playerId,
+              imageUrl,
+              prompt: prompt.trim(),
+              model: selectedModel,
+              size: "1024x1024",
+              costUsd,
+              generationTimeSeconds: Math.round(elapsed * 10) / 10,
+            },
+            update: {
+              imageUrl,
+              prompt: prompt.trim(),
+              model: selectedModel,
+              costUsd,
+              generationTimeSeconds: Math.round(elapsed * 10) / 10,
+              updatedAt: new Date(),
+            },
+          });
+
+          // Final result line
+          clearInterval(heartbeat);
+          controller.enqueue(encoder.encode(JSON.stringify({
+            status: "done",
+            imageUrl: saved.imageUrl,
+            model: saved.model,
+            size: saved.size,
+            costUsd: Number(saved.costUsd),
+            generationTimeSeconds: saved.generationTimeSeconds ? Number(saved.generationTimeSeconds) : elapsed,
+            createdAt: saved.createdAt.toISOString(),
+          }) + "\n"));
+          controller.close();
+        } catch (e) {
+          clearInterval(heartbeat);
+          const msg = (e as Error).message ?? String(e);
+          console.error("[sticker-generate] error:", msg);
+          controller.enqueue(encoder.encode(JSON.stringify({ status: "error", error: msg }) + "\n"));
+          controller.close();
+        }
       },
     });
 
-    return json({
-      imageUrl: saved.imageUrl,
-      model: saved.model,
-      size: saved.size,
-      costUsd: Number(saved.costUsd),
-      generationTimeSeconds: saved.generationTimeSeconds ? Number(saved.generationTimeSeconds) : openaiResult.elapsed,
-      createdAt: saved.createdAt.toISOString(),
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "application/x-ndjson",
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+      },
     });
   } catch (e) {
     return error((e as Error).message, 500);

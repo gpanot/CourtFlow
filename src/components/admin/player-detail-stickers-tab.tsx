@@ -208,11 +208,36 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstNa
     setGenError(null);
     setSplitError(null);
     try {
-      const data = await api.post<StickerResult>(
-        `/api/admin/players/${playerId}/sticker-photos/generate`,
-        { photo_id: selectedPhotoId, prompt, model }
-      );
-      setResult(data);
+      // The generate endpoint streams NDJSON heartbeats to keep the connection
+      // alive during long generations (gpt-image-2 can take 60–120s).
+      // We read line-by-line and use the last non-heartbeat line as the result.
+      const res = await fetch(`/api/admin/players/${playerId}/sticker-photos/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ photo_id: selectedPhotoId, prompt, model }),
+      });
+      if (!res.ok || !res.body) {
+        const text = await res.text();
+        throw new Error(text || `HTTP ${res.status}`);
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let lastResultLine = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        for (const line of chunk.split("\n")) {
+          const trimmed = line.trim();
+          if (trimmed) lastResultLine = trimmed;
+        }
+      }
+      if (!lastResultLine) throw new Error("No response from server");
+      const parsed = JSON.parse(lastResultLine) as { status: string; error?: string } & StickerResult;
+      if (parsed.status === "error" || parsed.error) {
+        throw new Error(parsed.error ?? "Generation failed");
+      }
+      setResult(parsed);
     } catch (e) {
       setGenError((e as Error).message ?? "Generation failed");
     } finally {
