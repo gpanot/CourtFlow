@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback } from "react";
+import { useFaceScanner } from "@/hooks/useFaceScanner";
 import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api-client";
 import { CameraCapture, type CameraCaptureHandle } from "@/components/camera-capture";
@@ -35,14 +36,6 @@ const RESULT_DISPLAY_MS: Record<string, number> = {
   error: 3000,
 };
 
-/** Time to show live preview before capture so the player can adjust (scanning UI appears after this). */
-const CAMERA_WARMUP_MS = 1500;
-const CAPTURE_POLL_MS = 120;
-const CAPTURE_MAX_ATTEMPTS = 45;
-/** Face match attempts per tap (e.g. cap/glasses adjustment between tries). */
-const MAX_FACE_ATTEMPTS = 3;
-/** Idle between face attempts so the player can adjust (ms). */
-const RETRY_IDLE_MS = 2000;
 
 interface TvQueueScannerProps {
   venueId: string;
@@ -58,10 +51,6 @@ export function TvQueueScanner({ venueId }: TvQueueScannerProps) {
   const [numberInput, setNumberInput] = useState("");
   const [numberLoading, setNumberLoading] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
-  /** During scanning: preview / capture / pause before another try after no face match. */
-  const [scanPhase, setScanPhase] = useState<"adjust" | "capturing" | "between_retries">("adjust");
-  /** Seconds left in the between-attempt pause. */
-  const [retrySecondsLeft, setRetrySecondsLeft] = useState<number | null>(null);
   const stateRef = useRef<ScanState>("idle");
 
   const resetToIdle = useCallback(() => {
@@ -73,7 +62,6 @@ export function TvQueueScanner({ venueId }: TvQueueScannerProps) {
     setResult({});
     setNumberInput("");
     setCameraError(null);
-    setRetrySecondsLeft(null);
   }, []);
 
   const scheduleReset = useCallback(
@@ -128,101 +116,51 @@ export function TvQueueScanner({ venueId }: TvQueueScannerProps) {
     }
     setCameraError(null);
     setNumberInput("");
-    setScanPhase("adjust");
-    setRetrySecondsLeft(null);
     unlockChime();
     stateRef.current = "scanning";
     setState("scanning");
   }, [unlockChime]);
 
-  // Up to MAX_FACE_ATTEMPTS face captures per session; short idle between not_recognised results.
-  useEffect(() => {
-    if (state !== "scanning") return;
+  type TvQueueJoinResponse = {
+    success: boolean;
+    resultType: string;
+    playerName?: string;
+    queueNumber?: number;
+    queuePosition?: number;
+    courtLabel?: string;
+    error?: string;
+  };
 
-    let cancelled = false;
-
-    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-    (async () => {
-      for (let attempt = 1; attempt <= MAX_FACE_ATTEMPTS && !cancelled; attempt++) {
-        setScanPhase("adjust");
-        await sleep(CAMERA_WARMUP_MS);
-        if (cancelled) return;
-
-        setScanPhase("capturing");
-
-        let frame: string | null = null;
-        for (let i = 0; i < CAPTURE_MAX_ATTEMPTS && !cancelled; i++) {
-          frame = cameraRef.current?.captureFrame() ?? null;
-          if (frame) break;
-          await sleep(CAPTURE_POLL_MS);
+  /* ─── Face scan loop — via useFaceScanner hook ────── */
+  const { phase: scanPhase, retrySecondsLeft } = useFaceScanner({
+    cameraRef,
+    active: state === "scanning",
+    endpoint: "/api/tv-queue/join",
+    extraBody: { venueId },
+    onMatch: useCallback(
+      (raw: unknown): boolean => {
+        const res = raw as TvQueueJoinResponse | null;
+        if (!res) {
+          // Network error — treat as not_recognised so the loop retries
+          return false;
         }
-
-        if (cancelled) return;
-
-        if (!frame) {
-          cameraRef.current?.stopCamera();
-          stateRef.current = "error";
-          setState("error");
-          setResult({ error: "Camera not ready. Tap Scan To Join to try again." });
-          scheduleReset(4000);
-          return;
+        if (!res.success) {
+          handleScanResult({ resultType: "error", error: res.error ?? "Recognition failed" });
+          return true;
         }
-
-        try {
-          const res = await api.post<{
-            success: boolean;
-            resultType: string;
-            playerName?: string;
-            queueNumber?: number;
-            queuePosition?: number;
-            courtLabel?: string;
-            error?: string;
-          }>("/api/tv-queue/join", { venueId, imageBase64: frame });
-
-          if (cancelled) return;
-
-          if (!res.success) {
-            handleScanResult({ resultType: "error", error: res.error ?? "Recognition failed" });
-            return;
-          }
-
-          if (res.resultType !== "not_recognised") {
-            handleScanResult(res);
-            return;
-          }
-
-          if (attempt < MAX_FACE_ATTEMPTS) {
-            setScanPhase("between_retries");
-            const steps = Math.ceil(RETRY_IDLE_MS / 1000);
-            for (let s = steps; s >= 1 && !cancelled; s--) {
-              setRetrySecondsLeft(s);
-              await sleep(1000);
-            }
-            setRetrySecondsLeft(null);
-            if (cancelled) return;
-            continue;
-          }
-
-          handleScanResult(res);
-          return;
-        } catch (e) {
-          if (cancelled) return;
-          const msg = e instanceof Error ? e.message : "Unknown error";
-          const isNetwork = !navigator.onLine || msg.toLowerCase().includes("fetch") || msg.toLowerCase().includes("network");
-          handleScanResult({
-            resultType: "error",
-            error: isNetwork ? "Network issue \u2014 see staff" : msg,
-          });
-          return;
+        if (res.resultType === "not_recognised") {
+          return false;
         }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [state, venueId, handleScanResult, scheduleReset]);
+        handleScanResult(res);
+        return true;
+      },
+      [handleScanResult]
+    ),
+    onMaxAttemptsReached: useCallback(() => {
+      // All attempts exhausted with not_recognised — call handleScanResult
+      handleScanResult({ resultType: "not_recognised" });
+    }, [handleScanResult]),
+  });
 
   const handleNumberSubmit = useCallback(async () => {
     const num = parseInt(numberInput, 10);

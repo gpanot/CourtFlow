@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useFaceScanner } from "@/hooks/useFaceScanner";
 import { QRCodeSVG } from "qrcode.react";
 import { buildVietQRPayload } from "@/lib/vietqr-payload";
 import {
@@ -92,11 +93,6 @@ interface RegistrationDraft {
 /* ─── Constants ───────────────────────────────────────────── */
 const CONFIRMED_DISPLAY_MS = 8000;
 const ERROR_DISPLAY_MS = 3000;
-const CAMERA_WARMUP_MS = 1500;
-const CAPTURE_POLL_MS = 120;
-const CAPTURE_MAX_ATTEMPTS = 45;
-const MAX_FACE_ATTEMPTS = 3;
-const RETRY_IDLE_MS = 2000;
 const PAYMENT_TIMEOUT_MS = 3 * 60 * 1000;
 const PAYMENT_CANCELLED_RESET_MS = 10_000;
 const PAYMENT_TIMEOUT_RESET_MS = 15_000;
@@ -142,8 +138,6 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
   const [errorMessage, setErrorMessage] = useState("");
 
   // Face scan state
-  const [scanPhase, setScanPhase] = useState<"adjust" | "capturing" | "between_retries">("adjust");
-  const [retrySecondsLeft, setRetrySecondsLeft] = useState<number | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
 
   // Phone state
@@ -199,8 +193,6 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
     setPayment(null);
     setIsNewPlayer(false);
     setErrorMessage("");
-    setScanPhase("adjust");
-    setRetrySecondsLeft(null);
     setCameraError(null);
     setPhoneInput("");
     setPhonePreview(null);
@@ -332,70 +324,61 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
     }
   }, [step, venueId, packages.length]);
 
-  /* ─── Face scan result handler ─── */
-  const handleFaceCheckin = useCallback(
-    async (imageBase64: string) => {
-      try {
-        const res = await api.post<{
-          resultType: string;
-          player?: PlayerInfo;
-          activeSubscription?: SubscriptionInfo | null;
-          error?: string;
-        }>("/api/courtpay/face-checkin", { venueId, imageBase64 });
+  /* ─── Face checkin response handler ─── */
+  type FaceCheckinResponse = {
+    resultType: string;
+    player?: PlayerInfo;
+    activeSubscription?: SubscriptionInfo | null;
+    error?: string;
+  };
 
-        if (res.resultType === "needs_registration") {
-          cameraRef.current?.stopCamera();
-          goTo("needs_registration");
-          return;
-        }
-
-        if (res.resultType === "matched" && res.player) {
-          cameraRef.current?.stopCamera();
-          setPlayer(res.player);
-
-          if (res.activeSubscription) {
-            setActiveSub(res.activeSubscription);
-            // Auto check-in for subscribers
-            const payRes = await fetch("/api/courtpay/pay-session", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ venueCode: venueId, playerId: res.player.id }),
-            });
-            const payData = await payRes.json();
-            if (payData.checkedIn) {
-              playSuccessChime();
-              goTo("confirmed");
-              resetTimerRef.current = setTimeout(resetToHome, CONFIRMED_DISPLAY_MS);
-              return;
-            }
-          }
-
-          goTo("subscription_offer");
-          return;
-        }
-
-        // no_face / error: stay on scanning so the loop can retry
-        if (res.resultType === "error") {
-          cameraRef.current?.stopCamera();
-          goTo("error");
-          setErrorMessage(res.error || "Something went wrong");
-          scheduleReset(ERROR_DISPLAY_MS);
-        }
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : "Unknown error";
-        const isNetwork =
-          !navigator.onLine ||
-          msg.toLowerCase().includes("fetch") ||
-          msg.toLowerCase().includes("network");
-        if (isNetwork) {
-          goTo("network_error");
-          scheduleReset(ERROR_RESET_MS);
-          return;
-        }
-        goTo("error");
-        setErrorMessage(msg);
-        scheduleReset(ERROR_DISPLAY_MS);
+  /**
+   * Processes a parsed /api/courtpay/face-checkin response.
+   * Returns true if resolved (navigated away from scanning), false if no-match (retry).
+   */
+  const processFaceCheckinResponse = useCallback(
+    (res: FaceCheckinResponse): boolean => {
+      if (res.resultType === "needs_registration") {
+        cameraRef.current?.stopCamera();
+        goTo("needs_registration");
+        return true;
       }
+      if (res.resultType === "matched" && res.player) {
+        cameraRef.current?.stopCamera();
+        setPlayer(res.player);
+        if (res.activeSubscription) {
+          setActiveSub(res.activeSubscription);
+          // Auto check-in for subscribers — fire-and-forget; navigation handled in the async block
+          void fetch("/api/courtpay/pay-session", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ venueCode: venueId, playerId: res.player!.id }),
+          })
+            .then((r) => r.json())
+            .then((payData: { checkedIn?: boolean }) => {
+              if (payData.checkedIn) {
+                playSuccessChime();
+                goTo("confirmed");
+                resetTimerRef.current = setTimeout(resetToHome, CONFIRMED_DISPLAY_MS);
+              } else {
+                goTo("subscription_offer");
+              }
+            })
+            .catch(() => { goTo("subscription_offer"); });
+        } else {
+          goTo("subscription_offer");
+        }
+        return true;
+      }
+      // no_face / multi_face: stay on scanning so the loop retries
+      if (res.resultType === "error") {
+        cameraRef.current?.stopCamera();
+        goTo("error");
+        setErrorMessage(res.error || "Something went wrong");
+        scheduleReset(ERROR_DISPLAY_MS);
+        return true;
+      }
+      return false;
     },
     [venueId, goTo, scheduleReset, playSuccessChime, resetToHome]
   );
@@ -405,8 +388,6 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
     if (stepRef.current === "scanning") return;
     clearTimers();
     setCameraError(null);
-    setScanPhase("adjust");
-    setRetrySecondsLeft(null);
     setPhoneInput("");
     setPhonePreview(null);
     setPhoneError("");
@@ -414,65 +395,26 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
     goTo("scanning");
   }, [unlockChime, clearTimers, goTo]);
 
-  /* ─── Face scan loop ────── */
-  useEffect(() => {
-    if (step !== "scanning") return;
-    let cancelled = false;
-    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-    (async () => {
-      for (let attempt = 1; attempt <= MAX_FACE_ATTEMPTS && !cancelled; attempt++) {
-        setScanPhase("adjust");
-        await sleep(CAMERA_WARMUP_MS);
-        if (cancelled) return;
-        setScanPhase("capturing");
-
-        let frame: string | null = null;
-        for (let i = 0; i < CAPTURE_MAX_ATTEMPTS && !cancelled; i++) {
-          frame = cameraRef.current?.captureFrame() ?? null;
-          if (frame) break;
-          await sleep(CAPTURE_POLL_MS);
-        }
-        if (cancelled) return;
-
-        if (!frame) {
-          cameraRef.current?.stopCamera();
-          goTo("error");
-          setErrorMessage("Camera not ready — tap to try again");
-          scheduleReset(4000);
-          return;
-        }
-
-        await handleFaceCheckin(frame);
-        if (cancelled) return;
-
-        if (stepRef.current !== "scanning") {
-          cameraRef.current?.stopCamera();
-          return;
-        }
-
-        if (attempt < MAX_FACE_ATTEMPTS) {
-          setScanPhase("between_retries");
-          const steps = Math.ceil(RETRY_IDLE_MS / 1000);
-          for (let s = steps; s >= 1 && !cancelled; s--) {
-            setRetrySecondsLeft(s);
-            await sleep(1000);
-          }
-          setRetrySecondsLeft(null);
-          if (cancelled) return;
-          continue;
-        }
-      }
-
-      if (!cancelled && stepRef.current === "scanning") {
-        cameraRef.current?.stopCamera();
-        goTo("no_face");
-        scheduleReset(ERROR_DISPLAY_MS);
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [step, goTo, scheduleReset, handleFaceCheckin]);
+  /* ─── Face scan loop — via useFaceScanner hook ────── */
+  const { phase: scanPhase, retrySecondsLeft } = useFaceScanner({
+    cameraRef,
+    active: step === "scanning",
+    endpoint: "/api/courtpay/face-checkin",
+    extraBody: { venueId },
+    onMatch: useCallback(
+      (raw: unknown): boolean => {
+        const res = raw as FaceCheckinResponse;
+        if (!res) return false;
+        return processFaceCheckinResponse(res);
+      },
+      [processFaceCheckinResponse]
+    ),
+    onMaxAttemptsReached: useCallback(() => {
+      cameraRef.current?.stopCamera();
+      goTo("no_face");
+      scheduleReset(ERROR_DISPLAY_MS);
+    }, [goTo, scheduleReset]),
+  });
 
   /* ─── Phone fallback ────────────────────────── */
   const openPhoneFlow = useCallback(() => {

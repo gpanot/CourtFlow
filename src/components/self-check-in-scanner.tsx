@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useFaceScanner } from "@/hooks/useFaceScanner";
 import { QRCodeSVG } from "qrcode.react";
 import { buildVietQRPayload } from "@/lib/vietqr-payload";
 import { useTranslation } from "react-i18next";
@@ -88,11 +89,6 @@ type VenueTabletSettings = { logoSpin?: boolean };
 const CONFIRMED_DISPLAY_MS = 8000;
 const ALREADY_DISPLAY_MS = 8000;
 const ERROR_DISPLAY_MS = 3000;
-const CAMERA_WARMUP_MS = 1500;
-const CAPTURE_POLL_MS = 120;
-const CAPTURE_MAX_ATTEMPTS = 45;
-const MAX_FACE_ATTEMPTS = 3;
-const RETRY_IDLE_MS = 2000;
 const INACTIVITY_RESET_MS = 45_000;
 const PAYMENT_TIMEOUT_MS = 3 * 60 * 1000;
 const PAYMENT_CANCELLED_RESET_MS = 10_000;
@@ -125,8 +121,6 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
 
   const [step, setStep] = useState<KioskStep>("home");
   const [result, setResult] = useState<CheckInResult>({});
-  const [scanPhase, setScanPhase] = useState<"adjust" | "capturing" | "between_retries">("adjust");
-  const [retrySecondsLeft, setRetrySecondsLeft] = useState<number | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
 
   const [phoneInput, setPhoneInput] = useState("");
@@ -189,8 +183,6 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
     cameraRef.current?.stopCamera();
     goTo("home");
     setResult({});
-    setScanPhase("adjust");
-    setRetrySecondsLeft(null);
     setCameraError(null);
     setPhoneInput("");
     setPhonePreview(null);
@@ -301,7 +293,86 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ─── Face scan result handler (returning flow) ─── */
+  /* ─── Checkin-payment response handler ─────────── */
+  type CheckinPaymentResponse = {
+    pendingPaymentId?: string;
+    amount?: number;
+    vietQR?: string;
+    playerName?: string;
+    resultType?: string;
+    alreadyCheckedIn?: boolean;
+    queueNumber?: number;
+    skillLevel?: string;
+    error?: string;
+    bankBin?: string | null;
+    bankAccount?: string | null;
+    paymentRef?: string | null;
+  };
+
+  /**
+   * Processes a parsed /api/kiosk/checkin-payment response.
+   * Returns true if the response resolved (navigated away from scanning),
+   * false if it was a no_face / multi_face that should retry.
+   */
+  const processCheckinResponse = useCallback(
+    (res: CheckinPaymentResponse): boolean => {
+      if (res.resultType === "needs_registration") {
+        cameraRef.current?.stopCamera();
+        goTo("needs_registration");
+        return true;
+      }
+      if (res.resultType === "already_checked_in") {
+        cameraRef.current?.stopCamera();
+        playSuccessChime();
+        setResult({
+          displayName: res.playerName,
+          queueNumber: res.queueNumber,
+          skillLevel: res.skillLevel,
+          isReturning: true,
+          alreadyCheckedIn: true,
+        });
+        goTo("already_checked_in");
+        scheduleReset(ALREADY_DISPLAY_MS);
+        return true;
+      }
+      // no_face / multi_face: stay on "scanning" so the loop can retry
+      if (res.resultType === "no_face" || res.resultType === "multi_face") {
+        return false;
+      }
+      if (res.resultType === "error") {
+        cameraRef.current?.stopCamera();
+        goTo("error");
+        setResult({ error: res.error });
+        scheduleReset(ERROR_DISPLAY_MS);
+        return true;
+      }
+      if (res.pendingPaymentId) {
+        setPayment({
+          pendingPaymentId: res.pendingPaymentId,
+          amount: res.amount || 0,
+          vietQR: res.vietQR || null,
+          playerName: res.playerName || "",
+          isNew: false,
+          skillLevel: res.skillLevel ?? null,
+          bankBin: res.bankBin ?? null,
+          bankAccount: res.bankAccount ?? null,
+          paymentRef: res.paymentRef ?? null,
+        });
+        goTo("payment_waiting");
+        paymentTimerRef.current = setTimeout(() => {
+          if (stepRef.current === "payment_waiting" || stepRef.current === "payment_cash") {
+            goTo("payment_timeout");
+            resetTimerRef.current = setTimeout(resetToHome, PAYMENT_TIMEOUT_RESET_MS);
+          }
+        }, PAYMENT_TIMEOUT_MS);
+        return true;
+      }
+      return false;
+    },
+    [goTo, scheduleReset, playSuccessChime, resetToHome]
+  );
+
+  /* ─── Face scan result handler (phone / wristband flows) ─── */
   const handleCheckinPayment = useCallback(
     async (imageBase64?: string, queueNumber?: number) => {
       try {
@@ -309,76 +380,8 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
         if (imageBase64) body.imageBase64 = imageBase64;
         if (queueNumber != null) body.queueNumber = queueNumber;
 
-        const res = await api.post<{
-          pendingPaymentId?: string;
-          playerId?: string;
-          amount?: number;
-          vietQR?: string;
-          playerName?: string;
-          isReturning?: boolean;
-          resultType?: string;
-          alreadyCheckedIn?: boolean;
-          queueNumber?: number;
-          skillLevel?: string;
-          error?: string;
-          resuming?: boolean;
-          bankBin?: string | null;
-          bankAccount?: string | null;
-          paymentRef?: string | null;
-        }>("/api/kiosk/checkin-payment", body);
-
-        if (res.resultType === "needs_registration") {
-          cameraRef.current?.stopCamera();
-          goTo("needs_registration");
-          return;
-        }
-        if (res.resultType === "already_checked_in") {
-          cameraRef.current?.stopCamera();
-          playSuccessChime();
-          setResult({
-            displayName: res.playerName,
-            queueNumber: res.queueNumber,
-            skillLevel: res.skillLevel,
-            isReturning: true,
-            alreadyCheckedIn: true,
-          });
-          goTo("already_checked_in");
-          scheduleReset(ALREADY_DISPLAY_MS);
-          return;
-        }
-        // no_face / multi_face: stay on "scanning" so the loop can retry
-        if (res.resultType === "no_face" || res.resultType === "multi_face") {
-          return;
-        }
-        if (res.resultType === "error") {
-          cameraRef.current?.stopCamera();
-          goTo("error");
-          setResult({ error: res.error });
-          scheduleReset(ERROR_DISPLAY_MS);
-          return;
-        }
-
-        if (res.pendingPaymentId) {
-          setPayment({
-            pendingPaymentId: res.pendingPaymentId,
-            amount: res.amount || 0,
-            vietQR: res.vietQR || null,
-            playerName: res.playerName || "",
-            isNew: false,
-            skillLevel: res.skillLevel ?? null,
-            bankBin: res.bankBin ?? null,
-            bankAccount: res.bankAccount ?? null,
-            paymentRef: res.paymentRef ?? null,
-          });
-          goTo("payment_waiting");
-          paymentTimerRef.current = setTimeout(() => {
-            if (stepRef.current === "payment_waiting" || stepRef.current === "payment_cash") {
-              goTo("payment_timeout");
-              resetTimerRef.current = setTimeout(resetToHome, PAYMENT_TIMEOUT_RESET_MS);
-            }
-          }, PAYMENT_TIMEOUT_MS);
-          return;
-        }
+        const res = await api.post<CheckinPaymentResponse>("/api/kiosk/checkin-payment", body);
+        processCheckinResponse(res);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Unknown error";
         const isNetwork =
@@ -399,7 +402,7 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
         scheduleReset(ERROR_DISPLAY_MS);
       }
     },
-    [venueId, goTo, scheduleReset, playSuccessChime, resetToHome]
+    [venueId, goTo, scheduleReset, processCheckinResponse]
   );
 
   /* ─── Begin face scan (returning path) ──────── */
@@ -407,8 +410,6 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
     if (stepRef.current === "scanning") return;
     clearTimers();
     setCameraError(null);
-    setScanPhase("adjust");
-    setRetrySecondsLeft(null);
     setPhoneInput("");
     setPhonePreview(null);
     setPhoneError("");
@@ -418,69 +419,29 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
     goTo("scanning");
   }, [unlockChime, clearTimers, goTo]);
 
-  /* ─── Face scan loop (calls checkin-payment directly) ────── */
-  useEffect(() => {
-    if (step !== "scanning") return;
-    let cancelled = false;
-    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-    (async () => {
-      for (let attempt = 1; attempt <= MAX_FACE_ATTEMPTS && !cancelled; attempt++) {
-        setScanPhase("adjust");
-        await sleep(CAMERA_WARMUP_MS);
-        if (cancelled) return;
-        setScanPhase("capturing");
-
-        let frame: string | null = null;
-        for (let i = 0; i < CAPTURE_MAX_ATTEMPTS && !cancelled; i++) {
-          frame = cameraRef.current?.captureFrame() ?? null;
-          if (frame) break;
-          await sleep(CAPTURE_POLL_MS);
+  /* ─── Face scan loop — via useFaceScanner hook ────── */
+  const { phase: scanPhase, retrySecondsLeft } = useFaceScanner({
+    cameraRef,
+    active: step === "scanning",
+    endpoint: "/api/kiosk/checkin-payment",
+    extraBody: { venueId },
+    onMatch: useCallback(
+      (raw: unknown): boolean => {
+        const res = raw as CheckinPaymentResponse;
+        if (!res) {
+          // Network error from hook — treat as no-match, retry
+          return false;
         }
-        if (cancelled) return;
-
-        if (!frame) {
-          cameraRef.current?.stopCamera();
-          goTo("error");
-          setResult({ error: "Camera not ready — tap to try again" });
-          scheduleReset(4000);
-          return;
-        }
-
-        // handleCheckinPayment navigates to the right step based on the API response.
-        // It handles needs_registration, already_checked_in, payment_waiting, error, etc.
-        await handleCheckinPayment(frame);
-        if (cancelled) return;
-
-        // If we're still on "scanning" after handleCheckinPayment, it means
-        // the face was not detected (no_face/multi_face). Retry if attempts remain.
-        if (stepRef.current !== "scanning") {
-          cameraRef.current?.stopCamera();
-          return;
-        }
-
-        if (attempt < MAX_FACE_ATTEMPTS) {
-          setScanPhase("between_retries");
-          const steps = Math.ceil(RETRY_IDLE_MS / 1000);
-          for (let s = steps; s >= 1 && !cancelled; s--) {
-            setRetrySecondsLeft(s);
-            await sleep(1000);
-          }
-          setRetrySecondsLeft(null);
-          if (cancelled) return;
-          continue;
-        }
-      }
-
-      if (!cancelled && stepRef.current === "scanning") {
-        cameraRef.current?.stopCamera();
-        goTo("no_face");
-        scheduleReset(ERROR_DISPLAY_MS);
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [step, venueId, goTo, scheduleReset, handleCheckinPayment]);
+        return processCheckinResponse(res);
+      },
+      [processCheckinResponse]
+    ),
+    onMaxAttemptsReached: useCallback(() => {
+      cameraRef.current?.stopCamera();
+      goTo("no_face");
+      scheduleReset(ERROR_DISPLAY_MS);
+    }, [goTo, scheduleReset]),
+  });
 
   /* ─── Phone fallback ────────────────────────── */
   const openPhoneFlow = useCallback(() => {
