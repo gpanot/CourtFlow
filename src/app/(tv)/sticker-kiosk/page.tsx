@@ -214,7 +214,8 @@ const CSS_ANIMATIONS = `
 `;
 
 // ---------------------------------------------------------------------------
-// Shared TopBar (CourtPay-style: logo/title + dark/light toggle + language)
+// Shared TopBar — matches mobile CourtFlowKioskTopBar exactly:
+//   [left slot: sun/moon pill]  [center: mark + "CourtPay"]  [right slot: flag pill]
 // ---------------------------------------------------------------------------
 
 function KioskTopBar({
@@ -231,84 +232,73 @@ function KioskTopBar({
   c: ReturnType<typeof getColors>;
 }) {
   const s = STRINGS[lang];
+  const isLight = !dark;
+
+  const pillBase: React.CSSProperties = {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    border: "none",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    cursor: "pointer",
+    flexShrink: 0,
+    background: isLight ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.12)",
+  };
+
   return (
     <div
       style={{
-        height: 56,
         flexShrink: 0,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "0 16px",
-        borderBottom: `1px solid ${c.headerBorder}`,
-        background: c.headerBg,
+        paddingBottom: 12,
+        paddingTop: 10,
+        paddingLeft: 16,
+        paddingRight: 16,
+        borderBottom: `1.5px solid ${isLight ? "#e2e8f0" : "#262626"}`,
+        background: isLight ? "rgba(255,255,255,0.92)" : "#000000",
       }}
     >
-      {/* Left: logo + title */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div
-          style={{
-            width: 32,
-            height: 32,
-            borderRadius: "50%",
-            background: "#16a34a",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: 16,
-          }}
-        >
-          🏓
+      {/* Three-column row: left slot | brand | right slot */}
+      <div style={{ display: "flex", alignItems: "center", minHeight: 40 }}>
+
+        {/* Left — dark/light toggle */}
+        <div style={{ width: 52, display: "flex", alignItems: "center", justifyContent: "flex-start" }}>
+          <button
+            onClick={onToggleDark}
+            aria-label={dark ? s.lightAria : s.darkAria}
+            style={pillBase}
+          >
+            {isLight
+              ? <Moon size={20} color="#334155" />
+              : <Sun size={20} color="#facc15" />}
+          </button>
         </div>
-        <span style={{ fontSize: 15, fontWeight: 700, color: c.text, letterSpacing: "-0.3px" }}>
-          Pickleball HCMC
-        </span>
-      </div>
 
-      {/* Right: toggles */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        {/* Dark/light toggle */}
-        <button
-          onClick={onToggleDark}
-          aria-label={dark ? s.lightAria : s.darkAria}
-          style={{
-            background: "transparent",
-            border: `1px solid ${c.border}`,
-            borderRadius: 20,
-            width: 36,
-            height: 36,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            color: c.muted,
-            flexShrink: 0,
-          }}
-        >
-          {dark ? <Sun size={16} /> : <Moon size={16} />}
-        </button>
+        {/* Center — CourtFlow mark + "CourtPay" */}
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/courtflow-mark.png"
+            alt=""
+            style={{ width: 26, height: 26, borderRadius: 6, display: "block" }}
+          />
+          <span style={{ fontSize: 17, fontWeight: 700, color: isLight ? "#15803d" : "#22c55e", letterSpacing: "-0.2px" }}>
+            CourtPay
+          </span>
+        </div>
 
-        {/* Language toggle */}
-        <button
-          onClick={onToggleLang}
-          aria-label={s.langAria}
-          style={{
-            background: "transparent",
-            border: `1px solid ${c.border}`,
-            borderRadius: 20,
-            width: 36,
-            height: 36,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            fontSize: 18,
-            lineHeight: 1,
-            flexShrink: 0,
-          }}
-        >
-          {lang === "vi" ? "🇬🇧" : "🇻🇳"}
-        </button>
+        {/* Right — language flag */}
+        <div style={{ width: 52, display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+          <button
+            onClick={onToggleLang}
+            aria-label={s.langAria}
+            style={{ background: "none", border: "none", cursor: "pointer", padding: "8px 10px", borderRadius: 10, fontSize: 22, lineHeight: 1 }}
+          >
+            {lang === "vi" ? "🇬🇧" : "🇻🇳"}
+          </button>
+        </div>
+
       </div>
     </div>
   );
