@@ -681,7 +681,7 @@ function StickerGrid({ stickers, compact }: { stickers: string[]; compact?: bool
                     color: "#fff",
                     fontSize: 16,
                     fontWeight: 700,
-                    opacity: 0.25,
+                    opacity: 0.45,
                     transform: "rotate(-35deg)",
                     userSelect: "none",
                     whiteSpace: "nowrap",
@@ -818,10 +818,23 @@ function IdentifiedScreen({
               <div style={{ background: "#ffffff", padding: 10, borderRadius: 12, display: "inline-block" }}>
                 <QRCodeSVG value={paymentQRPayload} size={130} bgColor="#ffffff" fgColor="#000000" />
               </div>
-              <p style={{ fontSize: 14, fontWeight: 600, color: c.text, textAlign: "center", marginTop: 6 }}>
-                {s.scanToPay(price.toLocaleString("vi-VN"))}
+              {/* Strikethrough original price */}
+              <p style={{ fontSize: 14, color: "#6b7280", textAlign: "center", marginTop: 6, textDecoration: "line-through" }}>
+                {(price * 2).toLocaleString("vi-VN")} VND
               </p>
-              <p style={{ fontSize: 11, color: c.muted, textAlign: "center", marginTop: 2 }}>{s.anyApp}</p>
+              {/* Sale price + badge */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 2 }}>
+                <span style={{ fontSize: 22, fontWeight: 600, color: "#4ade80" }}>
+                  {s.scanToPay(price.toLocaleString("vi-VN"))}
+                </span>
+                <span style={{ background: "#4ade80", color: "#000", fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 999 }}>
+                  50% OFF
+                </span>
+              </div>
+              {/* Introductory caption */}
+              <p style={{ fontSize: 12, color: "#6b7280", textAlign: "center", marginTop: 3, fontStyle: "italic" }}>
+                {lang === "vi" ? "Giá ưu đãi dành cho người chơi sớm" : "Introductory price for early players"}
+              </p>
             </>
           ) : (
             <p style={{ fontSize: 13, color: c.muted, textAlign: "center", marginTop: 8 }}>{s.noQR}</p>
