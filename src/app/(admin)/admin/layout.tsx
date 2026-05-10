@@ -7,7 +7,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { applyThemeMode, getStoredThemeMode, setStoredThemeMode, type ThemeMode } from "@/lib/theme-mode";
-import { LayoutDashboard, MapPin, Users, UserCircle, BarChart3, Monitor, Banknote, Crown, CalendarDays, GraduationCap, LogOut, Menu, X, CreditCard, Receipt, ScanFace, Sun, Moon } from "lucide-react";
+import { LayoutDashboard, MapPin, Users, UserCircle, BarChart3, Monitor, Banknote, Crown, CalendarDays, GraduationCap, LogOut, Menu, X, CreditCard, Receipt, ScanFace, Sun, Moon, ChevronLeft } from "lucide-react";
 import { SetupWizardBanner } from "@/components/setup-wizard-banner";
 
 const navItems = [
@@ -27,7 +27,7 @@ const navItems = [
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  const { token, role, onboardingCompleted, clearAuth } = useSessionStore();
+  const { token, role, onboardingCompleted, clearAuth, staffPhone, staffName } = useSessionStore();
   const pathname = usePathname();
   const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -92,6 +92,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </button>
           </div>
           <p className="text-xs text-neutral-500">CourtFlow</p>
+          {(staffName || staffPhone) && (
+            <p className="mt-1 text-xs text-neutral-400 truncate" title={staffPhone ?? undefined}>
+              {staffName ?? staffPhone}
+            </p>
+          )}
         </div>
 
         <nav className="space-y-1">
@@ -115,12 +120,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           })}
         </nav>
 
-        <button
-          onClick={clearAuth}
-          className="mt-8 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-neutral-400 hover:bg-neutral-800 hover:text-white"
-        >
-          <LogOut className="h-4 w-4" /> Sign Out
-        </button>
+        <div className="mt-8 space-y-1">
+          <button
+            onClick={() => router.push("/staff")}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-neutral-400 hover:bg-neutral-800 hover:text-white"
+          >
+            <ChevronLeft className="h-4 w-4" /> Continue as...
+          </button>
+          <button
+            onClick={clearAuth}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-neutral-400 hover:bg-neutral-800 hover:text-white"
+          >
+            <LogOut className="h-4 w-4" /> Sign Out
+          </button>
+        </div>
       </aside>
 
       {/* Mobile top header */}
@@ -165,6 +178,21 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             })}
           </nav>
           <div className="my-4 border-t border-neutral-800" />
+          {(staffName || staffPhone) && (
+            <p className="mb-2 truncate px-3 text-xs text-neutral-500" title={staffPhone ?? undefined}>
+              {staffName ?? staffPhone}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setMobileMenuOpen(false);
+              router.push("/staff");
+            }}
+            className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-neutral-400 hover:bg-neutral-800 hover:text-white"
+          >
+            <ChevronLeft className="h-4 w-4" /> Continue as...
+          </button>
           <button
             type="button"
             onClick={() => {
