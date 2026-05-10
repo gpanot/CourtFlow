@@ -141,8 +141,32 @@ export async function GET(request: NextRequest) {
       };
     }
 
+    // Build base where without gender/face quick-filter to get accurate counts
+    const baseWhere: Record<string, unknown> = {};
+    if (search) {
+      baseWhere.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { phone: { contains: search } },
+      ];
+    }
+    if (skillLevel) baseWhere.skillLevel = skillLevel;
+    if (venueId) baseWhere.queueEntries = { some: { session: { venueId } } };
+    if (status === "active") {
+      baseWhere.queueEntries = {
+        ...((baseWhere.queueEntries as object) || {}),
+        some: {
+          ...((baseWhere.queueEntries as Record<string, unknown>)?.some as object || {}),
+          session: {
+            ...((((baseWhere.queueEntries as Record<string, unknown>)?.some as Record<string, unknown>)?.session as object) || {}),
+            status: "open",
+          },
+          status: { in: ["waiting", "on_break", "playing", "assigned"] },
+        },
+      };
+    }
+
     const now = new Date();
-    const [players, total, stats] = await Promise.all([
+    const [players, total, stats, countAll, countMale, countFemale, countNoFace] = await Promise.all([
       prisma.player.findMany({
         where,
         orderBy: { createdAt: "desc" },
@@ -170,6 +194,10 @@ export async function GET(request: NextRequest) {
       }),
       prisma.player.count({ where }),
       getAdminPlayersStats(now),
+      prisma.player.count({ where: baseWhere }),
+      prisma.player.count({ where: { ...baseWhere, gender: "male" } }),
+      prisma.player.count({ where: { ...baseWhere, gender: "female" } }),
+      prisma.player.count({ where: { ...baseWhere, faceSubjectId: null } }),
     ]);
 
     const playerIds = players.map((p) => p.id);
@@ -260,11 +288,13 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    const filterCounts = { all: countAll, male: countMale, female: countFemale, no_face: countNoFace };
+
     if (status === "inactive") {
-      return json({ players: result.filter((p) => !p.isActiveToday), total, page, limit, stats });
+      return json({ players: result.filter((p) => !p.isActiveToday), total, page, limit, stats, filterCounts });
     }
 
-    return json({ players: result, total, page, limit, stats });
+    return json({ players: result, total, page, limit, stats, filterCounts });
   } catch (e) {
     return error((e as Error).message, 500);
   }

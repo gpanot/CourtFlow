@@ -189,6 +189,7 @@ export default function PlayersPage() {
   const [venues, setVenues] = useState<Venue[]>([]);
   const [stats, setStats] = useState<PlayerStats | null>(null);
   const [total, setTotal] = useState(0);
+  const [filterCounts, setFilterCounts] = useState<{ all: number; male: number; female: number; no_face: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -287,12 +288,13 @@ export default function PlayersPage() {
       }
       params.set("page", String(page));
 
-      const data = await api.get<{ players: PlayerRecord[]; total: number; stats: PlayerStats }>(
+      const data = await api.get<{ players: PlayerRecord[]; total: number; stats: PlayerStats; filterCounts?: { all: number; male: number; female: number; no_face: number } }>(
         `/api/admin/players?${params.toString()}`
       );
       setPlayers(data.players);
       setTotal(data.total);
       setStats(data.stats);
+      if (data.filterCounts) setFilterCounts(data.filterCounts);
     } catch (e) {
       console.error(e);
     } finally {
@@ -506,28 +508,36 @@ export default function PlayersPage() {
       {/* Search + filter toggle (mobile) / inline filters (desktop) */}
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-1.5">
-          {[
-            { key: "all", label: "All" },
-            { key: "male", label: "Male" },
-            { key: "female", label: "Female" },
-            { key: "no_face", label: "No face" },
-          ].map((opt) => (
-            <button
-              key={opt.key}
-              onClick={() => {
-                setQuickFilter(opt.key as "all" | "male" | "female" | "no_face");
-                setPage(1);
-              }}
-              className={cn(
-                "rounded-full border px-3 py-1 text-xs transition-colors",
-                quickFilter === opt.key
-                  ? "border-purple-500 bg-purple-600/20 text-purple-200"
-                  : "border-neutral-700 bg-neutral-800 text-neutral-400 hover:text-white"
-              )}
-            >
-              {opt.label}
-            </button>
-          ))}
+          {(
+            [
+              { key: "all", label: "All" },
+              { key: "male", label: "Male" },
+              { key: "female", label: "Female" },
+              { key: "no_face", label: "No face" },
+            ] as { key: "all" | "male" | "female" | "no_face"; label: string }[]
+          ).map((opt) => {
+            const count = filterCounts?.[opt.key];
+            return (
+              <button
+                key={opt.key}
+                onClick={() => {
+                  setQuickFilter(opt.key);
+                  setPage(1);
+                }}
+                className={cn(
+                  "rounded-full border px-3 py-1 text-xs transition-colors",
+                  quickFilter === opt.key
+                    ? "border-purple-500 bg-purple-600/20 text-purple-200"
+                    : "border-neutral-700 bg-neutral-800 text-neutral-400 hover:text-white"
+                )}
+              >
+                {opt.label}
+                {count !== undefined && (
+                  <span className="ml-1 opacity-60">({count})</span>
+                )}
+              </button>
+            );
+          })}
         </div>
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
