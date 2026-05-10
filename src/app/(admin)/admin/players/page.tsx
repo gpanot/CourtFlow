@@ -8,7 +8,7 @@ import { PlayerDetailFaceRecognition } from "@/components/admin/player-detail-fa
 import { Search, X, SlidersHorizontal, Users, UserPlus, Clock, Activity, Hourglass, Gauge, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Gamepad2, Star, MapPin, CalendarDays, Timer, Plus, Pencil, Trash2, Fingerprint, Smartphone, Download, Sticker, LayoutList } from "lucide-react";
 import { PlayerDetailStickersTab } from "@/components/admin/player-detail-stickers-tab";
 
-type SortKey = "name" | "phone" | "gender" | "skillLevel" | "totalSessions" | "totalGames" | "totalPlayMinutes" | "totalWaitMinutes" | "waitPlayRatio" | "venues" | "stickers";
+type SortKey = "name" | "phone" | "gender" | "skillLevel" | "totalSessions" | "totalGames" | "totalPlayMinutes" | "totalWaitMinutes" | "waitPlayRatio" | "venues" | "stickers" | "checkInCount";
 type SortDir = "asc" | "desc";
 const SKILL_ORDER: Record<string, number> = { beginner: 0, intermediate: 1, advanced: 2, pro: 3 };
 
@@ -103,6 +103,7 @@ interface PlayerRecord {
   reclubUserId?: number | null;
   venues: { id: string; name: string }[];
   lastSeen: { date: string; venue: string } | null;
+  checkInCount: number;
   isActiveToday: boolean;
   hasStickers?: boolean;
 }
@@ -266,6 +267,9 @@ export default function PlayersPage() {
           break;
         case "stickers":
           cmp = (a.hasStickers ? 1 : 0) - (b.hasStickers ? 1 : 0);
+          break;
+        case "checkInCount":
+          cmp = (a.checkInCount ?? 0) - (b.checkInCount ?? 0);
           break;
       }
       return sortDir === "asc" ? cmp : -cmp;
@@ -631,7 +635,7 @@ export default function PlayersPage() {
               <SortableHeader label="Wait" sortKey="totalWaitMinutes" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
               <SortableHeader label="W/P" sortKey="waitPlayRatio" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
               <SortableHeader label="Venues" sortKey="venues" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
-              <th className="px-2.5 py-2.5">Last Seen</th>
+              <SortableHeader label="Session C" sortKey="checkInCount" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
               <th className="px-2.5 py-2.5 w-8"></th>
             </tr>
           </thead>
@@ -682,8 +686,8 @@ export default function PlayersPage() {
                     )}
                   </div>
                 </td>
-                <td className="px-2.5 py-2 text-neutral-500 text-[11px] whitespace-nowrap">
-                  {p.lastSeen ? fmtDate(p.lastSeen.date) : "—"}
+                <td className="px-2.5 py-2 text-right tabular-nums">
+                  {(p.checkInCount ?? 0) > 0 ? p.checkInCount : <span className="text-neutral-600">—</span>}
                 </td>
                 <td className="px-1 py-2">
                   <div className="flex items-center justify-end gap-0.5">

@@ -201,18 +201,38 @@ export async function GET(request: NextRequest) {
     ]);
 
     const playerIds = players.map((p) => p.id);
-    const gameAssignments = playerIds.length > 0
-      ? await prisma.courtAssignment.findMany({
-          where: { playerIds: { hasSome: playerIds }, isWarmup: false },
-          select: { playerIds: true },
-        })
-      : [];
+    const playerPhones = players.map((p) => p.phone).filter(Boolean);
+
+    const [gameAssignments, checkInPlayerRows] = await Promise.all([
+      playerIds.length > 0
+        ? prisma.courtAssignment.findMany({
+            where: { playerIds: { hasSome: playerIds }, isWarmup: false },
+            select: { playerIds: true },
+          })
+        : Promise.resolve([]),
+      playerPhones.length > 0
+        ? prisma.checkInPlayer.findMany({
+            where: { phone: { in: playerPhones } },
+            select: {
+              phone: true,
+              _count: { select: { checkIns: true } },
+            },
+          })
+        : Promise.resolve([]),
+    ]);
+
     const gameCounts: Record<string, number> = {};
     const pidSet = new Set(playerIds);
     for (const a of gameAssignments) {
       for (const pid of a.playerIds) {
         if (pidSet.has(pid)) gameCounts[pid] = (gameCounts[pid] || 0) + 1;
       }
+    }
+
+    // Aggregate check-in counts by phone (a player may have CheckInPlayer rows across multiple venues)
+    const checkInCountByPhone: Record<string, number> = {};
+    for (const row of checkInPlayerRows) {
+      checkInCountByPhone[row.phone] = (checkInCountByPhone[row.phone] || 0) + row._count.checkIns;
     }
 
     const result = players.map((player) => {
@@ -278,6 +298,7 @@ export async function GET(request: NextRequest) {
         waitPlayRatio: playerWaitPlayRatio,
         venues: Array.from(venueMap.values()),
         lastSeen: lastSeenDate ? { date: lastSeenDate, venue: lastSeenVenue } : null,
+        checkInCount: checkInCountByPhone[player.phone] ?? 0,
         isActiveToday,
         hasStickers: !!(
           player.stickerPacks[0]?.sticker1Url ||
