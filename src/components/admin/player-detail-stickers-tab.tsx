@@ -225,7 +225,7 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstNa
     try {
       await api.delete(`/api/admin/players/${playerId}/sticker-photos/result`);
       setResult(null);
-      setStickerPacks([]);
+      // Keep stickerPacks intact — admin deletes packs manually
       setShowDeleteResultConfirm(false);
     } catch (e) {
       alert(`Delete failed: ${(e as Error).message}`);
@@ -639,78 +639,78 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstNa
               <span>{splitError}</span>
             </div>
           )}
+        </div>
+      )}
 
-          {/* ── Sticker Packs (all accumulated) ── */}
-          {stickerPacks.length > 0 && (
-            <div className="space-y-4">
-              <p className="text-xs font-medium text-neutral-400">
-                Sticker Packs ({stickerPacks.length})
-              </p>
-              {stickerPacks.map((pack, packIdx) => (
-                <div key={pack.id} className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-neutral-500">
-                      Pack {stickerPacks.length - packIdx}
-                      {pack.createdAt ? ` — ${fmtDate(pack.createdAt)}` : ""}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => void handleDeletePack(pack.id)}
-                      disabled={deletingPackId === pack.id}
-                      className="flex items-center gap-1 rounded px-2 py-0.5 text-[11px] text-red-400 hover:bg-red-950/40 hover:text-red-300 transition-colors disabled:opacity-50"
-                      title="Delete this pack"
-                    >
-                      {deletingPackId === pack.id ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-3 w-3" />
-                      )}
-                      Delete pack
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    {[pack.sticker1Url, pack.sticker2Url, pack.sticker3Url, pack.sticker4Url].map((url, i) => (
-                      <div
-                        key={i}
-                        className="relative aspect-square rounded-lg overflow-hidden border border-neutral-800 flex items-center justify-center"
-                        style={{
-                          backgroundImage: "linear-gradient(45deg, #2a2a2a 25%, transparent 25%), linear-gradient(-45deg, #2a2a2a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #2a2a2a 75%), linear-gradient(-45deg, transparent 75%, #2a2a2a 75%)",
-                          backgroundSize: "16px 16px",
-                          backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px",
-                        }}
-                      >
-                        {url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={url}
-                            alt={`Sticker ${i + 1}`}
-                            className="absolute inset-0 h-full w-full object-contain"
-                          />
-                        ) : (
-                          <span className="text-neutral-600 text-[10px]">—</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  {/* Download button for this pack */}
-                  <button
-                    type="button"
-                    onClick={handleDownloadPack}
-                    disabled={downloading}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600/80 py-1.5 text-xs font-medium text-white hover:bg-emerald-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+      {/* ── Sticker Packs (all accumulated — shown even after result deleted) ── */}
+      {stickerPacks.length > 0 && (
+        <div className="space-y-4">
+          <p className="text-xs font-medium text-neutral-400">
+            Sticker Packs ({stickerPacks.length})
+          </p>
+          {stickerPacks.map((pack, packIdx) => (
+            <div key={pack.id} className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-neutral-500">
+                  Pack {stickerPacks.length - packIdx}
+                  {pack.createdAt ? ` — ${fmtDate(pack.createdAt)}` : ""}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void handleDeletePack(pack.id)}
+                  disabled={deletingPackId === pack.id}
+                  className="flex items-center gap-1 rounded px-2 py-0.5 text-[11px] text-red-400 hover:bg-red-950/40 hover:text-red-300 transition-colors disabled:opacity-50"
+                  title="Delete this pack"
+                >
+                  {deletingPackId === pack.id ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-3 w-3" />
+                  )}
+                  Delete pack
+                </button>
+              </div>
+              <div className="grid grid-cols-4 gap-2">
+                {[pack.sticker1Url, pack.sticker2Url, pack.sticker3Url, pack.sticker4Url].map((url, i) => (
+                  <div
+                    key={i}
+                    className="relative aspect-square rounded-lg overflow-hidden border border-neutral-800 flex items-center justify-center"
+                    style={{
+                      backgroundImage: "linear-gradient(45deg, #2a2a2a 25%, transparent 25%), linear-gradient(-45deg, #2a2a2a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #2a2a2a 75%), linear-gradient(-45deg, transparent 75%, #2a2a2a 75%)",
+                      backgroundSize: "16px 16px",
+                      backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px",
+                    }}
                   >
-                    {downloading ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    {url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={url}
+                        alt={`Sticker ${i + 1}`}
+                        className="absolute inset-0 h-full w-full object-contain"
+                      />
                     ) : (
-                      <Download className="h-3.5 w-3.5" />
+                      <span className="text-neutral-600 text-[10px]">—</span>
                     )}
-                    {downloading ? "Downloading…" : "Download (.zip)"}
-                  </button>
-                </div>
-              ))}
+                  </div>
+                ))}
+              </div>
+
+              {/* Download button for this pack */}
+              <button
+                type="button"
+                onClick={handleDownloadPack}
+                disabled={downloading}
+                className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600/80 py-1.5 text-xs font-medium text-white hover:bg-emerald-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {downloading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
+                {downloading ? "Downloading…" : "Download (.zip)"}
+              </button>
             </div>
-          )}
+          ))}
         </div>
       )}
     </div>

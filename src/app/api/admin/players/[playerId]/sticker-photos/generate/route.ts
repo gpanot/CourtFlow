@@ -5,6 +5,9 @@ import { prisma } from "@/lib/db";
 import { json, error, notFound, parseBody } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
 
+// Allow up to 5 minutes — gpt-image-2 can take 60–120s on WaveSpeed
+export const maxDuration = 300;
+
 const STICKER_RESULTS_DIR = path.join(process.cwd(), "uploads", "players", "sticker-results");
 
 const VALID_MODELS = ["gpt-image-2", "gpt-image-1.5", "gpt-image-1-mini", "gpt-image-1"] as const;

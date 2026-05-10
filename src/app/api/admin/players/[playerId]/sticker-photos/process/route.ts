@@ -6,6 +6,9 @@ import { prisma } from "@/lib/db";
 import { json, error, notFound } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
 
+// Allow up to 5 minutes — 4× background removal via FastAPI can be slow
+export const maxDuration = 300;
+
 const PACKS_DIR = path.join(process.cwd(), "uploads", "players", "sticker-packs");
 
 const QUADRANTS = [
