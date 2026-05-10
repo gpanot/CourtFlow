@@ -92,19 +92,16 @@ const CHECKERED: React.CSSProperties = {
   backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px",
 };
 
-const KIOSK_SECRET =
-  process.env.NEXT_PUBLIC_STICKER_KIOSK_SECRET ?? "";
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function kioskFetch(url: string, options?: RequestInit) {
+function kioskFetch(secret: string, url: string, options?: RequestInit) {
   return fetch(url, {
     ...options,
     headers: {
       "Content-Type": "application/json",
-      "x-kiosk-secret": KIOSK_SECRET,
+      "x-kiosk-secret": secret,
       ...(options?.headers ?? {}),
     },
   });
@@ -209,7 +206,7 @@ function ShimmerRow() {
   );
 }
 
-function IdleScreen({ onScan }: { onScan: () => void }) {
+function IdleScreen({ onScan, secretReady }: { onScan: () => void; secretReady: boolean }) {
   const [stickers, setStickers] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -309,9 +306,12 @@ function IdleScreen({ onScan }: { onScan: () => void }) {
           See your personalized sticker pack in seconds
         </p>
         <div style={{ maxWidth: 340, width: "100%" }}>
-          <button style={BTN_PRIMARY} onClick={onScan}>
+          <button
+            style={{ ...BTN_PRIMARY, opacity: secretReady ? 1 : 0.5, cursor: secretReady ? "pointer" : "default" }}
+            onClick={secretReady ? onScan : undefined}
+          >
             <Camera size={20} />
-            Scan to see your stickers
+            {secretReady ? "Scan to see your stickers" : "Loading…"}
           </button>
         </div>
       </div>
@@ -323,15 +323,15 @@ function IdleScreen({ onScan }: { onScan: () => void }) {
 // Scanning screen
 // ---------------------------------------------------------------------------
 
-const KIOSK_HEADERS = { "x-kiosk-secret": KIOSK_SECRET };
-
 type ScanPhase = "idle" | "adjust" | "capturing" | "between_retries" | "matched" | "failed";
 
 function ScanningScreen({
+  kioskSecret,
   onIdentified,
   onNotFound,
   onCancel,
 }: {
+  kioskSecret: string;
   onIdentified: (session: SessionData) => void;
   onNotFound: (reason: NotFoundReason) => void;
   onCancel: () => void;
@@ -345,11 +345,13 @@ function ScanningScreen({
     hasStickerPack?: boolean;
   };
 
+  const kioskHeaders = { "x-kiosk-secret": kioskSecret };
+
   const { phase: scanPhase, retrySecondsLeft } = useFaceScanner({
     cameraRef,
     active: true,
     endpoint: "/api/kiosk/sticker-face-identify",
-    headers: KIOSK_HEADERS,
+    headers: kioskHeaders,
     onMatch: useCallback(
       (raw: unknown): boolean => {
         const data = raw as IdentifyResponse | null;
@@ -362,7 +364,7 @@ function ScanningScreen({
         }
 
         console.debug("[StickerKiosk] matched:", data.displayName, "— creating session");
-        void kioskFetch("/api/kiosk/sticker-session", {
+        void kioskFetch(kioskSecret, "/api/kiosk/sticker-session", {
           method: "POST",
           body: JSON.stringify({ playerId: data.playerId }),
         })
@@ -869,10 +871,19 @@ export default function StickerKioskPage() {
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
   const [notFoundReason, setNotFoundReason] = useState<NotFoundReason>({ hasStickerPack: true });
   const [kioskSettings, setKioskSettings] = useState<KioskSettings | null>(null);
+  const [kioskSecret, setKioskSecret] = useState<string | null>(null);
+
+  // Fetch secret from server on mount (avoids NEXT_PUBLIC_ build-time baking issue)
+  useEffect(() => {
+    void fetch("/api/kiosk/sticker-config")
+      .then((r) => r.json() as Promise<{ secret: string }>)
+      .then((data) => setKioskSecret(data.secret ?? ""))
+      .catch(() => setKioskSecret(""));
+  }, []);
 
   // Fetch kiosk settings once on mount
   useEffect(() => {
-    void kioskFetch("/api/kiosk/settings")
+    void fetch("/api/kiosk/settings")
       .then((r) => r.ok ? r.json() as Promise<KioskSettings> : null)
       .then((data) => { if (data) setKioskSettings(data); })
       .catch(() => {});
@@ -946,7 +957,7 @@ export default function StickerKioskPage() {
         <div style={{ position: "relative", width: "100vw", height: "100dvh", overflow: "hidden" }}>
           {/* Idle layer */}
           <div style={idleSlideStyle}>
-            <IdleScreen onScan={goToScanning} />
+            <IdleScreen onScan={goToScanning} secretReady={kioskSecret !== null} />
           </div>
 
           {/* Scanning / Identified layer (flip wrapper) */}
@@ -971,8 +982,9 @@ export default function StickerKioskPage() {
                     WebkitBackfaceVisibility: "hidden",
                   }}
                 >
-                  {(kioskState === "scanning" || kioskState === "identified") && (
+                  {(kioskState === "scanning" || kioskState === "identified") && kioskSecret !== null && (
                     <ScanningScreen
+                      kioskSecret={kioskSecret}
                       onIdentified={goToIdentified}
                       onNotFound={goToNotFound}
                       onCancel={goToIdle}
