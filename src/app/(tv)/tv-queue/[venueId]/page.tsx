@@ -16,6 +16,8 @@ import {
   type ThemeMode,
 } from "@/lib/theme-mode";
 
+export const dynamic = "force-dynamic";
+
 const TV_TABLET_LOCALE_STORAGE_KEY = "tv-tablet-locale";
 
 export default function TvQueuePage() {

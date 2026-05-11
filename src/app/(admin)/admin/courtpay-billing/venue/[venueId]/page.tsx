@@ -4,6 +4,9 @@ import { useEffect, useState, useCallback, type Dispatch, type SetStateAction } 
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
+
+export const dynamic = "force-dynamic";
+
 import {
   CourtPayBillingPaymentCard,
   type CourtPayBillingPaymentCardData,

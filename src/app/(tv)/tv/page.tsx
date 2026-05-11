@@ -17,6 +17,8 @@ import { TvQueueStrip } from "@/components/tv-queue-strip";
 import { TvQueueJoinAnnouncement } from "@/components/tv-queue-join-announcement";
 import { useCourtAssignmentAttention } from "@/hooks/use-court-assignment-attention";
 
+export const dynamic = "force-dynamic";
+
 type VenueTvSettings = { logoSpin?: boolean; tvLocale?: string };
 
 const TV_LAYOUT_STORAGE_KEY = "tv-layout-mode";

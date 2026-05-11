@@ -5,6 +5,8 @@ import { useTranslation } from "react-i18next";
 import staffI18n from "@/i18n/staff-i18n";
 import { StaffSessionPaymentsDetail } from "@/components/session/StaffSessionPaymentsDetail";
 
+export const dynamic = "force-dynamic";
+
 export default function StaffSessionPaymentsPage() {
   const { t } = useTranslation("translation", { i18n: staffI18n });
   const params = useParams();

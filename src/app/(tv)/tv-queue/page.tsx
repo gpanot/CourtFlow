@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { CourtFlowLogo } from "@/components/courtflow-logo";
 
+export const dynamic = "force-dynamic";
+
 export default function TvQueueVenueSelect() {
   const router = useRouter();
   const [venues, setVenues] = useState<{ id: string; name: string }[]>([]);
