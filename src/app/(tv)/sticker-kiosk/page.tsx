@@ -5,7 +5,21 @@ import {
   useRef,
   useState,
   useCallback,
+  useSyncExternalStore,
 } from "react";
+
+// ── Responsive hook — SSR-safe, no hydration mismatch ────────────────────────
+function subscribeToResize(cb: () => void) {
+  window.addEventListener("resize", cb);
+  return () => window.removeEventListener("resize", cb);
+}
+function useIsTablet() {
+  return useSyncExternalStore(
+    subscribeToResize,
+    () => window.innerWidth >= 768,
+    () => false, // server snapshot — default to mobile
+  );
+}
 import { useFaceScanner } from "@/hooks/useFaceScanner";
 import { QRCodeSVG } from "qrcode.react";
 import { Camera, X, Moon, Sun } from "lucide-react";
@@ -43,8 +57,8 @@ const STRINGS = {
     iPaid: "I just paid ✓",
     cancelBtn: "Cancel",
     confirmed: "Payment confirmed!",
-    scanPhone: "Scan with your phone to access your sticker pack",
-    downloadApp: "Download your stickers directly from the app",
+    scanPhone: "Scan to download your sticker pack",
+    downloadApp: "Download your stickers directly in the app",
     done: "Done",
     resetIn: (n: number) => `Screen resets in ${n}s`,
     notFoundTitle: "We didn't find your stickers",
@@ -77,8 +91,8 @@ const STRINGS = {
     iPaid: "Tôi đã thanh toán ✓",
     cancelBtn: "Huỷ",
     confirmed: "Thanh toán thành công!",
-    scanPhone: "Quét bằng điện thoại để truy cập bộ sticker",
-    downloadApp: "Tải sticker trực tiếp từ ứng dụng",
+    scanPhone: "Quét để tải bộ sticker của bạn",
+    downloadApp: "Tải sticker trực tiếp trong ứng dụng",
     done: "Xong",
     resetIn: (n: number) => `Màn hình đặt lại sau ${n}s`,
     notFoundTitle: "Không tìm thấy sticker của bạn",
@@ -228,6 +242,68 @@ const CSS_ANIMATIONS = `
 @keyframes fade-in {
   from { opacity: 0; }
   to   { opacity: 1; }
+}
+
+/* ── Tablet responsive layout for the payment screen (≥768px) ── */
+@media (min-width: 768px) {
+  .sk-payment-outer {
+    padding: 48px 32px !important;
+    justify-content: flex-start !important;
+  }
+  .sk-payment-header {
+    text-align: center;
+    margin-bottom: 32px !important;
+  }
+  .sk-payment-header p {
+    font-size: 24px !important;
+  }
+  .sk-two-col {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 48px;
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
+    align-items: flex-start;
+  }
+  .sk-col-left {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+  }
+  .sk-col-left .sk-sticker-grid {
+    max-width: none !important;
+    width: 420px !important;
+  }
+  .sk-col-left .sk-sticker-grid > div {
+    gap: 10px !important;
+  }
+  .sk-col-left .sk-sticker-cell {
+    aspect-ratio: 1 !important;
+  }
+  .sk-col-right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+    max-width: none !important;
+  }
+  .sk-qr-box {
+    padding: 16px !important;
+    border-radius: 16px !important;
+  }
+  .sk-price-strike {
+    font-size: 18px !important;
+  }
+  .sk-price-main {
+    font-size: 28px !important;
+  }
+  .sk-paid-btn-wrap {
+    max-width: none !important;
+    width: 100% !important;
+    margin-top: 24px !important;
+  }
 }
 `;
 
@@ -656,17 +732,19 @@ function ScanningScreen({
 const AUTO_RESET_S = 60;
 const PAYMENT_TIMER_S = 20;
 
-function StickerGrid({ stickers, compact, animate }: { stickers: string[]; compact?: boolean; animate?: boolean }) {
+function StickerGrid({ stickers, compact, animate, tabletLayout }: { stickers: string[]; compact?: boolean; animate?: boolean; tabletLayout?: boolean }) {
   return (
-    <div style={{ maxWidth: compact ? 320 : 432, width: "100%" }}>
+    <div className={tabletLayout ? "sk-sticker-grid" : undefined} style={{ maxWidth: compact ? 320 : 432, width: "100%" }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: compact ? 4 : 6 }}>
         {Array.from({ length: 4 }).map((_, i) => {
           const url = stickers[i];
-          // Stagger each card: 0ms, 180ms, 360ms, 540ms
-          const delay = animate ? `${i * 180}ms` : "0ms";
+          // Stagger each card: 400ms, 800ms, 1200ms, 1500ms
+          const DELAYS = [400, 800, 1200, 1500];
+          const delay = animate ? `${DELAYS[i]}ms` : "0ms";
           return (
             <div
               key={i}
+              className={tabletLayout ? "sk-sticker-cell" : undefined}
               style={{
                 position: "relative",
                 width: "100%",
@@ -744,10 +822,13 @@ function IdentifiedScreen({
 }) {
   const c = getColors(dark);
   const s = STRINGS[lang];
+  const isTablet = useIsTablet();
   // "payment" → show payment QR + timer; "confirmed" → full-screen QR reveal
   const [paymentPhase, setPaymentPhase] = useState<"payment" | "confirmed">("payment");
   const [paymentTimer, setPaymentTimer] = useState(PAYMENT_TIMER_S);
   const [showPaidButton, setShowPaidButton] = useState(false);
+  // Countdown shown below "I just paid" — starts at 70s, auto-resets if user does nothing
+  const [paidButtonCountdown, setPaidButtonCountdown] = useState(70);
   const [countdown, setCountdown] = useState(AUTO_RESET_S);
   // Whether the sticker grid has mounted (triggers animate prop)
   const [stickersVisible, setStickersVisible] = useState(false);
@@ -774,17 +855,49 @@ function IdentifiedScreen({
     return () => clearInterval(interval);
   }, [paymentPhase]);
 
+  // Once "I just paid" button appears, run 70s countdown then auto-reset
+  useEffect(() => {
+    if (!showPaidButton || paymentPhase !== "payment") return;
+    const interval = setInterval(() => {
+      setPaidButtonCountdown((n) => {
+        if (n <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
+        return n - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [showPaidButton, paymentPhase]);
+
+  // Auto-reset when paidButtonCountdown hits 0 (still on payment phase)
+  useEffect(() => {
+    if (showPaidButton && paymentPhase === "payment" && paidButtonCountdown === 0) {
+      onReset();
+    }
+  }, [paidButtonCountdown, showPaidButton, paymentPhase, onReset]);
+
   // Auto-reset after confirmed
   useEffect(() => {
     if (paymentPhase !== "confirmed") return;
     const interval = setInterval(() => {
       setCountdown((n) => {
-        if (n <= 1) { clearInterval(interval); onReset(); return 0; }
+        if (n <= 1) {
+          clearInterval(interval);
+          return 0;
+        }
         return n - 1;
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [paymentPhase, onReset]);
+  }, [paymentPhase]);
+
+  // Trigger onReset when countdown hits 0 (avoids calling setState inside a setState updater)
+  useEffect(() => {
+    if (paymentPhase === "confirmed" && countdown === 0) {
+      onReset();
+    }
+  }, [countdown, paymentPhase, onReset]);
 
   const price = kioskSettings?.stickerPrice ?? 30000;
   console.log("[IdentifiedScreen] kioskSettings:", JSON.stringify(kioskSettings));
@@ -805,10 +918,10 @@ function IdentifiedScreen({
   const isLight = !dark;
 
   return (
-    <div style={{ position: "relative", display: "flex", flexDirection: "column", height: "100dvh", background: c.bg, overflow: "hidden", padding: "16px 20px 16px" }}>
+    <div className="sk-payment-outer" style={{ position: "relative", display: "flex", flexDirection: "column", height: "100dvh", background: c.bg, overflow: "hidden", padding: "16px 20px 16px" }}>
 
-      {/* Inline header: back button + title + subtitle */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexShrink: 0 }}>
+      {/* Header — full width on both mobile and tablet */}
+      <div className="sk-payment-header" style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexShrink: 0 }}>
         <button
           onClick={onReset}
           aria-label="Back"
@@ -835,56 +948,68 @@ function IdentifiedScreen({
           <p style={{ fontSize: 20, fontWeight: 700, color: c.text, margin: 0, lineHeight: 1.2 }}>
             {s.hiPlayer(session.playerName)}
           </p>
-          <p style={{ fontSize: 12, color: c.muted, margin: "2px 0 0" }}>
-            {s.paySubtitle}
-          </p>
         </div>
       </div>
 
-      {/* Sticker grid — animated reveal on first render */}
-      <div style={{ display: "flex", justifyContent: "center", width: "100%", flexShrink: 0 }}>
-        <StickerGrid stickers={session.stickers} compact animate={stickersVisible} />
-      </div>
-
-      {/* Payment phase */}
+      {/* Payment phase — two-col on tablet, single-col on mobile */}
       {paymentPhase === "payment" && (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", maxWidth: 432, alignSelf: "center", marginTop: 8, flex: 1 }}>
-          {paymentQRPayload ? (
-            <>
-              <div style={{ background: "#ffffff", padding: 10, borderRadius: 12, display: "inline-block" }}>
-                <QRCodeSVG value={paymentQRPayload} size={130} bgColor="#ffffff" fgColor="#000000" />
-              </div>
-              {/* Strikethrough original price */}
-              <p style={{ fontSize: 14, color: "#6b7280", textAlign: "center", marginTop: 6, textDecoration: "line-through" }}>
-                {(price * 2).toLocaleString("vi-VN")} VND
-              </p>
-              {/* Sale price + badge */}
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 2 }}>
-                <span style={{ fontSize: 22, fontWeight: 600, color: "#4ade80" }}>
-                  {s.scanToPay(price.toLocaleString("vi-VN"))}
-                </span>
-                <span style={{ background: "#4ade80", color: "#000", fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 999 }}>
-                  50% OFF
-                </span>
-              </div>
-              {/* Introductory caption */}
-              <p style={{ fontSize: 12, color: "#6b7280", textAlign: "center", marginTop: 3, fontStyle: "italic" }}>
-                {lang === "vi" ? "Giá ưu đãi dành cho người chơi sớm" : "Introductory price for early players"}
-              </p>
-            </>
-          ) : (
-            <p style={{ fontSize: 13, color: c.muted, textAlign: "center", marginTop: 8 }}>{s.noQR}</p>
-          )}
+        <div className="sk-two-col" style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1, minHeight: 0 }}>
 
-          <div style={{ flex: 1 }} />
+          {/* Left col (mobile: sticker grid above QR) */}
+          <div className="sk-col-left" style={{ display: "flex", justifyContent: "center", width: "100%", flexShrink: 0, marginBottom: 16 }}>
+            <StickerGrid stickers={session.stickers} compact animate={stickersVisible} tabletLayout />
+          </div>
 
-          {!showPaidButton ? (
-            <p style={{ fontSize: 13, color: c.dim, textAlign: "center", marginBottom: 4 }}>{s.confirmIn(paymentTimer)}</p>
-          ) : (
-            <button onClick={handlePaid} style={{ ...BTN_PRIMARY, width: "100%", maxWidth: 432 }}>
-              {s.iPaid}
-            </button>
-          )}
+          {/* Right col (mobile: QR + button below stickers) */}
+          <div className="sk-col-right" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", maxWidth: 432, flex: 1 }}>
+            {paymentQRPayload ? (
+              <>
+                <div className="sk-qr-box" style={{ background: "#ffffff", padding: 10, borderRadius: 12, display: "inline-block" }}>
+                  <QRCodeSVG value={paymentQRPayload} size={isTablet ? 260 : 130} bgColor="#ffffff" fgColor="#000000" />
+                </div>
+                {/* Strikethrough original price */}
+                <p className="sk-price-strike" style={{ fontSize: 14, color: "#6b7280", textAlign: "center", marginTop: 6, textDecoration: "line-through" }}>
+                  {(price * 2).toLocaleString("vi-VN")} VND
+                </p>
+                {/* Sale price + badge */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 2 }}>
+                  <span className="sk-price-main" style={{ fontSize: 22, fontWeight: 600, color: "#4ade80" }}>
+                    {s.scanToPay(price.toLocaleString("vi-VN"))}
+                  </span>
+                  <span style={{ background: "#4ade80", color: "#000", fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 999 }}>
+                    50% OFF
+                  </span>
+                </div>
+                {/* Caption */}
+                <p style={{ fontSize: 12, color: "#6b7280", textAlign: "center", marginTop: 3, fontStyle: "italic" }}>
+                  {lang === "vi" ? "Để tải bộ sticker của bạn" : "To download your pack"}
+                </p>
+              </>
+            ) : (
+              <p style={{ fontSize: 13, color: c.muted, textAlign: "center", marginTop: 8 }}>{s.noQR}</p>
+            )}
+
+            <div style={{ flex: 1 }} />
+
+            {!showPaidButton ? (
+              <p style={{ fontSize: 13, color: c.dim, textAlign: "center", marginBottom: 4 }}>{s.confirmIn(paymentTimer)}</p>
+            ) : (
+              <div className="sk-paid-btn-wrap" style={{ width: "100%", maxWidth: 432 }}>
+                <button onClick={handlePaid} style={{ ...BTN_PRIMARY, width: "100%" }}>
+                  {s.iPaid}
+                </button>
+                <p style={{
+                  fontSize: 12,
+                  color: c.dim,
+                  textAlign: "center",
+                  marginTop: 8,
+                  visibility: paidButtonCountdown <= 60 ? "visible" : "hidden",
+                }}>
+                  {s.resetIn(paidButtonCountdown)}
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -928,20 +1053,26 @@ function IdentifiedScreen({
             {/* Labels */}
             <div style={{ textAlign: "center" }}>
               <p style={{ fontSize: 18, fontWeight: 700, color: c.text, margin: 0 }}>{s.scanPhone}</p>
-              <p style={{ fontSize: 13, color: c.muted, margin: "6px 0 0", maxWidth: 280 }}>{s.downloadApp}</p>
+              <p style={{ fontSize: 13, color: c.muted, margin: "6px auto 0", maxWidth: 280, textAlign: "center" }}>{s.downloadApp}</p>
             </div>
           </div>
 
-          {/* Bottom — Done button + countdown */}
+          {/* Bottom — Done button (discreet, visible only after 15s) + countdown */}
           <div style={{ width: "100%", maxWidth: 400, animation: "fade-in 0.4s ease 0.6s both" }}>
             <button
               onClick={onReset}
               style={{
-                ...BTN_PRIMARY,
+                ...BTN_BASE,
                 width: "100%",
-                fontSize: 17,
-                height: 60,
-                borderRadius: 18,
+                fontSize: 15,
+                height: 52,
+                borderRadius: 16,
+                background: "transparent",
+                color: c.dim,
+                border: `1px solid ${dark ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.12)"}`,
+                opacity: countdown <= AUTO_RESET_S - 15 ? 1 : 0,
+                pointerEvents: countdown <= AUTO_RESET_S - 15 ? "auto" : "none",
+                transition: "opacity 0.6s ease",
               }}
             >
               {s.done}
