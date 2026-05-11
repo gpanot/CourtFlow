@@ -5,8 +5,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 # prisma/schema.prisma must exist before npm ci (postinstall runs prisma generate)
 COPY prisma ./prisma
-# install all deps including optional (lightningcss musl binary, jspdf peers)
-RUN npm ci --include=optional
+RUN npm ci
 
 FROM base AS builder
 WORKDIR /app

@@ -520,9 +520,30 @@ function IdleScreen({
   const [femaleStickers, setFemaleStickers] = useState<string[]>([]);
   const [maleStickers, setMaleStickers] = useState<string[]>([]);
   const [recentStickers, setRecentStickers] = useState<string[]>([]);
-  // bumped on each poll to remount rows so animation restarts with fresh data
   const [recentVersion, setRecentVersion] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  // Animated subtitle rotator
+  const SUBTITLE_LINES = [
+    "Crafted for pickleball players only!",
+    "Your face. Your stickers.",
+    "Nobody else has these.",
+  ];
+  const [subtitleIdx, setSubtitleIdx] = useState(0);
+  const [subtitleVisible, setSubtitleVisible] = useState(true);
+
+  useEffect(() => {
+    const iv = setInterval(() => {
+      setSubtitleVisible(false);
+      setTimeout(() => {
+        setSubtitleIdx((i) => (i + 1) % SUBTITLE_LINES.length);
+        setSubtitleVisible(true);
+      }, 300);
+    }, 2500);
+    return () => clearInterval(iv);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const c = getColors(dark);
   const s = STRINGS[lang];
 
@@ -633,8 +654,20 @@ function IdleScreen({
         <p style={{ fontSize: 26, fontWeight: 700, color: c.text, textAlign: "center", marginBottom: 8 }}>
           {s.hero}
         </p>
-        <p style={{ fontSize: 15, color: c.muted, textAlign: "center", marginBottom: 32 }}>
-          {s.heroSub}
+        <p
+          style={{
+            fontSize: 15,
+            color: c.muted,
+            textAlign: "center",
+            marginBottom: 32,
+            opacity: subtitleVisible ? 1 : 0,
+            transform: subtitleVisible ? "translateY(0)" : "translateY(8px)",
+            transition: subtitleVisible
+              ? "opacity 400ms ease-out, transform 400ms ease-out"
+              : "opacity 300ms ease-in",
+          }}
+        >
+          {SUBTITLE_LINES[subtitleIdx]}
         </p>
         <div style={{ maxWidth: 340, width: "100%" }}>
           <button
