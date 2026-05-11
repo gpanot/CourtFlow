@@ -29,6 +29,8 @@ import {
 } from "@/components/camera-capture";
 import { buildVietQRPayload } from "@/lib/vietqr-payload";
 
+export const dynamic = "force-dynamic";
+
 // ---------------------------------------------------------------------------
 // i18n — Vietnamese / English strings
 // ---------------------------------------------------------------------------

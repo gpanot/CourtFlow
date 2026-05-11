@@ -7,6 +7,8 @@ import { VenuePicker } from "./VenuePicker";
 import { BalanceScreen } from "./BalanceScreen";
 import type { BalanceData, VenueInfo, IdentifyResult, StickerData } from "./types";
 
+export const dynamic = "force-dynamic";
+
 type Screen = "loading" | "identify" | "pick-venue" | "balance";
 
 const SESSION_KEY = "cf_balance_session";

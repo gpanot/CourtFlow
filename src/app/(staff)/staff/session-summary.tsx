@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api-client";
-import { Download, X, Loader2 } from "lucide-react";
+import { X } from "lucide-react";
 
 interface PlayerDetail {
   name: string;
@@ -84,26 +84,6 @@ function pct(value: number, total: number): string {
   return `${Math.round((value / total) * 100)}%`;
 }
 
-/** English labels for PDF export only */
-const PDF_SKILL_LABELS: Record<string, string> = {
-  beginner: "Beginner",
-  intermediate: "Intermediate",
-  advanced: "Advanced",
-  pro: "Pro",
-};
-
-const PDF_GENDER_LABELS: Record<string, string> = {
-  male: "Male",
-  female: "Female",
-  other: "Other",
-};
-
-const PDF_GAME_TYPE_LABELS: Record<string, string> = {
-  men: "4 Men",
-  women: "4 Women",
-  mixed: "Mixed",
-};
-
 export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
   const { t, i18n } = useTranslation();
   const dateLocale = i18n.language?.toLowerCase().startsWith("vi") ? "vi-VN" : "en-US";
@@ -147,7 +127,6 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
 
   const [data, setData] = useState<SessionStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     api
@@ -157,13 +136,13 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
       .finally(() => setLoading(false));
   }, [sessionId]);
 
-  const exportPDF = async () => {
+  /*
+  const removedPdfExport = async () => {
     if (!data || exporting) return;
     setExporting(true);
 
     try {
-      const { default: jsPDF } = await import("jspdf");
-      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const doc = null as never;
       const { session, players, courts, rotation, venue, gameTypes, playerExperience: px } = data;
 
       const pageW = doc.internal.pageSize.getWidth();
@@ -612,6 +591,7 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
       setExporting(false);
     }
   };
+  */
 
   if (loading) {
     return (
@@ -1004,14 +984,6 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
 
       {/* Bottom actions */}
       <div className="border-t border-neutral-800 px-5 py-4 space-y-3">
-        <button
-          onClick={exportPDF}
-          disabled={exporting}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3.5 font-semibold text-white transition-colors hover:bg-blue-500 disabled:opacity-60"
-        >
-          {exporting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
-          {exporting ? t("staff.sessionSummary.generating") : t("staff.sessionSummary.exportPdf")}
-        </button>
         <button
           onClick={onClose}
           className="w-full rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 transition-colors hover:bg-neutral-700"

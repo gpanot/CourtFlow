@@ -986,4 +986,9 @@ class FaceRecognitionService {
 }
 
 export const faceRecognitionService = new FaceRecognitionService();
-void faceRecognitionService.verifyCollectionExistsOnStartup();
+
+// Only run the startup collection check at actual server runtime, never during
+// Next.js static generation (build workers import this module too).
+if (process.env.NEXT_PHASE !== "phase-production-build") {
+  void faceRecognitionService.verifyCollectionExistsOnStartup();
+}
