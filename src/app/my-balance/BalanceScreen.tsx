@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { RefreshCw, Download, ChevronDown, ChevronUp } from "lucide-react";
+import { useState, useCallback } from "react";
+import { RefreshCw, Download, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { SubscriptionCard } from "@/components/balance/SubscriptionCard";
 import { BalanceTopBar } from "./BalanceTopBar";
@@ -65,34 +65,60 @@ const WHATSAPP_STEPS = [
 
 function StickerShopSection({
   stickerData,
-  stickerToken,
   paid,
 }: {
   stickerData: StickerData;
-  stickerToken?: string;
+  stickerToken?: string; // kept for API compat but download is now client-side
   paid?: boolean;
 }) {
-  const [shopState, setShopState] = useState<ShopState>(paid ? "success" : "idle");
+  const [shopState] = useState<ShopState>(paid ? "success" : "idle");
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
-  const [howToOpen, setHowToOpen] = useState(false);
+  // How-to starts expanded when paid (they just scanned and need the instructions right away)
+  const [howToOpen, setHowToOpen] = useState(!!paid);
+  const [downloading, setDownloading] = useState(false);
 
-  // Detect browser language for instructions
+  // Detect browser language — use i18n hook would require provider; navigator is fine here
   const isVi = typeof navigator !== "undefined" && navigator.language.startsWith("vi");
 
-  const handleDownload = () => {
-    if (!stickerToken) return;
-    window.location.href = `/api/player/download-pack?token=${encodeURIComponent(stickerToken)}`;
-  };
+  // Download each sticker individually via client-side blob — avoids all server-side ZIP issues
+  const handleDownload = useCallback(async () => {
+    if (downloading) return;
+    const urls = stickerData.stickers.filter(Boolean);
+    if (urls.length === 0) return;
+    setDownloading(true);
+    try {
+      for (let i = 0; i < urls.length; i++) {
+        const url = urls[i].split("?")[0]; // strip cache-buster
+        const res = await fetch(url);
+        if (!res.ok) continue;
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = objectUrl;
+        a.download = `sticker_${i + 1}.webp`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(objectUrl);
+        // Small delay between downloads so browser doesn't block them
+        if (i < urls.length - 1) await new Promise((r) => setTimeout(r, 400));
+      }
+    } finally {
+      setDownloading(false);
+    }
+  }, [stickerData.stickers, downloading]);
 
   return (
     <div style={{ marginTop: 28 }}>
       {/* Section header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <span style={{ fontSize: 20, fontWeight: 600, color: "#ffffff" }}>
-          Your Sticker Pack
+          {isVi ? "Bộ sticker của bạn" : "Your Sticker Pack"}
         </span>
         <span style={{ fontSize: 14, color: "#4ade80" }}>
-          {shopState === "success" ? "Yours forever ✓" : "4 stickers ready"}
+          {shopState === "success"
+            ? (isVi ? "Của bạn mãi mãi ✓" : "Yours forever ✓")
+            : (isVi ? "4 sticker sẵn sàng" : "4 stickers ready")}
         </span>
       </div>
 
@@ -105,16 +131,7 @@ function StickerShopSection({
               <div
                 key={i}
                 onClick={() => url && setPreviewIndex(i)}
-                style={{
-                  flex: "0 0 calc(25% - 6px)",
-                  minWidth: 72,
-                  aspectRatio: "1",
-                  borderRadius: 12,
-                  overflow: "hidden",
-                  cursor: url ? "pointer" : "default",
-                  position: "relative",
-                  background: "transparent",
-                }}
+                style={{ flex: "0 0 calc(25% - 6px)", minWidth: 72, aspectRatio: "1", borderRadius: 12, overflow: "hidden", cursor: url ? "pointer" : "default", position: "relative", background: "transparent" }}
               >
                 {url && (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -149,7 +166,7 @@ function StickerShopSection({
             })}
           </div>
           <p style={{ fontSize: 12, color: "#6b7280", textAlign: "center", marginTop: 8 }}>
-            Tap any sticker to preview
+            {isVi ? "Nhấn vào sticker để xem trước" : "Tap any sticker to preview"}
           </p>
         </div>
       )}
@@ -158,14 +175,19 @@ function StickerShopSection({
       {shopState === "success" && (
         <div style={{ marginTop: 16 }}>
           <button
-            onClick={handleDownload}
-            style={{ width: "100%", height: 56, borderRadius: 16, background: "#4ade80", color: "#000", fontSize: 16, fontWeight: 600, border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}
+            onClick={() => { void handleDownload(); }}
+            disabled={downloading}
+            style={{ width: "100%", height: 56, borderRadius: 16, background: downloading ? "#6b7280" : "#4ade80", color: "#000", fontSize: 16, fontWeight: 600, border: "none", cursor: downloading ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: downloading ? 0.8 : 1 }}
           >
-            <Download size={20} />
-            {isVi ? "Tải bộ sticker về máy" : "Download your sticker pack"}
+            {downloading
+              ? <Loader2 size={20} style={{ animation: "spin 1s linear infinite" }} />
+              : <Download size={20} />}
+            {downloading
+              ? (isVi ? "Đang tải…" : "Downloading…")
+              : (isVi ? "Tải bộ sticker về máy" : "Download your sticker pack")}
           </button>
 
-          {/* How to use on WhatsApp */}
+          {/* How to use on WhatsApp — expanded by default */}
           <div style={{ background: "#1a1a1a", borderRadius: 16, padding: 16, marginTop: 12 }}>
             <button
               onClick={() => setHowToOpen((o) => !o)}
@@ -195,7 +217,7 @@ function StickerShopSection({
         </div>
       )}
 
-      {/* Idle: show buy button (fallback for non-kiosk flow) */}
+      {/* Idle: kiosk prompt */}
       {shopState === "idle" && (
         <div style={{ marginTop: 16 }}>
           <p style={{ fontSize: 14, color: "#9ca3af", textAlign: "center" }}>
@@ -241,6 +263,10 @@ export function BalanceScreen({
         @keyframes pulse-dot {
           0%, 100% { opacity: 1; }
           50%       { opacity: 0.3; }
+        }
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
         }
       `}</style>
       <BalanceTopBar label={data.venueName || undefined} onBack={onBack} />
