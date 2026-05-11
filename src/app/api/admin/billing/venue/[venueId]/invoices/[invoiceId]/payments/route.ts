@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireSuperAdmin } from "@/lib/auth";
 import { getBillablePaymentsForWeek } from "@/lib/billing";
 
+export const dynamic = "force-dynamic";
 export async function GET(
   req: Request,
   {

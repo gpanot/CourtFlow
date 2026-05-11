@@ -7,6 +7,7 @@ import {
 } from "@/modules/courtpay/lib/check-in";
 import { generateWalkInSyntheticPhone } from "@/lib/walk-in-phone";
 
+export const dynamic = "force-dynamic";
 async function createWalkInPlayerWithUniquePhone(input: {
   name: string;
   gender: "male" | "female";

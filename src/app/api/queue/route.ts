@@ -5,6 +5,7 @@ import { requireAuth } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
 import { assignPlayerFromQueueToCourt } from "@/lib/algorithm";
 
+export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const sessionId = request.nextUrl.searchParams.get("sessionId");
   if (!sessionId) return error("sessionId is required");

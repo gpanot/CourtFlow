@@ -5,6 +5,7 @@ import { initialRankingScoreForSkillLevel } from "@/lib/ranking";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
 interface AdminPlayersStatsPayload {
   totalPlayers: number;
   activeToday: number;

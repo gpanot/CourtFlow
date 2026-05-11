@@ -15,6 +15,7 @@ import { analyzeFaceQuality } from "@/lib/face-quality";
 import type { SkillLevel } from "@prisma/client";
 import { initialRankingScoreForSkillLevel } from "@/lib/ranking";
 
+export const dynamic = "force-dynamic";
 // Helper function to get next queue number
 async function getNextQueueNumber(sessionId: string): Promise<number> {
   const lastEntry = await prisma.queueEntry.findFirst({

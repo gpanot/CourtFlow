@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireStaff } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
 const DEFAULT_PACKAGES = [
   { name: "Starter",   sessions: 5,    durationDays: 60, price: 0, perks: null, discountPct: 5,  isBestChoice: false },
   { name: "Regular",   sessions: 10,   durationDays: 90, price: 0, perks: null, discountPct: 10, isBestChoice: true  },

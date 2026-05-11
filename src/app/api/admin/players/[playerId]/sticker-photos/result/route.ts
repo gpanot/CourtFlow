@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { json, error, notFound } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
 /**
  * GET: retrieve the saved sticker generation result for this player.
  * Also includes sticker pack data if available.

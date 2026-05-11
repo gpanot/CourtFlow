@@ -12,6 +12,8 @@ import { PackageCard } from "@/modules/courtpay/components/PackageCard";
 import { PackageForm } from "@/modules/courtpay/components/PackageForm";
 import { SubscriberList } from "@/modules/courtpay/components/SubscriberList";
 
+export const dynamic = "force-dynamic";
+
 interface Package {
   id: string;
   name: string;

@@ -3,6 +3,7 @@ import { json, error } from "@/lib/api-helpers";
 import { requireAuth } from "@/lib/auth";
 import { getAvailableSlots } from "@/lib/booking";
 
+export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   try {
     requireAuth(request.headers);

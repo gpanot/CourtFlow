@@ -11,6 +11,8 @@ import { StaffPaymentSettingsForm } from "@/components/profile/StaffPaymentSetti
 import { StaffPlayerDiscounts } from "@/components/profile/StaffPlayerDiscounts";
 import { ArrowLeft } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 export default function StaffPaymentSettingsPage() {
   const { t } = useTranslation();
   const router = useRouter();

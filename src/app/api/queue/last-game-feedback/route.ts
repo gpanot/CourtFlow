@@ -5,6 +5,7 @@ import { requireAuth } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
 import { isValidLastGameRating, ratingToEmoji } from "@/lib/last-game-reaction";
 
+export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   try {
     const auth = requireAuth(request.headers);

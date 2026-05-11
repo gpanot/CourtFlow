@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
 function classifyPayment(p: { paymentMethod: string; type: string }): "qr" | "cash" | "sub" {
   if (p.paymentMethod === "cash") return "cash";
   if (p.paymentMethod === "subscription" || p.type === "subscription") return "sub";

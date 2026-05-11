@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { json, error, notFound } from "@/lib/api-helpers";
 import { requireAuth } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
 const AVATARS_DIR = path.join(process.cwd(), "uploads", "players", "avatars");
 const MAX_SIZE = 200 * 1024; // 200 KB
 

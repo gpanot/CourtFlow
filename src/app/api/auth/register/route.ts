@@ -6,6 +6,7 @@ import { setPlayerAuthCookieOnResponse } from "@/lib/player-auth-cookie";
 import type { SkillLevel, Gender } from "@prisma/client";
 import { initialRankingScoreForSkillLevel } from "@/lib/ranking";
 
+export const dynamic = "force-dynamic";
 interface RegisterBody {
   phone: string;
   name: string;

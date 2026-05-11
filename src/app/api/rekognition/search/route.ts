@@ -8,6 +8,7 @@ import { FACE_MATCH_THRESHOLD } from "@/lib/rekognition-config";
 import { requireSuperAdmin } from "@/lib/auth";
 import { USE_MOCK_SERVICE } from "@/lib/face-recognition";
 
+export const dynamic = "force-dynamic";
 const COLLECTION_ID = process.env.AWS_REKOGNITION_COLLECTION || "courtflow-players";
 const SEARCH_FACE_MATCH_THRESHOLD = 50;
 const MAX_FACES = 5;

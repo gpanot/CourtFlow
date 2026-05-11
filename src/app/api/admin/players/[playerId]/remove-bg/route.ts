@@ -6,6 +6,7 @@ import { error, json, notFound } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
 import { removeBackgroundFromBase64 } from "@/lib/remove-bg";
 
+export const dynamic = "force-dynamic";
 function toAbsolutePhotoUrl(photoPath: string, origin: string): string {
   if (photoPath.startsWith("http://") || photoPath.startsWith("https://")) {
     return photoPath;

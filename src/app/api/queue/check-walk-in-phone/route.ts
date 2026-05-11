@@ -4,6 +4,7 @@ import { json, error } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { isWalkInSyntheticPhone } from "@/lib/walk-in-phone";
 
+export const dynamic = "force-dynamic";
 /**
  * GET ?phone=...
  * Returns whether a real player (non–walk-in synthetic phone) already uses this number.

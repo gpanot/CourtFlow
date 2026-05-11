@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { validateSepayWebhook, processSepayWebhook } from "@/modules/courtpay/lib/sepay";
 import type { SepayWebhookPayload } from "@/modules/courtpay/types";
 
+export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   try {
     if (!validateSepayWebhook(req.headers)) {

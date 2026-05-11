@@ -4,6 +4,7 @@ import { json, error } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
 import { staffAssignmentsToVenues } from "@/lib/staff-app-access";
 
+export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   try {
     requireSuperAdmin(request.headers);

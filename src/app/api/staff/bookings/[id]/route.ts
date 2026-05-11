@@ -4,6 +4,7 @@ import { json, error, parseBody, notFound } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { getBookingConfig, resolveSlotPrice } from "@/lib/booking";
 
+export const dynamic = "force-dynamic";
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

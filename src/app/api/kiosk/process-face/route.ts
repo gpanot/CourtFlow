@@ -9,6 +9,7 @@ import {
 import { emitToVenue } from "@/lib/socket-server";
 import { persistPlayerCheckInFacePhoto } from "@/lib/persist-player-check-in-photo";
 
+export const dynamic = "force-dynamic";
 async function buildAlreadyCheckedInResponse(
   sessionId: string,
   playerId: string,

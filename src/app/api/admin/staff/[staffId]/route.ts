@@ -4,6 +4,7 @@ import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
 import { normalizeAppAccess, staffAssignmentsToVenues } from "@/lib/staff-app-access";
 
+export const dynamic = "force-dynamic";
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ staffId: string }> }

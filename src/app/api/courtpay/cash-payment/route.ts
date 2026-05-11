@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { emitToVenue } from "@/lib/socket-server";
 import { sendPaymentPushToStaff } from "@/lib/staff-push";
 
+export const dynamic = "force-dynamic";
 /**
  * POST /api/courtpay/cash-payment
  *

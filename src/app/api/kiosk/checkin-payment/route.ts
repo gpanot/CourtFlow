@@ -6,6 +6,7 @@ import { emitToVenue } from "@/lib/socket-server";
 import { sendPaymentPushToStaff } from "@/lib/staff-push";
 import { buildVietQRUrl } from "@/lib/vietqr";
 
+export const dynamic = "force-dynamic";
 const PAYMENT_TIMEOUT_MS = 3 * 60 * 1000;
 
 export async function POST(request: NextRequest) {

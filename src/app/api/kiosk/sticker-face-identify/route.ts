@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { faceRecognitionService } from "@/lib/face-recognition";
 import { json, error } from "@/lib/api-helpers";
 
+export const dynamic = "force-dynamic";
 function validateKioskSecret(request: NextRequest): boolean {
   const secret = request.headers.get("x-kiosk-secret");
   return !!secret && secret === process.env.STICKER_KIOSK_SECRET;

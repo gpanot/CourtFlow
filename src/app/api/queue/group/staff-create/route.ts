@@ -5,6 +5,7 @@ import { requireStaff } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
 import { MIN_GROUP_SIZE, MAX_GROUP_SIZE } from "@/lib/constants";
 
+export const dynamic = "force-dynamic";
 function generateGroupCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "";

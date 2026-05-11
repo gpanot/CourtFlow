@@ -8,6 +8,7 @@ import { faceRecognitionService } from "@/lib/face-recognition";
 import { checkInSubscriber } from "@/modules/courtpay/lib/check-in";
 import { getActiveSubscription } from "@/modules/courtpay/lib/subscription";
 
+export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   try {
     const auth = requireStaff(request.headers);

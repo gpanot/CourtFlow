@@ -4,6 +4,7 @@ import { json, error, parseBody, notFound } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { Prisma } from "@prisma/client";
 
+export const dynamic = "force-dynamic";
 interface RosterEntry {
   referenceCode: string;
   eventName: string;

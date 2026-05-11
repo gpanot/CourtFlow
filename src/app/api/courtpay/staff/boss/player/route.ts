@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireStaff } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
 const RECLUB_API = "https://api.reclub.co";
 const RECLUB_HEADERS: Record<string, string> = {
   "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",

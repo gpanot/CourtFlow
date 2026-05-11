@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
 /** PWA manifest for staff flows — start_url opens staff login, not the player app. */
 const STAFF_MANIFEST = {
   id: "/staff",

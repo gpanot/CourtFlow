@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import { CourtsManager, type Court } from "@/components/admin/CourtsManager";
 import { resolveTvLocale, tvI18n, type TvLocale } from "@/i18n/tv-i18n";
+
+export const dynamic = "force-dynamic";
 interface VenueSettings {
   logoSpin?: boolean;
   tvLocale?: string;

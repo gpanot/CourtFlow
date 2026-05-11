@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { faceRecognitionService } from "@/lib/face-recognition";
 import { isRateLimited } from "@/lib/rate-limit";
 
+export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   try {
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";

@@ -4,6 +4,7 @@ import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { sendStaffTestPush } from "@/lib/staff-push";
 
+export const dynamic = "force-dynamic";
 /**
  * POST /api/staff/push/test
  * Body: { venueId: string }

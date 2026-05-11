@@ -5,6 +5,8 @@ import { useSessionStore } from "@/stores/session-store";
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Clock, Eye, MapPin, RefreshCw, ScanFace, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 
+export const dynamic = "force-dynamic";
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface MatchedPlayer {

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { sendPushToPlayer } from "@/lib/push";
 import { json, error } from "@/lib/api-helpers";
 
+export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   try {
     requireStaff(request.headers);

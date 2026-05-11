@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
 type FeedbackMeta = {
   sessionId?: string;
   experience?: number;

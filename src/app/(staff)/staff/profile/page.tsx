@@ -3,6 +3,8 @@
 import { useClientConfig } from "@/config/use-client-config";
 import { ProfileCourtPay } from "@/components/profile/ProfileCourtPay";
 
+export const dynamic = "force-dynamic";
+
 export default function StaffProfilePage() {
   const clientConfig = useClientConfig();
 

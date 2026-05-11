@@ -5,6 +5,7 @@ import { findPlayerByPhoneDigits } from "@/lib/find-player-by-phone-digits";
 import { prisma } from "@/lib/db";
 import { isWalkInSyntheticPhone } from "@/lib/walk-in-phone";
 
+export const dynamic = "force-dynamic";
 /**
  * Staff-authenticated player lookup by phone.
  * Searches both the `players` table (self check-in / face-scan flow)

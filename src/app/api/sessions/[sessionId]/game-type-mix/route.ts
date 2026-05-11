@@ -5,6 +5,7 @@ import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
 
+export const dynamic = "force-dynamic";
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ sessionId: string }> }

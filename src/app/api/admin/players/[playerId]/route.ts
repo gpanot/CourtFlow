@@ -6,6 +6,7 @@ import { json, error, parseBody, notFound } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
 import { faceRecognitionService } from "@/lib/face-recognition";
 
+export const dynamic = "force-dynamic";
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ playerId: string }> }

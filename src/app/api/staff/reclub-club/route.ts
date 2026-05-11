@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
 /** Staff updates their default Reclub club (groupId) for roster fetch — global per account. */
 export async function PATCH(request: NextRequest) {
   try {

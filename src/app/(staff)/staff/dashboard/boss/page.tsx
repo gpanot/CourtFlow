@@ -13,6 +13,8 @@ import {
   type CourtPayBillingPaymentCardData,
 } from "@/components/courtpay-billing-payment-card";
 
+export const dynamic = "force-dynamic";
+
 type Tab = "today" | "history" | "subscriptions" | "players" | "billing";
 
 interface PlayerRow {

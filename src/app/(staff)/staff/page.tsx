@@ -29,6 +29,8 @@ import {
   type ThemeMode,
 } from "@/lib/theme-mode";
 
+export const dynamic = "force-dynamic";
+
 type StaffMeStatus = "idle" | "loading" | "success" | "error";
 
 interface StaffVenue {

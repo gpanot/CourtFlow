@@ -4,6 +4,7 @@ import { faceRecognitionService } from "@/lib/face-recognition";
 import { getActiveSubscription, getLatestSubscription } from "@/modules/courtpay/lib/subscription";
 import { ensureCourtPayCheckInPlayerSkillSynced } from "@/modules/courtpay/lib/check-in";
 
+export const dynamic = "force-dynamic";
 /**
  * POST /api/courtpay/face-checkin
  *

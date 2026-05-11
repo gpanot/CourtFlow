@@ -6,6 +6,7 @@ import { setPlayerAuthCookieOnResponse } from "@/lib/player-auth-cookie";
 import { faceRecognitionService } from "@/lib/face-recognition";
 import { logPlayerAppAuth } from "@/lib/player-app-auth-log";
 
+export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();

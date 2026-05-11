@@ -4,6 +4,7 @@ import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { getBookingConfig, resolveSlotPrice } from "@/lib/booking";
 
+export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   try {
     requireStaff(request.headers);

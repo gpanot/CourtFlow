@@ -6,6 +6,7 @@ import { setPlayerAuthCookieOnResponse } from "@/lib/player-auth-cookie";
 import { logPlayerAppAuth } from "@/lib/player-app-auth-log";
 import { isWalkInSyntheticPhone } from "@/lib/walk-in-phone";
 
+export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   try {
     const { phone, code } = await parseBody<{ phone: string; code: string }>(request);

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
 /**
  * POST /api/courtpay/staff/ensure-check-in-player
  *

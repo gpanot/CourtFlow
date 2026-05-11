@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { json, error, notFound } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
 const STICKER_PHOTOS_DIR = path.join(process.cwd(), "uploads", "players", "sticker-photos");
 const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
 

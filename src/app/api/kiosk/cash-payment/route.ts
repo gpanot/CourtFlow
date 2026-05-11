@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { emitToVenue } from "@/lib/socket-server";
 
+export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   try {
     const { pendingPaymentId } = await parseBody<{ pendingPaymentId: string }>(request);

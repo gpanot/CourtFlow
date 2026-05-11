@@ -7,6 +7,8 @@ import { api } from "@/lib/api-client";
 import { OnboardingFlow } from "./onboarding";
 import { PlayerHome } from "./home";
 
+export const dynamic = "force-dynamic";
+
 export default function PlayerPage() {
   const { t } = useTranslation();
   const { token, playerId, setAuth, clearAuth } = useSessionStore();

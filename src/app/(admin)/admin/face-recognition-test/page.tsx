@@ -6,6 +6,8 @@ import { PlayerAvatarThumb } from "@/components/player-avatar-thumb";
 import { ScanFace, Search, Upload } from "lucide-react";
 import { cn } from "@/lib/cn";
 
+export const dynamic = "force-dynamic";
+
 interface DiagnoseResponse {
   similarity: number | null;
   productionThreshold: number;

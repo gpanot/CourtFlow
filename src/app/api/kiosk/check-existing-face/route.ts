@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { faceRecognitionService } from "@/lib/face-recognition";
 
+export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   try {
     const body = await parseBody<{ imageBase64: string }>(request);

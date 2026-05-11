@@ -13,6 +13,7 @@ import { COLLECTION_ID, FACE_MATCH_THRESHOLD } from "@/lib/rekognition-config";
 import { saveSignupDuplicatePhoto } from "@/lib/save-signup-duplicate-photo";
 
 
+export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   try {
     const body = await req.json();

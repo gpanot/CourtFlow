@@ -4,6 +4,7 @@ import { json, error } from "@/lib/api-helpers";
 import { requireAuth } from "@/lib/auth";
 import { checkSessionLimit } from "@/lib/membership";
 
+export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   try {
     const auth = requireAuth(request.headers);

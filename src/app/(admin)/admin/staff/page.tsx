@@ -6,6 +6,8 @@ import { cn } from "@/lib/cn";
 import { Plus, Shield, User, Pencil, Trash2, KeyRound, X, Check, GraduationCap } from "lucide-react";
 import type { StaffAppAccessKind } from "@/lib/staff-app-access";
 
+export const dynamic = "force-dynamic";
+
 interface StaffVenue {
   id: string;
   name: string;

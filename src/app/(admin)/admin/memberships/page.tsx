@@ -26,6 +26,8 @@ import {
   Save,
 } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 interface VenueSettings {
   [key: string]: unknown;
 }

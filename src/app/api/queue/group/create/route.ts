@@ -4,6 +4,7 @@ import { json, error } from "@/lib/api-helpers";
 import { requireAuth } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
 
+export const dynamic = "force-dynamic";
 function generateGroupCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "";

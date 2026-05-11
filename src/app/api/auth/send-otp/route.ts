@@ -3,6 +3,7 @@ import { sendOtp } from "@/lib/auth";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { isWalkInSyntheticPhone } from "@/lib/walk-in-phone";
 
+export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   try {
     const { phone } = await parseBody<{ phone: string }>(request);

@@ -4,6 +4,7 @@ import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireAuth } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
 
+export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   try {
     const auth = requireAuth(request.headers);

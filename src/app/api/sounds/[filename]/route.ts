@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
 const ALLOWED_FILES = new Map<string, string>([
   ["202029__hykenfreak__notification-chime.mp3", "audio/mpeg"],
   ["415763__thebuilder15__doorbell-notification.mp3", "audio/mpeg"],

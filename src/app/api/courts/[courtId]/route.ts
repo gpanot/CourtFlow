@@ -5,6 +5,7 @@ import { json, error, notFound, parseBody } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { emitToVenue, emitToPlayer } from "@/lib/socket-server";
 
+export const dynamic = "force-dynamic";
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ courtId: string }> }

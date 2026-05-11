@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireStaff } from "@/lib/auth";
 import { getWeekBounds } from "@/lib/billing";
 
+export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   try {
     const staff = requireStaff(req.headers);

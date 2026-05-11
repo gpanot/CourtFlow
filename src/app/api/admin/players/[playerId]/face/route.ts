@@ -5,6 +5,7 @@ import { requireSuperAdmin } from "@/lib/auth";
 import { faceRecognitionService } from "@/lib/face-recognition";
 import { persistPlayerCheckInFacePhoto } from "@/lib/persist-player-check-in-photo";
 
+export const dynamic = "force-dynamic";
 function stripDataUrl(b64: string): string {
   const t = b64.trim();
   if (t.includes(",")) return t.split(",").pop() ?? t;

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
 import { staffAssignmentsToVenues } from "@/lib/staff-app-access";
 
+export const dynamic = "force-dynamic";
 /** Current staff member name and phone (Bearer staff/superadmin JWT). */
 export async function GET(request: NextRequest) {
   try {

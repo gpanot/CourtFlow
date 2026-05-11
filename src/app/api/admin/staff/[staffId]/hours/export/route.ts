@@ -16,6 +16,7 @@ import {
 } from "@/lib/payroll";
 import { Decimal } from "@prisma/client/runtime/library";
 
+export const dynamic = "force-dynamic";
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ staffId: string }> }

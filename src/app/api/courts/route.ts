@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
 
+export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const venueId = request.nextUrl.searchParams.get("venueId");
   if (!venueId) return error("venueId is required");

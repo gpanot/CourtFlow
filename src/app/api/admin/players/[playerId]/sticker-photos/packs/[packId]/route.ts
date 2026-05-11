@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { json, error, notFound } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
 /**
  * DELETE: remove a specific sticker pack (all 4 individual stickers) from disk and DB.
  * The parent sticker result (the 1-image generation) is NOT affected.

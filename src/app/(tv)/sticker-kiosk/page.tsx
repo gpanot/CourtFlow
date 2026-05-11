@@ -10,13 +10,14 @@ import {
 
 // ── Responsive hook — SSR-safe, no hydration mismatch ────────────────────────
 function subscribeToResize(cb: () => void) {
+  if (typeof window === "undefined") return () => {};
   window.addEventListener("resize", cb);
   return () => window.removeEventListener("resize", cb);
 }
 function useIsTablet() {
   return useSyncExternalStore(
     subscribeToResize,
-    () => window.innerWidth >= 768,
+    () => (typeof window !== "undefined" ? window.innerWidth >= 768 : false),
     () => false, // server snapshot — default to mobile
   );
 }
@@ -594,7 +595,10 @@ function IdleScreen({
   // Row D: men only — repeat to match female row length so scroll speed feels the same
   const targetLen = rowA.length > 0 ? rowA.length : 8;
   let rowDRaw = maleStickers.length > 0 ? maleStickers : femaleStickers;
-  while (rowDRaw.length < targetLen) rowDRaw = [...rowDRaw, ...rowDRaw];
+  // Guard: if source is empty, skip the loop to avoid infinite expansion of []
+  if (rowDRaw.length > 0) {
+    while (rowDRaw.length < targetLen) rowDRaw = [...rowDRaw, ...rowDRaw];
+  }
   const rowD = rowDRaw.slice(0, targetLen);
 
   const anyLoaded = femaleStickers.length > 0 || maleStickers.length > 0;

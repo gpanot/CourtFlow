@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { error } from "@/lib/api-helpers";
 import { getPlayerTokenFromRequest, setPlayerAuthCookieOnResponse } from "@/lib/player-auth-cookie";
 
+export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   try {
     const token = getPlayerTokenFromRequest(request);

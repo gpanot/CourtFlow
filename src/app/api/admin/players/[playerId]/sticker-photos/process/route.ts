@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { json, error, notFound } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
 // Allow up to 5 minutes — 4× background removal via FastAPI can be slow
 export const maxDuration = 300;
 

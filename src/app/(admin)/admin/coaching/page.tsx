@@ -23,6 +23,8 @@ import {
 } from "lucide-react";
 import { PaymentConfirmModal, type PaymentModalData, type PaymentConfirmResult } from "@/components/admin/PaymentConfirmModal";
 
+export const dynamic = "force-dynamic";
+
 /* ─── Types ─── */
 
 interface Venue {

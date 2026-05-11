@@ -261,6 +261,13 @@ function finalizeAwsRecognition(
 }
 
 class FaceRecognitionService {
+  private _collectionVerified = false;
+
+  private async lazyVerifyCollection(): Promise<void> {
+    if (this._collectionVerified) return;
+    this._collectionVerified = true;
+    await this.verifyCollectionExistsOnStartup();
+  }
 
   /**
    * AWS DetectFaces (ALL) before IndexFaces — rejects unusable enrollment photos.
@@ -987,8 +994,6 @@ class FaceRecognitionService {
 
 export const faceRecognitionService = new FaceRecognitionService();
 
-// Only run the startup collection check at actual server runtime, never during
-// Next.js static generation (build workers import this module too).
-if (process.env.NEXT_PHASE !== "phase-production-build") {
-  void faceRecognitionService.verifyCollectionExistsOnStartup();
-}
+// Collection verification is triggered lazily on first actual API call,
+// NOT at module import time. During `next build` the module is imported by
+// every worker for static analysis — a top-level AWS call blocks all workers.

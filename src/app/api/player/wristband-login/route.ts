@@ -5,6 +5,7 @@ import { signToken } from "@/lib/auth";
 import { setPlayerAuthCookieOnResponse } from "@/lib/player-auth-cookie";
 import { logPlayerAppAuth } from "@/lib/player-app-auth-log";
 
+export const dynamic = "force-dynamic";
 type WristbandBody = {
   queueNumber?: number;
   venueId?: string;

@@ -9,6 +9,8 @@ import { StaffHoursDrawer } from "@/components/admin/StaffHoursDrawer";
 import { ChevronLeft, ChevronRight, Download, AlertCircle, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/cn";
 
+export const dynamic = "force-dynamic";
+
 interface StaffRow {
   paymentId: string;
   staffId: string;

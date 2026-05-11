@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
 
+export const dynamic = "force-dynamic";
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ playerId: string }> }

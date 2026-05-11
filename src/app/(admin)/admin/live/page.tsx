@@ -11,6 +11,8 @@ import { cn } from "@/lib/cn";
 import { Wifi, WifiOff, Monitor, ChevronLeft } from "lucide-react";
 import { resolveTvLocale, tvI18n } from "@/i18n/tv-i18n";
 
+export const dynamic = "force-dynamic";
+
 interface VenueState {
   session: { id: string; status: string } | null;
   courts: CourtData[];

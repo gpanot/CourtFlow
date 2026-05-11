@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireSuperAdmin } from "@/lib/auth";
 import { getCurrentWeekUsage } from "@/lib/billing";
 
+export const dynamic = "force-dynamic";
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ venueId: string }> }

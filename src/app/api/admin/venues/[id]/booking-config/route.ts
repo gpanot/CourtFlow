@@ -4,6 +4,7 @@ import { json, error, parseBody, notFound } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
 import { DEFAULT_BOOKING_CONFIG, type BookingConfig } from "@/lib/booking";
 
+export const dynamic = "force-dynamic";
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

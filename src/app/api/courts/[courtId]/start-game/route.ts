@@ -5,6 +5,7 @@ import { requireStaff } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
 import { runRotation } from "@/lib/algorithm";
 
+export const dynamic = "force-dynamic";
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ courtId: string }> }

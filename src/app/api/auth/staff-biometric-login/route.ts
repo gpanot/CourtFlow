@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { staffAssignmentsToVenues } from "@/lib/staff-app-access";
 
+export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   try {
     const { staffId } = await parseBody<{ staffId: string }>(request);

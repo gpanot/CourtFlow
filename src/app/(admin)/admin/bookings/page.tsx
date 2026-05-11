@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import { CourtsManager } from "@/components/admin/CourtsManager";
 
+export const dynamic = "force-dynamic";
+
 interface VenueSettings {
   [key: string]: unknown;
 }

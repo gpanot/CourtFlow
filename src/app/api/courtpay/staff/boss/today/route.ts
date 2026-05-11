@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireStaff } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
 /**
  * Server-local calendar day [start, nextDayStart) — matches `GET .../boss/history`
  * (`todayStart.setHours(0,0,0,0)`), not UTC midnight. Using UTC here made the

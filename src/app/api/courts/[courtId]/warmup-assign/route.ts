@@ -6,6 +6,7 @@ import { emitToVenue, emitToPlayer } from "@/lib/socket-server";
 import { deriveGameType, scheduleAssignedToPlayingTransition } from "@/lib/algorithm";
 import { COURT_PLAYER_COUNT } from "@/lib/constants";
 
+export const dynamic = "force-dynamic";
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ courtId: string }> }

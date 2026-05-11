@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { json, error } from "@/lib/api-helpers";
 import { fetchReclubEvents } from "@/lib/reclub";
 
+export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const groupId = request.nextUrl.searchParams.get("groupId");
   if (!groupId) return error("groupId is required");

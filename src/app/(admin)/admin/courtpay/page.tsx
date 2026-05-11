@@ -16,6 +16,8 @@ import {
   Sparkles,
 } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 interface Venue {
   id: string;
   name: string;

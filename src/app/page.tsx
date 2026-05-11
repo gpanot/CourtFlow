@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { CourtFlowLogo } from "@/components/courtflow-logo";
 import { OnboardingFlow } from "@/components/onboarding/OnboardingFlow";
 
+export const dynamic = "force-dynamic";
+
 const ONBOARDING_KEY = "cf_onboarding_complete";
 
 export default function LandingPage() {

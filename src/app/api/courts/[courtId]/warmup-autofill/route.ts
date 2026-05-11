@@ -7,6 +7,7 @@ import { deriveGameType, selectPlayersForCourtAutofill, scheduleAssignedToPlayin
 import { COURT_PLAYER_COUNT, getSkillIndex, MAX_SKILL_GAP } from "@/lib/constants";
 import type { GameType, SkillLevel } from "@prisma/client";
 
+export const dynamic = "force-dynamic";
 function isSkillCompatible(candidateLevel: SkillLevel, courtPlayerLevels: SkillLevel[]): boolean {
   const candidateIdx = getSkillIndex(candidateLevel as SkillLevel);
   for (const level of courtPlayerLevels) {

@@ -5,6 +5,7 @@ import { requireStaff } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
 import type { Prisma } from "@prisma/client";
 
+export const dynamic = "force-dynamic";
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ sessionId: string }> }

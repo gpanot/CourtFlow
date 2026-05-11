@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { analyzeFaceQuality } from "@/lib/face-quality";
 
+export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   try {
     const body = await parseBody<{

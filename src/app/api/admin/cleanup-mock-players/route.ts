@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
 export async function POST() {
   await prisma.faceAttempt.updateMany({
     where: {

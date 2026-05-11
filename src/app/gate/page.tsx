@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Lock, X, ShieldAlert, CheckCircle } from "lucide-react";
 import { Suspense } from "react";
 
+export const dynamic = "force-dynamic";
+
 interface LogEntry {
   id: number;
   ip: string;

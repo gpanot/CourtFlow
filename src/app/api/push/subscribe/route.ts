@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireAuth } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
 interface SubscribeBody {
   playerId: string;
   endpoint: string;

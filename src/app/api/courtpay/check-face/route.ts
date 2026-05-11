@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { faceRecognitionService } from "@/lib/face-recognition";
 
+export const dynamic = "force-dynamic";
 /**
  * POST /api/courtpay/check-face
  *

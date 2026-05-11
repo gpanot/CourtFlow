@@ -12,6 +12,7 @@ import {
 import type { SkillLevel } from "@prisma/client";
 import { initialRankingScoreForSkillLevel } from "@/lib/ranking";
 
+export const dynamic = "force-dynamic";
 function normalizeWalkInAvatar(raw: string | null | undefined): string {
   if (raw == null) return "🏓";
   const s = raw.trim();

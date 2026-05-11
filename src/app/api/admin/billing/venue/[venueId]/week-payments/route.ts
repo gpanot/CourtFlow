@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireSuperAdmin } from "@/lib/auth";
 import { getBillablePaymentsForWeek, getWeekBounds } from "@/lib/billing";
 
+export const dynamic = "force-dynamic";
 function parseDateParam(input: string | null): Date | null {
   if (!input) return null;
   const parsed = new Date(input);

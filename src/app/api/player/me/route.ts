@@ -4,6 +4,7 @@ import { json, error, unauthorized } from "@/lib/api-helpers";
 import { verifyToken } from "@/lib/auth";
 import { getPlayerTokenFromRequest } from "@/lib/player-auth-cookie";
 
+export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   try {
     const token = getPlayerTokenFromRequest(request);

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { error } from "@/lib/api-helpers";
 import { generateHowToCard } from "@/lib/generate-howto-card";
 
+export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   try {
     const token = new URL(request.url).searchParams.get("token");

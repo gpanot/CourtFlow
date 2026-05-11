@@ -11,6 +11,8 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 const VIETQR_BANKS = [
   { bin: "970416", name: "ACB" },
   { bin: "970405", name: "Agribank" },

@@ -4,6 +4,7 @@ import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireAuth } from "@/lib/auth";
 import { getBookingConfig, validateBookingConflict, resolveSlotPrice } from "@/lib/booking";
 
+export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   try {
     const auth = requireAuth(request.headers);

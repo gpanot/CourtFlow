@@ -5,6 +5,7 @@ import { requireAuth } from "@/lib/auth";
 import { findQueueDisplayNameConflict } from "@/lib/queue-display-name";
 import { emitToVenue } from "@/lib/socket-server";
 
+export const dynamic = "force-dynamic";
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ playerId: string }> }

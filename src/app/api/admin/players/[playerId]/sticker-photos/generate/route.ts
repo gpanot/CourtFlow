@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { error, notFound, parseBody } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
 // Allow up to 5 minutes — gpt-image-2 can take 60–120s on WaveSpeed
 export const maxDuration = 300;
 

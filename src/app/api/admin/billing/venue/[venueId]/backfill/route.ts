@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireSuperAdmin } from "@/lib/auth";
 import { generateWeeklyInvoice, getWeekBounds } from "@/lib/billing";
 
+export const dynamic = "force-dynamic";
 /**
  * POST /api/admin/billing/venue/[venueId]/backfill
  *

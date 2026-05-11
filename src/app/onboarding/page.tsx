@@ -20,6 +20,8 @@ import {
   Wrench,
 } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+
 const STEPS = ["Welcome", "Your Venue", "Usage", "Pain Points"] as const;
 
 const PLAY_FREQUENCIES = [

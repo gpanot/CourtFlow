@@ -3,6 +3,7 @@ import { hashPassword, signToken } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 
+export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   try {
     const { name, email, phone, password, signupGatePassword } = await parseBody<{

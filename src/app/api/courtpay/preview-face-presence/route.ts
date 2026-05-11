@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { faceRecognitionService } from "@/lib/face-recognition";
 import { blurBackground } from "@/lib/fapihub";
 
+export const dynamic = "force-dynamic";
 /**
  * POST /api/courtpay/preview-face-presence
  *

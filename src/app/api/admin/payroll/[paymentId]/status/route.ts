@@ -4,6 +4,7 @@ import { json, error } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
 import { Decimal } from "@prisma/client/runtime/library";
 
+export const dynamic = "force-dynamic";
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ paymentId: string }> }

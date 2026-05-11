@@ -1,3 +1,5 @@
+
+export const dynamic = "force-dynamic";
 export const metadata = {
   title: "Privacy Policy — CourtPay",
   description: "Privacy policy for the CourtPay mobile application.",

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireStaff } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
 /**
  * GET /api/courtpay/staff/boss/players?venueId=...
  *

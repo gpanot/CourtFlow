@@ -7,6 +7,7 @@ import { emitToVenue } from "@/lib/socket-server";
 import { findPlayerByPhoneDigits } from "@/lib/find-player-by-phone-digits";
 import { isWalkInSyntheticPhone } from "@/lib/walk-in-phone";
 
+export const dynamic = "force-dynamic";
 async function buildAlreadyCheckedInResponse(
   sessionId: string,
   playerId: string,

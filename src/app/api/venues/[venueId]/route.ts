@@ -5,6 +5,7 @@ import { requireSuperAdmin } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
 import { Prisma } from "@prisma/client";
 
+export const dynamic = "force-dynamic";
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ venueId: string }> }

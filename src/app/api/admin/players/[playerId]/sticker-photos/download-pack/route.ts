@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { error, notFound } from "@/lib/api-helpers";
 import { verifyToken } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
 /**
  * GET: Download the 4 split stickers as a .zip file.
  * Supports auth via Authorization header OR ?token= query param (for direct download links).

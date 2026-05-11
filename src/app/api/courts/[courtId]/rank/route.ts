@@ -5,6 +5,7 @@ import { requireStaff } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
 import { clampScore, getScoreDelta } from "@/lib/ranking";
 
+export const dynamic = "force-dynamic";
 type RankBody = {
   sessionId?: string;
   rankings?: { playerId?: string; position?: number }[];

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { identifyPlayer } from "@/modules/courtpay/lib/check-in";
 import { prisma } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   try {
     const { venueCode, phone } = await req.json();

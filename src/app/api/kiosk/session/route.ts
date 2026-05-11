@@ -4,6 +4,7 @@ import { requireStaff } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { faceRecognitionService } from "@/lib/face-recognition";
 
+export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   try {
     const auth = requireStaff(request.headers);

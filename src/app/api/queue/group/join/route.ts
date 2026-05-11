@@ -5,6 +5,7 @@ import { requireAuth } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
 import { MAX_GROUP_SIZE } from "@/lib/constants";
 
+export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   try {
     const auth = requireAuth(request.headers);

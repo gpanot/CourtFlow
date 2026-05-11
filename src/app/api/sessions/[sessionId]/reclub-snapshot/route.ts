@@ -4,6 +4,7 @@ import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import type { Prisma } from "@prisma/client";
 
+export const dynamic = "force-dynamic";
 interface SnapshotPlayer {
   reclubUserId: number;
   reclubName: string;

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { generateWeeklyInvoice, getPreviousWeekBounds } from "@/lib/billing";
 
+export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;

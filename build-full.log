@@ -1,0 +1,61 @@
+
+> courtflow@0.1.0 build
+> next build && tsc --project tsconfig.server.json
+
+⚠ turbopack.root should be absolute, using: /Users/guillaumepanot/Documents/CODE/CourtFlow
+▲ Next.js 16.1.6 (Turbopack)
+- Environments: .env.local, .env
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 35.4s
+  Running TypeScript ...
+  Collecting page data using 7 workers ...
+[FaceRecognition] Mode: AWS Rekognition
+[FaceRecognition] Mode: AWS Rekognition
+[FaceRecognition] AWS Key present: true
+[FaceRecognition] AWS Region: ap-southeast-1
+[FaceRecognition] Collection: courtflow-players-staging
+[FaceRecognition] Environment: production
+[FaceRecognition] CRITICAL: Production is pointed at a staging collection. Check AWS_REKOGNITION_COLLECTION env var.
+[FaceRecognition] AWS Key present: true
+[FaceRecognition] AWS Region: ap-southeast-1
+[FaceRecognition] Collection: courtflow-players-staging
+[FaceRecognition] Environment: production
+[FaceRecognition] CRITICAL: Production is pointed at a staging collection. Check AWS_REKOGNITION_COLLECTION env var.
+[FaceRecognition] Mode: AWS Rekognition
+[FaceRecognition] AWS Key present: true
+[FaceRecognition] AWS Region: ap-southeast-1
+[FaceRecognition] Collection: courtflow-players-staging
+[FaceRecognition] Environment: production
+[FaceRecognition] CRITICAL: Production is pointed at a staging collection. Check AWS_REKOGNITION_COLLECTION env var.
+[FaceRecognition] Mode: AWS Rekognition
+[FaceRecognition] AWS Key present: true
+[FaceRecognition] AWS Region: ap-southeast-1
+[FaceRecognition] Collection: courtflow-players-staging
+[FaceRecognition] Environment: production
+[FaceRecognition] CRITICAL: Production is pointed at a staging collection. Check AWS_REKOGNITION_COLLECTION env var.
+[FaceRecognition] Mode: AWS Rekognition
+[FaceRecognition] AWS Key present: true
+[FaceRecognition] AWS Region: ap-southeast-1
+[FaceRecognition] Collection: courtflow-players-staging
+[FaceRecognition] Environment: production
+[FaceRecognition] CRITICAL: Production is pointed at a staging collection. Check AWS_REKOGNITION_COLLECTION env var.
+[FaceRecognition] Mode: AWS Rekognition
+[FaceRecognition] AWS Key present: true
+[FaceRecognition] AWS Region: ap-southeast-1
+[FaceRecognition] Collection: courtflow-players-staging
+[FaceRecognition] Environment: production
+[FaceRecognition] CRITICAL: Production is pointed at a staging collection. Check AWS_REKOGNITION_COLLECTION env var.
+[FaceRecognition] Mode: AWS Rekognition
+[FaceRecognition] AWS Key present: true
+[FaceRecognition] AWS Region: ap-southeast-1
+[FaceRecognition] Collection: courtflow-players-staging
+[FaceRecognition] Environment: production
+[FaceRecognition] CRITICAL: Production is pointed at a staging collection. Check AWS_REKOGNITION_COLLECTION env var.
+  Generating static pages using 7 workers (0/184) ...
+  Generating static pages using 7 workers (46/184) 
+  Generating static pages using 7 workers (92/184) 
+  Generating static pages using 7 workers (138/184) 
+🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙
+🌐 i18next is made possible by our own product, Locize — consider powering your project with managed localization (AI, CDN, integrations): https://locize.com 💙

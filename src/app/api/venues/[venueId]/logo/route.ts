@@ -5,6 +5,7 @@ import { requireSuperAdmin } from "@/lib/auth";
 import sharp from "sharp";
 import { emitToVenue } from "@/lib/socket-server";
 
+export const dynamic = "force-dynamic";
 const MAX_SIZE = 5 * 1024 * 1024;
 const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"];
 const OUTPUT_SIZE = 512;

@@ -5,6 +5,7 @@ import { requireStaff } from "@/lib/auth";
 import { emitToVenue, emitToPlayer } from "@/lib/socket-server";
 import { findReplacement } from "@/lib/algorithm";
 
+export const dynamic = "force-dynamic";
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ playerId: string }> }

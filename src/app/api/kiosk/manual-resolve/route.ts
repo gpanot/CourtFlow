@@ -6,6 +6,7 @@ import { faceRecognitionService } from "@/lib/face-recognition";
 import { emitToVenue } from "@/lib/socket-server";
 import { initialRankingScoreForSkillLevel } from "@/lib/ranking";
 
+export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   try {
     const auth = requireStaff(request.headers);

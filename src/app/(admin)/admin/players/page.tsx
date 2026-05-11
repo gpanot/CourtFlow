@@ -8,6 +8,8 @@ import { PlayerDetailFaceRecognition } from "@/components/admin/player-detail-fa
 import { Search, X, SlidersHorizontal, Users, UserPlus, Clock, Activity, Hourglass, Gauge, ChevronRight, ChevronUp, ChevronDown, ChevronsUpDown, Loader2, Gamepad2, Star, MapPin, CalendarDays, Timer, Plus, Pencil, Trash2, Fingerprint, Smartphone, Download, Sticker, LayoutList } from "lucide-react";
 import { PlayerDetailStickersTab } from "@/components/admin/player-detail-stickers-tab";
 
+export const dynamic = "force-dynamic";
+
 type SortKey = "name" | "phone" | "gender" | "skillLevel" | "totalSessions" | "totalGames" | "totalPlayMinutes" | "totalWaitMinutes" | "waitPlayRatio" | "venues" | "stickers" | "checkInCount";
 type SortDir = "asc" | "desc";
 const SKILL_ORDER: Record<string, number> = { beginner: 0, intermediate: 1, advanced: 2, pro: 3 };

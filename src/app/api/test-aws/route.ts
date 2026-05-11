@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { RekognitionClient, ListCollectionsCommand } from "@aws-sdk/client-rekognition";
 
+export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   try {
     // Ensure environment variables are loaded

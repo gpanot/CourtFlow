@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 import { json, error, notFound } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
 /**
  * DELETE: remove a specific uploaded sticker photo from disk and database.
  */

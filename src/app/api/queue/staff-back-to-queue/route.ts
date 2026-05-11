@@ -4,6 +4,7 @@ import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { emitToVenue } from "@/lib/socket-server";
 
+export const dynamic = "force-dynamic";
 /** Staff: return an on_break player to waiting (end of queue). */
 export async function POST(request: NextRequest) {
   try {

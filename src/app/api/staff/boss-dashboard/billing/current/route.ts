@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireStaff } from "@/lib/auth";
 import { getCurrentWeekUsage } from "@/lib/billing";
 
+export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   try {
     const staff = requireStaff(req.headers);

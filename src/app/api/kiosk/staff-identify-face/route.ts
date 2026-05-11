@@ -4,6 +4,7 @@ import { requireStaff } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { faceRecognitionService } from "@/lib/face-recognition";
 
+export const dynamic = "force-dynamic";
 /**
  * Recognize a face for staff lookup only — does not check in, change queue order, or create entries.
  */

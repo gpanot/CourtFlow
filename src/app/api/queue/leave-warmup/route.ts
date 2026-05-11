@@ -6,6 +6,7 @@ import { emitToVenue } from "@/lib/socket-server";
 import { assignPlayerFromQueueToCourt } from "@/lib/algorithm";
 import { QUEUE_LOOKAHEAD } from "@/lib/constants";
 
+export const dynamic = "force-dynamic";
 /** Player leaves an assigned (not yet playing) court slot — e.g. needs a break before the game starts. */
 export async function POST(request: NextRequest) {
   try {

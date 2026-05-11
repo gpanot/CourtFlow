@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   try {
     const auth = requireStaff(request.headers);

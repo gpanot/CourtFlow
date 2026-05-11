@@ -5,6 +5,8 @@ import { api } from "@/lib/api-client";
 import { BarChart3, Users, Trophy, MapPin, X, MessageSquareHeart } from "lucide-react";
 import { cn } from "@/lib/cn";
 
+export const dynamic = "force-dynamic";
+
 interface Analytics {
   overview: { totalPlayers: number; totalSessions: number; totalGames: number };
   recentSessions: {

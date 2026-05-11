@@ -22,6 +22,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 
+export const dynamic = "force-dynamic";
+
 interface UpcomingBooking {
   id: string;
   playerName: string;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
+export const dynamic = "force-dynamic";
 const SITE_PASSWORD = process.env.SITE_PASSWORD || "CourtFlow2026!";
 const COOKIE_NAME = "cf-site-access";
 const TOKEN_VALUE = "granted";

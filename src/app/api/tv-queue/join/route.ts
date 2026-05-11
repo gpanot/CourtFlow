@@ -5,6 +5,7 @@ import { faceRecognitionService } from "@/lib/face-recognition";
 import { emitToVenue } from "@/lib/socket-server";
 import { assignPlayerFromQueueToCourt } from "@/lib/algorithm";
 
+export const dynamic = "force-dynamic";
 /**
  * TV Tablet queue join via face scan.
  * Public endpoint — no staff auth required.

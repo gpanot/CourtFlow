@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireStaff } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
 const MAX_ACTIVE_PACKAGES = 3;
 
 export async function GET(req: Request) {

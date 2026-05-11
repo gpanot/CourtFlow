@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
 import { recoverStuckQueueStatusesForActiveGames } from "@/lib/recover-queue-status";
 
+export const dynamic = "force-dynamic";
 const STAFF_QUEUE_STATUSES = ["waiting", "on_break", "assigned", "playing"] as const;
 
 /** Player fields exposed on queue/court when the client is not staff (no internal ranking). */

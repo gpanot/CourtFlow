@@ -7,6 +7,8 @@ import { Lock, X } from "lucide-react";
 import { useSessionStore } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 
+export const dynamic = "force-dynamic";
+
 export default function SignUpPage() {
   const router = useRouter();
   const { setAuth, clearAuth } = useSessionStore();

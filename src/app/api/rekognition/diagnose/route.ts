@@ -3,6 +3,7 @@ import { compareTwoFaceImagesDiagnostic } from "@/lib/rekognition-compare";
 import { FACE_MATCH_THRESHOLD } from "@/lib/rekognition-config";
 import { requireSuperAdmin } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
 function stripDataUrl(b64: string): string {
   const t = b64.trim();
   if (t.includes(",")) return t.split(",").pop() ?? t;

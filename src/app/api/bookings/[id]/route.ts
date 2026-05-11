@@ -4,6 +4,7 @@ import { json, error, notFound } from "@/lib/api-helpers";
 import { requireAuth } from "@/lib/auth";
 import { checkCancellationPolicy } from "@/lib/booking";
 
+export const dynamic = "force-dynamic";
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }

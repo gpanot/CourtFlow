@@ -3,6 +3,7 @@ import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { fetchReclubRoster } from "@/lib/reclub";
 
+export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   try {
     requireStaff(request.headers);

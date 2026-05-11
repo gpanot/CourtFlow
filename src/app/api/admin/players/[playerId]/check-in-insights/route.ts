@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error, notFound } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
 
+export const dynamic = "force-dynamic";
 const FACE_REGISTRATION_AUDIT_ACTIONS = [
   "walk_in_player_added_with_face",
   "face_manual_resolve_new_player",
