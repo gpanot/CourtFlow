@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -150,8 +150,14 @@ export function PlayerCard({
 }: PlayerCardProps) {
   const theme = useAppColors();
   const styles = createStyles(theme);
+  const [imgError, setImgError] = useState(false);
 
-  const photoUri = resolveMediaUrl(p.avatarPhotoPath ?? p.facePhotoPath ?? null);
+  // Prefer avatarPhotoPath (thumbnail) only — facePhotoPath is full-res and slow to load.
+  // Append ?w=80 so any image proxy/CDN can serve a smaller version.
+  const rawPhoto = resolveMediaUrl(p.avatarPhotoPath ?? null);
+  const photoUri = rawPhoto
+    ? `${rawPhoto}${rawPhoto.includes("?") ? "&" : "?"}w=80`
+    : null;
   const initials = p.name.trim().charAt(0).toUpperCase();
   const isCourtPay = p.source === "courtpay";
   const isFemale = p.gender?.toLowerCase() === "female";
@@ -165,11 +171,12 @@ export function PlayerCard({
   const inner = (
     <>
       <View style={styles.playerAvatarWrap}>
-        {photoUri ? (
+        {photoUri && !imgError ? (
           <Image
             source={{ uri: photoUri }}
             style={styles.playerAvatar}
             resizeMode="cover"
+            onError={() => setImgError(true)}
           />
         ) : (
           <View style={styles.playerAvatarFallback}>

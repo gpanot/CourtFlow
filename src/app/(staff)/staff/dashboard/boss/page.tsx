@@ -180,6 +180,10 @@ export default function BossDashboardPage() {
   const [playersData, setPlayersData] = useState<PlayersData | null>(null);
   const [playerSearch, setPlayerSearch] = useState("");
   const [genderFilter, setGenderFilter] = useState<"all" | "male" | "female">("all");
+  const [sortByVisits, setSortByVisits] = useState(false);
+  const [playerStatsOpen, setPlayerStatsOpen] = useState(false);
+  const [playerPage, setPlayerPage] = useState(1);
+  const PLAYERS_PAGE_SIZE = 25;
   const [billingCurrent, setBillingCurrent] = useState<BillingCurrentData | null>(null);
   const [billingInvoices, setBillingInvoices] = useState<BillingInvoiceRow[]>([]);
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceDetail | null>(null);
@@ -594,14 +598,22 @@ export default function BossDashboardPage() {
             {/* KPI stats grid */}
             {playersData && (
               <div className="grid grid-cols-3 gap-2 mb-5">
-                <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-center">
+                <button
+                  type="button"
+                  onClick={() => setPlayerStatsOpen(true)}
+                  className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-center hover:border-purple-700/50 hover:bg-neutral-800/60 transition-colors"
+                >
                   <p className="text-xl font-bold">{playersData.stats.totalPlayers}</p>
                   <p className="text-[10px] text-neutral-500 mt-0.5">Total players</p>
-                </div>
-                <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-center">
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPlayerStatsOpen(true)}
+                  className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-center hover:border-purple-700/50 hover:bg-neutral-800/60 transition-colors"
+                >
                   <p className="text-xl font-bold text-purple-400">{playersData.stats.newThisWeek}</p>
                   <p className="text-[10px] text-neutral-500 mt-0.5">New this week</p>
-                </div>
+                </button>
                 <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 text-center">
                   <p className="text-xl font-bold">{playersData.stats.activeSubscriptions}</p>
                   <p className="text-[10px] text-neutral-500 mt-0.5">Subscribers</p>
@@ -633,8 +645,8 @@ export default function BossDashboardPage() {
               </div>
             )}
 
-            {/* Gender filter */}
-            <div className="flex gap-2 mb-3">
+            {/* Gender filter + sort */}
+            <div className="flex flex-wrap gap-2 mb-3">
               {(["all", "male", "female"] as const).map((g) => {
                 const count =
                   g === "all" ? (playersData?.stats.totalPlayers ?? 0)
@@ -644,7 +656,7 @@ export default function BossDashboardPage() {
                   <button
                     key={g}
                     type="button"
-                    onClick={() => setGenderFilter(g)}
+                    onClick={() => { setGenderFilter(g); setPlayerPage(1); }}
                     className={cn(
                       "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
                       genderFilter === g
@@ -656,6 +668,18 @@ export default function BossDashboardPage() {
                   </button>
                 );
               })}
+              <button
+                type="button"
+                onClick={() => { setSortByVisits((v) => !v); setPlayerPage(1); }}
+                className={cn(
+                  "rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                  sortByVisits
+                    ? "bg-purple-600/20 text-purple-400"
+                    : "text-neutral-400 hover:bg-neutral-800/40 hover:text-white"
+                )}
+              >
+                Reg. ↓
+              </button>
             </div>
 
             {/* Search */}
@@ -663,7 +687,7 @@ export default function BossDashboardPage() {
               <input
                 type="text"
                 value={playerSearch}
-                onChange={(e) => setPlayerSearch(e.target.value)}
+                onChange={(e) => { setPlayerSearch(e.target.value); setPlayerPage(1); }}
                 placeholder="Search by name or phone…"
                 className="w-full rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-600"
               />
@@ -685,19 +709,28 @@ export default function BossDashboardPage() {
               </div>
             ) : (() => {
               const q = playerSearch.toLowerCase().trim();
-              const filtered = playersData.players.filter((p) => {
-                const matchGender = genderFilter === "all" || p.gender?.toLowerCase() === genderFilter;
-                const matchSearch = !q || p.name.toLowerCase().includes(q) || (p.phone ?? "").includes(q);
-                return matchGender && matchSearch;
-              });
+              const filtered = playersData.players
+                .filter((p) => {
+                  const matchGender = genderFilter === "all" || p.gender?.toLowerCase() === genderFilter;
+                  const matchSearch = !q || p.name.toLowerCase().includes(q) || (p.phone ?? "").includes(q);
+                  return matchGender && matchSearch;
+                })
+                .sort((a, b) =>
+                  sortByVisits
+                    ? b.checkInCount - a.checkInCount
+                    : new Date(b.registeredAt).getTime() - new Date(a.registeredAt).getTime()
+                );
 
               if (filtered.length === 0) {
                 return <p className="text-neutral-500 text-sm py-8 text-center">No players found.</p>;
               }
 
+              const visible = filtered.slice(0, playerPage * PLAYERS_PAGE_SIZE);
+              const hasMore = visible.length < filtered.length;
+
               return (
                 <div className="space-y-2">
-                  {filtered.map((p) => {
+                  {visible.map((p) => {
                     const isFemale = p.gender?.toLowerCase() === "female";
                     const isMale = p.gender?.toLowerCase() === "male";
                     const nameColor = isFemale ? "text-pink-300" : isMale ? "text-blue-300" : "text-white";
@@ -705,6 +738,9 @@ export default function BossDashboardPage() {
                     const lastSeen = p.lastSeenAt
                       ? new Date(p.lastSeenAt).toLocaleDateString(undefined, { day: "2-digit", month: "short" })
                       : "—";
+                    const avatarUrl = p.avatarPhotoPath
+                      ? `${p.avatarPhotoPath}${p.avatarPhotoPath.includes("?") ? "&" : "?"}w=80`
+                      : null;
                     return (
                       <div
                         key={`${p.source}-${p.id}`}
@@ -712,7 +748,17 @@ export default function BossDashboardPage() {
                       >
                         {/* Avatar */}
                         <div className="flex-shrink-0 w-10 h-10 rounded-full overflow-hidden bg-purple-900/30 flex items-center justify-center">
-                          <span className="text-base font-bold text-purple-300">{initials}</span>
+                          {avatarUrl ? (
+                            <img
+                              src={avatarUrl}
+                              alt={p.name}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                            />
+                          ) : (
+                            <span className="text-base font-bold text-purple-300">{initials}</span>
+                          )}
                         </div>
 
                         <div className="flex-1 min-w-0">
@@ -740,6 +786,15 @@ export default function BossDashboardPage() {
                       </div>
                     );
                   })}
+                  {hasMore && (
+                    <button
+                      type="button"
+                      onClick={() => setPlayerPage((p) => p + 1)}
+                      className="w-full py-3 text-sm text-neutral-400 hover:text-white border border-neutral-800 rounded-xl hover:border-neutral-700 transition-colors"
+                    >
+                      Load more ({filtered.length - visible.length} remaining)
+                    </button>
+                  )}
                 </div>
               );
             })()}
@@ -1006,6 +1061,163 @@ export default function BossDashboardPage() {
           </div>
         ) : null}
       </div>
+
+      {/* Player Growth Stats Dialog */}
+      {playerStatsOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center"
+          onClick={(e) => { if (e.target === e.currentTarget) setPlayerStatsOpen(false); }}
+        >
+          <div className="w-full max-w-lg rounded-t-2xl sm:rounded-2xl bg-neutral-900 border border-neutral-800 p-5 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base font-bold text-white">Player Growth</h2>
+              <button
+                type="button"
+                onClick={() => setPlayerStatsOpen(false)}
+                className="text-neutral-400 hover:text-white transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {playersData ? (
+              <div className="space-y-6">
+                {/* New players — last 30 days */}
+                {(() => {
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  const days: { label: string; count: number }[] = [];
+                  for (let i = 29; i >= 0; i--) {
+                    const d = new Date(today);
+                    d.setDate(d.getDate() - i);
+                    const next = new Date(d);
+                    next.setDate(next.getDate() + 1);
+                    const count = playersData.players.filter((p) => {
+                      const reg = new Date(p.registeredAt);
+                      return reg >= d && reg < next;
+                    }).length;
+                    days.push({ label: `${d.getDate()}/${d.getMonth() + 1}`, count });
+                  }
+                  const maxCount = Math.max(...days.map((d) => d.count), 1);
+                  const barW = 14;
+                  return (
+                    <div>
+                      <p className="text-sm font-semibold text-white mb-3">New players — last 30 days</p>
+                      <div className="overflow-x-auto">
+                        <div className="flex items-end gap-0.5 pt-4" style={{ height: 110, minWidth: days.length * (barW + 2) }}>
+                          {days.map((d, i) => {
+                            const h = Math.max(4, Math.round((d.count / maxCount) * 80));
+                            return (
+                              <div key={i} className="flex flex-col items-center flex-shrink-0" style={{ width: barW }}>
+                                {d.count > 0 && (
+                                  <span className="text-[9px] text-neutral-400 mb-0.5 leading-none">{d.count}</span>
+                                )}
+                                <div
+                                  title={`${d.label}: ${d.count}`}
+                                  className="w-full rounded-sm transition-opacity hover:opacity-70"
+                                  style={{
+                                    height: h,
+                                    backgroundColor: d.count > 0 ? "#a855f7" : "#262626",
+                                  }}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Total players — last 24 weeks (line chart) */}
+                {(() => {
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  const weeks: { label: string; total: number }[] = [];
+                  for (let i = 23; i >= 0; i--) {
+                    const weekEnd = new Date(today);
+                    weekEnd.setDate(weekEnd.getDate() - i * 7);
+                    const weekEndMs = weekEnd.getTime();
+                    const total = playersData.players.filter(
+                      (p) => new Date(p.registeredAt).getTime() <= weekEndMs
+                    ).length;
+                    weeks.push({
+                      label: `${weekEnd.getDate()}/${weekEnd.getMonth() + 1}`,
+                      total,
+                    });
+                  }
+                  const minTotal = Math.min(...weeks.map((w) => w.total));
+                  const maxTotal = Math.max(...weeks.map((w) => w.total), minTotal + 1);
+                  const n = weeks.length;
+                  const chartW = 440;
+                  const chartH = 100;
+                  const padL = 36;
+                  const padR = 8;
+                  const padT = 8;
+                  const padB = 20;
+                  const plotW = chartW - padL - padR;
+                  const plotH = chartH - padT - padB;
+                  const xOf = (i: number) => padL + (i / (n - 1)) * plotW;
+                  const yOf = (v: number) => padT + plotH - Math.round(((v - minTotal) / (maxTotal - minTotal)) * plotH);
+                  const polyline = weeks.map((w, i) => `${xOf(i)},${yOf(w.total)}`).join(" ");
+                  const ticks = [minTotal, Math.round((minTotal + maxTotal) / 2), maxTotal];
+                  const totalNow = playersData.stats.totalPlayers;
+                  return (
+                    <div>
+                      <p className="text-sm font-semibold text-white mb-3">
+                        Total players ({totalNow}) — last 24 weeks
+                      </p>
+                      <div className="overflow-x-auto">
+                        <svg width={chartW} height={chartH} style={{ display: "block" }}>
+                          {/* Y-axis grid + labels */}
+                          {ticks.map((tick, ti) => (
+                            <g key={ti}>
+                              <line
+                                x1={padL} y1={yOf(tick)}
+                                x2={chartW - padR} y2={yOf(tick)}
+                                stroke="#3f3f46" strokeWidth={1} strokeDasharray="3 3"
+                              />
+                              <text
+                                x={padL - 4} y={yOf(tick) + 4}
+                                textAnchor="end" fontSize={9} fill="#71717a"
+                              >{tick}</text>
+                            </g>
+                          ))}
+                          {/* Filled area under line */}
+                          <path
+                            d={`M ${xOf(0)},${yOf(weeks[0].total)} ${weeks.slice(1).map((w, i) => `L ${xOf(i + 1)},${yOf(w.total)}`).join(" ")} L ${xOf(n - 1)},${padT + plotH} L ${xOf(0)},${padT + plotH} Z`}
+                            fill="#60a5fa" fillOpacity={0.12}
+                          />
+                          {/* Line */}
+                          <polyline
+                            points={polyline}
+                            fill="none" stroke="#60a5fa" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round"
+                          />
+                          {/* Dots every 4 weeks + last */}
+                          {weeks.map((w, i) => (
+                            (i % 4 === 0 || i === n - 1) ? (
+                              <g key={i}>
+                                <circle cx={xOf(i)} cy={yOf(w.total)} r={3} fill="#60a5fa" />
+                                <text x={xOf(i)} y={chartH - 4} textAnchor={i === 0 ? "start" : i === n - 1 ? "end" : "middle"} fontSize={9} fill="#71717a">
+                                  {w.label}
+                                </text>
+                              </g>
+                            ) : null
+                          ))}
+                        </svg>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            ) : (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin text-neutral-600" />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

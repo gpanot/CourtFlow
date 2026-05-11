@@ -10,6 +10,17 @@ function fisherYates<T>(arr: T[]): T[] {
   return a;
 }
 
+function packUrls(pack: {
+  sticker1Url: string | null;
+  sticker2Url: string | null;
+  sticker3Url: string | null;
+  sticker4Url: string | null;
+}): string[] {
+  return [pack.sticker1Url, pack.sticker2Url, pack.sticker3Url, pack.sticker4Url].filter(
+    Boolean
+  ) as string[];
+}
+
 export async function GET() {
   try {
     const packs = await prisma.playerStickerPack.findMany({
@@ -26,19 +37,32 @@ export async function GET() {
         sticker2Url: true,
         sticker3Url: true,
         sticker4Url: true,
+        player: { select: { gender: true } },
       },
-      take: 20,
+      orderBy: { createdAt: "desc" },
+      take: 100,
     });
 
+    const femaleUrls: string[] = [];
+    const maleUrls: string[] = [];
     const allUrls: string[] = [];
+
     for (const pack of packs) {
-      for (const url of [pack.sticker1Url, pack.sticker2Url, pack.sticker3Url, pack.sticker4Url]) {
-        if (url) allUrls.push(url);
+      const urls = packUrls(pack);
+      allUrls.push(...urls);
+      if (pack.player.gender === "male") {
+        maleUrls.push(...urls);
+      } else {
+        femaleUrls.push(...urls);
       }
     }
 
-    const shuffled = fisherYates(allUrls).slice(0, 16);
-    return json({ stickers: shuffled });
+    return json({
+      // Legacy field — kept for backward compat
+      stickers: fisherYates(allUrls).slice(0, 16),
+      female: fisherYates(femaleUrls).slice(0, 24),
+      male: fisherYates(maleUrls).slice(0, 24),
+    });
   } catch (e) {
     return error((e as Error).message, 500);
   }

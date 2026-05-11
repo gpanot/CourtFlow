@@ -9,7 +9,7 @@ import {
   type CameraCaptureHandle,
 } from "@/components/camera-capture";
 import { cn } from "@/lib/cn";
-import { ArrowLeft, Loader2, Smartphone, UserPlus, ScanFace } from "lucide-react";
+import { ArrowLeft, Loader2, Smartphone, ScanFace } from "lucide-react";
 import { useSuccessChime } from "@/hooks/use-success-chime";
 import { useSocket } from "@/hooks/use-socket";
 import { joinVenue } from "@/lib/socket-client";
@@ -412,8 +412,7 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
     onMaxAttemptsReached: useCallback(() => {
       cameraRef.current?.stopCamera();
       goTo("no_face");
-      scheduleReset(ERROR_DISPLAY_MS);
-    }, [goTo, scheduleReset]),
+    }, [goTo]),
   });
 
   /* ─── Phone fallback ────────────────────────── */
@@ -828,7 +827,7 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
       scanning: "bg-black",
       confirmed: "bg-black",
       error: "bg-red-950",
-      no_face: "bg-amber-950",
+      no_face: "bg-black",
       needs_registration: "bg-neutral-900",
       network_error: "bg-red-950",
       phone_enter: "bg-black",
@@ -885,24 +884,13 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
           <div className="w-full max-w-lg space-y-4">
             <button
               type="button"
-              onClick={beginRegFaceCapture}
-              className="flex w-full items-center gap-5 rounded-3xl border-2 border-neutral-600/50 bg-neutral-800/30 px-8 py-7 text-left transition-colors hover:bg-neutral-800/60 active:scale-[0.99]"
-            >
-              <UserPlus className="h-10 w-10 shrink-0 text-neutral-400" />
-              <div>
-                <p className="text-2xl font-bold text-white">First Time?</p>
-                <p className="text-base text-neutral-400">Register & get started</p>
-              </div>
-            </button>
-            <button
-              type="button"
               onClick={beginFaceScan}
               className="flex w-full items-center gap-5 rounded-3xl border-2 border-fuchsia-600/50 bg-fuchsia-900/30 px-8 py-7 text-left transition-colors hover:bg-fuchsia-900/50 active:scale-[0.99]"
             >
               <ScanFace className="h-10 w-10 shrink-0 text-fuchsia-400" />
               <div>
-                <p className="text-2xl font-bold text-white">Registered player</p>
-                <p className="text-base text-neutral-400">Scan your face to check in</p>
+                <p className="text-2xl font-bold text-white">Check-in</p>
+                <p className="text-base text-neutral-400">Tap to scan your face</p>
               </div>
             </button>
           </div>
@@ -945,36 +933,56 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
 
       {/* ── NEEDS REGISTRATION ──────────────────── */}
       {step === "needs_registration" && (
-        <div className="flex flex-1 flex-col items-center justify-center gap-6 px-8 text-center">
-          <button type="button" onClick={resetToHome} className="absolute left-6 top-6 z-20 rounded-full p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white" aria-label="Back">
-            <ArrowLeft className="h-6 w-6" />
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
+          <h2 className="text-3xl font-bold text-white">It seems you are new here?</h2>
+          <p className="text-lg text-neutral-400">We couldn&apos;t recognize your face</p>
+          <button
+            type="button"
+            onClick={() => { setIsNewPlayer(true); goTo("reg_face_capture"); }}
+            className="w-full max-w-lg rounded-3xl bg-fuchsia-600 px-8 py-7 text-2xl font-bold text-white transition-colors hover:bg-fuchsia-500 active:scale-[0.99]"
+          >
+            I&apos;m new here — Register
           </button>
-          <h2 className="text-2xl font-bold text-neutral-200">Face not recognized</h2>
-          <p className="text-lg text-neutral-400">Try again or use your phone number</p>
-          <button type="button" onClick={beginFaceScan} className="w-full max-w-lg rounded-3xl bg-fuchsia-600 px-8 py-7 text-2xl font-bold text-white transition-colors hover:bg-fuchsia-500 active:scale-[0.99]">
-            Scan Again
+          <button
+            type="button"
+            onClick={openPhoneFlow}
+            className="text-base text-neutral-500 hover:text-neutral-300"
+          >
+            Check-in by phone
           </button>
-          <div className="flex items-center justify-center">
-            <button type="button" onClick={openPhoneFlow} className="flex items-center gap-2 rounded-xl bg-fuchsia-700 px-6 py-3 text-lg font-semibold text-white hover:bg-fuchsia-600">
-              <Smartphone className="h-5 w-5" />
-              Check in with phone
-            </button>
-          </div>
         </div>
       )}
 
-      {/* ── NO FACE / ERROR ─────────────────────── */}
-      {(step === "no_face" || step === "error") && (
+      {/* ── NO FACE ─────────────────────────────── */}
+      {step === "no_face" && (
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
+          <h2 className="text-3xl font-bold text-white">It seems you are new here?</h2>
+          <p className="text-lg text-neutral-400">We couldn&apos;t recognize your face</p>
+          <button
+            type="button"
+            onClick={() => { setIsNewPlayer(true); goTo("reg_face_capture"); }}
+            className="w-full max-w-lg rounded-3xl bg-fuchsia-600 px-8 py-7 text-2xl font-bold text-white transition-colors hover:bg-fuchsia-500 active:scale-[0.99]"
+          >
+            I&apos;m new here — Register
+          </button>
+          <button
+            type="button"
+            onClick={openPhoneFlow}
+            className="text-base text-neutral-500 hover:text-neutral-300"
+          >
+            Check-in by phone
+          </button>
+        </div>
+      )}
+
+      {/* ── ERROR ───────────────────────────────── */}
+      {step === "error" && (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
           <div className="flex h-20 w-20 items-center justify-center rounded-full bg-red-700">
             <span className="text-3xl">!</span>
           </div>
-          <h2 className="text-3xl font-bold text-red-300">
-            {step === "no_face" ? "No face detected" : "Something went wrong"}
-          </h2>
-          <p className="text-lg text-neutral-400">
-            {step === "no_face" ? "Please look directly at the camera" : errorMessage || "Please try again"}
-          </p>
+          <h2 className="text-3xl font-bold text-red-300">Something went wrong</h2>
+          <p className="text-lg text-neutral-400">{errorMessage || "Please try again"}</p>
         </div>
       )}
 

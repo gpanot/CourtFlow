@@ -752,28 +752,7 @@ export function StaffProfileScreen() {
             <LockIcon />
             <Ionicons name="chevron-forward" size={16} color={theme.dimmed} style={styles.menuChevron} />
           </TouchableOpacity>
-          <View style={styles.menuDivider} />
-
-          {/* Appearance — free */}
-          <TouchableOpacity style={styles.menuRow} onPress={toggleTheme} activeOpacity={0.6}>
-            <Ionicons name={themeMode === "dark" ? "moon" : "sunny"} size={18} color={theme.amber400} />
-            <Text style={styles.menuRowText}>{t("profileAppearance")}</Text>
-            <Text style={styles.menuRowMeta}>{themeMode === "dark" ? t("profileAppearanceDark") : t("profileAppearanceLight")}</Text>
-            <Ionicons name="chevron-forward" size={16} color={theme.dimmed} style={styles.menuChevron} />
-          </TouchableOpacity>
         </View>
-
-        {/* Session History */}
-        <TouchableOpacity style={styles.historyBtn} onPress={() => navigation.navigate("StaffSessionHistory")} activeOpacity={0.7}>
-          <View style={styles.historyLeft}>
-            <Ionicons name="time-outline" size={20} color={theme.blue400} />
-            <View>
-              <Text style={styles.historyTitle}>{t("profileSessionHistory")}</Text>
-              <Text style={styles.historyDesc}>{t("profileSessionHistoryDesc")}</Text>
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={theme.subtle} />
-        </TouchableOpacity>
 
         {/* Log Out */}
         <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>

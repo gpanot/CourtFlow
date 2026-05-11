@@ -10,6 +10,8 @@ import {
   TextInput,
   Image,
   Alert,
+  Modal,
+  Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
@@ -25,6 +27,7 @@ import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PlayerCard } from "../../components/PlayerCard";
 import { BossRevenueExportSheet } from "../../components/staff/BossRevenueExportSheet";
+import Svg, { Polyline, Path, Line, Circle, Text as SvgText } from "react-native-svg";
 import {
   exportToCSV,
   formatDateDDMMYYYY,
@@ -501,6 +504,10 @@ export function StaffBossDashboardScreen() {
   const [genderFilter, setGenderFilter] = useState<GenderFilter>("all");
   const [playerSearch, setPlayerSearch] = useState("");
   const [searchVisible, setSearchVisible] = useState(false);
+  const [sortByVisits, setSortByVisits] = useState(false);
+  const [playerStatsOpen, setPlayerStatsOpen] = useState(false);
+  const [playerPage, setPlayerPage] = useState(1);
+  const PLAYERS_PAGE_SIZE = 25;
   const searchRef = useRef<TextInput>(null);
   const [revenueExportOpen, setRevenueExportOpen] = useState(false);
   const [exportToast, setExportToast] = useState<string | null>(null);
@@ -910,16 +917,16 @@ export function StaffBossDashboardScreen() {
               {/* KPI stats — 2×3 grid (2 columns, 3 rows) */}
               {playersData && (
                 <View style={styles.grid}>
-                  <View style={styles.statCard}>
-                  <Text style={styles.statLabel}>{t("bossDashboardTotalPlayers")}</Text>
-                  <Text style={styles.statValue}>{playersData.stats.totalPlayers}</Text>
-                </View>
-                <View style={styles.statCard}>
-                  <Text style={styles.statLabel}>{t("bossDashboardNewThisWeek")}</Text>
-                  <Text style={[styles.statValue, styles.statPurple]}>
-                    {playersData.stats.newThisWeek}
-                  </Text>
-                </View>
+                  <TouchableOpacity style={styles.statCard} onPress={() => setPlayerStatsOpen(true)} activeOpacity={0.7}>
+                    <Text style={styles.statLabel}>{t("bossDashboardTotalPlayers")}</Text>
+                    <Text style={styles.statValue}>{playersData.stats.totalPlayers}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.statCard} onPress={() => setPlayerStatsOpen(true)} activeOpacity={0.7}>
+                    <Text style={styles.statLabel}>{t("bossDashboardNewThisWeek")}</Text>
+                    <Text style={[styles.statValue, styles.statPurple]}>
+                      {playersData.stats.newThisWeek}
+                    </Text>
+                  </TouchableOpacity>
                 <View style={styles.statCard}>
                   <Text style={styles.statLabel}>{t("bossDashboardWithSubscription")}</Text>
                   <Text style={styles.statValue}>{playersData.stats.activeSubscriptions}</Text>
@@ -981,7 +988,7 @@ export function StaffBossDashboardScreen() {
                         styles.filterChip,
                         genderFilter === g && styles.filterChipActive,
                       ]}
-                      onPress={() => setGenderFilter(g)}
+                      onPress={() => { setGenderFilter(g); setPlayerPage(1); }}
                     >
                       <Text
                         style={[
@@ -994,6 +1001,17 @@ export function StaffBossDashboardScreen() {
                     </TouchableOpacity>
                   );
                 })}
+                <TouchableOpacity
+                  style={[
+                    styles.filterChip,
+                    sortByVisits && styles.filterChipActive,
+                  ]}
+                  onPress={() => { setSortByVisits((v) => !v); setPlayerPage(1); }}
+                >
+                  <Text style={[styles.filterChipText, sortByVisits && styles.filterChipTextActive]}>
+                    Reg. ↓
+                  </Text>
+                </TouchableOpacity>
                 <View style={{ flexDirection: "row", alignItems: "center", marginLeft: "auto" as never }}>
                   <TouchableOpacity
                     style={{ padding: 6 }}
@@ -1031,7 +1049,7 @@ export function StaffBossDashboardScreen() {
                     placeholder={t("bossDashboardSearchPlaceholder")}
                     placeholderTextColor={theme.muted}
                     value={playerSearch}
-                    onChangeText={setPlayerSearch}
+                    onChangeText={(v) => { setPlayerSearch(v); setPlayerPage(1); }}
                     autoCapitalize="none"
                     returnKeyType="search"
                   />
@@ -1048,16 +1066,22 @@ export function StaffBossDashboardScreen() {
                 <ActivityIndicator color={theme.purple400} style={{ marginTop: 24 }} />
               ) : (() => {
                 const q = playerSearch.toLowerCase().trim();
-                const filtered = playersData.players.filter((p) => {
-                  const matchGender =
-                    genderFilter === "all" ||
-                    p.gender?.toLowerCase() === genderFilter;
-                  const matchSearch =
-                    !q ||
-                    p.name.toLowerCase().includes(q) ||
-                    (p.phone ?? "").includes(q);
-                  return matchGender && matchSearch;
-                });
+                const filtered = playersData.players
+                  .filter((p) => {
+                    const matchGender =
+                      genderFilter === "all" ||
+                      p.gender?.toLowerCase() === genderFilter;
+                    const matchSearch =
+                      !q ||
+                      p.name.toLowerCase().includes(q) ||
+                      (p.phone ?? "").includes(q);
+                    return matchGender && matchSearch;
+                  })
+                  .sort((a, b) =>
+                    sortByVisits
+                      ? b.checkInCount - a.checkInCount
+                      : new Date(b.registeredAt).getTime() - new Date(a.registeredAt).getTime()
+                  );
 
                 if (filtered.length === 0) {
                   return (
@@ -1065,21 +1089,46 @@ export function StaffBossDashboardScreen() {
                   );
                 }
 
-                return filtered.map((p) => (
-                  <PlayerCard
-                    key={`${p.source}-${p.id}`}
-                    player={p}
-                    statKey="checkInCount"
-                    statLabel={t("staffDashboardVisits")}
-                    lastSeenLabel={t("bossDashboardLastSeen")}
-                    onPress={() =>
-                      navigation.navigate("StaffPlayerDetail", {
-                        playerId: p.id,
-                        source: p.source,
-                      })
-                    }
-                  />
-                ));
+                const visible = filtered.slice(0, playerPage * PLAYERS_PAGE_SIZE);
+                const hasMore = visible.length < filtered.length;
+
+                return (
+                  <>
+                    {visible.map((p) => (
+                      <PlayerCard
+                        key={`${p.source}-${p.id}`}
+                        player={p}
+                        statKey="checkInCount"
+                        statLabel={t("staffDashboardVisits")}
+                        lastSeenLabel={t("bossDashboardLastSeen")}
+                        onPress={() =>
+                          navigation.navigate("StaffPlayerDetail", {
+                            playerId: p.id,
+                            source: p.source,
+                          })
+                        }
+                      />
+                    ))}
+                    {hasMore && (
+                      <TouchableOpacity
+                        onPress={() => setPlayerPage((p) => p + 1)}
+                        style={{
+                          alignItems: "center",
+                          paddingVertical: 12,
+                          marginTop: 4,
+                          borderRadius: 10,
+                          borderWidth: 1,
+                          borderColor: theme.border,
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={{ color: theme.muted, fontSize: 13, fontWeight: "600" }}>
+                          Load more ({filtered.length - visible.length} remaining)
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </>
+                );
               })()}
             </>
           )}
@@ -1393,6 +1442,175 @@ export function StaffBossDashboardScreen() {
         cancelLabel={t("bossExportCancel")}
         onExport={runBossRevenueExport}
       />
+
+      {/* Player Growth Stats Modal */}
+      <Modal
+        visible={playerStatsOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPlayerStatsOpen(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" }}>
+          <View style={{
+            backgroundColor: theme.card,
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            padding: 20,
+            paddingBottom: Math.max(24, insets.bottom + 16),
+            maxHeight: Dimensions.get("window").height * 0.82,
+          }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <Text style={{ color: theme.text, fontSize: 16, fontWeight: "700" }}>Player Growth</Text>
+              <TouchableOpacity onPress={() => setPlayerStatsOpen(false)} style={{ padding: 4 }}>
+                <Ionicons name="close" size={22} color={theme.muted} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {playersData ? (
+                <>
+                  {/* New players — last 30 days (day by day) */}
+                  {(() => {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const days: { label: string; count: number }[] = [];
+                    for (let i = 29; i >= 0; i--) {
+                      const d = new Date(today);
+                      d.setDate(d.getDate() - i);
+                      const next = new Date(d);
+                      next.setDate(next.getDate() + 1);
+                      const count = playersData.players.filter((p) => {
+                        const reg = new Date(p.registeredAt);
+                        return reg >= d && reg < next;
+                      }).length;
+                      days.push({
+                        label: `${d.getDate()}/${d.getMonth() + 1}`,
+                        count,
+                      });
+                    }
+                    const maxCount = Math.max(...days.map((d) => d.count), 1);
+                    const screenW = Dimensions.get("window").width - 40;
+                    const barW = Math.max(10, Math.floor((screenW - 30 * 2) / 30));
+                    const barH = 80;
+                    return (
+                      <View style={{ marginBottom: 28 }}>
+                        <Text style={{ color: theme.text, fontSize: 13, fontWeight: "600", marginBottom: 10 }}>
+                          New players — last 30 days
+                        </Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                          <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 2, paddingTop: 16 }}>
+                            {days.map((d, i) => {
+                              const h = Math.max(4, Math.round((d.count / maxCount) * barH));
+                              return (
+                                <View key={i} style={{ alignItems: "center", width: barW }}>
+                                  {d.count > 0 && (
+                                    <Text style={{ color: theme.muted, fontSize: 8, marginBottom: 2 }}>
+                                      {d.count}
+                                    </Text>
+                                  )}
+                                  <View style={{
+                                    width: barW,
+                                    height: h,
+                                    backgroundColor: d.count > 0 ? theme.purple400 : theme.border,
+                                    borderRadius: 3,
+                                  }} />
+                                </View>
+                              );
+                            })}
+                          </View>
+                        </ScrollView>
+                      </View>
+                    );
+                  })()}
+
+                  {/* Total players — last 24 weeks (SVG line chart) */}
+                  {(() => {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const weeks: { label: string; total: number }[] = [];
+                    for (let i = 23; i >= 0; i--) {
+                      const weekEnd = new Date(today);
+                      weekEnd.setDate(weekEnd.getDate() - i * 7);
+                      const weekEndMs = weekEnd.getTime();
+                      const total = playersData.players.filter(
+                        (p) => new Date(p.registeredAt).getTime() <= weekEndMs
+                      ).length;
+                      weeks.push({
+                        label: `${weekEnd.getDate()}/${weekEnd.getMonth() + 1}`,
+                        total,
+                      });
+                    }
+                    const minTotal = Math.min(...weeks.map((w) => w.total));
+                    const maxTotal = Math.max(...weeks.map((w) => w.total), minTotal + 1);
+                    const n = weeks.length;
+                    const chartW = Dimensions.get("window").width - 40;
+                    const chartH = 120;
+                    const padL = 34;
+                    const padR = 8;
+                    const padT = 10;
+                    const padB = 18;
+                    const plotW = chartW - padL - padR;
+                    const plotH = chartH - padT - padB;
+                    const xOf = (i: number) => padL + (i / (n - 1)) * plotW;
+                    const yOf = (v: number) =>
+                      padT + plotH - Math.round(((v - minTotal) / (maxTotal - minTotal)) * plotH);
+                    const pts = weeks.map((w, i) => `${xOf(i)},${yOf(w.total)}`).join(" ");
+                    const areaPath = `M ${xOf(0)},${yOf(weeks[0].total)} ${weeks.slice(1).map((w, i) => `L ${xOf(i + 1)},${yOf(w.total)}`).join(" ")} L ${xOf(n - 1)},${padT + plotH} L ${xOf(0)},${padT + plotH} Z`;
+                    const ticks = [minTotal, Math.round((minTotal + maxTotal) / 2), maxTotal];
+                    const totalNow = playersData.stats.totalPlayers;
+                    return (
+                      <View style={{ marginBottom: 8 }}>
+                        <Text style={{ color: theme.text, fontSize: 13, fontWeight: "600", marginBottom: 10 }}>
+                          {`Total players (${totalNow}) — last 24 weeks`}
+                        </Text>
+                        <Svg width={chartW} height={chartH}>
+                          {/* Grid lines + y-axis labels */}
+                          {ticks.map((tick, ti) => (
+                            <React.Fragment key={ti}>
+                              <Line
+                                x1={padL} y1={yOf(tick)}
+                                x2={chartW - padR} y2={yOf(tick)}
+                                stroke={theme.border} strokeWidth={1} strokeDasharray="3,3"
+                              />
+                              <SvgText
+                                x={padL - 4} y={yOf(tick) + 4}
+                                textAnchor="end" fontSize={8} fill={theme.muted}
+                              >{tick}</SvgText>
+                            </React.Fragment>
+                          ))}
+                          {/* Area fill */}
+                          <Path d={areaPath} fill="#60a5fa" fillOpacity={0.12} />
+                          {/* Line */}
+                          <Polyline
+                            points={pts}
+                            fill="none" stroke="#60a5fa" strokeWidth={2}
+                            strokeLinejoin="round" strokeLinecap="round"
+                          />
+                          {/* Dots + x labels every 4 weeks */}
+                          {weeks.map((w, i) => (
+                            (i % 4 === 0 || i === n - 1) ? (
+                              <React.Fragment key={i}>
+                                <Circle cx={xOf(i)} cy={yOf(w.total)} r={3} fill="#60a5fa" />
+                                <SvgText
+                                  x={xOf(i)}
+                                  y={chartH - 2}
+                                  textAnchor={i === 0 ? "start" : i === n - 1 ? "end" : "middle"}
+                                  fontSize={8} fill={theme.muted}
+                                >{w.label}</SvgText>
+                              </React.Fragment>
+                            ) : null
+                          ))}
+                        </Svg>
+                      </View>
+                    );
+                  })()}
+                </>
+              ) : (
+                <ActivityIndicator color={theme.purple400} />
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {exportToast ? (
         <View

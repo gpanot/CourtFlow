@@ -187,6 +187,11 @@ const CHECK_IN_SCANNER_EN = {
   "cameraNotReady": "Camera not ready — try again.",
   "faceAlreadyExists": "{{name}} already exists. Use Registered player.",
   "courtpayTagline": "CourtPay",
+  "newHereRegister": "I'm new here — Register",
+  "playedBeforePhone": "I've played here before — Enter phone",
+  "couldNotRecognize": "We couldn't recognize your face",
+  "seemsNewHere": "It seems you are new here?",
+  "checkInByPhoneLink": "Check-in by phone",
 
   // ── Staff app general ──────────────────────────────────────────────────────
   "staffDashboard": "Staff Dashboard",
@@ -756,6 +761,11 @@ const CHECK_IN_SCANNER_VI = {
   "cameraNotReady": "Camera chưa sẵn sàng — thử lại.",
   "faceAlreadyExists": "{{name}} đã tồn tại. Chọn Người chơi đã đăng ký.",
   "courtpayTagline": "CourtPay",
+  "newHereRegister": "Tôi mới — Đăng ký",
+  "playedBeforePhone": "Tôi đã chơi ở đây — Nhập số điện thoại",
+  "couldNotRecognize": "Chúng tôi không nhận diện được khuôn mặt của bạn",
+  "seemsNewHere": "Bạn mới đến đây?",
+  "checkInByPhoneLink": "Check-in bằng số điện thoại",
 
   // ── Staff app general ──────────────────────────────────────────────────────
   "staffDashboard": "Bảng điều khiển nhân viên",

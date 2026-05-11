@@ -386,20 +386,6 @@ export function ProfileCourtPay({ legacyTab, onOpenSessionHistory, variant = "ta
             </button>
           </div>
 
-          <button
-            type="button"
-            onClick={handleSessionHistory}
-            className="flex w-full items-center justify-between rounded-xl border border-neutral-800 bg-neutral-900/50 px-4 py-3.5 hover:bg-neutral-800/50 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <History className="h-5 w-5 text-client-primary" aria-hidden />
-              <div className="text-left">
-                <span className="block font-medium text-neutral-200">{t("staff.profile.sessionHistory")}</span>
-                <span className="text-xs text-neutral-500">{t("staff.profile.sessionHistoryDesc")}</span>
-              </div>
-            </div>
-            <ChevronRight className="h-5 w-5 shrink-0 text-neutral-500" aria-hidden />
-          </button>
 
           <p className="text-xs text-neutral-500">{t("staff.profile.sharedDeviceHint")}</p>
 

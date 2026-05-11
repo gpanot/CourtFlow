@@ -18,7 +18,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { ScanFace, UserPlus } from "lucide-react-native";
+import { ScanFace } from "lucide-react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { StatusBar } from "expo-status-bar";
 import { CourtPayLiquidBackdrop } from "../../components/courtpay/CourtPayLiquidBackdrop";
@@ -1160,31 +1160,6 @@ export function CourtPayCheckInScreen({
                 activeOpacity={0.92}
                 onPress={() => {
                   setFaceBase64(null);
-                  setIsNewPlayer(true);
-                  setStep("reg_face_capture");
-                  restartIdleTimer();
-                }}
-              >
-                <LiquidGlassSurface
-                  accent="none"
-                  style={styles.homeGlassCard}
-                  intensity={Platform.OS === "ios" ? 44 : 82}
-                  mode={themeMode}
-                >
-                  <View style={styles.homeGlassRow}>
-                    <UserPlus size={40} color={isLight ? "#64748b" : "#a3a3a3"} strokeWidth={2} />
-                    <View style={styles.homeCardTextCol}>
-                      <Text style={[styles.homeCardTitle, isLight && styles.homeCardTitleLight]}>{t("homeFirstTime")}</Text>
-                      <Text style={[styles.homeCardSubMuted, isLight && styles.homeCardSubMutedLight]}>{t("homeFirstTimeSub")}</Text>
-                    </View>
-                  </View>
-                </LiquidGlassSurface>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.homeCardTouchable}
-                activeOpacity={0.92}
-                onPress={() => {
-                  setFaceBase64(null);
                   setStep("scan_returning");
                   restartIdleTimer();
                 }}
@@ -1198,8 +1173,8 @@ export function CourtPayCheckInScreen({
                   <View style={styles.homeGlassRow}>
                     <ScanFace size={40} color={isLight ? CP.textOnLight : CP.text} strokeWidth={2} />
                     <View style={styles.homeCardTextCol}>
-                      <Text style={[styles.homeCardTitle, isLight && styles.homeCardTitleLight]}>{t("homeCheckIn")}</Text>
-                      <Text style={[styles.homeCardSub, isLight && styles.homeCardSubLight]}>{t("homeCheckInSub")}</Text>
+                      <Text style={[styles.homeCardTitle, isLight && styles.homeCardTitleLight]}>{t("checkIn")}</Text>
+                      <Text style={[styles.homeCardSub, isLight && styles.homeCardSubLight]}>{t("tapToCheckIn")}</Text>
                     </View>
                   </View>
                 </LiquidGlassSurface>
@@ -1233,24 +1208,17 @@ export function CourtPayCheckInScreen({
         return (
           <LiquidGlassSurface style={styles.flowGlassPanel} accent="none" mode={themeMode}>
             <View style={styles.flowGlassPanelInner}>
-              <Ionicons name="scan-outline" size={56} color={isLight ? "#b45309" : "#fbbf24"} />
-              <Text style={[styles.formTitle, isLight && styles.formTitleLight]}>{t("noFaceDetected")}</Text>
-              <Text style={[styles.heroSubtitle, isLight && styles.heroSubtitleLight]}>{t("lookAtCamera")}</Text>
+              <Text style={[styles.formTitle, isLight && styles.formTitleLight]}>{t("seemsNewHere")}</Text>
+              <Text style={[styles.heroSubtitle, isLight && styles.heroSubtitleLight]}>{t("couldNotRecognize")}</Text>
               <TouchableOpacity
-                style={[styles.primaryBtn, dyn.primaryBtn]}
-                onPress={() => setStep("scan_returning")}
+                style={[styles.scanAgainBig, dyn.scanAgainBig]}
+                onPress={() => { setIsNewPlayer(true); setStep("reg_face_capture"); }}
+                activeOpacity={0.92}
               >
-                <Text style={styles.primaryBtnText}>{t("tryAgainGeneric")}</Text>
+                <Text style={styles.scanAgainBigText}>{t("newHereRegister")}</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.secondaryActionBtn, dyn.secondaryActionBtn]}
-                onPress={() => setStep("phone_enter")}
-              >
-                <Ionicons name="call-outline" size={18} color={isLight ? CP.primaryDark : CP.primaryLight} />
-                <Text style={[styles.secondaryActionText, dyn.secondaryActionText]}>{t("usePhoneInstead")}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.cancelBtn} onPress={resetToHome}>
-                <Text style={[styles.cancelText, isLight && styles.cancelTextLight]}>{t("backToHome")}</Text>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setStep("phone_enter")}>
+                <Text style={[styles.cancelText, isLight && styles.cancelTextLight]}>{t("checkInByPhoneLink")}</Text>
               </TouchableOpacity>
             </View>
           </LiquidGlassSurface>
@@ -1260,32 +1228,24 @@ export function CourtPayCheckInScreen({
       case "needs_registration":
         return (
           <View style={[styles.centerContent, styles.needsRegRoot]}>
-            <Pressable
-              style={[styles.needsRegBack, { top: insets.top + 4, left: 12 }]}
-              onPress={resetToHome}
-              hitSlop={12}
-            >
-              <Ionicons name="arrow-back" size={26} color={isLight ? "#475569" : "#a3a3a3"} />
-            </Pressable>
-            <LiquidGlassSurface style={styles.needsRegGlass} accent="amber" mode={themeMode}>
+            <LiquidGlassSurface style={styles.needsRegGlass} accent="none" mode={themeMode}>
               <View style={styles.needsRegGlassInner}>
-                <Ionicons name="alert-circle-outline" size={60} color={isLight ? "#b45309" : "#f59e0b"} />
-                <Text style={[styles.formTitle, isLight && styles.formTitleLight]}>{t("faceNotRecognized")}</Text>
-                <Text style={[styles.heroSubtitle, isLight && styles.heroSubtitleLight]}>{t("faceNotRecognizedHint")}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", alignSelf: "stretch", gap: 8 }}>
+                  <Pressable onPress={resetToHome} hitSlop={12} style={{ padding: 4, borderRadius: 999 }}>
+                    <Ionicons name="arrow-back" size={22} color={isLight ? "#475569" : "#a3a3a3"} />
+                  </Pressable>
+                  <Text style={[styles.formTitle, isLight && styles.formTitleLight, { flex: 1, textAlign: "left", marginBottom: 0 }]} numberOfLines={1} adjustsFontSizeToFit>{t("seemsNewHere")}</Text>
+                </View>
+                <Text style={[styles.heroSubtitle, isLight && styles.heroSubtitleLight]}>{t("couldNotRecognize")}</Text>
                 <TouchableOpacity
                   style={[styles.scanAgainBig, dyn.scanAgainBig]}
-                  onPress={() => setStep("scan_returning")}
+                  onPress={() => { setIsNewPlayer(true); setStep("reg_face_capture"); }}
                   activeOpacity={0.92}
                 >
-                  <Text style={styles.scanAgainBigText}>{t("scanAgain")}</Text>
+                  <Text style={styles.scanAgainBigText}>{t("newHereRegister")}</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.phoneAltBtn, dyn.phoneAltBtn]}
-                  onPress={() => setStep("phone_enter")}
-                  activeOpacity={0.9}
-                >
-                  <Ionicons name="call-outline" size={20} color="#fff" />
-                  <Text style={styles.phoneAltBtnText}>{t("checkInWithPhone")}</Text>
+                <TouchableOpacity style={styles.cancelBtn} onPress={() => setStep("phone_enter")}>
+                  <Text style={[styles.cancelText, isLight && styles.cancelTextLight]}>{t("checkInByPhoneLink")}</Text>
                 </TouchableOpacity>
               </View>
             </LiquidGlassSurface>
@@ -2696,7 +2656,7 @@ const styles = StyleSheet.create({
   flowGlassPanelInner: { alignItems: "center", gap: 16 },
 
   // ── NEEDS REGISTRATION ────────────────────────────────────────────────────
-  needsRegRoot: { position: "relative", width: "100%", paddingTop: 48 },
+  needsRegRoot: { position: "relative", width: "100%" },
   needsRegGlass: {
     width: "100%",
     maxWidth: 520,

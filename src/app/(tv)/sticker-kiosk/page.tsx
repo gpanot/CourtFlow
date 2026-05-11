@@ -244,6 +244,17 @@ const CSS_ANIMATIONS = `
   to   { opacity: 1; }
 }
 
+/* ── Tablet portrait: larger sticker thumbnails in single-column layout ── */
+@media (min-width: 768px) and (orientation: portrait) {
+  .sk-sticker-grid {
+    max-width: none !important;
+    width: 506px !important;
+  }
+  .sk-sticker-grid > div {
+    gap: 10px !important;
+  }
+}
+
 /* ── Tablet responsive layout for the payment screen (≥768px) ── */
 @media (min-width: 768px) {
   .sk-payment-outer {
@@ -273,7 +284,7 @@ const CSS_ANIMATIONS = `
   }
   .sk-col-left .sk-sticker-grid {
     max-width: none !important;
-    width: 420px !important;
+    width: 483px !important;
   }
   .sk-col-left .sk-sticker-grid > div {
     gap: 10px !important;
@@ -381,7 +392,7 @@ function KioskTopBar({
           )}
         </div>
 
-        {/* Center — CourtFlow mark + "CourtPay" */}
+        {/* Center — CourtFlow mark + "CourtFun" */}
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -390,7 +401,7 @@ function KioskTopBar({
             style={{ width: 26, height: 26, borderRadius: 6, display: "block" }}
           />
           <span style={{ fontSize: 17, fontWeight: 700, color: isLight ? "#15803d" : "#22c55e", letterSpacing: "-0.2px" }}>
-            CourtPay
+            CourtFun
           </span>
         </div>
 
@@ -485,6 +496,8 @@ function ShimmerRow() {
   );
 }
 
+const RECENT_POLL_MS = 3 * 60 * 1000; // 3 minutes
+
 function IdleScreen({
   onScan,
   secretReady,
@@ -492,6 +505,7 @@ function IdleScreen({
   onToggleDark,
   lang,
   onToggleLang,
+  kioskSecret,
 }: {
   onScan: () => void;
   secretReady: boolean;
@@ -499,54 +513,103 @@ function IdleScreen({
   onToggleDark: () => void;
   lang: Lang;
   onToggleLang: () => void;
+  kioskSecret: string | null;
 }) {
-  const [stickers, setStickers] = useState<string[]>([]);
+  const [femaleStickers, setFemaleStickers] = useState<string[]>([]);
+  const [maleStickers, setMaleStickers] = useState<string[]>([]);
+  const [recentStickers, setRecentStickers] = useState<string[]>([]);
+  // bumped on each poll to remount rows so animation restarts with fresh data
+  const [recentVersion, setRecentVersion] = useState(0);
   const [loading, setLoading] = useState(true);
   const c = getColors(dark);
   const s = STRINGS[lang];
 
+  // Initial showcase load
   useEffect(() => {
     fetch("/api/kiosk/sticker-showcase")
       .then((r) => r.json())
-      .then((d: { stickers: string[] }) => setStickers(d.stickers ?? []))
+      .then((d: { female?: string[]; male?: string[]; stickers?: string[] }) => {
+        setFemaleStickers(d.female ?? d.stickers ?? []);
+        setMaleStickers(d.male ?? []);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 
-  // Split into 3 bands
-  const third = Math.ceil(stickers.length / 3);
-  const rowA = stickers.slice(0, third);
-  const rowB = stickers.slice(third, third * 2);
-  const rowC = stickers.slice(third * 2);
+  // Poll recent check-in stickers every 3 min
+  const fetchRecent = useCallback(() => {
+    if (!kioskSecret) return;
+    fetch("/api/kiosk/recent-checkin-stickers", {
+      headers: { "x-kiosk-secret": kioskSecret },
+    })
+      .then((r) => r.ok ? r.json() as Promise<{ stickers: string[] }> : null)
+      .then((d) => {
+        if (d && d.stickers.length > 0) {
+          setRecentStickers(d.stickers);
+          setRecentVersion((v) => v + 1);
+        }
+      })
+      .catch(() => {});
+  }, [kioskSecret]);
+
+  useEffect(() => {
+    fetchRecent();
+    const interval = setInterval(fetchRecent, RECENT_POLL_MS);
+    return () => clearInterval(interval);
+  }, [fetchRecent]);
+
+  // Build 4 row data sets
+  const half = Math.ceil(femaleStickers.length / 2);
+  const rowA = femaleStickers.slice(0, half);
+  const rowB = femaleStickers.slice(half);
+  // Row C: recent check-ins injected at front, filled with female fallback
+  const rowC = recentStickers.length >= 4
+    ? recentStickers
+    : [...recentStickers, ...femaleStickers].slice(0, Math.max(recentStickers.length, 8));
+  // Row D: men only
+  const rowD = maleStickers;
+
+  const anyLoaded = femaleStickers.length > 0 || maleStickers.length > 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100dvh", background: c.bg }}>
       <KioskTopBar dark={dark} onToggleDark={onToggleDark} lang={lang} onToggleLang={onToggleLang} c={c} />
 
-      {/* Showcase rows — 3 bands */}
+      {/* Showcase rows — 4 bands */}
       <div
         style={{
           flex: "0 0 auto",
-          height: "calc((100dvh - 56px) * 0.55)",
+          height: "calc((100dvh - 56px) * 0.6)",
           display: "flex",
           flexDirection: "column",
           justifyContent: "center",
-          gap: 8,
-          padding: "12px 0",
+          gap: 6,
+          padding: "8px 0",
           overflow: "hidden",
         }}
       >
-        {loading || stickers.length === 0 ? (
+        {loading || !anyLoaded ? (
           <>
+            <ShimmerRow />
             <ShimmerRow />
             <ShimmerRow />
             <ShimmerRow />
           </>
         ) : (
           <>
-            <StickerRow stickers={rowA.length > 0 ? rowA : stickers} direction="ltr" />
-            <StickerRow stickers={rowB.length > 0 ? rowB : stickers} direction="rtl" />
-            <StickerRow stickers={rowC.length > 0 ? rowC : stickers} direction="ltr" />
+            <StickerRow stickers={rowA.length > 0 ? rowA : femaleStickers} direction="ltr" />
+            <StickerRow stickers={rowB.length > 0 ? rowB : femaleStickers} direction="rtl" />
+            {/* Row C: live recent check-ins, remounts when new data arrives */}
+            <StickerRow
+              key={`recent-${recentVersion}`}
+              stickers={rowC.length > 0 ? rowC : femaleStickers}
+              direction="ltr"
+            />
+            {/* Row D: men only */}
+            <StickerRow
+              stickers={rowD.length > 0 ? rowD : femaleStickers}
+              direction="rtl"
+            />
           </>
         )}
       </div>
@@ -734,7 +797,7 @@ const PAYMENT_TIMER_S = 20;
 
 function StickerGrid({ stickers, compact, animate, tabletLayout }: { stickers: string[]; compact?: boolean; animate?: boolean; tabletLayout?: boolean }) {
   return (
-    <div className={tabletLayout ? "sk-sticker-grid" : undefined} style={{ maxWidth: compact ? 320 : 432, width: "100%" }}>
+    <div className="sk-sticker-grid" style={{ maxWidth: compact ? 320 : 432, width: "100%" }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: compact ? 4 : 6 }}>
         {Array.from({ length: 4 }).map((_, i) => {
           const url = stickers[i];
@@ -1258,6 +1321,7 @@ export default function StickerKioskPage() {
               onToggleDark={onToggleDark}
               lang={lang}
               onToggleLang={onToggleLang}
+              kioskSecret={kioskSecret}
             />
           </div>
 
