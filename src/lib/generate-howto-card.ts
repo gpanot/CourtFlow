@@ -1,107 +1,49 @@
+import sharp from "sharp";
+
 /**
  * Generates a 1080x1080 "How to use your stickers" PNG instruction card
- * using SVG → sharp rasterisation (no native deps required).
+ * using Sharp's SVG-to-PNG rasterisation (no native-build dependencies).
  * Returns a Buffer containing the PNG bytes.
  */
 export async function generateHowToCard(venueName?: string): Promise<Buffer> {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const sharp = require("sharp") as typeof import("sharp");
-
-  const SIZE = 1080;
-  const GREEN = "#4ade80";
-  const WHITE = "#ffffff";
-  const GRAY = "#9ca3af";
-  const BLACK = "#000000";
-
-  const brand = escXml(venueName ?? "CourtFlow");
-
-  const siteUrl = escXml(
+  const brand = venueName ?? "CourtFlow";
+  const siteUrl =
     process.env.RAILWAY_PUBLIC_DOMAIN ??
-      (process.env.APP_URL
-        ? process.env.APP_URL.replace(/^https?:\/\//, "")
-        : "courtflow.app"),
-  );
+    (process.env.APP_URL ? process.env.APP_URL.replace(/^https?:\/\//, "") : "courtflow.app");
 
-  const steps = [
-    {
-      en: "Download your sticker pack",
-      vi: "Tải bộ sticker về máy",
-    },
-    {
-      en: "Open WhatsApp, go to any chat",
-      vi: "Mở WhatsApp, vào bất kỳ đoạn chat nào",
-    },
-    {
-      en: "Tap the sticker icon 😊",
-      vi: "Nhấn vào biểu tượng sticker 😊",
-    },
-    {
-      en: "Tap ✂️ create icon to add a sticker",
-      vi: "Nhấn ✂️ để tạo sticker mới",
-    },
-    {
-      en: "Select your sticker — send immediately!",
-      vi: "Chọn sticker vừa tải — gửi ngay!",
-    },
-  ];
-
-  const STEP_Y_START = 350;
-  const STEP_GAP = 130;
-  const CIRCLE_R = 28;
-  const LEFT_X = 80;
-  const TEXT_X = LEFT_X + CIRCLE_R * 2 + 20;
-
-  const stepsSvg = steps
-    .map((step, i) => {
-      const cy = STEP_Y_START + i * STEP_GAP + CIRCLE_R;
-      return `
-      <!-- Step ${i + 1} circle -->
-      <circle cx="${LEFT_X + CIRCLE_R}" cy="${cy}" r="${CIRCLE_R}" fill="${GREEN}"/>
-      <text x="${LEFT_X + CIRCLE_R}" y="${cy + 10}" text-anchor="middle"
-        font-family="sans-serif" font-weight="bold" font-size="26" fill="${BLACK}">${i + 1}</text>
-      <!-- Step ${i + 1} text -->
-      <text x="${TEXT_X}" y="${cy - 6}" font-family="sans-serif" font-size="30" fill="${WHITE}">${escXml(step.en)}</text>
-      <text x="${TEXT_X}" y="${cy + 30}" font-family="sans-serif" font-size="24" fill="${GRAY}">${escXml(step.vi)}</text>
-    `;
-    })
-    .join("");
-
-  const svg = `<?xml version="1.0" encoding="UTF-8"?>
-<svg width="${SIZE}" height="${SIZE}" xmlns="http://www.w3.org/2000/svg">
-  <!-- Background -->
-  <rect width="${SIZE}" height="${SIZE}" fill="${BLACK}"/>
-
-  <!-- Brand name -->
-  <text x="${SIZE / 2}" y="85" text-anchor="middle"
-    font-family="sans-serif" font-weight="bold" font-size="44" fill="${GREEN}">${brand}</text>
-
-  <!-- English title -->
-  <text x="${SIZE / 2}" y="160" text-anchor="middle"
-    font-family="sans-serif" font-weight="bold" font-size="46" fill="${WHITE}">How to use your stickers on WhatsApp</text>
-
-  <!-- Vietnamese title -->
-  <text x="${SIZE / 2}" y="218" text-anchor="middle"
-    font-family="sans-serif" font-size="36" fill="${WHITE}">Cách dùng sticker trên WhatsApp</text>
-
-  <!-- Divider -->
-  <line x1="80" y1="248" x2="${SIZE - 80}" y2="248" stroke="${GREEN}" stroke-width="3"/>
-
-  <!-- Steps -->
-  ${stepsSvg}
-
-  <!-- Footer URL -->
-  <text x="${SIZE / 2}" y="${SIZE - 44}" text-anchor="middle"
-    font-family="sans-serif" font-size="26" fill="${GRAY}">${siteUrl}</text>
-</svg>`;
+  const svg = `<svg width="1080" height="1080" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1080" height="1080" fill="#000000"/>
+    <text x="540" y="80" font-family="Arial" font-size="44" font-weight="bold" fill="#4ade80" text-anchor="middle">${brand}</text>
+    <text x="540" y="150" font-family="Arial" font-size="36" font-weight="bold" fill="white" text-anchor="middle">How to use your stickers on WhatsApp</text>
+    <text x="540" y="200" font-family="Arial" font-size="28" fill="#9ca3af" text-anchor="middle">Cach dung sticker tren WhatsApp</text>
+    <line x1="80" y1="230" x2="1000" y2="230" stroke="#4ade80" stroke-width="2"/>
+    <!-- Step 1 -->
+    <circle cx="100" cy="310" r="28" fill="#4ade80"/>
+    <text x="100" y="318" font-family="Arial" font-size="24" font-weight="bold" fill="black" text-anchor="middle">1</text>
+    <text x="150" y="305" font-family="Arial" font-size="26" fill="white">Download your sticker pack</text>
+    <text x="150" y="335" font-family="Arial" font-size="22" fill="#9ca3af">Tai bo sticker ve may</text>
+    <!-- Step 2 -->
+    <circle cx="100" cy="420" r="28" fill="#4ade80"/>
+    <text x="100" y="428" font-family="Arial" font-size="24" font-weight="bold" fill="black" text-anchor="middle">2</text>
+    <text x="150" y="415" font-family="Arial" font-size="26" fill="white">Open WhatsApp, go to any chat</text>
+    <text x="150" y="445" font-family="Arial" font-size="22" fill="#9ca3af">Mo WhatsApp, vao bat ky doan chat nao</text>
+    <!-- Step 3 -->
+    <circle cx="100" cy="530" r="28" fill="#4ade80"/>
+    <text x="100" y="538" font-family="Arial" font-size="24" font-weight="bold" fill="black" text-anchor="middle">3</text>
+    <text x="150" y="525" font-family="Arial" font-size="26" fill="white">Tap the sticker icon next to the text field</text>
+    <text x="150" y="555" font-family="Arial" font-size="22" fill="#9ca3af">Nhan vao bieu tuong sticker canh o chat</text>
+    <!-- Step 4 -->
+    <circle cx="100" cy="640" r="28" fill="#4ade80"/>
+    <text x="100" y="648" font-family="Arial" font-size="24" font-weight="bold" fill="black" text-anchor="middle">4</text>
+    <text x="150" y="635" font-family="Arial" font-size="26" fill="white">Tap the create icon to add your sticker</text>
+    <text x="150" y="665" font-family="Arial" font-size="22" fill="#9ca3af">Nhan icon tao sticker moi</text>
+    <!-- Step 5 -->
+    <circle cx="100" cy="750" r="28" fill="#4ade80"/>
+    <text x="100" y="758" font-family="Arial" font-size="24" font-weight="bold" fill="black" text-anchor="middle">5</text>
+    <text x="150" y="745" font-family="Arial" font-size="26" fill="white">Select your sticker -- send immediately!</text>
+    <text x="150" y="775" font-family="Arial" font-size="22" fill="#9ca3af">Chon sticker vua tai -- gui ngay!</text>
+    <text x="540" y="1040" font-family="Arial" font-size="22" fill="#6b7280" text-anchor="middle">${siteUrl}</text>
+  </svg>`;
 
   return sharp(Buffer.from(svg)).png().toBuffer();
-}
-
-function escXml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
 }
