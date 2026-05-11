@@ -42,8 +42,12 @@ const STRINGS = {
   en: {
     scanBtn: "Scan to see your stickers",
     loading: "Loading…",
-    hero: "Your face. Your stickers.",
-    heroSub: "See your personalized sticker pack in seconds",
+    heroLines: [
+      "Crafted for pickleball players only!",
+      "Your face. Your stickers.",
+      "Nobody else has these.",
+    ],
+    heroSub: "Get your sticker pack now.",
     lookCamera: "Look at the camera",
     noMatchRetry: "No match yet — retrying…",
     nextScanIn: "Next scan in",
@@ -76,8 +80,12 @@ const STRINGS = {
   vi: {
     scanBtn: "Quét mặt để xem sticker",
     loading: "Đang tải…",
-    hero: "Khuôn mặt bạn. Sticker của bạn.",
-    heroSub: "Xem bộ sticker cá nhân trong vài giây",
+    heroLines: [
+      "Dành riêng cho người chơi pickleball!",
+      "Khuôn mặt bạn. Sticker của bạn.",
+      "Không ai khác có những sticker này.",
+    ],
+    heroSub: "Nhận bộ sticker của bạn ngay.",
     lookCamera: "Nhìn vào camera",
     noMatchRetry: "Chưa nhận dạng được — đang thử lại…",
     nextScanIn: "Quét tiếp trong",
@@ -526,25 +534,19 @@ function IdleScreen({
   const [recentVersion, setRecentVersion] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  // Animated subtitle rotator
-  const SUBTITLE_LINES = [
-    "Crafted for pickleball players only!",
-    "Your face. Your stickers.",
-    "Nobody else has these.",
-  ];
-  const [subtitleIdx, setSubtitleIdx] = useState(0);
-  const [subtitleVisible, setSubtitleVisible] = useState(true);
+  // Animated title rotator
+  const [titleIdx, setTitleIdx] = useState(0);
+  const [titleVisible, setTitleVisible] = useState(true);
 
   useEffect(() => {
     const iv = setInterval(() => {
-      setSubtitleVisible(false);
+      setTitleVisible(false);
       setTimeout(() => {
-        setSubtitleIdx((i) => (i + 1) % SUBTITLE_LINES.length);
-        setSubtitleVisible(true);
+        setTitleIdx((i) => (i + 1) % 3);
+        setTitleVisible(true);
       }, 300);
     }, 2500);
     return () => clearInterval(iv);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const c = getColors(dark);
@@ -657,23 +659,24 @@ function IdleScreen({
           padding: "0 32px",
         }}
       >
-        <p style={{ fontSize: 26, fontWeight: 700, color: c.text, textAlign: "center", marginBottom: 8 }}>
-          {s.hero}
-        </p>
         <p
           style={{
-            fontSize: 15,
-            color: c.muted,
+            fontSize: 26,
+            fontWeight: 700,
+            color: c.text,
             textAlign: "center",
-            marginBottom: 32,
-            opacity: subtitleVisible ? 1 : 0,
-            transform: subtitleVisible ? "translateY(0)" : "translateY(8px)",
-            transition: subtitleVisible
+            marginBottom: 8,
+            opacity: titleVisible ? 1 : 0,
+            transform: titleVisible ? "translateY(0)" : "translateY(8px)",
+            transition: titleVisible
               ? "opacity 400ms ease-out, transform 400ms ease-out"
               : "opacity 300ms ease-in",
           }}
         >
-          {SUBTITLE_LINES[subtitleIdx]}
+          {s.heroLines[titleIdx]}
+        </p>
+        <p style={{ fontSize: 15, color: c.muted, textAlign: "center", marginBottom: 32 }}>
+          {s.heroSub}
         </p>
         <div style={{ maxWidth: 340, width: "100%" }}>
           <button
