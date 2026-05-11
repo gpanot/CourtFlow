@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { error } from "@/lib/api-helpers";
+import { generateHowToCard } from "@/lib/generate-howto-card";
 
 export async function GET(request: NextRequest) {
   try {
@@ -76,7 +77,15 @@ export async function GET(request: NextRequest) {
       return error("Could not fetch sticker files", 404);
     }
 
-    // Build ZIP in memory
+    // Generate the instruction card PNG
+    let howToBuffer: Buffer | null = null;
+    try {
+      howToBuffer = await generateHowToCard();
+    } catch {
+      // non-fatal — continue without the card
+    }
+
+    // Build ZIP in memory — how-to card goes first so it appears at the top
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const archiver = require("archiver");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -88,6 +97,10 @@ export async function GET(request: NextRequest) {
       archive.on("end", resolve);
       archive.on("error", reject);
 
+      // Instruction card first
+      if (howToBuffer) {
+        archive.append(howToBuffer, { name: "how-to-use.png" });
+      }
       for (const file of validFiles) {
         archive.append(file.buffer, { name: file.name });
       }

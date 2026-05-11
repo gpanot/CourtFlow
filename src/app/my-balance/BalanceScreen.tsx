@@ -56,11 +56,11 @@ function formatRelativeTime(iso: string, locale: string): string {
 
 
 const WHATSAPP_STEPS = [
-  { en: "Tap the Download button below", vi: "Nhấn nút Tải xuống bên dưới" },
-  { en: "Open WhatsApp, go to any chat", vi: "Mở WhatsApp, vào bất kỳ cuộc trò chuyện nào" },
-  { en: "Tap the attachment (📎) icon", vi: "Nhấn biểu tượng đính kèm (📎)" },
-  { en: "Choose 'Photos & Videos' and select your stickers", vi: "Chọn 'Ảnh & Video' rồi chọn sticker của bạn" },
-  { en: "Send and enjoy! 🎉", vi: "Gửi và tận hưởng! 🎉" },
+  { en: "Download your sticker pack using the button above", vi: "Tải bộ sticker bằng nút phía trên" },
+  { en: "Open WhatsApp and go to any chat", vi: "Mở WhatsApp và vào bất kỳ đoạn chat nào" },
+  { en: "Tap the sticker icon (😊) next to the text field", vi: "Nhấn vào biểu tượng sticker (😊) cạnh ô nhập văn bản" },
+  { en: "Tap the ✂️ create icon to create a sticker", vi: "Nhấn ✂️ để tạo sticker mới" },
+  { en: "Select your downloaded sticker — it's ready to send immediately!", vi: "Chọn sticker vừa tải — gửi ngay!" },
 ];
 
 function StickerShopSection({
@@ -71,14 +71,15 @@ function StickerShopSection({
   stickerToken?: string; // kept for API compat but download is now client-side
   paid?: boolean;
 }) {
+  const { i18n } = useTranslation();
   const [shopState] = useState<ShopState>(paid ? "success" : "idle");
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   // How-to starts expanded when paid (they just scanned and need the instructions right away)
   const [howToOpen, setHowToOpen] = useState(!!paid);
   const [downloading, setDownloading] = useState(false);
 
-  // Detect browser language — use i18n hook would require provider; navigator is fine here
-  const isVi = typeof navigator !== "undefined" && navigator.language.startsWith("vi");
+  // Use the app's active i18n language so flag toggle is respected
+  const isVi = i18n.language.startsWith("vi");
 
   // Download each sticker individually via client-side blob — avoids all server-side ZIP issues
   const handleDownload = useCallback(async () => {

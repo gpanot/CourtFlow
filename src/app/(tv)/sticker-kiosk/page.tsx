@@ -428,9 +428,11 @@ function KioskTopBar({
 function StickerRow({
   stickers,
   direction,
+  speed = 28,
 }: {
   stickers: string[];
   direction: "ltr" | "rtl";
+  speed?: number;
 }) {
   const doubled = [...stickers, ...stickers];
   return (
@@ -439,7 +441,7 @@ function StickerRow({
         style={{
           display: "flex",
           gap: 8,
-          animation: `${direction === "ltr" ? "scroll-ltr" : "scroll-rtl"} 28s linear infinite`,
+          animation: `${direction === "ltr" ? "scroll-ltr" : "scroll-rtl"} ${speed}s linear infinite`,
           width: "max-content",
         }}
         onMouseEnter={(e) =>
@@ -566,8 +568,11 @@ function IdleScreen({
   const rowC = recentStickers.length >= 4
     ? recentStickers
     : [...recentStickers, ...femaleStickers].slice(0, Math.max(recentStickers.length, 8));
-  // Row D: men only
-  const rowD = maleStickers;
+  // Row D: men only — repeat to match female row length so scroll speed feels the same
+  const targetLen = rowA.length > 0 ? rowA.length : 8;
+  let rowDRaw = maleStickers.length > 0 ? maleStickers : femaleStickers;
+  while (rowDRaw.length < targetLen) rowDRaw = [...rowDRaw, ...rowDRaw];
+  const rowD = rowDRaw.slice(0, targetLen);
 
   const anyLoaded = femaleStickers.length > 0 || maleStickers.length > 0;
 
@@ -605,9 +610,9 @@ function IdleScreen({
               stickers={rowC.length > 0 ? rowC : femaleStickers}
               direction="ltr"
             />
-            {/* Row D: men only */}
+            {/* Row D: men only (padded to same length as other rows for consistent speed) */}
             <StickerRow
-              stickers={rowD.length > 0 ? rowD : femaleStickers}
+              stickers={rowD}
               direction="rtl"
             />
           </>
