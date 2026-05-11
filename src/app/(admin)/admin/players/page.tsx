@@ -218,15 +218,18 @@ export default function PlayersPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  // Numeric columns default to descending (highest first) on first click
+  const NUMERIC_SORT_KEYS = new Set<SortKey>(["totalSessions", "totalGames", "totalPlayMinutes", "totalWaitMinutes", "waitPlayRatio", "venues", "stickers", "checkInCount"]);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
-      if (sortDir === "asc") setSortDir("desc");
-      else { setSortKey(null); setSortDir("asc"); }
+      if (sortDir === "desc") setSortDir("asc");
+      else { setSortKey(null); setSortDir("desc"); }
     } else {
       setSortKey(key);
-      setSortDir("asc");
+      setSortDir(NUMERIC_SORT_KEYS.has(key) ? "desc" : "asc");
     }
   };
 

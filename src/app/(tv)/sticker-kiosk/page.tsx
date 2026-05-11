@@ -211,6 +211,24 @@ const CSS_ANIMATIONS = `
   50%  { opacity: 0.7; }
   100% { opacity: 0.4; }
 }
+@keyframes sticker-pop {
+  0%   { opacity: 0; transform: scale(0.55) rotate(-6deg); }
+  60%  { opacity: 1; transform: scale(1.08) rotate(1.5deg); }
+  80%  { transform: scale(0.96) rotate(-0.5deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+@keyframes sticker-shimmer-reveal {
+  0%   { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes slide-up-in {
+  0%   { transform: translateY(100vh); opacity: 0; }
+  100% { transform: translateY(0);    opacity: 1; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
 `;
 
 // ---------------------------------------------------------------------------
@@ -638,12 +656,14 @@ function ScanningScreen({
 const AUTO_RESET_S = 60;
 const PAYMENT_TIMER_S = 20;
 
-function StickerGrid({ stickers, compact }: { stickers: string[]; compact?: boolean }) {
+function StickerGrid({ stickers, compact, animate }: { stickers: string[]; compact?: boolean; animate?: boolean }) {
   return (
     <div style={{ maxWidth: compact ? 320 : 432, width: "100%" }}>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: compact ? 4 : 6 }}>
         {Array.from({ length: 4 }).map((_, i) => {
           const url = stickers[i];
+          // Stagger each card: 0ms, 180ms, 360ms, 540ms
+          const delay = animate ? `${i * 180}ms` : "0ms";
           return (
             <div
               key={i}
@@ -656,6 +676,13 @@ function StickerGrid({ stickers, compact }: { stickers: string[]; compact?: bool
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                ...(animate
+                  ? {
+                      animation: `sticker-pop 0.55s cubic-bezier(0.34,1.56,0.64,1) both`,
+                      animationDelay: delay,
+                      opacity: 0,
+                    }
+                  : {}),
               }}
             >
               {url && (
@@ -717,13 +744,21 @@ function IdentifiedScreen({
 }) {
   const c = getColors(dark);
   const s = STRINGS[lang];
-  // "payment" → show payment QR + timer; "confirmed" → show shopUrl QR
+  // "payment" → show payment QR + timer; "confirmed" → full-screen QR reveal
   const [paymentPhase, setPaymentPhase] = useState<"payment" | "confirmed">("payment");
   const [paymentTimer, setPaymentTimer] = useState(PAYMENT_TIMER_S);
   const [showPaidButton, setShowPaidButton] = useState(false);
   const [countdown, setCountdown] = useState(AUTO_RESET_S);
+  // Whether the sticker grid has mounted (triggers animate prop)
+  const [stickersVisible, setStickersVisible] = useState(false);
 
-  // Payment countdown (5s → show "I just paid")
+  // Trigger sticker animation shortly after mount
+  useEffect(() => {
+    const t = setTimeout(() => setStickersVisible(true), 80);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Payment countdown → show "I just paid" after timer
   useEffect(() => {
     if (paymentPhase !== "payment") return;
     const interval = setInterval(() => {
@@ -770,7 +805,7 @@ function IdentifiedScreen({
   const isLight = !dark;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100dvh", background: c.bg, overflow: "hidden", padding: "16px 20px 16px" }}>
+    <div style={{ position: "relative", display: "flex", flexDirection: "column", height: "100dvh", background: c.bg, overflow: "hidden", padding: "16px 20px 16px" }}>
 
       {/* Inline header: back button + title + subtitle */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8, flexShrink: 0 }}>
@@ -801,13 +836,14 @@ function IdentifiedScreen({
             {s.hiPlayer(session.playerName)}
           </p>
           <p style={{ fontSize: 12, color: c.muted, margin: "2px 0 0" }}>
-            {paymentPhase === "payment" ? s.paySubtitle : s.confirmedSubtitle}
+            {s.paySubtitle}
           </p>
         </div>
       </div>
 
+      {/* Sticker grid — animated reveal on first render */}
       <div style={{ display: "flex", justifyContent: "center", width: "100%", flexShrink: 0 }}>
-        <StickerGrid stickers={session.stickers} compact />
+        <StickerGrid stickers={session.stickers} compact animate={stickersVisible} />
       </div>
 
       {/* Payment phase */}
@@ -852,27 +888,74 @@ function IdentifiedScreen({
         </div>
       )}
 
-      {/* Confirmed phase */}
+      {/* ── Confirmed phase: full-screen overlay slides up from bottom ── */}
       {paymentPhase === "confirmed" && (
-        <div data-qr style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", maxWidth: 432, alignSelf: "center", marginTop: 8, flex: 1 }}>
-          <div style={{ background: "#ffffff", padding: 12, borderRadius: 12, display: "inline-block" }}>
-            <QRCodeSVG value={session.shopUrl} size={180} bgColor="#ffffff" fgColor="#000000" />
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: dark ? "#0a0a0a" : "#f8fafc",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "40px 28px 32px",
+            animation: "slide-up-in 0.45s cubic-bezier(0.22,1,0.36,1) both",
+          }}
+        >
+          {/* Top — success badge + name */}
+          <div style={{ textAlign: "center", animation: "fade-in 0.4s ease 0.3s both" }}>
+            <div style={{ fontSize: 52, lineHeight: 1, marginBottom: 12 }}>🎉</div>
+            <p style={{ fontSize: 22, fontWeight: 800, color: c.green, margin: 0 }}>{s.confirmed}</p>
+            <p style={{ fontSize: 15, color: c.text, fontWeight: 600, margin: "4px 0 0" }}>
+              {s.hiPlayer(session.playerName)}
+            </p>
           </div>
-          <p style={{ fontSize: 16, fontWeight: 600, color: c.green, textAlign: "center", marginTop: 8 }}>{s.confirmed}</p>
-          <p style={{ fontSize: 14, fontWeight: 500, color: c.text, textAlign: "center", marginTop: 4 }}>{s.scanPhone}</p>
-          <p style={{ fontSize: 12, color: c.muted, textAlign: "center", marginTop: 2 }}>{s.downloadApp}</p>
 
-          <div style={{ flex: 1 }} />
+          {/* Center — download QR */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 16, animation: "fade-in 0.4s ease 0.45s both" }}>
+            {/* QR card */}
+            <div style={{
+              background: "#ffffff",
+              padding: 18,
+              borderRadius: 20,
+              boxShadow: dark ? "0 8px 40px rgba(0,0,0,0.6)" : "0 8px 32px rgba(0,0,0,0.12)",
+              display: "inline-block",
+            }}>
+              <QRCodeSVG value={session.shopUrl} size={200} bgColor="#ffffff" fgColor="#000000" />
+            </div>
 
-          <button
-            onClick={onReset}
-            style={{ background: "transparent", border: `1px solid ${c.border}`, color: c.muted, fontSize: 15, fontWeight: 500, cursor: "pointer", borderRadius: 12, padding: "9px 32px", width: "100%", maxWidth: 432 }}
-          >
-            {s.done}
-          </button>
-          <p style={{ fontSize: 11, color: c.dim, textAlign: "center", marginTop: 8, visibility: countdown <= 15 ? "visible" : "hidden" }}>
-            {s.resetIn(countdown)}
-          </p>
+            {/* Labels */}
+            <div style={{ textAlign: "center" }}>
+              <p style={{ fontSize: 18, fontWeight: 700, color: c.text, margin: 0 }}>{s.scanPhone}</p>
+              <p style={{ fontSize: 13, color: c.muted, margin: "6px 0 0", maxWidth: 280 }}>{s.downloadApp}</p>
+            </div>
+          </div>
+
+          {/* Bottom — Done button + countdown */}
+          <div style={{ width: "100%", maxWidth: 400, animation: "fade-in 0.4s ease 0.6s both" }}>
+            <button
+              onClick={onReset}
+              style={{
+                ...BTN_PRIMARY,
+                width: "100%",
+                fontSize: 17,
+                height: 60,
+                borderRadius: 18,
+              }}
+            >
+              {s.done}
+            </button>
+            <p style={{
+              fontSize: 12,
+              color: c.dim,
+              textAlign: "center",
+              marginTop: 10,
+              visibility: countdown <= 20 ? "visible" : "hidden",
+            }}>
+              {s.resetIn(countdown)}
+            </p>
+          </div>
         </div>
       )}
     </div>
