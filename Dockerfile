@@ -5,9 +5,8 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 # prisma/schema.prisma must exist before npm ci (postinstall runs prisma generate)
 COPY prisma ./prisma
-# --omit=optional skips canvas (optional peer dep of jsdom) which requires
-# Python/build tools not present on Alpine. We don't use canvas at runtime.
-RUN npm ci --omit=optional
+# install all deps including optional (lightningcss musl binary, jspdf peers)
+RUN npm ci --include=optional
 
 FROM base AS builder
 WORKDIR /app
