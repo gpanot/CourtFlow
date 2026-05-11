@@ -7,7 +7,8 @@ import { useSessionStore } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { StaffDashboard } from "./dashboard";
 import Link from "next/link";
-import { Shield, Clipboard, Grid3X3, Phone, Lock, Eye, EyeOff, Loader2, Tablet, Sun, Moon } from "lucide-react";
+import { Shield, Clipboard, Grid3X3, Phone, Lock, Eye, EyeOff, Loader2, Tablet, Sun, Moon, Layers } from "lucide-react";
+import { StickerKioskGate } from "@/components/sticker-kiosk-gate";
 import { CourtFlowLogo } from "@/components/courtflow-logo";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
 import { StaffTopBar } from "@/components/staff-top-bar";
@@ -67,6 +68,7 @@ export default function StaffPage() {
   const [pendingAppPickVenue, setPendingAppPickVenue] = useState<StaffVenue | null>(null);
   const [showRoleChoice, setShowRoleChoice] = useState(false);
   const [showOtherApps, setShowOtherApps] = useState(false);
+  const [showStickerKiosk, setShowStickerKiosk] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
   const [loginVenues, setLoginVenues] = useState<StaffVenue[]>([]);
   /** Authoritative staff venues from GET /api/auth/staff-me (avoids tablet race with login payload only). */
@@ -407,6 +409,10 @@ export default function StaffPage() {
     );
   }
 
+  if (showStickerKiosk) {
+    return <StickerKioskGate onExit={() => setShowStickerKiosk(false)} />;
+  }
+
   if (showRoleChoice) {
     return (
       <div className="min-h-dvh bg-neutral-950">
@@ -564,6 +570,20 @@ export default function StaffPage() {
                   </div>
                 </button>
               )}
+
+              <button
+                type="button"
+                onClick={() => setShowStickerKiosk(true)}
+                className="group flex w-full items-center gap-4 rounded-2xl border border-amber-500/25 bg-amber-500/5 p-4 text-left transition-all hover:border-amber-500/45 hover:bg-amber-500/10"
+              >
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 transition-colors group-hover:bg-amber-500/25">
+                  <Layers className="h-5 w-5 shrink-0 text-amber-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="font-semibold text-white">Sticker Kiosk</p>
+                  <p className="text-xs text-neutral-400">Full-screen sticker dispensing kiosk</p>
+                </div>
+              </button>
 
               {showOtherAppsEntry ? (
                 <button
