@@ -9,7 +9,8 @@ import {
 import { activateSubscription } from "@/modules/courtpay/lib/subscription";
 import { faceRecognitionService } from "@/lib/face-recognition";
 import { persistPlayerCheckInFacePhoto } from "@/lib/persist-player-check-in-photo";
-import { COLLECTION_ID } from "@/lib/rekognition-config";
+import { COLLECTION_ID, FACE_MATCH_THRESHOLD } from "@/lib/rekognition-config";
+import { saveSignupDuplicatePhoto } from "@/lib/save-signup-duplicate-photo";
 
 
 export async function POST(req: Request) {
@@ -122,6 +123,34 @@ export async function POST(req: Request) {
         matchedPlayerId: faceCheck.playerId ?? null,
       });
       if (faceCheck.resultType === "matched" && faceCheck.playerId) {
+        // Log this duplicate detection for admin review before rejecting
+        try {
+          const dupLog = await prisma.signupDuplicateLog.create({
+            data: {
+              matchedPlayerId: faceCheck.playerId,
+              newPlayerName: nameTrimmed || null,
+              newPlayerPhone: phoneNorm || null,
+              similarityScore: faceCheck.confidence ?? null,
+              threshold: FACE_MATCH_THRESHOLD,
+              source: "courtpay",
+              venueId: venue.id,
+            awsDetail: (faceCheck.attemptMeta ?? faceCheck.recognitionDebug ?? undefined) as never,
+            },
+          });
+          await saveSignupDuplicatePhoto(dupLog.id, imageBase64).catch(() => null);
+          const photoPath = `/uploads/signup-duplicates/${dupLog.id}.jpg`;
+          await prisma.signupDuplicateLog.update({
+            where: { id: dupLog.id },
+            data: { newPlayerPhotoPath: photoPath },
+          });
+          console.warn("[courtpay/register] Signup duplicate logged", {
+            logId: dupLog.id,
+            matchedPlayerId: faceCheck.playerId,
+            similarity: faceCheck.confidence,
+          });
+        } catch (logErr) {
+          console.error("[courtpay/register] Failed to log signup duplicate:", logErr);
+        }
         return NextResponse.json(
           { error: "This face is already registered. Please use Check In instead." },
           { status: 409 }

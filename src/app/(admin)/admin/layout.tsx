@@ -7,7 +7,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { applyThemeMode, getStoredThemeMode, setStoredThemeMode, type ThemeMode } from "@/lib/theme-mode";
-import { LayoutDashboard, MapPin, Users, UserCircle, BarChart3, Monitor, Banknote, Crown, CalendarDays, GraduationCap, LogOut, Menu, X, CreditCard, Receipt, ScanFace, Sun, Moon, ChevronLeft, ShoppingBag } from "lucide-react";
+import { LayoutDashboard, MapPin, Users, UserCircle, BarChart3, Monitor, Banknote, Crown, CalendarDays, GraduationCap, LogOut, Menu, X, CreditCard, Receipt, ScanFace, Sun, Moon, ChevronLeft, ShoppingBag, AlertTriangle } from "lucide-react";
 import { SetupWizardBanner } from "@/components/setup-wizard-banner";
 
 const navItems = [
@@ -25,6 +25,7 @@ const navItems = [
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/admin/face-recognition-test", label: "Face Recognition Test", icon: ScanFace },
   { href: "/admin/kiosk-shop", label: "Kiosk Shop", icon: ShoppingBag },
+  { href: "/admin/log-errors", label: "Log Errors", icon: AlertTriangle },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

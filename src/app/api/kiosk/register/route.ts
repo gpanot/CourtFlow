@@ -6,7 +6,8 @@ import { emitToVenue } from "@/lib/socket-server";
 import { sendPaymentPushToStaff } from "@/lib/staff-push";
 import { buildVietQRUrl } from "@/lib/vietqr";
 import { persistPlayerCheckInFacePhoto } from "@/lib/persist-player-check-in-photo";
-import { COLLECTION_ID } from "@/lib/rekognition-config";
+import { COLLECTION_ID, FACE_MATCH_THRESHOLD } from "@/lib/rekognition-config";
+import { saveSignupDuplicatePhoto } from "@/lib/save-signup-duplicate-photo";
 
 const PAYMENT_TIMEOUT_MS = 3 * 60 * 1000;
 
@@ -42,6 +43,34 @@ export async function POST(request: NextRequest) {
     // Prevent duplicate face registration: check if this face is already enrolled
     const faceCheck = await faceRecognitionService.recognizeFace(imageBase64);
     if (faceCheck.resultType === "matched" && faceCheck.playerId) {
+      // Log this duplicate detection for admin review before rejecting
+      try {
+        const dupLog = await prisma.signupDuplicateLog.create({
+          data: {
+            matchedPlayerId: faceCheck.playerId,
+            newPlayerName: name.trim() || null,
+            newPlayerPhone: phone.trim() || null,
+            similarityScore: faceCheck.confidence ?? null,
+            threshold: FACE_MATCH_THRESHOLD,
+            source: "kiosk",
+            venueId,
+            awsDetail: (faceCheck.attemptMeta ?? faceCheck.recognitionDebug ?? undefined) as never,
+          },
+        });
+        await saveSignupDuplicatePhoto(dupLog.id, imageBase64).catch(() => null);
+        const photoPath = `/uploads/signup-duplicates/${dupLog.id}.jpg`;
+        await prisma.signupDuplicateLog.update({
+          where: { id: dupLog.id },
+          data: { newPlayerPhotoPath: photoPath },
+        });
+        console.warn("[kiosk/register] Signup duplicate logged", {
+          logId: dupLog.id,
+          matchedPlayerId: faceCheck.playerId,
+          similarity: faceCheck.confidence,
+        });
+      } catch (logErr) {
+        console.error("[kiosk/register] Failed to log signup duplicate:", logErr);
+      }
       return error("This face is already registered. Please use Check In instead.", 409);
     }
 

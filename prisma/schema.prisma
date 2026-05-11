@@ -151,6 +151,7 @@ model Venue {
   billingInvoices      BillingInvoice[]
   faceRecognitionLogs  FaceRecognitionLog[]
   registeredPlayers    Player[]             @relation("PlayerRegistrationVenue")
+  signupDuplicateLogs  SignupDuplicateLog[]
 
   @@map("venues")
 }
@@ -194,6 +195,7 @@ model Player {
   stickerResult         PlayerStickerResult?
   stickerPacks          PlayerStickerPack[]
   stickerSessions       StickerSession[]
+  signupDuplicateLogs   SignupDuplicateLog[]
 
   @@index([registrationVenueId])
   @@map("players")
@@ -986,6 +988,44 @@ model KioskSettings {
   updatedAt     DateTime @updatedAt @map("updated_at")
 
   @@map("kiosk_settings")
+}
+
+/// Logs face duplicate detections during player sign-up for review in the admin panel.
+model SignupDuplicateLog {
+  id                  String   @id @default(cuid())
+  /// The photo submitted by the new person trying to sign up (stored as a file path or base64 data URL).
+  newPlayerPhotoPath  String?  @map("new_player_photo_path")
+  /// The name submitted by the person trying to sign up (if provided).
+  newPlayerName       String?  @map("new_player_name")
+  /// The phone submitted by the person trying to sign up (if provided).
+  newPlayerPhone      String?  @map("new_player_phone")
+  /// The existing player that AWS Rekognition matched against.
+  matchedPlayerId     String   @map("matched_player_id")
+  /// AWS Rekognition similarity score (0–100).
+  similarityScore     Float?   @map("similarity_score")
+  /// The AWS Rekognition threshold used at the time of the check.
+  threshold           Float?   @map("threshold")
+  /// AWS FaceId returned for the matched existing player's face.
+  awsFaceId           String?  @map("aws_face_id")
+  /// Raw AWS Rekognition response details (JSON).
+  awsDetail           Json?    @map("aws_detail")
+  /// Source surface: "kiosk" | "courtpay".
+  source              String   @default("unknown")
+  /// Venue where the duplicate was detected.
+  venueId             String?  @map("venue_id")
+  /// Whether an admin has reviewed and resolved this entry.
+  reviewed            Boolean  @default(false)
+  reviewedAt          DateTime? @map("reviewed_at")
+  reviewNote          String?   @map("review_note")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  matchedPlayer Player  @relation(fields: [matchedPlayerId], references: [id], onDelete: Cascade)
+  venue         Venue?  @relation(fields: [venueId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([matchedPlayerId])
+  @@index([venueId])
+  @@map("signup_duplicate_logs")
 }
 
 model StickerTemplate {
