@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   output: "standalone",
   allowedDevOrigins: ["*"],
+  serverExternalPackages: ["canvg", "dompurify", "html2canvas", "jspdf"],
   env: {
     NEXT_PUBLIC_BUILD_ID:
       process.env.RAILWAY_GIT_COMMIT_SHA ||
