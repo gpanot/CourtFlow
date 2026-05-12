@@ -16,8 +16,8 @@ export const dynamic = "force-dynamic";
  * If SEPAY_WEBHOOK_SECRET is not set, verification is skipped (allow all).
  */
 function verifySignature(request: NextRequest, rawBody: string): boolean {
-  const secret = process.env.SEPAY_WEBHOOK_SECRET;
-  if (!secret) return true;
+  const secret = (process.env.SEPAY_WEBHOOK_SECRET ?? "").trim();
+  if (!secret) return true; // no secret or empty string — accept all
 
   const sigHeader = request.headers.get("x-sepay-signature") ?? "";
   const timestamp = request.headers.get("x-sepay-timestamp") ?? "";
@@ -50,7 +50,8 @@ export async function POST(request: NextRequest) {
   let rawBody = "";
   try {
     rawBody = await request.text();
-    console.log("[sepay-webhook] Received POST — body length:", rawBody.length);
+    const hmacActive = !!((process.env.SEPAY_WEBHOOK_SECRET ?? "").trim());
+    console.log(`[sepay-webhook] Received POST — body length: ${rawBody.length} | HMAC: ${hmacActive ? "ON" : "OFF (no secret)"}`);
     console.log("[sepay-webhook] X-SePay-Signature:", request.headers.get("x-sepay-signature"));
     console.log("[sepay-webhook] X-SePay-Timestamp:", request.headers.get("x-sepay-timestamp"));
 
