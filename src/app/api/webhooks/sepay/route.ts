@@ -76,8 +76,13 @@ export async function POST(request: NextRequest) {
       return json({ success: true });
     }
 
-    if (!sepayId) {
+    if (sepayId === undefined || sepayId === null) {
       console.warn("[sepay-webhook] Missing sepayId in payload");
+      return json({ success: true });
+    }
+    // sepayId = 0 is SePay's test payload — log and skip (real transactions have id > 0)
+    if (sepayId === 0) {
+      console.log("[sepay-webhook] Test payload (id=0) — skipped");
       return json({ success: true });
     }
 
