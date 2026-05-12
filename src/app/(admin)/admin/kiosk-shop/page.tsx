@@ -12,7 +12,11 @@ import {
   Save,
   Sticker,
   ShoppingBag,
+  Layers,
+  X,
+  ExternalLink,
 } from "lucide-react";
+import { PlayerDetailStickersTab } from "@/components/admin/player-detail-stickers-tab";
 
 export const dynamic = "force-dynamic";
 
@@ -43,7 +47,268 @@ interface DraftTemplate {
   femalePrompt: string;
 }
 
-type ActiveTab = "stickers";
+type ActiveTab = "stickers" | "explorer";
+
+// ---------------------------------------------------------------------------
+// Explorer types
+// ---------------------------------------------------------------------------
+
+interface ExplorerPack {
+  packId: string;
+  playerId: string;
+  playerName: string;
+  playerGender: string;
+  playerFacePhotoPath: string | null;
+  playerAvatarPhotoPath: string | null;
+  sticker1Url: string | null;
+  sticker2Url: string | null;
+  sticker3Url: string | null;
+  sticker4Url: string | null;
+  isPaid: boolean;
+  createdAt: string;
+}
+
+interface ExplorerPlayer {
+  id: string;
+  name: string;
+  gender: string;
+  facePhotoPath: string | null;
+  avatarPhotoPath: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Player Stickers Slide-over
+// ---------------------------------------------------------------------------
+
+function PlayerStickerSlideOver({
+  player,
+  onClose,
+}: {
+  player: ExplorerPlayer;
+  onClose: () => void;
+}) {
+  const photoPath = player.avatarPhotoPath ?? player.facePhotoPath ?? null;
+  const initial = player.name.charAt(0).toUpperCase();
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="relative w-full max-w-2xl animate-in slide-in-from-right overflow-y-auto bg-neutral-950 border-l border-neutral-800 shadow-2xl">
+        {/* Header */}
+        <div className="sticky top-0 z-10 border-b border-neutral-800 bg-neutral-950 px-4 py-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="h-10 w-10 shrink-0 rounded-full overflow-hidden bg-neutral-800 flex items-center justify-center">
+              {photoPath ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={photoPath} alt={player.name} className="h-full w-full object-cover" />
+              ) : (
+                <span className="text-lg font-bold text-neutral-400">{initial}</span>
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-white">{player.name}</p>
+              <p className="text-[11px] text-neutral-500 capitalize">{player.gender}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="h-8 w-8 shrink-0 rounded-lg bg-neutral-800 flex items-center justify-center text-neutral-400 hover:text-white hover:bg-neutral-700 transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Stickers tab content */}
+        <PlayerDetailStickersTab
+          playerId={player.id}
+          facePhotoPath={player.facePhotoPath}
+          playerFirstName={player.name.split(" ")[0]}
+          playerGender={player.gender}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Sticker Explorer Tab
+// ---------------------------------------------------------------------------
+
+type GenderFilter = "all" | "male" | "female";
+
+function StickerExplorerTab({ token }: { token: string }) {
+  const [packs, setPacks] = useState<ExplorerPack[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [genderFilter, setGenderFilter] = useState<GenderFilter>("all");
+  const [detailPlayer, setDetailPlayer] = useState<ExplorerPlayer | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    fetch("/api/admin/sticker-explorer", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((data: ExplorerPack[]) => setPacks(data ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [token]);
+
+  const filtered = useMemo(() => {
+    if (genderFilter === "all") return packs;
+    return packs.filter((p) => p.playerGender === genderFilter);
+  }, [packs, genderFilter]);
+
+  const counts = useMemo(() => ({
+    all: packs.length,
+    male: packs.filter((p) => p.playerGender === "male").length,
+    female: packs.filter((p) => p.playerGender === "female").length,
+  }), [packs]);
+
+  const fmtDate = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
+      " " + d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+  };
+
+  const filterBtnCls = (active: boolean) =>
+    `px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+      active
+        ? "bg-purple-600 text-white"
+        : "bg-neutral-800 text-neutral-400 hover:bg-neutral-700 hover:text-neutral-200"
+    }`;
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-16">
+        <Loader2 className="h-6 w-6 animate-spin text-purple-400" />
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {/* Filter bar */}
+      <div className="flex items-center gap-2 pb-4 flex-wrap">
+        <button type="button" className={filterBtnCls(genderFilter === "all")} onClick={() => setGenderFilter("all")}>
+          All ({counts.all})
+        </button>
+        <button type="button" className={filterBtnCls(genderFilter === "male")} onClick={() => setGenderFilter("male")}>
+          Male ({counts.male})
+        </button>
+        <button type="button" className={filterBtnCls(genderFilter === "female")} onClick={() => setGenderFilter("female")}>
+          Female ({counts.female})
+        </button>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 py-16 text-neutral-600">
+          <Layers className="h-10 w-10 opacity-40" />
+          <p className="text-sm">No sticker packs found.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((pack) => {
+            const photoSrc = pack.playerAvatarPhotoPath ?? pack.playerFacePhotoPath ?? null;
+            const stickers = [pack.sticker1Url, pack.sticker2Url, pack.sticker3Url, pack.sticker4Url];
+            const allMissing = stickers.every((s) => !s);
+
+            return (
+              <div
+                key={pack.packId}
+                className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-3 space-y-3"
+              >
+                {/* Player row */}
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setDetailPlayer({
+                        id: pack.playerId,
+                        name: pack.playerName,
+                        gender: pack.playerGender,
+                        facePhotoPath: pack.playerFacePhotoPath,
+                        avatarPhotoPath: pack.playerAvatarPhotoPath,
+                      })
+                    }
+                    className="flex items-center gap-2 min-w-0 group"
+                  >
+                    {/* Avatar */}
+                    <div className="h-8 w-8 shrink-0 rounded-full overflow-hidden bg-neutral-800 flex items-center justify-center">
+                      {photoSrc ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={photoSrc} alt={pack.playerName} className="h-full w-full object-cover" />
+                      ) : (
+                        <span className="text-xs font-bold text-neutral-400">
+                          {pack.playerName.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                    {/* Name + gender */}
+                    <div className="min-w-0 text-left">
+                      <span className="block truncate text-sm font-medium text-neutral-200 group-hover:text-purple-300 transition-colors">
+                        {pack.playerName}
+                      </span>
+                      <span className={`text-[10px] capitalize ${pack.playerGender === "female" ? "text-pink-400" : pack.playerGender === "male" ? "text-blue-400" : "text-neutral-500"}`}>
+                        {pack.playerGender}
+                      </span>
+                    </div>
+                    <ExternalLink className="h-3.5 w-3.5 shrink-0 text-neutral-600 group-hover:text-purple-400 transition-colors" />
+                  </button>
+
+                  {/* Paid badge */}
+                  {pack.isPaid && (
+                    <span className="shrink-0 rounded-full bg-green-900/50 px-2 py-0.5 text-[10px] font-medium text-green-400">
+                      Paid
+                    </span>
+                  )}
+                </div>
+
+                {/* Sticker grid */}
+                {allMissing ? (
+                  <div className="h-16 rounded-lg border border-dashed border-neutral-700 flex items-center justify-center">
+                    <span className="text-[11px] text-neutral-600">No stickers yet</span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {stickers.map((url, i) => (
+                      <div
+                        key={i}
+                        className="relative aspect-square rounded-lg overflow-hidden border border-neutral-800 bg-neutral-900 flex items-center justify-center"
+                      >
+                        {url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={url}
+                            alt={`Sticker ${i + 1}`}
+                            className="absolute inset-0 h-full w-full object-contain"
+                          />
+                        ) : (
+                          <span className="text-[10px] text-neutral-700">—</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Date */}
+                <p className="text-[10px] text-neutral-600">{fmtDate(pack.createdAt)}</p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Player detail slide-over */}
+      {detailPlayer && (
+        <PlayerStickerSlideOver
+          player={detailPlayer}
+          onClose={() => setDetailPlayer(null)}
+        />
+      )}
+    </>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Payment Settings Section
@@ -602,7 +867,12 @@ function TemplatesSection({ token }: { token: string }) {
 
 export default function KioskShopPage() {
   const token = useSessionStore((s) => s.token);
-  const [activeTab] = useState<ActiveTab>("stickers");
+  const [activeTab, setActiveTab] = useState<ActiveTab>("stickers");
+
+  const tabCls = (tab: ActiveTab) =>
+    activeTab === tab
+      ? "border-b-2 border-purple-500 px-4 py-2 text-sm font-medium text-purple-400"
+      : "border-b-2 border-transparent px-4 py-2 text-sm font-medium text-neutral-500 hover:text-neutral-300";
 
   return (
     <div className="space-y-6">
@@ -613,15 +883,14 @@ export default function KioskShopPage() {
 
       {/* Tab bar */}
       <div className="flex gap-1 border-b border-neutral-800">
-        <button
-          type="button"
-          className={
-            activeTab === "stickers"
-              ? "border-b-2 border-purple-500 px-4 py-2 text-sm font-medium text-purple-400"
-              : "px-4 py-2 text-sm font-medium text-neutral-500 hover:text-neutral-300"
-          }
-        >
+        <button type="button" className={tabCls("stickers")} onClick={() => setActiveTab("stickers")}>
           Stickers
+        </button>
+        <button type="button" className={tabCls("explorer")} onClick={() => setActiveTab("explorer")}>
+          <span className="flex items-center gap-1.5">
+            <Layers className="h-3.5 w-3.5" />
+            Explorer
+          </span>
         </button>
       </div>
 
@@ -637,6 +906,10 @@ export default function KioskShopPage() {
             <TemplatesSection token={token} />
           </div>
         </div>
+      )}
+
+      {activeTab === "explorer" && token && (
+        <StickerExplorerTab token={token} />
       )}
     </div>
   );
