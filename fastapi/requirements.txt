@@ -2,4 +2,6 @@ fastapi
 uvicorn[standard]
 rembg[cpu]
 Pillow
+numpy
 python-multipart
+scipy

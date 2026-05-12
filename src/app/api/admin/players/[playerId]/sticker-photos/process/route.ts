@@ -79,7 +79,7 @@ export async function POST(
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image_base64: base64 }),
+        body: JSON.stringify({ image_base64: base64, aggressiveness: "chroma", chroma_tolerance: 40, feather_radius: 1.5 }),
       });
 
       console.log(`[split-stickers] sticker ${index}: response status ${res.status} ${res.statusText}`);

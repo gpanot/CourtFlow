@@ -704,12 +704,7 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstNa
                 {[pack.sticker1Url, pack.sticker2Url, pack.sticker3Url, pack.sticker4Url].map((url, i) => (
                   <div
                     key={i}
-                    className="relative aspect-square rounded-lg overflow-hidden border border-neutral-800 flex items-center justify-center"
-                    style={{
-                      backgroundImage: "linear-gradient(45deg, #2a2a2a 25%, transparent 25%), linear-gradient(-45deg, #2a2a2a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #2a2a2a 75%), linear-gradient(-45deg, transparent 75%, #2a2a2a 75%)",
-                      backgroundSize: "16px 16px",
-                      backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px",
-                    }}
+                    className="relative aspect-square rounded-lg overflow-hidden border border-neutral-800 flex items-center justify-center bg-neutral-900"
                   >
                     {url ? (
                       // eslint-disable-next-line @next/next/no-img-element
