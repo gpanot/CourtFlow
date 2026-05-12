@@ -792,7 +792,7 @@ function IdleScreen({
         >
           {/* Fun phrase */}
           <p style={{
-            fontSize: "clamp(28px, 6vw, 56px)",
+            fontSize: "clamp(20px, 4.2vw, 40px)",
             fontWeight: 900,
             color: "#4ade80",
             textAlign: "center",
@@ -807,7 +807,7 @@ function IdleScreen({
           </p>
 
           {/* Sticker image */}
-          <div style={{ position: "relative", width: "min(70vw, 70vh, 420px)" }}>
+          <div style={{ position: "relative", width: "min(49vw, 49vh, 294px)" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={previewSticker}
