@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
+import { Gender } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      where: gender ? { player: { gender } } : undefined,
+      where: gender ? { player: { gender: gender as Gender } } : undefined,
     });
 
     const result: StickerExplorerPack[] = packs.map((p) => ({
