@@ -15,8 +15,38 @@ import {
   Layers,
   X,
   ExternalLink,
+  BarChart2,
+  Receipt,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { PlayerDetailStickersTab } from "@/components/admin/player-detail-stickers-tab";
+import dynamic from "next/dynamic";
+
+// Recharts — client-only (SSR off to avoid window errors)
+const BarChartComponent = dynamic(() => import("recharts").then((m) => {
+  const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } = m;
+  function StickerBarChart({ data }: { data: { date: string; scans: number; purchases: number }[] }) {
+    const fmt = (d: string) => { const [,mm,dd] = d.split("-"); return `${dd}/${mm}`; };
+    return (
+      <ResponsiveContainer width="100%" height={200}>
+        <BarChart data={data.map(d => ({ ...d, label: fmt(d.date) }))} barGap={2}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#262626" vertical={false} />
+          <XAxis dataKey="label" tick={{ fill: "#6b7280", fontSize: 11 }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ fill: "#6b7280", fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} width={28} />
+          <Tooltip
+            contentStyle={{ background: "#171717", border: "1px solid #262626", borderRadius: 8, fontSize: 12 }}
+            labelStyle={{ color: "#e5e5e5", marginBottom: 4 }}
+            itemStyle={{ color: "#a3a3a3" }}
+          />
+          <Bar dataKey="scans" fill="#3b82f6" radius={[3, 3, 0, 0]} name="Scans" />
+          <Bar dataKey="purchases" fill="#4ade80" radius={[3, 3, 0, 0]} name="Purchases" />
+        </BarChart>
+      </ResponsiveContainer>
+    );
+  }
+  return { default: StickerBarChart };
+}), { ssr: false, loading: () => <div className="h-[200px] flex items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-neutral-600" /></div> });
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +77,38 @@ interface DraftTemplate {
   femalePrompt: string;
 }
 
-type ActiveTab = "stickers" | "explorer";
+type ActiveTab = "stickers" | "explorer" | "stats" | "purchases";
+
+// ---------------------------------------------------------------------------
+// Stats types
+// ---------------------------------------------------------------------------
+interface StickerStats {
+  scansTotal: number;
+  scansToday: number;
+  scansThisWeek: number;
+  packsGenerated: number;
+  purchasesTotal: number;
+  purchasesToday: number;
+  revenueTotal: number;
+  revenueToday: number;
+  conversionRate: number;
+  last7Days: { date: string; scans: number; purchases: number; revenue: number }[];
+}
+
+// ---------------------------------------------------------------------------
+// Purchase types
+// ---------------------------------------------------------------------------
+interface Purchase {
+  id: string;
+  sepayId: number;
+  paymentCode: string;
+  transferAmount: number;
+  content: string;
+  processedAt: string;
+  playerName: string | null;
+  playerPhone: string | null;
+  playerId: string | null;
+}
 
 // ---------------------------------------------------------------------------
 // Explorer types
@@ -869,6 +930,287 @@ function TemplatesSection({ token }: { token: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// Stats Tab
+// ---------------------------------------------------------------------------
+
+function fmtVND(n: number): string {
+  return n.toLocaleString("vi-VN") + "đ";
+}
+
+function StatCard({ title, value, subtitle }: { title: string; value: string; subtitle: string }) {
+  return (
+    <div className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 space-y-1">
+      <p className="text-xs text-neutral-500">{title}</p>
+      <p className="text-2xl font-bold text-white tabular-nums">{value}</p>
+      <p className="text-xs text-neutral-600">{subtitle}</p>
+    </div>
+  );
+}
+
+function StickerStatsTab({ token }: { token: string }) {
+  const [stats, setStats] = useState<StickerStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/admin/sticker-stats", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.json())
+      .then((d: StickerStats) => setStats(d))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [token]);
+
+  if (loading) {
+    return <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-purple-400" /></div>;
+  }
+  if (!stats) {
+    return <p className="text-sm text-neutral-500 py-8 text-center">Failed to load stats.</p>;
+  }
+
+  const insight =
+    stats.conversionRate > 15
+      ? "🔥 Strong conversion — keep it up"
+      : stats.conversionRate > 5
+      ? `📈 Good start — ${stats.purchasesTotal} sales so far`
+      : `👀 ${stats.scansTotal} players scanned — ${stats.purchasesTotal} purchased`;
+
+  return (
+    <div className="space-y-6 max-w-3xl">
+      {/* Metric cards */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatCard
+          title="Face Scans Today"
+          value={String(stats.scansToday)}
+          subtitle={`All time: ${stats.scansTotal}`}
+        />
+        <StatCard
+          title="Purchases Today"
+          value={String(stats.purchasesToday)}
+          subtitle={`All time: ${stats.purchasesTotal}`}
+        />
+        <StatCard
+          title="Revenue Today"
+          value={fmtVND(stats.revenueToday)}
+          subtitle={`Total: ${fmtVND(stats.revenueTotal)}`}
+        />
+        <StatCard
+          title="Conversion Rate"
+          value={`${stats.conversionRate}%`}
+          subtitle="Scans → Purchases"
+        />
+      </div>
+
+      {/* Bar chart */}
+      <div className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4">
+        <p className="text-xs font-medium text-neutral-400 mb-4">Last 7 days — Scans vs Purchases</p>
+        <div className="flex items-center gap-4 mb-3">
+          <span className="flex items-center gap-1.5 text-[11px] text-neutral-500">
+            <span className="inline-block w-3 h-2 rounded-sm bg-blue-500" /> Scans
+          </span>
+          <span className="flex items-center gap-1.5 text-[11px] text-neutral-500">
+            <span className="inline-block w-3 h-2 rounded-sm bg-green-400" /> Purchases
+          </span>
+        </div>
+        <BarChartComponent data={stats.last7Days} />
+      </div>
+
+      {/* Insight */}
+      <p className="text-sm text-neutral-400 text-center">{insight}</p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Purchases Tab
+// ---------------------------------------------------------------------------
+
+function fmtDateTime(iso: string): string {
+  const d = new Date(iso);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
+}
+
+function StickerPurchasesTab({ token }: { token: string }) {
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const load = useCallback(async (p: number) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/sticker-purchases?page=${p}&limit=20`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json() as { purchases: Purchase[]; total: number; page: number; totalPages: number };
+      setPurchases(data.purchases ?? []);
+      setTotal(data.total ?? 0);
+      setPage(data.page ?? 1);
+      setTotalPages(data.totalPages ?? 1);
+    } catch {
+      // silent
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => { void load(1); }, [load]);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleDelete = async (id: string) => {
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/sticker-purchases/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Delete failed");
+      setPurchases((prev) => prev.filter((p) => p.id !== id));
+      setTotal((t) => t - 1);
+      setConfirmDeleteId(null);
+      showToast("Payment deleted and pack marked as unpaid.");
+    } catch (e) {
+      showToast(`Error: ${(e as Error).message}`);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-purple-400" /></div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] rounded-lg bg-neutral-800 border border-neutral-700 px-4 py-2.5 text-sm text-white shadow-xl">
+          {toast}
+        </div>
+      )}
+
+      {purchases.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 py-16 text-neutral-600">
+          <Receipt className="h-10 w-10 opacity-40" />
+          <p className="text-sm">No purchases yet.</p>
+        </div>
+      ) : (
+        <>
+          <p className="text-xs text-neutral-500">Showing {purchases.length} of {total} purchases</p>
+
+          {/* Table */}
+          <div className="rounded-xl border border-neutral-800 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-neutral-800 bg-neutral-900/80">
+                  <th className="px-3 py-2.5 text-left text-[11px] font-medium text-neutral-500">Date &amp; Time</th>
+                  <th className="px-3 py-2.5 text-left text-[11px] font-medium text-neutral-500">Player</th>
+                  <th className="px-3 py-2.5 text-left text-[11px] font-medium text-neutral-500">Amount</th>
+                  <th className="px-3 py-2.5 text-left text-[11px] font-medium text-neutral-500 hidden sm:table-cell">Payment Code</th>
+                  <th className="px-3 py-2.5 text-left text-[11px] font-medium text-neutral-500 hidden md:table-cell">SePay ID</th>
+                  <th className="px-3 py-2.5 text-right text-[11px] font-medium text-neutral-500">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-800/60">
+                {purchases.map((p) => (
+                  <tr key={p.id} className="bg-neutral-900/30 hover:bg-neutral-800/30 transition-colors">
+                    <td className="px-3 py-2.5 text-xs text-neutral-400 tabular-nums whitespace-nowrap">
+                      {fmtDateTime(p.processedAt)}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <p className="text-xs font-medium text-neutral-200">{p.playerName ?? "Unknown"}</p>
+                      {p.playerPhone && <p className="text-[10px] text-neutral-600">{p.playerPhone}</p>}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <span className="text-xs font-semibold text-green-400 tabular-nums">
+                        {fmtVND(p.transferAmount)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5 hidden sm:table-cell">
+                      <code className="text-[10px] text-neutral-600 font-mono">{p.paymentCode}</code>
+                    </td>
+                    <td className="px-3 py-2.5 hidden md:table-cell">
+                      <code className="text-[10px] text-neutral-600 font-mono">{p.sepayId}</code>
+                    </td>
+                    <td className="px-3 py-2.5 text-right">
+                      {confirmDeleteId === p.id ? (
+                        <div className="flex items-center justify-end gap-1.5">
+                          <span className="text-[10px] text-neutral-400 whitespace-nowrap">Mark unpaid?</span>
+                          <button
+                            type="button"
+                            disabled={deleting}
+                            onClick={() => void handleDelete(p.id)}
+                            className="rounded px-2 py-0.5 text-[11px] font-medium bg-red-600 text-white hover:bg-red-500 disabled:opacity-50 whitespace-nowrap"
+                          >
+                            {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : "Confirm"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteId(null)}
+                            className="rounded px-2 py-0.5 text-[11px] text-neutral-400 hover:text-white"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(p.id)}
+                          className="h-7 w-7 ml-auto rounded-lg flex items-center justify-center text-neutral-600 hover:text-red-400 hover:bg-red-950/40 transition-colors"
+                          title="Delete payment"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-3">
+              <button
+                type="button"
+                onClick={() => { const p = page - 1; setPage(p); void load(p); }}
+                disabled={page === 1}
+                className="h-7 w-7 rounded flex items-center justify-center text-neutral-400 hover:text-white hover:bg-neutral-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="text-xs text-neutral-500 tabular-nums">
+                Page {page} of {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => { const p = page + 1; setPage(p); void load(p); }}
+                disabled={page === totalPages}
+                className="h-7 w-7 rounded flex items-center justify-center text-neutral-400 hover:text-white hover:bg-neutral-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 
@@ -899,16 +1241,25 @@ export default function KioskShopPage() {
             Explorer
           </span>
         </button>
+        <button type="button" className={tabCls("stats")} onClick={() => setActiveTab("stats")}>
+          <span className="flex items-center gap-1.5">
+            <BarChart2 className="h-3.5 w-3.5" />
+            Stats
+          </span>
+        </button>
+        <button type="button" className={tabCls("purchases")} onClick={() => setActiveTab("purchases")}>
+          <span className="flex items-center gap-1.5">
+            <Receipt className="h-3.5 w-3.5" />
+            Purchases
+          </span>
+        </button>
       </div>
 
       {activeTab === "stickers" && token && (
         <div className="space-y-8 max-w-3xl">
-          {/* Payment settings */}
           <div className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4">
             <PaymentSettingsSection token={token} />
           </div>
-
-          {/* Templates */}
           <div className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4">
             <TemplatesSection token={token} />
           </div>
@@ -917,6 +1268,14 @@ export default function KioskShopPage() {
 
       {activeTab === "explorer" && token && (
         <StickerExplorerTab token={token} />
+      )}
+
+      {activeTab === "stats" && token && (
+        <StickerStatsTab token={token} />
+      )}
+
+      {activeTab === "purchases" && token && (
+        <StickerPurchasesTab token={token} />
       )}
     </div>
   );
