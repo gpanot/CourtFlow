@@ -68,7 +68,7 @@ const STRINGS = {
     downloadApp: "Download your stickers directly in the app",
     done: "Done",
     resetIn: (n: number) => `Screen resets in ${n}s`,
-    notFoundTitle: "We didn't find your stickers",
+    notFoundTitle: "Your stickers are not ready yet",
     notFoundNoFace: "We couldn't recognize your face. Try again with better lighting.",
     notFoundNoPack: "Ask a staff member to set up your sticker pack first.",
     tryAgain: "Try again",
@@ -106,7 +106,7 @@ const STRINGS = {
     downloadApp: "Tải sticker trực tiếp trong ứng dụng",
     done: "Xong",
     resetIn: (n: number) => `Màn hình đặt lại sau ${n}s`,
-    notFoundTitle: "Không tìm thấy sticker của bạn",
+    notFoundTitle: "Sticker của bạn chưa sẵn sàng",
     notFoundNoFace: "Không nhận dạng được khuôn mặt. Thử lại ở nơi sáng hơn.",
     notFoundNoPack: "Nhờ nhân viên thiết lập bộ sticker trước nhé.",
     tryAgain: "Thử lại",
@@ -769,6 +769,7 @@ function ScanningScreen({
     onMaxAttemptsReached: useCallback(() => {
       onNotFound({ hasStickerPack: true });
     }, [onNotFound]),
+    overrides: { maxFaceAttempts: 2, retryIdleMs: 2000 },
   });
 
   const viewfinderSize = "min(70vw, 380px)";
@@ -806,7 +807,9 @@ function ScanningScreen({
             boxShadow: scanPhase === "capturing" ? `0 0 0 4px rgba(22,163,74,0.2)` : "none",
           }}
         >
-          <CameraCapture ref={cameraRef} active facingMode="user" className="w-full h-full" videoClassName="w-full h-full object-cover" />
+          <div style={{ width: "100%", height: "100%", transform: "scaleX(-1)" }}>
+            <CameraCapture ref={cameraRef} active facingMode="user" className="w-full h-full" videoClassName="w-full h-full object-cover" />
+          </div>
 
           {scanPhase !== "between_retries" && (
             <div style={{ position: "absolute", left: 0, right: 0, height: 2, background: c.green, opacity: 0.6, animation: "scan-line 1.5s linear infinite" }} />
