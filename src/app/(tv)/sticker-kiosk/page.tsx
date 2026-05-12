@@ -261,7 +261,7 @@ const CSS_ANIMATIONS = `
   to   { opacity: 1; }
 }
 
-/* ── Portrait (phone + tablet): sticker grid fills 55% of height, QR fills rest ── */
+/* ── Portrait (phone + tablet): sticker grid above QR, content fills full height ── */
 @media (orientation: portrait) {
   .sk-two-col {
     flex-direction: column !important;
@@ -269,41 +269,45 @@ const CSS_ANIMATIONS = `
     width: 100% !important;
   }
   .sk-col-left {
-    flex: 0 0 55% !important;
+    flex: 0 0 auto !important;
     width: 100% !important;
     margin-bottom: 8px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
   }
+  /* Sticker grid: 2×2 grid sized to fit portrait screens without overflowing */
   .sk-col-left .sk-sticker-grid {
-    max-width: none !important;
-    width: 100% !important;
-    height: 100% !important;
+    width: auto !important;
+    max-width: 100% !important;
+    height: auto !important;
   }
   .sk-col-left .sk-sticker-grid > div {
-    height: 100% !important;
+    height: auto !important;
+    gap: 6px !important;
   }
+  /* Each sticker cell: fixed size based on viewport, never oversized */
   .sk-col-left .sk-sticker-cell,
   .sk-col-left .sk-sticker-grid > div > div {
-    aspect-ratio: unset !important;
-    height: 100% !important;
+    aspect-ratio: 1 !important;
+    width: min(22vw, 140px) !important;
+    height: min(22vw, 140px) !important;
   }
   .sk-col-right {
     flex: 1 !important;
     width: 100% !important;
     max-width: 432px !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
   }
 }
 
-/* ── Tablet portrait: larger sticker thumbnails in single-column layout ── */
+/* ── Tablet portrait: slightly larger sticker cells ── */
 @media (min-width: 768px) and (orientation: portrait) {
-  .sk-sticker-grid {
-    max-width: none !important;
-    width: 481px !important;
-  }
-  .sk-sticker-grid > div {
-    gap: 10px !important;
+  .sk-col-left .sk-sticker-cell,
+  .sk-col-left .sk-sticker-grid > div > div {
+    width: min(18vw, 160px) !important;
+    height: min(18vw, 160px) !important;
   }
 }
 
@@ -1040,10 +1044,8 @@ function IdentifiedScreen({
   const [paymentPhase, setPaymentPhase] = useState<"payment" | "confirmed">(
     session.isPaid ? "confirmed" : "payment"
   );
-  // "I just paid" button is always visible — shown after a short grace delay
-  const [showPaidButton, setShowPaidButton] = useState(false);
-  // Countdown for auto-reset after button appears (no payment detected)
-  const [paidButtonCountdown, setPaidButtonCountdown] = useState(90);
+  // Countdown for auto-reset while waiting for payment (no payment detected in time)
+  const [paymentCountdown, setPaymentCountdown] = useState(90);
   const [countdown, setCountdown] = useState(AUTO_RESET_S);
   // Whether the sticker grid has mounted (triggers animate prop)
   const [stickersVisible, setStickersVisible] = useState(false);
@@ -1053,13 +1055,6 @@ function IdentifiedScreen({
     const t = setTimeout(() => setStickersVisible(true), 80);
     return () => clearTimeout(t);
   }, []);
-
-  // Show "I just paid" button after a short delay (let player scan QR first)
-  useEffect(() => {
-    if (paymentPhase !== "payment") return;
-    const t = setTimeout(() => setShowPaidButton(true), 8000);
-    return () => clearTimeout(t);
-  }, [paymentPhase]);
 
   // Poll SePay payment status every 3s while in payment phase
   useEffect(() => {
@@ -1079,24 +1074,24 @@ function IdentifiedScreen({
     return () => clearInterval(interval);
   }, [paymentPhase, session.token]);
 
-  // Once "I just paid" button appears, run 90s countdown then auto-reset
+  // 90s countdown while waiting for payment — auto-reset if no payment received
   useEffect(() => {
-    if (!showPaidButton || paymentPhase !== "payment") return;
+    if (paymentPhase !== "payment") return;
     const interval = setInterval(() => {
-      setPaidButtonCountdown((n) => {
+      setPaymentCountdown((n) => {
         if (n <= 1) { clearInterval(interval); return 0; }
         return n - 1;
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [showPaidButton, paymentPhase]);
+  }, [paymentPhase]);
 
-  // Auto-reset when paidButtonCountdown hits 0 (still on payment phase)
+  // Auto-reset when paymentCountdown hits 0 (no payment received in time)
   useEffect(() => {
-    if (showPaidButton && paymentPhase === "payment" && paidButtonCountdown === 0) {
+    if (paymentPhase === "payment" && paymentCountdown === 0) {
       onReset();
     }
-  }, [paidButtonCountdown, showPaidButton, paymentPhase, onReset]);
+  }, [paymentCountdown, paymentPhase, onReset]);
 
   // Auto-reset after confirmed
   useEffect(() => {
@@ -1141,17 +1136,6 @@ function IdentifiedScreen({
         paymentRef: paymentCode || `Sticker ${session.playerName}`.slice(0, 50),
       })
     : null;
-
-  const handlePaid = useCallback(() => {
-    setCountdown(AUTO_RESET_S);
-    setPaymentPhase("confirmed");
-    // Fire-and-forget — persist payment in DB; never block the user
-    fetch("/api/player/confirm-sticker-payment", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: session.token }),
-    }).catch((err) => console.error("[Kiosk] confirm-sticker-payment failed", err));
-  }, [session.token]);
 
   const isLight = !dark;
 
@@ -1263,33 +1247,23 @@ function IdentifiedScreen({
 
             <div style={{ flex: 1 }} />
 
-            {/* Polling indicator — visible before "I just paid" appears */}
-            {!showPaidButton && (
-              <p style={{ fontSize: 13, color: c.dim, textAlign: "center", marginBottom: 4, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+            {/* Polling indicator + urgency countdown */}
+            <div style={{ textAlign: "center", marginBottom: 8 }}>
+              <p style={{ fontSize: 13, color: c.dim, marginBottom: 6, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
                 <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#4ade80", animation: "pulse-dot 1.4s ease-in-out infinite" }} />
                 {s.waitingPayment}
               </p>
-            )}
-
-            {showPaidButton && (
-              <div className="sk-paid-btn-wrap" style={{ width: "100%", maxWidth: 432 }}>
-                {/* Urgency countdown — always visible once button appears */}
-                <p style={{
-                  fontSize: 13,
-                  fontWeight: paidButtonCountdown <= 30 ? 700 : 500,
-                  color: paidButtonCountdown <= 30 ? "#f87171" : c.dim,
-                  textAlign: "center",
-                  marginBottom: 8,
-                  letterSpacing: "0.01em",
-                  transition: "color 0.3s",
-                }}>
-                  ⏱ {s.resetIn(paidButtonCountdown)}
-                </p>
-                <button onClick={handlePaid} style={{ ...BTN_PRIMARY, width: "100%" }}>
-                  {s.iPaid}
-                </button>
-              </div>
-            )}
+              <p style={{
+                fontSize: 13,
+                fontWeight: paymentCountdown <= 30 ? 700 : 500,
+                color: paymentCountdown <= 30 ? "#f87171" : c.dim,
+                letterSpacing: "0.01em",
+                transition: "color 0.3s",
+                margin: 0,
+              }}>
+                ⏱ {s.resetIn(paymentCountdown)}
+              </p>
+            </div>
           </div>
         </div>
       )}
