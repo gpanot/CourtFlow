@@ -31,7 +31,10 @@ export async function GET(request: NextRequest) {
       return json({ error: "not_found" }, 404);
     }
 
-    const packPlayer = await prisma.player.findUnique({ where: { id: session.playerId }, select: { name: true } });
+    const [packPlayer, kioskSettings] = await Promise.all([
+      prisma.player.findUnique({ where: { id: session.playerId }, select: { name: true } }),
+      prisma.kioskSettings.findUnique({ where: { id: "global" } }),
+    ]);
     const playerName = packPlayer?.name?.split(" ")[0] ?? "player";
     const stickers = [
       stickerPack.sticker1Url,
@@ -44,7 +47,8 @@ export async function GET(request: NextRequest) {
       playerId: session.playerId,
       playerName,
       stickers,
-      price: 30000,
+      price: kioskSettings?.stickerPrice ?? 30000,
+      isPaid: stickerPack.isPaid,
     });
   } catch (e) {
     return error((e as Error).message, 500);

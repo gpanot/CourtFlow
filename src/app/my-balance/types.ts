@@ -39,4 +39,5 @@ export interface StickerData {
   playerName: string;
   stickers: string[];
   price: number;
+  isPaid: boolean;
 }

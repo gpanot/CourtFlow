@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
       stickerPack.sticker4Url,
     ].filter(Boolean) as string[];
 
-    return json({ token: session.token, shopUrl, playerName, stickers });
+    return json({ token: session.token, shopUrl, playerName, stickers, isPaid: stickerPack.isPaid });
   } catch (e) {
     return error((e as Error).message, 500);
   }

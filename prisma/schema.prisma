@@ -951,15 +951,17 @@ model PlayerStickerResult {
 }
 
 model PlayerStickerPack {
-  id          String   @id @default(cuid())
-  playerId    String   @map("player_id")
-  resultId    String   @map("result_id")
-  sticker1Url String?  @map("sticker_1_url")
-  sticker2Url String?  @map("sticker_2_url")
-  sticker3Url String?  @map("sticker_3_url")
-  sticker4Url String?  @map("sticker_4_url")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id          String    @id @default(cuid())
+  playerId    String    @map("player_id")
+  resultId    String    @map("result_id")
+  sticker1Url String?   @map("sticker_1_url")
+  sticker2Url String?   @map("sticker_2_url")
+  sticker3Url String?   @map("sticker_3_url")
+  sticker4Url String?   @map("sticker_4_url")
+  isPaid      Boolean   @default(false) @map("is_paid")
+  paidAt      DateTime? @map("paid_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   player Player              @relation(fields: [playerId], references: [id], onDelete: Cascade)
   result PlayerStickerResult @relation(fields: [resultId], references: [id], onDelete: Cascade)

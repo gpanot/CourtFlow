@@ -117,7 +117,8 @@ export default function MyBalancePage() {
               const data = await res.json() as StickerData;
               setStickerData(data);
               setStickerToken(token);
-              setStickerPaid(urlParams.get("paid") === "true");
+              // DB is source of truth; URL param "paid=true" is kept as fallback
+              setStickerPaid(data.isPaid === true || urlParams.get("paid") === "true");
               // Jump straight to balance screen with a minimal BalanceData shell
               setBalanceData({
                 found: true,

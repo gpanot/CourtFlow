@@ -56,6 +56,7 @@ const STRINGS = {
     cancel: "Cancel",
     hiPlayer: (name: string) => `Hi ${name}! 👋`,
     paySubtitle: "Complete payment to get your sticker pack",
+    alreadyPaidSubtitle: "Your stickers are ready to download",
     confirmedSubtitle: "Payment received! Scan to access your stickers",
     scanToPay: (price: string) => `Scan to pay ${price} VND`,
     anyApp: "Use any Vietnamese banking app",
@@ -94,6 +95,7 @@ const STRINGS = {
     cancel: "Huỷ",
     hiPlayer: (name: string) => `Chào ${name}! 👋`,
     paySubtitle: "Hoàn thành thanh toán để nhận bộ sticker",
+    alreadyPaidSubtitle: "Sticker của bạn sẵn sàng để tải về",
     confirmedSubtitle: "Đã thanh toán! Quét để truy cập sticker",
     scanToPay: (price: string) => `Quét để thanh toán ${price} VND`,
     anyApp: "Dùng app ngân hàng Việt Nam bất kỳ",
@@ -128,6 +130,7 @@ interface SessionData {
   shopUrl: string;
   playerName: string;
   stickers: string[];
+  isPaid?: boolean;
 }
 
 interface KioskSettings {
@@ -1030,7 +1033,10 @@ function IdentifiedScreen({
   const s = STRINGS[lang];
   const isTablet = useIsTablet();
   // "payment" → show payment QR + timer; "confirmed" → full-screen QR reveal
-  const [paymentPhase, setPaymentPhase] = useState<"payment" | "confirmed">("payment");
+  // If the player already paid, skip straight to "confirmed"
+  const [paymentPhase, setPaymentPhase] = useState<"payment" | "confirmed">(
+    session.isPaid ? "confirmed" : "payment"
+  );
   const [paymentTimer, setPaymentTimer] = useState(PAYMENT_TIMER_S);
   const [showPaidButton, setShowPaidButton] = useState(false);
   // Countdown shown below "I just paid" — starts at 70s, auto-resets if user does nothing
@@ -1119,7 +1125,13 @@ function IdentifiedScreen({
   const handlePaid = useCallback(() => {
     setCountdown(AUTO_RESET_S);
     setPaymentPhase("confirmed");
-  }, []);
+    // Fire-and-forget — persist payment in DB; never block the user
+    fetch("/api/player/confirm-sticker-payment", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: session.token }),
+    }).catch((err) => console.error("[Kiosk] confirm-sticker-payment failed", err));
+  }, [session.token]);
 
   const isLight = !dark;
 
@@ -1237,7 +1249,9 @@ function IdentifiedScreen({
           {/* Top — success badge + name */}
           <div style={{ textAlign: "center", animation: "fade-in 0.4s ease 0.3s both" }}>
             <div style={{ fontSize: 52, lineHeight: 1, marginBottom: 12 }}>🎉</div>
-            <p style={{ fontSize: 22, fontWeight: 800, color: c.green, margin: 0 }}>{s.confirmed}</p>
+            <p style={{ fontSize: 22, fontWeight: 800, color: c.green, margin: 0 }}>
+              {session.isPaid ? s.alreadyPaidSubtitle : s.confirmed}
+            </p>
             <p style={{ fontSize: 15, color: c.text, fontWeight: 600, margin: "4px 0 0" }}>
               {s.hiPlayer(session.playerName)}
             </p>
