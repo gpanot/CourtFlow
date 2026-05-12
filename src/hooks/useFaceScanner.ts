@@ -13,7 +13,7 @@ const DEFAULTS = {
   capturePollMs: 120,
   captureMaxAttempts: 45,
   retryIdleMs: 2000,
-} as const;
+};
 
 export type FaceScannerDefaults = typeof DEFAULTS;
 
