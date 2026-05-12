@@ -223,7 +223,7 @@ function StickerShopSection({
                     <img src={url} alt={`Sticker ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
                   )}
                   <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-                    <span style={{ color: "#fff", fontSize: 16, fontWeight: 700, opacity: 0.25, transform: "rotate(-35deg)", userSelect: "none", whiteSpace: "nowrap" }}>
+                    <span style={{ color: "#fff", fontSize: 16, fontWeight: 700, opacity: 0.45, transform: "rotate(-35deg)", userSelect: "none", whiteSpace: "nowrap" }}>
                       PREVIEW
                     </span>
                   </div>
@@ -348,7 +348,7 @@ function StickerShopSection({
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={stickerData.stickers[previewIndex]} alt={`Sticker ${previewIndex + 1}`} style={{ maxWidth: "90vw", maxHeight: "90vw", objectFit: "contain", display: "block" }} />
               <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-                <span style={{ color: "#fff", fontSize: 28, fontWeight: 700, opacity: 0.30, transform: "rotate(-35deg)", userSelect: "none", whiteSpace: "nowrap", letterSpacing: 4 }}>
+                <span style={{ color: "#fff", fontSize: 28, fontWeight: 700, opacity: 0.50, transform: "rotate(-35deg)", userSelect: "none", whiteSpace: "nowrap", letterSpacing: 4 }}>
                   PREVIEW
                 </span>
               </div>

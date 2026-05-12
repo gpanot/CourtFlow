@@ -255,6 +255,41 @@ const CSS_ANIMATIONS = `
   to   { opacity: 1; }
 }
 
+/* ── Portrait (phone + tablet): sticker grid fills 55% of height, QR fills rest ── */
+@media (orientation: portrait) {
+  .sk-two-col {
+    flex-direction: column !important;
+    align-items: center !important;
+    width: 100% !important;
+  }
+  .sk-col-left {
+    flex: 0 0 55% !important;
+    width: 100% !important;
+    margin-bottom: 8px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+  .sk-col-left .sk-sticker-grid {
+    max-width: none !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+  .sk-col-left .sk-sticker-grid > div {
+    height: 100% !important;
+  }
+  .sk-col-left .sk-sticker-cell,
+  .sk-col-left .sk-sticker-grid > div > div {
+    aspect-ratio: unset !important;
+    height: 100% !important;
+  }
+  .sk-col-right {
+    flex: 1 !important;
+    width: 100% !important;
+    max-width: 432px !important;
+  }
+}
+
 /* ── Tablet portrait: larger sticker thumbnails in single-column layout ── */
 @media (min-width: 768px) and (orientation: portrait) {
   .sk-sticker-grid {
@@ -724,19 +759,26 @@ function IdleScreen({
             transition: "opacity 300ms ease",
           }}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={previewSticker}
-            alt=""
-            style={{
-              width: "60vw",
-              maxWidth: 340,
-              height: "auto",
-              objectFit: "contain",
-              transform: isPreviewVisible ? "scale(1)" : "scale(0.3)",
-              transition: "transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1)",
-            }}
-          />
+          <div style={{ position: "relative", width: "60vw", maxWidth: 340 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={previewSticker}
+              alt=""
+              style={{
+                width: "100%",
+                height: "auto",
+                objectFit: "contain",
+                display: "block",
+                transform: isPreviewVisible ? "scale(1)" : "scale(0.3)",
+                transition: "transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1)",
+              }}
+            />
+            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+              <span style={{ color: "#fff", fontSize: 22, fontWeight: 700, opacity: 0.65, transform: "rotate(-35deg)", userSelect: "none", whiteSpace: "nowrap", letterSpacing: 3 }}>
+                PREVIEW
+              </span>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -950,7 +992,7 @@ function StickerGrid({ stickers, compact, animate, tabletLayout }: { stickers: s
                     color: "#fff",
                     fontSize: 16,
                     fontWeight: 700,
-                    opacity: 0.45,
+                    opacity: 0.65,
                     transform: "rotate(-35deg)",
                     userSelect: "none",
                     whiteSpace: "nowrap",
@@ -1120,7 +1162,7 @@ function IdentifiedScreen({
         <div className="sk-two-col" style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1, minHeight: 0 }}>
 
           {/* Left col (mobile: sticker grid above QR) */}
-          <div className="sk-col-left" style={{ display: "flex", justifyContent: "center", width: "100%", flexShrink: 0, marginBottom: 16 }}>
+          <div className="sk-col-left" style={{ display: "flex", justifyContent: "center", width: "100%" }}>
             <StickerGrid stickers={session.stickers} compact animate={stickersVisible} tabletLayout />
           </div>
 
