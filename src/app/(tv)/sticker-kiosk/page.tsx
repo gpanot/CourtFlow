@@ -61,7 +61,8 @@ const STRINGS = {
     scanToPay: (price: string) => `Scan to pay ${price} VND`,
     anyApp: "Use any Vietnamese banking app",
     noQR: "Payment QR not configured — contact staff.",
-    confirmIn: (n: number) => `You can confirm payment in ${n}s…`,
+    confirmIn: (_n: number) => `Waiting for payment confirmation…`,
+    waitingPayment: "Waiting for payment…",
     iPaid: "I just paid ✓",
     cancelBtn: "Cancel",
     confirmed: "Payment confirmed!",
@@ -100,7 +101,8 @@ const STRINGS = {
     scanToPay: (price: string) => `Quét để thanh toán ${price} VND`,
     anyApp: "Dùng app ngân hàng Việt Nam bất kỳ",
     noQR: "Chưa cấu hình mã QR — liên hệ nhân viên.",
-    confirmIn: (n: number) => `Bạn có thể xác nhận thanh toán sau ${n}s…`,
+    confirmIn: (_n: number) => `Đang chờ xác nhận thanh toán…`,
+    waitingPayment: "Đang chờ thanh toán…",
     iPaid: "Tôi đã thanh toán ✓",
     cancelBtn: "Huỷ",
     confirmed: "Thanh toán thành công!",
@@ -131,6 +133,7 @@ interface SessionData {
   playerName: string;
   stickers: string[];
   isPaid?: boolean;
+  paymentCode?: string;
 }
 
 interface KioskSettings {
@@ -1037,10 +1040,10 @@ function IdentifiedScreen({
   const [paymentPhase, setPaymentPhase] = useState<"payment" | "confirmed">(
     session.isPaid ? "confirmed" : "payment"
   );
-  const [paymentTimer, setPaymentTimer] = useState(PAYMENT_TIMER_S);
+  // "I just paid" button is always visible — shown after a short grace delay
   const [showPaidButton, setShowPaidButton] = useState(false);
-  // Countdown shown below "I just paid" — starts at 70s, auto-resets if user does nothing
-  const [paidButtonCountdown, setPaidButtonCountdown] = useState(70);
+  // Countdown for auto-reset after button appears (no payment detected)
+  const [paidButtonCountdown, setPaidButtonCountdown] = useState(90);
   const [countdown, setCountdown] = useState(AUTO_RESET_S);
   // Whether the sticker grid has mounted (triggers animate prop)
   const [stickersVisible, setStickersVisible] = useState(false);
@@ -1051,31 +1054,37 @@ function IdentifiedScreen({
     return () => clearTimeout(t);
   }, []);
 
-  // Payment countdown → show "I just paid" after timer
+  // Show "I just paid" button after a short delay (let player scan QR first)
   useEffect(() => {
     if (paymentPhase !== "payment") return;
-    const interval = setInterval(() => {
-      setPaymentTimer((n) => {
-        if (n <= 1) {
-          clearInterval(interval);
-          setShowPaidButton(true);
-          return 0;
-        }
-        return n - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
+    const t = setTimeout(() => setShowPaidButton(true), 8000);
+    return () => clearTimeout(t);
   }, [paymentPhase]);
 
-  // Once "I just paid" button appears, run 70s countdown then auto-reset
+  // Poll SePay payment status every 3s while in payment phase
+  useEffect(() => {
+    if (paymentPhase !== "payment" || !session.token) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/player/sticker-payment-status?token=${encodeURIComponent(session.token)}`);
+        if (!res.ok) return;
+        const data = await res.json() as { isPaid: boolean };
+        if (data.isPaid) {
+          clearInterval(interval);
+          setCountdown(AUTO_RESET_S);
+          setPaymentPhase("confirmed");
+        }
+      } catch { /* network error — keep polling */ }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [paymentPhase, session.token]);
+
+  // Once "I just paid" button appears, run 90s countdown then auto-reset
   useEffect(() => {
     if (!showPaidButton || paymentPhase !== "payment") return;
     const interval = setInterval(() => {
       setPaidButtonCountdown((n) => {
-        if (n <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
+        if (n <= 1) { clearInterval(interval); return 0; }
         return n - 1;
       });
     }, 1000);
@@ -1112,13 +1121,24 @@ function IdentifiedScreen({
   }, [countdown, paymentPhase, onReset]);
 
   const price = kioskSettings?.stickerPrice ?? 30000;
-  console.log("[IdentifiedScreen] kioskSettings:", JSON.stringify(kioskSettings));
-  const paymentQRPayload = kioskSettings?.bankBin && kioskSettings?.bankAccount
+
+  // SePay QR image URL — generates a branded bank QR server-side
+  // Falls back to plain VietQR SVG if SePay env vars are not set
+  const paymentCode = session.paymentCode ?? "";
+  const sepayBankAccount = kioskSettings?.bankAccount ?? "";
+  const sepayBankBin = kioskSettings?.bankBin ?? "";
+  const hasQrConfig = !!(sepayBankAccount && sepayBankBin);
+  // SePay image QR: https://qr.sepay.vn/img?acc=...&bank=...&amount=...&des=...&template=compact
+  const sepayQrUrl = hasQrConfig && paymentCode
+    ? `https://qr.sepay.vn/img?acc=${encodeURIComponent(sepayBankAccount)}&bank=${encodeURIComponent(sepayBankBin)}&amount=${price}&des=${encodeURIComponent(paymentCode)}&template=compact`
+    : null;
+  // Legacy VietQR payload fallback (renders via QRCodeSVG)
+  const legacyQRPayload = hasQrConfig && !sepayQrUrl
     ? buildVietQRPayload({
-        bankBin: kioskSettings.bankBin,
-        accountNumber: kioskSettings.bankAccount,
+        bankBin: sepayBankBin,
+        accountNumber: sepayBankAccount,
         amount: price,
-        paymentRef: `Sticker ${session.playerName}`.slice(0, 50),
+        paymentRef: paymentCode || `Sticker ${session.playerName}`.slice(0, 50),
       })
     : null;
 
@@ -1180,10 +1200,16 @@ function IdentifiedScreen({
 
           {/* Right col (mobile: QR + button below stickers) */}
           <div className="sk-col-right" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", maxWidth: 432, flex: 1 }}>
-            {paymentQRPayload ? (
+            {sepayQrUrl ? (
               <>
-                <div className="sk-qr-box" style={{ background: "#ffffff", padding: 10, borderRadius: 12, display: "inline-block" }}>
-                  <QRCodeSVG value={paymentQRPayload} size={isTablet ? 260 : 130} bgColor="#ffffff" fgColor="#000000" />
+                {/* SePay-branded QR image — includes bank logo and branding */}
+                <div className="sk-qr-box" style={{ background: "#ffffff", padding: 8, borderRadius: 12, display: "inline-block" }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={sepayQrUrl}
+                    alt="Payment QR"
+                    style={{ width: isTablet ? 260 : 160, height: isTablet ? 260 : 160, display: "block", objectFit: "contain" }}
+                  />
                 </div>
                 {/* Strikethrough original price */}
                 <p className="sk-price-strike" style={{ fontSize: 14, color: "#6b7280", textAlign: "center", marginTop: 6, textDecoration: "line-through" }}>
@@ -1198,10 +1224,38 @@ function IdentifiedScreen({
                     50% OFF
                   </span>
                 </div>
+                {/* Payment code memo */}
+                {paymentCode && (
+                  <div style={{ marginTop: 6, textAlign: "center" }}>
+                    <p style={{ fontSize: 10, color: "#6b7280", marginBottom: 2 }}>
+                      {lang === "vi" ? "Ghi chú chuyển khoản" : "Transfer memo"}
+                    </p>
+                    <code style={{ fontSize: 13, fontWeight: 700, color: "#d1d5db", letterSpacing: 1, background: "rgba(255,255,255,0.06)", padding: "2px 8px", borderRadius: 6 }}>
+                      {paymentCode}
+                    </code>
+                  </div>
+                )}
                 {/* Caption */}
-                <p style={{ fontSize: 12, color: "#6b7280", textAlign: "center", marginTop: 3, fontStyle: "italic" }}>
+                <p style={{ fontSize: 12, color: "#6b7280", textAlign: "center", marginTop: 4, fontStyle: "italic" }}>
                   {lang === "vi" ? "Để tải bộ sticker của bạn" : "To download your pack"}
                 </p>
+              </>
+            ) : legacyQRPayload ? (
+              <>
+                <div className="sk-qr-box" style={{ background: "#ffffff", padding: 10, borderRadius: 12, display: "inline-block" }}>
+                  <QRCodeSVG value={legacyQRPayload} size={isTablet ? 260 : 130} bgColor="#ffffff" fgColor="#000000" />
+                </div>
+                <p className="sk-price-strike" style={{ fontSize: 14, color: "#6b7280", textAlign: "center", marginTop: 6, textDecoration: "line-through" }}>
+                  {(price * 2).toLocaleString("vi-VN")} VND
+                </p>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 2 }}>
+                  <span className="sk-price-main" style={{ fontSize: 22, fontWeight: 600, color: "#4ade80" }}>
+                    {s.scanToPay(price.toLocaleString("vi-VN"))}
+                  </span>
+                  <span style={{ background: "#4ade80", color: "#000", fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 999 }}>
+                    50% OFF
+                  </span>
+                </div>
               </>
             ) : (
               <p style={{ fontSize: 13, color: c.muted, textAlign: "center", marginTop: 8 }}>{s.noQR}</p>
@@ -1209,9 +1263,15 @@ function IdentifiedScreen({
 
             <div style={{ flex: 1 }} />
 
-            {!showPaidButton ? (
-              <p style={{ fontSize: 13, color: c.dim, textAlign: "center", marginBottom: 4 }}>{s.confirmIn(paymentTimer)}</p>
-            ) : (
+            {/* Polling indicator — visible before "I just paid" appears */}
+            {!showPaidButton && (
+              <p style={{ fontSize: 13, color: c.dim, textAlign: "center", marginBottom: 4, display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+                <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#4ade80", animation: "pulse-dot 1.4s ease-in-out infinite" }} />
+                {s.waitingPayment}
+              </p>
+            )}
+
+            {showPaidButton && (
               <div className="sk-paid-btn-wrap" style={{ width: "100%", maxWidth: 432 }}>
                 <button onClick={handlePaid} style={{ ...BTN_PRIMARY, width: "100%" }}>
                   {s.iPaid}
@@ -1221,7 +1281,7 @@ function IdentifiedScreen({
                   color: c.dim,
                   textAlign: "center",
                   marginTop: 8,
-                  visibility: paidButtonCountdown <= 60 ? "visible" : "hidden",
+                  visibility: paidButtonCountdown <= 75 ? "visible" : "hidden",
                 }}>
                   {s.resetIn(paidButtonCountdown)}
                 </p>

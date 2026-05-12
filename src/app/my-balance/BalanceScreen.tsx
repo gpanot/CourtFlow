@@ -65,14 +65,15 @@ const WHATSAPP_STEPS = [
 
 function StickerShopSection({
   stickerData,
+  stickerToken,
   paid,
 }: {
   stickerData: StickerData;
-  stickerToken?: string; // kept for API compat but download is now client-side
+  stickerToken?: string;
   paid?: boolean;
 }) {
   const { i18n } = useTranslation();
-  const [shopState] = useState<ShopState>(paid ? "success" : "idle");
+  const [shopState, setShopState] = useState<ShopState>(paid ? "success" : "idle");
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   // How-to starts expanded when paid (they just scanned and need the instructions right away)
   const [howToOpen, setHowToOpen] = useState(!!paid);
@@ -85,6 +86,24 @@ function StickerShopSection({
       (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
     );
   }, []);
+
+  // Poll payment status every 3s while in payment/idle state (waiting for SePay webhook)
+  useEffect(() => {
+    if (shopState === "success" || !stickerToken) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/player/sticker-payment-status?token=${encodeURIComponent(stickerToken)}`);
+        if (!res.ok) return;
+        const data = await res.json() as { isPaid: boolean };
+        if (data.isPaid) {
+          clearInterval(interval);
+          setShopState("success");
+          setHowToOpen(true);
+        }
+      } catch { /* keep polling on network errors */ }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [shopState, stickerToken]);
 
   // Use the app's active i18n language so flag toggle is respected
   const isVi = i18n.language.startsWith("vi");

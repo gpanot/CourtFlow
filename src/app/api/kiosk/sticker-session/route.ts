@@ -40,6 +40,14 @@ export async function POST(request: NextRequest) {
       data: { playerId, expiresAt },
     });
 
+    // Generate a unique SePay payment code for this session and attach to the pack
+    const prefix = process.env.SEPAY_PAYMENT_PREFIX ?? "STICKER";
+    const paymentCode = `${prefix}${session.token.slice(0, 10).toUpperCase()}`;
+    await prisma.playerStickerPack.update({
+      where: { id: stickerPack.id },
+      data: { paymentCode },
+    });
+
     const appUrl =
       process.env.APP_URL ??
       (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : "");
@@ -53,7 +61,7 @@ export async function POST(request: NextRequest) {
       stickerPack.sticker4Url,
     ].filter(Boolean) as string[];
 
-    return json({ token: session.token, shopUrl, playerName, stickers, isPaid: stickerPack.isPaid });
+    return json({ token: session.token, shopUrl, playerName, stickers, isPaid: stickerPack.isPaid, paymentCode });
   } catch (e) {
     return error((e as Error).message, 500);
   }

@@ -961,6 +961,7 @@ model PlayerStickerPack {
   sticker4Url String?   @map("sticker_4_url")
   isPaid      Boolean   @default(false) @map("is_paid")
   paidAt      DateTime? @map("paid_at")
+  paymentCode String?   @unique @map("payment_code")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
@@ -969,6 +970,17 @@ model PlayerStickerPack {
 
   @@index([playerId])
   @@map("player_sticker_packs")
+}
+
+model StickerPaymentLog {
+  id             String   @id @default(cuid())
+  sepayId        Int      @unique @map("sepay_id")
+  paymentCode    String   @map("payment_code")
+  transferAmount Int      @map("transfer_amount")
+  content        String
+  processedAt    DateTime @default(now()) @map("processed_at")
+
+  @@map("sticker_payment_logs")
 }
 
 model StickerSession {
