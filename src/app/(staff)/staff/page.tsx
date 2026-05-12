@@ -771,13 +771,23 @@ export default function StaffPage() {
           </form>
         </div>
 
-        <button
-          type="button"
-          onClick={handleShowOnboarding}
-          className="mx-auto mt-4 block text-xs text-neutral-500 transition-colors hover:text-neutral-300"
-        >
-          View onboarding
-        </button>
+        <div className="mt-4 flex items-center justify-center gap-4">
+          <button
+            type="button"
+            onClick={handleShowOnboarding}
+            className="text-xs text-neutral-500 transition-colors hover:text-neutral-300"
+          >
+            View onboarding
+          </button>
+          <span className="text-neutral-700">·</span>
+          <a
+            href="/sticker-kiosk"
+            className="flex items-center gap-1 text-xs text-amber-500/70 transition-colors hover:text-amber-400"
+          >
+            <Layers className="h-3 w-3" />
+            Sticker Kiosk
+          </a>
+        </div>
 
       </div>
     </div>
