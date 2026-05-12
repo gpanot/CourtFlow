@@ -60,6 +60,8 @@ interface ExplorerPack {
   playerGender: string;
   playerFacePhotoPath: string | null;
   playerAvatarPhotoPath: string | null;
+  playerPhone: string;
+  checkInCount: number;
   sticker1Url: string | null;
   sticker2Url: string | null;
   sticker3Url: string | null;
@@ -291,8 +293,13 @@ function StickerExplorerTab({ token }: { token: string }) {
                   </div>
                 )}
 
-                {/* Date */}
-                <p className="text-[10px] text-neutral-600">{fmtDate(pack.createdAt)}</p>
+                {/* Date + check-in count */}
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[10px] text-neutral-600">{fmtDate(pack.createdAt)}</p>
+                  <span className="text-[10px] text-neutral-500 tabular-nums">
+                    {pack.checkInCount} session{pack.checkInCount !== 1 ? "s" : ""}
+                  </span>
+                </div>
               </div>
             );
           })}

@@ -13,6 +13,8 @@ export interface StickerExplorerPack {
   playerGender: string;
   playerFacePhotoPath: string | null;
   playerAvatarPhotoPath: string | null;
+  playerPhone: string;
+  checkInCount: number;
   sticker1Url: string | null;
   sticker2Url: string | null;
   sticker3Url: string | null;
@@ -39,6 +41,7 @@ export async function GET(request: NextRequest) {
           select: {
             id: true,
             name: true,
+            phone: true,
             gender: true,
             facePhotoPath: true,
             avatarPhotoPath: true,
@@ -48,6 +51,20 @@ export async function GET(request: NextRequest) {
       where: gender ? { player: { gender: gender as Gender } } : undefined,
     });
 
+    // Build phone → total check-in count map
+    const phones = [...new Set(packs.map((p) => p.player.phone))];
+    const checkInRows = await prisma.checkInPlayer.findMany({
+      where: { phone: { in: phones } },
+      select: {
+        phone: true,
+        _count: { select: { checkIns: true } },
+      },
+    });
+    const checkInByPhone: Record<string, number> = {};
+    for (const row of checkInRows) {
+      checkInByPhone[row.phone] = (checkInByPhone[row.phone] ?? 0) + row._count.checkIns;
+    }
+
     const result: StickerExplorerPack[] = packs.map((p) => ({
       packId: p.id,
       playerId: p.playerId,
@@ -55,6 +72,8 @@ export async function GET(request: NextRequest) {
       playerGender: p.player.gender ?? "other",
       playerFacePhotoPath: p.player.facePhotoPath,
       playerAvatarPhotoPath: p.player.avatarPhotoPath,
+      playerPhone: p.player.phone,
+      checkInCount: checkInByPhone[p.player.phone] ?? 0,
       sticker1Url: p.sticker1Url,
       sticker2Url: p.sticker2Url,
       sticker3Url: p.sticker3Url,
