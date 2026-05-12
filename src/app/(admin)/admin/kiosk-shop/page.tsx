@@ -21,10 +21,10 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { PlayerDetailStickersTab } from "@/components/admin/player-detail-stickers-tab";
-import dynamic from "next/dynamic";
+import dynamicImport from "next/dynamic";
 
 // Recharts — client-only (SSR off to avoid window errors)
-const BarChartComponent = dynamic(() => import("recharts").then((m) => {
+const BarChartComponent = dynamicImport(() => import("recharts").then((m) => {
   const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } = m;
   function StickerBarChart({ data }: { data: { date: string; scans: number; purchases: number }[] }) {
     const fmt = (d: string) => { const [,mm,dd] = d.split("-"); return `${dd}/${mm}`; };
