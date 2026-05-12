@@ -6,19 +6,30 @@ import { json } from "@/lib/api-helpers";
 export const dynamic = "force-dynamic";
 
 /**
- * Verify optional HMAC-SHA256 signature from SePay.
- * SePay sends the signature in the `Authorization: Apikey <token>` header
- * or as `X-Signature` depending on the auth method chosen in the dashboard.
- * If SEPAY_WEBHOOK_SECRET is not set, verification is skipped.
+ * Verify SePay HMAC-SHA256 signature.
+ *
+ * Per SePay docs (https://developer.sepay.vn/en/sepay-webhooks/xac-thuc):
+ *   Header: X-SePay-Signature: sha256={hex_hash}
+ *   Header: X-SePay-Timestamp: {unix_seconds}
+ *   Signed string: "{timestamp}.{raw_body}"
+ *
+ * If SEPAY_WEBHOOK_SECRET is not set, verification is skipped (allow all).
  */
 function verifySignature(request: NextRequest, rawBody: string): boolean {
   const secret = process.env.SEPAY_WEBHOOK_SECRET;
-  if (!secret) return true; // no secret configured — accept all
+  if (!secret) return true;
 
-  // SePay HMAC-SHA256: signature sent in X-Signature header
-  const signature = request.headers.get("x-signature") ?? "";
-  const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
-  return signature === expected;
+  const sigHeader = request.headers.get("x-sepay-signature") ?? "";
+  const timestamp = request.headers.get("x-sepay-timestamp") ?? "";
+
+  // Strip the "sha256=" prefix SePay prepends
+  const receivedHash = sigHeader.startsWith("sha256=") ? sigHeader.slice(7) : sigHeader;
+  if (!receivedHash) return false;
+
+  // Signed payload is "{timestamp}.{raw_body}"
+  const signedString = `${timestamp}.${rawBody}`;
+  const expected = createHmac("sha256", secret).update(signedString).digest("hex");
+  return receivedHash === expected;
 }
 
 /**
@@ -39,6 +50,10 @@ export async function POST(request: NextRequest) {
   let rawBody = "";
   try {
     rawBody = await request.text();
+    console.log("[sepay-webhook] Received POST — body length:", rawBody.length);
+    console.log("[sepay-webhook] X-SePay-Signature:", request.headers.get("x-sepay-signature"));
+    console.log("[sepay-webhook] X-SePay-Timestamp:", request.headers.get("x-sepay-timestamp"));
+
     const body = JSON.parse(rawBody) as {
       id?: number;
       transferType?: string;
@@ -46,12 +61,12 @@ export async function POST(request: NextRequest) {
       content?: string;
       code?: string | null;
     };
+    console.log("[sepay-webhook] Parsed body:", JSON.stringify({ id: body.id, transferType: body.transferType, transferAmount: body.transferAmount, code: body.code, content: body.content?.slice(0, 80) }));
 
     // Verify HMAC if secret is configured
     if (!verifySignature(request, rawBody)) {
       console.warn("[sepay-webhook] Signature mismatch — rejected");
-      // Still return 200 so SePay doesn't retry; log and ignore
-      return json({ success: false, reason: "invalid_signature" });
+      return json({ success: true }); // still 200 so SePay doesn't retry
     }
 
     const { id: sepayId, transferType, transferAmount, content, code } = body;

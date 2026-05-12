@@ -65,22 +65,25 @@ export async function GET(request: NextRequest) {
       checkInByPhone[row.phone] = (checkInByPhone[row.phone] ?? 0) + row._count.checkIns;
     }
 
-    const result: StickerExplorerPack[] = packs.map((p) => ({
-      packId: p.id,
-      playerId: p.playerId,
-      playerName: p.player.name,
-      playerGender: p.player.gender ?? "other",
-      playerFacePhotoPath: p.player.facePhotoPath,
-      playerAvatarPhotoPath: p.player.avatarPhotoPath,
-      playerPhone: p.player.phone,
-      checkInCount: checkInByPhone[p.player.phone] ?? 0,
-      sticker1Url: p.sticker1Url,
-      sticker2Url: p.sticker2Url,
-      sticker3Url: p.sticker3Url,
-      sticker4Url: p.sticker4Url,
-      isPaid: p.isPaid,
-      createdAt: p.createdAt.toISOString(),
-    }));
+    const result: StickerExplorerPack[] = packs
+      .map((p) => ({
+        packId: p.id,
+        playerId: p.playerId,
+        playerName: p.player.name,
+        playerGender: p.player.gender ?? "other",
+        playerFacePhotoPath: p.player.facePhotoPath,
+        playerAvatarPhotoPath: p.player.avatarPhotoPath,
+        playerPhone: p.player.phone,
+        checkInCount: checkInByPhone[p.player.phone] ?? 0,
+        sticker1Url: p.sticker1Url,
+        sticker2Url: p.sticker2Url,
+        sticker3Url: p.sticker3Url,
+        sticker4Url: p.sticker4Url,
+        isPaid: p.isPaid,
+        createdAt: p.createdAt.toISOString(),
+      }))
+      // Sort by most sessions first
+      .sort((a, b) => b.checkInCount - a.checkInCount);
 
     return json(result);
   } catch (e) {

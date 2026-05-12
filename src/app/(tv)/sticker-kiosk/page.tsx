@@ -300,7 +300,7 @@ const CSS_ANIMATIONS = `
 @media (min-width: 768px) and (orientation: portrait) {
   .sk-sticker-grid {
     max-width: none !important;
-    width: 506px !important;
+    width: 481px !important;
   }
   .sk-sticker-grid > div {
     gap: 10px !important;
@@ -336,7 +336,7 @@ const CSS_ANIMATIONS = `
   }
   .sk-col-left .sk-sticker-grid {
     max-width: none !important;
-    width: 483px !important;
+    width: 459px !important;
   }
   .sk-col-left .sk-sticker-grid > div {
     gap: 10px !important;
@@ -1273,18 +1273,21 @@ function IdentifiedScreen({
 
             {showPaidButton && (
               <div className="sk-paid-btn-wrap" style={{ width: "100%", maxWidth: 432 }}>
+                {/* Urgency countdown — always visible once button appears */}
+                <p style={{
+                  fontSize: 13,
+                  fontWeight: paidButtonCountdown <= 30 ? 700 : 500,
+                  color: paidButtonCountdown <= 30 ? "#f87171" : c.dim,
+                  textAlign: "center",
+                  marginBottom: 8,
+                  letterSpacing: "0.01em",
+                  transition: "color 0.3s",
+                }}>
+                  ⏱ {s.resetIn(paidButtonCountdown)}
+                </p>
                 <button onClick={handlePaid} style={{ ...BTN_PRIMARY, width: "100%" }}>
                   {s.iPaid}
                 </button>
-                <p style={{
-                  fontSize: 12,
-                  color: c.dim,
-                  textAlign: "center",
-                  marginTop: 8,
-                  visibility: paidButtonCountdown <= 75 ? "visible" : "hidden",
-                }}>
-                  {s.resetIn(paidButtonCountdown)}
-                </p>
               </div>
             )}
           </div>
