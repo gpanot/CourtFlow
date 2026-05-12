@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { mkdir, writeFile, unlink, readFile } from "fs/promises";
+import { mkdir, writeFile, readFile } from "fs/promises";
 import path from "path";
 import { prisma } from "@/lib/db";
 import { error, notFound, parseBody } from "@/lib/api-helpers";
@@ -127,24 +127,15 @@ export async function POST(
           if (!imgRes.ok) throw new Error(`Failed to download generated image from WaveSpeed: HTTP ${imgRes.status}`);
           const imageData = Buffer.from(await imgRes.arrayBuffer());
 
-          // Save to disk
+          // Each generation gets a unique filename — never overwrite previous results
           await mkdir(STICKER_RESULTS_DIR, { recursive: true });
-          const filename = `${playerId}_result.png`;
+          const filename = `${playerId}_result_${Date.now()}.png`;
           const filePath = path.join(STICKER_RESULTS_DIR, filename);
           await writeFile(filePath, imageData);
-          const imageUrl = `/uploads/players/sticker-results/${filename}?t=${Date.now()}`;
+          const imageUrl = `/uploads/players/sticker-results/${filename}`;
 
-          const existingResult = await prisma.playerStickerResult.findUnique({ where: { playerId } });
-          if (existingResult) {
-            const oldPath = existingResult.imageUrl.split("?")[0];
-            if (oldPath !== `/uploads/players/sticker-results/${filename}`) {
-              try { await unlink(path.join(process.cwd(), oldPath)); } catch { /* ignore */ }
-            }
-          }
-
-          const saved = await prisma.playerStickerResult.upsert({
-            where: { playerId },
-            create: {
+          const saved = await prisma.playerStickerResult.create({
+            data: {
               playerId,
               imageUrl,
               prompt: prompt.trim(),
@@ -153,20 +144,13 @@ export async function POST(
               costUsd,
               generationTimeSeconds: Math.round(elapsed * 10) / 10,
             },
-            update: {
-              imageUrl,
-              prompt: prompt.trim(),
-              model: selectedModel,
-              costUsd,
-              generationTimeSeconds: Math.round(elapsed * 10) / 10,
-              updatedAt: new Date(),
-            },
           });
 
           // Final result line
           clearInterval(heartbeat);
           controller.enqueue(encoder.encode(JSON.stringify({
             status: "done",
+            id: saved.id,
             imageUrl: saved.imageUrl,
             model: saved.model,
             size: saved.size,

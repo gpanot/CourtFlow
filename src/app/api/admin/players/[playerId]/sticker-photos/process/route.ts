@@ -32,7 +32,13 @@ export async function POST(
     requireSuperAdmin(request.headers);
     const { playerId } = await params;
 
-    const result = await prisma.playerStickerResult.findUnique({ where: { playerId } });
+    const body = await request.json().catch(() => ({})) as { resultId?: string };
+    const resultId = body.resultId;
+
+    // If a specific resultId is supplied, use that; otherwise fall back to the most recent
+    const result = resultId
+      ? await prisma.playerStickerResult.findFirst({ where: { id: resultId, playerId } })
+      : await prisma.playerStickerResult.findFirst({ where: { playerId }, orderBy: { createdAt: "desc" } });
     if (!result) return notFound("No sticker result found. Generate stickers first.");
     console.log("[split-stickers] found result id:", result.id, "imageUrl:", result.imageUrl);
 
@@ -120,10 +126,12 @@ export async function POST(
 
     return json({
       id: pack.id,
+      resultId: pack.resultId,
       sticker1Url: pack.sticker1Url,
       sticker2Url: pack.sticker2Url,
       sticker3Url: pack.sticker3Url,
       sticker4Url: pack.sticker4Url,
+      createdAt: pack.createdAt.toISOString(),
     });
   } catch (e) {
     const msg = (e as Error).message ?? String(e);

@@ -12,6 +12,8 @@ import {
   Grid2x2,
   Download,
   BookTemplate,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { useSessionStore } from "@/stores/session-store";
@@ -33,17 +35,19 @@ interface StickerPhoto {
 }
 
 interface StickerResult {
-  id?: string;
+  id: string;
   imageUrl: string;
   model: string;
   size: string;
   costUsd: number;
   generationTimeSeconds: number | null;
   createdAt: string;
+  packs?: StickerPack[];
 }
 
 interface StickerPack {
   id: string;
+  resultId?: string;
   sticker1Url: string | null;
   sticker2Url: string | null;
   sticker3Url: string | null;
@@ -83,16 +87,20 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstNa
   // ── model
   const [model, setModel] = useState("gpt-image-2");
 
-  // ── generation
+  // ── generation results (carousel — multiple results per player)
+  const [results, setResults] = useState<StickerResult[]>([]);
+  const [selectedResultIdx, setSelectedResultIdx] = useState(0);
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
-  const [result, setResult] = useState<StickerResult | null>(null);
 
   // ── delete result
-  const [deletingResult, setDeletingResult] = useState(false);
-  const [showDeleteResultConfirm, setShowDeleteResultConfirm] = useState(false);
+  const [deletingResultId, setDeletingResultId] = useState<string | null>(null);
+  const [confirmDeleteResultId, setConfirmDeleteResultId] = useState<string | null>(null);
 
-  // ── sticker packs (multiple, accumulate over time)
+  // ── downloading single result image
+  const [downloadingResultId, setDownloadingResultId] = useState<string | null>(null);
+
+  // ── sticker packs (all accumulated — shown even after result deleted)
   const [stickerPacks, setStickerPacks] = useState<StickerPack[]>([]);
   const [splitting, setSplitting] = useState(false);
   const [splitError, setSplitError] = useState<string | null>(null);
@@ -112,21 +120,23 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstNa
     })();
   }, []);
 
-  // ── Load existing uploaded photos, saved result, and pack on mount
+  // ── Load existing uploaded photos, saved results, and packs on mount
   useEffect(() => {
     let cancelled = false;
     setLoadingPhotos(true);
 
     Promise.all([
       api.get<StickerPhoto[]>(`/api/admin/players/${playerId}/sticker-photos`).catch(() => [] as StickerPhoto[]),
-      api.get<StickerResult & { packs?: StickerPack[] }>(`/api/admin/players/${playerId}/sticker-photos/result`).catch(() => null),
-    ]).then(([photos, savedResult]) => {
+      api.get<StickerResult[]>(`/api/admin/players/${playerId}/sticker-photos/result`).catch(() => [] as StickerResult[]),
+    ]).then(([photos, savedResults]) => {
       if (cancelled) return;
       setUploadedPhotos(photos ?? []);
-      if (savedResult) {
-        setResult(savedResult);
-        if (savedResult.packs) setStickerPacks(savedResult.packs);
-      }
+      const arr = savedResults ?? [];
+      setResults(arr);
+      setSelectedResultIdx(0);
+      // Flatten all packs from all results
+      const allPacks = arr.flatMap((r) => (r.packs ?? []).map((p) => ({ ...p, resultId: p.resultId ?? r.id })));
+      setStickerPacks(allPacks.sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()));
     }).finally(() => {
       if (!cancelled) setLoadingPhotos(false);
     });
@@ -242,7 +252,19 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstNa
       if (parsed.status === "error" || parsed.error) {
         throw new Error(parsed.error ?? "Generation failed");
       }
-      setResult(parsed);
+      // Prepend the new result to the carousel and select it
+      const newResult: StickerResult = {
+        id: parsed.id,
+        imageUrl: parsed.imageUrl,
+        model: parsed.model,
+        size: parsed.size,
+        costUsd: parsed.costUsd,
+        generationTimeSeconds: parsed.generationTimeSeconds,
+        createdAt: parsed.createdAt,
+        packs: [],
+      };
+      setResults((prev) => [newResult, ...prev]);
+      setSelectedResultIdx(0);
     } catch (e) {
       setGenError((e as Error).message ?? "Generation failed");
     } finally {
@@ -250,19 +272,44 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstNa
     }
   }, [playerId, selectedPhotoId, prompt, model]);
 
-  const handleDeleteResult = useCallback(async () => {
-    setDeletingResult(true);
+  const handleDeleteResult = useCallback(async (resultId: string) => {
+    setDeletingResultId(resultId);
     try {
-      await api.delete(`/api/admin/players/${playerId}/sticker-photos/result`);
-      setResult(null);
-      // Keep stickerPacks intact — admin deletes packs manually
-      setShowDeleteResultConfirm(false);
+      await api.delete(`/api/admin/players/${playerId}/sticker-photos/result?resultId=${encodeURIComponent(resultId)}`);
+      setResults((prev) => {
+        const next = prev.filter((r) => r.id !== resultId);
+        return next;
+      });
+      setSelectedResultIdx((prev) => Math.max(0, prev - 1));
+      setConfirmDeleteResultId(null);
     } catch (e) {
       alert(`Delete failed: ${(e as Error).message}`);
     } finally {
-      setDeletingResult(false);
+      setDeletingResultId(null);
     }
   }, [playerId]);
+
+  const handleDownloadResult = useCallback(async (result: StickerResult) => {
+    setDownloadingResultId(result.id);
+    try {
+      const res = await fetch(result.imageUrl);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const date = new Date(result.createdAt).toISOString().slice(0, 10);
+      a.download = `sticker_result_${date}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (e) {
+      alert(`Download failed: ${(e as Error).message}`);
+    } finally {
+      setDownloadingResultId(null);
+    }
+  }, []);
 
   const handleDeletePack = useCallback(async (packId: string) => {
     if (!confirm("Delete this sticker pack? This cannot be undone.")) return;
@@ -277,15 +324,20 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstNa
     }
   }, [playerId]);
 
-  const handleSplit = useCallback(async () => {
+  const handleSplit = useCallback(async (resultId: string) => {
     setSplitting(true);
     setSplitError(null);
     try {
       const data = await api.post<StickerPack>(
         `/api/admin/players/${playerId}/sticker-photos/process`,
-        {}
+        { resultId }
       );
-      setStickerPacks((prev) => [data, ...prev]);
+      // Prepend to global packs list
+      setStickerPacks((prev) => [{ ...data, resultId }, ...prev]);
+      // Also append to the result's own packs in the results array
+      setResults((prev) => prev.map((r) =>
+        r.id === resultId ? { ...r, packs: [{ ...data, resultId }, ...(r.packs ?? [])] } : r
+      ));
     } catch (e) {
       setSplitError((e as Error).message ?? "Splitting failed");
     } finally {
@@ -585,92 +637,165 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstNa
         </div>
       )}
 
-      {/* ── Generation Result ── */}
-      {result && (
-        <div className="space-y-2">
-          <div className="relative rounded-xl overflow-hidden border border-neutral-800">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={result.imageUrl}
-              alt="Generated stickers"
-              className="w-full max-h-[500px] object-contain bg-black rounded-xl"
-            />
-            {/* Delete result button */}
-            {showDeleteResultConfirm ? (
-              <div className="absolute top-2 right-2 flex items-center gap-1.5 rounded-lg bg-black/85 px-2.5 py-1.5 backdrop-blur-sm">
-                <span className="text-[11px] text-neutral-300">Delete result?</span>
+      {/* ── Generated Images Carousel ── */}
+      {results.length > 0 && (() => {
+        const result = results[selectedResultIdx];
+        if (!result) return null;
+        const isDeleting = deletingResultId === result.id;
+        const isConfirmDelete = confirmDeleteResultId === result.id;
+        const isDownloading = downloadingResultId === result.id;
+
+        return (
+          <div className="space-y-2">
+            {/* Carousel header */}
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-neutral-400">
+                Generated Images ({results.length})
+              </p>
+              <div className="flex items-center gap-1">
                 <button
                   type="button"
-                  onClick={() => void handleDeleteResult()}
-                  disabled={deletingResult}
-                  className="rounded px-2 py-0.5 text-[11px] font-medium bg-red-600 text-white hover:bg-red-500 disabled:opacity-50"
+                  onClick={() => setSelectedResultIdx((i) => Math.max(0, i - 1))}
+                  disabled={selectedResultIdx === 0}
+                  className="h-6 w-6 rounded flex items-center justify-center text-neutral-400 hover:text-white hover:bg-neutral-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title="Previous"
                 >
-                  {deletingResult ? <Loader2 className="h-3 w-3 animate-spin" /> : "Confirm"}
+                  <ChevronLeft className="h-4 w-4" />
                 </button>
+                <span className="text-[11px] text-neutral-500 tabular-nums w-10 text-center">
+                  {selectedResultIdx + 1} / {results.length}
+                </span>
                 <button
                   type="button"
-                  onClick={() => setShowDeleteResultConfirm(false)}
-                  className="rounded px-2 py-0.5 text-[11px] text-neutral-400 hover:text-white"
+                  onClick={() => setSelectedResultIdx((i) => Math.min(results.length - 1, i + 1))}
+                  disabled={selectedResultIdx === results.length - 1}
+                  className="h-6 w-6 rounded flex items-center justify-center text-neutral-400 hover:text-white hover:bg-neutral-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title="Next"
                 >
-                  Cancel
+                  <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setShowDeleteResultConfirm(true)}
-                className="absolute top-2 right-2 h-8 w-8 rounded-lg bg-black/70 flex items-center justify-center text-red-400 hover:bg-red-900/80 hover:text-red-300 transition-colors"
-                title="Delete result"
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-
-          {/* Metadata */}
-          <div className="space-y-0.5 px-0.5">
-            <p className="text-[11px] text-neutral-500 tabular-nums">
-              Model: {result.model}&nbsp;&nbsp;|&nbsp;&nbsp;
-              Size: {result.size}&nbsp;&nbsp;|&nbsp;&nbsp;
-              Cost: ${result.costUsd.toFixed(2)}&nbsp;&nbsp;|&nbsp;&nbsp;
-              {result.generationTimeSeconds != null
-                ? `Generated in ${result.generationTimeSeconds.toFixed(1)}s`
-                : ""}
-            </p>
-            <p className="text-[11px] text-neutral-600">
-              Generated on {fmtDate(result.createdAt)}
-            </p>
-          </div>
-
-          {/* ── Split Stickers Button ── */}
-          <button
-            type="button"
-            onClick={() => void handleSplit()}
-            disabled={splitting}
-            className="w-full flex items-center justify-center gap-2 rounded-lg border border-neutral-700 bg-neutral-800 py-2.5 text-sm font-medium text-neutral-200 hover:bg-neutral-700 hover:border-neutral-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {splitting ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Splitting…
-              </>
-            ) : (
-              <>
-                <Grid2x2 className="h-4 w-4" />
-                Split stickers
-              </>
-            )}
-          </button>
-
-          {/* Split error */}
-          {splitError && (
-            <div className="flex items-start gap-2 rounded-lg border border-red-900/50 bg-red-950/30 px-3 py-2.5 text-xs text-red-300">
-              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-400" />
-              <span>{splitError}</span>
             </div>
-          )}
-        </div>
-      )}
+
+            {/* Image + action buttons */}
+            <div className="relative rounded-xl overflow-hidden border border-neutral-800">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={result.imageUrl}
+                alt="Generated stickers"
+                className="w-full max-h-[500px] object-contain bg-black rounded-xl"
+              />
+
+              {/* Top-right action buttons: download + delete */}
+              <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                {isConfirmDelete ? (
+                  <div className="flex items-center gap-1.5 rounded-lg bg-black/85 px-2.5 py-1.5 backdrop-blur-sm">
+                    <span className="text-[11px] text-neutral-300">Delete?</span>
+                    <button
+                      type="button"
+                      onClick={() => void handleDeleteResult(result.id)}
+                      disabled={isDeleting}
+                      className="rounded px-2 py-0.5 text-[11px] font-medium bg-red-600 text-white hover:bg-red-500 disabled:opacity-50"
+                    >
+                      {isDeleting ? <Loader2 className="h-3 w-3 animate-spin" /> : "Confirm"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteResultId(null)}
+                      className="rounded px-2 py-0.5 text-[11px] text-neutral-400 hover:text-white"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {/* Download raw image */}
+                    <button
+                      type="button"
+                      onClick={() => void handleDownloadResult(result)}
+                      disabled={isDownloading}
+                      className="h-8 w-8 rounded-lg bg-black/70 flex items-center justify-center text-emerald-400 hover:bg-emerald-900/80 hover:text-emerald-300 transition-colors disabled:opacity-50"
+                      title="Download this image"
+                    >
+                      {isDownloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                    </button>
+                    {/* Delete result */}
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteResultId(result.id)}
+                      className="h-8 w-8 rounded-lg bg-black/70 flex items-center justify-center text-red-400 hover:bg-red-900/80 hover:text-red-300 transition-colors"
+                      title="Delete this image"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Metadata */}
+            <div className="space-y-0.5 px-0.5">
+              <p className="text-[11px] text-neutral-500 tabular-nums">
+                Model: {result.model}&nbsp;&nbsp;|&nbsp;&nbsp;
+                Size: {result.size}&nbsp;&nbsp;|&nbsp;&nbsp;
+                Cost: ${result.costUsd.toFixed(2)}&nbsp;&nbsp;|&nbsp;&nbsp;
+                {result.generationTimeSeconds != null
+                  ? `Generated in ${result.generationTimeSeconds.toFixed(1)}s`
+                  : ""}
+              </p>
+              <p className="text-[11px] text-neutral-600">
+                Generated on {fmtDate(result.createdAt)}
+              </p>
+            </div>
+
+            {/* Dot indicators */}
+            {results.length > 1 && (
+              <div className="flex justify-center gap-1.5 pt-0.5">
+                {results.map((_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setSelectedResultIdx(i)}
+                    className={`h-1.5 rounded-full transition-all ${
+                      i === selectedResultIdx
+                        ? "w-4 bg-purple-500"
+                        : "w-1.5 bg-neutral-600 hover:bg-neutral-500"
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* ── Split Stickers Button ── */}
+            <button
+              type="button"
+              onClick={() => void handleSplit(result.id)}
+              disabled={splitting}
+              className="w-full flex items-center justify-center gap-2 rounded-lg border border-neutral-700 bg-neutral-800 py-2.5 text-sm font-medium text-neutral-200 hover:bg-neutral-700 hover:border-neutral-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {splitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Splitting…
+                </>
+              ) : (
+                <>
+                  <Grid2x2 className="h-4 w-4" />
+                  Split this image into stickers
+                </>
+              )}
+            </button>
+
+            {/* Split error */}
+            {splitError && (
+              <div className="flex items-start gap-2 rounded-lg border border-red-900/50 bg-red-950/30 px-3 py-2.5 text-xs text-red-300">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-red-400" />
+                <span>{splitError}</span>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── Sticker Packs (all accumulated — shown even after result deleted) ── */}
       {stickerPacks.length > 0 && (

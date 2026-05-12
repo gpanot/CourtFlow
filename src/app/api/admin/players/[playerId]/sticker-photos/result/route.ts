@@ -1,15 +1,16 @@
 import { NextRequest } from "next/server";
-import { unlink, rm } from "fs/promises";
+import { unlink } from "fs/promises";
 import path from "path";
 import { prisma } from "@/lib/db";
 import { json, error, notFound } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
+
 /**
- * GET: retrieve the saved sticker generation result for this player.
- * Also includes sticker pack data if available.
- * Returns 404 if no result has been generated yet.
+ * GET: retrieve all sticker generation results for this player (newest first).
+ * Each result includes its nested sticker packs.
+ * Returns an empty array if none found.
  */
 export async function GET(
   request: NextRequest,
@@ -19,26 +20,26 @@ export async function GET(
     requireSuperAdmin(request.headers);
     const { playerId } = await params;
 
-    const result = await prisma.playerStickerResult.findUnique({
+    const results = await prisma.playerStickerResult.findMany({
       where: { playerId },
+      orderBy: { createdAt: "desc" },
       include: {
         stickerPacks: {
           orderBy: { createdAt: "desc" },
         },
       },
     });
-    if (!result) return notFound("No sticker result found");
 
-    const response: Record<string, unknown> = {
-      id: result.id,
-      imageUrl: result.imageUrl,
-      prompt: result.prompt,
-      model: result.model,
-      size: result.size,
-      costUsd: Number(result.costUsd),
-      generationTimeSeconds: result.generationTimeSeconds ? Number(result.generationTimeSeconds) : null,
-      createdAt: result.createdAt.toISOString(),
-      packs: result.stickerPacks.map((p) => ({
+    const response = results.map((r) => ({
+      id: r.id,
+      imageUrl: r.imageUrl,
+      prompt: r.prompt,
+      model: r.model,
+      size: r.size,
+      costUsd: Number(r.costUsd),
+      generationTimeSeconds: r.generationTimeSeconds ? Number(r.generationTimeSeconds) : null,
+      createdAt: r.createdAt.toISOString(),
+      packs: r.stickerPacks.map((p) => ({
         id: p.id,
         sticker1Url: p.sticker1Url,
         sticker2Url: p.sticker2Url,
@@ -46,7 +47,7 @@ export async function GET(
         sticker4Url: p.sticker4Url,
         createdAt: p.createdAt.toISOString(),
       })),
-    };
+    }));
 
     return json(response);
   } catch (e) {
@@ -55,8 +56,8 @@ export async function GET(
 }
 
 /**
- * DELETE: remove the sticker result image from disk and database.
- * Also removes the sticker pack directory and record if they exist.
+ * DELETE: remove a specific sticker result image (by ?resultId=xxx).
+ * Does NOT delete sticker packs — admin deletes those manually.
  */
 export async function DELETE(
   request: NextRequest,
@@ -65,28 +66,26 @@ export async function DELETE(
   try {
     requireSuperAdmin(request.headers);
     const { playerId } = await params;
+    const resultId = new URL(request.url).searchParams.get("resultId");
 
-    const result = await prisma.playerStickerResult.findUnique({ where: { playerId } });
-    if (!result) return notFound("No sticker result found");
-
-    // Delete all sticker packs for this player (files + records)
-    const packDir = path.join(process.cwd(), "uploads", "players", "sticker-packs", playerId);
-    try {
-      await rm(packDir, { recursive: true, force: true });
-    } catch {
-      // directory may not exist
+    if (!resultId) {
+      return error("resultId query param is required", 400);
     }
-    await prisma.playerStickerPack.deleteMany({ where: { playerId } });
 
-    // Delete result image file
+    const result = await prisma.playerStickerResult.findFirst({
+      where: { id: resultId, playerId },
+    });
+    if (!result) return notFound("Sticker result not found");
+
+    // Delete the image file from disk
     const urlPath = result.imageUrl.split("?")[0];
     try {
       await unlink(path.join(process.cwd(), urlPath));
     } catch {
-      // file may not exist
+      // file may not exist on disk
     }
 
-    await prisma.playerStickerResult.delete({ where: { playerId } });
+    await prisma.playerStickerResult.delete({ where: { id: resultId } });
 
     return json({ success: true });
   } catch (e) {

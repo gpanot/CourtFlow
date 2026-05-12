@@ -192,7 +192,7 @@ model Player {
   faceRecognitionLogs   FaceRecognitionLog[]
   customPrices          PlayerCustomPrice[]
   stickerPhotos         PlayerStickerPhoto[]
-  stickerResult         PlayerStickerResult?
+  stickerResults        PlayerStickerResult[]
   stickerPacks          PlayerStickerPack[]
   stickerSessions       StickerSession[]
   signupDuplicateLogs   SignupDuplicateLog[]
@@ -934,7 +934,7 @@ model PlayerStickerPhoto {
 
 model PlayerStickerResult {
   id                    String   @id @default(cuid())
-  playerId              String   @unique @map("player_id")
+  playerId              String   @map("player_id")
   imageUrl              String   @map("image_url")
   prompt                String
   model                 String   @default("gpt-image-1")
@@ -947,6 +947,7 @@ model PlayerStickerResult {
   player       Player              @relation(fields: [playerId], references: [id], onDelete: Cascade)
   stickerPacks PlayerStickerPack[]
 
+  @@index([playerId])
   @@map("player_sticker_results")
 }
 
