@@ -75,6 +75,7 @@ const STRINGS = {
     notFoundNoPack: "Ask a staff member to set up your sticker pack first.",
     tryAgain: "Try again",
     goBack: "Go back",
+    funPhrases: ["I am awesome! 🔥", "You rock! 🎸", "Forever young! ✨", "I am a star! ⭐"],
     langAria: "Switch to Vietnamese",
     darkAria: "Switch to dark mode",
     lightAria: "Switch to light mode",
@@ -115,6 +116,7 @@ const STRINGS = {
     notFoundNoPack: "Nhờ nhân viên thiết lập bộ sticker trước nhé.",
     tryAgain: "Thử lại",
     goBack: "Quay lại",
+    funPhrases: ["Tôi thật tuyệt vời! 🔥", "Bạn thật ngầu! 🎸", "Mãi mãi trẻ trung! ✨", "Tôi là ngôi sao! ⭐"],
     langAria: "Switch to English",
     darkAria: "Chuyển chế độ tối",
     lightAria: "Chuyển chế độ sáng",
@@ -582,15 +584,36 @@ function IdleScreen({
   // Tap-to-preview overlay
   const [previewSticker, setPreviewSticker] = useState<string | null>(null);
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
+  const [previewPhrase, setPreviewPhrase] = useState("");
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const handleStickerTap = useCallback((url: string) => {
+  const showPreview = useCallback((url: string, phrases: readonly string[]) => {
+    // Clear any running timer so rapid taps restart cleanly
+    if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+    const phrase = phrases[Math.floor(Math.random() * phrases.length)];
+    setPreviewPhrase(phrase);
     setPreviewSticker(url);
     setIsPreviewVisible(true);
-    setTimeout(() => {
+    previewTimerRef.current = setTimeout(() => {
       setIsPreviewVisible(false);
       setTimeout(() => setPreviewSticker(null), 300);
     }, 2000);
   }, []);
+
+  const handleStickerTap = useCallback((url: string) => {
+    showPreview(url, STRINGS[lang].funPhrases);
+  }, [showPreview, lang]);
+
+  // Attract mode: every 45s auto-show a random sticker fullscreen
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const allStickers = [...femaleStickers, ...maleStickers, ...recentStickers].filter(Boolean);
+      if (allStickers.length === 0) return;
+      const url = allStickers[Math.floor(Math.random() * allStickers.length)];
+      showPreview(url, STRINGS[lang].funPhrases);
+    }, 45000);
+    return () => clearInterval(interval);
+  }, [femaleStickers, maleStickers, recentStickers, showPreview, lang]);
 
   // Animated title rotator
   const [titleIdx, setTitleIdx] = useState(0);
@@ -749,23 +772,42 @@ function IdleScreen({
         </div>
       </div>
 
-      {/* Sticker tap-to-preview overlay */}
+      {/* Sticker tap-to-preview / attract-mode overlay */}
       {previewSticker && (
         <div
           style={{
             position: "fixed",
             inset: 0,
             display: "flex",
+            flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
             zIndex: 50,
             pointerEvents: "none",
-            backgroundColor: "rgba(0,0,0,0.4)",
+            backgroundColor: "rgba(0,0,0,0.82)",
             opacity: isPreviewVisible ? 1 : 0,
             transition: "opacity 300ms ease",
+            gap: 24,
           }}
         >
-          <div style={{ position: "relative", width: "60vw", maxWidth: 340 }}>
+          {/* Fun phrase */}
+          <p style={{
+            fontSize: "clamp(28px, 6vw, 56px)",
+            fontWeight: 900,
+            color: "#4ade80",
+            textAlign: "center",
+            margin: 0,
+            padding: "0 24px",
+            letterSpacing: "-0.5px",
+            transform: isPreviewVisible ? "translateY(0) scale(1)" : "translateY(-16px) scale(0.9)",
+            transition: "transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1)",
+            textShadow: "0 0 40px rgba(74,222,128,0.5)",
+          }}>
+            {previewPhrase}
+          </p>
+
+          {/* Sticker image */}
+          <div style={{ position: "relative", width: "min(70vw, 70vh, 420px)" }}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={previewSticker}
@@ -776,11 +818,12 @@ function IdleScreen({
                 objectFit: "contain",
                 display: "block",
                 transform: isPreviewVisible ? "scale(1)" : "scale(0.3)",
-                transition: "transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1)",
+                transition: "transform 350ms cubic-bezier(0.34, 1.56, 0.64, 1)",
               }}
             />
+            {/* PREVIEW watermark */}
             <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-              <span style={{ color: "#fff", fontSize: 22, fontWeight: 700, opacity: 0.65, transform: "rotate(-35deg)", userSelect: "none", whiteSpace: "nowrap", letterSpacing: 3 }}>
+              <span style={{ color: "#fff", fontSize: "clamp(18px,4vw,32px)", fontWeight: 700, opacity: 0.45, transform: "rotate(-35deg)", userSelect: "none", whiteSpace: "nowrap", letterSpacing: 4 }}>
                 PREVIEW
               </span>
             </div>
