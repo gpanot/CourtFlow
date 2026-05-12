@@ -138,7 +138,7 @@ function StickerShopSection({
             justify-content: space-between !important;
           }
           .sticker-shop-portrait .portrait-grid {
-            flex: 0 0 45% !important;
+            flex: 0 0 55% !important;
             display: grid !important;
             grid-template-columns: 1fr 1fr !important;
             gap: 8px !important;
@@ -246,7 +246,7 @@ function StickerShopSection({
               <p style={{ fontSize: 18, fontWeight: 600, color: "#ffffff", marginBottom: 12, textAlign: "center" }}>
                 {isVi ? "Lưu sticker của bạn" : "Save your stickers"}
               </p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 20 }}>
                 {stickerData.stickers.slice(0, 4).map((url, i) => (
                   <div
                     key={i}
@@ -259,12 +259,26 @@ function StickerShopSection({
                   </div>
                 ))}
               </div>
-              <p style={{ fontSize: 14, color: "#9ca3af", textAlign: "center", marginBottom: 8 }}>
-                👇 {isVi ? "Giữ ngón tay trên từng sticker → Lưu vào Ảnh" : "Long press each sticker → Save to Photos"}
-              </p>
-              <p style={{ fontSize: 12, color: "#6b7280", textAlign: "center", fontStyle: "italic" }}>
-                {isVi ? "Mở Zalo hoặc WhatsApp → gửi từ Ảnh của bạn" : "Open Zalo or WhatsApp → send from your Photos"}
-              </p>
+              {/* Numbered steps */}
+              {[
+                {
+                  en: "Long press each sticker → Save to Photos",
+                  vi: "Giữ ngón tay trên từng sticker → Lưu vào Ảnh",
+                },
+                {
+                  en: "Open Zalo or WhatsApp → send from your Photos",
+                  vi: "Mở Zalo hoặc WhatsApp → gửi từ Ảnh của bạn",
+                },
+              ].map((step, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#4ade80", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: "#000" }}>{i + 1}</span>
+                  </div>
+                  <span style={{ fontSize: 16, color: "#d1d5db", lineHeight: 1.45, paddingTop: 4 }}>
+                    {isVi ? step.vi : step.en}
+                  </span>
+                </div>
+              ))}
             </div>
           ) : (
             /* Android / desktop: download button + how-to accordion */
@@ -330,8 +344,15 @@ function StickerShopSection({
           style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.92)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}
         >
           {stickerData.stickers[previewIndex] && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={stickerData.stickers[previewIndex]} alt={`Sticker ${previewIndex + 1}`} style={{ maxWidth: "90vw", maxHeight: "90vw", objectFit: "contain" }} />
+            <div style={{ position: "relative", maxWidth: "90vw", maxHeight: "90vw" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={stickerData.stickers[previewIndex]} alt={`Sticker ${previewIndex + 1}`} style={{ maxWidth: "90vw", maxHeight: "90vw", objectFit: "contain", display: "block" }} />
+              <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+                <span style={{ color: "#fff", fontSize: 28, fontWeight: 700, opacity: 0.30, transform: "rotate(-35deg)", userSelect: "none", whiteSpace: "nowrap", letterSpacing: 4 }}>
+                  PREVIEW
+                </span>
+              </div>
+            </div>
           )}
         </div>
       )}
