@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { RefreshCw, Download, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { SubscriptionCard } from "@/components/balance/SubscriptionCard";
@@ -77,6 +77,14 @@ function StickerShopSection({
   // How-to starts expanded when paid (they just scanned and need the instructions right away)
   const [howToOpen, setHowToOpen] = useState(!!paid);
   const [downloading, setDownloading] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+
+  useEffect(() => {
+    setIsIOS(
+      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1)
+    );
+  }, []);
 
   // Use the app's active i18n language so flag toggle is respected
   const isVi = i18n.language.startsWith("vi");
@@ -111,8 +119,65 @@ function StickerShopSection({
 
   return (
     <div style={{ marginTop: 28 }}>
+      {/* Portrait tablet layout styles */}
+      <style>{`
+        @media (orientation: portrait) and (min-width: 768px) {
+          .sticker-shop-portrait {
+            display: flex !important;
+            flex-direction: column !important;
+            height: 100dvh !important;
+            height: 100vh !important;
+            overflow: hidden !important;
+            padding: 2vh 24px !important;
+            margin-top: 0 !important;
+          }
+          .sticker-shop-portrait .portrait-header {
+            flex: 0 0 10% !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+          }
+          .sticker-shop-portrait .portrait-grid {
+            flex: 0 0 45% !important;
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            gap: 8px !important;
+            overflow: hidden !important;
+          }
+          .sticker-shop-portrait .portrait-grid > div {
+            height: 100% !important;
+          }
+          .sticker-shop-portrait .portrait-grid img {
+            height: 100% !important;
+            width: 100% !important;
+            object-fit: contain !important;
+          }
+          .sticker-shop-portrait .portrait-qr {
+            flex: 0 0 25% !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+          }
+          .sticker-shop-portrait .portrait-qr img {
+            height: 20vh !important;
+            width: auto !important;
+          }
+          .sticker-shop-portrait .portrait-actions {
+            flex: 0 0 20% !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 8px !important;
+          }
+          .sticker-shop-portrait .portrait-actions button {
+            min-height: 7vh !important;
+          }
+        }
+      `}</style>
+
       {/* Section header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+      <div className="portrait-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <span style={{ fontSize: 20, fontWeight: 600, color: "#ffffff" }}>
           {isVi ? "Bộ sticker của bạn" : "Your Sticker Pack"}
         </span>
@@ -125,7 +190,7 @@ function StickerShopSection({
 
       {/* Stickers — horizontal row when paid, 2x2 grid otherwise */}
       {shopState === "success" ? (
-        <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
+        <div className="portrait-grid" style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
           {Array.from({ length: 4 }).map((_, i) => {
             const url = stickerData.stickers[i];
             return (
@@ -172,49 +237,80 @@ function StickerShopSection({
         </div>
       )}
 
-      {/* Download button + instructions — only in success state */}
+      {/* Download / action section — only in success state */}
       {shopState === "success" && (
-        <div style={{ marginTop: 16 }}>
-          <button
-            onClick={() => { void handleDownload(); }}
-            disabled={downloading}
-            style={{ width: "100%", height: 56, borderRadius: 16, background: downloading ? "#6b7280" : "#4ade80", color: "#000", fontSize: 16, fontWeight: 600, border: "none", cursor: downloading ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: downloading ? 0.8 : 1 }}
-          >
-            {downloading
-              ? <Loader2 size={20} style={{ animation: "spin 1s linear infinite" }} />
-              : <Download size={20} />}
-            {downloading
-              ? (isVi ? "Đang tải…" : "Downloading…")
-              : (isVi ? "Tải bộ sticker về máy" : "Download your sticker pack")}
-          </button>
-
-          {/* How to use on WhatsApp — expanded by default */}
-          <div style={{ background: "#1a1a1a", borderRadius: 16, padding: 16, marginTop: 12 }}>
-            <button
-              onClick={() => setHowToOpen((o) => !o)}
-              style={{ width: "100%", background: "transparent", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", padding: 0 }}
-            >
-              <span style={{ fontSize: 16, fontWeight: 600, color: "#ffffff" }}>
-                {isVi ? "📲 Cách dùng trên WhatsApp?" : "📲 How to use on WhatsApp?"}
-              </span>
-              {howToOpen ? <ChevronUp size={18} color="#9ca3af" /> : <ChevronDown size={18} color="#9ca3af" />}
-            </button>
-
-            {howToOpen && (
-              <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-                {WHATSAPP_STEPS.map((step, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-                    <div style={{ width: 26, height: 26, borderRadius: "50%", background: "#4ade80", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: "#000" }}>{i + 1}</span>
-                    </div>
-                    <span style={{ fontSize: 15, color: "#9ca3af", paddingTop: 3, lineHeight: 1.4 }}>
-                      {isVi ? step.vi : step.en}
-                    </span>
+        <div className="portrait-actions" style={{ marginTop: 16 }}>
+          {isIOS ? (
+            /* iOS: show individual stickers with long-press instructions */
+            <div style={{ width: "100%" }}>
+              <p style={{ fontSize: 18, fontWeight: 600, color: "#ffffff", marginBottom: 12, textAlign: "center" }}>
+                {isVi ? "Lưu sticker của bạn" : "Save your stickers"}
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+                {stickerData.stickers.slice(0, 4).map((url, i) => (
+                  <div
+                    key={i}
+                    style={{ minHeight: 160, borderRadius: 12, overflow: "hidden", background: "repeating-conic-gradient(#2a2a2a 0% 25%, #1a1a1a 0% 50%) 0 0 / 16px 16px" }}
+                  >
+                    {url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={url} alt={`Sticker ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
+                    )}
                   </div>
                 ))}
               </div>
-            )}
-          </div>
+              <p style={{ fontSize: 14, color: "#9ca3af", textAlign: "center", marginBottom: 8 }}>
+                👇 {isVi ? "Giữ ngón tay trên từng sticker → Lưu vào Ảnh" : "Long press each sticker → Save to Photos"}
+              </p>
+              <p style={{ fontSize: 12, color: "#6b7280", textAlign: "center", fontStyle: "italic" }}>
+                {isVi ? "Mở Zalo hoặc WhatsApp → gửi từ Ảnh của bạn" : "Open Zalo or WhatsApp → send from your Photos"}
+              </p>
+            </div>
+          ) : (
+            /* Android / desktop: download button + how-to accordion */
+            <>
+              <button
+                onClick={() => { void handleDownload(); }}
+                disabled={downloading}
+                style={{ width: "100%", height: 56, borderRadius: 16, background: downloading ? "#6b7280" : "#4ade80", color: "#000", fontSize: 16, fontWeight: 600, border: "none", cursor: downloading ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: downloading ? 0.8 : 1 }}
+              >
+                {downloading
+                  ? <Loader2 size={20} style={{ animation: "spin 1s linear infinite" }} />
+                  : <Download size={20} />}
+                {downloading
+                  ? (isVi ? "Đang tải…" : "Downloading…")
+                  : (isVi ? "Tải bộ sticker về máy" : "Download your sticker pack")}
+              </button>
+
+              {/* How to use on WhatsApp — expanded by default */}
+              <div style={{ background: "#1a1a1a", borderRadius: 16, padding: 16, marginTop: 12, width: "100%" }}>
+                <button
+                  onClick={() => setHowToOpen((o) => !o)}
+                  style={{ width: "100%", background: "transparent", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", padding: 0 }}
+                >
+                  <span style={{ fontSize: 16, fontWeight: 600, color: "#ffffff" }}>
+                    {isVi ? "📲 Cách dùng trên WhatsApp?" : "📲 How to use on WhatsApp?"}
+                  </span>
+                  {howToOpen ? <ChevronUp size={18} color="#9ca3af" /> : <ChevronDown size={18} color="#9ca3af" />}
+                </button>
+
+                {howToOpen && (
+                  <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+                    {WHATSAPP_STEPS.map((step, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                        <div style={{ width: 26, height: 26, borderRadius: "50%", background: "#4ade80", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: "#000" }}>{i + 1}</span>
+                        </div>
+                        <span style={{ fontSize: 15, color: "#9ca3af", paddingTop: 3, lineHeight: 1.4 }}>
+                          {isVi ? step.vi : step.en}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
 

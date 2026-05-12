@@ -440,10 +440,12 @@ function StickerRow({
   stickers,
   direction,
   speed = 28,
+  onStickerTap,
 }: {
   stickers: string[];
   direction: "ltr" | "rtl";
   speed?: number;
+  onStickerTap?: (url: string) => void;
 }) {
   const doubled = [...stickers, ...stickers];
   return (
@@ -465,12 +467,14 @@ function StickerRow({
         {doubled.map((url, i) => (
           <div
             key={i}
+            onClick={() => onStickerTap?.(url)}
             style={{
               width: 110,
               height: 110,
               borderRadius: 12,
               flexShrink: 0,
               overflow: "hidden",
+              cursor: onStickerTap ? "pointer" : "default",
               ...CHECKERED,
             }}
           >
@@ -533,6 +537,19 @@ function IdleScreen({
   const [recentStickers, setRecentStickers] = useState<string[]>([]);
   const [recentVersion, setRecentVersion] = useState(0);
   const [loading, setLoading] = useState(true);
+
+  // Tap-to-preview overlay
+  const [previewSticker, setPreviewSticker] = useState<string | null>(null);
+  const [isPreviewVisible, setIsPreviewVisible] = useState(false);
+
+  const handleStickerTap = useCallback((url: string) => {
+    setPreviewSticker(url);
+    setIsPreviewVisible(true);
+    setTimeout(() => {
+      setIsPreviewVisible(false);
+      setTimeout(() => setPreviewSticker(null), 300);
+    }, 2000);
+  }, []);
 
   // Animated title rotator
   const [titleIdx, setTitleIdx] = useState(0);
@@ -631,18 +648,20 @@ function IdleScreen({
           </>
         ) : (
           <>
-            <StickerRow stickers={rowA.length > 0 ? rowA : femaleStickers} direction="ltr" />
-            <StickerRow stickers={rowB.length > 0 ? rowB : femaleStickers} direction="rtl" />
+            <StickerRow stickers={rowA.length > 0 ? rowA : femaleStickers} direction="ltr" onStickerTap={handleStickerTap} />
+            <StickerRow stickers={rowB.length > 0 ? rowB : femaleStickers} direction="rtl" onStickerTap={handleStickerTap} />
             {/* Row C: live recent check-ins, remounts when new data arrives */}
             <StickerRow
               key={`recent-${recentVersion}`}
               stickers={rowC.length > 0 ? rowC : femaleStickers}
               direction="ltr"
+              onStickerTap={handleStickerTap}
             />
             {/* Row D: men only (padded to same length as other rows for consistent speed) */}
             <StickerRow
               stickers={rowD}
               direction="rtl"
+              onStickerTap={handleStickerTap}
             />
           </>
         )}
@@ -688,6 +707,38 @@ function IdleScreen({
           </button>
         </div>
       </div>
+
+      {/* Sticker tap-to-preview overlay */}
+      {previewSticker && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 50,
+            pointerEvents: "none",
+            backgroundColor: "rgba(0,0,0,0.4)",
+            opacity: isPreviewVisible ? 1 : 0,
+            transition: "opacity 300ms ease",
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={previewSticker}
+            alt=""
+            style={{
+              width: "60vw",
+              maxWidth: 340,
+              height: "auto",
+              objectFit: "contain",
+              transform: isPreviewVisible ? "scale(1)" : "scale(0.3)",
+              transition: "transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1)",
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
