@@ -261,53 +261,49 @@ const CSS_ANIMATIONS = `
   to   { opacity: 1; }
 }
 
-/* ── Portrait (phone + tablet): sticker grid above QR, content fills full height ── */
+/* ── Portrait (all sizes): sticker grid = 55% of screen, QR fills the rest ── */
 @media (orientation: portrait) {
   .sk-two-col {
     flex-direction: column !important;
     align-items: center !important;
     width: 100% !important;
+    height: 100% !important;
   }
   .sk-col-left {
-    flex: 0 0 auto !important;
+    /* exactly 55% of viewport height */
+    flex: 0 0 55dvh !important;
+    height: 55dvh !important;
     width: 100% !important;
-    margin-bottom: 8px !important;
+    margin-bottom: 6px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
+    overflow: hidden !important;
   }
-  /* Sticker grid: 2×2 grid sized to fit portrait screens without overflowing */
   .sk-col-left .sk-sticker-grid {
     width: auto !important;
     max-width: 100% !important;
-    height: auto !important;
+    height: 100% !important;
   }
   .sk-col-left .sk-sticker-grid > div {
-    height: auto !important;
+    height: 100% !important;
     gap: 6px !important;
   }
-  /* Each sticker cell: fixed size based on viewport, never oversized */
+  /* Each cell = half of 55dvh minus gap ≈ 27dvh */
   .sk-col-left .sk-sticker-cell,
   .sk-col-left .sk-sticker-grid > div > div {
     aspect-ratio: 1 !important;
-    width: min(22vw, 140px) !important;
-    height: min(22vw, 140px) !important;
+    width: calc(27dvh - 6px) !important;
+    height: calc(27dvh - 6px) !important;
+    max-width: 48vw !important;
+    max-height: 48vw !important;
   }
   .sk-col-right {
     flex: 1 !important;
-    width: 100% !important;
-    max-width: 432px !important;
     min-height: 0 !important;
+    width: 100% !important;
+    max-width: 480px !important;
     overflow-y: auto !important;
-  }
-}
-
-/* ── Tablet portrait: slightly larger sticker cells ── */
-@media (min-width: 768px) and (orientation: portrait) {
-  .sk-col-left .sk-sticker-cell,
-  .sk-col-left .sk-sticker-grid > div > div {
-    width: min(18vw, 160px) !important;
-    height: min(18vw, 160px) !important;
   }
 }
 
