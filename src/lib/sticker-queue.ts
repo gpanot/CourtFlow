@@ -13,7 +13,7 @@ export async function enqueueStickerJobIfNeeded(
   playerId: string,
   gender: string
 ): Promise<void> {
-  if (gender !== "female") return;
+  if (gender !== "female" && gender !== "male") return;
 
   const [existingPack, existingJob] = await Promise.all([
     prisma.playerStickerPack.findFirst({ where: { playerId } }),

@@ -82,10 +82,11 @@ export async function POST(request: NextRequest) {
       return json({ queued: "skipped", reason: "already_has_pack" });
     }
 
-    // ── 5. Fetch the Pickleball female prompt ───────────────────────────
+    // ── 5. Fetch the Pickleball prompt for the player's gender ─────────
     const template = await prisma.stickerTemplate.findFirst({ where: { name: "Pickleball" } });
     if (!template) throw new Error("Pickleball template not found in database");
-    const prompt = template.femalePrompt;
+    const prompt = player.gender === "male" ? template.malePrompt : template.femalePrompt;
+    console.log(`[sticker-queue-worker] using ${player.gender === "male" ? "male" : "female"} prompt for player ${player.id}`);
 
     // ── 6. Resolve face photo path ──────────────────────────────────────
     const urlPath = player.facePhotoPath.split("?")[0];
