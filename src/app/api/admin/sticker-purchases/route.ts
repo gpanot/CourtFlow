@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
       const player = packByCode[l.paymentCode] ?? null;
       return {
         id: l.id,
-        sepayId: l.sepayId,
+        payosOrderCode: l.payosOrderCode,
         paymentCode: l.paymentCode,
         transferAmount: l.transferAmount,
         content: l.content,

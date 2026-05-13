@@ -28,8 +28,6 @@ import {
   CameraCapture,
   type CameraCaptureHandle,
 } from "@/components/camera-capture";
-import { buildVietQRPayload } from "@/lib/vietqr-payload";
-
 export const dynamic = "force-dynamic";
 
 // ---------------------------------------------------------------------------
@@ -135,14 +133,14 @@ interface SessionData {
   playerName: string;
   stickers: string[];
   isPaid?: boolean;
-  paymentCode?: string;
+  // PayOS fields
+  checkoutUrl?: string | null;
+  qrCode?: string | null;
+  price?: number;
 }
 
 interface KioskSettings {
   stickerPrice: number;
-  bankBin: string;
-  bankAccount: string;
-  bankOwnerName: string;
 }
 
 interface NotFoundReason {
@@ -1095,7 +1093,7 @@ function IdentifiedScreen({
     return () => clearTimeout(t);
   }, []);
 
-  // Poll SePay payment status every 3s while in payment phase
+  // Poll payment status every 3s while in payment phase
   useEffect(() => {
     if (paymentPhase !== "payment" || !session.token) return;
     const interval = setInterval(async () => {
@@ -1154,27 +1152,11 @@ function IdentifiedScreen({
     }
   }, [countdown, paymentPhase, onReset]);
 
-  const price = kioskSettings?.stickerPrice ?? 30000;
+  const price = session.price ?? kioskSettings?.stickerPrice ?? 30000;
 
-  // SePay QR image URL — generates a branded bank QR server-side
-  // Falls back to plain VietQR SVG if SePay env vars are not set
-  const paymentCode = session.paymentCode ?? "";
-  const sepayBankAccount = kioskSettings?.bankAccount ?? "";
-  const sepayBankBin = kioskSettings?.bankBin ?? "";
-  const hasQrConfig = !!(sepayBankAccount && sepayBankBin);
-  // SePay image QR: https://qr.sepay.vn/img?acc=...&bank=...&amount=...&des=...&template=compact
-  const sepayQrUrl = hasQrConfig && paymentCode
-    ? `https://qr.sepay.vn/img?acc=${encodeURIComponent(sepayBankAccount)}&bank=${encodeURIComponent(sepayBankBin)}&amount=${price}&des=${encodeURIComponent(paymentCode)}&template=compact`
-    : null;
-  // Legacy VietQR payload fallback (renders via QRCodeSVG)
-  const legacyQRPayload = hasQrConfig && !sepayQrUrl
-    ? buildVietQRPayload({
-        bankBin: sepayBankBin,
-        accountNumber: sepayBankAccount,
-        amount: price,
-        paymentRef: paymentCode || `Sticker ${session.playerName}`.slice(0, 50),
-      })
-    : null;
+  // PayOS: use the QR code string returned by the payment link creation
+  const payosQrCode = session.qrCode ?? null;
+  const payosCheckoutUrl = session.checkoutUrl ?? null;
 
   const isLight = !dark;
 
@@ -1223,16 +1205,11 @@ function IdentifiedScreen({
 
           {/* Right col (mobile: QR + button below stickers) */}
           <div className="sk-col-right" style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "100%", maxWidth: 432, flex: 1 }}>
-            {sepayQrUrl ? (
+            {payosQrCode ? (
               <>
-                {/* SePay-branded QR image — includes bank logo and branding */}
-                <div className="sk-qr-box" style={{ background: "#ffffff", padding: 8, borderRadius: 12, display: "inline-block" }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={sepayQrUrl}
-                    alt="Payment QR"
-                    style={{ width: isTablet ? 260 : 160, height: isTablet ? 260 : 160, display: "block", objectFit: "contain" }}
-                  />
+                {/* PayOS VietQR code rendered as SVG */}
+                <div className="sk-qr-box" style={{ background: "#ffffff", padding: 10, borderRadius: 12, display: "inline-block" }}>
+                  <QRCodeSVG value={payosQrCode} size={isTablet ? 260 : 160} bgColor="#ffffff" fgColor="#000000" />
                 </div>
                 {/* Strikethrough original price */}
                 <p className="sk-price-strike" style={{ fontSize: 14, color: "#6b7280", textAlign: "center", marginTop: 6, textDecoration: "line-through" }}>
@@ -1247,38 +1224,21 @@ function IdentifiedScreen({
                     50% OFF
                   </span>
                 </div>
-                {/* Payment code memo */}
-                {paymentCode && (
-                  <div style={{ marginTop: 6, textAlign: "center" }}>
-                    <p style={{ fontSize: 10, color: "#6b7280", marginBottom: 2 }}>
-                      {lang === "vi" ? "Ghi chú chuyển khoản" : "Transfer memo"}
-                    </p>
-                    <code style={{ fontSize: 13, fontWeight: 700, color: "#d1d5db", letterSpacing: 1, background: "rgba(255,255,255,0.06)", padding: "2px 8px", borderRadius: 6 }}>
-                      {paymentCode}
-                    </code>
-                  </div>
-                )}
                 {/* Caption */}
                 <p style={{ fontSize: 12, color: "#6b7280", textAlign: "center", marginTop: 4, fontStyle: "italic" }}>
                   {lang === "vi" ? "Để tải bộ sticker của bạn" : "To download your pack"}
                 </p>
-              </>
-            ) : legacyQRPayload ? (
-              <>
-                <div className="sk-qr-box" style={{ background: "#ffffff", padding: 10, borderRadius: 12, display: "inline-block" }}>
-                  <QRCodeSVG value={legacyQRPayload} size={isTablet ? 260 : 130} bgColor="#ffffff" fgColor="#000000" />
-                </div>
-                <p className="sk-price-strike" style={{ fontSize: 14, color: "#6b7280", textAlign: "center", marginTop: 6, textDecoration: "line-through" }}>
-                  {(price * 2).toLocaleString("vi-VN")} VND
-                </p>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 2 }}>
-                  <span className="sk-price-main" style={{ fontSize: 22, fontWeight: 600, color: "#4ade80" }}>
-                    {s.scanToPay(price.toLocaleString("vi-VN"))}
-                  </span>
-                  <span style={{ background: "#4ade80", color: "#000", fontSize: 11, fontWeight: 700, padding: "3px 8px", borderRadius: 999 }}>
-                    50% OFF
-                  </span>
-                </div>
+                {/* Open checkout page link (fallback for phone browsers) */}
+                {payosCheckoutUrl && (
+                  <a
+                    href={payosCheckoutUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ fontSize: 11, color: "#6b7280", textAlign: "center", marginTop: 4, textDecoration: "underline" }}
+                  >
+                    {lang === "vi" ? "Hoặc mở trang thanh toán" : "Or open payment page"}
+                  </a>
+                )}
               </>
             ) : (
               <p style={{ fontSize: 13, color: c.muted, textAlign: "center", marginTop: 8 }}>{s.noQR}</p>
