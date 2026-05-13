@@ -168,15 +168,15 @@ function createStyles(t: AppColors) {
       alignItems: "center",
     },
     avatarWrap: {
-      width: 56,
-      height: 56,
+      width: 63,
+      height: 63,
       position: "relative",
     },
-    avatarImage: { width: 52, height: 52, borderRadius: 26 },
+    avatarImage: { width: 57, height: 57, borderRadius: 28.5 },
     initialsCircle: {
-      width: 52,
-      height: 52,
-      borderRadius: 26,
+      width: 57,
+      height: 57,
+      borderRadius: 28.5,
       alignItems: "center",
       justifyContent: "center",
     },
@@ -269,7 +269,7 @@ function createStyles(t: AppColors) {
       bottom: 0,
       left: 0,
       right: 0,
-      borderRadius: 26,
+      borderRadius: 28.5,
       backgroundColor: "rgba(0,0,0,0.55)",
       alignItems: "center",
       justifyContent: "flex-end",
@@ -997,7 +997,7 @@ export function ReclubRosterSection({
                     <Image source={{ uri: sheetPlayer.avatarUrl }} style={styles.sheetAvatar} />
                   )}
                   <Text style={styles.sheetPlayerName}>{sheetPlayer.name}</Text>
-                  <Text style={styles.sheetSubtitle}>Ai đã trả cho người chơi này?</Text>
+                  <Text style={styles.sheetSubtitle}>{t("reclubMatchSheetTitle")}</Text>
                 </View>
                 <FlatList
                   data={unmatchedPayments}
@@ -1033,12 +1033,12 @@ export function ReclubRosterSection({
                   )}
                   ListEmptyComponent={
                     <Text style={[styles.noEventText, { paddingVertical: 20 }]}>
-                      Không có thanh toán chưa khớp
+                      {t("reclubMatchSheetNoPayments")}
                     </Text>
                   }
                   ListFooterComponent={
                     <TouchableOpacity style={styles.skipBtn} onPress={closeSheet} activeOpacity={0.7}>
-                      <Text style={styles.skipBtnText}>Bỏ qua</Text>
+                      <Text style={styles.skipBtnText}>{t("reclubMatchSheetSkip")}</Text>
                     </TouchableOpacity>
                   }
                 />
@@ -1077,7 +1077,7 @@ export function ReclubRosterSection({
                   </View>
                   {linked && (
                     <>
-                      <Text style={styles.linkedLabel}>Người chơi CourtPay đã liên kết</Text>
+                      <Text style={styles.linkedLabel}>{t("reclubInfoLinkedLabel")}</Text>
                       <View style={styles.linkedRow}>
                         {linked.facePhotoPath ? (
                           <Image source={{ uri: linked.facePhotoPath }} style={styles.paymentAvatar} />
@@ -1099,14 +1099,23 @@ export function ReclubRosterSection({
                       </View>
                       <TouchableOpacity
                         style={styles.unlinkBtn}
-                        onPress={() => handleUnlinkPlayer(linked.playerId)}
+                        onPress={() =>
+                          Alert.alert(
+                            t("reclubInfoUnlinkConfirmTitle"),
+                            t("reclubInfoUnlinkConfirmMsg"),
+                            [
+                              { text: t("reclubInfoUnlinkConfirmCancel"), style: "cancel" },
+                              { text: t("reclubInfoUnlinkConfirmOk"), style: "destructive", onPress: () => handleUnlinkPlayer(linked.playerId) },
+                            ]
+                          )
+                        }
                         disabled={linkingPlayerId != null}
                         activeOpacity={0.7}
                       >
                         {linkingPlayerId === linked.playerId ? (
                           <ActivityIndicator size="small" color="#ef4444" />
                         ) : (
-                          <Text style={styles.unlinkBtnText}>Huỷ liên kết</Text>
+                          <Text style={styles.unlinkBtnText}>{t("reclubInfoUnlink")}</Text>
                         )}
                       </TouchableOpacity>
                     </>

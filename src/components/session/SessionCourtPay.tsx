@@ -157,6 +157,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
   const [sheetPlayer, setSheetPlayer] = useState<ReclubPlayer | null>(null);
   const [sheetMode, setSheetMode] = useState<"match" | "info" | "unmatched-list" | null>(null);
   const [linkingPlayerId, setLinkingPlayerId] = useState<string | null>(null);
+  const [unlinkConfirmId, setUnlinkConfirmId] = useState<string | null>(null);
   const [selectedEventCodes, setSelectedEventCodes] = useState<Set<string>>(new Set());
 
   const rosters = useMemo<ReclubRosterData[]>(() => {
@@ -505,6 +506,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
   const closeSheet = () => {
     setSheetPlayer(null);
     setSheetMode(null);
+    setUnlinkConfirmId(null);
   };
 
   const handleAvatarTap = (player: ReclubPlayer) => {
@@ -717,7 +719,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                               {player.isDefaultAvatar ? (
                                 <div
                                   className={cn(
-                                    "flex h-[52px] w-[52px] items-center justify-center rounded-full text-lg font-bold text-white",
+                                    "flex h-[57px] w-[57px] items-center justify-center rounded-full text-lg font-bold text-white",
                                     hasRing && "ring-[3px] ring-green-500"
                                   )}
                                   style={{ backgroundColor: initialsColor(player.name) }}
@@ -729,7 +731,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                                   src={player.avatarUrl}
                                   alt=""
                                   className={cn(
-                                    "h-[52px] w-[52px] rounded-full object-cover",
+                                    "h-[57px] w-[57px] rounded-full object-cover",
                                     hasRing && "ring-[3px] ring-green-500"
                                   )}
                                 />
@@ -945,11 +947,11 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                 <img src={sheetPlayer.avatarUrl} alt="" className="mb-2 h-12 w-12 rounded-full object-cover" />
               )}
               <p className="text-base font-bold text-white">{sheetPlayer.name}</p>
-              <p className="mt-1 text-sm text-neutral-400">Ai đã trả cho người chơi này?</p>
+              <p className="mt-1 text-sm text-neutral-400">{t("staff.sessionPaymentsDetail.reclubMatchSheetTitle")}</p>
             </div>
             <div className="max-h-[40dvh] overflow-y-auto">
               {unmatchedPayments.length === 0 ? (
-                <p className="py-6 text-center text-sm text-neutral-500">Không có thanh toán chưa khớp</p>
+                <p className="py-6 text-center text-sm text-neutral-500">{t("staff.sessionPaymentsDetail.reclubMatchSheetNoPayments")}</p>
               ) : (
                 unmatchedPayments.map((p) => (
                   <button
@@ -987,7 +989,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
               onClick={closeSheet}
               className="mt-2 w-full py-3 text-center text-sm font-medium text-neutral-400 transition-colors hover:text-white"
             >
-              Bỏ qua
+              {t("staff.sessionPaymentsDetail.reclubMatchSheetSkip")}
             </button>
           </div>
         </div>
@@ -1017,7 +1019,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
               </div>
               {linked && (
                 <div className="px-5 py-3">
-                  <p className="mb-2 text-xs font-medium text-neutral-500">Người chơi CourtPay đã liên kết</p>
+                  <p className="mb-2 text-xs font-medium text-neutral-500">{t("staff.sessionPaymentsDetail.reclubInfoLinkedLabel")}</p>
                   <div className="flex items-center gap-3">
                     {linked.facePhotoPath ? (
                       <img src={linked.facePhotoPath} alt="" className="h-10 w-10 rounded-full object-cover" />
@@ -1036,18 +1038,41 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                       </p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    disabled={linkingPlayerId != null}
-                    onClick={() => handleUnlinkPlayer(linked.playerId)}
-                    className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-red-500/50 py-2 text-sm font-semibold text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50"
-                  >
-                    {linkingPlayerId === linked.playerId ? (
-                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                    ) : (
-                      "Huỷ liên kết"
-                    )}
-                  </button>
+                  {unlinkConfirmId === linked.playerId ? (
+                    <div className="mt-4 rounded-lg border border-red-500/40 bg-red-950/30 p-3">
+                      <p className="mb-3 text-sm text-red-300">{t("staff.sessionPaymentsDetail.reclubInfoUnlinkConfirmMsg")}</p>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setUnlinkConfirmId(null)}
+                          className="flex-1 rounded-lg border border-neutral-600 py-2 text-sm text-neutral-300 transition-colors hover:bg-neutral-800"
+                        >
+                          {t("staff.sessionPaymentsDetail.reclubMatchSheetSkip")}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={linkingPlayerId != null}
+                          onClick={() => handleUnlinkPlayer(linked.playerId)}
+                          className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-50"
+                        >
+                          {linkingPlayerId === linked.playerId ? (
+                            <Loader2 className="mx-auto h-4 w-4 animate-spin" aria-hidden />
+                          ) : (
+                            t("staff.sessionPaymentsDetail.reclubInfoUnlink")
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={linkingPlayerId != null}
+                      onClick={() => setUnlinkConfirmId(linked.playerId)}
+                      className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-red-500/50 py-2 text-sm font-semibold text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+                    >
+                      {t("staff.sessionPaymentsDetail.reclubInfoUnlink")}
+                    </button>
+                  )}
                 </div>
               )}
             </div>

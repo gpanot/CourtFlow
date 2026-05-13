@@ -583,7 +583,14 @@
       "reclubWalkInSeparator": "Walk-in",
       "reclubSelectEvents": "Select events",
       "reclubContinue": "Continue",
-      "reclubSelectedCount": "{{count}} selected"
+      "reclubSelectedCount": "{{count}} selected",
+      "reclubMatchSheetTitle": "Who paid for this player?",
+      "reclubMatchSheetNoPayments": "No unmatched payments",
+      "reclubMatchSheetSkip": "Skip",
+      "reclubInfoLinkedLabel": "Linked CourtPay player",
+      "reclubInfoUnlink": "Unlink",
+      "reclubInfoUnlinkConfirmTitle": "Unlink player?",
+      "reclubInfoUnlinkConfirmMsg": "This player will be moved back to walk-ins until linked again by staff."
     },
     "courtPayAwaitingPayment": {
       "payTitle": "🤩 {{name}} 🎉",

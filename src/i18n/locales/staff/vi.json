@@ -591,7 +591,14 @@
       "reclubWalkInSeparator": "Walk-in",
       "reclubSelectEvents": "Chọn sự kiện",
       "reclubContinue": "Tiếp tục",
-      "reclubSelectedCount": "Đã chọn {{count}}"
+      "reclubSelectedCount": "Đã chọn {{count}}",
+      "reclubMatchSheetTitle": "Ai đã trả cho người chơi này?",
+      "reclubMatchSheetNoPayments": "Không có thanh toán chưa khớp",
+      "reclubMatchSheetSkip": "Bỏ qua",
+      "reclubInfoLinkedLabel": "Người chơi CourtPay đã liên kết",
+      "reclubInfoUnlink": "Huỷ liên kết",
+      "reclubInfoUnlinkConfirmTitle": "Huỷ liên kết?",
+      "reclubInfoUnlinkConfirmMsg": "Người chơi này sẽ trở về walk-ins cho đến khi nhân viên liên kết lại."
     },
     "courtPayAwaitingPayment": {
       "payTitle": "🤩 {{name}} 🎉",

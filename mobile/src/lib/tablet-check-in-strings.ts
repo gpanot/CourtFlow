@@ -395,6 +395,15 @@ const CHECK_IN_SCANNER_EN = {
   "reclubTabReclub": "Reclub",
   "reclubNoSnapshot": "No Reclub data for this session.",
   "reclubNoSnapshotHint": "A snapshot is created when a session with a Reclub roster is closed.",
+  "reclubMatchSheetTitle": "Who paid for this player?",
+  "reclubMatchSheetNoPayments": "No unmatched payments",
+  "reclubMatchSheetSkip": "Skip",
+  "reclubInfoLinkedLabel": "Linked CourtPay player",
+  "reclubInfoUnlink": "Unlink",
+  "reclubInfoUnlinkConfirmTitle": "Unlink player?",
+  "reclubInfoUnlinkConfirmMsg": "This player will be moved back to walk-ins until linked again by staff.",
+  "reclubInfoUnlinkConfirmOk": "Unlink",
+  "reclubInfoUnlinkConfirmCancel": "Cancel",
 
   // ── Boss Dashboard ─────────────────────────────────────────────────────────
   "bossDashboardTitle": "Boss Dashboard",
@@ -968,6 +977,15 @@ const CHECK_IN_SCANNER_VI = {
   "reclubTabReclub": "Reclub",
   "reclubNoSnapshot": "Không có dữ liệu Reclub cho phiên này.",
   "reclubNoSnapshotHint": "Snapshot sẽ được tạo khi đóng phiên có roster Reclub.",
+  "reclubMatchSheetTitle": "Ai đã trả cho người chơi này?",
+  "reclubMatchSheetNoPayments": "Không có thanh toán chưa khớp",
+  "reclubMatchSheetSkip": "Bỏ qua",
+  "reclubInfoLinkedLabel": "Người chơi CourtPay đã liên kết",
+  "reclubInfoUnlink": "Huỷ liên kết",
+  "reclubInfoUnlinkConfirmTitle": "Huỷ liên kết?",
+  "reclubInfoUnlinkConfirmMsg": "Người chơi này sẽ trở về walk-ins cho đến khi nhân viên liên kết lại.",
+  "reclubInfoUnlinkConfirmOk": "Huỷ liên kết",
+  "reclubInfoUnlinkConfirmCancel": "Hủy",
 
   // ── Boss Dashboard ─────────────────────────────────────────────────────────
   "bossDashboardTitle": "Bảng Boss",
