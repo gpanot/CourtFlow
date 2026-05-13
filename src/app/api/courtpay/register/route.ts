@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { enqueueStickerJobIfNeeded } from "@/lib/sticker-queue";
 import {
   registerPlayer,
   createCheckInPayment,
@@ -241,6 +242,8 @@ export async function POST(req: Request) {
         try {
           await persistPlayerCheckInFacePhoto(corePlayer.id, imageBase64);
         } catch { /* non-critical */ }
+
+        enqueueStickerJobIfNeeded(corePlayer.id, corePlayer.gender).catch(console.error);
       }
     }
 

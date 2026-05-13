@@ -196,6 +196,7 @@ model Player {
   stickerPacks          PlayerStickerPack[]
   stickerSessions       StickerSession[]
   signupDuplicateLogs   SignupDuplicateLog[]
+  stickerJobs           StickerJobQueue[]
 
   @@index([registrationVenueId])
   @@map("players")
@@ -1054,4 +1055,20 @@ model StickerTemplate {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   @@map("sticker_templates")
+}
+
+model StickerJobQueue {
+  id        String   @id @default(cuid())
+  playerId  String   @map("player_id")
+  /// pending | processing | done | failed
+  status    String   @default("pending")
+  attempts  Int      @default(0)
+  error     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@map("sticker_job_queue")
 }

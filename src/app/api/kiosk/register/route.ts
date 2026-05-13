@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
+import { enqueueStickerJobIfNeeded } from "@/lib/sticker-queue";
 import { faceRecognitionService } from "@/lib/face-recognition";
 import { emitToVenue } from "@/lib/socket-server";
 import { sendPaymentPushToStaff } from "@/lib/staff-push";
@@ -114,6 +115,8 @@ export async function POST(request: NextRequest) {
     } catch {
       // Non-critical — continue
     }
+
+    enqueueStickerJobIfNeeded(player.id, player.gender).catch(console.error);
 
     const pendingPayment = await prisma.pendingPayment.create({
       data: {

@@ -4,6 +4,7 @@ import type { SkillLevel } from "@prisma/client";
 import { initialRankingScoreForSkillLevel } from "@/lib/ranking";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
+import { enqueueStickerJobIfNeeded } from "@/lib/sticker-queue";
 
 export const dynamic = "force-dynamic";
 interface AdminPlayersStatsPayload {
@@ -352,6 +353,8 @@ export async function POST(request: NextRequest) {
         registrationAt: new Date(),
       },
     });
+
+    enqueueStickerJobIfNeeded(player.id, player.gender).catch(console.error);
 
     return json(player, 201);
   } catch (e) {

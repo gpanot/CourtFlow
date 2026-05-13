@@ -5,6 +5,7 @@ import { error, parseBody } from "@/lib/api-helpers";
 import { setPlayerAuthCookieOnResponse } from "@/lib/player-auth-cookie";
 import type { SkillLevel, Gender } from "@prisma/client";
 import { initialRankingScoreForSkillLevel } from "@/lib/ranking";
+import { enqueueStickerJobIfNeeded } from "@/lib/sticker-queue";
 
 export const dynamic = "force-dynamic";
 interface RegisterBody {
@@ -34,6 +35,8 @@ export async function POST(request: NextRequest) {
         registrationAt: new Date(),
       },
     });
+
+    enqueueStickerJobIfNeeded(player.id, player.gender).catch(console.error);
 
     const token = signToken({ id: player.id, role: "player" });
     const res = NextResponse.json({ token, player }, { status: 201 });
