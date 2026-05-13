@@ -44,6 +44,7 @@ const STRINGS = {
       "Crafted for pickleball players only!",
       "Your face. Your stickers.",
       "Nobody else has these.",
+      "Super high resolution stickers.",
     ],
     heroSub: "Get your sticker pack now.",
     lookCamera: "Look at the camera",
@@ -85,6 +86,7 @@ const STRINGS = {
       "Dành riêng cho người chơi pickleball!",
       "Khuôn mặt bạn. Sticker của bạn.",
       "Không ai khác có những sticker này.",
+      "Độ phân giải cực cao.",
     ],
     heroSub: "Nhận bộ sticker của bạn ngay.",
     lookCamera: "Nhìn vào camera",
@@ -621,7 +623,7 @@ function IdleScreen({
     const iv = setInterval(() => {
       setTitleVisible(false);
       setTimeout(() => {
-        setTitleIdx((i) => (i + 1) % 3);
+        setTitleIdx((i) => (i + 1) % s.heroLines.length);
         setTitleVisible(true);
       }, 300);
     }, 2500);
@@ -1156,7 +1158,6 @@ function IdentifiedScreen({
 
   // PayOS: use the QR code string returned by the payment link creation
   const payosQrCode = session.qrCode ?? null;
-  const payosCheckoutUrl = session.checkoutUrl ?? null;
 
   const isLight = !dark;
 
@@ -1228,17 +1229,6 @@ function IdentifiedScreen({
                 <p style={{ fontSize: 12, color: "#6b7280", textAlign: "center", marginTop: 4, fontStyle: "italic" }}>
                   {lang === "vi" ? "Để tải bộ sticker của bạn" : "To download your pack"}
                 </p>
-                {/* Open checkout page link (fallback for phone browsers) */}
-                {payosCheckoutUrl && (
-                  <a
-                    href={payosCheckoutUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{ fontSize: 11, color: "#6b7280", textAlign: "center", marginTop: 4, textDecoration: "underline" }}
-                  >
-                    {lang === "vi" ? "Hoặc mở trang thanh toán" : "Or open payment page"}
-                  </a>
-                )}
               </>
             ) : (
               <p style={{ fontSize: 13, color: c.muted, textAlign: "center", marginTop: 8 }}>{s.noQR}</p>
@@ -1278,10 +1268,35 @@ function IdentifiedScreen({
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "40px 28px 32px",
+            padding: "16px 28px 32px",
             animation: "slide-up-in 0.45s cubic-bezier(0.22,1,0.36,1) both",
           }}
         >
+          {/* Top-left back button */}
+          <div style={{ width: "100%", display: "flex", alignItems: "center", marginBottom: 8 }}>
+            <button
+              onClick={onReset}
+              aria-label="Back"
+              style={{
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                border: "none",
+                background: isLight ? "rgba(15,23,42,0.08)" : "rgba(255,255,255,0.12)",
+                color: isLight ? "#334155" : "#e2e8f0",
+                fontSize: 22,
+                fontWeight: 600,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                lineHeight: 1,
+              }}
+            >
+              ‹
+            </button>
+          </div>
+
           {/* Top — success badge + name */}
           <div style={{ textAlign: "center", animation: "fade-in 0.4s ease 0.3s both" }}>
             <div style={{ fontSize: 52, lineHeight: 1, marginBottom: 12 }}>🎉</div>
