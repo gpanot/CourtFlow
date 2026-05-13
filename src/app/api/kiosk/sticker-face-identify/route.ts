@@ -82,7 +82,7 @@ export async function POST(request: NextRequest) {
 
     const player = await prisma.player.findUnique({
       where: { id: resolvedPlayerId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, gender: true },
     });
 
     if (!player) {
@@ -124,6 +124,7 @@ export async function POST(request: NextRequest) {
       playerId: player.id,
       displayName: player.name,
       hasStickerPack,
+      gender: player.gender,
     });
   } catch (e) {
     return error((e as Error).message, 500);

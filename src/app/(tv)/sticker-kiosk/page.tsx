@@ -74,6 +74,8 @@ const STRINGS = {
     notFoundNoPack: "Ask a staff member to set up your sticker pack first.",
     tryAgain: "Try again",
     goBack: "Go back",
+    wantToBuy: "I want to buy 🛒",
+    generatingNow: (n: number) => `We're on it! Processing now, come back in ${n}s…`,
     funPhrases: ["I am awesome! 🔥", "You rock! 🎸", "Forever young! ✨", "I am a star! ⭐"],
     langAria: "Switch to Vietnamese",
     darkAria: "Switch to dark mode",
@@ -116,6 +118,8 @@ const STRINGS = {
     notFoundNoPack: "Nhờ nhân viên thiết lập bộ sticker trước nhé.",
     tryAgain: "Thử lại",
     goBack: "Quay lại",
+    wantToBuy: "Tôi muốn mua 🛒",
+    generatingNow: (n: number) => `Đang xử lý! Quay lại sau ${n} giây…`,
     funPhrases: ["Tôi thật tuyệt vời! 🔥", "Bạn thật ngầu! 🎸", "Mãi mãi trẻ trung! ✨", "Tôi là ngôi sao! ⭐"],
     langAria: "Switch to English",
     darkAria: "Chuyển chế độ tối",
@@ -147,6 +151,8 @@ interface KioskSettings {
 
 interface NotFoundReason {
   hasStickerPack: boolean;
+  playerId?: string;
+  gender?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -868,6 +874,7 @@ function ScanningScreen({
     playerId?: string;
     displayName?: string;
     hasStickerPack?: boolean;
+    gender?: string;
   };
 
   const kioskHeaders = { "x-kiosk-secret": kioskSecret };
@@ -884,7 +891,7 @@ function ScanningScreen({
 
         if (!data.hasStickerPack) {
           console.debug("[StickerKiosk] matched but no sticker pack for", data.displayName);
-          onNotFound({ hasStickerPack: false });
+          onNotFound({ hasStickerPack: false, playerId: data.playerId, gender: data.gender });
           return true;
         }
 
@@ -1368,6 +1375,8 @@ function IdentifiedScreen({
 // Not-found screen
 // ---------------------------------------------------------------------------
 
+const FAKE_TIMER_SECONDS = 130;
+
 function NotFoundScreen({
   reason,
   onTryAgain,
@@ -1376,6 +1385,7 @@ function NotFoundScreen({
   onToggleDark,
   lang,
   onToggleLang,
+  kioskSecret,
 }: {
   reason: NotFoundReason;
   onTryAgain: () => void;
@@ -1384,27 +1394,89 @@ function NotFoundScreen({
   onToggleDark: () => void;
   lang: Lang;
   onToggleLang: () => void;
+  kioskSecret: string | null;
 }) {
   const c = getColors(dark);
   const s = STRINGS[lang];
 
+  // Auto-go-back after 30s (extended since player may be waiting for processing)
+  const autoBackSecs = reason.hasStickerPack ? 15 : 30;
   useEffect(() => {
-    const t = setTimeout(onGoBack, 15000);
+    const t = setTimeout(onGoBack, autoBackSecs * 1000);
     return () => clearTimeout(t);
-  }, [onGoBack]);
+  }, [onGoBack, autoBackSecs]);
+
+  // "I want to buy" flow — only for !hasStickerPack (no pack generated yet)
+  const [buying, setBuying] = useState(false);
+  const [fakeSecondsLeft, setFakeSecondsLeft] = useState(FAKE_TIMER_SECONDS);
+
+  const handleWantToBuy = useCallback(() => {
+    if (buying || !reason.playerId) return;
+    setBuying(true);
+
+    // Enqueue the sticker generation job — fire and forget, never blocks UI
+    fetch("/api/kiosk/enqueue-sticker", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-kiosk-secret": kioskSecret ?? "",
+      },
+      body: JSON.stringify({ playerId: reason.playerId }),
+    }).catch(console.error);
+  }, [buying, reason.playerId, kioskSecret]);
+
+  // Countdown timer while processing
+  useEffect(() => {
+    if (!buying) return;
+    if (fakeSecondsLeft <= 0) return;
+    const t = setInterval(() => setFakeSecondsLeft((n) => n - 1), 1000);
+    return () => clearInterval(t);
+  }, [buying, fakeSecondsLeft]);
+
+  const showBuyButton = !reason.hasStickerPack && !!reason.playerId && !buying;
+  const showProcessing = !reason.hasStickerPack && buying;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100dvh", background: c.bg }}>
       <KioskTopBar dark={dark} onToggleDark={onToggleDark} lang={lang} onToggleLang={onToggleLang} c={c} />
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, padding: "0 32px", textAlign: "center", gap: 16 }}>
-        <span style={{ fontSize: 64, lineHeight: 1 }}>⚠️</span>
+        <span style={{ fontSize: 64, lineHeight: 1 }}>😅</span>
         <p style={{ fontSize: 22, fontWeight: 600, color: c.text, margin: 0 }}>{s.notFoundTitle}</p>
-        <p style={{ fontSize: 15, color: c.muted, maxWidth: 260, margin: 0 }}>
+        <p style={{ fontSize: 15, color: c.muted, maxWidth: 300, margin: 0 }}>
           {reason.hasStickerPack ? s.notFoundNoFace : s.notFoundNoPack}
         </p>
+
+        {showProcessing && (
+          <div style={{
+            background: dark ? "#1a2e1a" : "#e8f5e9",
+            border: "1px solid #4ade80",
+            borderRadius: 16,
+            padding: "16px 24px",
+            maxWidth: 340,
+            width: "100%",
+          }}>
+            <p style={{ fontSize: 16, fontWeight: 600, color: "#4ade80", margin: "0 0 8px 0" }}>
+              {s.generatingNow(fakeSecondsLeft)}
+            </p>
+            {/* Progress bar */}
+            <div style={{ background: dark ? "#333" : "#ddd", borderRadius: 999, height: 6, overflow: "hidden" }}>
+              <div style={{
+                background: "#4ade80",
+                height: "100%",
+                borderRadius: 999,
+                width: `${Math.round(((FAKE_TIMER_SECONDS - fakeSecondsLeft) / FAKE_TIMER_SECONDS) * 100)}%`,
+                transition: "width 1s linear",
+              }} />
+            </div>
+          </div>
+        )}
+
         <div style={{ display: "flex", flexDirection: "column", gap: 12, width: "100%", maxWidth: 340, marginTop: 8 }}>
           {reason.hasStickerPack && (
             <button style={BTN_PRIMARY} onClick={onTryAgain}>{s.tryAgain}</button>
+          )}
+          {showBuyButton && (
+            <button style={BTN_PRIMARY} onClick={handleWantToBuy}>{s.wantToBuy}</button>
           )}
           <button style={btnSecondary(c)} onClick={onGoBack}>{s.goBack}</button>
         </div>
@@ -1591,6 +1663,7 @@ export default function StickerKioskPage() {
           onToggleDark={onToggleDark}
           lang={lang}
           onToggleLang={onToggleLang}
+          kioskSecret={kioskSecret}
         />
       )}
     </>
