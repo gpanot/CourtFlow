@@ -97,7 +97,7 @@ GET https://reclub.co/m/{referenceCode}
 ```python
 import re
 
-def get_participant_user_ids(reference_code):
+def get_participants(reference_code):
     url = f"https://reclub.co/m/{reference_code}"
     req = urllib.request.Request(url, headers={
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
@@ -112,31 +112,66 @@ def get_participant_user_ids(reference_code):
     raw = json.loads(match.group(1))
 
     # Nuxt uses a flat array with index-based references.
-    # Participant dicts have: referenceType, referenceId, status, isHost, etc.
-    # The VALUES in these dicts are indices into the same `raw` array.
+    # Participant dicts have: referenceType, referenceId, status, createdAt,
+    # lastStatusUpdatedAt, externalReference, etc.
+    # ALL dict values are indices into the same `raw` array — dereference with raw[idx].
     #
-    # Key resolved values (as of April 2026):
-    #   referenceType → 10 = real user (also seen: 9, 30)
-    #   status        → 1  = confirmed
-    #   referenceId   → resolves to the integer userId
+    # Key resolved values (as of May 2026):
+    #   status                → 1  = confirmed
+    #   referenceId           → integer userId (can be < 1000 for early Reclub users — use > 0)
+    #   createdAt             → unix seconds (when the participant entry was created)
+    #   lastStatusUpdatedAt   → unix milliseconds (when status last changed, e.g. waitlist → confirmed)
+    #   externalReference     → None for self-joined; dict with "name" key for +1/bring-a-friend entries
 
-    user_ids = set()
+    entries = []
+    seen = set()
     for item in raw:
         if not isinstance(item, dict) or "referenceId" not in item:
             continue
 
-        ref_type = raw[item["referenceType"]]  # dereference index
-        status   = raw[item["status"]]
-        user_id  = raw[item["referenceId"]]
+        status  = raw[item["status"]]
+        user_id = raw[item["referenceId"]]
+        if status != 1:
+            continue
 
-        if status == 1 and isinstance(user_id, int) and user_id > 1000:
-            user_ids.add(user_id)
+        created_s  = raw[item["createdAt"]] if "createdAt" in item else 0          # seconds
+        last_ms    = raw[item["lastStatusUpdatedAt"]] if "lastStatusUpdatedAt" in item else 0  # ms
 
-    return sorted(user_ids)
+        # Detect +1 / bring-a-friend entries (externalReference has a "name" field)
+        ext_idx = item.get("externalReference")
+        ext_ref = raw[ext_idx] if isinstance(ext_idx, int) else None
+        if isinstance(ext_ref, dict) and "name" in ext_ref:
+            guest_name = raw[ext_ref["name"]]
+            if isinstance(guest_name, str) and guest_name.strip():
+                entries.append({
+                    "user_id": user_id if isinstance(user_id, int) and user_id > 0 else None,
+                    "guest_name": guest_name.strip(),
+                    "is_added_by_friend": True,
+                    "last_status_updated_at_ms": last_ms,
+                })
+            continue  # don't also add the adder as a real entry
+
+        if isinstance(user_id, int) and user_id > 0 and user_id not in seen:
+            seen.add(user_id)
+            entries.append({
+                "user_id": user_id,
+                "guest_name": None,
+                "is_added_by_friend": False,
+                "last_status_updated_at_ms": last_ms,
+            })
+
+    # Sort by lastStatusUpdatedAt ASC = first confirmed appears first (matches Reclub display order).
+    # Note: lastStatusUpdatedAt reflects the most recent status change, so waitlist promotions
+    # correctly appear after players who were confirmed from the start.
+    entries.sort(key=lambda x: x["last_status_updated_at_ms"])
+    return entries
 ```
 
 **Notes:**
-- Some participants are guests (no `userId`) — expect ~3 fewer than `participantsStatusCount.joined`.
+- Use `userId > 0` (not `> 1000`) — very early Reclub users have IDs like 694 and are valid.
+- `+1 / bring-a-friend` entries have `externalReference.name` set. Their `userId` is the adder's ID (use it for dedup, but don't add them as a separate real-player entry).
+- **Sort order:** `lastStatusUpdatedAt ASC` matches Reclub's display. The organizer/first-joiner appears at position 1; players promoted from the waitlist appear last.
+- `createdAt` (seconds) = when the participant entry was created. `lastStatusUpdatedAt` (ms) = when the status last changed (e.g. pending → confirmed). For most players these are the same; they differ for waitlist promotions.
 - If Reclub changes the Nuxt payload format, the index-dereferencing logic may need updating.
 
 ---
@@ -211,7 +246,7 @@ def find_meets(group_id, date):
 
 
 def get_participant_ids(reference_code):
-    """Parse the meet page Nuxt payload and return confirmed userIds."""
+    """Parse the meet page Nuxt payload and return confirmed userIds sorted by lastStatusUpdatedAt ASC."""
     url = f"https://reclub.co/m/{reference_code}"
     req = urllib.request.Request(url, headers={
         "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
@@ -221,15 +256,27 @@ def get_participant_ids(reference_code):
     match = re.search(r'<script[^>]*id="__NUXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL)
     raw = json.loads(match.group(1))
 
-    user_ids = set()
+    entries = []
+    seen = set()
     for item in raw:
         if not isinstance(item, dict) or "referenceId" not in item:
             continue
         status  = raw[item["status"]]
         user_id = raw[item["referenceId"]]
-        if status == 1 and isinstance(user_id, int) and user_id > 1000:
-            user_ids.add(user_id)
-    return sorted(user_ids)
+        last_ms = raw[item["lastStatusUpdatedAt"]] if "lastStatusUpdatedAt" in item else 0
+        if status != 1 or not isinstance(user_id, int) or user_id <= 0:
+            continue
+        # Skip +1/bring-a-friend entries (they have externalReference.name)
+        ext_idx = item.get("externalReference")
+        ext_ref = raw[ext_idx] if isinstance(ext_idx, int) else None
+        if isinstance(ext_ref, dict) and "name" in ext_ref:
+            continue
+        if user_id not in seen:
+            seen.add(user_id)
+            entries.append((last_ms, user_id))
+
+    entries.sort()  # ASC by lastStatusUpdatedAt = Reclub display order
+    return [uid for _, uid in entries]
 
 
 def get_profiles(user_ids):
@@ -292,8 +339,11 @@ if __name__ == "__main__":
 ## Caveats
 
 - **No auth required** — all endpoints above are public.
-- **Guest players** (added by hosts without a Reclub account) won't have a `userId` and won't appear in the roster. Expect the count to be slightly below `participantsStatusCount.joined`.
+- **`userId > 0`, not `> 1000`** — very early Reclub users have IDs below 1000 (e.g. userId=694 = Pierre). Using `> 1000` silently drops them.
+- **+1 / bring-a-friend entries** — participants added by another user have `externalReference.name` set. They show up as a separate entry in the Nuxt payload; their `userId` is the adder's ID. They have no Reclub profile of their own. The adder still appears as their own real entry — avoid double-counting.
+- **Waitlist promotions** — `lastStatusUpdatedAt` differs from `createdAt` when a player was on a waitlist and later confirmed. Sort by `lastStatusUpdatedAt ASC` to match Reclub's display (first confirmed = first in list).
+- **Guest players** (no `userId`, no `externalReference.name`) won't appear. These are rare and account for the occasional 1-player gap vs `participantsStatusCount.joined`.
 - **Nuxt payload format is fragile** — if Reclub updates their frontend, the `__NUXT_DATA__` structure may change. The index-dereferencing pattern has been stable since late 2025 but verify if results look wrong.
-- **Rate limiting** — be polite. Add `time.sleep(0.3)` between batch calls if fetching many events. On HTTP 429, back off.
+- **Rate limiting** — be polite. Add `time.sleep(0.3)` between batch calls if fetching many events. On HTTP 429, back off 2 seconds and retry once.
 
-*Created: April 29, 2026*
+*Created: April 29, 2026 — Updated: May 13, 2026 (sort order, userId threshold, +1 friends, waitlist handling)*

@@ -72,6 +72,7 @@ interface ReclubPlayer {
   avatarUrl: string;
   isDefaultAvatar: boolean;
   gender: string;
+  isAddedByFriend?: boolean;
 }
 
 interface ReclubRosterData {
@@ -732,6 +733,11 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                                     hasRing && "ring-[3px] ring-green-500"
                                   )}
                                 />
+                              )}
+                              {player.isAddedByFriend && (
+                                <div className="absolute inset-0 flex items-end justify-center rounded-full pb-1" style={{ backgroundColor: "rgba(0,0,0,0.55)" }}>
+                                  <span className="text-[11px] font-extrabold" style={{ color: "#ffffff" }}>+1</span>
+                                </div>
                               )}
                               {isConfirmedPaid && (
                                 <div className="absolute -top-0.5 -right-0.5 flex h-[20px] w-[20px] items-center justify-center rounded-full border-2 border-neutral-900 bg-green-500">

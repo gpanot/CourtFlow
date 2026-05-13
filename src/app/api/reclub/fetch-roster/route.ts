@@ -14,6 +14,12 @@ export async function POST(request: NextRequest) {
     }
 
     const roster = await fetchReclubRoster(referenceCode);
+    console.log(
+      `[reclub] ✅ ${referenceCode} — ${roster.players.length} players:\n` +
+      roster.players.map((p, i) =>
+        `  ${String(i + 1).padStart(2)}. ${p.isAddedByFriend ? "[+1] " : "     "}${p.name}`
+      ).join("\n")
+    );
     return json({
       referenceCode,
       eventName: roster.eventName,

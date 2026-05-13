@@ -87,6 +87,17 @@ export interface ReclubPlayer {
   avatarUrl: string;
   isDefaultAvatar: boolean;
   gender: string;
+  /** true when this player was added as a +1 by another Reclub user (bring-a-friend) */
+  isAddedByFriend?: boolean;
+}
+
+interface RosterEntry {
+  userId: number | null;
+  createdAt: number; // unix seconds; used for sort (ASC = first-joined first, matches Reclub display)
+  lastStatusUpdatedAt: number; // ms; kept for reference
+  isSynthetic: boolean;
+  syntheticName?: string;
+  syntheticGender?: string;
 }
 
 export async function fetchReclubRoster(
@@ -114,11 +125,10 @@ export async function fetchReclubRoster(
 
   const raw: unknown[] = JSON.parse(nuxtMatch[1]);
 
-  const userIds = new Set<number>();
-  // Synthetic players for: (a) guests added by name with no Reclub account (referenceId=null),
-  // and (b) players added by another user ("bring a friend", externalReference.name is set).
-  // In both cases we skip adding to userIds to avoid double-counting the adder.
-  const syntheticPlayers: ReclubPlayer[] = [];
+  // Collect all confirmed participants with their lastStatusUpdatedAt timestamp.
+  // Reclub displays participants sorted by lastStatusUpdatedAt DESC (most-recently confirmed first).
+  const entries: RosterEntry[] = [];
+  const seenUserIds = new Set<number>();
 
   for (const item of raw) {
     if (
@@ -133,7 +143,21 @@ export async function fetchReclubRoster(
 
       if (status !== 1) continue;
 
-      // Resolve externalReference — present for "added by" and manual-guest entries
+      // lastStatusUpdatedAt is stored as ms in the NUXT payload
+      const lastUpdatedRaw = (rec as Record<string, unknown>).lastStatusUpdatedAt;
+      const lastUpdatedMs =
+        typeof lastUpdatedRaw === "number" && lastUpdatedRaw > 0
+          ? (raw[lastUpdatedRaw] as number | null) ?? 0
+          : 0;
+
+      // createdAt is stored as unix seconds in the NUXT payload
+      const createdAtRaw = (rec as Record<string, unknown>).createdAt;
+      const createdAtSec =
+        typeof createdAtRaw === "number" && createdAtRaw > 0
+          ? (raw[createdAtRaw] as number | null) ?? 0
+          : 0;
+
+      // Resolve externalReference — present for "added by" (bring-a-friend) entries
       const extRefIndex = (rec as Record<string, unknown>).externalReference as number | undefined;
       const extRef = extRefIndex !== undefined ? raw[extRefIndex] : undefined;
       if (
@@ -146,51 +170,78 @@ export async function fetchReclubRoster(
         const name = raw[extObj.name];
         const gender = raw[extObj.gender];
         if (typeof name === "string" && name.trim()) {
-          syntheticPlayers.push({
-            reclubUserId: typeof userId === "number" && userId > 1000 ? userId : null,
-            name: name.trim(),
-            avatarUrl: "",
-            isDefaultAvatar: true,
-            gender: typeof gender === "string" ? gender : "",
+          entries.push({
+            userId: typeof userId === "number" && userId > 0 ? userId : null,
+            createdAt: createdAtSec,
+            lastStatusUpdatedAt: lastUpdatedMs,
+            isSynthetic: true,
+            syntheticName: name.trim(),
+            syntheticGender: typeof gender === "string" ? gender : "",
           });
         }
-        // Skip — do not also add userId to the batch-fetch set
+        // Skip — do not also add the adder's userId to the fetch set
         continue;
       }
 
-      if (typeof userId === "number" && userId > 1000) {
-        userIds.add(userId);
+      if (typeof userId === "number" && userId > 0 && !seenUserIds.has(userId)) {
+        seenUserIds.add(userId);
+        entries.push({
+          userId,
+          createdAt: createdAtSec,
+          lastStatusUpdatedAt: lastUpdatedMs,
+          isSynthetic: false,
+        });
       }
     }
   }
 
-  const sortedIds = [...userIds].sort((a, b) => a - b);
+  // Sort by lastStatusUpdatedAt ASC — first confirmed appears first, matching Reclub's display order.
+  // Phoebe (organizer, confirmed days ago) → first. Nadya (just confirmed from waitlist) → last.
+  entries.sort((a, b) => a.lastStatusUpdatedAt - b.lastStatusUpdatedAt);
 
   const BATCH = 50;
-  const players: ReclubPlayer[] = [];
+  const realIds = entries.filter((e) => !e.isSynthetic && e.userId !== null).map((e) => e.userId as number);
+  const playerMap = new Map<number, { name: string; imageUrl: string; gender: string }>();
 
-  for (let i = 0; i < sortedIds.length; i += BATCH) {
+  for (let i = 0; i < realIds.length; i += BATCH) {
     if (i > 0) await sleep(300);
 
-    const batch = sortedIds.slice(i, i + BATCH);
+    const batch = realIds.slice(i, i + BATCH);
     const ids = batch.join(",");
     const data = (await reclubApiFetch(
       `/players/userIds?userIds=${ids}&scopes=BASIC_PROFILE`
     )) as { players?: Array<{ userId: number; name: string; imageUrl: string; gender: string }> };
 
     for (const p of data.players ?? []) {
-      players.push({
-        reclubUserId: p.userId,
-        name: p.name,
-        avatarUrl: p.imageUrl,
-        isDefaultAvatar: p.imageUrl.includes(DEFAULT_AVATAR_HOST),
-        gender: p.gender ?? "",
-      });
+      playerMap.set(p.userId, { name: p.name, imageUrl: p.imageUrl, gender: p.gender ?? "" });
     }
   }
 
-  // Append synthetic players (guests + added-by entries) after real profiles
-  players.push(...syntheticPlayers);
+  // Build final player list in sorted order, resolving profiles for real players
+  const players: ReclubPlayer[] = [];
+  for (const entry of entries) {
+    if (entry.isSynthetic) {
+      players.push({
+        reclubUserId: entry.userId,
+        name: entry.syntheticName!,
+        avatarUrl: "",
+        isDefaultAvatar: true,
+        gender: entry.syntheticGender ?? "",
+        isAddedByFriend: true,
+      });
+    } else if (entry.userId !== null) {
+      const profile = playerMap.get(entry.userId);
+      if (profile) {
+        players.push({
+          reclubUserId: entry.userId,
+          name: profile.name,
+          avatarUrl: profile.imageUrl,
+          isDefaultAvatar: profile.imageUrl.includes(DEFAULT_AVATAR_HOST),
+          gender: profile.gender,
+        });
+      }
+    }
+  }
 
   const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
   const eventName = titleMatch

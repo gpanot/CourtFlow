@@ -30,6 +30,7 @@ interface ReclubPlayer {
   avatarUrl: string;
   isDefaultAvatar: boolean;
   gender: string;
+  isAddedByFriend?: boolean;
 }
 
 interface ReclubRosterData {
@@ -261,6 +262,23 @@ function createStyles(t: AppColors) {
       fontSize: 9,
       fontWeight: "800",
       color: "#fff",
+    },
+    friendOverlay: {
+      position: "absolute",
+      top: 0,
+      bottom: 0,
+      left: 0,
+      right: 0,
+      borderRadius: 26,
+      backgroundColor: "rgba(0,0,0,0.55)",
+      alignItems: "center",
+      justifyContent: "flex-end",
+      paddingBottom: 4,
+    },
+    friendOverlayText: {
+      fontSize: 11,
+      fontWeight: "800",
+      color: "#ffffff",
     },
     playerName: {
       fontSize: 11,
@@ -857,6 +875,11 @@ export function ReclubRosterSection({
                               hasRing && styles.paidRing,
                             ]}
                           />
+                        )}
+                        {player.isAddedByFriend && (
+                          <View style={styles.friendOverlay}>
+                            <Text style={styles.friendOverlayText}>+1</Text>
+                          </View>
                         )}
                         {isConfirmedPaid && (
                           <View style={styles.checkBadge}>
