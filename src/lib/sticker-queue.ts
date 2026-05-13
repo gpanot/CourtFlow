@@ -7,7 +7,7 @@ import { processStickerQueue } from "@/lib/sticker-job-processor";
  * Safe to call fire-and-forget — never throws, just logs on error.
  *
  * Skips if:
- * - player is not male or female
+ * - player is not female (auto-generation on registration is female-only)
  * - player already has a sticker pack
  * - player already has a pending or processing job
  */
@@ -15,7 +15,7 @@ export async function enqueueStickerJobIfNeeded(
   playerId: string,
   gender: string
 ): Promise<void> {
-  if (gender !== "female" && gender !== "male") return;
+  if (gender !== "female") return;
 
   const [existingPack, existingJob] = await Promise.all([
     prisma.playerStickerPack.findFirst({ where: { playerId } }),
