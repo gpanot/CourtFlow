@@ -5,6 +5,7 @@ import { mkdir, writeFile } from "fs/promises";
 import { prisma } from "@/lib/db";
 import { json, error, notFound } from "@/lib/api-helpers";
 import { requireSuperAdmin } from "@/lib/auth";
+import { generateHowToCard } from "@/lib/generate-howto-card";
 
 export const dynamic = "force-dynamic";
 // Allow up to 5 minutes — 4× background removal via FastAPI can be slow
@@ -112,7 +113,19 @@ export async function POST(
         `/uploads/players/sticker-packs/${playerId}/${ts}/${filename}?t=${ts}`;
     }
 
-    // ── Step 4: always create a NEW pack record (packs accumulate, admin deletes manually) ──
+    // ── Step 4: generate how-to card PNG and save alongside stickers ──
+    let howToCardUrl: string | null = null;
+    try {
+      const cardBuffer = await generateHowToCard();
+      const cardFilename = "how-to-use.png";
+      await writeFile(path.join(packSubDir, cardFilename), cardBuffer);
+      howToCardUrl = `/uploads/players/sticker-packs/${playerId}/${ts}/${cardFilename}?t=${ts}`;
+      console.log(`[sticker-process] how-to card saved: ${howToCardUrl}`);
+    } catch (cardErr) {
+      console.warn("[sticker-process] how-to card generation failed (non-fatal):", cardErr);
+    }
+
+    // ── Step 5: always create a NEW pack record (packs accumulate, admin deletes manually) ──
     const pack = await prisma.playerStickerPack.create({
       data: {
         playerId,
@@ -121,6 +134,7 @@ export async function POST(
         sticker2Url: stickerUrls["sticker2Url"],
         sticker3Url: stickerUrls["sticker3Url"],
         sticker4Url: stickerUrls["sticker4Url"],
+        howToCardUrl,
       },
     });
 
@@ -131,6 +145,7 @@ export async function POST(
       sticker2Url: pack.sticker2Url,
       sticker3Url: pack.sticker3Url,
       sticker4Url: pack.sticker4Url,
+      howToCardUrl: pack.howToCardUrl,
       createdAt: pack.createdAt.toISOString(),
     });
   } catch (e) {

@@ -963,6 +963,7 @@ model PlayerStickerPack {
   paidAt           DateTime? @map("paid_at")
   paymentCode      String?   @unique @map("payment_code")
   payosOrderCode   String?   @unique @map("payos_order_code")
+  howToCardUrl     String?   @map("how_to_card_url")
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 

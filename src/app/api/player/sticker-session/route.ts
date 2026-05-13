@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
       stickers,
       price: kioskSettings?.stickerPrice ?? 30000,
       isPaid: stickerPack.isPaid,
+      howToCardUrl: stickerPack.howToCardUrl ?? null,
     });
   } catch (e) {
     return error((e as Error).message, 500);

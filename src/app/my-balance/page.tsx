@@ -327,6 +327,7 @@ export default function MyBalancePage() {
         stickerData={stickerData}
         stickerToken={stickerToken ?? undefined}
         stickerPaid={stickerPaid}
+        isStickerOnlyMode={!!stickerToken}
       />
     );
   }

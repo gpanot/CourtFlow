@@ -16,6 +16,7 @@ interface BalanceScreenProps {
   stickerData?: StickerData | null;
   stickerToken?: string;
   stickerPaid?: boolean;
+  isStickerOnlyMode?: boolean;
 }
 
 type ShopState = "idle" | "payment" | "success";
@@ -78,6 +79,7 @@ function StickerShopSection({
   // How-to starts expanded when paid (they just scanned and need the instructions right away)
   const [howToOpen, setHowToOpen] = useState(!!paid);
   const [downloading, setDownloading] = useState(false);
+  const [downloaded, setDownloaded] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
@@ -108,33 +110,53 @@ function StickerShopSection({
   // Use the app's active i18n language so flag toggle is respected
   const isVi = i18n.language.startsWith("vi");
 
-  // Download each sticker individually via client-side blob — avoids all server-side ZIP issues
+  // Download each sticker + the how-to card individually via client-side blob
   const handleDownload = useCallback(async () => {
     if (downloading) return;
-    const urls = stickerData.stickers.filter(Boolean);
-    if (urls.length === 0) return;
+    const stickerUrls = stickerData.stickers.filter(Boolean);
+    if (stickerUrls.length === 0) return;
     setDownloading(true);
     try {
-      for (let i = 0; i < urls.length; i++) {
-        const url = urls[i].split("?")[0]; // strip cache-buster
-        const res = await fetch(url);
-        if (!res.ok) continue;
-        const blob = await res.blob();
-        const objectUrl = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = objectUrl;
-        a.download = `sticker_${i + 1}.webp`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(objectUrl);
-        // Small delay between downloads so browser doesn't block them
-        if (i < urls.length - 1) await new Promise((r) => setTimeout(r, 400));
+      // Build the full list: stickers first, then the stored how-to card PNG
+      const allFiles: { url: string; filename: string }[] = [
+        ...stickerUrls.map((url, i) => ({
+          url: url.split("?")[0],
+          filename: `sticker_${i + 1}.webp`,
+        })),
+      ];
+      if (stickerData.howToCardUrl) {
+        allFiles.push({
+          url: stickerData.howToCardUrl.split("?")[0],
+          filename: "how-to-use.png",
+        });
       }
+
+      for (let i = 0; i < allFiles.length; i++) {
+        const { url, filename } = allFiles[i];
+        try {
+          const res = await fetch(url);
+          if (!res.ok) continue;
+          const blob = await res.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = objectUrl;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(objectUrl);
+        } catch { /* skip failed file */ }
+        // Small delay so browser doesn't block multiple downloads
+        if (i < allFiles.length - 1) await new Promise((r) => setTimeout(r, 400));
+      }
+
+      // Show "Downloaded!" for 3 seconds then reset button
+      setDownloaded(true);
+      setTimeout(() => setDownloaded(false), 3000);
     } finally {
       setDownloading(false);
     }
-  }, [stickerData.stickers, downloading]);
+  }, [stickerData.stickers, stickerData.howToCardUrl, downloading]);
 
   return (
     <div style={{ marginTop: 28 }}>
@@ -304,15 +326,17 @@ function StickerShopSection({
             <>
               <button
                 onClick={() => { void handleDownload(); }}
-                disabled={downloading}
-                style={{ width: "100%", height: 56, borderRadius: 16, background: downloading ? "#6b7280" : "#4ade80", color: "#000", fontSize: 16, fontWeight: 600, border: "none", cursor: downloading ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: downloading ? 0.8 : 1 }}
+                disabled={downloading || downloaded}
+                style={{ width: "100%", height: 56, borderRadius: 16, background: downloaded ? "#16a34a" : downloading ? "#6b7280" : "#4ade80", color: "#000", fontSize: 16, fontWeight: 600, border: "none", cursor: (downloading || downloaded) ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, opacity: 1, transition: "background 0.3s" }}
               >
                 {downloading
                   ? <Loader2 size={20} style={{ animation: "spin 1s linear infinite" }} />
                   : <Download size={20} />}
                 {downloading
                   ? (isVi ? "Đang tải…" : "Downloading…")
-                  : (isVi ? "Tải bộ sticker về máy" : "Download your sticker pack")}
+                  : downloaded
+                    ? (isVi ? "Đã tải xong ✓" : "Downloaded! ✓")
+                    : (isVi ? "Tải bộ sticker về máy" : "Download your sticker pack")}
               </button>
 
               {/* How to use on WhatsApp — expanded by default */}
@@ -388,6 +412,7 @@ export function BalanceScreen({
   stickerData,
   stickerToken,
   stickerPaid,
+  isStickerOnlyMode,
 }: BalanceScreenProps) {
   const { t, i18n } = useTranslation();
 
@@ -406,7 +431,7 @@ export function BalanceScreen({
           to   { transform: rotate(360deg); }
         }
       `}</style>
-      <BalanceTopBar label={data.venueName || undefined} onBack={onBack} />
+      <BalanceTopBar label={data.venueName || undefined} onBack={isStickerOnlyMode ? undefined : onBack} />
 
       <div className="flex flex-1 flex-col px-6 py-8">
         <h1 className="text-2xl font-bold" style={{ color: "var(--bal-text)" }}>
@@ -483,31 +508,33 @@ export function BalanceScreen({
           />
         )}
 
-        <div className="mt-auto flex flex-col items-center gap-4 pt-10">
-          {!stickerData && (
-            <button
-              onClick={onRefresh}
-              disabled={refreshing}
-              className="flex items-center gap-2 rounded-xl border px-6 py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
-              style={{
-                borderColor: "var(--bal-border)",
-                background: "var(--bal-card)",
-                color: "var(--bal-text-secondary)",
-              }}
-            >
-              <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-              {t("balance.refresh")}
-            </button>
-          )}
+        {!isStickerOnlyMode && (
+          <div className="mt-auto flex flex-col items-center gap-4 pt-10">
+            {!stickerData && (
+              <button
+                onClick={onRefresh}
+                disabled={refreshing}
+                className="flex items-center gap-2 rounded-xl border px-6 py-2.5 text-sm font-medium transition-colors disabled:opacity-50"
+                style={{
+                  borderColor: "var(--bal-border)",
+                  background: "var(--bal-card)",
+                  color: "var(--bal-text-secondary)",
+                }}
+              >
+                <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+                {t("balance.refresh")}
+              </button>
+            )}
 
-          <button
-            onClick={onBack}
-            className="text-sm transition-colors"
-            style={{ color: "var(--bal-subtle)" }}
-          >
-            {showBackToVenues ? t("balance.switchVenue") : t("balance.logout")}
-          </button>
-        </div>
+            <button
+              onClick={onBack}
+              className="text-sm transition-colors"
+              style={{ color: "var(--bal-subtle)" }}
+            >
+              {showBackToVenues ? t("balance.switchVenue") : t("balance.logout")}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

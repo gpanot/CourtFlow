@@ -40,4 +40,5 @@ export interface StickerData {
   stickers: string[];
   price: number;
   isPaid: boolean;
+  howToCardUrl?: string | null;
 }

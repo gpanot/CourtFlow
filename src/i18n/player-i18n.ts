@@ -7,6 +7,10 @@ import vi from "./locales/player/vi.json";
 export const PLAYER_I18N_STORAGE_KEY = "courtflow_player_lang";
 
 if (!i18n.isInitialized) {
+  // Default to Vietnamese on first visit (no stored preference yet)
+  const hasStoredLang =
+    typeof window !== "undefined" && !!localStorage.getItem(PLAYER_I18N_STORAGE_KEY);
+
   i18n
     .use(LanguageDetector)
     .use(initReactI18next)
@@ -15,6 +19,7 @@ if (!i18n.isInitialized) {
         en: { translation: en },
         vi: { translation: vi },
       },
+      ...(hasStoredLang ? {} : { lng: "vi" }),
       fallbackLng: "vi",
       supportedLngs: ["en", "vi"],
       interpolation: { escapeValue: false },
