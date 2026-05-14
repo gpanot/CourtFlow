@@ -584,6 +584,8 @@ function IdleScreen({
   const [femaleStickers, setFemaleStickers] = useState<string[]>([]);
   const [maleStickers, setMaleStickers] = useState<string[]>([]);
   const [recentStickers, setRecentStickers] = useState<string[]>([]);
+  const [recentFemaleStickers, setRecentFemaleStickers] = useState<string[]>([]);
+  const [recentMaleStickers, setRecentMaleStickers] = useState<string[]>([]);
   const [recentVersion, setRecentVersion] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -613,13 +615,13 @@ function IdleScreen({
   // Attract mode: every 45s auto-show a random sticker fullscreen
   useEffect(() => {
     const interval = setInterval(() => {
-      const allStickers = [...femaleStickers, ...maleStickers, ...recentStickers].filter(Boolean);
+      const allStickers = [...femaleStickers, ...maleStickers, ...recentStickers, ...recentFemaleStickers, ...recentMaleStickers].filter(Boolean);
       if (allStickers.length === 0) return;
       const url = allStickers[Math.floor(Math.random() * allStickers.length)];
       showPreview(url, STRINGS[lang].funPhrases);
     }, 45000);
     return () => clearInterval(interval);
-  }, [femaleStickers, maleStickers, recentStickers, showPreview, lang]);
+  }, [femaleStickers, maleStickers, recentStickers, recentFemaleStickers, recentMaleStickers, showPreview, lang]);
 
   // Animated title rotator
   const [titleIdx, setTitleIdx] = useState(0);
@@ -657,10 +659,12 @@ function IdleScreen({
     fetch("/api/kiosk/recent-checkin-stickers", {
       headers: { "x-kiosk-secret": kioskSecret },
     })
-      .then((r) => r.ok ? r.json() as Promise<{ stickers: string[] }> : null)
+      .then((r) => r.ok ? r.json() as Promise<{ stickers: string[]; female?: string[]; male?: string[] }> : null)
       .then((d) => {
         if (d && d.stickers.length > 0) {
           setRecentStickers(d.stickers);
+          setRecentFemaleStickers(d.female ?? []);
+          setRecentMaleStickers(d.male ?? []);
           setRecentVersion((v) => v + 1);
         }
       })
@@ -674,16 +678,20 @@ function IdleScreen({
   }, [fetchRecent]);
 
   // Build 4 row data sets
-  const half = Math.ceil(femaleStickers.length / 2);
-  const rowA = femaleStickers.slice(0, half);
-  const rowB = femaleStickers.slice(half);
-  // Row C: recent check-ins injected at front, filled with female fallback
+  // Rows A/B: recent female check-ins if available, fallback to showcase females
+  const recentFemSrc = recentFemaleStickers.length >= 4 ? recentFemaleStickers : femaleStickers;
+  const half = Math.ceil(recentFemSrc.length / 2);
+  const rowA = recentFemSrc.slice(0, half);
+  const rowB = recentFemSrc.slice(half);
+  // Row C: all recent check-ins (mixed gender — shows who just played), fallback females
   const rowC = recentStickers.length >= 4
     ? recentStickers
     : [...recentStickers, ...femaleStickers].slice(0, Math.max(recentStickers.length, 8));
-  // Row D: men only — repeat to match female row length so scroll speed feels the same
+  // Row D: recent male check-ins if available, fallback to showcase males (then females)
   const targetLen = rowA.length > 0 ? rowA.length : 8;
-  let rowDRaw = maleStickers.length > 0 ? maleStickers : femaleStickers;
+  let rowDRaw = recentMaleStickers.length >= 4
+    ? recentMaleStickers
+    : maleStickers.length > 0 ? maleStickers : femaleStickers;
   // Guard: if source is empty, skip the loop to avoid infinite expansion of []
   if (rowDRaw.length > 0) {
     while (rowDRaw.length < targetLen) rowDRaw = [...rowDRaw, ...rowDRaw];

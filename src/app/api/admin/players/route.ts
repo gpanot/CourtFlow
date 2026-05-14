@@ -103,6 +103,19 @@ export async function GET(request: NextRequest) {
     const face = url.searchParams.get("face") || "";
     const page = Math.max(1, parseInt(url.searchParams.get("page") || "1"));
     const limit = 50;
+    const sortKey = url.searchParams.get("sortKey") || "";
+    const sortDir = (url.searchParams.get("sortDir") || "desc") as "asc" | "desc";
+
+    // DB-native sort keys can be pushed directly to Prisma orderBy
+    const DB_SORT_MAP: Record<string, Record<string, string>> = {
+      name: { name: sortDir },
+      phone: { phone: sortDir },
+      gender: { gender: sortDir },
+      skillLevel: { skillLevel: sortDir },
+    };
+    const isDbSort = sortKey in DB_SORT_MAP;
+    // Computed sort keys require fetching all records then sorting in JS
+    const isComputedSort = !isDbSort && !!sortKey;
 
     const where: Record<string, unknown> = {};
 
@@ -168,31 +181,37 @@ export async function GET(request: NextRequest) {
     }
 
     const now = new Date();
+    const playerInclude = {
+      queueEntries: {
+        select: {
+          sessionId: true,
+          joinedAt: true,
+          totalPlayMinutesToday: true,
+          status: true,
+          session: {
+            select: {
+              status: true,
+              closedAt: true,
+              venue: { select: { id: true, name: true } },
+            },
+          },
+        },
+        orderBy: { joinedAt: "desc" as const },
+      },
+      stickerPacks: {
+        select: { sticker1Url: true, sticker2Url: true, sticker3Url: true, sticker4Url: true },
+        orderBy: { createdAt: "desc" as const },
+        take: 1,
+      },
+    };
+
     const [players, total, stats, countAll, countMale, countFemale, countNoFace] = await Promise.all([
       prisma.player.findMany({
         where,
-        orderBy: { createdAt: "desc" },
-        skip: (page - 1) * limit,
-        take: limit,
-        include: {
-          queueEntries: {
-            select: {
-              sessionId: true,
-              joinedAt: true,
-              totalPlayMinutesToday: true,
-              status: true,
-              session: {
-                select: {
-                  status: true,
-                  closedAt: true,
-                  venue: { select: { id: true, name: true } },
-                },
-              },
-            },
-            orderBy: { joinedAt: "desc" },
-          },
-          stickerPacks: { select: { sticker1Url: true, sticker2Url: true, sticker3Url: true, sticker4Url: true }, orderBy: { createdAt: "desc" as const }, take: 1 },
-        },
+        // For computed sorts we fetch ALL records (no pagination) — we sort+paginate in JS below
+        orderBy: isDbSort ? DB_SORT_MAP[sortKey] : { createdAt: "desc" },
+        ...(isComputedSort ? {} : { skip: (page - 1) * limit, take: limit }),
+        include: playerInclude,
       }),
       prisma.player.count({ where }),
       getAdminPlayersStats(now),
@@ -313,11 +332,30 @@ export async function GET(request: NextRequest) {
 
     const filterCounts = { all: countAll, male: countMale, female: countFemale, no_face: countNoFace };
 
-    if (status === "inactive") {
-      return json({ players: result.filter((p) => !p.isActiveToday), total, page, limit, stats, filterCounts });
+    let finalResult = status === "inactive" ? result.filter((p) => !p.isActiveToday) : result;
+
+    if (isComputedSort) {
+      // Sort the full result set in JS, then paginate manually
+      const SKILL_ORDER_MAP: Record<string, number> = { beginner: 0, intermediate: 1, advanced: 2, pro: 3 };
+      finalResult = [...finalResult].sort((a, b) => {
+        let cmp = 0;
+        switch (sortKey) {
+          case "totalSessions": cmp = a.totalSessions - b.totalSessions; break;
+          case "totalGames": cmp = a.totalGames - b.totalGames; break;
+          case "totalPlayMinutes": cmp = a.totalPlayMinutes - b.totalPlayMinutes; break;
+          case "totalWaitMinutes": cmp = a.totalWaitMinutes - b.totalWaitMinutes; break;
+          case "waitPlayRatio": cmp = a.waitPlayRatio - b.waitPlayRatio; break;
+          case "venues": cmp = a.venues.length - b.venues.length; break;
+          case "stickers": cmp = (a.hasStickers ? 1 : 0) - (b.hasStickers ? 1 : 0); break;
+          case "checkInCount": cmp = (a.checkInCount ?? 0) - (b.checkInCount ?? 0); break;
+          case "skillLevel": cmp = (SKILL_ORDER_MAP[a.skillLevel] ?? 0) - (SKILL_ORDER_MAP[b.skillLevel] ?? 0); break;
+        }
+        return sortDir === "asc" ? cmp : -cmp;
+      });
+      finalResult = finalResult.slice((page - 1) * limit, page * limit);
     }
 
-    return json({ players: result, total, page, limit, stats, filterCounts });
+    return json({ players: finalResult, total, page, limit, stats, filterCounts });
   } catch (e) {
     return error((e as Error).message, 500);
   }

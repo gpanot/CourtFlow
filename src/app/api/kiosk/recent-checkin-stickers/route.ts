@@ -47,6 +47,7 @@ export async function GET(request: NextRequest) {
       select: {
         phone: true,
         name: true,
+        gender: true,
         stickerPacks: {
           orderBy: { createdAt: "desc" },
           take: 1,
@@ -62,7 +63,7 @@ export async function GET(request: NextRequest) {
 
     // Build ordered result — preserve check-in recency order
     const phoneToPlayer = new Map(players.map((p) => [p.phone, p]));
-    const result: { name: string; stickers: string[] }[] = [];
+    const result: { name: string; stickers: string[]; gender: string }[] = [];
 
     for (const phone of orderedPhones) {
       const player = phoneToPlayer.get(phone);
@@ -72,13 +73,15 @@ export async function GET(request: NextRequest) {
         Boolean
       ) as string[];
       if (stickers.length > 0) {
-        result.push({ name: player.name.split(" ")[0], stickers });
+        result.push({ name: player.name.split(" ")[0], stickers, gender: player.gender });
       }
       if (result.length >= 8) break; // max 8 recent players
     }
 
     const allStickers = result.flatMap((r) => r.stickers);
-    return json({ stickers: allStickers, players: result });
+    const femaleStickers = result.filter((r) => r.gender === "female").flatMap((r) => r.stickers);
+    const maleStickers = result.filter((r) => r.gender === "male").flatMap((r) => r.stickers);
+    return json({ stickers: allStickers, female: femaleStickers, male: maleStickers, players: result });
   } catch (e) {
     return error((e as Error).message, 500);
   }

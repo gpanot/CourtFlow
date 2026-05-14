@@ -226,6 +226,7 @@ export default function PlayersPage() {
   const NUMERIC_SORT_KEYS = new Set<SortKey>(["totalSessions", "totalGames", "totalPlayMinutes", "totalWaitMinutes", "waitPlayRatio", "venues", "stickers", "checkInCount"]);
 
   const toggleSort = (key: SortKey) => {
+    setPage(1);
     if (sortKey === key) {
       if (sortDir === "desc") setSortDir("asc");
       else { setSortKey(null); setSortDir("desc"); }
@@ -235,52 +236,8 @@ export default function PlayersPage() {
     }
   };
 
-  const sortedPlayers = useMemo(() => {
-    if (!sortKey) return players;
-    const sorted = [...players].sort((a, b) => {
-      let cmp = 0;
-      switch (sortKey) {
-        case "name":
-          cmp = a.name.localeCompare(b.name);
-          break;
-        case "phone":
-          cmp = a.phone.localeCompare(b.phone);
-          break;
-        case "gender":
-          cmp = a.gender.localeCompare(b.gender);
-          break;
-        case "skillLevel":
-          cmp = (SKILL_ORDER[a.skillLevel] ?? 0) - (SKILL_ORDER[b.skillLevel] ?? 0);
-          break;
-        case "totalSessions":
-          cmp = a.totalSessions - b.totalSessions;
-          break;
-        case "totalGames":
-          cmp = a.totalGames - b.totalGames;
-          break;
-        case "totalPlayMinutes":
-          cmp = a.totalPlayMinutes - b.totalPlayMinutes;
-          break;
-        case "totalWaitMinutes":
-          cmp = a.totalWaitMinutes - b.totalWaitMinutes;
-          break;
-        case "waitPlayRatio":
-          cmp = a.waitPlayRatio - b.waitPlayRatio;
-          break;
-        case "venues":
-          cmp = a.venues.length - b.venues.length;
-          break;
-        case "stickers":
-          cmp = (a.hasStickers ? 1 : 0) - (b.hasStickers ? 1 : 0);
-          break;
-        case "checkInCount":
-          cmp = (a.checkInCount ?? 0) - (b.checkInCount ?? 0);
-          break;
-      }
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-    return sorted;
-  }, [players, sortKey, sortDir]);
+  // Sorting is now done server-side — players arrives pre-sorted from the API
+  const sortedPlayers = players;
 
   const fetchPlayers = useCallback(async () => {
     setLoading(true);
@@ -296,6 +253,10 @@ export default function PlayersPage() {
         params.set("face", "no_face");
       }
       params.set("page", String(page));
+      if (sortKey) {
+        params.set("sortKey", sortKey);
+        params.set("sortDir", sortDir);
+      }
 
       const data = await api.get<{ players: PlayerRecord[]; total: number; stats: PlayerStats; filterCounts?: { all: number; male: number; female: number; no_face: number } }>(
         `/api/admin/players?${params.toString()}`
@@ -309,7 +270,7 @@ export default function PlayersPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, venueFilter, skillFilter, statusFilter, quickFilter, page]);
+  }, [search, venueFilter, skillFilter, statusFilter, quickFilter, page, sortKey, sortDir]);
 
   useEffect(() => {
     api.get<Venue[]>("/api/venues").then(setVenues).catch(console.error);
@@ -641,7 +602,7 @@ export default function PlayersPage() {
               <SortableHeader label="W/P" sortKey="waitPlayRatio" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
               <SortableHeader label="Venues" sortKey="venues" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
               <SortableHeader label="Session C" sortKey="checkInCount" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
-              <th className="px-2.5 py-2.5 w-8"></th>
+              <th className="px-2.5 py-2.5 w-16"></th>
             </tr>
           </thead>
           <tbody>
@@ -653,7 +614,7 @@ export default function PlayersPage() {
                       avatarPhotoPath={p.avatarPhotoPath}
                       facePhotoPath={p.facePhotoPath}
                       avatar={p.avatar}
-                      sizeClass="h-7 w-7"
+                      sizeClass="h-14 w-14"
                       textFallbackClassName="text-sm"
                     />
                     <span className="font-medium truncate max-w-[120px]">{p.name}</span>
