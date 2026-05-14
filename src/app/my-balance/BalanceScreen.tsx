@@ -229,26 +229,8 @@ function StickerShopSection({
         </span>
       </div>
 
-      {/* Stickers — horizontal row when paid, 2x2 grid otherwise */}
-      {shopState === "success" ? (
-        <div className="portrait-grid" style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4 }}>
-          {Array.from({ length: 4 }).map((_, i) => {
-            const url = stickerData.stickers[i];
-            return (
-              <div
-                key={i}
-                onClick={() => url && setPreviewIndex(i)}
-                style={{ flex: "0 0 calc(25% - 6px)", minWidth: 72, aspectRatio: "1", borderRadius: 12, overflow: "hidden", cursor: url ? "pointer" : "default", position: "relative", background: "transparent" }}
-              >
-                {url && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={url} alt={`Sticker ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-                )}
-              </div>
-            );
-          })}
-        </div>
-      ) : (
+      {/* Stickers — 2x2 grid (only shown before paid; after paid the bigger iOS/Android sections below take over) */}
+      {shopState !== "success" && (
         <div style={{ background: "#1a1a1a", borderRadius: 16, padding: 16 }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {Array.from({ length: 4 }).map((_, i) => {

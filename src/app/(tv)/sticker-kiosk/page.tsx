@@ -613,15 +613,22 @@ function IdleScreen({
     showPreview(url, STRINGS[lang].funPhrases);
   }, [showPreview, lang]);
 
-  // Attract mode: every 45s auto-show a random sticker fullscreen
+  // Attract mode: show a random sticker fullscreen at a random interval (5–15s)
   useEffect(() => {
-    const interval = setInterval(() => {
-      const allStickers = [...femaleStickers, ...maleStickers, ...recentStickers, ...recentFemaleStickers, ...recentMaleStickers].filter(Boolean);
-      if (allStickers.length === 0) return;
-      const url = allStickers[Math.floor(Math.random() * allStickers.length)];
-      showPreview(url, STRINGS[lang].funPhrases);
-    }, 45000);
-    return () => clearInterval(interval);
+    let timer: ReturnType<typeof setTimeout>;
+    function scheduleNext() {
+      const delay = (5 + Math.random() * 10) * 1000; // 5000–15000 ms
+      timer = setTimeout(() => {
+        const allStickers = [...femaleStickers, ...maleStickers, ...recentStickers, ...recentFemaleStickers, ...recentMaleStickers].filter(Boolean);
+        if (allStickers.length > 0) {
+          const url = allStickers[Math.floor(Math.random() * allStickers.length)];
+          showPreview(url, STRINGS[lang].funPhrases);
+        }
+        scheduleNext();
+      }, delay);
+    }
+    scheduleNext();
+    return () => clearTimeout(timer);
   }, [femaleStickers, maleStickers, recentStickers, recentFemaleStickers, recentMaleStickers, showPreview, lang]);
 
   // Animated title rotator
