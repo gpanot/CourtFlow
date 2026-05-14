@@ -160,7 +160,7 @@ function StickerShopSection({
 
   return (
     <div style={{ marginTop: 28 }}>
-      {/* Portrait tablet layout styles */}
+      {/* Portrait tablet layout styles — tablet only (min-width: 768px) */}
       <style>{`
         @media (orientation: portrait) and (min-width: 768px) {
           .sticker-shop-portrait {
@@ -215,6 +215,24 @@ function StickerShopSection({
             min-height: 7vh !important;
           }
         }
+
+        /* Phone: cap the unpaid 2x2 preview grid so content below stays visible */
+        @media (max-width: 767px) {
+          .sticker-preview-grid {
+            max-height: 44vw !important;
+          }
+          .sticker-preview-grid > div {
+            max-height: 44vw !important;
+          }
+          /* iOS paid stickers: cap height so instructions stay on screen */
+          .ios-sticker-grid {
+            max-height: 48vw !important;
+          }
+          .ios-sticker-grid > div {
+            min-height: unset !important;
+            aspect-ratio: 1 !important;
+          }
+        }
       `}</style>
 
       {/* Section header */}
@@ -232,7 +250,7 @@ function StickerShopSection({
       {/* Stickers — 2x2 grid (only shown before paid; after paid the bigger iOS/Android sections below take over) */}
       {shopState !== "success" && (
         <div style={{ background: "#1a1a1a", borderRadius: 16, padding: 16 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+          <div className="sticker-preview-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {Array.from({ length: 4 }).map((_, i) => {
               const url = stickerData.stickers[i];
               return (
@@ -269,20 +287,7 @@ function StickerShopSection({
               <p style={{ fontSize: 18, fontWeight: 600, color: "#ffffff", marginBottom: 12, textAlign: "center" }}>
                 {isVi ? "Lưu sticker của bạn" : "Save your stickers"}
               </p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 20 }}>
-                {stickerData.stickers.slice(0, 4).map((url, i) => (
-                  <div
-                    key={i}
-                    style={{ minHeight: 160, borderRadius: 12, overflow: "hidden", background: "repeating-conic-gradient(#2a2a2a 0% 25%, #1a1a1a 0% 50%) 0 0 / 16px 16px" }}
-                  >
-                    {url && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={url} alt={`Sticker ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
-                    )}
-                  </div>
-                ))}
-              </div>
-              {/* Numbered steps */}
+              {/* Numbered steps — above the stickers */}
               {[
                 {
                   en: "Long press each sticker → Save to Photos",
@@ -302,6 +307,19 @@ function StickerShopSection({
                   </span>
                 </div>
               ))}
+              <div className="ios-sticker-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
+                {stickerData.stickers.slice(0, 4).map((url, i) => (
+                  <div
+                    key={i}
+                    style={{ minHeight: 160, borderRadius: 12, overflow: "hidden", background: "repeating-conic-gradient(#2a2a2a 0% 25%, #1a1a1a 0% 50%) 0 0 / 16px 16px" }}
+                  >
+                    {url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={url} alt={`Sticker ${i + 1}`} style={{ width: "100%", height: "100%", objectFit: "contain", display: "block" }} />
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           ) : (
             /* Android / desktop: download button + how-to accordion */

@@ -102,7 +102,7 @@ interface StickerStats {
 // ---------------------------------------------------------------------------
 interface Purchase {
   id: string;
-  sepayId: number;
+  payosOrderCode: string | null;
   paymentCode: string;
   transferAmount: number;
   content: string;
@@ -1120,7 +1120,7 @@ function StickerPurchasesTab({ token }: { token: string }) {
                   <th className="px-3 py-2.5 text-left text-[11px] font-medium text-neutral-500">Player</th>
                   <th className="px-3 py-2.5 text-left text-[11px] font-medium text-neutral-500">Amount</th>
                   <th className="px-3 py-2.5 text-left text-[11px] font-medium text-neutral-500 hidden sm:table-cell">Payment Code</th>
-                  <th className="px-3 py-2.5 text-left text-[11px] font-medium text-neutral-500 hidden md:table-cell">SePay ID</th>
+                  <th className="px-3 py-2.5 text-left text-[11px] font-medium text-neutral-500 hidden md:table-cell">Order Code</th>
                   <th className="px-3 py-2.5 text-right text-[11px] font-medium text-neutral-500">Action</th>
                 </tr>
               </thead>
@@ -1143,7 +1143,7 @@ function StickerPurchasesTab({ token }: { token: string }) {
                       <code className="text-[10px] text-neutral-600 font-mono">{p.paymentCode}</code>
                     </td>
                     <td className="px-3 py-2.5 hidden md:table-cell">
-                      <code className="text-[10px] text-neutral-600 font-mono">{p.sepayId}</code>
+                      <code className="text-[10px] text-neutral-600 font-mono">{p.payosOrderCode ?? p.paymentCode}</code>
                     </td>
                     <td className="px-3 py-2.5 text-right">
                       {confirmDeleteId === p.id ? (

@@ -23,19 +23,30 @@ export async function GET(request: NextRequest) {
       prisma.stickerPaymentLog.count(),
     ]);
 
-    // Resolve player info via paymentCode → PlayerStickerPack → Player
-    const codes = logs.map((l) => l.paymentCode);
-    const packs = await prisma.playerStickerPack.findMany({
-      where: { paymentCode: { in: codes } },
-      select: {
-        paymentCode: true,
-        player: { select: { id: true, name: true, phone: true } },
-      },
-    });
-    const packByCode = Object.fromEntries(packs.map((p) => [p.paymentCode!, p.player]));
+    // Resolve player: PayOS logs match via payosOrderCode; legacy SePay logs via paymentCode
+    const orderCodes = logs.map((l) => l.payosOrderCode).filter(Boolean) as string[];
+    const paymentCodes = logs.map((l) => l.paymentCode).filter(Boolean) as string[];
+
+    const [packsByOrder, packsByCode] = await Promise.all([
+      orderCodes.length > 0
+        ? prisma.playerStickerPack.findMany({
+            where: { payosOrderCode: { in: orderCodes } },
+            select: { payosOrderCode: true, player: { select: { id: true, name: true, phone: true } } },
+          })
+        : Promise.resolve([]),
+      paymentCodes.length > 0
+        ? prisma.playerStickerPack.findMany({
+            where: { paymentCode: { in: paymentCodes } },
+            select: { paymentCode: true, player: { select: { id: true, name: true, phone: true } } },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const byOrderCode = Object.fromEntries(packsByOrder.map((p) => [p.payosOrderCode!, p.player]));
+    const byPaymentCode = Object.fromEntries(packsByCode.map((p) => [p.paymentCode!, p.player]));
 
     const purchases = logs.map((l) => {
-      const player = packByCode[l.paymentCode] ?? null;
+      const player = byOrderCode[l.payosOrderCode] ?? byPaymentCode[l.paymentCode] ?? null;
       return {
         id: l.id,
         payosOrderCode: l.payosOrderCode,
