@@ -1,8 +1,6 @@
-import { NextRequest } from "next/server";
-import { after } from "next/server";
+import { NextRequest, after } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
-import { enqueueStickerJobIfNeeded } from "@/lib/sticker-queue";
 import { processStickerQueue } from "@/lib/sticker-job-processor";
 
 export const dynamic = "force-dynamic";
@@ -45,8 +43,26 @@ export async function POST(request: NextRequest) {
     return error("Player not found", 404);
   }
 
-  await enqueueStickerJobIfNeeded(player.id, player.gender);
-  console.log(`[kiosk/enqueue-sticker] job enqueued for player ${playerId} (${player.name}, gender: ${player.gender})`);
+  // Direct enqueue — bypasses the female-only guard in enqueueStickerJobIfNeeded
+  // because the player explicitly tapped "I want to buy", regardless of gender.
+  const [existingPack, existingJob] = await Promise.all([
+    prisma.playerStickerPack.findFirst({ where: { playerId: player.id } }),
+    prisma.stickerJobQueue.findFirst({
+      where: { playerId: player.id, status: { in: ["pending", "processing"] } },
+    }),
+  ]);
+
+  if (existingPack) {
+    console.log(`[kiosk/enqueue-sticker] player ${player.name} already has a sticker pack — skipping`);
+    return json({ queued: false, reason: "already_has_pack" });
+  }
+
+  if (!existingJob) {
+    await prisma.stickerJobQueue.create({ data: { playerId: player.id } });
+    console.log(`[kiosk/enqueue-sticker] job created for player ${playerId} (${player.name}, gender: ${player.gender})`);
+  } else {
+    console.log(`[kiosk/enqueue-sticker] job already pending/processing for player ${player.name} — skipping duplicate`);
+  }
 
   // Fire the worker AFTER the response is sent — non-blocking for the kiosk
   after(async () => {
