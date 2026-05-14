@@ -998,12 +998,16 @@ model StickerSession {
 }
 
 model KioskSettings {
-  id            String   @id @default("global")
-  stickerPrice  Int      @default(30000) @map("sticker_price")
-  bankBin       String   @default("") @map("bank_bin")
-  bankAccount   String   @default("") @map("bank_account")
-  bankOwnerName String   @default("") @map("bank_owner_name")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  id              String   @id @default("global")
+  stickerPrice    Int      @default(30000) @map("sticker_price")
+  bankBin         String   @default("") @map("bank_bin")
+  bankAccount     String   @default("") @map("bank_account")
+  bankOwnerName   String   @default("") @map("bank_owner_name")
+  /// Chroma key tolerance for background removal (default 65, original default 40)
+  chromaTolerance Int      @default(65) @map("chroma_tolerance")
+  /// Gaussian feather radius for chroma key edges (default 0.8, original default 1.5)
+  featherRadius   Float    @default(0.8) @map("feather_radius")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   @@map("kiosk_settings")
 }

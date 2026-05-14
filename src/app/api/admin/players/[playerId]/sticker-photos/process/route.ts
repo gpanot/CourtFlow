@@ -72,6 +72,11 @@ export async function POST(
     // ── Step 3: remove background via FastAPI ─────────────────────────────
     const fastapiUrl = (process.env["FASTAPI_URL"] ?? "http://localhost:8000").replace(/\/$/, "");
     console.log("[split-stickers] FASTAPI_URL:", fastapiUrl);
+    type KioskSettingsExtended = { chromaTolerance?: number; featherRadius?: number };
+    const kioskSettings = await prisma.kioskSettings.findUnique({ where: { id: "global" } }) as KioskSettingsExtended | null;
+    const chromaTolerance = kioskSettings?.chromaTolerance ?? 65;
+    const featherRadius = kioskSettings?.featherRadius ?? 0.8;
+    console.log(`[split-stickers] chroma settings — tolerance: ${chromaTolerance}, featherRadius: ${featherRadius}`);
     const stickerUrls: Record<string, string> = {};
     // Each split run gets its own timestamped subfolder so packs are never overwritten
     const ts = Date.now();
@@ -86,7 +91,7 @@ export async function POST(
       const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image_base64: base64, aggressiveness: "chroma", chroma_tolerance: 40, feather_radius: 1.5 }),
+        body: JSON.stringify({ image_base64: base64, aggressiveness: "chroma", chroma_tolerance: chromaTolerance, feather_radius: featherRadius }),
       });
 
       console.log(`[split-stickers] sticker ${index}: response status ${res.status} ${res.statusText}`);

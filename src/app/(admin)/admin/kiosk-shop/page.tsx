@@ -19,6 +19,8 @@ import {
   Receipt,
   ChevronLeft,
   ChevronRight,
+  Settings,
+  RotateCcw,
 } from "lucide-react";
 import { PlayerDetailStickersTab } from "@/components/admin/player-detail-stickers-tab";
 import dynamicImport from "next/dynamic";
@@ -77,7 +79,7 @@ interface DraftTemplate {
   femalePrompt: string;
 }
 
-type ActiveTab = "stickers" | "explorer" | "stats" | "purchases";
+type ActiveTab = "stickers" | "explorer" | "stats" | "purchases" | "settings";
 
 // ---------------------------------------------------------------------------
 // Stats types
@@ -1211,6 +1213,153 @@ function StickerPurchasesTab({ token }: { token: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// Chroma Settings Tab
+// ---------------------------------------------------------------------------
+
+const CHROMA_DEFAULTS = { chromaTolerance: 40, featherRadius: 1.5 };
+const CHROMA_RECOMMENDED = { chromaTolerance: 65, featherRadius: 0.8 };
+
+function ChromaSettingsSection({ token }: { token: string }) {
+  const [tolerance, setTolerance] = useState<number | "">(65);
+  const [feather, setFeather] = useState<number | "">(0.8);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/admin/kiosk-settings", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((d: { chromaTolerance?: number; featherRadius?: number }) => {
+        if (d.chromaTolerance !== undefined) setTolerance(d.chromaTolerance);
+        if (d.featherRadius !== undefined) setFeather(d.featherRadius);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [token]);
+
+  const handleSave = async () => {
+    if (tolerance === "" || feather === "") return;
+    setSaving(true);
+    setSaved(false);
+    try {
+      await fetch("/api/admin/kiosk-settings", {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ chromaTolerance: Number(tolerance), featherRadius: Number(feather) }),
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const applyPreset = (preset: { chromaTolerance: number; featherRadius: number }) => {
+    setTolerance(preset.chromaTolerance);
+    setFeather(preset.featherRadius);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-neutral-500 text-sm py-8">
+        <Loader2 className="h-4 w-4 animate-spin" /> Loading settings…
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 max-w-lg">
+      <div>
+        <h2 className="text-base font-semibold text-white mb-1">Background Removal — Chroma Key</h2>
+        <p className="text-xs text-neutral-500">
+          Controls how aggressively the green (#00FF00) background is removed when splitting stickers.
+          Applied to both the auto-queue processor and the manual split in the player admin.
+        </p>
+      </div>
+
+      {/* Presets */}
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => applyPreset(CHROMA_RECOMMENDED)}
+          className="flex items-center gap-1.5 rounded-lg border border-green-700 bg-green-950/40 px-3 py-1.5 text-xs font-medium text-green-400 hover:bg-green-900/40 transition-colors"
+        >
+          <Check className="h-3 w-3" /> Current recommended (65 / 0.8)
+        </button>
+        <button
+          type="button"
+          onClick={() => applyPreset(CHROMA_DEFAULTS)}
+          className="flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800/40 px-3 py-1.5 text-xs font-medium text-neutral-400 hover:bg-neutral-700/40 transition-colors"
+        >
+          <RotateCcw className="h-3 w-3" /> Original defaults (40 / 1.5)
+        </button>
+      </div>
+
+      {/* Fields */}
+      <div className="grid gap-5">
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium text-neutral-300">
+            Tolerance <span className="text-neutral-500 font-normal text-xs">(integer, 1–255)</span>
+          </label>
+          <p className="text-xs text-neutral-500">
+            How far from pure green a pixel can be and still get removed.
+            <br />
+            <span className="text-neutral-400">Lower = stricter (less removal). Higher = more removal.</span>
+            <br />
+            <span className="text-neutral-600">Original default: 40 · Current recommended: 65</span>
+          </p>
+          <input
+            type="number"
+            min={1}
+            max={255}
+            step={1}
+            value={tolerance}
+            onChange={(e) => setTolerance(e.target.value === "" ? "" : Number(e.target.value))}
+            className="w-32 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium text-neutral-300">
+            Feather Radius <span className="text-neutral-500 font-normal text-xs">(decimal, 0–5)</span>
+          </label>
+          <p className="text-xs text-neutral-500">
+            Gaussian blur sigma applied to the mask edge to soften the cutout.
+            <br />
+            <span className="text-neutral-400">Lower = sharper edge, less bleed into adjacent pixels.</span>
+            <br />
+            <span className="text-neutral-600">Original default: 1.5 · Current recommended: 0.8</span>
+          </p>
+          <input
+            type="number"
+            min={0}
+            max={5}
+            step={0.1}
+            value={feather}
+            onChange={(e) => setFeather(e.target.value === "" ? "" : Number(e.target.value))}
+            className="w-32 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
+          />
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={handleSave}
+        disabled={saving || tolerance === "" || feather === ""}
+        className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      >
+        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : saved ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
+        {saving ? "Saving…" : saved ? "Saved!" : "Save settings"}
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Page
 // ---------------------------------------------------------------------------
 
@@ -1253,6 +1402,12 @@ export default function KioskShopPage() {
             Purchases
           </span>
         </button>
+        <button type="button" className={tabCls("settings")} onClick={() => setActiveTab("settings")}>
+          <span className="flex items-center gap-1.5">
+            <Settings className="h-3.5 w-3.5" />
+            Settings
+          </span>
+        </button>
       </div>
 
       {activeTab === "stickers" && token && (
@@ -1276,6 +1431,12 @@ export default function KioskShopPage() {
 
       {activeTab === "purchases" && token && (
         <StickerPurchasesTab token={token} />
+      )}
+
+      {activeTab === "settings" && token && (
+        <div className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-5 max-w-2xl">
+          <ChromaSettingsSection token={token} />
+        </div>
       )}
     </div>
   );

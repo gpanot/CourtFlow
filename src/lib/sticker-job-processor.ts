@@ -176,6 +176,11 @@ export async function processStickerQueue(): Promise<ProcessResult> {
     const fastapiUrl = (process.env["FASTAPI_URL"] ?? "http://localhost:8000").replace(/\/$/, "");
     const stickerUrls: Record<string, string> = {};
 
+    // Fetch current chroma settings from DB (falls back to current defaults if not set)
+    const kioskSettings = await prisma.kioskSettings.findUnique({ where: { id: "global" } });
+    const chromaTolerance = kioskSettings?.chromaTolerance ?? 65;
+    const featherRadius = kioskSettings?.featherRadius ?? 0.8;
+
     for (const q of QUADRANTS) {
       const cropLeft = q.left === 0 ? 0 : quadW;
       const cropTop = q.top === 0 ? 0 : quadH;
@@ -188,7 +193,7 @@ export async function processStickerQueue(): Promise<ProcessResult> {
       const res = await fetch(`${fastapiUrl}/internal/remove-background`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image_base64: base64, aggressiveness: "chroma", chroma_tolerance: 40, feather_radius: 1.5 }),
+        body: JSON.stringify({ image_base64: base64, aggressiveness: "chroma", chroma_tolerance: chromaTolerance, feather_radius: featherRadius }),
       });
 
       if (!res.ok) {
