@@ -927,7 +927,7 @@ function ScanningScreen({
     onMaxAttemptsReached: useCallback(() => {
       onNotFound({ hasStickerPack: true });
     }, [onNotFound]),
-    overrides: { maxFaceAttempts: 2, retryIdleMs: 2000 },
+    overrides: { maxFaceAttempts: 2, retryIdleMs: 500, cameraWarmupMs: 800 },
   });
 
   const viewfinderSize = "min(70vw, 380px)";
