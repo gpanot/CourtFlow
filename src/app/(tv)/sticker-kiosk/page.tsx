@@ -153,6 +153,7 @@ interface NotFoundReason {
   hasStickerPack: boolean;
   playerId?: string;
   gender?: string;
+  playerName?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -899,7 +900,7 @@ function ScanningScreen({
 
         if (!data.hasStickerPack) {
           console.debug("[StickerKiosk] matched but no sticker pack for", data.displayName);
-          onNotFound({ hasStickerPack: false, playerId: data.playerId, gender: data.gender });
+          onNotFound({ hasStickerPack: false, playerId: data.playerId, gender: data.gender, playerName: data.displayName });
           return true;
         }
 
@@ -1451,7 +1452,13 @@ function NotFoundScreen({
         <span style={{ fontSize: 64, lineHeight: 1 }}>😅</span>
         <p style={{ fontSize: 22, fontWeight: 600, color: c.text, margin: 0 }}>{s.notFoundTitle}</p>
         <p style={{ fontSize: 15, color: c.muted, maxWidth: 300, margin: 0 }}>
-          {reason.hasStickerPack ? s.notFoundNoFace : s.notFoundNoPack}
+          {reason.hasStickerPack
+            ? s.notFoundNoFace
+            : reason.playerName
+              ? (lang === "vi"
+                ? `Đừng lo ${reason.playerName.split(" ").pop()}, chúng tôi đang xử lý nhé!`
+                : `Don't worry ${reason.playerName.split(" ").pop()}, we're on it!`)
+              : s.notFoundNoPack}
         </p>
 
         {showProcessing && (
