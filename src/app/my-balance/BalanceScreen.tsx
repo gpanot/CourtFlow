@@ -224,14 +224,6 @@ function StickerShopSection({
           .sticker-preview-grid > div {
             max-height: 44vw !important;
           }
-          /* iOS paid stickers: cap height so instructions stay on screen */
-          .ios-sticker-grid {
-            max-height: 48vw !important;
-          }
-          .ios-sticker-grid > div {
-            min-height: unset !important;
-            aspect-ratio: 1 !important;
-          }
         }
       `}</style>
 
@@ -311,7 +303,7 @@ function StickerShopSection({
                 {stickerData.stickers.slice(0, 4).map((url, i) => (
                   <div
                     key={i}
-                    style={{ minHeight: 160, borderRadius: 12, overflow: "hidden", background: "repeating-conic-gradient(#2a2a2a 0% 25%, #1a1a1a 0% 50%) 0 0 / 16px 16px" }}
+                    style={{ aspectRatio: "1", borderRadius: 12, overflow: "hidden", background: "repeating-conic-gradient(#2a2a2a 0% 25%, #1a1a1a 0% 50%) 0 0 / 16px 16px" }}
                   >
                     {url && (
                       // eslint-disable-next-line @next/next/no-img-element
