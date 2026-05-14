@@ -20,15 +20,15 @@ class ImageRequest(BaseModel):
     aggressiveness: str = "chroma"
     # Chroma key tolerance: how far from pure green a pixel can be and still be removed.
     # Lower = stricter (only pure green removed). Higher = more green shades removed.
-    chroma_tolerance: int = 40
+    chroma_tolerance: int = 65
     # Radius for edge feathering after chroma key (softens the hard cutout edge).
-    feather_radius: float = 1.5
+    feather_radius: float = 0.8
 
 
 def remove_chroma_green(
     image_bytes: bytes,
-    tolerance: int = 40,
-    feather_radius: float = 1.5,
+    tolerance: int = 65,
+    feather_radius: float = 0.8,
 ) -> bytes:
     """
     Chroma key removal tuned for pure #00FF00 green backgrounds.
