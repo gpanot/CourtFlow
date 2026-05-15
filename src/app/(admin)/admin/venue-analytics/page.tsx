@@ -7,10 +7,10 @@ import { cn } from "@/lib/cn";
 import {
   Calendar, TrendingUp, Users, DollarSign, Clock, BarChart3,
   Building2, UserCheck, CreditCard, ChevronDown, GraduationCap,
-  UserCircle, Download, Activity,
+  UserCircle, Download, Activity, Repeat, XCircle, Layers, ArrowUpDown,
 } from "lucide-react";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend,
 } from "recharts";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +28,22 @@ interface AnalyticsData {
     bookingsByDate: Record<string, number>;
     perCourt: { label: string; bookings: number; hours: number }[];
     peakHours: Record<number, Record<number, number>>;
+    repeatBookerPct: number;
+    uniqueBookers: number;
+    repeatBookers: number;
+    cancellationPct: number;
+    revenueByDow: Record<number, number>;
+    openPlayHours: number;
+    openPlaySessions: number;
+    coachingCourtHours: number;
+    combinedUtilizationPct: number;
+    combinedBookedHours: number;
+    mom: {
+      prevMonthLabel: string;
+      currentMonthLabel: string;
+      prev: { bookings: number; cancelled: number; cancelPct: number; revenue: number; hours: number; utilPct: number; combinedUtilPct: number };
+      current: { bookings: number; revenue: number; hours: number; utilPct: number; cancelPct: number };
+    };
   };
   memberships: {
     activeCount: number;
@@ -65,6 +81,18 @@ interface AnalyticsData {
     genderBreakdown: Record<string, number>;
     registrationsByDate: Record<string, number>;
     topBookers: { name: string; bookings: number; lessons: number }[];
+  };
+  monthProjection: {
+    monthLabel: string;
+    daysInMonth: number;
+    todayDate: number;
+    days: { day: number; date: string; revenue: number; projected: number; hours: number; projectedHours: number; isPast: boolean }[];
+    actualRevenue: number;
+    projectedRevenue: number;
+    actualHours: number;
+    projectedHours: number;
+    avgDailyRevenue: number;
+    avgDailyHours: number;
   };
   overview: {
     totalPlayers: number;
@@ -115,6 +143,21 @@ function downloadCSV(filename: string, headers: string[], rows: string[][]) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function MonthTooltip({ active, payload, label }: { active?: boolean; payload?: { dataKey: string; value: number; fill: string }[]; label?: string }) {
+  if (!active || !payload?.length) return null;
+  const actual = payload.find((p) => p.dataKey === "revenue");
+  const projected = payload.find((p) => p.dataKey === "projected");
+  const total = (actual?.value || 0) + (projected?.value || 0);
+  if (total === 0) return null;
+  return (
+    <div className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs shadow-lg">
+      <p className="text-neutral-400 mb-1">Day {label}</p>
+      {(actual?.value || 0) > 0 && <p className="text-emerald-400">Actual: {fmtPrice(actual!.value)}</p>}
+      {(projected?.value || 0) > 0 && <p className="text-purple-400">Projected: {fmtPrice(projected!.value)}</p>}
+    </div>
+  );
 }
 
 function ChartTooltip({ active, payload, label, suffix }: { active?: boolean; payload?: { value: number }[]; label?: string; suffix?: string }) {
@@ -316,6 +359,24 @@ export default function VenueAnalyticsPage() {
     return max;
   }, [data]);
 
+  const dowChartData = useMemo(() => {
+    if (!data) return [];
+    const labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    return labels.map((name, i) => ({ name, revenue: data.courtBookings.revenueByDow[i] || 0 }));
+  }, [data]);
+
+  const momData = useMemo(() => {
+    if (!data) return null;
+    const m = data.courtBookings.mom;
+    return [
+      { metric: "Bookings", prev: m.prev.bookings, current: m.current.bookings },
+      { metric: "Revenue", prev: m.prev.revenue, current: m.current.revenue, isCents: true },
+      { metric: "Hours", prev: m.prev.hours, current: m.current.hours },
+      { metric: "Utilization", prev: m.prev.utilPct, current: m.current.utilPct, isPct: true },
+      { metric: "Cancel %", prev: m.prev.cancelPct, current: m.current.cancelPct, isPct: true },
+    ];
+  }, [data]);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -364,12 +425,39 @@ export default function VenueAnalyticsPage() {
 
           {/* ===== COURT BOOKINGS ===== */}
           <Section title="Court Bookings" icon={Calendar} onExport={exportCourtBookings}>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6 md:gap-4">
               <StatCard icon={BarChart3} label="Total Bookings" value={String(data.courtBookings.totalBookings)} sub={data.courtBookings.cancelledBookings > 0 ? `${data.courtBookings.cancelledBookings} cancelled` : undefined} color="text-blue-400" />
               <StatCard icon={TrendingUp} label="Utilization" value={`${data.courtBookings.utilizationPct}%`} sub={`${data.courtBookings.totalBookedHours}h / ${data.courtBookings.totalAvailableHours}h`} color="text-emerald-400" />
               <StatCard icon={DollarSign} label="Booking Revenue" value={fmtPrice(data.courtBookings.bookingRevenue)} color="text-green-400" />
               <StatCard icon={Clock} label="Hours Booked" value={String(data.courtBookings.totalBookedHours)} color="text-indigo-400" />
+              <StatCard icon={TrendingUp} label={`Projected ${data.monthProjection.monthLabel}`} value={fmtPrice(data.monthProjection.projectedRevenue)} sub={`${fmtPrice(data.monthProjection.actualRevenue)} actual so far`} color="text-purple-400" />
+              <StatCard icon={Clock} label="Projected Hours" value={String(data.monthProjection.projectedHours)} sub={`${data.monthProjection.actualHours}h actual so far`} color="text-pink-400" />
             </div>
+
+            {/* Month revenue chart with projections */}
+            <div className="mt-4">
+              <ChartCard title={`${data.monthProjection.monthLabel} Revenue — Actual vs Projected`}>
+                <ResponsiveContainer width="100%" height={220}>
+                  <BarChart data={data.monthProjection.days} barGap={0}>
+                    <XAxis dataKey="day" tick={{ fill: "#737373", fontSize: 9 }} tickLine={false} axisLine={false}
+                      interval={data.monthProjection.daysInMonth > 20 ? 1 : 0}
+                      tickFormatter={(d: number) => d % 2 === 1 || data.monthProjection.daysInMonth <= 20 ? String(d) : ""} />
+                    <YAxis tick={{ fill: "#737373", fontSize: 10 }} tickLine={false} axisLine={false} width={40}
+                      tickFormatter={(v: number) => v >= 100000 ? `${Math.round(v / 100000)}k` : v >= 1000 ? `${Math.round(v / 1000)}` : String(v)} />
+                    <Tooltip content={<MonthTooltip />} cursor={{ fill: "rgba(139,92,246,0.06)" }} />
+                    <Legend
+                      formatter={(value: string) => <span className="text-[11px] text-neutral-400">{value === "revenue" ? "Actual" : "Projected"}</span>}
+                      iconType="square"
+                      wrapperStyle={{ paddingTop: 8 }}
+                    />
+                    <Bar dataKey="revenue" stackId="rev" fill="#10b981" radius={[0, 0, 0, 0]} maxBarSize={16} name="revenue" />
+                    <Bar dataKey="projected" stackId="rev" fill="#8b5cf6" opacity={0.5} radius={[2, 2, 0, 0]} maxBarSize={16} name="projected" />
+                  </BarChart>
+                </ResponsiveContainer>
+                <p className="text-[10px] text-neutral-500 mt-1">Green = actual revenue · Purple = projected (based on 90-day avg: {fmtPrice(data.monthProjection.avgDailyRevenue)}/day, {data.monthProjection.avgDailyHours}h/day)</p>
+              </ChartCard>
+            </div>
+
             <div className="grid gap-4 md:grid-cols-2 mt-4">
               {bookingChartData.length > 0 && (
                 <ChartCard title="Bookings per Day">
@@ -442,6 +530,71 @@ export default function VenueAnalyticsPage() {
                   <span>More</span>
                 </div>
               </ChartCard>
+            </div>
+
+            {/* Extra KPIs row */}
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4 mt-4">
+              <StatCard icon={Repeat} label="Repeat Booker Rate" value={`${data.courtBookings.repeatBookerPct}%`} sub={`${data.courtBookings.repeatBookers} of ${data.courtBookings.uniqueBookers} bookers`} color="text-cyan-400" />
+              <StatCard icon={XCircle} label="Cancellation Rate" value={`${data.courtBookings.cancellationPct}%`} sub={`${data.courtBookings.cancelledBookings} cancelled`} color="text-red-400" />
+              <StatCard icon={Layers} label="Combined Utilization" value={`${data.courtBookings.combinedUtilizationPct}%`} sub={`${data.courtBookings.combinedBookedHours}h (bookings + coaching)`} color="text-teal-400" />
+              <StatCard icon={Activity} label="Open Play Sessions" value={String(data.courtBookings.openPlaySessions)} sub={`${data.courtBookings.openPlayHours}h total`} color="text-orange-400" />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 mt-4">
+              {/* Revenue by day of week */}
+              <ChartCard title="Revenue by Day of Week">
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={dowChartData}>
+                    <XAxis dataKey="name" tick={{ fill: "#a3a3a3", fontSize: 11 }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fill: "#737373", fontSize: 10 }} tickLine={false} axisLine={false} width={40}
+                      tickFormatter={(v: number) => v >= 100000 ? `${Math.round(v / 100000)}k` : v >= 1000 ? `${Math.round(v / 1000)}` : String(v)} />
+                    <Tooltip content={<ChartTooltip />} cursor={{ fill: "rgba(6,182,212,0.08)" }} />
+                    <Bar dataKey="revenue" radius={[4, 4, 0, 0]} maxBarSize={48}>
+                      {dowChartData.map((_, i) => <Cell key={i} fill={["#ef4444", "#3b82f6", "#3b82f6", "#3b82f6", "#3b82f6", "#3b82f6", "#ef4444"][i]} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                <p className="text-[10px] text-neutral-500 mt-1">Revenue in cents · Red = weekends</p>
+              </ChartCard>
+
+              {/* Month-over-month comparison */}
+              {momData && (
+                <ChartCard title={`Month-over-Month: ${data.courtBookings.mom.prevMonthLabel} vs ${data.courtBookings.mom.currentMonthLabel}`}>
+                  <div className="space-y-2">
+                    {momData.map((row) => {
+                      const prev = row.isCents ? fmtPrice(row.prev) : row.isPct ? `${row.prev}%` : String(row.prev);
+                      const curr = row.isCents ? fmtPrice(row.current) : row.isPct ? `${row.current}%` : String(row.current);
+                      const diff = row.current - row.prev;
+                      const diffPct = row.prev > 0 ? Math.round((diff / row.prev) * 100) : 0;
+                      const isUp = diff > 0;
+                      const isCancelMetric = row.metric === "Cancel %";
+                      const changeColor = isCancelMetric
+                        ? (isUp ? "text-red-400" : "text-green-400")
+                        : (isUp ? "text-green-400" : diff < 0 ? "text-red-400" : "text-neutral-500");
+                      return (
+                        <div key={row.metric} className="flex items-center justify-between rounded-lg bg-neutral-800/50 px-3 py-2">
+                          <p className="text-sm font-medium text-neutral-300">{row.metric}</p>
+                          <div className="flex items-center gap-3">
+                            <div className="text-right">
+                              <p className="text-[10px] text-neutral-500">{data.courtBookings.mom.prevMonthLabel}</p>
+                              <p className="text-sm tabular-nums text-neutral-400">{prev}</p>
+                            </div>
+                            <ArrowUpDown className="h-3 w-3 text-neutral-600 shrink-0" />
+                            <div className="text-right">
+                              <p className="text-[10px] text-neutral-500">{data.courtBookings.mom.currentMonthLabel}</p>
+                              <p className="text-sm tabular-nums text-white">{curr}</p>
+                            </div>
+                            <span className={cn("text-xs font-medium tabular-nums min-w-[48px] text-right", changeColor)}>
+                              {diff === 0 ? "—" : `${isUp ? "+" : ""}${diffPct}%`}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[10px] text-neutral-500 mt-2">Current month figures are partial (through today)</p>
+                </ChartCard>
+              )}
             </div>
           </Section>
 
@@ -638,7 +791,7 @@ export default function VenueAnalyticsPage() {
                 <ChartCard title="Top Bookers (Period)">
                   <div className="max-h-[200px] overflow-y-auto space-y-1.5">
                     {data.players.topBookers.map((p, i) => (
-                      <div key={p.name} className="flex items-center justify-between rounded-lg bg-neutral-800/50 px-3 py-2">
+                      <div key={`${p.name}-${i}`} className="flex items-center justify-between rounded-lg bg-neutral-800/50 px-3 py-2">
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] font-bold text-neutral-500 w-4">#{i + 1}</span>
                           <p className="text-sm font-medium text-white">{p.name}</p>

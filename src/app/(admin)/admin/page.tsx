@@ -28,6 +28,7 @@ interface UpcomingBooking {
   id: string;
   playerName: string;
   playerAvatar: string;
+  playerPhoto: string | null;
   courtLabel: string;
   venueName: string;
   startTime: string;
@@ -39,6 +40,7 @@ interface RecentBooking {
   id: string;
   playerName: string;
   playerAvatar: string;
+  playerPhoto: string | null;
   courtLabel: string;
   venueName: string;
   date: string;
@@ -105,6 +107,21 @@ function fmtTime(iso: string): string {
 
 function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+function PlayerAvatarImg({ photo, avatar, size = "md" }: { photo: string | null; avatar: string; size?: "sm" | "md" }) {
+  const dim = size === "sm" ? "h-6 w-6" : "h-8 w-8";
+  const textSize = size === "sm" ? "text-sm" : "text-lg";
+
+  const imgSrc = photo || (avatar && (avatar.startsWith("/") || avatar.startsWith("http")) ? avatar : null);
+
+  if (imgSrc) {
+    return (
+      <img src={imgSrc} alt="" className={cn(dim, "rounded-full object-cover shrink-0")} />
+    );
+  }
+
+  return <span className={textSize}>{avatar || "🏓"}</span>;
 }
 
 export default function AdminOverview() {
@@ -300,7 +317,7 @@ export default function AdminOverview() {
             ) : (
               data.bookings.upcomingToday.map((b) => (
                 <div key={b.id} className="flex items-center gap-3 px-4 py-2.5">
-                  <span className="text-lg">{b.playerAvatar || "🏓"}</span>
+                  <PlayerAvatarImg photo={b.playerPhoto} avatar={b.playerAvatar} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{b.playerName}</p>
                     <p className="text-xs text-neutral-500">
@@ -456,7 +473,7 @@ export default function AdminOverview() {
                 <tr key={b.id} className="border-b border-neutral-800/50 last:border-0">
                   <td className="px-4 py-2.5">
                     <span className="flex items-center gap-2">
-                      <span className="text-sm">{b.playerAvatar || "🏓"}</span>
+                      <PlayerAvatarImg photo={b.playerPhoto} avatar={b.playerAvatar} size="sm" />
                       <span className="font-medium">{b.playerName}</span>
                     </span>
                   </td>
@@ -495,7 +512,7 @@ export default function AdminOverview() {
             <div key={b.id} className="px-4 py-3">
               <div className="flex items-center justify-between mb-1">
                 <span className="flex items-center gap-2">
-                  <span className="text-sm">{b.playerAvatar || "🏓"}</span>
+                  <PlayerAvatarImg photo={b.playerPhoto} avatar={b.playerAvatar} size="sm" />
                   <span className="text-sm font-medium">{b.playerName}</span>
                 </span>
                 <BookingStatusBadge status={b.status} />

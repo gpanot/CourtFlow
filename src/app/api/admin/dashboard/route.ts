@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
       prisma.booking.findMany({
         where: { ...bookingWhere, date: { gte: todayStart, lte: todayEnd }, startTime: { gt: now }, status: "confirmed" },
         include: {
-          player: { select: { name: true, avatar: true } },
+          player: { select: { name: true, avatar: true, avatarPhotoPath: true, facePhotoPath: true } },
           court: { select: { label: true } },
           venue: { select: { name: true } },
         },
@@ -100,7 +100,7 @@ export async function GET(request: NextRequest) {
       prisma.booking.findMany({
         where: bookingWhere,
         include: {
-          player: { select: { name: true, avatar: true } },
+          player: { select: { name: true, avatar: true, avatarPhotoPath: true, facePhotoPath: true } },
           court: { select: { label: true } },
           venue: { select: { name: true } },
         },
@@ -207,6 +207,7 @@ export async function GET(request: NextRequest) {
           id: b.id,
           playerName: b.player.name,
           playerAvatar: b.player.avatar,
+          playerPhoto: b.player.avatarPhotoPath || b.player.facePhotoPath || null,
           courtLabel: b.court.label,
           venueName: b.venue.name,
           startTime: b.startTime,
@@ -249,6 +250,7 @@ export async function GET(request: NextRequest) {
         id: b.id,
         playerName: b.player.name,
         playerAvatar: b.player.avatar,
+        playerPhoto: b.player.avatarPhotoPath || b.player.facePhotoPath || null,
         courtLabel: b.court.label,
         venueName: b.venue.name,
         date: b.date,

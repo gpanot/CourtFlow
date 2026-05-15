@@ -43,6 +43,7 @@ export async function GET(request: NextRequest) {
         select: {
           id: true,
           courtId: true,
+          playerId: true,
           date: true,
           startTime: true,
           endTime: true,
@@ -101,6 +102,7 @@ export async function GET(request: NextRequest) {
         select: {
           id: true,
           coachId: true,
+          courtId: true,
           date: true,
           startTime: true,
           endTime: true,
@@ -131,6 +133,117 @@ export async function GET(request: NextRequest) {
         },
       }),
     ]);
+
+    // --- MONTH PROJECTION DATA ---
+    const now = new Date();
+    const currentMonthStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
+    const currentMonthEnd = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59));
+    const last90Start = new Date(now);
+    last90Start.setDate(last90Start.getDate() - 90);
+    last90Start.setUTCHours(0, 0, 0, 0);
+
+    // Previous month range for MoM comparison
+    const prevMonthStart = new Date(Date.UTC(now.getFullYear(), now.getMonth() - 1, 1));
+    const prevMonthEnd = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 0, 23, 59, 59));
+
+    const [monthBookings, last90Bookings, openPlaySessions, prevMonthBookings, prevMonthLessons] = await Promise.all([
+      prisma.booking.findMany({
+        where: {
+          venueId,
+          date: { gte: currentMonthStart, lte: currentMonthEnd },
+          status: { in: ["confirmed", "completed"] },
+        },
+        select: { date: true, priceInCents: true, startTime: true, endTime: true },
+      }),
+      prisma.booking.findMany({
+        where: {
+          venueId,
+          date: { gte: last90Start, lt: currentMonthStart },
+          status: { in: ["confirmed", "completed"] },
+        },
+        select: { date: true, priceInCents: true, startTime: true, endTime: true },
+      }),
+      prisma.session.findMany({
+        where: {
+          venueId,
+          openedAt: { gte: dateFrom, lte: dateTo },
+        },
+        select: { id: true, openedAt: true, closedAt: true },
+      }),
+      prisma.booking.findMany({
+        where: {
+          venueId,
+          date: { gte: prevMonthStart, lte: prevMonthEnd },
+        },
+        select: { status: true, priceInCents: true, startTime: true, endTime: true },
+      }),
+      prisma.coachLesson.findMany({
+        where: {
+          venueId,
+          date: { gte: prevMonthStart, lte: prevMonthEnd },
+          status: { in: ["confirmed", "completed"] },
+        },
+        select: { startTime: true, endTime: true, courtId: true },
+      }),
+    ]);
+
+    // Revenue and hours per day for current month
+    const daysInMonth = currentMonthEnd.getUTCDate();
+    const todayDate = now.getUTCDate();
+    const monthLabel = currentMonthStart.toLocaleString("en-US", { month: "long", timeZone: "UTC" });
+
+    const monthRevenueByDay: Record<number, number> = {};
+    const monthHoursByDay: Record<number, number> = {};
+    for (const b of monthBookings) {
+      const day = new Date(b.date).getUTCDate();
+      monthRevenueByDay[day] = (monthRevenueByDay[day] || 0) + b.priceInCents;
+      monthHoursByDay[day] = (monthHoursByDay[day] || 0) +
+        (new Date(b.endTime).getTime() - new Date(b.startTime).getTime()) / 3600000;
+    }
+
+    // 90-day daily averages for projection
+    const last90Days = Math.max(1, Math.ceil((currentMonthStart.getTime() - last90Start.getTime()) / 86400000));
+    const totalRevenue90 = last90Bookings.reduce((s, b) => s + b.priceInCents, 0);
+    let totalHours90 = 0;
+    for (const b of last90Bookings) {
+      totalHours90 += (new Date(b.endTime).getTime() - new Date(b.startTime).getTime()) / 3600000;
+    }
+    const avgDailyRevenue = totalRevenue90 / last90Days;
+    const avgDailyHours = totalHours90 / last90Days;
+
+    // Build the chart data: one entry per day of the month
+    const monthChartDays: { day: number; date: string; revenue: number; projected: number; hours: number; projectedHours: number; isPast: boolean }[] = [];
+    let actualMonthRevenue = 0;
+    let actualMonthHours = 0;
+    let projectedMonthRevenue = 0;
+    let projectedMonthHours = 0;
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${currentMonthStart.getUTCFullYear()}-${String(currentMonthStart.getUTCMonth() + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      const isPast = d <= todayDate;
+      const actualRev = monthRevenueByDay[d] || 0;
+      const actualHrs = monthHoursByDay[d] || 0;
+
+      if (isPast) {
+        actualMonthRevenue += actualRev;
+        actualMonthHours += actualHrs;
+        projectedMonthRevenue += actualRev;
+        projectedMonthHours += actualHrs;
+      } else {
+        projectedMonthRevenue += avgDailyRevenue;
+        projectedMonthHours += avgDailyHours;
+      }
+
+      monthChartDays.push({
+        day: d,
+        date: dateStr,
+        revenue: isPast ? actualRev : 0,
+        projected: isPast ? 0 : Math.round(avgDailyRevenue),
+        hours: isPast ? Math.round(actualHrs * 10) / 10 : 0,
+        projectedHours: isPast ? 0 : Math.round(avgDailyHours * 10) / 10,
+        isPast,
+      });
+    }
 
     // --- COURT BOOKING ANALYTICS ---
     const confirmedBookings = bookings.filter((b) => b.status === "confirmed" || b.status === "completed");
@@ -182,6 +295,71 @@ export async function GET(request: NextRequest) {
       const day = new Date(b.date).getUTCDay();
       if (peakHours[hour]) peakHours[hour][day]++;
     }
+
+    // --- REPEAT BOOKER RATE ---
+    const bookerCounts: Record<string, number> = {};
+    for (const b of confirmedBookings) {
+      bookerCounts[b.playerId] = (bookerCounts[b.playerId] || 0) + 1;
+    }
+    const uniqueBookers = Object.keys(bookerCounts).length;
+    const repeatBookers = Object.values(bookerCounts).filter((c) => c > 1).length;
+    const repeatBookerPct = uniqueBookers > 0 ? Math.round((repeatBookers / uniqueBookers) * 100) : 0;
+
+    // --- CANCELLATION RATE ---
+    const totalAllBookings = bookings.length;
+    const cancellationPct = totalAllBookings > 0 ? Math.round((cancelledBookings.length / totalAllBookings) * 100) : 0;
+
+    // --- REVENUE BY DAY OF WEEK ---
+    const revenueByDow: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+    for (const b of confirmedBookings) {
+      const dow = new Date(b.date).getUTCDay();
+      revenueByDow[dow] += b.priceInCents;
+    }
+
+    // --- OPEN PLAY / COURTPAY SESSION OVERLAP ---
+    let openPlayHours = 0;
+    for (const s of openPlaySessions) {
+      if (s.closedAt) {
+        openPlayHours += (new Date(s.closedAt).getTime() - new Date(s.openedAt).getTime()) / 3600000;
+      }
+    }
+    openPlayHours = Math.round(openPlayHours * 10) / 10;
+
+    // --- COACHING + COURT COMBINED UTILIZATION ---
+    const confirmedLessonsOnCourt = coachLessons.filter(
+      (l) => (l.status === "confirmed" || l.status === "completed") && l.courtId
+    );
+    let coachingCourtHours = 0;
+    for (const l of confirmedLessonsOnCourt) {
+      coachingCourtHours += (new Date(l.endTime).getTime() - new Date(l.startTime).getTime()) / 3600000;
+    }
+    const combinedBookedHours = totalBookedHours + coachingCourtHours;
+    const combinedUtilizationPct = totalAvailableHours > 0
+      ? Math.round((combinedBookedHours / totalAvailableHours) * 100)
+      : 0;
+
+    // --- MONTH OVER MONTH COMPARISON ---
+    const prevConfirmed = prevMonthBookings.filter((b) => b.status === "confirmed" || b.status === "completed");
+    const prevCancelled = prevMonthBookings.filter((b) => b.status === "cancelled");
+    const prevRevenue = prevConfirmed.reduce((s, b) => s + b.priceInCents, 0);
+    let prevBookedHours = 0;
+    for (const b of prevConfirmed) {
+      prevBookedHours += (new Date(b.endTime).getTime() - new Date(b.startTime).getTime()) / 3600000;
+    }
+    let prevCoachCourtHours = 0;
+    for (const l of prevMonthLessons) {
+      if (l.courtId) prevCoachCourtHours += (new Date(l.endTime).getTime() - new Date(l.startTime).getTime()) / 3600000;
+    }
+    const prevMonthDays = prevMonthEnd.getUTCDate();
+    const prevAvailableHours = bookableCourtCount * hoursPerDayPerCourt * prevMonthDays;
+    const prevUtilPct = prevAvailableHours > 0 ? Math.round((prevBookedHours / prevAvailableHours) * 100) : 0;
+    const prevCombinedUtilPct = prevAvailableHours > 0
+      ? Math.round(((prevBookedHours + prevCoachCourtHours) / prevAvailableHours) * 100)
+      : 0;
+    const prevCancelPct = prevMonthBookings.length > 0
+      ? Math.round((prevCancelled.length / prevMonthBookings.length) * 100)
+      : 0;
+    const prevMonthLabel = prevMonthStart.toLocaleString("en-US", { month: "long", timeZone: "UTC" });
 
     // --- MEMBERSHIP ANALYTICS ---
     const activeMembers = memberships.filter((m) => m.status === "active");
@@ -298,6 +476,39 @@ export async function GET(request: NextRequest) {
         bookingsByDate,
         perCourt: Object.values(perCourt),
         peakHours,
+        repeatBookerPct,
+        uniqueBookers,
+        repeatBookers,
+        cancellationPct,
+        revenueByDow,
+        openPlayHours,
+        openPlaySessions: openPlaySessions.length,
+        coachingCourtHours: Math.round(coachingCourtHours * 10) / 10,
+        combinedUtilizationPct,
+        combinedBookedHours: Math.round(combinedBookedHours * 10) / 10,
+        mom: {
+          prevMonthLabel,
+          currentMonthLabel: monthLabel,
+          prev: {
+            bookings: prevConfirmed.length,
+            cancelled: prevCancelled.length,
+            cancelPct: prevCancelPct,
+            revenue: prevRevenue,
+            hours: Math.round(prevBookedHours * 10) / 10,
+            utilPct: prevUtilPct,
+            combinedUtilPct: prevCombinedUtilPct,
+          },
+          current: {
+            bookings: monthBookings.length,
+            revenue: monthBookings.reduce((s, b) => s + b.priceInCents, 0),
+            hours: Math.round(actualMonthHours * 10) / 10,
+            utilPct: (() => {
+              const curAvail = bookableCourtCount * hoursPerDayPerCourt * todayDate;
+              return curAvail > 0 ? Math.round((actualMonthHours / curAvail) * 100) : 0;
+            })(),
+            cancelPct: cancellationPct,
+          },
+        },
       },
       memberships: {
         activeCount: activeMembers.length,
@@ -341,6 +552,18 @@ export async function GET(request: NextRequest) {
         genderBreakdown,
         registrationsByDate,
         topBookers,
+      },
+      monthProjection: {
+        monthLabel,
+        daysInMonth,
+        todayDate,
+        days: monthChartDays,
+        actualRevenue: actualMonthRevenue,
+        projectedRevenue: Math.round(projectedMonthRevenue),
+        actualHours: Math.round(actualMonthHours * 10) / 10,
+        projectedHours: Math.round(projectedMonthHours * 10) / 10,
+        avgDailyRevenue: Math.round(avgDailyRevenue),
+        avgDailyHours: Math.round(avgDailyHours * 10) / 10,
       },
       overview: {
         totalPlayers,
