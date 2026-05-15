@@ -621,7 +621,7 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
         skillLevel: regLevel,
         bankBin: res.bankBin ?? null,
         bankAccount: res.bankAccount ?? null,
-        paymentRef: `${regName.trim()} NEW ${new Date().toISOString().slice(0, 10)}`,
+        paymentRef: `${regName.trim()} NEW ${(() => { const _d = new Date(); return `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, "0")}-${String(_d.getDate()).padStart(2, "0")}`; })()}`,
       });
       goTo("payment_waiting");
       paymentTimerRef.current = setTimeout(() => {

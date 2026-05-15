@@ -7,25 +7,61 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { applyThemeMode, getStoredThemeMode, setStoredThemeMode, type ThemeMode } from "@/lib/theme-mode";
-import { LayoutDashboard, MapPin, Users, UserCircle, BarChart3, Monitor, Banknote, Crown, CalendarDays, GraduationCap, LogOut, Menu, X, CreditCard, Receipt, ScanFace, Sun, Moon, ChevronLeft, ShoppingBag, AlertTriangle } from "lucide-react";
+import { LayoutDashboard, MapPin, Users, UserCircle, BarChart3, Monitor, Banknote, Crown, CalendarDays, GraduationCap, LogOut, Menu, X, CreditCard, Receipt, ScanFace, Sun, Moon, ChevronLeft, ChevronDown, ChevronRight, ShoppingBag, AlertTriangle, PieChart } from "lucide-react";
 import { SetupWizardBanner } from "@/components/setup-wizard-banner";
+import { AiChatWidget } from "@/components/admin/AiChatWidget";
 
-const navItems = [
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}
+
+interface NavSection {
+  label: string;
+  items: NavItem[];
+}
+
+const topNavItems: NavItem[] = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
-  { href: "/admin/live", label: "Live Sessions", icon: Monitor },
   { href: "/admin/venues", label: "Venues", icon: MapPin },
-  { href: "/admin/memberships", label: "Memberships", icon: Crown },
-  { href: "/admin/courtpay", label: "CourtPay", icon: CreditCard },
-  { href: "/admin/courtpay-billing", label: "CP Billing", icon: Receipt },
   { href: "/admin/bookings", label: "Bookings", icon: CalendarDays },
+  { href: "/admin/memberships", label: "Memberships", icon: Crown },
   { href: "/admin/coaching", label: "Coaching", icon: GraduationCap },
   { href: "/admin/staff", label: "Staff", icon: Users },
-  { href: "/admin/payroll", label: "Payroll", icon: Banknote },
   { href: "/admin/players", label: "Players", icon: UserCircle },
-  { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
-  { href: "/admin/face-recognition-test", label: "Face Recognition Test", icon: ScanFace },
-  { href: "/admin/kiosk-shop", label: "Kiosk Shop", icon: ShoppingBag },
-  { href: "/admin/log-errors", label: "Log Errors", icon: AlertTriangle },
+  { href: "/admin/venue-analytics", label: "Venue Analytics", icon: PieChart },
+];
+
+const navSections: NavSection[] = [
+  {
+    label: "CourtFlow - Social",
+    items: [
+      { href: "/admin/live", label: "Live Sessions", icon: Monitor },
+      { href: "/admin/payroll", label: "Payroll Hosts", icon: Banknote },
+      { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
+    ],
+  },
+  {
+    label: "CourtPay - Check-in",
+    items: [
+      { href: "/admin/courtpay", label: "CourtPay", icon: CreditCard },
+      { href: "/admin/courtpay-billing", label: "CP Billing", icon: Receipt },
+      { href: "/admin/kiosk-shop", label: "Kiosk Shop", icon: ShoppingBag },
+    ],
+  },
+  {
+    label: "Logs & Errors",
+    items: [
+      { href: "/admin/face-recognition-test", label: "Face Recognition Test", icon: ScanFace },
+      { href: "/admin/log-errors", label: "Log Errors", icon: AlertTriangle },
+    ],
+  },
+];
+
+const allNavItems: NavItem[] = [
+  ...topNavItems,
+  ...navSections.flatMap((s) => s.items),
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -34,6 +70,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
+    if (typeof window === "undefined") return {};
+    try { return JSON.parse(localStorage.getItem("admin-nav-sections") || "{}"); } catch { return {}; }
+  });
+
+  const toggleSection = (label: string) => {
+    setCollapsedSections((prev) => {
+      const next = { ...prev, [label]: !prev[label] };
+      try { localStorage.setItem("admin-nav-sections", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (token && role === "superadmin" && onboardingCompleted === false) {
@@ -102,7 +150,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
 
         <nav className="space-y-1">
-          {navItems.map((item) => {
+          {topNavItems.map((item) => {
             const active = pathname === item.href;
             return (
               <Link
@@ -118,6 +166,50 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <item.icon className="h-4 w-4" />
                 {item.label}
               </Link>
+            );
+          })}
+
+          {navSections.map((section) => {
+            const isCollapsed = collapsedSections[section.label] ?? false;
+            const hasActive = section.items.some((item) => pathname === item.href);
+            return (
+              <div key={section.label} className="pt-3 mt-2 border-t border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => toggleSection(section.label)}
+                  className={cn(
+                    "flex w-full items-center gap-1 rounded-lg px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide transition-colors",
+                    hasActive
+                      ? "text-purple-400"
+                      : "text-neutral-500 hover:text-neutral-300"
+                  )}
+                >
+                  {isCollapsed ? <ChevronRight className="h-3 w-3 shrink-0" /> : <ChevronDown className="h-3 w-3 shrink-0" />}
+                  {section.label}
+                </button>
+                {!isCollapsed && (
+                  <div className="mt-0.5 space-y-0.5">
+                    {section.items.map((item) => {
+                      const active = pathname === item.href;
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          className={cn(
+                            "flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                            active
+                              ? "bg-purple-600/20 text-purple-400"
+                              : "text-neutral-400 hover:bg-neutral-800 hover:text-white"
+                          )}
+                        >
+                          <item.icon className="h-4 w-4" />
+                          {item.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
         </nav>
@@ -160,7 +252,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="fixed inset-x-0 top-[57px] z-30 max-h-[min(70vh,calc(100dvh-9rem))] overflow-y-auto border-b border-neutral-800 bg-neutral-950/98 p-4 pb-6 backdrop-blur-sm md:hidden">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">Pages</p>
           <nav className="space-y-0.5">
-            {navItems.map((item) => {
+            {topNavItems.map((item) => {
               const active = pathname === item.href;
               return (
                 <Link
@@ -176,6 +268,46 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   <item.icon className="h-4 w-4 shrink-0" />
                   {item.label}
                 </Link>
+              );
+            })}
+
+            {navSections.map((section) => {
+              const isCollapsed = collapsedSections[section.label] ?? false;
+              const hasActive = section.items.some((item) => pathname === item.href);
+              return (
+                <div key={section.label} className="pt-3 mt-2 border-t border-neutral-800">
+                  <button
+                    type="button"
+                    onClick={() => toggleSection(section.label)}
+                    className={cn(
+                      "flex w-full items-center gap-1 rounded-lg px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide transition-colors",
+                      hasActive
+                        ? "text-purple-400"
+                        : "text-neutral-500 hover:text-neutral-300"
+                    )}
+                  >
+                    {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                    {section.label}
+                  </button>
+                  {!isCollapsed && section.items.map((item) => {
+                    const active = pathname === item.href;
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={cn(
+                          "flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                          active
+                            ? "bg-purple-600/20 text-purple-400"
+                            : "text-neutral-300 hover:bg-neutral-800 hover:text-white"
+                        )}
+                      >
+                        <item.icon className="h-4 w-4 shrink-0" />
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
               );
             })}
           </nav>
@@ -225,7 +357,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Mobile bottom tab bar — horizontal scroll */}
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm md:hidden">
         <div className="flex max-w-full flex-nowrap items-end overflow-x-auto overscroll-x-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-          {navItems.map((item) => {
+          {allNavItems.map((item) => {
             const active = pathname === item.href;
             return (
               <Link
@@ -245,6 +377,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           })}
         </div>
       </nav>
+
+      <AiChatWidget />
     </div>
   );
 }

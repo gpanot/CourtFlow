@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
+import { useAdminVenueStore } from "@/stores/admin-venue-store";
 import {
   ChevronLeft,
   ChevronRight,
@@ -23,6 +24,8 @@ import {
   Save,
   ChevronUp,
   GraduationCap,
+  LayoutGrid,
+  TableProperties,
 } from "lucide-react";
 import { CourtsManager } from "@/components/admin/CourtsManager";
 
@@ -119,7 +122,10 @@ interface PlayerResult {
 }
 
 function formatDate(d: Date): string {
-  return d.toISOString().split("T")[0];
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function formatTime(iso: string): string {
@@ -128,8 +134,8 @@ function formatTime(iso: string): string {
 }
 
 function fmtPrice(cents: number): string {
-  const d = cents / 100;
-  return `$${d % 1 === 0 ? d : d.toFixed(2)}`;
+  const d = Math.round(cents / 100);
+  return `$${d.toLocaleString("en-US")}`;
 }
 
 const BLOCK_LABELS: Record<string, string> = {
@@ -141,8 +147,10 @@ const BLOCK_LABELS: Record<string, string> = {
 };
 
 export default function BookingsPage() {
+  const { selectedVenueId: storedVenueId, setSelectedVenueId: setStoredVenueId } = useAdminVenueStore();
   const [venues, setVenues] = useState<Venue[]>([]);
-  const [selectedVenueId, setSelectedVenueId] = useState("");
+  const [selectedVenueId, _setSelectedVenueId] = useState(storedVenueId ?? "");
+  const setSelectedVenueId = (id: string) => { _setSelectedVenueId(id); setStoredVenueId(id); };
   const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
   const [bookings, setBookings] = useState<BookingRecord[]>([]);
   const [availability, setAvailability] = useState<CourtSlotData[]>([]);
@@ -167,6 +175,10 @@ export default function BookingsPage() {
   const [saving, setSaving] = useState(false);
 
   const [activeTab, setActiveTab] = useState<"bookings" | "settings">("bookings");
+  const [viewMode, setViewMode] = useState<"court" | "time">(() => {
+    if (typeof window === "undefined") return "court";
+    return (localStorage.getItem("bookings-view-mode") as "court" | "time") || "court";
+  });
   const [venueDetails, setVenueDetails] = useState<Venue | null>(null);
 
   // Court block state
@@ -185,9 +197,13 @@ export default function BookingsPage() {
     try {
       const data = await api.get<Venue[]>("/api/admin/venues");
       setVenues(data);
-      if (data.length > 0 && !selectedVenueId) setSelectedVenueId(data[0].id);
+      if (data.length > 0 && !selectedVenueId) {
+        const stored = storedVenueId;
+        const match = stored && data.find((v) => v.id === stored);
+        setSelectedVenueId(match ? stored : data[0].id);
+      }
     } catch (e) { console.error(e); }
-  }, [selectedVenueId]);
+  }, [selectedVenueId, storedVenueId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchBookings = useCallback(async () => {
     if (!selectedVenueId) return;
@@ -231,6 +247,9 @@ export default function BookingsPage() {
   useEffect(() => { fetchVenues(); }, [fetchVenues]);
   useEffect(() => { fetchBookings(); fetchAvailability(); fetchCourtBlocks(); }, [fetchBookings, fetchAvailability, fetchCourtBlocks]);
   useEffect(() => { fetchVenueDetails(); }, [fetchVenueDetails]);
+  useEffect(() => {
+    if (activeTab === "bookings") { fetchAvailability(); fetchCourtBlocks(); }
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const searchPlayers = useCallback(async (query: string) => {
     if (query.length < 2) { setPlayerResults([]); return; }
@@ -604,7 +623,7 @@ export default function BookingsPage() {
 
       {activeTab === "bookings" && <>
       {/* Date Navigation */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <button onClick={() => shiftDate(-1)} className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white">
           <ChevronLeft className="h-5 w-5" />
         </button>
@@ -623,15 +642,126 @@ export default function BookingsPage() {
         >
           Today
         </button>
+        <div className="ml-auto flex items-center rounded-lg border border-neutral-700 overflow-hidden">
+          <button
+            onClick={() => { setViewMode("court"); localStorage.setItem("bookings-view-mode", "court"); }}
+            className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors", viewMode === "court" ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400 hover:text-white")}
+            title="Court View"
+          >
+            <LayoutGrid className="h-3.5 w-3.5" /> Courts
+          </button>
+          <button
+            onClick={() => { setViewMode("time"); localStorage.setItem("bookings-view-mode", "time"); }}
+            className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors border-l border-neutral-700", viewMode === "time" ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400 hover:text-white")}
+            title="Time View"
+          >
+            <TableProperties className="h-3.5 w-3.5" /> Time
+          </button>
+        </div>
       </div>
 
-      {/* Day Planner Grid — courts as columns, time as rows */}
+      {/* Day Planner Grid */}
       {availability.length === 0 ? (
         <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-12 text-center">
           <p className="text-neutral-500">No bookable courts configured for this venue.</p>
           <p className="text-xs text-neutral-600 mt-1">Enable &quot;Bookable&quot; on courts in Venues settings.</p>
         </div>
-      ) : (() => {
+      ) : viewMode === "time" ? (() => {
+        const courts = availability;
+        const slots = allSlotTimes;
+
+        const getSlotLabel = (court: CourtSlotData, slot: SlotInfo, rowIdx: number) => {
+          const courtSlot = court.slots[rowIdx];
+          const booking = bookingsByCourtAndTime.get(`${court.courtId}_${slot.startTime}`);
+          if (booking) return { type: "booking" as const, label: booking.player.name, sub: fmtPrice(booking.priceInCents) };
+          const blockInfo = courtSlot?.block;
+          if (blockInfo) return { type: "block" as const, label: blockInfo.title || BLOCK_LABELS[blockInfo.type] || blockInfo.type, sub: blockInfo.type };
+          const schedInfo = courtSlot?.schedule;
+          if (schedInfo) return { type: "schedule" as const, label: schedInfo.title || BLOCK_LABELS[schedInfo.type], sub: schedInfo.type };
+          const lessonInfo = courtSlot?.lesson;
+          if (lessonInfo) return { type: "lesson" as const, label: lessonInfo.coachName, sub: lessonInfo.playerName };
+          if (courtSlot?.available) return { type: "available" as const, label: fmtPrice(courtSlot.priceInCents), sub: "" };
+          return { type: "unavailable" as const, label: "", sub: "" };
+        };
+
+        return (
+          <div className="rounded-xl border border-neutral-800 overflow-hidden">
+            <div className="overflow-auto max-h-[75vh]">
+              <table className="w-full border-collapse text-[11px]">
+                <thead>
+                  <tr>
+                    <th className="sticky top-0 left-0 z-30 bg-neutral-900/95 backdrop-blur border-b border-r border-neutral-700 px-2 py-2 text-left text-xs font-medium text-neutral-500 min-w-[80px]">Court</th>
+                    {slots.map((slot) => (
+                      <th key={slot.startTime} className="sticky top-0 z-20 bg-neutral-900/95 backdrop-blur border-b border-l border-neutral-700 px-1 py-2 text-center font-medium text-neutral-500 min-w-[54px] whitespace-nowrap">
+                        {formatTime(slot.startTime)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {courts.map((court) => (
+                    <tr key={court.courtId} className="group">
+                      <td className="sticky left-0 z-10 bg-neutral-900 border-r border-neutral-700 px-2 py-1.5 font-semibold text-xs text-white whitespace-nowrap">
+                        {court.courtLabel}
+                      </td>
+                      {slots.map((slot, slotIdx) => {
+                        const info = getSlotLabel(court, slot, slotIdx);
+                        const cellCls = cn(
+                          "border-l border-b border-neutral-800/40 px-0.5 py-0.5 text-center whitespace-nowrap",
+                        );
+                        const innerCls = cn(
+                          "rounded px-1 py-1 text-[10px] leading-tight truncate max-w-[54px]",
+                          info.type === "booking" && "bg-purple-600/20 text-purple-300 font-medium",
+                          info.type === "block" && info.sub === "open_play" && "bg-emerald-600/20 text-emerald-300",
+                          info.type === "block" && info.sub === "maintenance" && "bg-neutral-600/20 text-neutral-400",
+                          info.type === "block" && info.sub !== "open_play" && info.sub !== "maintenance" && "bg-amber-600/20 text-amber-300",
+                          info.type === "schedule" && info.sub === "open_play" && "bg-emerald-600/20 text-emerald-300",
+                          info.type === "schedule" && info.sub !== "open_play" && "bg-blue-600/20 text-blue-300",
+                          info.type === "lesson" && "bg-teal-600/20 text-teal-300",
+                          info.type === "available" && "text-neutral-600",
+                          info.type === "unavailable" && "bg-neutral-800/20 text-neutral-700",
+                        );
+                        return (
+                          <td key={slot.startTime} className={cellCls}>
+                            {info.type === "available" ? (
+                              <button
+                                onClick={() => toggleSlotSelection(court, court.slots[slotIdx])}
+                                className={cn(
+                                  "w-full rounded px-1 py-1 text-[10px] transition-colors",
+                                  isSlotSelected(court.courtId, slot.startTime)
+                                    ? "bg-purple-600/25 text-purple-300 ring-1 ring-purple-500/50"
+                                    : "text-neutral-600 hover:bg-purple-600/10 hover:text-purple-400"
+                                )}
+                              >
+                                {info.label}
+                              </button>
+                            ) : info.type === "unavailable" ? (
+                              <div className={innerCls}>&ndash;</div>
+                            ) : info.type === "booking" ? (
+                              <div
+                                onClick={() => {
+                                  const booking = bookingsByCourtAndTime.get(`${court.courtId}_${slot.startTime}`);
+                                  if (booking?.status === "confirmed") openEditModal(booking);
+                                }}
+                                className={cn(innerCls, "cursor-pointer")}
+                                title={info.label}
+                              >
+                                {info.label}
+                              </div>
+                            ) : (
+                              <div className={innerCls} title={info.label}>{info.label}</div>
+                            )}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })() : (() => {
         const ROW_H = 56;
         const courts = availability;
         const slots = allSlotTimes;
@@ -1397,7 +1527,7 @@ function BookingConfigSection({
     setDirty(false);
   }, [settings]);
 
-  const centsToDollars = (c: number) => c / 100;
+  const centsToDollars = (c: number) => Math.round(c / 100);
   const dollarsToCents = (d: number) => Math.round(d * 100);
   const resolve = (cell: number | null) => cell ?? bCfg.defaultPriceInCents;
 
@@ -1417,7 +1547,7 @@ function BookingConfigSection({
 
   const commitEdit = () => {
     if (!editingCell) return;
-    const dollars = Math.max(0, Number(editValue) || 0);
+    const dollars = Math.max(0, parseInt(editValue.replace(/[^0-9]/g, "") || "0", 10));
     updateCell(editingCell.day, editingCell.hour, dollarsToCents(dollars));
     setEditingCell(null);
   };
@@ -1462,7 +1592,7 @@ function BookingConfigSection({
   const inputCls = "w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-white focus:border-purple-500 focus:outline-none";
   const activeHours: number[] = [];
   for (let h = bCfg.bookingStartHour; h < bCfg.bookingEndHour; h++) activeHours.push(h);
-  const fmtDollars = (c: number) => { const d = c / 100; return d === 0 ? "0" : d % 1 === 0 ? String(d) : d.toFixed(2); };
+  const fmtDollars = (c: number) => { const d = Math.round(c / 100); return d.toLocaleString("en-US"); };
 
   return (
     <div className="space-y-4">
@@ -1491,8 +1621,8 @@ function BookingConfigSection({
             </div>
             <div>
               <label className="text-[10px] text-neutral-500">Default ($)</label>
-              <input type="text" inputMode="decimal" value={centsToDollars(bCfg.defaultPriceInCents)}
-                onChange={(e) => { setBCfg({ ...bCfg, defaultPriceInCents: dollarsToCents(Number(e.target.value) || 0) }); setDirty(true); }} className={inputCls} />
+              <input type="text" inputMode="numeric" value={centsToDollars(bCfg.defaultPriceInCents).toLocaleString("en-US")}
+                onChange={(e) => { const v = parseInt(e.target.value.replace(/[^0-9]/g, "") || "0", 10); setBCfg({ ...bCfg, defaultPriceInCents: dollarsToCents(v) }); setDirty(true); }} className={inputCls} />
             </div>
           </div>
         </div>
@@ -1536,7 +1666,7 @@ function BookingConfigSection({
                     })}
                     <td className="px-0.5 py-0.5">
                       <div className="flex gap-0.5">
-                        <button onClick={() => { const val = prompt(`Set all ${DAY_LABELS[day]} slots ($):`, String(centsToDollars(bCfg.defaultPriceInCents))); if (val !== null) fillDay(day, dollarsToCents(Math.max(0, Number(val) || 0))); }}
+                        <button onClick={() => { const val = prompt(`Set all ${DAY_LABELS[day]} slots ($):`, String(centsToDollars(bCfg.defaultPriceInCents))); if (val !== null) fillDay(day, dollarsToCents(Math.max(0, parseInt(val.replace(/[^0-9]/g, "") || "0", 10)))); }}
                           className="rounded px-1.5 py-1 text-[9px] text-neutral-500 hover:bg-neutral-700 hover:text-neutral-300" title={`Fill all ${DAY_LABELS[day]} slots`}>Fill</button>
                         <button onClick={() => { if (confirm(`Copy ${DAY_LABELS[day]} prices to all days?`)) copyDayToAll(day); }}
                           className="rounded px-1.5 py-1 text-[9px] text-neutral-500 hover:bg-neutral-700 hover:text-neutral-300" title={`Copy ${DAY_LABELS[day]} to all days`}>Copy→All</button>

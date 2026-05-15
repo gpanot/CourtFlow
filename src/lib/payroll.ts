@@ -27,7 +27,7 @@ export function getWeekStart(date: Date): Date {
 }
 
 /**
- * Return Monday 00:00:00 and Sunday 23:59:59.999 of the week.
+ * Return Monday 00:00:00 and Sunday 23:59:59.999 of the week (UTC).
  */
 export function getWeekRange(weekStart: Date): { start: Date; end: Date } {
   const start = new Date(weekStart);
@@ -70,55 +70,58 @@ export function parseWeekStart(dateStr: string): Date {
 }
 
 /**
- * Format a date as "Mon Mar 9" style label.
+ * Format a date as "Mon Mar 9" style label (local time).
  */
 export function formatDayLabel(date: Date): string {
   const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  return `${days[date.getUTCDay()]} ${months[date.getUTCMonth()]} ${date.getUTCDate()}`;
+  return `${days[date.getDay()]} ${months[date.getMonth()]} ${date.getDate()}`;
 }
 
 /**
- * Format a week range as "Mar 9 – Mar 15, 2026".
+ * Format a week range as "Mar 9 – Mar 15, 2026" (local time).
  */
 export function formatWeekLabel(weekStart: Date): string {
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const end = new Date(weekStart);
-  end.setUTCDate(end.getUTCDate() + 6);
-  const startMonth = months[weekStart.getUTCMonth()];
-  const endMonth = months[end.getUTCMonth()];
-  const year = end.getUTCFullYear();
+  end.setDate(end.getDate() + 6);
+  const startMonth = months[weekStart.getMonth()];
+  const endMonth = months[end.getMonth()];
+  const year = end.getFullYear();
   if (startMonth === endMonth) {
-    return `${startMonth} ${weekStart.getUTCDate()} – ${end.getUTCDate()}, ${year}`;
+    return `${startMonth} ${weekStart.getDate()} – ${end.getDate()}, ${year}`;
   }
-  return `${startMonth} ${weekStart.getUTCDate()} – ${endMonth} ${end.getUTCDate()}, ${year}`;
+  return `${startMonth} ${weekStart.getDate()} – ${endMonth} ${end.getDate()}, ${year}`;
 }
 
 /**
- * Format a short week range: "Mar 9–15" or "Mar 9 – Apr 1".
+ * Format a short week range: "Mar 9–15" or "Mar 9 – Apr 1" (local time).
  */
 export function formatWeekRangeShort(weekStart: Date): string {
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const end = new Date(weekStart);
-  end.setUTCDate(end.getUTCDate() + 6);
-  const startMonth = months[weekStart.getUTCMonth()];
-  const endMonth = months[end.getUTCMonth()];
+  end.setDate(end.getDate() + 6);
+  const startMonth = months[weekStart.getMonth()];
+  const endMonth = months[end.getMonth()];
   if (startMonth === endMonth) {
-    return `${startMonth} ${weekStart.getUTCDate()}–${end.getUTCDate()}`;
+    return `${startMonth} ${weekStart.getDate()}–${end.getDate()}`;
   }
-  return `${startMonth} ${weekStart.getUTCDate()} – ${endMonth} ${end.getUTCDate()}`;
+  return `${startMonth} ${weekStart.getDate()} – ${endMonth} ${end.getDate()}`;
 }
 
 /**
- * Format date as YYYY-MM-DD.
+ * Format date as YYYY-MM-DD (local time).
  */
 export function formatDateISO(date: Date): string {
-  return date.toISOString().split("T")[0];
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 /**
- * Format time from a Date as HH:MM.
+ * Format time from a Date as HH:MM (local time).
  */
 export function formatTime(date: Date): string {
-  return `${String(date.getUTCHours()).padStart(2, "0")}:${String(date.getUTCMinutes()).padStart(2, "0")}`;
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 }

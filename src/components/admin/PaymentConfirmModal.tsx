@@ -54,7 +54,13 @@ export function PaymentConfirmModal({ data, accentColor = "green", onConfirm, on
   const [form, setForm] = useState({
     amount: String(data.amountInCents / 100),
     method: data.paymentMethod || "cash",
-    date: data.paidAt ? new Date(data.paidAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
+    date: (() => {
+      const d = data.paidAt ? new Date(data.paidAt) : new Date();
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    })(),
     note: data.note || "",
   });
   const [proofFile, setProofFile] = useState<File | null>(null);

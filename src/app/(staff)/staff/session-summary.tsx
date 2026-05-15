@@ -583,7 +583,8 @@ export function SessionSummary({ sessionId, onClose }: SessionSummaryProps) {
         { align: "center" }
       );
 
-      const filename = `courtflow-analytics-${new Date(session.date).toISOString().split("T")[0]}.pdf`;
+      const _sd = new Date(session.date);
+      const filename = `courtflow-analytics-${_sd.getFullYear()}-${String(_sd.getMonth() + 1).padStart(2, "0")}-${String(_sd.getDate()).padStart(2, "0")}.pdf`;
       doc.save(filename);
     } catch (e) {
       console.error("PDF export failed:", e);

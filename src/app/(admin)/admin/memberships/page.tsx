@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
+import { useAdminVenueStore } from "@/stores/admin-venue-store";
 import { PaymentConfirmModal, type PaymentModalData, type PaymentConfirmResult } from "@/components/admin/PaymentConfirmModal";
 import {
   Plus,
@@ -94,8 +95,10 @@ interface PlayerResult {
 }
 
 export default function MembershipsPage() {
+  const { selectedVenueId: storedVenueId, setSelectedVenueId: setStoredVenueId } = useAdminVenueStore();
   const [venues, setVenues] = useState<Venue[]>([]);
-  const [selectedVenueId, setSelectedVenueId] = useState<string>("");
+  const [selectedVenueId, _setSelectedVenueId] = useState<string>(storedVenueId ?? "");
+  const setSelectedVenueId = (id: string) => { _setSelectedVenueId(id); setStoredVenueId(id); };
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [memberships, setMemberships] = useState<MembershipRecord[]>([]);
   const [paymentSummary, setPaymentSummary] = useState<PaymentSummary | null>(null);
@@ -133,9 +136,13 @@ export default function MembershipsPage() {
     try {
       const data = await api.get<Venue[]>("/api/admin/venues");
       setVenues(data);
-      if (data.length > 0 && !selectedVenueId) setSelectedVenueId(data[0].id);
+      if (data.length > 0 && !selectedVenueId) {
+        const stored = storedVenueId;
+        const match = stored && data.find((v) => v.id === stored);
+        setSelectedVenueId(match ? stored : data[0].id);
+      }
     } catch (e) { console.error(e); }
-  }, [selectedVenueId]);
+  }, [selectedVenueId, storedVenueId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchTiers = useCallback(async () => {
     if (!selectedVenueId) return;
@@ -185,7 +192,7 @@ export default function MembershipsPage() {
       await api.post("/api/admin/membership-tiers", {
         venueId: selectedVenueId,
         name: tierForm.name.trim(),
-        priceInCents: Math.round((Number(tierForm.price) || 0) * 100),
+        priceInCents: parseInt(tierForm.price.replace(/[^0-9]/g, "") || "0", 10) * 100,
         sessionsIncluded: tierForm.sessionsIncluded === "" ? null : Number(tierForm.sessionsIncluded),
         showBadge: tierForm.showBadge,
         perks: tierForm.perks,
@@ -200,7 +207,7 @@ export default function MembershipsPage() {
     try {
       await api.patch(`/api/admin/membership-tiers/${id}`, {
         name: editTierForm.name.trim(),
-        priceInCents: Math.round((Number(editTierForm.price) || 0) * 100),
+        priceInCents: parseInt(editTierForm.price.replace(/[^0-9]/g, "") || "0", 10) * 100,
         sessionsIncluded: editTierForm.sessionsIncluded === "" ? null : Number(editTierForm.sessionsIncluded),
         showBadge: editTierForm.showBadge,
         perks: editTierForm.perks,
@@ -343,7 +350,7 @@ export default function MembershipsPage() {
 
   const activeTiers = tiers.filter((t) => t.isActive);
   const allPerks = [...new Set(tiers.flatMap((t) => (t.perks as string[]) || []))];
-  const fmtPrice = (cents: number) => { const d = cents / 100; return `$${d % 1 === 0 ? d : d.toFixed(2)}`; };
+  const fmtPrice = (cents: number) => `$${Math.round(cents / 100).toLocaleString("en-US")}`;
   const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   const selectedVenueSettings = venues.find((v) => v.id === selectedVenueId)?.settings;
 
@@ -479,7 +486,7 @@ export default function MembershipsPage() {
                   </div>
                   <div className="flex gap-1">
                     <button
-                      onClick={() => { setEditingTierId(tier.id); setEditTierForm({ name: tier.name, price: String(tier.priceInCents / 100), sessionsIncluded: tier.sessionsIncluded === null ? "" : String(tier.sessionsIncluded), showBadge: tier.showBadge, perks: (tier.perks as string[]) || [] }); }}
+                      onClick={() => { setEditingTierId(tier.id); setEditTierForm({ name: tier.name, price: Math.round(tier.priceInCents / 100).toLocaleString("en-US"), sessionsIncluded: tier.sessionsIncluded === null ? "" : String(tier.sessionsIncluded), showBadge: tier.showBadge, perks: (tier.perks as string[]) || [] }); }}
                       className="rounded p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-white"
                     ><Pencil className="h-3.5 w-3.5" /></button>
                     <button
@@ -937,8 +944,8 @@ function TierFormCard({
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="text-xs text-neutral-500">Price ($)</label>
-          <input type="text" inputMode="decimal" value={form.price}
-            onChange={(e) => setForm({ ...form, price: e.target.value })} placeholder="0" className={inputCls} />
+          <input type="text" inputMode="numeric" value={form.price}
+            onChange={(e) => { const digits = e.target.value.replace(/[^0-9]/g, ""); setForm({ ...form, price: digits ? parseInt(digits, 10).toLocaleString("en-US") : "" }); }} placeholder="0" className={inputCls} />
         </div>
         <div>
           <label className="text-xs text-neutral-500">Sessions/mo (blank=unlimited)</label>

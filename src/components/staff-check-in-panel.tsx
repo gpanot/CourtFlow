@@ -405,7 +405,7 @@ export function StaffCheckInPanel({ venueId, queueNamesLower, onAdded }: StaffCh
         gender,
         bankBin: res.bankBin ?? null,
         bankAccount: res.bankAccount ?? null,
-        paymentRef: `${trimmed} NEW ${new Date().toISOString().slice(0, 10)}`,
+        paymentRef: `${trimmed} NEW ${(() => { const _d = new Date(); return `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, "0")}-${String(_d.getDate()).padStart(2, "0")}`; })()}`,
       });
       setPaymentMode("vietqr");
       clearPaymentTimer();

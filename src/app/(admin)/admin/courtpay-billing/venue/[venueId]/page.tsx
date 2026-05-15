@@ -121,9 +121,12 @@ function fmtShort(iso: string) {
   });
 }
 
-function utcDayKey(iso: string | Date): string {
+function localDayKey(iso: string | Date): string {
   const d = typeof iso === "string" ? new Date(iso) : iso;
-  return d.toISOString().slice(0, 10);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function groupPaymentsBySession(payments: WeekPaymentItem[]) {
@@ -389,7 +392,7 @@ export default function VenueBillingDetailPage() {
     const cw = detail.currentWeek;
     if (cw) {
       const hasInvoiceForSameWeek = detail.invoices.some(
-        (inv) => utcDayKey(inv.weekStartDate) === utcDayKey(cw.weekStart)
+        (inv) => localDayKey(inv.weekStartDate) === localDayKey(cw.weekStart)
       );
       if (!hasInvoiceForSameWeek) {
         rows.push({ kind: "current", weekKey: CURRENT_WEEK_ROW_KEY, cw });

@@ -298,7 +298,8 @@ export function PlayerDetailStickersTab({ playerId, facePhotoPath, playerFirstNa
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      const date = new Date(result.createdAt).toISOString().slice(0, 10);
+      const _d = new Date(result.createdAt);
+      const date = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, "0")}-${String(_d.getDate()).padStart(2, "0")}`;
       a.download = `sticker_result_${date}.png`;
       document.body.appendChild(a);
       a.click();

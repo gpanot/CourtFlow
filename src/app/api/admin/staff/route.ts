@@ -60,6 +60,8 @@ export async function POST(request: NextRequest) {
       role: "staff" | "superadmin";
       venueIds?: string[];
       venueAssignments?: { venueId: string; appAccess: string[] }[];
+      isCoach?: boolean;
+      coachBio?: string | null;
     }>(request);
 
     if (!body.name || !body.phone || !body.password) {
@@ -86,6 +88,8 @@ export async function POST(request: NextRequest) {
         phone: body.phone,
         passwordHash: hashPassword(body.password),
         role: body.role || "staff",
+        ...(body.isCoach !== undefined && { isCoach: body.isCoach }),
+        ...(body.coachBio !== undefined && { coachBio: body.coachBio }),
         ...(assignmentCreates.length > 0
           ? {
               venueAssignments: {

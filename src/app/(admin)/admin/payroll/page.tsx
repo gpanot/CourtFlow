@@ -54,32 +54,39 @@ interface PayrollData {
   staff: StaffRow[];
 }
 
+function localDateISO(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function getCurrentWeekMonday(): string {
   const d = new Date();
-  const day = d.getUTCDay();
+  const day = d.getDay();
   const diff = day === 0 ? -6 : 1 - day;
-  d.setUTCDate(d.getUTCDate() + diff);
-  return d.toISOString().split("T")[0];
+  d.setDate(d.getDate() + diff);
+  return localDateISO(d);
 }
 
 function addWeeks(dateStr: string, weeks: number): string {
-  const d = new Date(dateStr + "T00:00:00Z");
-  d.setUTCDate(d.getUTCDate() + weeks * 7);
-  return d.toISOString().split("T")[0];
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() + weeks * 7);
+  return localDateISO(d);
 }
 
 function formatWeekDisplay(weekStart: string): string {
-  const start = new Date(weekStart + "T00:00:00Z");
+  const start = new Date(weekStart + "T00:00:00");
   const end = new Date(start);
-  end.setUTCDate(end.getUTCDate() + 6);
+  end.setDate(end.getDate() + 6);
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const sm = months[start.getUTCMonth()];
-  const em = months[end.getUTCMonth()];
-  const year = end.getUTCFullYear();
+  const sm = months[start.getMonth()];
+  const em = months[end.getMonth()];
+  const year = end.getFullYear();
   if (sm === em) {
-    return `Week of ${sm} ${start.getUTCDate()} – ${end.getUTCDate()}, ${year}`;
+    return `Week of ${sm} ${start.getDate()} – ${end.getDate()}, ${year}`;
   }
-  return `Week of ${sm} ${start.getUTCDate()} – ${em} ${end.getUTCDate()}, ${year}`;
+  return `Week of ${sm} ${start.getDate()} – ${em} ${end.getDate()}, ${year}`;
 }
 
 function formatShortDate(dateStr: string): string {
@@ -88,7 +95,7 @@ function formatShortDate(dateStr: string): string {
 }
 
 function todayISO(): string {
-  return new Date().toISOString().split("T")[0];
+  return localDateISO(new Date());
 }
 
 export default function PayrollPage() {

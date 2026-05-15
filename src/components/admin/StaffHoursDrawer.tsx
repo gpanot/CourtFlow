@@ -92,10 +92,17 @@ interface CumulativeData {
   };
 }
 
+function localDateISO(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function addWeeks(dateStr: string, weeks: number): string {
-  const d = new Date(dateStr + "T00:00:00Z");
-  d.setUTCDate(d.getUTCDate() + weeks * 7);
-  return d.toISOString().split("T")[0];
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() + weeks * 7);
+  return localDateISO(d);
 }
 
 function getDefaultFrom(): string {
@@ -104,22 +111,22 @@ function getDefaultFrom(): string {
 
 function getCurrentWeekMonday(): string {
   const d = new Date();
-  const day = d.getUTCDay();
+  const day = d.getDay();
   const diff = day === 0 ? -6 : 1 - day;
-  d.setUTCDate(d.getUTCDate() + diff);
-  return d.toISOString().split("T")[0];
+  d.setDate(d.getDate() + diff);
+  return localDateISO(d);
 }
 
 function formatWeekNav(weekStart: string): string {
-  const start = new Date(weekStart + "T00:00:00Z");
+  const start = new Date(weekStart + "T00:00:00");
   const end = new Date(start);
-  end.setUTCDate(end.getUTCDate() + 6);
+  end.setDate(end.getDate() + 6);
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const sm = months[start.getUTCMonth()];
-  const em = months[end.getUTCMonth()];
-  const year = end.getUTCFullYear();
-  if (sm === em) return `${sm} ${start.getUTCDate()} – ${end.getUTCDate()}, ${year}`;
-  return `${sm} ${start.getUTCDate()} – ${em} ${end.getUTCDate()}, ${year}`;
+  const sm = months[start.getMonth()];
+  const em = months[end.getMonth()];
+  const year = end.getFullYear();
+  if (sm === em) return `${sm} ${start.getDate()} – ${end.getDate()}, ${year}`;
+  return `${sm} ${start.getDate()} – ${em} ${end.getDate()}, ${year}`;
 }
 
 export function StaffHoursDrawer({
@@ -156,7 +163,7 @@ export function StaffHoursDrawer({
   // Mark Paid modal
   const [showMarkPaid, setShowMarkPaid] = useState(false);
   const [mpAmount, setMpAmount] = useState("");
-  const [mpDate, setMpDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [mpDate, setMpDate] = useState(() => localDateISO(new Date()));
   const [mpMethod, setMpMethod] = useState<string>("Bank Transfer");
   const [mpNote, setMpNote] = useState("");
   const [mpSubmitting, setMpSubmitting] = useState(false);
@@ -202,7 +209,7 @@ export function StaffHoursDrawer({
 
   const openMarkPaidModal = () => {
     setMpAmount("");
-    setMpDate(new Date().toISOString().split("T")[0]);
+    setMpDate(localDateISO(new Date()));
     setMpMethod("Bank Transfer");
     setMpNote(weekData?.payment.note || "");
     setShowMarkPaid(true);

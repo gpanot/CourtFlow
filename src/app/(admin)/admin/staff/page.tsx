@@ -166,6 +166,8 @@ export default function StaffPage() {
           venueId,
           appAccess: form.venueAppAccess[venueId] ?? ["courtflow"],
         })),
+        isCoach: form.isCoach,
+        coachBio: form.coachBio || null,
       });
       await fetchAll();
       closeModal();

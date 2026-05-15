@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
+import { useAdminVenueStore } from "@/stores/admin-venue-store";
 import {
   GraduationCap,
   Package,
@@ -109,8 +110,14 @@ interface CourtSlotData {
   slots: AvailSlot[];
 }
 
-const centsToDollars = (c: number) => (c / 100).toFixed(2);
-const dollarsToCents = (d: string) => Math.round(parseFloat(d || "0") * 100);
+const centsToDollars = (c: number) => Math.round(c / 100);
+const dollarsToCents = (d: string) => (parseInt(d.replace(/,/g, "") || "0", 10)) * 100;
+const formatPrice = (n: number) => n.toLocaleString("en-US");
+const parseFormattedPrice = (raw: string) => {
+  const digits = raw.replace(/[^0-9]/g, "");
+  if (!digits) return "";
+  return parseInt(digits, 10).toLocaleString("en-US");
+};
 
 const STATUS_COLORS: Record<string, string> = {
   confirmed: "bg-blue-600/20 text-blue-400",
@@ -129,16 +136,21 @@ const STATUS_LABELS: Record<string, string> = {
 /* ─── Main Page ─── */
 
 export default function CoachingPage() {
+  const { selectedVenueId: storedVenueId, setSelectedVenueId: setStoredVenueId } = useAdminVenueStore();
   const [tab, setTab] = useState<"coaches" | "lessons">("coaches");
   const [venues, setVenues] = useState<Venue[]>([]);
-  const [selectedVenueId, setSelectedVenueId] = useState("");
+  const [selectedVenueId, _setSelectedVenueId] = useState(storedVenueId ?? "");
+  const setSelectedVenueId = (id: string) => { _setSelectedVenueId(id); setStoredVenueId(id); };
 
   useEffect(() => {
     api.get<Venue[]>("/api/venues").then((v) => {
       setVenues(v);
-      if (v.length > 0) setSelectedVenueId(v[0].id);
+      if (v.length > 0 && !selectedVenueId) {
+        const match = storedVenueId && v.find((x) => x.id === storedVenueId);
+        setSelectedVenueId(match ? storedVenueId : v[0].id);
+      }
     });
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="space-y-6">
@@ -230,7 +242,7 @@ function CoachesTab({ venueId }: { venueId: string }) {
       description: pkg.description || "",
       lessonType: pkg.lessonType,
       durationHours: String(pkg.durationMin / 60),
-      priceInDollars: centsToDollars(pkg.priceInCents),
+      priceInDollars: formatPrice(centsToDollars(pkg.priceInCents)),
       sessionsIncluded: String(pkg.sessionsIncluded),
     });
     setErr("");
@@ -351,7 +363,7 @@ function CoachesTab({ venueId }: { venueId: string }) {
                         </div>
                         <div className="flex items-center gap-3 mt-1 text-xs text-neutral-500">
                           <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{pkg.durationMin / 60}h</span>
-                          <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />${centsToDollars(pkg.priceInCents)}</span>
+                          <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />${formatPrice(centsToDollars(pkg.priceInCents))}</span>
                           {pkg.sessionsIncluded > 1 && (
                             <span className="flex items-center gap-1"><Users className="h-3 w-3" />{pkg.sessionsIncluded} sessions</span>
                           )}
@@ -443,10 +455,10 @@ function CoachesTab({ venueId }: { venueId: string }) {
                   <label className="mb-1.5 block text-sm text-neutral-400">Price ($)</label>
                   <input
                     type="text"
-                    inputMode="decimal"
-                    placeholder="0.00"
+                    inputMode="numeric"
+                    placeholder="0"
                     value={pkgForm.priceInDollars}
-                    onChange={(e) => setPkgForm({ ...pkgForm, priceInDollars: e.target.value })}
+                    onChange={(e) => setPkgForm({ ...pkgForm, priceInDollars: parseFormattedPrice(e.target.value) })}
                     className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-white focus:border-teal-500 focus:outline-none"
                   />
                 </div>
@@ -492,11 +504,15 @@ function formatSlotTime(iso: string): string {
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+function localDateISO(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 function LessonsTab({ venueId }: { venueId: string }) {
-  const [selectedDate, setSelectedDate] = useState(() => {
-    const d = new Date();
-    return d.toISOString().split("T")[0];
-  });
+  const [selectedDate, setSelectedDate] = useState(() => localDateISO(new Date()));
   const [lessons, setLessons] = useState<CoachLesson[]>([]);
   const [coaches, setCoaches] = useState<Coach[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -509,7 +525,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
 
   const [availability, setAvailability] = useState<CourtSlotData[]>([]);
   const [loadingAvail, setLoadingAvail] = useState(false);
-  const [bookDate, setBookDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [bookDate, setBookDate] = useState(() => localDateISO(new Date()));
 
   const [bookForm, setBookForm] = useState({
     coachId: "",
@@ -621,7 +637,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
       note: lesson.note || "",
       status: lesson.status,
     });
-    const lessonDate = new Date(lesson.date).toISOString().split("T")[0];
+    const lessonDate = localDateISO(new Date(lesson.date));
     setBookDate(lessonDate);
     setSelectedSlots([]);
     setErr("");
@@ -960,7 +976,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
                         <option value="">Select a package...</option>
                         {coachPackages.map((p) => (
                           <option key={p.id} value={p.id}>
-                            {p.name} — ${centsToDollars(p.priceInCents)} ({p.durationMin / 60}h)
+                            {p.name} — ${formatPrice(centsToDollars(p.priceInCents))} ({p.durationMin / 60}h)
                           </option>
                         ))}
                       </select>
@@ -1054,7 +1070,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
                     </p>
                     {selectedPkg && (
                       <p className="text-xs text-teal-400 mt-1">
-                        ${centsToDollars(Math.round((selectedPkg.priceInCents / selectedPkg.durationMin) * selectedSlots.length * 60))}
+                        ${formatPrice(centsToDollars(Math.round((selectedPkg.priceInCents / selectedPkg.durationMin) * selectedSlots.length * 60)))}
                       </p>
                     )}
                   </div>
