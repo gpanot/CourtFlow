@@ -642,6 +642,54 @@ export default function BookingsPage() {
         >
           Today
         </button>
+
+        {/* Selection action bar — same row as date nav */}
+        {hasSelection && selectionTimeRange && (
+          <div className="flex items-center gap-2 rounded-2xl border border-purple-500/40 bg-neutral-900/95 backdrop-blur px-3 py-1.5 shadow-lg shadow-purple-900/20 animate-in fade-in duration-150">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-white truncate">
+                {selectionCourtIds.length === 1
+                  ? selectedSlots[selectionCourtIds[0]].courtLabel
+                  : `${selectionCourtIds.length} courts`}
+                {" "}— {selectionTotalSlots} slot{selectionTotalSlots > 1 ? "s" : ""}
+              </p>
+              <p className="text-[10px] text-neutral-400">
+                {formatTime(selectionTimeRange.first.startTime)} – {formatTime(selectionTimeRange.last.endTime)}
+                {canBookFromSelection && (
+                  <span className="ml-1.5 font-medium text-purple-400">{fmtPrice(selectionTotalPrice)}</span>
+                )}
+              </p>
+            </div>
+            <button
+              onClick={() => openBlockFromSelection("open_play")}
+              className="flex items-center gap-1 rounded-lg border border-emerald-600/50 bg-emerald-600/20 px-2 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-600/30 transition-colors"
+            >
+              <Users className="h-3.5 w-3.5" /> Open Play
+            </button>
+            <button
+              onClick={() => openBlockFromSelection()}
+              className="flex items-center gap-1 rounded-lg border border-amber-600/50 bg-amber-600/20 px-2 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-600/30 transition-colors"
+            >
+              <Ban className="h-3.5 w-3.5" /> Block
+            </button>
+            <button
+              onClick={openCreateFromSelection}
+              disabled={!canBookFromSelection}
+              className="flex items-center gap-1 rounded-lg bg-purple-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-purple-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+              title={!canBookFromSelection ? "Select consecutive slots on a single court to book" : ""}
+            >
+              <Plus className="h-3.5 w-3.5" /> Book
+            </button>
+            <button
+              onClick={clearSelection}
+              className="rounded-md p-1 text-neutral-400 hover:bg-neutral-800 hover:text-white transition-colors"
+              title="Clear selection"
+            >
+              <XCircle className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+
         <div className="ml-auto flex items-center rounded-lg border border-neutral-700 overflow-hidden">
           <button
             onClick={() => { setViewMode("court"); localStorage.setItem("bookings-view-mode", "court"); }}
@@ -1000,55 +1048,6 @@ export default function BookingsPage() {
           </div>
         );
       })()}
-
-      {/* Floating selection bar */}
-      {hasSelection && selectionTimeRange && (
-        <div className="sticky bottom-4 z-30 mx-auto max-w-xl animate-in slide-in-from-bottom-4 fade-in duration-200">
-          <div className="flex items-center gap-3 rounded-2xl border border-purple-500/40 bg-neutral-900/95 backdrop-blur px-4 py-3 shadow-xl shadow-purple-900/20">
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-white truncate">
-                {selectionCourtIds.length === 1
-                  ? selectedSlots[selectionCourtIds[0]].courtLabel
-                  : `${selectionCourtIds.length} courts`}
-                {" "}— {selectionTotalSlots} slot{selectionTotalSlots > 1 ? "s" : ""}
-              </p>
-              <p className="text-xs text-neutral-400">
-                {formatTime(selectionTimeRange.first.startTime)} – {formatTime(selectionTimeRange.last.endTime)}
-                {canBookFromSelection && (
-                  <span className="ml-2 font-medium text-purple-400">{fmtPrice(selectionTotalPrice)}</span>
-                )}
-              </p>
-            </div>
-            <button
-              onClick={() => openBlockFromSelection("open_play")}
-              className="flex items-center gap-1.5 rounded-xl border border-emerald-600/50 bg-emerald-600/20 px-3 py-2.5 text-sm font-semibold text-emerald-300 hover:bg-emerald-600/30 transition-colors"
-            >
-              <Users className="h-4 w-4" /> Open Play
-            </button>
-            <button
-              onClick={() => openBlockFromSelection()}
-              className="flex items-center gap-1.5 rounded-xl border border-amber-600/50 bg-amber-600/20 px-3 py-2.5 text-sm font-semibold text-amber-300 hover:bg-amber-600/30 transition-colors"
-            >
-              <Ban className="h-4 w-4" /> Block
-            </button>
-            <button
-              onClick={openCreateFromSelection}
-              disabled={!canBookFromSelection}
-              className="flex items-center gap-1.5 rounded-xl bg-purple-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-purple-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              title={!canBookFromSelection ? "Select consecutive slots on a single court to book" : ""}
-            >
-              <Plus className="h-4 w-4" /> Book
-            </button>
-            <button
-              onClick={clearSelection}
-              className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white transition-colors"
-              title="Clear selection"
-            >
-              <XCircle className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Bookings List */}
       <section className="space-y-3">

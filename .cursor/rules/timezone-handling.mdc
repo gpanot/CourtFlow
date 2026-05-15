@@ -1,0 +1,73 @@
+---
+description: Server-side and client-side timezone handling rules for date/time operations
+globs: "src/**/*.ts,src/**/*.tsx,scripts/**/*.ts"
+alwaysApply: true
+---
+# Timezone Handling
+
+CourtFlow servers run in the **venue's local timezone** (currently `Asia/Saigon`, UTC+7). All date/time logic MUST produce timestamps that represent the **user's local time**, not UTC.
+
+## Server-side Rules (API routes, lib utilities, seed scripts)
+
+### Date normalization — use LOCAL midnight
+```ts
+// CORRECT — local midnight (e.g. 2026-05-15T00:00 local = 2026-05-14T17:00:00.000Z)
+const date = new Date(dateStr);
+date.setHours(0, 0, 0, 0);
+
+// WRONG — UTC midnight (2026-05-15T00:00:00.000Z ≠ local midnight)
+date.setUTCHours(0, 0, 0, 0);
+```
+
+### Time slot generation — use LOCAL hours
+```ts
+// CORRECT — 8 AM local
+start.setHours(8, 0, 0, 0);
+
+// WRONG — 8 AM UTC = 3 PM local
+start.setUTCHours(8, 0, 0, 0);
+```
+
+### Day of week, hour extraction — use LOCAL methods
+```ts
+// CORRECT
+date.getDay();        // local day of week
+date.getHours();      // local hour
+date.getMinutes();    // local minutes
+
+// WRONG for venue-local logic
+date.getUTCDay();
+date.getUTCHours();
+```
+
+### Date arithmetic — use LOCAL methods
+```ts
+// CORRECT
+nextDay.setDate(nextDay.getDate() + 1);
+end.setMinutes(end.getMinutes() + 60);
+
+// WRONG
+nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+end.setUTCMinutes(end.getUTCMinutes() + 60);
+```
+
+## Client-side Rules (React components)
+
+- Use `toLocaleTimeString()` or `toLocaleString()` to display times — these automatically convert UTC ISO strings to the browser's local timezone.
+- Use `getHours()`, `getMinutes()` for local-time calculations (e.g. "now" indicator line).
+- Never display raw UTC hours to the user.
+
+## Database
+
+- The `date` column on `bookings`, `court_blocks`, `coach_lessons` is PostgreSQL `DATE` type — stores only the date portion, no time.
+- The `start_time` / `end_time` columns are `timestamp without time zone` — PostgreSQL stores the value as-is, and Node.js interprets it in the server's timezone.
+- When seeding or creating records, always use `setHours()` (local) to match how the server queries.
+
+## Key Principle
+
+> The server timezone IS the venue timezone. Use `setHours` / `getHours` (local) everywhere on the server. The `.toISOString()` output will automatically encode the correct UTC offset. The client's `toLocaleTimeString()` will then display the correct user-local time.
+
+## When NOT to use local methods
+
+- Payroll `weekStart` fields use UTC (`setUTCHours`) because they represent abstract week boundaries, not venue operating hours.
+- Any field documented as explicitly UTC in the schema.
