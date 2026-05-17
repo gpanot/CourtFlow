@@ -528,9 +528,7 @@ export default function BossDashboardPage() {
               const rs = historyData.revenueSummary;
               const rows = [
                 { label: "Today", bucket: rs.today, highlight: true },
-                { label: "Yesterday", bucket: rs.yesterday },
                 { label: "This week", bucket: rs.thisWeek },
-                { label: "This month", bucket: rs.thisMonth },
                 { label: "All time", bucket: rs.allTime },
               ];
               return (

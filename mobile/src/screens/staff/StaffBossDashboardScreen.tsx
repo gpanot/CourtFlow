@@ -810,9 +810,7 @@ export function StaffBossDashboardScreen() {
                 const rs = historyData.revenueSummary;
                 const rows: { label: string; bucket: RevenueBucket; highlight?: boolean }[] = [
                   { label: t("bossDashboardToday"), bucket: rs.today, highlight: true },
-                  { label: t("bossDashboardYesterday"), bucket: rs.yesterday },
                   { label: t("bossDashboardThisWeek"), bucket: rs.thisWeek },
-                  { label: t("bossDashboardThisMonth"), bucket: rs.thisMonth },
                   { label: t("bossDashboardAllTime"), bucket: rs.allTime },
                 ];
                 return (
@@ -886,7 +884,15 @@ export function StaffBossDashboardScreen() {
                                     style={[styles.row, { backgroundColor: theme.bg, borderColor: theme.border }]}
                                     activeOpacity={0.7}
                                     onPress={async () => {
-                                      if (sessions) return;
+                                      if (sessions) {
+                                        // collapse: remove from state
+                                        setWeekSessions((prev) => {
+                                          const next = { ...prev };
+                                          delete next[weekKey];
+                                          return next;
+                                        });
+                                        return;
+                                      }
                                       setWeekSessionsLoading(weekKey);
                                       try {
                                         const list = await api.get<SessionHistoryRow[]>(
