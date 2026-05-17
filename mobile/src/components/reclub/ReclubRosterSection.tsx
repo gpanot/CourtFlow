@@ -536,6 +536,7 @@ export function ReclubRosterSection({
 
   const handleAvatarTap = useCallback(
     (player: ReclubPlayer) => {
+      if (player.isAddedByFriend) return;
       setSheetPlayer(player);
       setSheetMode(player.reclubUserId !== null && paidReclubIds.has(player.reclubUserId) ? "info" : "match");
     },

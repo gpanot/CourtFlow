@@ -116,6 +116,64 @@ export async function GET(req: Request) {
       dailyRevenue[day].peopleTotal += partyForRow(p);
     }
 
+    // Monthly revenue breakdown with nested weeks (ISO Monday-based weeks)
+    // Week key: "YYYY-WW" (ISO week). Week boundaries: Monday 00:00 → Sunday 23:59
+    const getISOWeekMonday = (d: Date): Date => {
+      const day = d.getDay(); // 0=Sun,1=Mon,...
+      const diff = (day === 0 ? -6 : 1 - day); // days to subtract to reach Monday
+      const monday = new Date(d);
+      monday.setDate(d.getDate() + diff);
+      monday.setHours(0, 0, 0, 0);
+      return monday;
+    };
+
+    type WeekBucket = { weekStart: string; weekEnd: string; total: number; count: number; peopleTotal: number };
+    type MonthBucket = { month: string; total: number; count: number; peopleTotal: number; weeks: WeekBucket[] };
+
+    const monthlyMap: Record<string, MonthBucket> = {};
+    const weekMap: Record<string, WeekBucket> = {};
+
+    for (const p of recentPayments) {
+      const d = p.confirmedAt || p.createdAt;
+      const monthKey = d.toISOString().slice(0, 7); // "YYYY-MM"
+
+      const monday = getISOWeekMonday(d);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23, 59, 59, 999);
+
+      const weekKey = monday.toISOString().slice(0, 10);
+      const weekEndKey = sunday.toISOString().slice(0, 10);
+
+      if (!weekMap[weekKey]) {
+        weekMap[weekKey] = { weekStart: weekKey, weekEnd: weekEndKey, total: 0, count: 0, peopleTotal: 0 };
+      }
+      weekMap[weekKey].total += p.amount;
+      weekMap[weekKey].count += 1;
+      weekMap[weekKey].peopleTotal += partyForRow(p);
+
+      if (!monthlyMap[monthKey]) {
+        monthlyMap[monthKey] = { month: monthKey, total: 0, count: 0, peopleTotal: 0, weeks: [] };
+      }
+      monthlyMap[monthKey].total += p.amount;
+      monthlyMap[monthKey].count += 1;
+      monthlyMap[monthKey].peopleTotal += partyForRow(p);
+    }
+
+    // Attach weeks to months (a week goes to the month where it starts — i.e. Monday's month)
+    for (const week of Object.values(weekMap)) {
+      const monthKey = week.weekStart.slice(0, 7);
+      if (monthlyMap[monthKey]) {
+        monthlyMap[monthKey].weeks.push(week);
+      }
+    }
+    // Sort weeks within each month DESC (most recent first)
+    for (const month of Object.values(monthlyMap)) {
+      month.weeks.sort((a, b) => b.weekStart.localeCompare(a.weekStart));
+    }
+
+    const monthlyRevenue = Object.values(monthlyMap).sort((a, b) => b.month.localeCompare(a.month));
+
     return NextResponse.json({
       payments: recentPayments.map((p) => ({
         id: p.id,
@@ -130,6 +188,7 @@ export async function GET(req: Request) {
         (a, b) => b.date.localeCompare(a.date)
       ),
       revenueSummary,
+      monthlyRevenue,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Internal server error";

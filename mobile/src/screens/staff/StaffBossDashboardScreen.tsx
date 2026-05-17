@@ -86,6 +86,19 @@ interface HistoryData {
     thisMonth: { total: number; count: number; peopleTotal?: number };
     allTime: { total: number; count: number; peopleTotal?: number };
   };
+  monthlyRevenue?: {
+    month: string;
+    total: number;
+    count: number;
+    peopleTotal: number;
+    weeks: {
+      weekStart: string;
+      weekEnd: string;
+      total: number;
+      count: number;
+      peopleTotal: number;
+    }[];
+  }[];
 }
 
 interface SessionData {
@@ -499,7 +512,6 @@ export function StaffBossDashboardScreen() {
   const [billingInvoices, setBillingInvoices] = useState<BillingInvoiceRow[]>([]);
   const [showQR, setShowQR] = useState<string | null>(null);
   const [qrData, setQrData] = useState<QRData | null>(null);
-  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceDetail | null>(null);
   const [justPaid, setJustPaid] = useState<string | null>(null);
   const [genderFilter, setGenderFilter] = useState<GenderFilter>("all");
   const [playerSearch, setPlayerSearch] = useState("");
@@ -513,6 +525,13 @@ export function StaffBossDashboardScreen() {
   const [exportToast, setExportToast] = useState<string | null>(null);
   // Track which tabs have been fetched so we don't reload on re-visit
   const loadedTabs = useRef(new Set<Tab>());
+
+  // ── History tab collapse / expand state ─────────────────────────────────────
+  const [dailyRevenueExpanded, setDailyRevenueExpanded] = useState(false);
+  const [pastSessionsExpanded, setPastSessionsExpanded] = useState(false);
+  const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
+  const [weekSessions, setWeekSessions] = useState<Record<string, SessionHistoryRow[]>>({});
+  const [weekSessionsLoading, setWeekSessionsLoading] = useState<string | null>(null);
 
   const showExportToast = useCallback((msg: string) => {
     setExportToast(msg);
@@ -818,10 +837,165 @@ export function StaffBossDashboardScreen() {
                 );
               })()}
 
+              {/* Revenue by month — expandable months → weeks → sessions */}
+              {(historyData.monthlyRevenue ?? []).length > 0 && (
+                <>
+                  <Text style={[styles.sectionTitle, { marginBottom: 8, marginTop: 4 }]}>
+                    Revenue by month
+                  </Text>
+                  {(historyData.monthlyRevenue ?? []).map((month) => {
+                    const isOpen = expandedMonth === month.month;
+                    return (
+                      <View key={month.month} style={{ marginBottom: 8 }}>
+                        <TouchableOpacity
+                          style={styles.row}
+                          activeOpacity={0.7}
+                          onPress={() => setExpandedMonth(isOpen ? null : month.month)}
+                        >
+                          <View style={styles.rowMain}>
+                            <Text style={styles.rowTitle}>
+                              {new Date(month.month + "-01").toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+                            </Text>
+                            <Text style={styles.rowSub}>
+                              {month.count} {t("bossDashboardPayments")}
+                              {" · "}
+                              {month.peopleTotal} {t("bossDashboardSessionPlayersPaid")}
+                            </Text>
+                          </View>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                            <Text style={[styles.rowTitle, styles.statPurple]}>
+                              {formatVND(month.total)} VND
+                            </Text>
+                            <Ionicons
+                              name={isOpen ? "chevron-up" : "chevron-down"}
+                              size={16}
+                              color={theme.muted}
+                            />
+                          </View>
+                        </TouchableOpacity>
+
+                        {isOpen && (
+                          <View style={{ marginLeft: 12, marginTop: 2 }}>
+                            {month.weeks.map((week) => {
+                              const weekKey = week.weekStart;
+                              const sessions = weekSessions[weekKey];
+                              const isLoadingWeek = weekSessionsLoading === weekKey;
+                              return (
+                                <View key={weekKey} style={{ marginBottom: 6 }}>
+                                  <TouchableOpacity
+                                    style={[styles.row, { backgroundColor: theme.bg, borderColor: theme.border }]}
+                                    activeOpacity={0.7}
+                                    onPress={async () => {
+                                      if (sessions) return;
+                                      setWeekSessionsLoading(weekKey);
+                                      try {
+                                        const list = await api.get<SessionHistoryRow[]>(
+                                          `/api/sessions/history?venueId=${venueId}&from=${week.weekStart}T00:00:00&to=${week.weekEnd}T23:59:59`
+                                        );
+                                        setWeekSessions((prev) => ({ ...prev, [weekKey]: list }));
+                                      } catch {
+                                        setWeekSessions((prev) => ({ ...prev, [weekKey]: [] }));
+                                      } finally {
+                                        setWeekSessionsLoading(null);
+                                      }
+                                    }}
+                                  >
+                                    <View style={styles.rowMain}>
+                                      <Text style={[styles.rowTitle, { fontSize: 13 }]}>
+                                        {new Date(week.weekStart).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+                                        {" → "}
+                                        {new Date(week.weekEnd).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+                                      </Text>
+                                      <Text style={styles.rowSub}>
+                                        {week.count} {t("bossDashboardPayments")}
+                                        {" · "}
+                                        {week.peopleTotal} {t("bossDashboardSessionPlayersPaid")}
+                                      </Text>
+                                    </View>
+                                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                                      <Text style={[styles.rowTitle, styles.statPurple, { fontSize: 13 }]}>
+                                        {formatVND(week.total)} VND
+                                      </Text>
+                                      {isLoadingWeek ? (
+                                        <ActivityIndicator size="small" color={theme.muted} />
+                                      ) : (
+                                        <Ionicons
+                                          name={sessions ? "chevron-up" : "chevron-down"}
+                                          size={14}
+                                          color={theme.muted}
+                                        />
+                                      )}
+                                    </View>
+                                  </TouchableOpacity>
+
+                                  {sessions && sessions.length > 0 && (
+                                    <View style={{ marginLeft: 8, marginTop: 2 }}>
+                                      {sessions
+                                        .filter((s) => (s.paymentPeopleTotal ?? s.paymentCount ?? 0) > 0)
+                                        .map((s) => (
+                                          <TouchableOpacity
+                                            key={s.id}
+                                            style={styles.sessionCard}
+                                            activeOpacity={0.7}
+                                            onPress={() =>
+                                              navigation.navigate("StaffSessionDetail", {
+                                                sessionId: s.id,
+                                                date: sessionDateLabel(s.openedAt),
+                                                openedAt: s.openedAt,
+                                                closedAt: s.closedAt ?? null,
+                                                debugHistoryPaymentPeopleTotal: s.paymentPeopleTotal,
+                                                debugHistoryPaymentCount: s.paymentCount,
+                                                debugHistoryQueuePlayerCount: s.playerCount,
+                                              })
+                                            }
+                                          >
+                                            <View style={styles.sessionCardRow}>
+                                              <Text style={styles.sessionCardDate}>{sessionDateLabel(s.openedAt)}</Text>
+                                              <View style={styles.sessionCardBadge}>
+                                                <Text style={styles.sessionCardBadgeText}>{t("bossDashboardClosed")}</Text>
+                                              </View>
+                                            </View>
+                                            <Text style={styles.sessionCardFee}>
+                                              {t("bossDashboardRevenue")}: {s.paymentRevenue?.toLocaleString() ?? "0"} VND ·{" "}
+                                              {s.paymentPeopleTotal ?? s.paymentCount ?? 0} {t("bossDashboardSessionPlayersPaid")} ·{" "}
+                                              {s.paymentCount ?? 0} {t("bossDashboardPayments")}
+                                            </Text>
+                                            <Text style={styles.sessionCardTime}>
+                                              {new Date(s.openedAt).toLocaleTimeString()}
+                                              {s.closedAt ? ` — ${new Date(s.closedAt).toLocaleTimeString()}` : ""}
+                                            </Text>
+                                          </TouchableOpacity>
+                                        ))}
+                                      {sessions.filter((s) => (s.paymentPeopleTotal ?? s.paymentCount ?? 0) > 0).length === 0 && (
+                                        <Text style={[styles.empty, { paddingVertical: 12, fontSize: 12 }]}>
+                                          {t("bossDashboardNoPastSessions")}
+                                        </Text>
+                                      )}
+                                    </View>
+                                  )}
+                                </View>
+                              );
+                            })}
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
+                </>
+              )}
+
+              {/* Daily revenue — collapsible, default collapsed */}
               {historyData.dailyRevenue.length > 0 && (
                 <>
-                  <Text style={styles.sectionTitle}>{t("bossDashboardDailyRevenue")}</Text>
-                  {historyData.dailyRevenue.map((d) => (
+                  <TouchableOpacity
+                    style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 8 }}
+                    activeOpacity={0.7}
+                    onPress={() => setDailyRevenueExpanded((v) => !v)}
+                  >
+                    <Text style={styles.sectionTitle}>{t("bossDashboardDailyRevenue")}</Text>
+                    <Ionicons name={dailyRevenueExpanded ? "chevron-up" : "chevron-down"} size={16} color={theme.muted} />
+                  </TouchableOpacity>
+                  {dailyRevenueExpanded && historyData.dailyRevenue.map((d) => (
                     <View key={d.date} style={styles.row}>
                       <View style={styles.rowMain}>
                         <Text style={styles.rowTitle}>
@@ -841,67 +1015,74 @@ export function StaffBossDashboardScreen() {
                 </>
               )}
 
-              <View
+              {/* Past sessions — collapsible, default collapsed */}
+              <TouchableOpacity
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
                   justifyContent: "space-between",
                   marginTop: 12,
-                  marginBottom: 4,
-                  gap: 8,
+                  paddingVertical: 8,
                 }}
+                activeOpacity={0.7}
+                onPress={() => setPastSessionsExpanded((v) => !v)}
               >
                 <Text style={[styles.sectionTitle, { marginBottom: 0, flex: 1 }]}>
                   {t("bossDashboardPastSessions")}
                 </Text>
-                <TouchableOpacity
-                  style={{ padding: 6 }}
-                  onPress={() => setRevenueExportOpen(true)}
-                  accessibilityRole="button"
-                  accessibilityLabel={t("bossExportRevenueTitle")}
-                >
-                  <Ionicons name="download-outline" size={18} color={theme.muted} />
-                </TouchableOpacity>
-              </View>
-              {sessionHistory.length === 0 ? (
-                <Text style={styles.empty}>{t("bossDashboardNoPastSessions")}</Text>
-              ) : (
-                sessionHistory.map((s) => (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                   <TouchableOpacity
-                    key={s.id}
-                    style={styles.sessionCard}
-                    activeOpacity={0.7}
-                    onPress={() =>
-                      navigation.navigate("StaffSessionDetail", {
-                        sessionId: s.id,
-                        date: sessionDateLabel(s.openedAt),
-                        openedAt: s.openedAt,
-                        closedAt: s.closedAt ?? null,
-                        debugHistoryPaymentPeopleTotal: s.paymentPeopleTotal,
-                        debugHistoryPaymentCount: s.paymentCount,
-                        debugHistoryQueuePlayerCount: s.playerCount,
-                      })
-                    }
+                    style={{ padding: 6 }}
+                    onPress={() => setRevenueExportOpen(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel={t("bossExportRevenueTitle")}
                   >
-                    <View style={styles.sessionCardRow}>
-                      <Text style={styles.sessionCardDate}>{sessionDateLabel(s.openedAt)}</Text>
-                      <View style={styles.sessionCardBadge}>
-                        <Text style={styles.sessionCardBadgeText}>{t("bossDashboardClosed")}</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.sessionCardFee}>
-                      {t("bossDashboardRevenue")}: {s.paymentRevenue?.toLocaleString() ?? "0"} VND ·{" "}
-                      {s.paymentPeopleTotal ?? s.paymentCount ?? 0} {t("bossDashboardSessionPlayersPaid")} ·{" "}
-                      {s.paymentCount ?? 0} {t("bossDashboardPayments")}
-                      {(s.cancelledCount ?? 0) > 0 ? ` · ${s.cancelledCount} ${t("sessionCancelledFree")}` : ""}
-                    </Text>
-                    <Text style={styles.sessionCardTime}>
-                      {new Date(s.openedAt).toLocaleTimeString()}
-                      {s.closedAt ? ` — ${new Date(s.closedAt).toLocaleTimeString()}` : ""}
-                      {s.openedOnDevice ? ` · ${s.openedOnDevice}` : ""}
-                    </Text>
+                    <Ionicons name="download-outline" size={18} color={theme.muted} />
                   </TouchableOpacity>
-                ))
+                  <Ionicons name={pastSessionsExpanded ? "chevron-up" : "chevron-down"} size={16} color={theme.muted} />
+                </View>
+              </TouchableOpacity>
+              {pastSessionsExpanded && (
+                sessionHistory.length === 0 ? (
+                  <Text style={styles.empty}>{t("bossDashboardNoPastSessions")}</Text>
+                ) : (
+                  sessionHistory.map((s) => (
+                    <TouchableOpacity
+                      key={s.id}
+                      style={styles.sessionCard}
+                      activeOpacity={0.7}
+                      onPress={() =>
+                        navigation.navigate("StaffSessionDetail", {
+                          sessionId: s.id,
+                          date: sessionDateLabel(s.openedAt),
+                          openedAt: s.openedAt,
+                          closedAt: s.closedAt ?? null,
+                          debugHistoryPaymentPeopleTotal: s.paymentPeopleTotal,
+                          debugHistoryPaymentCount: s.paymentCount,
+                          debugHistoryQueuePlayerCount: s.playerCount,
+                        })
+                      }
+                    >
+                      <View style={styles.sessionCardRow}>
+                        <Text style={styles.sessionCardDate}>{sessionDateLabel(s.openedAt)}</Text>
+                        <View style={styles.sessionCardBadge}>
+                          <Text style={styles.sessionCardBadgeText}>{t("bossDashboardClosed")}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.sessionCardFee}>
+                        {t("bossDashboardRevenue")}: {s.paymentRevenue?.toLocaleString() ?? "0"} VND ·{" "}
+                        {s.paymentPeopleTotal ?? s.paymentCount ?? 0} {t("bossDashboardSessionPlayersPaid")} ·{" "}
+                        {s.paymentCount ?? 0} {t("bossDashboardPayments")}
+                        {(s.cancelledCount ?? 0) > 0 ? ` · ${s.cancelledCount} ${t("sessionCancelledFree")}` : ""}
+                      </Text>
+                      <Text style={styles.sessionCardTime}>
+                        {new Date(s.openedAt).toLocaleTimeString()}
+                        {s.closedAt ? ` — ${new Date(s.closedAt).toLocaleTimeString()}` : ""}
+                        {s.openedOnDevice ? ` · ${s.openedOnDevice}` : ""}
+                      </Text>
+                    </TouchableOpacity>
+                  ))
+                )
               )}
             </>
           )}
@@ -1258,19 +1439,14 @@ export function StaffBossDashboardScreen() {
                     return (
                       <TouchableOpacity
                         key={inv.id}
-                        activeOpacity={isPaid ? 0.75 : 1}
+                        activeOpacity={0.85}
                         onPress={async () => {
-                          if (!isPaid) return;
-                          if (selectedInvoice?.id === inv.id) {
-                            setSelectedInvoice(null);
-                            return;
-                          }
-                          try {
-                            const data = await api.get<InvoiceDetail>(
-                              `/api/staff/boss-dashboard/billing/invoices/${inv.id}`
-                            );
-                            setSelectedInvoice(data);
-                          } catch {}
+                          if (!venueId) return;
+                          navigation.navigate("StaffBillingWeekPayments", {
+                            venueId,
+                            weekStart: inv.weekStartDate,
+                            weekEnd: inv.weekEndDate,
+                          });
                         }}
                         style={{
                           borderRadius: 12,
@@ -1300,66 +1476,31 @@ export function StaffBossDashboardScreen() {
                               </Text>
                             </View>
 
-                            {/* Expanded paid detail */}
-                            {isPaid && selectedInvoice?.id === inv.id ? (
-                              <View style={{ gap: 6 }}>
-                                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                                  <Text style={{ fontSize: 12, color: theme.muted }}>{t("bossDashboardBillingTotalPayments")}</Text>
-                                  <Text style={{ fontSize: 12, color: theme.text }}>{selectedInvoice.totalCheckins}</Text>
-                                </View>
-                                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                                  <Text style={{ fontSize: 12, color: theme.muted }}>{t("bossDashboardBillingBaseCharges")}</Text>
-                                  <Text style={{ fontSize: 12, color: theme.text }}>{formatVND(selectedInvoice.baseAmount)} VND</Text>
-                                </View>
-                                {selectedInvoice.subscriptionAmount > 0 && (
-                                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                                    <Text style={{ fontSize: 12, color: theme.muted }}>{t("bossDashboardBillingSubAddonLabel")}</Text>
-                                    <Text style={{ fontSize: 12, color: theme.text }}>{formatVND(selectedInvoice.subscriptionAmount)} VND</Text>
-                                  </View>
-                                )}
-                                {selectedInvoice.sepayAmount > 0 && (
-                                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                                    <Text style={{ fontSize: 12, color: theme.muted }}>{t("bossDashboardBillingAutoPayAddon")}</Text>
-                                    <Text style={{ fontSize: 12, color: theme.text }}>{formatVND(selectedInvoice.sepayAmount)} VND</Text>
-                                  </View>
-                                )}
-                                <View style={{ borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 6, marginTop: 2, flexDirection: "row", justifyContent: "space-between" }}>
-                                  <Text style={{ fontSize: 13, fontWeight: "600", color: theme.text }}>{t("bossDashboardBillingTotal")}</Text>
-                                  <Text style={{ fontSize: 13, fontWeight: "700", color: theme.purple400 }}>{formatVND(selectedInvoice.totalAmount)} VND</Text>
-                                </View>
-                                {selectedInvoice.paidAt && (
-                                  <Text style={{ fontSize: 11, color: "#4ade80", marginTop: 2 }}>
-                                    {t("bossDashboardBillingPaid")}: {new Date(selectedInvoice.paidAt).toLocaleString()}
-                                  </Text>
-                                )}
-                                {selectedInvoice.paymentRef && (
-                                  <Text style={{ fontSize: 11, fontFamily: "monospace", color: theme.subtle }}>
-                                    {t("bossDashboardBillingRef")}: {selectedInvoice.paymentRef}
-                                  </Text>
-                                )}
-                                <Text style={{ fontSize: 11, color: theme.muted, marginTop: 4 }}>{t("bossDashboardBillingTapCollapse")}</Text>
+                            {/* Summary for all statuses */}
+                            <View style={{ gap: 4 }}>
+                              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                                <Text style={{ fontSize: 13, color: theme.muted }}>{t("bossDashboardBillingPayments")}</Text>
+                                <Text style={{ fontSize: 13, color: theme.text }}>{inv.totalCheckins}</Text>
                               </View>
-                            ) : (
-                              /* Collapsed summary for all statuses */
-                              <View style={{ gap: 4 }}>
-                                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                                  <Text style={{ fontSize: 13, color: theme.muted }}>{t("bossDashboardBillingPayments")}</Text>
-                                  <Text style={{ fontSize: 13, color: theme.text }}>{inv.totalCheckins}</Text>
-                                </View>
-                                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                                  <Text style={{ fontSize: 14, fontWeight: "700", color: isPaid ? "#4ade80" : theme.purple400 }}>
-                                    {formatVND(inv.totalAmount)} VND
+                              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                                <Text style={{ fontSize: 14, fontWeight: "700", color: isPaid ? "#4ade80" : theme.purple400 }}>
+                                  {formatVND(inv.totalAmount)} VND
+                                </Text>
+                                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                                  <Text style={{ fontSize: 12, color: theme.muted }}>
+                                    {isPaid ? t("bossDashboardBillingTapDetails") : t("bossDashboardBillingTapView")}
                                   </Text>
-                                  {isPaid && <Text style={{ fontSize: 12, color: "#4ade80" }}>{t("bossDashboardBillingTapDetails")}</Text>}
+                                  <Ionicons name="chevron-forward" size={14} color={theme.muted} />
                                 </View>
                               </View>
-                            )}
+                            </View>
 
                             {/* QR pay button for pending/overdue */}
                             {(isPending || isOverdue) && (
                               <>
                                 <TouchableOpacity
-                                  onPress={async () => {
+                                  onPress={async (e) => {
+                                    e.stopPropagation?.();
                                     if (showQR === inv.id) {
                                       setShowQR(null);
                                       setQrData(null);

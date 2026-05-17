@@ -222,7 +222,7 @@ export async function fetchReclubRoster(
   for (const entry of entries) {
     if (entry.isSynthetic) {
       players.push({
-        reclubUserId: entry.userId,
+        reclubUserId: null,
         name: entry.syntheticName!,
         avatarUrl: "",
         isDefaultAvatar: true,

@@ -88,6 +88,26 @@ interface HistoryData {
     paymentRef: string | null;
   }[];
   dailyRevenue: { date: string; total: number; count: number; peopleTotal?: number }[];
+  monthlyRevenue?: {
+    month: string;
+    total: number;
+    count: number;
+    peopleTotal: number;
+    weeks: {
+      weekStart: string;
+      weekEnd: string;
+      total: number;
+      count: number;
+      peopleTotal: number;
+    }[];
+  }[];
+  revenueSummary?: {
+    today: { total: number; count: number; peopleTotal?: number };
+    yesterday: { total: number; count: number; peopleTotal?: number };
+    thisWeek: { total: number; count: number; peopleTotal?: number };
+    thisMonth: { total: number; count: number; peopleTotal?: number };
+    allTime: { total: number; count: number; peopleTotal?: number };
+  };
 }
 
 interface SessionData {
@@ -188,7 +208,6 @@ export default function BossDashboardPage() {
   const PLAYERS_PAGE_SIZE = 25;
   const [billingCurrent, setBillingCurrent] = useState<BillingCurrentData | null>(null);
   const [billingInvoices, setBillingInvoices] = useState<BillingInvoiceRow[]>([]);
-  const [selectedInvoice, setSelectedInvoice] = useState<InvoiceDetail | null>(null);
   const [qrData, setQrData] = useState<QRData | null>(null);
   const [showQR, setShowQR] = useState<string | null>(null);
   const [justPaid, setJustPaid] = useState<string | null>(null);
@@ -196,6 +215,18 @@ export default function BossDashboardPage() {
   const [weekPayments, setWeekPayments] = useState<WeeklyPaymentsData | null>(null);
   const [weekPaymentsOpen, setWeekPaymentsOpen] = useState(false);
   const [weekPaymentsLoading, setWeekPaymentsLoading] = useState(false);
+
+  // ── History collapse / expand state ─────────────────────────────────────────
+  const [dailyRevenueExpanded, setDailyRevenueExpanded] = useState(false);
+  const [pastPaymentsExpanded, setPastPaymentsExpanded] = useState(false);
+  const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
+  const [weekSessions, setWeekSessions] = useState<Record<string, { id: string; date: string; openedAt: string; closedAt: string | null; playerCount: number; paymentCount?: number; paymentRevenue?: number; paymentPeopleTotal?: number }[]>>({});
+  const [weekSessionsLoading, setWeekSessionsLoading] = useState<string | null>(null);
+
+  // ── Billing past-week inline expansion ──────────────────────────────────────
+  const [invoiceWeekPayments, setInvoiceWeekPayments] = useState<Record<string, WeeklyPaymentsData | null>>({});
+  const [invoiceWeekPaymentsOpen, setInvoiceWeekPaymentsOpen] = useState<string | null>(null);
+  const [invoiceWeekPaymentsLoading, setInvoiceWeekPaymentsLoading] = useState<string | null>(null);
   const { on, emit } = useSocket();
 
   const fetchData = useCallback(async () => {
@@ -274,18 +305,6 @@ export default function BossDashboardPage() {
     } catch (e) { console.error(e); }
   };
 
-  const handleInvoiceDetail = async (invoiceId: string) => {
-    if (selectedInvoice?.id === invoiceId) {
-      setSelectedInvoice(null);
-      return;
-    }
-    try {
-      const data = await api.get<InvoiceDetail>(
-        `/api/staff/boss-dashboard/billing/invoices/${invoiceId}`
-      );
-      setSelectedInvoice(data);
-    } catch (e) { console.error(e); }
-  };
 
   const handleToggleWeekPayments = async () => {
     if (!venueId || !billingCurrent) return;
@@ -504,58 +523,227 @@ export default function BossDashboardPage() {
           </div>
         ) : tab === "history" && historyData ? (
           <div>
-            {historyData.dailyRevenue.length > 0 && (
-              <div className="mb-6 space-y-2">
-                <h3 className="text-sm font-medium text-neutral-300">Daily revenue (UTC)</h3>
-                <p className="text-xs text-neutral-500 mb-2">
-                  Each row is payments grouped by confirmation date in UTC (same as Today).
-                </p>
-                {historyData.dailyRevenue.slice(0, 7).map((d) => (
-                  <div
-                    key={d.date}
-                    className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2"
-                  >
-                    <span className="text-sm text-neutral-400">{d.date}</span>
-                    <div className="text-right">
-                      <span className="text-sm font-medium text-purple-400">
-                        {formatVND(d.total)} VND
-                      </span>
-                      <span className="text-xs text-neutral-500 ml-2">
-                        {d.count} payments · {d.peopleTotal ?? d.count} players
-                      </span>
+            {/* Revenue summary */}
+            {historyData.revenueSummary && (() => {
+              const rs = historyData.revenueSummary;
+              const rows = [
+                { label: "Today", bucket: rs.today, highlight: true },
+                { label: "Yesterday", bucket: rs.yesterday },
+                { label: "This week", bucket: rs.thisWeek },
+                { label: "This month", bucket: rs.thisMonth },
+                { label: "All time", bucket: rs.allTime },
+              ];
+              return (
+                <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 mb-5">
+                  <p className="text-xs font-semibold text-neutral-400 mb-3 uppercase tracking-wider">Revenue Summary</p>
+                  {rows.map(({ label, bucket, highlight }) => (
+                    <div key={label} className="flex items-center justify-between py-2 border-t border-neutral-800 first:border-0">
+                      <span className="text-sm font-medium">{label}</span>
+                      <div className="text-right">
+                        <span className={cn("text-sm font-semibold", highlight ? "text-purple-400" : "text-white")}>
+                          {formatVND(bucket.total)} VND
+                        </span>
+                        <span className="text-xs text-neutral-500 ml-2">
+                          {bucket.count} payments · {bucket.peopleTotal ?? bucket.count} players
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              );
+            })()}
+
+            {/* Revenue by month */}
+            {(historyData.monthlyRevenue ?? []).length > 0 && (
+              <div className="mb-5">
+                <h3 className="text-sm font-medium text-neutral-300 mb-2">Revenue by month</h3>
+                <div className="space-y-2">
+                  {(historyData.monthlyRevenue ?? []).map((month) => {
+                    const isOpen = expandedMonth === month.month;
+                    return (
+                      <div key={month.month}>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedMonth(isOpen ? null : month.month)}
+                          className="w-full flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2.5 hover:bg-neutral-800/60 transition-colors"
+                        >
+                          <div className="text-left">
+                            <p className="text-sm font-medium">
+                              {new Date(month.month + "-01").toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+                            </p>
+                            <p className="text-xs text-neutral-500">
+                              {month.count} payments · {month.peopleTotal} players
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-purple-400">{formatVND(month.total)} VND</span>
+                            {isOpen ? <ChevronUp className="h-4 w-4 text-neutral-500" /> : <ChevronDown className="h-4 w-4 text-neutral-500" />}
+                          </div>
+                        </button>
+
+                        {isOpen && (
+                          <div className="ml-4 mt-1 space-y-1">
+                            {month.weeks.map((week) => {
+                              const weekKey = week.weekStart;
+                              const sessions = weekSessions[weekKey];
+                              const isLoadingWeek = weekSessionsLoading === weekKey;
+                              return (
+                                <div key={weekKey}>
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      if (sessions) {
+                                        setWeekSessions((prev) => {
+                                          const next = { ...prev };
+                                          delete next[weekKey];
+                                          return next;
+                                        });
+                                        return;
+                                      }
+                                      setWeekSessionsLoading(weekKey);
+                                      try {
+                                        const list = await api.get<typeof sessions>(
+                                          `/api/sessions/history?venueId=${venueId}&from=${week.weekStart}T00:00:00&to=${week.weekEnd}T23:59:59`
+                                        );
+                                        setWeekSessions((prev) => ({ ...prev, [weekKey]: list }));
+                                      } catch { setWeekSessions((prev) => ({ ...prev, [weekKey]: [] })); }
+                                      finally { setWeekSessionsLoading(null); }
+                                    }}
+                                    className="w-full flex items-center justify-between rounded-lg border border-neutral-800/60 bg-neutral-950 px-3 py-2 hover:bg-neutral-800/40 transition-colors"
+                                  >
+                                    <div className="text-left">
+                                      <p className="text-xs font-medium text-neutral-300">
+                                        {new Date(week.weekStart).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+                                        {" → "}
+                                        {new Date(week.weekEnd).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+                                      </p>
+                                      <p className="text-[10px] text-neutral-500">{week.count} payments · {week.peopleTotal} players</p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-medium text-purple-400">{formatVND(week.total)} VND</span>
+                                      {isLoadingWeek ? (
+                                        <Loader2 className="h-3 w-3 animate-spin text-neutral-500" />
+                                      ) : sessions ? (
+                                        <ChevronUp className="h-3 w-3 text-neutral-500" />
+                                      ) : (
+                                        <ChevronDown className="h-3 w-3 text-neutral-500" />
+                                      )}
+                                    </div>
+                                  </button>
+
+                                  {sessions && (
+                                    <div className="ml-3 mt-1 space-y-1">
+                                      {sessions
+                                        .filter((s) => (s.paymentPeopleTotal ?? s.paymentCount ?? 0) > 0)
+                                        .map((s) => (
+                                          <div
+                                            key={s.id}
+                                            className="rounded-lg border border-neutral-800/40 bg-neutral-900/60 px-3 py-2"
+                                          >
+                                            <div className="flex items-center justify-between">
+                                              <span className="text-xs font-medium text-neutral-300">
+                                                {new Date(s.openedAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+                                                {" "}
+                                                {new Date(s.openedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                                              </span>
+                                              <span className="text-xs text-purple-400">{formatVND(s.paymentRevenue ?? 0)} VND</span>
+                                            </div>
+                                            <p className="text-[10px] text-neutral-500 mt-0.5">
+                                              {s.paymentPeopleTotal ?? s.paymentCount ?? 0} players · {s.paymentCount ?? 0} payments
+                                            </p>
+                                          </div>
+                                        ))}
+                                      {sessions.filter((s) => (s.paymentPeopleTotal ?? s.paymentCount ?? 0) > 0).length === 0 && (
+                                        <p className="text-xs text-neutral-600 py-2 pl-2">No paid sessions this week.</p>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
-            <h3 className="text-sm font-medium text-neutral-300 mb-3">
-              Recent Payments
-            </h3>
-            <div className="space-y-2">
-              {historyData.payments.slice(0, 20).map((p) => (
-                <div
-                  key={p.id}
-                  className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2.5"
+            {/* Daily revenue — collapsible, default collapsed */}
+            {historyData.dailyRevenue.length > 0 && (
+              <div className="mb-5">
+                <button
+                  type="button"
+                  onClick={() => setDailyRevenueExpanded((v) => !v)}
+                  className="w-full flex items-center justify-between mb-2"
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">{p.playerName}</span>
-                    <span className="text-sm font-medium text-purple-400">
-                      {formatVND(p.amount)} VND
-                    </span>
+                  <h3 className="text-sm font-medium text-neutral-300">Daily revenue (UTC)</h3>
+                  {dailyRevenueExpanded ? <ChevronUp className="h-4 w-4 text-neutral-500" /> : <ChevronDown className="h-4 w-4 text-neutral-500" />}
+                </button>
+                {dailyRevenueExpanded && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-neutral-500 mb-2">
+                      Each row is payments grouped by confirmation date in UTC.
+                    </p>
+                    {historyData.dailyRevenue.slice(0, 7).map((d) => (
+                      <div
+                        key={d.date}
+                        className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2"
+                      >
+                        <span className="text-sm text-neutral-400">{d.date}</span>
+                        <div className="text-right">
+                          <span className="text-sm font-medium text-purple-400">
+                            {formatVND(d.total)} VND
+                          </span>
+                          <span className="text-xs text-neutral-500 ml-2">
+                            {d.count} payments · {d.peopleTotal ?? d.count} players
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex items-center justify-between mt-1">
-                    <span className="text-xs text-neutral-500">
-                      {p.type} · {p.paymentMethod}
-                    </span>
-                    {p.paymentRef && (
-                      <span className="text-[10px] font-mono text-neutral-600">
-                        {p.paymentRef}
-                      </span>
-                    )}
-                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Recent Payments — collapsible, default collapsed */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setPastPaymentsExpanded((v) => !v)}
+                className="w-full flex items-center justify-between mb-2"
+              >
+                <h3 className="text-sm font-medium text-neutral-300">Recent Payments</h3>
+                {pastPaymentsExpanded ? <ChevronUp className="h-4 w-4 text-neutral-500" /> : <ChevronDown className="h-4 w-4 text-neutral-500" />}
+              </button>
+              {pastPaymentsExpanded && (
+                <div className="space-y-2">
+                  {historyData.payments.slice(0, 20).map((p) => (
+                    <div
+                      key={p.id}
+                      className="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2.5"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">{p.playerName}</span>
+                        <span className="text-sm font-medium text-purple-400">
+                          {formatVND(p.amount)} VND
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between mt-1">
+                        <span className="text-xs text-neutral-500">
+                          {p.type} · {p.paymentMethod}
+                        </span>
+                        {p.paymentRef && (
+                          <span className="text-[10px] font-mono text-neutral-600">
+                            {p.paymentRef}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
           </div>
         ) : tab === "subscriptions" && sessionData ? (
@@ -899,158 +1087,213 @@ export default function BossDashboardPage() {
             {/* Pending / overdue invoices */}
             {billingInvoices
               .filter((inv) => inv.status === "pending" || inv.status === "overdue")
-              .map((inv) => (
-                <div
-                  key={inv.id}
-                  className={cn(
-                    "rounded-xl border p-4",
-                    justPaid === inv.id
-                      ? "border-green-600 bg-green-950/30"
-                      : inv.status === "overdue"
-                        ? "border-amber-700/60 bg-amber-950/20"
-                        : "border-yellow-700/40 bg-yellow-950/10"
-                  )}
-                >
-                  {justPaid === inv.id ? (
-                    <div className="flex items-center gap-2 text-green-400">
-                      <CheckCircle2 className="h-5 w-5" />
-                      <span className="font-medium">Payment received — thank you!</span>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">
-                            {inv.status === "overdue" ? "Invoice overdue" : "Invoice due"}
-                          </span>
-                          <span>{inv.status === "overdue" ? "⚠️" : "⏳"}</span>
-                        </div>
+              .map((inv) => {
+                const isOpen = invoiceWeekPaymentsOpen === inv.id;
+                const payments = invoiceWeekPayments[inv.id];
+                const isLoadingPayments = invoiceWeekPaymentsLoading === inv.id;
+
+                const handleToggleInvoicePayments = async () => {
+                  if (isOpen) {
+                    setInvoiceWeekPaymentsOpen(null);
+                    return;
+                  }
+                  setInvoiceWeekPaymentsOpen(inv.id);
+                  if (payments !== undefined) return;
+                  setInvoiceWeekPaymentsLoading(inv.id);
+                  try {
+                    const data = await api.get<WeeklyPaymentsData>(
+                      `/api/staff/boss-dashboard/billing/week-payments?venueId=${venueId}&weekStart=${inv.weekStartDate}&weekEnd=${inv.weekEndDate}`
+                    );
+                    setInvoiceWeekPayments((prev) => ({ ...prev, [inv.id]: data }));
+                  } catch { setInvoiceWeekPayments((prev) => ({ ...prev, [inv.id]: null })); }
+                  finally { setInvoiceWeekPaymentsLoading(null); }
+                };
+
+                return (
+                  <div
+                    key={inv.id}
+                    className={cn(
+                      "rounded-xl border p-4",
+                      justPaid === inv.id
+                        ? "border-green-600 bg-green-950/30"
+                        : inv.status === "overdue"
+                          ? "border-amber-700/60 bg-amber-950/20"
+                          : "border-yellow-700/40 bg-yellow-950/10"
+                    )}
+                  >
+                    {justPaid === inv.id ? (
+                      <div className="flex items-center gap-2 text-green-400">
+                        <CheckCircle2 className="h-5 w-5" />
+                        <span className="font-medium">Payment received — thank you!</span>
                       </div>
-                      <p className="text-sm text-neutral-400 mb-1">
-                        Week {new Date(inv.weekStartDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                        {" – "}
-                        {new Date(inv.weekEndDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                      </p>
-                      <p className="text-sm mb-1">{inv.totalCheckins} payments</p>
-                      <p className="text-lg font-bold text-purple-400 mb-3">{formatVND(inv.totalAmount)} VND</p>
-
-                      <button
-                        onClick={() => handleShowQR(inv.id)}
-                        className={cn(
-                          "w-full rounded-lg py-2.5 text-sm font-medium transition-colors",
-                          showQR === inv.id
-                            ? "bg-neutral-800 text-neutral-300"
-                            : "bg-purple-600 text-white hover:bg-purple-500"
-                        )}
-                      >
-                        {showQR === inv.id ? (
-                          <span className="flex items-center justify-center gap-1">Hide QR <ChevronUp className="h-4 w-4" /></span>
-                        ) : (
-                          <span className="flex items-center justify-center gap-1">Pay now — scan QR <ChevronDown className="h-4 w-4" /></span>
-                        )}
-                      </button>
-
-                      {showQR === inv.id && qrData && (
-                        <div className="mt-4 text-center space-y-3">
-                          {qrData.qrUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={qrData.qrUrl}
-                              alt="VietQR payment code"
-                              className="mx-auto w-64 h-64 rounded-lg bg-white p-2"
-                            />
-                          ) : (
-                            <p className="text-sm text-red-400">Could not generate QR code</p>
-                          )}
-                          <p className="text-sm text-neutral-300">
-                            Amount: <span className="font-medium">{formatVND(qrData.amount)} VND</span>
-                          </p>
-                          <p className="text-xs font-mono text-neutral-500">
-                            Ref: {qrData.reference}
-                          </p>
-                          <p className="text-xs text-neutral-600">
-                            Payment confirmed automatically once received
-                          </p>
-                          <div className="flex items-center justify-center gap-2 text-xs text-purple-400">
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                            Waiting for payment...
+                    ) : (
+                      <>
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">
+                              {inv.status === "overdue" ? "Invoice overdue" : "Invoice due"}
+                            </span>
+                            <span>{inv.status === "overdue" ? "⚠️" : "⏳"}</span>
                           </div>
                         </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              ))}
+                        <p className="text-sm text-neutral-400 mb-1">
+                          Week {new Date(inv.weekStartDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                          {" – "}
+                          {new Date(inv.weekEndDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                        </p>
+                        <p className="text-sm mb-1">{inv.totalCheckins} payments</p>
+                        <p className="text-lg font-bold text-purple-400 mb-3">{formatVND(inv.totalAmount)} VND</p>
 
-            {/* Invoice history */}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleShowQR(inv.id)}
+                            className={cn(
+                              "flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors",
+                              showQR === inv.id
+                                ? "bg-neutral-800 text-neutral-300"
+                                : "bg-purple-600 text-white hover:bg-purple-500"
+                            )}
+                          >
+                            {showQR === inv.id ? (
+                              <span className="flex items-center justify-center gap-1">Hide QR <ChevronUp className="h-4 w-4" /></span>
+                            ) : (
+                              <span className="flex items-center justify-center gap-1">Pay now — scan QR <ChevronDown className="h-4 w-4" /></span>
+                            )}
+                          </button>
+                          <button
+                            onClick={handleToggleInvoicePayments}
+                            className="rounded-lg border border-neutral-700 px-3 py-2.5 text-sm text-neutral-300 hover:bg-neutral-800 transition-colors flex items-center gap-1"
+                          >
+                            Details {isOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                          </button>
+                        </div>
+
+                        {showQR === inv.id && qrData && (
+                          <div className="mt-4 text-center space-y-3">
+                            {qrData.qrUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={qrData.qrUrl}
+                                alt="VietQR payment code"
+                                className="mx-auto w-64 h-64 rounded-lg bg-white p-2"
+                              />
+                            ) : (
+                              <p className="text-sm text-red-400">Could not generate QR code</p>
+                            )}
+                            <p className="text-sm text-neutral-300">
+                              Amount: <span className="font-medium">{formatVND(qrData.amount)} VND</span>
+                            </p>
+                            <p className="text-xs font-mono text-neutral-500">
+                              Ref: {qrData.reference}
+                            </p>
+                            <p className="text-xs text-neutral-600">
+                              Payment confirmed automatically once received
+                            </p>
+                            <div className="flex items-center justify-center gap-2 text-xs text-purple-400">
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                              Waiting for payment...
+                            </div>
+                          </div>
+                        )}
+
+                        {isOpen && (
+                          <div className="mt-4 border-t border-neutral-800 pt-3 space-y-2">
+                            {isLoadingPayments ? (
+                              <div className="flex justify-center py-4">
+                                <Loader2 className="h-4 w-4 animate-spin text-neutral-500" />
+                              </div>
+                            ) : payments ? (
+                              <>
+                                <p className="text-xs text-neutral-500">
+                                  {payments.summary.totalPayments} payments · {formatVND(payments.summary.totalAmount)} VND
+                                </p>
+                                {payments.payments.map((payment) => (
+                                  <CourtPayBillingPaymentCard key={payment.id} payment={payment} />
+                                ))}
+                              </>
+                            ) : (
+                              <p className="text-xs text-red-400">Could not load payment details.</p>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+
+            {/* Invoice history (paid) */}
             {billingInvoices.filter((inv) => inv.status === "paid").length > 0 && (
               <div>
                 <h3 className="text-sm font-medium text-neutral-300 mb-3">Invoice history</h3>
                 <div className="space-y-2">
                   {billingInvoices
                     .filter((inv) => inv.status === "paid")
-                    .map((inv) => (
-                      <div key={inv.id}>
-                        <button
-                          onClick={() => handleInvoiceDetail(inv.id)}
-                          className="w-full flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-left hover:bg-neutral-800/80 transition-colors"
-                        >
-                          <div>
-                            <p className="text-sm">
-                              Week {new Date(inv.weekStartDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                              {" – "}
-                              {new Date(inv.weekEndDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-purple-400">{formatVND(inv.totalAmount)} VND</span>
-                            <span className="text-xs text-green-400">✓ Paid</span>
-                          </div>
-                        </button>
+                    .map((inv) => {
+                      const isOpen = invoiceWeekPaymentsOpen === inv.id;
+                      const payments = invoiceWeekPayments[inv.id];
+                      const isLoadingPayments = invoiceWeekPaymentsLoading === inv.id;
 
-                        {selectedInvoice?.id === inv.id && (
-                          <div className="mt-1 rounded-lg border border-neutral-800 bg-neutral-900/50 px-4 py-3 space-y-2 text-sm">
-                            <p className="text-neutral-300 font-medium mb-2">
-                              Week {new Date(selectedInvoice.weekStartDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                            </p>
-                            <div className="flex justify-between">
-                              <span className="text-neutral-400">Total payments</span>
-                              <span>{selectedInvoice.totalCheckins}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-neutral-400">Base charges</span>
-                              <span>{formatVND(selectedInvoice.baseAmount)} VND</span>
-                            </div>
-                            {selectedInvoice.subscriptionAmount > 0 && (
-                              <div className="flex justify-between">
-                                <span className="text-neutral-400">Subscription add-on</span>
-                                <span>{formatVND(selectedInvoice.subscriptionAmount)} VND</span>
-                              </div>
-                            )}
-                            {selectedInvoice.sepayAmount > 0 && (
-                              <div className="flex justify-between">
-                                <span className="text-neutral-400">Auto-Payment add-on</span>
-                                <span>{formatVND(selectedInvoice.sepayAmount)} VND</span>
-                              </div>
-                            )}
-                            <div className="border-t border-neutral-800 pt-2 flex justify-between font-medium">
-                              <span>Total</span>
-                              <span className="text-purple-400">{formatVND(selectedInvoice.totalAmount)} VND</span>
-                            </div>
-                            {selectedInvoice.paidAt && (
-                              <p className="text-xs text-neutral-500 pt-1">
-                                Paid: {new Date(selectedInvoice.paidAt).toLocaleString()}
+                      const handleToggleInvoicePayments = async () => {
+                        if (isOpen) {
+                          setInvoiceWeekPaymentsOpen(null);
+                          return;
+                        }
+                        setInvoiceWeekPaymentsOpen(inv.id);
+                        if (payments !== undefined) return;
+                        setInvoiceWeekPaymentsLoading(inv.id);
+                        try {
+                          const data = await api.get<WeeklyPaymentsData>(
+                            `/api/staff/boss-dashboard/billing/week-payments?venueId=${venueId}&weekStart=${inv.weekStartDate}&weekEnd=${inv.weekEndDate}`
+                          );
+                          setInvoiceWeekPayments((prev) => ({ ...prev, [inv.id]: data }));
+                        } catch { setInvoiceWeekPayments((prev) => ({ ...prev, [inv.id]: null })); }
+                        finally { setInvoiceWeekPaymentsLoading(null); }
+                      };
+
+                      return (
+                        <div key={inv.id}>
+                          <button
+                            onClick={handleToggleInvoicePayments}
+                            className="w-full flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-left hover:bg-neutral-800/80 transition-colors"
+                          >
+                            <div>
+                              <p className="text-sm">
+                                Week {new Date(inv.weekStartDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                                {" – "}
+                                {new Date(inv.weekEndDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
                               </p>
-                            )}
-                            {selectedInvoice.paymentRef && (
-                              <p className="text-xs font-mono text-neutral-600">
-                                Ref: {selectedInvoice.paymentRef}
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium text-purple-400">{formatVND(inv.totalAmount)} VND</span>
+                              <span className="text-xs text-green-400">✓ Paid</span>
+                              {isOpen ? <ChevronUp className="h-3.5 w-3.5 text-neutral-500" /> : <ChevronDown className="h-3.5 w-3.5 text-neutral-500" />}
+                            </div>
+                          </button>
+
+                          {isOpen && (
+                            <div className="mt-1 rounded-lg border border-neutral-800 bg-neutral-900/50 px-4 py-3 space-y-2 text-sm">
+                              {isLoadingPayments ? (
+                                <div className="flex justify-center py-4">
+                                  <Loader2 className="h-4 w-4 animate-spin text-neutral-500" />
+                                </div>
+                              ) : payments ? (
+                                <>
+                                  <p className="text-xs text-neutral-500">
+                                    {payments.summary.totalPayments} payments · {formatVND(payments.summary.totalAmount)} VND
+                                  </p>
+                                  {payments.payments.map((payment) => (
+                                    <CourtPayBillingPaymentCard key={payment.id} payment={payment} />
+                                  ))}
+                                </>
+                              ) : (
+                                <p className="text-xs text-red-400">Could not load payment details.</p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                 </div>
               </div>
             )}

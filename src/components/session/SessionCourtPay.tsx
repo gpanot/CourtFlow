@@ -510,6 +510,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
   };
 
   const handleAvatarTap = (player: ReclubPlayer) => {
+    if (player.isAddedByFriend) return;
     if (
       player.reclubUserId !== null &&
       (paidReclubIds.has(player.reclubUserId) || cancelledReclubIds.has(player.reclubUserId))
