@@ -62,7 +62,7 @@ export async function blurBackgroundKeepFaceSharp(
 
   const blurPx = options.blurPx ?? 8;
   const facePaddingRatio = options.facePaddingRatio ?? 0.2;
-  const jpegQuality = options.jpegQuality ?? 0.9;
+  const jpegQuality = options.jpegQuality ?? 0.82;
 
   const img = await loadImage(dataUrl);
   const width = img.naturalWidth || img.width;

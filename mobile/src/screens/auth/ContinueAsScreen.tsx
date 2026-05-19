@@ -15,6 +15,7 @@ import { C } from "../../theme/colors";
 import type { RootStackScreenProps } from "../../navigation/types";
 import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
 import { TabletLanguageToggle } from "../../components/TabletLanguageToggle";
+import { APP_VERSION_CODE, APP_BUILD_DATE } from "../../lib/app-version";
 
 interface ModeOption {
   key: string;
@@ -149,6 +150,10 @@ export function ContinueAsScreen({
         <Ionicons name="log-out-outline" size={18} color={C.red400} />
         <Text style={styles.logoutText}>{t("continueAsSignOut")}</Text>
       </TouchableOpacity>
+
+      <Text style={styles.versionText}>
+        v{APP_VERSION_CODE} — {APP_BUILD_DATE}
+      </Text>
     </View>
   );
 }
@@ -226,4 +231,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(220,38,38,0.1)",
   },
   logoutText: { color: C.red400, fontSize: 15, fontWeight: "600" },
+  versionText: {
+    textAlign: "center",
+    color: C.dimmed,
+    fontSize: 12,
+    marginTop: 16,
+  },
 });

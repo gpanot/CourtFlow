@@ -105,10 +105,25 @@ export const CameraCapture = forwardRef<CameraCaptureHandle, CameraCaptureProps>
       if (!video || !canvas) return null;
       const ctx = canvas.getContext("2d");
       if (!ctx || video.videoWidth === 0 || video.videoHeight === 0) return null;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0);
-      return canvas.toDataURL("image/jpeg", 0.8).split(",")[1];
+
+      const MAX_SIDE = 2000;
+      const MAX_BYTES = 1 * 1024 * 1024;
+      let w = video.videoWidth;
+      let h = video.videoHeight;
+      if (w > MAX_SIDE || h > MAX_SIDE) {
+        const scale = MAX_SIDE / Math.max(w, h);
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+      }
+      canvas.width = w;
+      canvas.height = h;
+      ctx.drawImage(video, 0, 0, w, h);
+
+      let result = canvas.toDataURL("image/jpeg", 0.82).split(",")[1];
+      if (result && result.length * 0.75 > MAX_BYTES) {
+        result = canvas.toDataURL("image/jpeg", 0.65).split(",")[1];
+      }
+      return result ?? null;
     }, []);
 
     useImperativeHandle(ref, () => ({ startCamera, stopCamera, captureFrame }), [

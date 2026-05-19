@@ -29,6 +29,7 @@ import {
   setStoredThemeMode,
   type ThemeMode,
 } from "@/lib/theme-mode";
+import { APP_VERSION_CODE, APP_BUILD_DATE } from "@/lib/app-version";
 
 export const dynamic = "force-dynamic";
 
@@ -626,6 +627,9 @@ export default function StaffPage() {
           >
             {t("staff.login.signOut")}
           </button>
+          <p className="mt-4 text-center text-xs text-neutral-600">
+            v{APP_VERSION_CODE} — {APP_BUILD_DATE}
+          </p>
         </div>
       </div>
     );

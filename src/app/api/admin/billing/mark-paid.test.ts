@@ -163,4 +163,108 @@ describe("POST /api/admin/billing/venue/:venueId/invoices/:invoiceId/mark-paid",
     const res = await POST(makeReq(), { params: makeParams() });
     expect(res.status).toBe(200);
   });
+
+  it("accepts amount, method=payos, and comment in body", async () => {
+    mockRequireSuperAdmin.mockReturnValue(undefined);
+    mockPrisma.billingInvoice.findUnique.mockResolvedValue({
+      id: INVOICE_ID,
+      venueId: VENUE_ID,
+      status: "pending",
+    });
+    mockPrisma.billingInvoice.update.mockResolvedValue({
+      id: INVOICE_ID,
+      status: "paid",
+      confirmedBy: "payos_admin",
+      paidAmount: 42000,
+      comment: "via bank ref #123",
+    });
+
+    const req = new Request(
+      `http://localhost/api/admin/billing/venue/${VENUE_ID}/invoices/${INVOICE_ID}/mark-paid`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: 42000, method: "payos", comment: "via bank ref #123" }),
+      }
+    );
+
+    const res = await POST(req, { params: makeParams() });
+    expect(res.status).toBe(200);
+
+    expect(mockPrisma.billingInvoice.update).toHaveBeenCalledWith({
+      where: { id: INVOICE_ID },
+      data: expect.objectContaining({
+        status: "paid",
+        confirmedBy: "payos_admin",
+        paidAmount: 42000,
+        comment: "via bank ref #123",
+      }),
+    });
+  });
+
+  it("accepts method=sepay and stores sepay_admin as confirmedBy", async () => {
+    mockRequireSuperAdmin.mockReturnValue(undefined);
+    mockPrisma.billingInvoice.findUnique.mockResolvedValue({
+      id: INVOICE_ID,
+      venueId: VENUE_ID,
+      status: "overdue",
+    });
+    mockPrisma.billingInvoice.update.mockResolvedValue({
+      id: INVOICE_ID,
+      status: "paid",
+      confirmedBy: "sepay_admin",
+    });
+
+    const req = new Request(
+      `http://localhost/api/admin/billing/venue/${VENUE_ID}/invoices/${INVOICE_ID}/mark-paid`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method: "sepay" }),
+      }
+    );
+
+    const res = await POST(req, { params: makeParams() });
+    expect(res.status).toBe(200);
+
+    expect(mockPrisma.billingInvoice.update).toHaveBeenCalledWith({
+      where: { id: INVOICE_ID },
+      data: expect.objectContaining({
+        confirmedBy: "sepay_admin",
+      }),
+    });
+  });
+
+  it("defaults to manual_admin when no method in body", async () => {
+    mockRequireSuperAdmin.mockReturnValue(undefined);
+    mockPrisma.billingInvoice.findUnique.mockResolvedValue({
+      id: INVOICE_ID,
+      venueId: VENUE_ID,
+      status: "pending",
+    });
+    mockPrisma.billingInvoice.update.mockResolvedValue({
+      id: INVOICE_ID,
+      status: "paid",
+      confirmedBy: "manual_admin",
+    });
+
+    const req = new Request(
+      `http://localhost/api/admin/billing/venue/${VENUE_ID}/invoices/${INVOICE_ID}/mark-paid`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      }
+    );
+
+    const res = await POST(req, { params: makeParams() });
+    expect(res.status).toBe(200);
+
+    expect(mockPrisma.billingInvoice.update).toHaveBeenCalledWith({
+      where: { id: INVOICE_ID },
+      data: expect.objectContaining({
+        confirmedBy: "manual_admin",
+      }),
+    });
+  });
 });

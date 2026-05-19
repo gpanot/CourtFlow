@@ -23,6 +23,7 @@ import type { AppColors } from "../../theme/palettes";
 import type { StaffStackParamList } from "../../navigation/types";
 import type { SessionHistoryRow } from "../../types/api";
 import { SubscribersList } from "../../components/SubscribersList";
+import { BillingBlockedBanner } from "../../components/BillingBlockedBanner";
 import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PlayerCard } from "../../components/PlayerCard";
@@ -522,6 +523,7 @@ export function StaffBossDashboardScreen() {
   const PLAYERS_PAGE_SIZE = 25;
   const searchRef = useRef<TextInput>(null);
   const [revenueExportOpen, setRevenueExportOpen] = useState(false);
+  const [hasOverdueBilling, setHasOverdueBilling] = useState(false);
   const [exportToast, setExportToast] = useState<string | null>(null);
   // Track which tabs have been fetched so we don't reload on re-visit
   const loadedTabs = useRef(new Set<Tab>());
@@ -692,6 +694,43 @@ export function StaffBossDashboardScreen() {
     void fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    if (!venueId) return;
+    api.get<{ hasOverdueBilling: boolean }>(`/api/courtpay/staff/billing-status?venueId=${venueId}`)
+      .then((r) => setHasOverdueBilling(r.hasOverdueBilling))
+      .catch(() => {});
+  }, [venueId]);
+
+  const billingPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startBillingPoll = useCallback(() => {
+    if (billingPollRef.current) clearInterval(billingPollRef.current);
+    let attempts = 0;
+    billingPollRef.current = setInterval(async () => {
+      attempts++;
+      if (attempts > 24) {
+        if (billingPollRef.current) clearInterval(billingPollRef.current);
+        return;
+      }
+      try {
+        const r = await api.get<{ hasOverdueBilling: boolean }>(
+          `/api/courtpay/staff/billing-status?venueId=${venueId}`
+        );
+        if (!r.hasOverdueBilling) {
+          setHasOverdueBilling(false);
+          if (billingPollRef.current) clearInterval(billingPollRef.current);
+          loadedTabs.current.clear();
+          void fetchData(true);
+        }
+      } catch {}
+    }, 5000);
+  }, [venueId, fetchData]);
+
+  useEffect(() => {
+    return () => {
+      if (billingPollRef.current) clearInterval(billingPollRef.current);
+    };
+  }, []);
+
   return (
     <View style={styles.screen}>
       <View style={styles.tabs}>
@@ -718,6 +757,8 @@ export function StaffBossDashboardScreen() {
         <View style={{ paddingTop: 40 }}>
           <ActivityIndicator color={theme.purple400} />
         </View>
+      ) : hasOverdueBilling && tab !== "billing" ? (
+        <BillingBlockedBanner />
       ) : (
         <ScrollView
           contentContainerStyle={styles.body}
@@ -1501,37 +1542,62 @@ export function StaffBossDashboardScreen() {
                               </View>
                             </View>
 
-                            {/* QR pay button for pending/overdue */}
+                            {/* Pay buttons for pending/overdue */}
                             {(isPending || isOverdue) && (
                               <>
-                                <TouchableOpacity
-                                  onPress={async (e) => {
-                                    e.stopPropagation?.();
-                                    if (showQR === inv.id) {
-                                      setShowQR(null);
-                                      setQrData(null);
-                                      return;
-                                    }
-                                    try {
-                                      const data = await api.get<QRData>(
-                                        `/api/staff/boss-dashboard/billing/invoices/${inv.id}/qr`
-                                      );
-                                      setQrData(data);
-                                      setShowQR(inv.id);
-                                    } catch {}
-                                  }}
-                                  style={{
-                                    backgroundColor: showQR === inv.id ? theme.card : "#7c3aed",
-                                    borderRadius: 10,
-                                    paddingVertical: 12,
-                                    alignItems: "center",
-                                    marginTop: 12,
-                                  }}
-                                >
-                                  <Text style={{ fontSize: 14, fontWeight: "600", color: showQR === inv.id ? theme.muted : "#fff" }}>
-                                    {showQR === inv.id ? t("bossDashboardBillingHideQR") : t("bossDashboardBillingPayNow")}
-                                  </Text>
-                                </TouchableOpacity>
+                                <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+                                  <TouchableOpacity
+                                    onPress={async () => {
+                                      try {
+                                        const res = await api.post<{ checkoutUrl?: string }>(`/api/staff/boss-dashboard/billing/invoices/${inv.id}/pay`);
+                                        if (res.checkoutUrl) {
+                                          const { Linking } = require("react-native");
+                                          Linking.openURL(res.checkoutUrl);
+                                          startBillingPoll();
+                                        }
+                                      } catch {}
+                                    }}
+                                    style={{
+                                      flex: 1,
+                                      backgroundColor: "#7c3aed",
+                                      borderRadius: 10,
+                                      paddingVertical: 12,
+                                      alignItems: "center",
+                                    }}
+                                  >
+                                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#fff" }}>Pay with PayOS</Text>
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    onPress={async (e) => {
+                                      e.stopPropagation?.();
+                                      if (showQR === inv.id) {
+                                        setShowQR(null);
+                                        setQrData(null);
+                                        return;
+                                      }
+                                      try {
+                                        const data = await api.get<QRData>(
+                                          `/api/staff/boss-dashboard/billing/invoices/${inv.id}/qr`
+                                        );
+                                        setQrData(data);
+                                        setShowQR(inv.id);
+                                      } catch {}
+                                    }}
+                                    style={{
+                                      borderRadius: 10,
+                                      paddingVertical: 12,
+                                      paddingHorizontal: 16,
+                                      alignItems: "center",
+                                      borderWidth: 1,
+                                      borderColor: theme.border,
+                                      backgroundColor: showQR === inv.id ? theme.card : "transparent",
+                                    }}
+                                  >
+                                    <Text style={{ fontSize: 14, fontWeight: "600", color: showQR === inv.id ? theme.muted : theme.text }}>
+                                      {showQR === inv.id ? "Hide QR" : "Bank QR"}
+                                    </Text>
+                                  </TouchableOpacity>
+                                </View>
 
                                 {showQR === inv.id && qrData && (
                                   <View style={{ marginTop: 16, alignItems: "center", gap: 10 }}>

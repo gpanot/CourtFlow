@@ -43,6 +43,7 @@ interface BillingConfig {
   defaultBaseRate: number;
   defaultSubAddon: number;
   defaultSepayAddon: number;
+  paymentGateway: string;
 }
 
 interface VenueOverview {
@@ -241,6 +242,38 @@ export default function CourtPayBillingPage() {
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white"
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Payment gateway toggle */}
+          <div className="mt-6 pt-5 border-t border-neutral-800">
+            <h4 className="text-sm font-medium text-neutral-400 mb-3">Payment gateway</h4>
+            <div className="flex gap-2">
+              {(
+                [
+                  { id: "payos", label: "PayOS", available: true },
+                  { id: "sepay", label: "Sepay", available: false },
+                ] as const
+              ).map(({ id, label, available }) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => available && setConfigForm({ ...configForm, paymentGateway: id })}
+                  className={cn(
+                    "relative rounded-lg px-5 py-2.5 text-sm font-medium border transition-colors",
+                    configForm.paymentGateway === id
+                      ? "border-purple-500 bg-purple-900/30 text-white"
+                      : available
+                        ? "border-neutral-700 text-neutral-400 hover:border-neutral-600 hover:text-white"
+                        : "border-neutral-800 text-neutral-600 cursor-not-allowed"
+                  )}
+                >
+                  {label}
+                  {!available && (
+                    <span className="ml-1.5 text-[10px] text-neutral-600">(coming soon)</span>
+                  )}
+                </button>
+              ))}
             </div>
           </div>
 

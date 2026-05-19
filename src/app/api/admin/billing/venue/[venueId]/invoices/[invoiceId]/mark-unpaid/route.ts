@@ -13,13 +13,6 @@ export async function POST(
     requireSuperAdmin(req.headers);
     const { invoiceId, venueId } = await params;
 
-    let body: { amount?: number; method?: string; comment?: string } = {};
-    try {
-      body = await req.json();
-    } catch {
-      // No body is fine — backwards compatible with the old confirm-only flow
-    }
-
     const invoice = await prisma.billingInvoice.findUnique({
       where: { id: invoiceId },
     });
@@ -31,37 +24,42 @@ export async function POST(
       );
     }
 
-    if (invoice.status === "paid") {
+    if (invoice.status !== "paid") {
       return NextResponse.json(
-        { error: "Invoice already paid" },
+        { error: "Invoice is not currently paid" },
         { status: 400 }
       );
     }
 
-    const method = body.method ?? "manual";
-    const confirmedBy =
-      method === "payos"
-        ? "payos_admin"
-        : method === "sepay"
-          ? "sepay_admin"
-          : "manual_admin";
+    const now = new Date();
+    const weekEnd = new Date(invoice.weekEndDate);
+    const sevenDaysAfterEnd = new Date(weekEnd);
+    sevenDaysAfterEnd.setDate(sevenDaysAfterEnd.getDate() + 7);
+
+    const newStatus = now > sevenDaysAfterEnd ? "overdue" : "pending";
 
     const updated = await prisma.billingInvoice.update({
       where: { id: invoiceId },
       data: {
-        status: "paid",
-        paidAt: new Date(),
-        confirmedBy,
-        paidAmount: body.amount != null ? body.amount : undefined,
-        comment: body.comment ?? undefined,
+        status: newStatus,
+        paidAt: null,
+        confirmedBy: null,
+        paidAmount: null,
+        comment: null,
       },
     });
 
-    // Restore venue if it was suspended
-    await prisma.venue.updateMany({
-      where: { id: venueId, billingStatus: "suspended" },
-      data: { billingStatus: "active" },
+    // Check if venue now has overdue invoices and should be flagged
+    const overdueCount = await prisma.billingInvoice.count({
+      where: { venueId, status: "overdue" },
     });
+
+    if (overdueCount > 0) {
+      await prisma.venue.updateMany({
+        where: { id: venueId, billingStatus: "active" },
+        data: { billingStatus: "active" },
+      });
+    }
 
     return NextResponse.json(updated);
   } catch (err: unknown) {

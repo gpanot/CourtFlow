@@ -833,6 +833,7 @@ model BillingConfig {
   defaultBaseRate   Int      @default(5000) @map("default_base_rate")
   defaultSubAddon   Int      @default(1000) @map("default_sub_addon")
   defaultSepayAddon Int      @default(1000) @map("default_sepay_addon")
+  paymentGateway    String   @default("payos") @map("payment_gateway")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
   @@map("billing_config")
@@ -871,7 +872,10 @@ model BillingInvoice {
   status               String    @default("pending") // "pending" | "paid" | "overdue"
   paymentRef           String?   @unique @map("payment_ref")
   paidAt               DateTime? @map("paid_at")
-  confirmedBy          String?   @map("confirmed_by") // "sepay" | "manual_admin"
+  confirmedBy          String?   @map("confirmed_by") // "sepay" | "manual_admin" | "payos" | "payos_admin" | "sepay_admin"
+  paidAmount           Int?      @map("paid_amount")
+  comment              String?   @map("comment")
+  payosOrderCode       String?   @unique @map("payos_order_code")
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
 

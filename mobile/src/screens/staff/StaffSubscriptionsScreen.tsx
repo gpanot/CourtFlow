@@ -32,6 +32,7 @@ import { useAppColors } from "../../theme/use-app-colors";
 import type { AppColors } from "../../theme/palettes";
 import type { StaffStackParamList } from "../../navigation/types";
 import { SubscribersList } from "../../components/SubscribersList";
+import { BillingBlockedBanner } from "../../components/BillingBlockedBanner";
 import type { VenuePaymentSettings } from "../../types/api";
 import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
 
@@ -498,6 +499,7 @@ export function StaffSubscriptionsScreen() {
   const [formDiscountManual, setFormDiscountManual] = useState(false);
   const [formBestChoice, setFormBestChoice] = useState(false);
   const [formSaving, setFormSaving] = useState(false);
+  const [hasOverdueBilling, setHasOverdueBilling] = useState(false);
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -568,7 +570,13 @@ export function StaffSubscriptionsScreen() {
       return;
     }
     setLoading(true);
-    Promise.all([fetchPackages(), fetchSessionFee()]).finally(() =>
+    Promise.all([
+      fetchPackages(),
+      fetchSessionFee(),
+      api.get<{ hasOverdueBilling: boolean }>(`/api/courtpay/staff/billing-status?venueId=${venueId}`)
+        .then((r) => setHasOverdueBilling(r.hasOverdueBilling))
+        .catch(() => {}),
+    ]).finally(() =>
       setLoading(false)
     );
   }, [venueId, fetchPackages, fetchSessionFee]);
@@ -997,6 +1005,8 @@ export function StaffSubscriptionsScreen() {
               )}
             </>
         </ScrollView>
+      ) : hasOverdueBilling ? (
+        <BillingBlockedBanner />
       ) : (
         <View style={styles.subscribersWrap}>
           {defaultsBanner ? (

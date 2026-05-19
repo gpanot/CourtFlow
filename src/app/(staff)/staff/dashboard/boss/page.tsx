@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useSessionStore, useHasHydrated } from "@/stores/session-store";
 import { staffProfileHomeHref } from "@/config/clients";
@@ -12,6 +12,7 @@ import {
   CourtPayBillingPaymentCard,
   type CourtPayBillingPaymentCardData,
 } from "@/components/courtpay-billing-payment-card";
+import { BillingBlockedBanner } from "@/components/billing-blocked-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -215,6 +216,7 @@ export default function BossDashboardPage() {
   const [weekPayments, setWeekPayments] = useState<WeeklyPaymentsData | null>(null);
   const [weekPaymentsOpen, setWeekPaymentsOpen] = useState(false);
   const [weekPaymentsLoading, setWeekPaymentsLoading] = useState(false);
+  const [hasOverdueBilling, setHasOverdueBilling] = useState(false);
 
   // ── History collapse / expand state ─────────────────────────────────────────
   const [dailyRevenueExpanded, setDailyRevenueExpanded] = useState(false);
@@ -271,11 +273,51 @@ export default function BossDashboardPage() {
     setLoading(false);
   }, [venueId, tab]);
 
+  const fetchBillingStatus = useCallback(async () => {
+    if (!venueId) return;
+    try {
+      const r = await api.get<{ hasOverdueBilling: boolean }>(
+        `/api/courtpay/staff/billing-status?venueId=${venueId}`
+      );
+      setHasOverdueBilling(r.hasOverdueBilling);
+    } catch { /* ignore */ }
+  }, [venueId]);
+
+  const billingPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const startBillingPoll = useCallback(() => {
+    if (billingPollRef.current) clearInterval(billingPollRef.current);
+    let attempts = 0;
+    billingPollRef.current = setInterval(async () => {
+      attempts++;
+      if (attempts > 24) {
+        if (billingPollRef.current) clearInterval(billingPollRef.current);
+        return;
+      }
+      try {
+        const r = await api.get<{ hasOverdueBilling: boolean }>(
+          `/api/courtpay/staff/billing-status?venueId=${venueId}`
+        );
+        if (!r.hasOverdueBilling) {
+          setHasOverdueBilling(false);
+          if (billingPollRef.current) clearInterval(billingPollRef.current);
+          fetchData();
+        }
+      } catch { /* ignore */ }
+    }, 5000);
+  }, [venueId, fetchData]);
+
+  useEffect(() => {
+    return () => {
+      if (billingPollRef.current) clearInterval(billingPollRef.current);
+    };
+  }, []);
+
   useEffect(() => {
     if (!hydrated) return;
     if (!token) { router.replace("/staff"); return; }
     fetchData();
-  }, [hydrated, token, router, fetchData]);
+    fetchBillingStatus();
+  }, [hydrated, token, router, fetchData, fetchBillingStatus]);
 
   useEffect(() => {
     if (!venueId) return;
@@ -392,6 +434,8 @@ export default function BossDashboardPage() {
           <div className="flex justify-center py-20">
             <Loader2 className="h-8 w-8 animate-spin text-neutral-600" />
           </div>
+        ) : hasOverdueBilling && tab !== "billing" ? (
+          <BillingBlockedBanner />
         ) : tab === "today" && todayData ? (
           <div>
             <div className="grid grid-cols-2 gap-3 mb-6">
@@ -1144,19 +1188,29 @@ export default function BossDashboardPage() {
 
                         <div className="flex gap-2">
                           <button
+                            onClick={async () => {
+                              try {
+                                const res = await api.post<{ checkoutUrl?: string; qrCode?: string }>(`/api/staff/boss-dashboard/billing/invoices/${inv.id}/pay`);
+                                if (res.checkoutUrl) {
+                                  window.open(res.checkoutUrl, "_blank");
+                                  startBillingPoll();
+                                }
+                              } catch (e) { console.error(e); }
+                            }}
+                            className="flex-1 rounded-lg py-2.5 text-sm font-medium bg-purple-600 text-white hover:bg-purple-500 transition-colors"
+                          >
+                            Pay with PayOS
+                          </button>
+                          <button
                             onClick={() => handleShowQR(inv.id)}
                             className={cn(
-                              "flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors",
+                              "rounded-lg px-3 py-2.5 text-sm font-medium transition-colors border",
                               showQR === inv.id
-                                ? "bg-neutral-800 text-neutral-300"
-                                : "bg-purple-600 text-white hover:bg-purple-500"
+                                ? "bg-neutral-800 text-neutral-300 border-neutral-700"
+                                : "border-neutral-700 text-neutral-300 hover:bg-neutral-800"
                             )}
                           >
-                            {showQR === inv.id ? (
-                              <span className="flex items-center justify-center gap-1">Hide QR <ChevronUp className="h-4 w-4" /></span>
-                            ) : (
-                              <span className="flex items-center justify-center gap-1">Pay now — scan QR <ChevronDown className="h-4 w-4" /></span>
-                            )}
+                            {showQR === inv.id ? "Hide QR" : "Bank QR"}
                           </button>
                           <button
                             onClick={handleToggleInvoicePayments}

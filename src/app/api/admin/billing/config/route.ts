@@ -37,6 +37,7 @@ export async function PUT(req: Request) {
       defaultBaseRate,
       defaultSubAddon,
       defaultSepayAddon,
+      paymentGateway,
     } = body;
 
     const config = await prisma.billingConfig.upsert({
@@ -49,6 +50,7 @@ export async function PUT(req: Request) {
         defaultBaseRate: defaultBaseRate ?? 5000,
         defaultSubAddon: defaultSubAddon ?? 1000,
         defaultSepayAddon: defaultSepayAddon ?? 1000,
+        paymentGateway: paymentGateway ?? "payos",
       },
       update: {
         ...(bankBin !== undefined && { bankBin }),
@@ -57,6 +59,7 @@ export async function PUT(req: Request) {
         ...(defaultBaseRate !== undefined && { defaultBaseRate }),
         ...(defaultSubAddon !== undefined && { defaultSubAddon }),
         ...(defaultSepayAddon !== undefined && { defaultSepayAddon }),
+        ...(paymentGateway !== undefined && { paymentGateway }),
       },
     });
 

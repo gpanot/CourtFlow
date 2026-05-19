@@ -10,12 +10,7 @@ export const dynamic = "force-dynamic";
  * POST /api/webhooks/payos
  *
  * PayOS calls this when a payment completes (or is cancelled/fails).
- * Docs: https://payos.vn/docs/webhook-thong-tin-thanh-toan/
- *
- * Key fields:
- *   code      — "00" means success
- *   data.orderCode — the numeric order code we set when creating the payment link
- *   data.amount    — VND amount
+ * Handles both sticker purchases and billing invoice payments.
  */
 export async function POST(request: NextRequest) {
   let rawBody = "";
@@ -48,6 +43,48 @@ export async function POST(request: NextRequest) {
       return json({ success: true });
     }
 
+    // --- Check if this is a billing invoice payment ---
+    const billingInvoice = await prisma.billingInvoice.findUnique({
+      where: { payosOrderCode },
+    });
+
+    if (billingInvoice) {
+      if (billingInvoice.status === "paid") {
+        console.log(`[payos-webhook] Billing invoice ${billingInvoice.id} already paid — skipped`);
+        return json({ success: true });
+      }
+
+      await prisma.billingInvoice.update({
+        where: { id: billingInvoice.id },
+        data: {
+          status: "paid",
+          paidAt: new Date(),
+          confirmedBy: "payos",
+          paidAmount: amount,
+        },
+      });
+
+      // Restore venue billing status if no more overdue invoices
+      const remainingOverdue = await prisma.billingInvoice.count({
+        where: {
+          venueId: billingInvoice.venueId,
+          status: { in: ["overdue", "pending"] },
+          id: { not: billingInvoice.id },
+        },
+      });
+
+      if (remainingOverdue === 0) {
+        await prisma.venue.updateMany({
+          where: { id: billingInvoice.venueId, billingStatus: "suspended" },
+          data: { billingStatus: "active" },
+        });
+      }
+
+      console.log(`[payos-webhook] ✓ Billing invoice ${billingInvoice.id} marked paid — PayOS #${orderCode} — ${amount} VND`);
+      return json({ success: true });
+    }
+
+    // --- Otherwise, handle sticker pack payment ---
     // Deduplication
     const existing = await prisma.stickerPaymentLog.findUnique({
       where: { payosOrderCode },

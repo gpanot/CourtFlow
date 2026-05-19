@@ -29,6 +29,7 @@ import { useAppColors } from "../../theme/use-app-colors";
 import type { AppColors } from "../../theme/palettes";
 import type { StaffStackParamList } from "../../navigation/types";
 import { SubscribersList } from "../../components/SubscribersList";
+import { BillingBlockedBanner } from "../../components/BillingBlockedBanner";
 import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
 import { PlayerCard } from "../../components/PlayerCard";
 
@@ -239,6 +240,8 @@ export function StaffDashboardScreen() {
   const searchRef = useRef<TextInput>(null);
 
 
+  const [hasOverdueBilling, setHasOverdueBilling] = useState(false);
+
   // Track which tabs have been loaded — never re-fetch on tab switch
   const loadedTabs = useRef(new Set<Tab>());
 
@@ -279,6 +282,13 @@ export function StaffDashboardScreen() {
       void fetchPlayers();
     }
   }, [tab, fetchPlayers]);
+
+  useEffect(() => {
+    if (!venueId) return;
+    api.get<{ hasOverdueBilling: boolean }>(`/api/courtpay/staff/billing-status?venueId=${venueId}`)
+      .then((r) => setHasOverdueBilling(r.hasOverdueBilling))
+      .catch(() => {});
+  }, [venueId]);
 
   const handlePlayersRefresh = () => {
     setPlayersRefreshing(true);
@@ -325,7 +335,9 @@ export function StaffDashboardScreen() {
         ]}
         pointerEvents={tab === "subscribers" ? "auto" : "none"}
       >
-        {venueId ? (
+        {hasOverdueBilling ? (
+          <BillingBlockedBanner />
+        ) : venueId ? (
           <View style={styles.shareCard}>
             <Text style={styles.shareCardTitle}>{t("staffDashboardShareTitle")}</Text>
             <Text style={styles.shareCardDesc}>
@@ -352,7 +364,9 @@ export function StaffDashboardScreen() {
         ]}
         pointerEvents={tab === "players" ? "auto" : "none"}
       >
-        {playersLoading && !playersData ? (
+        {hasOverdueBilling ? (
+          <BillingBlockedBanner />
+        ) : playersLoading && !playersData ? (
           <View style={{ paddingTop: 40 }}>
             <ActivityIndicator color={theme.blue400} />
           </View>

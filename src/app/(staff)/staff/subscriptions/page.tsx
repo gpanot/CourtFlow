@@ -11,6 +11,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { PackageCard } from "@/modules/courtpay/components/PackageCard";
 import { PackageForm } from "@/modules/courtpay/components/PackageForm";
 import { SubscriberList } from "@/modules/courtpay/components/SubscriberList";
+import { BillingBlockedBanner } from "@/components/billing-blocked-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +62,7 @@ export default function StaffSubscriptionsPage() {
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [showLimitModal, setShowLimitModal] = useState(false);
+  const [hasOverdueBilling, setHasOverdueBilling] = useState(false);
 
   const fetchPackages = useCallback(async () => {
     if (!venueId) return;
@@ -103,8 +105,16 @@ export default function StaffSubscriptionsPage() {
     if (!hydrated) return;
     if (!token) { router.replace("/staff"); return; }
     setLoading(true);
-    Promise.all([fetchPackages(), fetchSubscribers()]).finally(() => setLoading(false));
-  }, [hydrated, token, router, fetchPackages, fetchSubscribers]);
+    Promise.all([
+      fetchPackages(),
+      fetchSubscribers(),
+      venueId
+        ? api.get<{ hasOverdueBilling: boolean }>(`/api/courtpay/staff/billing-status?venueId=${venueId}`)
+            .then((r) => setHasOverdueBilling(r.hasOverdueBilling))
+            .catch(() => {})
+        : Promise.resolve(),
+    ]).finally(() => setLoading(false));
+  }, [hydrated, token, router, fetchPackages, fetchSubscribers, venueId]);
 
   const createDefaults = async () => {
     setCreatingDefaults(true);
@@ -305,6 +315,8 @@ export default function StaffSubscriptionsPage() {
               </>
             )}
           </div>
+        ) : hasOverdueBilling ? (
+          <BillingBlockedBanner />
         ) : (
           <SubscriberList
             subscribers={subscribers}

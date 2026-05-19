@@ -45,6 +45,8 @@ interface InvoiceRow {
   paymentRef: string | null;
   paidAt: string | null;
   confirmedBy: string | null;
+  paidAmount: number | null;
+  comment: string | null;
 }
 
 interface VenueDetail {
@@ -245,8 +247,15 @@ export default function VenueBillingDetailPage() {
   const [weekPayments, setWeekPayments] = useState<Record<string, WeeklyPaymentsResponse>>({});
   const [loadingPayments, setLoadingPayments] = useState<string | null>(null);
   const [markingPaid, setMarkingPaid] = useState<string | null>(null);
+  const [markingUnpaid, setMarkingUnpaid] = useState<string | null>(null);
   const [backfilling, setBackfilling] = useState(false);
   const [backfillResult, setBackfillResult] = useState<string | null>(null);
+
+  // Mark-paid modal
+  const [payModal, setPayModal] = useState<{ invoiceId: string; totalAmount: number } | null>(null);
+  const [payAmount, setPayAmount] = useState("");
+  const [payMethod, setPayMethod] = useState<"manual" | "payos" | "sepay">("manual");
+  const [payComment, setPayComment] = useState("");
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const fetchDetail = useCallback(async () => {
@@ -359,16 +368,43 @@ export default function VenueBillingDetailPage() {
     setBackfilling(false);
   };
 
-  const markPaid = async (invoiceId: string) => {
-    if (!confirm("Mark this invoice as paid manually? This cannot be undone.")) return;
-    setMarkingPaid(invoiceId);
+  const openPayModal = (invoiceId: string, totalAmount: number) => {
+    setPayModal({ invoiceId, totalAmount });
+    setPayAmount(String(totalAmount));
+    setPayMethod("manual");
+    setPayComment("");
+  };
+
+  const submitMarkPaid = async () => {
+    if (!payModal) return;
+    setMarkingPaid(payModal.invoiceId);
     try {
-      await api.post(`/api/admin/billing/venue/${venueId}/invoices/${invoiceId}/mark-paid`);
+      await api.post(
+        `/api/admin/billing/venue/${venueId}/invoices/${payModal.invoiceId}/mark-paid`,
+        {
+          amount: parseInt(payAmount) || payModal.totalAmount,
+          method: payMethod,
+          comment: payComment.trim() || undefined,
+        }
+      );
+      setPayModal(null);
       await fetchDetail();
     } catch (e) {
       console.error(e);
     }
     setMarkingPaid(null);
+  };
+
+  const markUnpaid = async (invoiceId: string) => {
+    if (!confirm("Revert this invoice to unpaid? This will undo the payment.")) return;
+    setMarkingUnpaid(invoiceId);
+    try {
+      await api.post(`/api/admin/billing/venue/${venueId}/invoices/${invoiceId}/mark-unpaid`);
+      await fetchDetail();
+    } catch (e) {
+      console.error(e);
+    }
+    setMarkingUnpaid(null);
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -736,17 +772,32 @@ export default function VenueBillingDetailPage() {
                       <div className="flex items-center gap-3 shrink-0">
                         <span className="text-sm font-semibold text-purple-400">{formatVND(inv.totalAmount)} VND</span>
                         {isPaid ? (
-                          <span className="text-xs text-green-400 whitespace-nowrap">
+                          <span className="text-xs text-green-400 whitespace-nowrap flex items-center gap-1.5">
                             ✓ Paid
+                            {inv.confirmedBy === "payos" && " - PayOS"}
+                            {inv.confirmedBy === "payos_admin" && " - PayOS"}
+                            {inv.confirmedBy === "sepay" && " - Sepay"}
+                            {inv.confirmedBy === "sepay_admin" && " - Sepay"}
                             {inv.confirmedBy === "manual_admin" && " (manual)"}
                             {inv.confirmedBy === "free_tier" && " (free)"}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void markUnpaid(inv.id);
+                              }}
+                              disabled={markingUnpaid === inv.id}
+                              className="ml-1 text-[10px] text-neutral-500 hover:text-red-400 underline"
+                            >
+                              {markingUnpaid === inv.id ? "…" : "undo"}
+                            </button>
                           </span>
                         ) : (
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              void markPaid(inv.id);
+                              openPayModal(inv.id, inv.totalAmount);
                             }}
                             disabled={markingPaid === inv.id}
                             className={cn(
@@ -881,22 +932,40 @@ export default function VenueBillingDetailPage() {
                       <p className="text-xs text-neutral-500 mt-0.5">
                         {inv.totalCheckins} payments
                         {inv.confirmedBy === "free_tier" && (
-                          <span className="ml-2 text-green-400">Free tier 🎁</span>
+                          <span className="ml-2 text-green-400">Free tier</span>
                         )}
                         {inv.confirmedBy === "manual_admin" && (
                           <span className="ml-2 text-neutral-500">(manual)</span>
                         )}
+                        {(inv.confirmedBy === "payos" || inv.confirmedBy === "payos_admin") && (
+                          <span className="ml-2 text-purple-400">Paid - PayOS</span>
+                        )}
+                        {(inv.confirmedBy === "sepay" || inv.confirmedBy === "sepay_admin") && (
+                          <span className="ml-2 text-blue-400">Paid - Sepay</span>
+                        )}
+                        {inv.comment && (
+                          <span className="ml-2 text-neutral-600 italic">&ldquo;{inv.comment}&rdquo;</span>
+                        )}
                       </p>
                     </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-sm font-bold text-green-400">
-                        {formatVND(inv.totalAmount)} VND
-                      </p>
-                      {inv.paidAt && (
-                        <p className="text-xs text-neutral-500 mt-0.5">
-                          {fmtDate(inv.paidAt)}
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className="text-right">
+                        <p className="text-sm font-bold text-green-400">
+                          {formatVND(inv.paidAmount ?? inv.totalAmount)} VND
                         </p>
-                      )}
+                        {inv.paidAt && (
+                          <p className="text-xs text-neutral-500 mt-0.5">
+                            {fmtDate(inv.paidAt)}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => void markUnpaid(inv.id)}
+                        disabled={markingUnpaid === inv.id}
+                        className="text-[10px] text-neutral-500 hover:text-red-400 underline"
+                      >
+                        {markingUnpaid === inv.id ? "…" : "undo"}
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -938,7 +1007,7 @@ export default function VenueBillingDetailPage() {
                         {inv.status === "overdue" ? "Overdue" : "Pending"}
                       </span>
                       <button
-                        onClick={() => void markPaid(inv.id)}
+                        onClick={() => openPayModal(inv.id, inv.totalAmount)}
                         disabled={markingPaid === inv.id}
                         className="text-xs rounded border border-neutral-700 px-2 py-1 text-neutral-400 hover:text-white hover:border-neutral-600 disabled:opacity-50"
                       >
@@ -954,6 +1023,98 @@ export default function VenueBillingDetailPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Mark paid modal ──────────────────────────────────────────── */}
+      {payModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+          onClick={() => setPayModal(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold mb-4">Mark invoice as paid</h3>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs text-neutral-500 mb-1 block">Amount paid (VND)</label>
+                <input
+                  type="number"
+                  value={payAmount}
+                  onChange={(e) => setPayAmount(e.target.value)}
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white"
+                  placeholder={String(payModal.totalAmount)}
+                />
+                {parseInt(payAmount) !== payModal.totalAmount && (
+                  <p className="text-[10px] text-amber-400 mt-1">
+                    Invoice total: {formatVND(payModal.totalAmount)} VND
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="text-xs text-neutral-500 mb-1 block">Payment method</label>
+                <div className="flex gap-2">
+                  {(
+                    [
+                      { id: "payos" as const, label: "PayOS" },
+                      { id: "sepay" as const, label: "Sepay" },
+                      { id: "manual" as const, label: "Manual" },
+                    ] as const
+                  ).map(({ id, label }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setPayMethod(id)}
+                      className={cn(
+                        "flex-1 rounded-lg py-2 text-sm font-medium border transition-colors",
+                        payMethod === id
+                          ? "border-purple-500 bg-purple-900/30 text-white"
+                          : "border-neutral-700 text-neutral-400 hover:border-neutral-600"
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-neutral-500 mb-1 block">Comment (optional)</label>
+                <textarea
+                  value={payComment}
+                  onChange={(e) => setPayComment(e.target.value)}
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white resize-none"
+                  rows={2}
+                  placeholder="e.g. Paid via bank transfer ref #123"
+                />
+              </div>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => setPayModal(null)}
+                className="flex-1 rounded-lg border border-neutral-700 py-2 text-sm text-neutral-400 hover:text-white hover:border-neutral-600"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void submitMarkPaid()}
+                disabled={!!markingPaid}
+                className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-purple-600 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-50"
+              >
+                {markingPaid ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
+                Mark paid
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
