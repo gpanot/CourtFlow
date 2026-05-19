@@ -180,6 +180,7 @@ interface BillingInvoiceRow {
   status: string;
   paymentRef: string | null;
   paidAt: string | null;
+  paidAmount: number | null;
 }
 
 interface InvoiceDetail {
@@ -1529,16 +1530,33 @@ export function StaffBossDashboardScreen() {
                                 <Text style={{ fontSize: 13, color: theme.muted }}>{t("bossDashboardBillingPayments")}</Text>
                                 <Text style={{ fontSize: 13, color: theme.text }}>{inv.totalCheckins}</Text>
                               </View>
-                              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                                <Text style={{ fontSize: 14, fontWeight: "700", color: isPaid ? "#4ade80" : theme.purple400 }}>
-                                  {formatVND(inv.totalAmount)} VND
+                              {/* Total billed */}
+                              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                                <Text style={{ fontSize: 13, color: theme.muted }}>{t("bossDashboardBillingTotal")}</Text>
+                                <Text style={{ fontSize: 13, fontWeight: "600", color: theme.purple400 }}>
+                                  {inv.totalAmount === 0 ? "Free 🎁" : `${formatVND(inv.totalAmount)} VND`}
                                 </Text>
-                                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                                  <Text style={{ fontSize: 12, color: theme.muted }}>
-                                    {isPaid ? t("bossDashboardBillingTapDetails") : t("bossDashboardBillingTapView")}
+                              </View>
+                              {/* Total paid (only for paid invoices) */}
+                              {isPaid && (
+                                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                                  <Text style={{ fontSize: 13, color: theme.muted }}>{t("bossDashboardBillingPaid")}</Text>
+                                  <Text style={{ fontSize: 13, fontWeight: "600", color: "#4ade80" }}>
+                                    {inv.paidAmount === 0
+                                      ? "Free 🎁"
+                                      : inv.paidAmount != null
+                                        ? `${formatVND(inv.paidAmount)} VND`
+                                        : inv.totalAmount === 0
+                                          ? "Free 🎁"
+                                          : `${formatVND(inv.totalAmount)} VND`}
                                   </Text>
-                                  <Ionicons name="chevron-forward" size={14} color={theme.muted} />
                                 </View>
+                              )}
+                              <View style={{ flexDirection: "row", justifyContent: "flex-end", alignItems: "center", gap: 4 }}>
+                                <Text style={{ fontSize: 12, color: theme.muted }}>
+                                  {isPaid ? t("bossDashboardBillingTapDetails") : t("bossDashboardBillingTapView")}
+                                </Text>
+                                <Ionicons name="chevron-forward" size={14} color={theme.muted} />
                               </View>
                             </View>
 

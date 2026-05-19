@@ -840,8 +840,28 @@ export default function VenueBillingDetailPage() {
                           )}
                           <div className="flex justify-between font-semibold">
                             <span className="text-neutral-400">Total billed</span>
-                            <span className="text-purple-400">{formatVND(inv.totalAmount)} VND</span>
+                            <span className="text-purple-400">
+                              {inv.totalAmount === 0 ? (
+                                <span className="text-green-400">Free 🎁</span>
+                              ) : (
+                                `${formatVND(inv.totalAmount)} VND`
+                              )}
+                            </span>
                           </div>
+                          {isPaid && (
+                            <div className="flex justify-between font-semibold">
+                              <span className="text-neutral-400">Total paid</span>
+                              <span className="text-green-400">
+                                {inv.paidAmount === 0 || inv.paidAmount === null && inv.totalAmount === 0 ? (
+                                  "Free 🎁"
+                                ) : inv.paidAmount != null ? (
+                                  `${formatVND(inv.paidAmount)} VND`
+                                ) : (
+                                  `${formatVND(inv.totalAmount)} VND`
+                                )}
+                              </span>
+                            </div>
+                          )}
                         </div>
 
                         {inv.paidAt && (

@@ -38,7 +38,6 @@ export function CourtPayBillingPaymentCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-medium truncate">{payment.playerName}</p>
-          <p className="text-xs text-neutral-500">{payment.playerPhone}</p>
           {payment.playerSkillLevel ? (
             <p className="text-[11px] text-neutral-600 mt-0.5">Skill: {payment.playerSkillLevel}</p>
           ) : null}

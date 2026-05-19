@@ -163,6 +163,7 @@ interface BillingInvoiceRow {
   status: string;
   paymentRef: string | null;
   paidAt: string | null;
+  paidAmount: number | null;
 }
 
 interface InvoiceDetail {
@@ -1186,7 +1187,12 @@ export default function BossDashboardPage() {
                           {new Date(inv.weekEndDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                         </p>
                         <p className="text-sm mb-1">{inv.totalCheckins} payments</p>
-                        <p className="text-lg font-bold text-purple-400 mb-3">{formatVND(inv.totalAmount)} VND</p>
+                        <div className="flex items-baseline justify-between mb-3">
+                          <span className="text-xs text-neutral-500">Total billed</span>
+                          <span className="text-lg font-bold text-purple-400">
+                            {inv.totalAmount === 0 ? "Free 🎁" : `${formatVND(inv.totalAmount)} VND`}
+                          </span>
+                        </div>
 
                         <div className="flex gap-2">
                           <button
@@ -1302,8 +1308,14 @@ export default function BossDashboardPage() {
                               </p>
                             </div>
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium text-purple-400">{formatVND(inv.totalAmount)} VND</span>
-                              <span className="text-xs text-green-400">✓ Paid</span>
+                              <div className="text-right">
+                                <p className="text-xs text-neutral-500">
+                                  Billed: {inv.totalAmount === 0 ? <span className="text-green-400">Free 🎁</span> : `${formatVND(inv.totalAmount)} VND`}
+                                </p>
+                                <p className="text-xs text-green-400">
+                                  ✓ Paid: {inv.paidAmount === 0 ? "Free 🎁" : inv.paidAmount != null ? `${formatVND(inv.paidAmount)} VND` : inv.totalAmount === 0 ? "Free 🎁" : `${formatVND(inv.totalAmount)} VND`}
+                                </p>
+                              </div>
                               {isOpen ? <ChevronUp className="h-3.5 w-3.5 text-neutral-500" /> : <ChevronDown className="h-3.5 w-3.5 text-neutral-500" />}
                             </div>
                           </button>

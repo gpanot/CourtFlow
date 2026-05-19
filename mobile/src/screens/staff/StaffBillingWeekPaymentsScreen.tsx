@@ -170,7 +170,6 @@ export function StaffBillingWeekPaymentsScreen() {
             <View style={styles.row}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{item.playerName}</Text>
-                <Text style={styles.phone}>{item.playerPhone}</Text>
               </View>
               <Text style={styles.amount}>{formatVND(item.amount)} VND</Text>
             </View>
