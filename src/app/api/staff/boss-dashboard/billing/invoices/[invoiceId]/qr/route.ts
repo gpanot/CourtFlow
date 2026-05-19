@@ -35,58 +35,51 @@ export async function GET(
     }
 
     let qrCode: string | null = null;
-    let payosOrderCode = invoice.payosOrderCode;
+    const existingOrderCode = invoice.payosOrderCode;
 
-    // Try to reuse an existing PayOS order
-    if (payosOrderCode) {
+    // If there's an existing PayOS order, check its status before reusing
+    if (existingOrderCode) {
       try {
-        const existing = await payos.paymentRequests.getPaymentRequestInfo(
-          Number(payosOrderCode)
-        );
+        const existing = await payos.paymentRequests.get(Number(existingOrderCode));
         if (existing.status === "PAID") {
           return NextResponse.json({ qrCode: null, amount: invoice.totalAmount, reference: invoice.paymentRef, status: "paid" });
         }
-        if (existing.status !== "CANCELLED" && existing.status !== "EXPIRED") {
-          // qrCode is the VietQR payload string returned by PayOS
-          qrCode = (existing as { qrCode?: string }).qrCode ?? null;
-        } else {
-          payosOrderCode = null;
-        }
+        // CANCELLED / EXPIRED → fall through to create a new order below
+        // PENDING / PROCESSING → we'd ideally reuse, but qrCode isn't returned by .get()
+        // so we always create a fresh link to get the qrCode string
       } catch {
-        payosOrderCode = null;
+        // ignore — create a new order
       }
     }
 
-    // Create a new PayOS payment link if needed
-    if (!payosOrderCode || !qrCode) {
-      const orderCode = Date.now() % 1000000000;
-      const appUrl =
-        process.env.APP_URL ||
-        (process.env.RAILWAY_PUBLIC_DOMAIN
-          ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
-          : "http://localhost:3000");
+    // Always create a new PayOS payment link to obtain the qrCode string
+    const orderCode = Date.now() % 1000000000;
+    const appUrl =
+      process.env.APP_URL ||
+      (process.env.RAILWAY_PUBLIC_DOMAIN
+        ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+        : "http://localhost:3000");
 
-      const weekLabel = new Date(invoice.weekStartDate).toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "short",
-      });
-      const description = `CourtPay Bill ${invoice.paymentRef || weekLabel}`;
+    const weekLabel = new Date(invoice.weekStartDate).toLocaleDateString("en-GB", {
+      day: "numeric",
+      month: "short",
+    });
+    const description = `CourtPay Bill ${invoice.paymentRef || weekLabel}`;
 
-      const paymentLink = await payos.paymentRequests.create({
-        orderCode,
-        amount: invoice.totalAmount,
-        description: description.slice(0, 25),
-        returnUrl: `${appUrl}/staff/dashboard/boss`,
-        cancelUrl: `${appUrl}/staff/dashboard/boss`,
-      });
+    const paymentLink = await payos.paymentRequests.create({
+      orderCode,
+      amount: invoice.totalAmount,
+      description: description.slice(0, 25),
+      returnUrl: `${appUrl}/staff/dashboard/boss`,
+      cancelUrl: `${appUrl}/staff/dashboard/boss`,
+    });
 
-      await prisma.billingInvoice.update({
-        where: { id: invoiceId },
-        data: { payosOrderCode: String(orderCode) },
-      });
+    await prisma.billingInvoice.update({
+      where: { id: invoiceId },
+      data: { payosOrderCode: String(orderCode) },
+    });
 
-      qrCode = paymentLink.qrCode ?? null;
-    }
+    qrCode = paymentLink.qrCode ?? null;
 
     return NextResponse.json({
       qrCode,
