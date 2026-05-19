@@ -583,7 +583,14 @@ const CHECK_IN_SCANNER_EN = {
   "bossSubDetailEditTitle": "Edit subscription",
   "bossSubDetailSessionsRemaining": "Sessions remaining",
   "bossSubDetailExpiryDate": "Expiry date (YYYY-MM-DD)",
-  "bossSubDetailSave": "Save"
+  "bossSubDetailSave": "Save",
+
+  // ── Billing blocked banner & pay QR ──────────────────────────────────────
+  "billingBlockedTitle": "Unpaid billing",
+  "billingBlockedMessage": "You have unpaid bills so you can't see the content of this page. Pay the bill to get full access.",
+  "billingBlockedHint": "Go to Boss Dashboard > Billing",
+  "bossDashboardBillingPayQR": "Pay now via QR",
+  "bossDashboardBillingHideQRBtn": "Hide QR"
 } as const;
 
 const CHECK_IN_SCANNER_VI = {
@@ -1165,7 +1172,14 @@ const CHECK_IN_SCANNER_VI = {
   "bossSubDetailEditTitle": "Chỉnh sửa gói",
   "bossSubDetailSessionsRemaining": "Số buổi còn lại",
   "bossSubDetailExpiryDate": "Ngày hết hạn (YYYY-MM-DD)",
-  "bossSubDetailSave": "Lưu"
+  "bossSubDetailSave": "Lưu",
+
+  // ── Billing blocked banner & pay QR ──────────────────────────────────────
+  "billingBlockedTitle": "Hóa đơn chưa thanh toán",
+  "billingBlockedMessage": "Bạn có hóa đơn chưa thanh toán nên không thể xem nội dung trang này. Thanh toán hóa đơn để được truy cập đầy đủ.",
+  "billingBlockedHint": "Vào Boss Dashboard > Billing",
+  "bossDashboardBillingPayQR": "Thanh toán qua QR",
+  "bossDashboardBillingHideQRBtn": "Ẩn QR"
 } as const;
 
 export const TABLET_ARIA: Record<TabletKioskLocale, { switchToEnglishAria: string; switchToVietnameseAria: string }> = {

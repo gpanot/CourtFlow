@@ -7,6 +7,7 @@ import { staffProfileHomeHref } from "@/config/clients";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { ArrowLeft, Loader2, DollarSign, Clock, TrendingUp, Receipt, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
 import { useSocket } from "@/hooks/use-socket";
 import {
   CourtPayBillingPaymentCard,
@@ -182,7 +183,7 @@ interface InvoiceDetail {
 }
 
 interface QRData {
-  qrUrl: string | null;
+  qrCode: string | null;
   amount: number;
   reference: string;
   status: string;
@@ -344,6 +345,7 @@ export default function BossDashboardPage() {
       );
       setQrData(data);
       setShowQR(invoiceId);
+      startBillingPoll();
     } catch (e) { console.error(e); }
   };
 
@@ -1188,29 +1190,15 @@ export default function BossDashboardPage() {
 
                         <div className="flex gap-2">
                           <button
-                            onClick={async () => {
-                              try {
-                                const res = await api.post<{ checkoutUrl?: string; qrCode?: string }>(`/api/staff/boss-dashboard/billing/invoices/${inv.id}/pay`);
-                                if (res.checkoutUrl) {
-                                  window.open(res.checkoutUrl, "_blank");
-                                  startBillingPoll();
-                                }
-                              } catch (e) { console.error(e); }
-                            }}
-                            className="flex-1 rounded-lg py-2.5 text-sm font-medium bg-purple-600 text-white hover:bg-purple-500 transition-colors"
-                          >
-                            Pay with PayOS
-                          </button>
-                          <button
                             onClick={() => handleShowQR(inv.id)}
                             className={cn(
-                              "rounded-lg px-3 py-2.5 text-sm font-medium transition-colors border",
+                              "flex-1 rounded-lg py-2.5 text-sm font-medium transition-colors",
                               showQR === inv.id
-                                ? "bg-neutral-800 text-neutral-300 border-neutral-700"
-                                : "border-neutral-700 text-neutral-300 hover:bg-neutral-800"
+                                ? "bg-neutral-800 text-neutral-300 border border-neutral-700"
+                                : "bg-purple-600 text-white hover:bg-purple-500"
                             )}
                           >
-                            {showQR === inv.id ? "Hide QR" : "Bank QR"}
+                            {showQR === inv.id ? "Ẩn QR / Hide QR" : "Thanh toán qua QR / Pay now via QR"}
                           </button>
                           <button
                             onClick={handleToggleInvoicePayments}
@@ -1221,29 +1209,26 @@ export default function BossDashboardPage() {
                         </div>
 
                         {showQR === inv.id && qrData && (
-                          <div className="mt-4 text-center space-y-3">
-                            {qrData.qrUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={qrData.qrUrl}
-                                alt="VietQR payment code"
-                                className="mx-auto w-64 h-64 rounded-lg bg-white p-2"
-                              />
+                          <div className="mt-4 flex flex-col items-center gap-3 text-center">
+                            {qrData.qrCode ? (
+                              <div className="rounded-xl bg-white p-3">
+                                <QRCodeSVG value={qrData.qrCode} size={220} bgColor="#ffffff" fgColor="#000000" />
+                              </div>
                             ) : (
-                              <p className="text-sm text-red-400">Could not generate QR code</p>
+                              <p className="text-sm text-red-400">Không thể tạo mã QR / Could not generate QR</p>
                             )}
                             <p className="text-sm text-neutral-300">
-                              Amount: <span className="font-medium">{formatVND(qrData.amount)} VND</span>
+                              {formatVND(qrData.amount)} VND
                             </p>
                             <p className="text-xs font-mono text-neutral-500">
                               Ref: {qrData.reference}
                             </p>
                             <p className="text-xs text-neutral-600">
-                              Payment confirmed automatically once received
+                              Thanh toán tự động xác nhận khi nhận được / Payment confirmed automatically once received
                             </p>
                             <div className="flex items-center justify-center gap-2 text-xs text-purple-400">
                               <Loader2 className="h-3 w-3 animate-spin" />
-                              Waiting for payment...
+                              Đang chờ thanh toán… / Waiting for payment…
                             </div>
                           </div>
                         )}

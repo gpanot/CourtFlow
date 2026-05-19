@@ -1,9 +1,19 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireStaff } from "@/lib/auth";
-import { buildVietQRUrl } from "@/lib/vietqr";
+import { payos } from "@/lib/payos";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * GET /api/staff/boss-dashboard/billing/invoices/:invoiceId/qr
+ *
+ * Returns a PayOS VietQR code string for inline rendering in the app.
+ * Creates a PayOS payment link if none exists yet, or reuses the existing
+ * one so the PayOS webhook fires correctly on payment.
+ *
+ * Response: { qrCode: string | null, amount, reference, status }
+ */
 export async function GET(
   req: Request,
   { params }: { params: Promise<{ invoiceId: string }> }
@@ -20,33 +30,73 @@ export async function GET(
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
     }
 
-    const config = await prisma.billingConfig.findUnique({
-      where: { id: "default" },
-    });
-
-    if (!config || !config.bankBin || !config.bankAccount) {
-      return NextResponse.json(
-        { error: "Billing bank details not configured. Contact admin." },
-        { status: 503 }
-      );
+    if (invoice.totalAmount <= 0) {
+      return NextResponse.json({ error: "Invoice amount is zero" }, { status: 400 });
     }
 
-    const qrUrl = buildVietQRUrl({
-      bankBin: config.bankBin,
-      accountNumber: config.bankAccount,
-      accountName: config.bankOwner,
-      amount: invoice.totalAmount,
-      description: invoice.paymentRef ?? "",
-    });
+    let qrCode: string | null = null;
+    let payosOrderCode = invoice.payosOrderCode;
+
+    // Try to reuse an existing PayOS order
+    if (payosOrderCode) {
+      try {
+        const existing = await payos.paymentRequests.getPaymentRequestInfo(
+          Number(payosOrderCode)
+        );
+        if (existing.status === "PAID") {
+          return NextResponse.json({ qrCode: null, amount: invoice.totalAmount, reference: invoice.paymentRef, status: "paid" });
+        }
+        if (existing.status !== "CANCELLED" && existing.status !== "EXPIRED") {
+          // qrCode is the VietQR payload string returned by PayOS
+          qrCode = (existing as { qrCode?: string }).qrCode ?? null;
+        } else {
+          payosOrderCode = null;
+        }
+      } catch {
+        payosOrderCode = null;
+      }
+    }
+
+    // Create a new PayOS payment link if needed
+    if (!payosOrderCode || !qrCode) {
+      const orderCode = Date.now() % 1000000000;
+      const appUrl =
+        process.env.APP_URL ||
+        (process.env.RAILWAY_PUBLIC_DOMAIN
+          ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`
+          : "http://localhost:3000");
+
+      const weekLabel = new Date(invoice.weekStartDate).toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+      });
+      const description = `CourtPay Bill ${invoice.paymentRef || weekLabel}`;
+
+      const paymentLink = await payos.paymentRequests.create({
+        orderCode,
+        amount: invoice.totalAmount,
+        description: description.slice(0, 25),
+        returnUrl: `${appUrl}/staff/dashboard/boss`,
+        cancelUrl: `${appUrl}/staff/dashboard/boss`,
+      });
+
+      await prisma.billingInvoice.update({
+        where: { id: invoiceId },
+        data: { payosOrderCode: String(orderCode) },
+      });
+
+      qrCode = paymentLink.qrCode ?? null;
+    }
 
     return NextResponse.json({
-      qrUrl,
+      qrCode,
       amount: invoice.totalAmount,
       reference: invoice.paymentRef,
       status: invoice.status,
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Internal server error";
+    console.error("[billing-qr] Error:", message);
     const status = message.includes("access") || message.includes("token") ? 401 : 500;
     return NextResponse.json({ error: message }, { status });
   }

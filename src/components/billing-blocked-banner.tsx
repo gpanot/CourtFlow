@@ -14,14 +14,18 @@ export function BillingBlockedBanner({ className }: BillingBlockedBannerProps) {
       <AlertTriangle className="h-10 w-10 text-amber-400" />
       <div className="max-w-sm space-y-2">
         <p className="text-sm font-semibold text-amber-300">
-          Unpaid billing
+          Hóa đơn chưa thanh toán / Unpaid billing
         </p>
         <p className="text-sm text-neutral-400">
+          Bạn có hóa đơn chưa thanh toán nên không thể xem nội dung trang này.
+          Thanh toán hóa đơn để được truy cập đầy đủ.
+        </p>
+        <p className="text-xs text-neutral-500">
           You have unpaid bills so you can&apos;t see the content of this page.
           Pay the bill to get full access.
         </p>
         <p className="text-xs text-neutral-500">
-          Go to <span className="font-medium text-neutral-300">Boss Dashboard</span>{" "}
+          Vào <span className="font-medium text-neutral-300">Boss Dashboard</span>{" "}
           &gt; <span className="font-medium text-neutral-300">Billing</span>
         </p>
       </div>

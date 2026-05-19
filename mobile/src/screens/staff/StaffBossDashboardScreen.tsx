@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   RefreshControl,
   TextInput,
-  Image,
   Alert,
   Modal,
   Dimensions,
@@ -29,6 +28,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PlayerCard } from "../../components/PlayerCard";
 import { BossRevenueExportSheet } from "../../components/staff/BossRevenueExportSheet";
 import Svg, { Polyline, Path, Line, Circle, Text as SvgText } from "react-native-svg";
+import QRCode from "react-native-qrcode-svg";
 import {
   exportToCSV,
   formatDateDDMMYYYY,
@@ -200,7 +200,7 @@ interface InvoiceDetail {
 }
 
 interface QRData {
-  qrUrl: string | null;
+  qrCode: string | null;
   amount: number;
   reference: string;
   status: string;
@@ -1547,27 +1547,6 @@ export function StaffBossDashboardScreen() {
                               <>
                                 <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
                                   <TouchableOpacity
-                                    onPress={async () => {
-                                      try {
-                                        const res = await api.post<{ checkoutUrl?: string }>(`/api/staff/boss-dashboard/billing/invoices/${inv.id}/pay`);
-                                        if (res.checkoutUrl) {
-                                          const { Linking } = require("react-native");
-                                          Linking.openURL(res.checkoutUrl);
-                                          startBillingPoll();
-                                        }
-                                      } catch {}
-                                    }}
-                                    style={{
-                                      flex: 1,
-                                      backgroundColor: "#7c3aed",
-                                      borderRadius: 10,
-                                      paddingVertical: 12,
-                                      alignItems: "center",
-                                    }}
-                                  >
-                                    <Text style={{ fontSize: 14, fontWeight: "600", color: "#fff" }}>Pay with PayOS</Text>
-                                  </TouchableOpacity>
-                                  <TouchableOpacity
                                     onPress={async (e) => {
                                       e.stopPropagation?.();
                                       if (showQR === inv.id) {
@@ -1581,32 +1560,31 @@ export function StaffBossDashboardScreen() {
                                         );
                                         setQrData(data);
                                         setShowQR(inv.id);
+                                        startBillingPoll();
                                       } catch {}
                                     }}
                                     style={{
+                                      flex: 1,
                                       borderRadius: 10,
                                       paddingVertical: 12,
-                                      paddingHorizontal: 16,
                                       alignItems: "center",
-                                      borderWidth: 1,
-                                      borderColor: theme.border,
-                                      backgroundColor: showQR === inv.id ? theme.card : "transparent",
+                                      ...(showQR === inv.id
+                                        ? { borderWidth: 1, borderColor: theme.border, backgroundColor: theme.card }
+                                        : { backgroundColor: "#7c3aed" }),
                                     }}
                                   >
-                                    <Text style={{ fontSize: 14, fontWeight: "600", color: showQR === inv.id ? theme.muted : theme.text }}>
-                                      {showQR === inv.id ? "Hide QR" : "Bank QR"}
+                                    <Text style={{ fontSize: 14, fontWeight: "600", color: showQR === inv.id ? theme.muted : "#fff" }}>
+                                      {showQR === inv.id ? t("bossDashboardBillingHideQRBtn") : t("bossDashboardBillingPayQR")}
                                     </Text>
                                   </TouchableOpacity>
                                 </View>
 
                                 {showQR === inv.id && qrData && (
                                   <View style={{ marginTop: 16, alignItems: "center", gap: 10 }}>
-                                    {qrData.qrUrl ? (
-                                      <Image
-                                        source={{ uri: qrData.qrUrl }}
-                                        style={{ width: 240, height: 240, borderRadius: 12, backgroundColor: "#fff" }}
-                                        resizeMode="contain"
-                                      />
+                                    {qrData.qrCode ? (
+                                      <View style={{ backgroundColor: "#fff", borderRadius: 12, padding: 12 }}>
+                                        <QRCode value={qrData.qrCode} size={220} backgroundColor="#ffffff" color="#000000" ecl="M" />
+                                      </View>
                                     ) : (
                                       <Text style={{ fontSize: 13, color: "#ef4444" }}>{t("bossDashboardBillingNoQR")}</Text>
                                     )}

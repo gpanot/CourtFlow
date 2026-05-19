@@ -2,9 +2,11 @@ import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppColors } from "../theme/use-app-colors";
+import { useTabletKioskLocale } from "../hooks/useTabletKioskLocale";
 
 export function BillingBlockedBanner() {
   const theme = useAppColors();
+  const { t } = useTabletKioskLocale();
   const styles = React.useMemo(
     () =>
       StyleSheet.create({
@@ -39,10 +41,6 @@ export function BillingBlockedBanner() {
           color: theme.subtle,
           textAlign: "center",
         },
-        hintBold: {
-          fontWeight: "600",
-          color: theme.text,
-        },
       }),
     [theme]
   );
@@ -50,15 +48,9 @@ export function BillingBlockedBanner() {
   return (
     <View style={styles.container}>
       <Ionicons name="warning" size={36} color={theme.amber400} />
-      <Text style={styles.title}>Unpaid billing</Text>
-      <Text style={styles.message}>
-        You have unpaid bills so you can&apos;t see the content of this page.
-        Pay the bill to get full access.
-      </Text>
-      <Text style={styles.hint}>
-        Go to <Text style={styles.hintBold}>Boss Dashboard</Text> &gt;{" "}
-        <Text style={styles.hintBold}>Billing</Text>
-      </Text>
+      <Text style={styles.title}>{t("billingBlockedTitle")}</Text>
+      <Text style={styles.message}>{t("billingBlockedMessage")}</Text>
+      <Text style={styles.hint}>{t("billingBlockedHint")}</Text>
     </View>
   );
 }
