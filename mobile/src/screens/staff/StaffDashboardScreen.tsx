@@ -288,7 +288,7 @@ export function StaffDashboardScreen() {
     api.get<{ hasOverdueBilling: boolean }>(`/api/courtpay/staff/billing-status?venueId=${venueId}`)
       .then((r) => setHasOverdueBilling(r.hasOverdueBilling))
       .catch(() => {});
-  }, [venueId]);
+  }, [venueId, tab]);
 
   const handlePlayersRefresh = () => {
     setPlayersRefreshing(true);

@@ -116,6 +116,13 @@ export default function StaffSubscriptionsPage() {
     ]).finally(() => setLoading(false));
   }, [hydrated, token, router, fetchPackages, fetchSubscribers, venueId]);
 
+  useEffect(() => {
+    if (!venueId || tab !== "subscribers") return;
+    api.get<{ hasOverdueBilling: boolean }>(`/api/courtpay/staff/billing-status?venueId=${venueId}`)
+      .then((r) => setHasOverdueBilling(r.hasOverdueBilling))
+      .catch(() => {});
+  }, [tab, venueId]);
+
   const createDefaults = async () => {
     setCreatingDefaults(true);
     try {

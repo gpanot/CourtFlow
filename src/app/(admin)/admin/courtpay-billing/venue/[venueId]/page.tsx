@@ -382,7 +382,7 @@ export default function VenueBillingDetailPage() {
       await api.post(
         `/api/admin/billing/venue/${venueId}/invoices/${payModal.invoiceId}/mark-paid`,
         {
-          amount: parseInt(payAmount) || payModal.totalAmount,
+          amount: payAmount.trim() !== "" && !isNaN(parseInt(payAmount)) ? parseInt(payAmount) : payModal.totalAmount,
           method: payMethod,
           comment: payComment.trim() || undefined,
         }

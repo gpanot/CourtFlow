@@ -25,6 +25,7 @@ export async function GET(req: Request) {
         status: true,
         paymentRef: true,
         paidAt: true,
+        paidAmount: true,
         createdAt: true,
       },
     });

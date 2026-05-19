@@ -322,6 +322,10 @@ export default function BossDashboardPage() {
   }, [hydrated, token, router, fetchData, fetchBillingStatus]);
 
   useEffect(() => {
+    fetchBillingStatus();
+  }, [tab, fetchBillingStatus]);
+
+  useEffect(() => {
     if (!venueId) return;
     emit("join:venue", venueId);
     const off = on("billing:invoice_paid", (...args: unknown[]) => {

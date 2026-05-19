@@ -56,8 +56,8 @@ export async function POST(
 
     if (overdueCount > 0) {
       await prisma.venue.updateMany({
-        where: { id: venueId, billingStatus: "active" },
-        data: { billingStatus: "active" },
+        where: { id: venueId },
+        data: { billingStatus: "suspended" },
       });
     }
 

@@ -700,7 +700,7 @@ export function StaffBossDashboardScreen() {
     api.get<{ hasOverdueBilling: boolean }>(`/api/courtpay/staff/billing-status?venueId=${venueId}`)
       .then((r) => setHasOverdueBilling(r.hasOverdueBilling))
       .catch(() => {});
-  }, [venueId]);
+  }, [venueId, tab]);
 
   const billingPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startBillingPoll = useCallback(() => {

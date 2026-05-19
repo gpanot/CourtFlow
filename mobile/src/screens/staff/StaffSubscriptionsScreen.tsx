@@ -581,6 +581,13 @@ export function StaffSubscriptionsScreen() {
     );
   }, [venueId, fetchPackages, fetchSessionFee]);
 
+  useEffect(() => {
+    if (!venueId || tab !== "subscribers") return;
+    api.get<{ hasOverdueBilling: boolean }>(`/api/courtpay/staff/billing-status?venueId=${venueId}`)
+      .then((r) => setHasOverdueBilling(r.hasOverdueBilling))
+      .catch(() => {});
+  }, [tab, venueId]);
+
   // ── Auto-calculate discount ──────────────────────────────────────────────
   // Recompute whenever price, sessions, days, or unlimited flag change,
   // unless the user has manually typed a discount value.
