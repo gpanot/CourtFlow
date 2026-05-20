@@ -48,6 +48,7 @@ const navSections: NavSection[] = [
       { href: "/admin/courtpay", label: "CourtPay", icon: CreditCard },
       { href: "/admin/courtpay-billing", label: "CP Billing", icon: Receipt },
       { href: "/admin/kiosk-shop", label: "Kiosk Shop", icon: ShoppingBag },
+      { href: "/admin/courtpay-analytics", label: "CP Analytics", icon: BarChart3 },
     ],
   },
   {
