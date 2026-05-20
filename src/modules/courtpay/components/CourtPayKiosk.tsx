@@ -166,6 +166,9 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
   // Payment state
   const [paymentLoading, setPaymentLoading] = useState(false);
 
+  // "Not you?" two-option modal (shared across payment_waiting, confirmed, already_paid)
+  const [showNotYouModal, setShowNotYouModal] = useState(false);
+
   // Venue info
   const [venueName, setVenueName] = useState("");
   const [venueLogoUrl, setVenueLogoUrl] = useState<string | null>(null);
@@ -220,6 +223,18 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
     },
     [resetToHome]
   );
+
+  const handleNotYouNewPlayer = useCallback(() => {
+    setShowNotYouModal(false);
+    resetToHome();
+    setTimeout(() => goTo("reg_face_capture"), 50);
+  }, [resetToHome, goTo]);
+
+  const handleNotYouExistingPlayer = useCallback(() => {
+    setShowNotYouModal(false);
+    resetToHome();
+    setTimeout(() => goTo("phone_enter"), 50);
+  }, [resetToHome, goTo]);
 
   // Load venue info
   useEffect(() => {
@@ -1370,10 +1385,10 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
             </button>
             <button
               type="button"
-              onClick={() => { resetToHome(); setTimeout(() => goTo("phone_enter"), 50); }}
+              onClick={() => setShowNotYouModal(true)}
               className="text-sm font-medium text-amber-400 underline hover:text-amber-300"
             >
-              Not you?
+              {t("staff.courtPayCheckIn.notYouQuestion")}
             </button>
           </div>
         </div>
@@ -1394,6 +1409,52 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
           <div className="flex items-center gap-3 text-neutral-400">
             <div className="h-3 w-3 animate-pulse rounded-full bg-amber-500" />
             <span>Waiting for staff confirmation…</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── "NOT YOU?" MODAL ────────────────────── */}
+      {showNotYouModal && (
+        <div className="absolute inset-0 z-50 flex items-end justify-center bg-black/70 pb-8 backdrop-blur-sm sm:items-center sm:pb-0">
+          <div className="w-full max-w-sm rounded-3xl border border-neutral-800 bg-neutral-950 p-6 shadow-2xl mx-4">
+            <p className="mb-5 text-center text-xl font-bold text-white">
+              {t("staff.courtPayCheckIn.notYouQuestion")}
+            </p>
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={handleNotYouNewPlayer}
+                className="flex w-full items-center gap-4 rounded-2xl border border-neutral-700 bg-neutral-900 px-5 py-4 text-left transition-colors hover:border-fuchsia-500/60 hover:bg-fuchsia-900/20"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-fuchsia-700/30">
+                  <ScanFace className="h-5 w-5 text-fuchsia-300" />
+                </span>
+                <div>
+                  <p className="font-semibold text-white">{t("staff.courtPayCheckIn.notYouNewPlayer")}</p>
+                  <p className="text-sm text-neutral-400">Take a photo to register</p>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={handleNotYouExistingPlayer}
+                className="flex w-full items-center gap-4 rounded-2xl border border-neutral-700 bg-neutral-900 px-5 py-4 text-left transition-colors hover:border-amber-500/60 hover:bg-amber-900/20"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-700/30">
+                  <Smartphone className="h-5 w-5 text-amber-300" />
+                </span>
+                <div>
+                  <p className="font-semibold text-white">{t("staff.courtPayCheckIn.notYouExistingPlayer")}</p>
+                  <p className="text-sm text-neutral-400">Enter your phone number</p>
+                </div>
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowNotYouModal(false)}
+              className="mt-4 w-full rounded-xl py-2.5 text-sm text-neutral-500 hover:text-neutral-300"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
@@ -1441,6 +1502,13 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
             isNew={isNewPlayer}
             onReset={resetToHome}
           />
+          <button
+            type="button"
+            onClick={() => setShowNotYouModal(true)}
+            className="mt-4 text-sm font-medium text-amber-400 underline hover:text-amber-300"
+          >
+            {t("staff.courtPayCheckIn.notYouQuestion")}
+          </button>
         </div>
       )}
     </div>

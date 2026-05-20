@@ -228,6 +228,9 @@ export function CourtPayCheckInScreen({
   const [alreadyPaidPlayer, setAlreadyPaidPlayer] = useState<CheckInPlayerLite | null>(null);
   const [alreadyPaidStatus, setAlreadyPaidStatus] = useState<string>("");
 
+  // "Not you?" two-option modal (shared: already_paid + confirmed steps)
+  const [showNotYouModal, setShowNotYouModal] = useState(false);
+
   // ── Reclub roster autocomplete ───────────────────────────────────────────
   interface ReclubRosterEntry { reclubUserId: number; name: string; avatarUrl: string; isDefaultAvatar: boolean; gender: string; }
   const [reclubRoster, setReclubRoster] = useState<ReclubRosterEntry[]>([]);
@@ -2124,8 +2127,7 @@ export function CourtPayCheckInScreen({
             variant="already_paid"
             playerName={alreadyPaidPlayer?.name}
             playerNameAlreadyPaidLabel={
-              alreadyPaidPlayer?.name
-                ? t("alreadyPaidWithName", { name: alreadyPaidPlayer.name })
+              alreadyPaidPlayer?.name                ? t("alreadyPaidWithName", { name: alreadyPaidPlayer.name })
                 : t("alreadyPaidNoName")
             }
             noNameFallback={t("alreadyPaidNoName")}
@@ -2137,13 +2139,8 @@ export function CourtPayCheckInScreen({
             faceBase64={faceBase64}
             onPrimaryAction={resetToHome}
             primaryLabel={t("backToHome")}
-            onSecondaryAction={() => {
-              setPhoneInput("");
-              setPhoneError("");
-              setPhonePreview(null);
-              setStep("phone_enter");
-            }}
-            secondaryLabel={t("notYouCheckInByPhone")}
+            onSecondaryAction={() => setShowNotYouModal(true)}
+            secondaryLabel={t("notYouQuestion")}
             mode={themeMode}
           />
         );
@@ -2238,17 +2235,12 @@ export function CourtPayCheckInScreen({
                   </TouchableOpacity>
                   {confirmMessage ? (
                     <TouchableOpacity
-                      onPress={() => {
-                        setPhoneInput("");
-                        setPhoneError("");
-                        setPhonePreview(null);
-                        setStep("phone_enter");
-                      }}
+                      onPress={() => setShowNotYouModal(true)}
                       activeOpacity={0.7}
                       style={{ paddingVertical: 8 }}
                     >
                       <Text style={[styles.confirmedCountdown, isLight && styles.confirmedCountdownLight, { textDecorationLine: "underline" }]}>
-                        {t("notYouCheckInByPhone")}
+                        {t("notYouQuestion")}
                       </Text>
                     </TouchableOpacity>
                   ) : null}
@@ -2346,6 +2338,88 @@ export function CourtPayCheckInScreen({
             </View>
           </View>
         </View>
+      </Modal>
+
+      {/* "Not you?" two-option modal (already_paid + confirmed steps) */}
+      <Modal
+        visible={showNotYouModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowNotYouModal(false)}
+      >
+        <Pressable
+          style={styles.notYouBackdrop}
+          onPress={() => setShowNotYouModal(false)}
+        >
+          <Pressable style={[styles.notYouCard, isLight && styles.notYouCardLight]} onPress={() => {}}>
+            <Text style={[styles.notYouTitle, isLight && styles.notYouTitleLight]}>
+              {t("notYouQuestion")}
+            </Text>
+
+            {/* New Player */}
+            <TouchableOpacity
+              style={[styles.notYouOption, isLight && styles.notYouOptionLight]}
+              activeOpacity={0.8}
+              onPress={() => {
+                setShowNotYouModal(false);
+                if (pendingPayment?.id) {
+                  void api.post("/api/kiosk/cancel-payment", {
+                    pendingPaymentId: pendingPayment.id,
+                  }).catch(() => {});
+                }
+                resetToHome();
+                setTimeout(() => setStep("reg_face_capture"), 80);
+              }}
+            >
+              <View style={styles.notYouOptionIcon}>
+                <Ionicons name="camera-outline" size={24} color="#c084fc" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.notYouOptionTitle, isLight && styles.notYouOptionTitleLight]}>
+                  {t("notYouNewPlayer")}
+                </Text>
+                <Text style={styles.notYouOptionSub}>Take a photo to register</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Existing Player via Phone */}
+            <TouchableOpacity
+              style={[styles.notYouOption, isLight && styles.notYouOptionLight]}
+              activeOpacity={0.8}
+              onPress={() => {
+                setShowNotYouModal(false);
+                if (pendingPayment?.id) {
+                  void api.post("/api/kiosk/cancel-payment", {
+                    pendingPaymentId: pendingPayment.id,
+                  }).catch(() => {});
+                }
+                setPhoneInput("");
+                setPhoneError("");
+                setPhonePreview(null);
+                resetToHome();
+                setTimeout(() => setStep("phone_enter"), 80);
+              }}
+            >
+              <View style={styles.notYouOptionIcon}>
+                <Ionicons name="call-outline" size={24} color="#fbbf24" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.notYouOptionTitle, isLight && styles.notYouOptionTitleLight]}>
+                  {t("notYouExistingPlayer")}
+                </Text>
+                <Text style={styles.notYouOptionSub}>Enter your phone number</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.notYouCancel}
+              activeOpacity={0.7}
+              onPress={() => setShowNotYouModal(false)}
+            >
+              <Text style={styles.notYouCancelText}>{t("cancel")}</Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       {/* Registration: phone reminder — solid panel (no glass / translucent scrim) */}
@@ -3506,5 +3580,82 @@ const styles = StyleSheet.create({
   },
   cashOverlayCancelTextLight: {
     color: "#475569",
+  },
+
+  // ── "Not you?" modal ────────────────────────────────────────────────────
+  notYouBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 20,
+  },
+  notYouCard: {
+    width: "100%",
+    maxWidth: 400,
+    backgroundColor: "#0a0a0a",
+    borderRadius: 24,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "#262626",
+    padding: 24,
+    gap: 12,
+  },
+  notYouCardLight: {
+    backgroundColor: "#ffffff",
+    borderColor: "#e5e7eb",
+  },
+  notYouTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#ffffff",
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  notYouTitleLight: {
+    color: "#0f172a",
+  },
+  notYouOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    backgroundColor: "#171717",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#2a2a2a",
+    padding: 16,
+  },
+  notYouOptionLight: {
+    backgroundColor: "#f8fafc",
+    borderColor: "#e2e8f0",
+  },
+  notYouOptionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(192,132,252,0.12)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  notYouOptionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#ffffff",
+    marginBottom: 2,
+  },
+  notYouOptionTitleLight: {
+    color: "#0f172a",
+  },
+  notYouOptionSub: {
+    fontSize: 13,
+    color: "#737373",
+  },
+  notYouCancel: {
+    paddingVertical: 10,
+    alignItems: "center",
+    marginTop: 4,
+  },
+  notYouCancelText: {
+    fontSize: 15,
+    color: "#737373",
   },
 });

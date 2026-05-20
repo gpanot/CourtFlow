@@ -6,6 +6,7 @@ import staffI18n from "@/i18n/staff-i18n";
 import { Banknote, QrCode, Loader2, Check, Clock, EllipsisVertical, Users } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { api } from "@/lib/api-client";
+import { getDeviceLabel } from "@/lib/device-label";
 import { useSocket } from "@/hooks/use-socket";
 
 interface PendingPaymentItem {
@@ -227,7 +228,10 @@ export function PendingPaymentsPanel({
   const handleConfirm = async (id: string) => {
     setActionLoading(id);
     try {
-      await api.post("/api/staff/confirm-payment", { pendingPaymentId: id });
+      await api.post("/api/staff/confirm-payment", {
+        pendingPaymentId: id,
+        confirmedOnDevice: getDeviceLabel(),
+      });
       setPayments((prev) => prev.filter((p) => p.id !== id));
       void fetchPaidPayments();
     } catch (e) {
