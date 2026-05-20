@@ -1232,8 +1232,10 @@ function IdentifiedScreen({
             {payosQrCode ? (
               <>
                 {/* PayOS VietQR code rendered as SVG */}
-                <div className="sk-qr-box" style={{ background: "#ffffff", padding: 10, borderRadius: 12, display: "inline-block" }}>
+                <div className="sk-qr-box" style={{ background: "#ffffff", padding: 10, borderRadius: 12, display: "inline-flex", flexDirection: "column", alignItems: "center" }}>
                   <QRCodeSVG value={payosQrCode} size={isTablet ? 260 : 160} bgColor="#ffffff" fgColor="#000000" />
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src="/vietqr-logo.png" alt="VietQR" style={{ height: 20, objectFit: "contain", marginTop: 6 }} />
                 </div>
                 {/* Strikethrough original price */}
                 <p className="sk-price-strike" style={{ fontSize: 14, color: "#6b7280", textAlign: "center", marginTop: 6, textDecoration: "line-through" }}>

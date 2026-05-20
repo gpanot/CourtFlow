@@ -88,6 +88,7 @@ interface CheckInWithRelations {
   status: string;
   confirmedAt: Date | null;
   confirmedBy: string | null;
+  confirmedOnDevice: string | null;
   cancelReason: string | null;
   cancelledAt: Date | null;
   checkInPlayer: {
@@ -119,7 +120,19 @@ async function getBillablePaymentsForPeriod(
       status: { in: ["confirmed", "cancelled"] },
       confirmedAt: { gte: weekStart, lte: weekEnd },
     },
-    include: {
+    select: {
+      id: true,
+      checkInPlayerId: true,
+      amount: true,
+      paymentRef: true,
+      paymentMethod: true,
+      type: true,
+      status: true,
+      confirmedAt: true,
+      confirmedBy: true,
+      confirmedOnDevice: true,
+      cancelReason: true,
+      cancelledAt: true,
       checkInPlayer: {
         select: {
           id: true,
@@ -261,6 +274,7 @@ type SessionTimeWindow = {
   status: string;
   type: string;
   title: string | null;
+  openedOnDevice?: string | null;
 };
 
 function inferCourtPaySessionByTimeWindow(
@@ -288,6 +302,7 @@ function sessionToBillingPayload(s: SessionTimeWindow) {
     status: s.status,
     type: s.type,
     title: s.title,
+    openedOnDevice: s.openedOnDevice ?? null,
   };
 }
 
@@ -340,6 +355,7 @@ export async function getBillablePaymentsForWeek(
         status: true,
         type: true,
         title: true,
+        openedOnDevice: true,
       },
       orderBy: { openedAt: "asc" },
     }),
@@ -364,6 +380,7 @@ export async function getBillablePaymentsForWeek(
         status: p.status,
         confirmedAt: p.confirmedAt,
         confirmedBy: p.confirmedBy,
+        confirmedOnDevice: p.confirmedOnDevice ?? null,
         cancelReason: p.cancelReason,
         cancelledAt: p.cancelledAt,
         session: inferred ? sessionToBillingPayload(inferred) : null,

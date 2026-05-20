@@ -192,6 +192,10 @@ const CHECK_IN_SCANNER_EN = {
   "couldNotRecognize": "We couldn't recognize your face",
   "seemsNewHere": "It seems you are new here?",
   "checkInByPhoneLink": "Check-in by phone",
+  "notYouCheckInByPhone": "Not you? Check in via phone number",
+  "notYouQuestion": "Not you?",
+  "notYouNewPlayer": "New Player",
+  "notYouExistingPlayer": "Existing Player (Via Phone)",
 
   // ── Staff app general ──────────────────────────────────────────────────────
   "staffDashboard": "Staff Dashboard",
@@ -782,6 +786,10 @@ const CHECK_IN_SCANNER_VI = {
   "couldNotRecognize": "Chúng tôi không nhận diện được khuôn mặt của bạn",
   "seemsNewHere": "Bạn mới đến đây?",
   "checkInByPhoneLink": "Check-in bằng số điện thoại",
+  "notYouCheckInByPhone": "Không phải bạn? Điểm danh bằng số điện thoại",
+  "notYouQuestion": "Không phải bạn?",
+  "notYouNewPlayer": "Người chơi mới",
+  "notYouExistingPlayer": "Người chơi đã có (Qua SĐT)",
 
   // ── Staff app general ──────────────────────────────────────────────────────
   "staffDashboard": "Bảng điều khiển nhân viên",

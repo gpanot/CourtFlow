@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,9 @@ import {
   useWindowDimensions,
   Animated,
   Easing,
+  Modal,
+  Pressable,
+  Image,
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 import { buildVietQRPayload } from "../../lib/vietqr-payload";
@@ -57,6 +60,10 @@ type Props = {
   onPartyCountChange: (next: number) => void | Promise<void>;
   onCash: () => void;
   onCancel: () => void;
+  /** "Not you?" — new player registration path (take photo) */
+  onNotYouNewPlayer?: () => void;
+  /** "Not you?" — existing player via phone path */
+  onNotYouExistingPlayer?: () => void;
 };
 
 function formatVND(amount: number) {
@@ -75,6 +82,8 @@ export function CourtPaySessionAwaitingPayment({
   onPartyCountChange,
   onCash,
   onCancel,
+  onNotYouNewPlayer,
+  onNotYouExistingPlayer,
 }: Props) {
   const { t } = useTabletKioskLocale();
   const theme = useAppColors();
@@ -244,6 +253,7 @@ export function CourtPaySessionAwaitingPayment({
         styles.qrWrap,
         variant === "staff" && staffStyles.qrWrap,
         pending.skillLevel ? COURTPAY_LEVEL_QR_BORDER[pending.skillLevel] : null,
+        { alignItems: "center" },
       ]}
     >
       <QRCode
@@ -252,6 +262,11 @@ export function CourtPaySessionAwaitingPayment({
         backgroundColor="#ffffff"
         color="#000000"
         ecl="M"
+      />
+      <Image
+        source={require("../../../assets/vietqr-logo.png")}
+        style={styles.vietqrLogo}
+        resizeMode="contain"
       />
     </View>
   ) : null;
@@ -338,23 +353,81 @@ export function CourtPaySessionAwaitingPayment({
     </TouchableOpacity>
   );
 
+  const [notYouVisible, setNotYouVisible] = useState(false);
+  const hasNotYou = !!(onNotYouNewPlayer || onNotYouExistingPlayer);
+
   const cancelBtn = (
-    <TouchableOpacity
-      style={[styles.cancelBtn, variant === "staff" && staffStyles.cancelBtn]}
-      onPress={onCancel}
-      activeOpacity={0.7}
-    >
-      <Text
-        style={[
-          styles.cancelText,
-          variant === "kiosk" && kioskTheme?.isLight && styles.cancelTextLight,
-          variant === "staff" && staffStyles.cancelText,
-        ]}
+    <View style={styles.cancelRow}>
+      <TouchableOpacity
+        style={[styles.cancelBtn, variant === "staff" && staffStyles.cancelBtn]}
+        onPress={onCancel}
+        activeOpacity={0.7}
       >
-        {t("cancel")}
-      </Text>
-    </TouchableOpacity>
+        <Text
+          style={[
+            styles.cancelText,
+            variant === "kiosk" && kioskTheme?.isLight && styles.cancelTextLight,
+            variant === "staff" && staffStyles.cancelText,
+          ]}
+        >
+          {t("cancel")}
+        </Text>
+      </TouchableOpacity>
+      {hasNotYou ? (
+        <TouchableOpacity
+          style={[styles.cancelBtn, variant === "staff" && staffStyles.cancelBtn]}
+          onPress={() => setNotYouVisible(true)}
+          activeOpacity={0.7}
+        >
+          <Text
+            style={[
+              styles.notYouText,
+              variant === "kiosk" && kioskTheme?.isLight && styles.notYouTextLight,
+              variant === "staff" && staffStyles.cancelText,
+            ]}
+          >
+            {t("notYouQuestion")}
+          </Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
   );
+
+  const notYouModal = hasNotYou ? (
+    <Modal visible={notYouVisible} transparent animationType="fade" onRequestClose={() => setNotYouVisible(false)}>
+      <Pressable style={styles.notYouOverlay} onPress={() => setNotYouVisible(false)}>
+        <View style={styles.notYouSheet}>
+          {onNotYouNewPlayer ? (
+            <TouchableOpacity
+              style={styles.notYouOption}
+              onPress={() => { setNotYouVisible(false); onNotYouNewPlayer(); }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="camera-outline" size={22} color="#a78bfa" />
+              <Text style={styles.notYouOptionText}>{t("notYouNewPlayer")}</Text>
+            </TouchableOpacity>
+          ) : null}
+          {onNotYouExistingPlayer ? (
+            <TouchableOpacity
+              style={styles.notYouOption}
+              onPress={() => { setNotYouVisible(false); onNotYouExistingPlayer(); }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="call-outline" size={22} color="#60a5fa" />
+              <Text style={styles.notYouOptionText}>{t("notYouExistingPlayer")}</Text>
+            </TouchableOpacity>
+          ) : null}
+          <TouchableOpacity
+            style={[styles.notYouOption, styles.notYouCancelOption]}
+            onPress={() => setNotYouVisible(false)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.notYuCancelText}>{t("cancel")}</Text>
+          </TouchableOpacity>
+        </View>
+      </Pressable>
+    </Modal>
+  ) : null;
 
   const staffInner = (
     <View style={[staffStyles.inner, compact && staffStyles.innerCompact]}>
@@ -367,6 +440,7 @@ export function CourtPaySessionAwaitingPayment({
       {waitingRow}
       {cashBtn}
       {cancelBtn}
+      {notYouModal}
     </View>
   );
 
@@ -410,6 +484,7 @@ export function CourtPaySessionAwaitingPayment({
           {waitingRow}
           {cashBtn}
           {cancelBtn}
+          {notYouModal}
         </View>
       </LiquidGlassSurface>
     );
@@ -544,6 +619,11 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
   },
+  vietqrLogo: {
+    height: 18,
+    width: 80,
+    marginTop: 6,
+  },
   amount: { fontSize: 28, fontWeight: "700", color: "transparent" },
   ref: { fontSize: 12, color: "#737373", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" },
   refLight: { color: "#64748b" },
@@ -565,8 +645,17 @@ const styles = StyleSheet.create({
   },
   cashText: { color: "#fbbf24", fontSize: 14, fontWeight: "600" },
   cashTextLight: { color: "#b45309" },
+  cancelRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", width: "100%", paddingHorizontal: 8 },
   cancelBtn: { paddingVertical: 4 },
   cancelText: { fontSize: 13, color: "#a3a3a3", textDecorationLine: "underline" },
   cancelTextLight: { color: "#64748b" },
+  notYouText: { fontSize: 13, color: "#f59e0b", textDecorationLine: "underline" },
+  notYouTextLight: { color: "#b45309" },
+  notYouOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "center", alignItems: "center" },
+  notYouSheet: { width: "85%", maxWidth: 360, backgroundColor: "#1c1c1e", borderRadius: 20, padding: 8, gap: 4 },
+  notYouOption: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 16, paddingHorizontal: 20, borderRadius: 14 },
+  notYouOptionText: { fontSize: 17, fontWeight: "600", color: "#fff" },
+  notYuCancelText: { fontSize: 17, fontWeight: "500", color: "#a3a3a3", textAlign: "center", width: "100%" },
+  notYouCancelOption: { justifyContent: "center", borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "#333" },
   disabledOpacity: { opacity: 0.55 },
 });

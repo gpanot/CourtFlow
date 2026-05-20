@@ -2101,6 +2101,19 @@ export function CourtPayCheckInScreen({
             onPartyCountChange={handleSessionPartyCountChange}
             onCash={() => void handleCash()}
             onCancel={() => void handleCancelPayment()}
+            onNotYouNewPlayer={() => {
+              void handleCancelPayment().then(() => {
+                setStep("reg_face_capture");
+              });
+            }}
+            onNotYouExistingPlayer={() => {
+              void handleCancelPayment().then(() => {
+                setPhoneInput("");
+                setPhoneError("");
+                setPhonePreview(null);
+                setStep("phone_enter");
+              });
+            }}
           />
         ) : null;
 
@@ -2124,6 +2137,13 @@ export function CourtPayCheckInScreen({
             faceBase64={faceBase64}
             onPrimaryAction={resetToHome}
             primaryLabel={t("backToHome")}
+            onSecondaryAction={() => {
+              setPhoneInput("");
+              setPhoneError("");
+              setPhonePreview(null);
+              setStep("phone_enter");
+            }}
+            secondaryLabel={t("notYouCheckInByPhone")}
             mode={themeMode}
           />
         );
@@ -2216,6 +2236,22 @@ export function CourtPayCheckInScreen({
                   >
                     <Text style={styles.primaryBtnText}>{t("done")}</Text>
                   </TouchableOpacity>
+                  {confirmMessage ? (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setPhoneInput("");
+                        setPhoneError("");
+                        setPhonePreview(null);
+                        setStep("phone_enter");
+                      }}
+                      activeOpacity={0.7}
+                      style={{ paddingVertical: 8 }}
+                    >
+                      <Text style={[styles.confirmedCountdown, isLight && styles.confirmedCountdownLight, { textDecorationLine: "underline" }]}>
+                        {t("notYouCheckInByPhone")}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               </LiquidGlassSurface>
             </View>

@@ -24,6 +24,9 @@ interface Props {
   faceBase64?: string | null;
   onPrimaryAction: () => void;
   primaryLabel: string;
+  /** Optional secondary link (e.g. "Not you? Check in via phone number") */
+  onSecondaryAction?: () => void;
+  secondaryLabel?: string;
   mode?: "light" | "dark";
 }
 
@@ -40,6 +43,8 @@ export function CourtPayStatusCard({
   faceBase64,
   onPrimaryAction,
   primaryLabel,
+  onSecondaryAction,
+  secondaryLabel,
   mode = "dark",
 }: Props) {
   const accent: LiquidGlassAccent = "amber";
@@ -96,6 +101,18 @@ export function CourtPayStatusCard({
             >
               <Text style={styles.btnText}>{primaryLabel}</Text>
             </TouchableOpacity>
+
+            {onSecondaryAction && secondaryLabel ? (
+              <TouchableOpacity
+                onPress={onSecondaryAction}
+                activeOpacity={0.7}
+                style={styles.secondaryBtn}
+              >
+                <Text style={[styles.secondaryText, isLight && styles.secondaryTextLight]}>
+                  {secondaryLabel}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
         </LiquidGlassSurface>
       </View>
@@ -197,5 +214,17 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(0,0,0,0.18)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 1,
+  },
+  secondaryBtn: {
+    paddingVertical: 8,
+  },
+  secondaryText: {
+    fontSize: 14,
+    color: "#a3a3a3",
+    textDecorationLine: "underline" as const,
+    textAlign: "center" as const,
+  },
+  secondaryTextLight: {
+    color: "#57534e",
   },
 });

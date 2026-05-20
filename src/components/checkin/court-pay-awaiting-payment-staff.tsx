@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { QRCodeSVG } from "qrcode.react";
 import staffI18n from "@/i18n/staff-i18n";
 import { cn } from "@/lib/cn";
 import { COURTPAY_LEVEL_QR_FRAME, type CourtPaySkillLevelUI } from "@/modules/courtpay/lib/skill-level-ui";
-import { Loader2, Minus, Plus, Wallet } from "lucide-react";
+import { Camera, Loader2, Minus, Phone, Plus, Wallet } from "lucide-react";
 import { buildVietQRPayload } from "@/lib/vietqr-payload";
 
 export const COURTPAY_SESSION_PARTY_MAX = 4;
@@ -35,6 +35,8 @@ export function CourtPayAwaitingPaymentStaff({
   onPartyCountChange,
   onCash,
   onCancel,
+  onNotYouNewPlayer,
+  onNotYouExistingPlayer,
 }: {
   playerName: string;
   pending: CourtPayAwaitingPaymentData;
@@ -46,6 +48,8 @@ export function CourtPayAwaitingPaymentStaff({
   onPartyCountChange: (next: number) => void | Promise<void>;
   onCash: () => void;
   onCancel: () => void;
+  onNotYouNewPlayer?: () => void;
+  onNotYouExistingPlayer?: () => void;
 }) {
   const { t } = useTranslation("translation", { i18n: staffI18n });
 
@@ -116,7 +120,7 @@ export function CourtPayAwaitingPaymentStaff({
         {qrPayload ? (
           <div
             className={cn(
-              "rounded-2xl bg-white p-3",
+              "flex flex-col items-center rounded-2xl bg-white p-3",
               pending.skillLevel ? COURTPAY_LEVEL_QR_FRAME[pending.skillLevel] : ""
             )}
           >
@@ -126,6 +130,8 @@ export function CourtPayAwaitingPaymentStaff({
               level="M"
               className="mx-auto block max-w-[70vw]"
             />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/vietqr-logo.png" alt="VietQR" className="mt-2 h-5 object-contain" />
           </div>
         ) : null}
 
@@ -164,10 +170,71 @@ export function CourtPayAwaitingPaymentStaff({
           )}
         </button>
 
-        <button type="button" onClick={onCancel} className="px-3 py-2 text-sm text-neutral-500 hover:text-neutral-300">
-          {t("staff.dashboard.cancel")}
-        </button>
+        <div className="flex w-full items-center justify-between px-2">
+          <button type="button" onClick={onCancel} className="px-3 py-2 text-sm text-neutral-500 hover:text-neutral-300">
+            {t("staff.dashboard.cancel")}
+          </button>
+          {(onNotYouNewPlayer || onNotYouExistingPlayer) && (
+            <NotYouDropdown
+              onNewPlayer={onNotYouNewPlayer}
+              onExistingPlayer={onNotYouExistingPlayer}
+              t={t}
+            />
+          )}
+        </div>
       </div>
+    </div>
+  );
+}
+
+function NotYouDropdown({
+  onNewPlayer,
+  onExistingPlayer,
+  t,
+}: {
+  onNewPlayer?: () => void;
+  onExistingPlayer?: () => void;
+  t: (key: string) => string;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="px-3 py-2 text-sm font-medium text-amber-400 underline hover:text-amber-300"
+      >
+        {t("staff.courtPayCheckIn.notYouQuestion")}
+      </button>
+      {open && (
+        <>
+          {/* backdrop */}
+          {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute bottom-full right-0 z-50 mb-2 w-64 overflow-hidden rounded-xl border border-neutral-700 bg-neutral-900 shadow-2xl">
+            {onNewPlayer && (
+              <button
+                type="button"
+                onClick={() => { setOpen(false); onNewPlayer(); }}
+                className="flex w-full items-center gap-3 px-4 py-3.5 text-left text-sm text-white hover:bg-neutral-800"
+              >
+                <Camera className="h-4 w-4 text-purple-400" />
+                {t("staff.courtPayCheckIn.notYouNewPlayer")}
+              </button>
+            )}
+            {onExistingPlayer && (
+              <button
+                type="button"
+                onClick={() => { setOpen(false); onExistingPlayer(); }}
+                className="flex w-full items-center gap-3 border-t border-neutral-800 px-4 py-3.5 text-left text-sm text-white hover:bg-neutral-800"
+              >
+                <Phone className="h-4 w-4 text-blue-400" />
+                {t("staff.courtPayCheckIn.notYouExistingPlayer")}
+              </button>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }

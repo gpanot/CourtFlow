@@ -866,6 +866,8 @@ export function CheckInCourtPay(props: StaffTabPanelProps) {
           onPartyCountChange={handleSessionPartyCountChange}
           onCash={() => void handleCashPayment()}
           onCancel={resetForm}
+          onNotYouNewPlayer={() => { resetForm(); setMode("new"); }}
+          onNotYouExistingPlayer={() => { resetForm(); setMode("existing"); }}
         />
       </div>
     );

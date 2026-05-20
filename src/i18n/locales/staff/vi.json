@@ -676,7 +676,11 @@
       "courtPayPreCaptureChecking": "Đang kiểm tra ảnh…",
       "courtPayPreCaptureReady": "Đã chụp ảnh, có thể gửi đăng ký.",
       "courtPayPreCaptureNoFace": "Không thấy khuôn mặt, vui lòng chụp lại.",
-      "regFormTitle": "Hãy thiết lập tài khoản"
+      "regFormTitle": "Hãy thiết lập tài khoản",
+      "notYouCheckInByPhone": "Không phải bạn? Điểm danh bằng số điện thoại",
+      "notYouQuestion": "Không phải bạn?",
+      "notYouNewPlayer": "Người chơi mới",
+      "notYouExistingPlayer": "Người chơi đã có (Qua SĐT)"
     }
   }
 }

@@ -668,7 +668,11 @@
       "courtPayPreCaptureChecking": "Checking photo…",
       "courtPayPreCaptureReady": "Photo captured, ready to submit.",
       "courtPayPreCaptureNoFace": "No face detected, please retake.",
-      "regFormTitle": "Let's setup your account"
+      "regFormTitle": "Let's setup your account",
+      "notYouCheckInByPhone": "Not you? Check in via phone number",
+      "notYouQuestion": "Not you?",
+      "notYouNewPlayer": "New Player",
+      "notYouExistingPlayer": "Existing Player (Via Phone)"
     }
   }
 }

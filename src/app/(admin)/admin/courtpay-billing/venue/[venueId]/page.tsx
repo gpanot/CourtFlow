@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  Smartphone,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -69,6 +70,7 @@ interface BillingSessionSummary {
   status: string;
   type: string;
   title: string | null;
+  openedOnDevice: string | null;
 }
 
 interface WeekPaymentItem extends CourtPayBillingPaymentCardData {
@@ -207,6 +209,12 @@ function BillingWeekSessionBuckets({
                   <span className="text-neutral-600"> · </span>
                   {bucket.payments.length} payment{bucket.payments.length === 1 ? "" : "s"}
                 </p>
+                {bucket.session?.openedOnDevice && (
+                  <p className="text-[11px] text-neutral-600 mt-0.5 flex items-center gap-1">
+                    <Smartphone className="h-3 w-3 shrink-0" />
+                    {bucket.session.openedOnDevice}
+                  </p>
+                )}
               </div>
             </button>
             {sessionOpen && (

@@ -370,6 +370,14 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
         }
         return true;
       }
+      if (res.resultType === "already_paid" && res.player) {
+        cameraRef.current?.stopCamera();
+        setPlayer(res.player);
+        playSuccessChime();
+        goTo("confirmed");
+        resetTimerRef.current = setTimeout(resetToHome, CONFIRMED_DISPLAY_MS);
+        return true;
+      }
       // no_face / multi_face: stay on scanning so the loop retries
       if (res.resultType === "error") {
         cameraRef.current?.stopCamera();
@@ -1311,11 +1319,13 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
           {paymentQRPayload ? (
             <div
               className={cn(
-                "rounded-2xl bg-white p-3",
+                "flex flex-col items-center rounded-2xl bg-white p-3",
                 payment.skillLevel ? COURTPAY_LEVEL_QR_FRAME[payment.skillLevel] : ""
               )}
             >
               <QRCodeSVG value={paymentQRPayload} size={288} level="M" className="max-w-[70vw]" />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/vietqr-logo.png" alt="VietQR" className="mt-2 h-6 object-contain" />
             </div>
           ) : (
             <div
@@ -1353,6 +1363,19 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
             {paymentLoading && <Loader2 className="h-5 w-5 animate-spin" />}
             Pay by cash
           </button>
+
+          <div className="flex items-center gap-6 pt-2">
+            <button type="button" onClick={resetToHome} className="text-sm text-neutral-500 underline hover:text-neutral-300">
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => { resetToHome(); setTimeout(() => goTo("phone_enter"), 50); }}
+              className="text-sm font-medium text-amber-400 underline hover:text-amber-300"
+            >
+              Not you?
+            </button>
+          </div>
         </div>
       )}
 
