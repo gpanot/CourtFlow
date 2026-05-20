@@ -279,6 +279,7 @@ export async function GET(req: Request) {
             status: true,
             type: true,
             title: true,
+            openedOnDevice: true,
             staff: { select: { name: true } },
           },
           orderBy: { openedAt: "asc" },
@@ -295,6 +296,7 @@ export async function GET(req: Request) {
           openedAt: string;
           closedAt: string | null;
           hostName: string | null;
+          openedOnDevice: string | null;
           payments: typeof payments;
         }
       >();
@@ -303,6 +305,7 @@ export async function GET(req: Request) {
         const resolved = resolvePaymentSession(p, sessionCandidates);
         if (!resolved) continue;
         const sid = resolved.id;
+        const candidate = sessionCandidates.find((c) => c.id === sid);
         if (!sessionMap.has(sid)) {
           sessionMap.set(sid, {
             id: sid,
@@ -312,6 +315,7 @@ export async function GET(req: Request) {
             openedAt: resolved.openedAt.toISOString(),
             closedAt: resolved.closedAt?.toISOString() ?? null,
             hostName: resolved.staff?.name ?? null,
+            openedOnDevice: candidate?.openedOnDevice ?? null,
             payments: [],
           });
         }
@@ -332,6 +336,7 @@ export async function GET(req: Request) {
             openedAt: s.openedAt,
             closedAt: s.closedAt,
             hostName: s.hostName,
+            openedOnDevice: s.openedOnDevice,
             paymentCount: s.payments.length,
             revenue: confirmed.reduce((sum, p) => sum + p.amount, 0),
             playerCount: playerIds.size,

@@ -55,6 +55,7 @@ interface SessionRow {
   openedAt: string;
   closedAt: string | null;
   hostName: string | null;
+  openedOnDevice: string | null;
   paymentCount: number;
   revenue: number;
   playerCount: number;
@@ -124,6 +125,7 @@ function paymentRowsToCsv(rows: PaymentDetailRow[]): string[][] {
     p.status,
     p.confirmedAt ?? "",
     p.confirmedBy ?? "",
+    p.confirmedOnDevice ?? "",
     p.cancelReason ?? "",
   ]);
 }
@@ -144,6 +146,7 @@ const PAYMENT_CSV_HEADERS = [
   "Status",
   "Confirmed At",
   "Confirmed By",
+  "Device",
   "Cancel Reason",
 ];
 
@@ -533,8 +536,40 @@ export default function CourtPayAnalyticsPage() {
         summaryRows.push(["Sessions", String(kpis.sessionCount)]);
         summaryRows.push(["Cancelled", String(kpis.cancelledCount)]);
         summaryRows.push(["", ""]);
-        summaryRows.push(["--- Payment details ---", ""]);
       }
+
+      // At week level, prepend a sessions breakdown table
+      if (drill?.level === "week" && sessions.length > 0) {
+        summaryRows.push([
+          "--- Sessions ---",
+          "", "", "", "", "", "", "",
+        ]);
+        summaryRows.push([
+          "Date",
+          "Session",
+          "Host",
+          "Device",
+          "Payments",
+          "Revenue (VND)",
+          "Players",
+          "Cancelled",
+        ]);
+        for (const s of sessions) {
+          summaryRows.push([
+            new Date(s.openedAt).toLocaleString("en-GB"),
+            s.title || s.type.replace(/_/g, " "),
+            s.hostName ?? "",
+            s.openedOnDevice ?? "",
+            String(s.paymentCount),
+            String(s.revenue),
+            String(s.playerCount),
+            String(s.cancelledCount),
+          ]);
+        }
+        summaryRows.push(["", "", "", "", "", "", "", ""]);
+      }
+
+      summaryRows.push(["--- Payment details ---", ""]);
 
       downloadCSV(
         `${filename}.csv`,
@@ -769,7 +804,14 @@ export default function CourtPayAnalyticsPage() {
                       minute: "2-digit",
                     }),
                     s.title || s.type.replace(/_/g, " "),
-                    s.hostName ?? "—",
+                    <div key="host" className="leading-tight">
+                      <p>{s.hostName ?? "—"}</p>
+                      {s.openedOnDevice && (
+                        <p className="text-[10px] text-neutral-500 mt-0.5">
+                          {s.openedOnDevice}
+                        </p>
+                      )}
+                    </div>,
                     String(s.paymentCount),
                     <span key="rev" className="text-purple-400 font-medium">
                       {formatVND(s.revenue)} VND
@@ -883,9 +925,18 @@ export default function CourtPayAnalyticsPage() {
                     >
                       {p.status}
                     </span>,
-                    p.confirmedAt
-                      ? new Date(p.confirmedAt).toLocaleString("en-GB")
-                      : "—",
+                    <div key="conf" className="leading-tight">
+                      <p className="text-neutral-200">
+                        {p.confirmedAt
+                          ? new Date(p.confirmedAt).toLocaleString("en-GB")
+                          : "—"}
+                      </p>
+                      {p.confirmedOnDevice && (
+                        <p className="text-[10px] text-neutral-500 mt-0.5">
+                          {p.confirmedOnDevice}
+                        </p>
+                      )}
+                    </div>,
                   ],
                 }))}
               />

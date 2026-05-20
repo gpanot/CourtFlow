@@ -58,6 +58,7 @@ const PAYMENT_SELECT = {
   createdAt: true,
   confirmedAt: true,
   confirmedBy: true,
+  confirmedOnDevice: true,
   cancelReason: true,
   cancelledAt: true,
   checkInPlayer: {
@@ -166,6 +167,7 @@ export interface PaymentDetailRow {
   paymentRef: string | null;
   confirmedAt: string | null;
   confirmedBy: string | null;
+  confirmedOnDevice: string | null;
   cancelReason: string | null;
 }
 
@@ -202,6 +204,7 @@ export function toPaymentDetail(
     paymentRef: payment.paymentRef,
     confirmedAt: payment.confirmedAt?.toISOString() ?? null,
     confirmedBy: payment.confirmedBy,
+    confirmedOnDevice: payment.confirmedOnDevice ?? null,
     cancelReason: payment.cancelReason,
   };
 }
@@ -250,6 +253,7 @@ export interface SessionCandidate {
   status: string;
   type: string;
   title: string | null;
+  openedOnDevice?: string | null;
   staff?: { name: string } | null;
 }
 
