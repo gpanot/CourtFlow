@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import {
@@ -50,6 +51,7 @@ function barColor(bucket: string): string {
 }
 
 export function FaceStatsTab() {
+  const router = useRouter();
   const [data, setData] = useState<FaceStatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -269,7 +271,19 @@ export function FaceStatsTab() {
                     key={row.id}
                     className="border-b border-neutral-800/50 hover:bg-neutral-800/30"
                   >
-                    <td className="px-4 py-3 text-white">{row.playerName}</td>
+                    <td className="px-4 py-3">
+                      {row.playerId ? (
+                        <button
+                          type="button"
+                          onClick={() => router.push(`/admin/players?open=${row.playerId}`)}
+                          className="text-left font-medium text-white underline-offset-2 hover:text-purple-300 hover:underline"
+                        >
+                          {row.playerName}
+                        </button>
+                      ) : (
+                        <span className="text-neutral-400">{row.playerName}</span>
+                      )}
+                    </td>
                     <td className={cn("px-4 py-3 font-mono tabular-nums font-semibold", scoreColor)}>
                       {row.similarityScore != null ? `${row.similarityScore.toFixed(1)}%` : "—"}
                     </td>
