@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { PlayerAvatarThumb } from "@/components/player-avatar-thumb";
@@ -188,9 +187,6 @@ const SKILL_COLORS: Record<string, string> = {
 };
 
 export default function PlayersPage() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-
   const [quickFilter, setQuickFilter] = useState<"all" | "male" | "female" | "no_face">("all");
   const [players, setPlayers] = useState<PlayerRecord[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
@@ -304,19 +300,6 @@ export default function PlayersPage() {
       setDetailLoading(false);
     }
   }, []);
-
-  // Deep-link: ?open=<playerId> navigates from Face Stats tab to this page and auto-opens the panel
-  const autoOpenDoneRef = useRef(false);
-  useEffect(() => {
-    const openId = searchParams.get("open");
-    if (!openId || autoOpenDoneRef.current || loading || players.length === 0) return;
-    const match = players.find((p) => p.id === openId);
-    if (match) {
-      autoOpenDoneRef.current = true;
-      void openPlayerDetail(match);
-      router.replace("/admin/players", { scroll: false });
-    }
-  }, [searchParams, players, loading, openPlayerDetail, router]);
 
   const totalPages = Math.ceil(total / 50);
   const hasFilters = venueFilter || skillFilter || statusFilter || search || quickFilter !== "all";

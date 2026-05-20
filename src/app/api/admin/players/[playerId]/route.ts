@@ -7,6 +7,95 @@ import { requireSuperAdmin } from "@/lib/auth";
 import { faceRecognitionService } from "@/lib/face-recognition";
 
 export const dynamic = "force-dynamic";
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ playerId: string }> }
+) {
+  try {
+    requireSuperAdmin(request.headers);
+    const { playerId } = await params;
+
+    const player = await prisma.player.findUnique({
+      where: { id: playerId },
+      include: {
+        queueEntries: {
+          select: {
+            sessionId: true,
+            joinedAt: true,
+            totalPlayMinutesToday: true,
+            status: true,
+            session: {
+              select: {
+                status: true,
+                closedAt: true,
+                venue: { select: { id: true, name: true } },
+              },
+            },
+          },
+          orderBy: { joinedAt: "desc" },
+        },
+      },
+    });
+    if (!player) return notFound("Player not found");
+
+    const now = new Date();
+    const sessions = new Set<string>();
+    const venueMap = new Map<string, { id: string; name: string; lastSeen: Date }>();
+    let totalPlayMinutes = 0;
+    let lastSeenDate: Date | null = null;
+    let lastSeenVenue: string | null = null;
+
+    for (const entry of player.queueEntries) {
+      sessions.add(entry.sessionId);
+      totalPlayMinutes += entry.totalPlayMinutesToday;
+      const v = entry.session.venue;
+      const existing = venueMap.get(v.id);
+      if (!existing || entry.joinedAt > existing.lastSeen) {
+        venueMap.set(v.id, { id: v.id, name: v.name, lastSeen: entry.joinedAt });
+      }
+      if (!lastSeenDate || entry.joinedAt > lastSeenDate) {
+        lastSeenDate = entry.joinedAt;
+        lastSeenVenue = v.name;
+      }
+    }
+
+    const gameCount = await prisma.courtAssignment.count({
+      where: { playerIds: { has: playerId }, isWarmup: false },
+    });
+
+    const checkInCount = player.phone
+      ? await prisma.checkInPlayer.findMany({
+          where: { phone: player.phone },
+          select: { _count: { select: { checkIns: true } } },
+        }).then((rows) => rows.reduce((acc, r) => acc + r._count.checkIns, 0))
+      : 0;
+
+    return json({
+      id: player.id,
+      name: player.name,
+      phone: player.phone,
+      avatar: player.avatar,
+      faceSubjectId: player.faceSubjectId,
+      facePhotoPath: player.facePhotoPath,
+      avatarPhotoPath: player.avatarPhotoPath,
+      gender: player.gender,
+      skillLevel: player.skillLevel,
+      createdAt: player.createdAt,
+      totalSessions: sessions.size,
+      totalGames: gameCount,
+      totalPlayMinutes,
+      checkInCount,
+      venues: Array.from(venueMap.values()).map((v) => ({ id: v.id, name: v.name })),
+      lastSeen: lastSeenDate && lastSeenVenue
+        ? { date: lastSeenDate.toISOString(), venue: lastSeenVenue }
+        : null,
+    });
+  } catch (e) {
+    return error((e as Error).message, 500);
+  }
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ playerId: string }> }

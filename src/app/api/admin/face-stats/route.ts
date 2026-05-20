@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
       passed: true,
       createdAt: true,
       player: {
-        select: { id: true, name: true },
+        select: { id: true, name: true, facePhotoPath: true, createdAt: true },
       },
     },
   });
@@ -68,6 +68,8 @@ export async function GET(request: NextRequest) {
     id: l.id,
     playerName: l.player?.name ?? "Unknown",
     playerId: l.player?.id ?? null,
+    playerFacePhotoPath: l.player?.facePhotoPath ?? null,
+    playerCreatedAt: l.player?.createdAt?.toISOString() ?? null,
     similarityScore: l.similarityScore,
     threshold: l.threshold,
     passed: l.passed,
