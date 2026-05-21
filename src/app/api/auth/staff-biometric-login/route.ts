@@ -5,27 +5,28 @@ import { json, error, parseBody } from "@/lib/api-helpers";
 import { staffAssignmentsToVenues } from "@/lib/staff-app-access";
 import { extractClientIp, resolveIpGeo } from "@/lib/resolve-ip-geo";
 
-function logAuth(
+async function logAuth(
   staffId: string | null,
   phone: string | null,
   ip: string | null,
   userAgent: string | null,
 ) {
-  resolveIpGeo(ip).then((geo) => {
-    prisma.staffAuthLog
-      .create({
-        data: {
-          staffId,
-          action: "biometric_login",
-          phone,
-          ipAddress: ip,
-          country: geo.country,
-          city: geo.city,
-          userAgent,
-        },
-      })
-      .catch((err) => console.error("[staff-auth-log]", err));
-  });
+  try {
+    const geo = await resolveIpGeo(ip);
+    await prisma.staffAuthLog.create({
+      data: {
+        staffId,
+        action: "biometric_login",
+        phone,
+        ipAddress: ip,
+        country: geo.country,
+        city: geo.city,
+        userAgent,
+      },
+    });
+  } catch (err) {
+    console.error("[staff-auth-log]", err);
+  }
 }
 
 export const dynamic = "force-dynamic";
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
     });
     if (!staff) return error("Staff not found", 404);
 
-    logAuth(staff.id, staff.phone, ip, userAgent);
+    await logAuth(staff.id, staff.phone, ip, userAgent);
 
     const venues = staffAssignmentsToVenues(staff.venueAssignments);
     const firstVenueId = venues.length === 1 ? venues[0].id : undefined;
