@@ -270,6 +270,7 @@ model StaffMember {
   pushTokens            StaffPushToken[]
   faceRecognitionLogs   FaceRecognitionLog[]
   customPrices          PlayerCustomPrice[]
+  authLogs              StaffAuthLog[]
 
   @@map("staff_members")
 }
@@ -1079,4 +1080,22 @@ model StickerJobQueue {
 
   @@index([status, createdAt])
   @@map("sticker_job_queue")
+}
+
+model StaffAuthLog {
+  id        String   @id @default(cuid())
+  staffId   String?  @map("staff_id")
+  action    String
+  phone     String?
+  ipAddress String?  @map("ip_address")
+  country   String?
+  city      String?
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  staff StaffMember? @relation(fields: [staffId], references: [id], onDelete: SetNull)
+
+  @@index([staffId])
+  @@index([createdAt])
+  @@map("staff_auth_logs")
 }
