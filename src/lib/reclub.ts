@@ -22,6 +22,7 @@ export const RECLUB_CLUBS: ReclubClub[] = [
   { groupId: 104121, name: "Top One", slug: "top-one" },
   { groupId: 326472, name: "The MM Pickleball Club", slug: "the-mm-pickleball-club" },
   { groupId: 6648, name: "002 Pickleball Club (Thao Dien)", slug: "002-pickleball-club" },
+  { groupId: 427921, name: "3UP Club", slug: "3up-club" },
 ];
 
 const DEFAULT_AVATAR_HOST = "d1upr18ac2olqz.cloudfront.net/default-avatars";
