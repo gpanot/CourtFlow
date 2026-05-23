@@ -33,7 +33,10 @@ function sleep(ms: number) {
 
 async function reclubApiFetch(path: string, retryOn429 = true): Promise<unknown> {
   const url = path.startsWith("http") ? path : `${RECLUB_API}${path}`;
-  const res = await fetch(url, { headers: RECLUB_HEADERS });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  const res = await fetch(url, { headers: RECLUB_HEADERS, signal: controller.signal });
+  clearTimeout(timeout);
 
   if (res.status === 429 && retryOn429) {
     await sleep(2000);
@@ -102,21 +105,42 @@ interface RosterEntry {
   syntheticGender?: string;
 }
 
+async function fetchEventHtml(referenceCode: string, maxRetries = 3): Promise<string> {
+  const url = `${RECLUB_WEB}/m/${referenceCode}`;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      const htmlRes = await fetch(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+          Accept: "text/html",
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      if (!htmlRes.ok) {
+        throw new Error(`HTTP ${htmlRes.status}`);
+      }
+
+      const html = await htmlRes.text();
+      if (html.includes("__NUXT_DATA__")) return html;
+
+      console.warn(`[reclub] attempt ${attempt}/${maxRetries}: __NUXT_DATA__ missing (${html.length} bytes)`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[reclub] attempt ${attempt}/${maxRetries} failed for ${referenceCode}: ${msg}`);
+    }
+    if (attempt < maxRetries) await sleep(1500 * attempt);
+  }
+  throw new Error(`Could not fetch event page for ${referenceCode} after ${maxRetries} attempts`);
+}
+
 export async function fetchReclubRoster(
   referenceCode: string
 ): Promise<{ eventName: string; players: ReclubPlayer[] }> {
-  const htmlRes = await fetch(`${RECLUB_WEB}/m/${referenceCode}`, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
-      Accept: "text/html",
-    },
-  });
-
-  if (!htmlRes.ok) {
-    throw new Error(`Failed to fetch event page: ${htmlRes.status}`);
-  }
-
-  const html = await htmlRes.text();
+  const html = await fetchEventHtml(referenceCode);
 
   const nuxtMatch = html.match(
     /<script[^>]*id="__NUXT_DATA__"[^>]*>([\s\S]*?)<\/script>/
