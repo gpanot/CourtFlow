@@ -414,12 +414,24 @@ export function PaymentTabScreen() {
   const [groupAssigning, setGroupAssigning] = useState(false);
 
   const walkInsCount = useMemo(
-    () => paid.filter((p) => p.checkInPlayerId !== null).length,
+    () => paid.filter((p) => !p.player?.reclubUserId).length,
     [paid]
   );
 
   const cancelledCount = useMemo(
     () => paid.filter((p) => p.status === "cancelled" || !!p.cancelReason).length,
+    [paid]
+  );
+
+  const groupCount = useMemo(() => {
+    const memberPaymentIds = new Set(paid.map((p) => p.groupPaidByPaymentId).filter(Boolean));
+    return paid.filter(
+      (p) => p.groupPaidByPaymentId || memberPaymentIds.has(p.id) || (p.partyCount ?? 1) >= 2
+    ).length;
+  }, [paid]);
+
+  const cashCount = useMemo(
+    () => paid.filter((p) => p.paymentMethod === "cash").length,
     [paid]
   );
 
@@ -452,12 +464,12 @@ export function PaymentTabScreen() {
     if (paidFilter === "all") return paid;
     if (paidFilter === "group") {
       const memberPaymentIds = new Set(paid.map((p) => p.groupPaidByPaymentId).filter(Boolean));
-      return paid.filter((p) => p.groupPaidByPaymentId || memberPaymentIds.has(p.id));
+      return paid.filter(
+        (p) => p.groupPaidByPaymentId || memberPaymentIds.has(p.id) || (p.partyCount ?? 1) >= 2
+      );
     }
     if (paidFilter === "cash") {
-      const cash = paid.filter((p) => p.paymentMethod === "cash");
-      const others = paid.filter((p) => p.paymentMethod !== "cash");
-      return [...cash, ...others];
+      return paid.filter((p) => p.paymentMethod === "cash");
     }
     if (paidFilter === "name") {
       return [...paid].sort((a, b) => {
@@ -467,7 +479,7 @@ export function PaymentTabScreen() {
       });
     }
     if (paidFilter === "walkins") {
-      return paid.filter((p) => p.checkInPlayerId !== null);
+      return paid.filter((p) => !p.player?.reclubUserId);
     }
     if (paidFilter === "cancelled") {
       return paid.filter((p) => p.status === "cancelled" || !!p.cancelReason);
@@ -1049,9 +1061,9 @@ export function PaymentTabScreen() {
                 {f === "all"
                   ? t("paymentFilterAll")
                   : f === "group"
-                    ? t("paymentFilterGroup")
+                    ? `${t("paymentFilterGroup")}(${groupCount})`
                     : f === "cash"
-                      ? t("paymentFilterCash")
+                      ? `${t("paymentFilterCash")}(${cashCount})`
                       : f === "name"
                         ? t("paymentFilterName")
                         : f === "walkins"
@@ -1120,7 +1132,11 @@ export function PaymentTabScreen() {
           onPress={() => setMenuPaymentId(null)}
         >
           <View style={[styles.menuCard, { top: menuY }]}>
-            {paid.find((p) => p.id === menuPaymentId)?.cancelReason ? (
+            {(() => {
+              const menuPayment = paid.find((p) => p.id === menuPaymentId);
+              if (!menuPayment) return null;
+              if (menuPayment.cancelReason) {
+                return (
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => {
@@ -1133,8 +1149,15 @@ export function PaymentTabScreen() {
                 <Ionicons name="arrow-undo-outline" size={18} color={theme.green400} />
                 <Text style={[styles.menuItemTextNeutral, { color: theme.green400 }]}>{t("paymentRestore")}</Text>
               </TouchableOpacity>
-            ) : (
+                );
+              }
+              const isGroupPayment =
+                (menuPayment.partyCount ?? 1) >= 2 ||
+                !!menuPayment.groupPaidByPaymentId ||
+                paid.some((p) => p.groupPaidByPaymentId === menuPayment.id);
+              return (
               <>
+                {!isGroupPayment && (
                 <TouchableOpacity
                   style={styles.menuItem}
                   onPress={() => {
@@ -1148,6 +1171,7 @@ export function PaymentTabScreen() {
                   <Ionicons name="people-outline" size={18} color={theme.text} />
                   <Text style={styles.menuItemTextNeutral}>{t("paymentGroup")}</Text>
                 </TouchableOpacity>
+                )}
                 <TouchableOpacity
                   style={styles.menuItem}
                   onPress={() => {
@@ -1161,7 +1185,8 @@ export function PaymentTabScreen() {
                   <Text style={styles.menuItemText}>{t("paymentCancel")}</Text>
                 </TouchableOpacity>
               </>
-            )}
+              );
+            })()}
           </View>
         </Pressable>
       </Modal>

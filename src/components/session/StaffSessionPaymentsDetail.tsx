@@ -228,9 +228,14 @@ export function StaffSessionPaymentsDetail({
   const playerCount = useMemo(() => payments.reduce((s, p) => s + (p.partyCount ?? 1), 0), [payments]);
 
   const walkInsCount = useMemo(
-    () => payments.filter((p) => p.checkInPlayerId !== null).length,
+    () => payments.filter((p) => !p.player?.reclubUserId).length,
     [payments]
   );
+
+  const groupCount = useMemo(() => {
+    const memberPaymentIds = new Set(payments.map((p) => p.groupPaidByPaymentId).filter(Boolean));
+    return payments.filter((p) => p.groupPaidByPaymentId || memberPaymentIds.has(p.id)).length;
+  }, [payments]);
 
   const filtered = useMemo(() => {
     if (filter === "all") return payments;
@@ -246,7 +251,7 @@ export function StaffSessionPaymentsDetail({
       });
     }
     if (filter === "walkins") {
-      return payments.filter((p) => p.checkInPlayerId !== null);
+      return payments.filter((p) => !p.player?.reclubUserId);
     }
     return payments.filter((p) => getPaymentFilter(p) === filter);
   }, [payments, filter]);
@@ -451,7 +456,7 @@ export function StaffSessionPaymentsDetail({
         <div className="flex gap-1.5">
           {(
             [
-              { key: "group" as const, label: "Group" },
+              { key: "group" as const, label: `Group(${groupCount})` },
               { key: "name" as const, label: "Name A–Z" },
               { key: "walkins" as const, label: `Walk-ins(${walkInsCount})` },
             ] as const

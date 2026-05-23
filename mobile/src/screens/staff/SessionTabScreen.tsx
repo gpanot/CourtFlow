@@ -55,6 +55,7 @@ interface PaidPaymentRow {
   status?: string;
   partyCount?: number;
   confirmedAt?: string | null;
+  facePhotoUrl?: string | null;
   player?: { id: string; name: string; reclubUserId?: number | null; facePhotoPath?: string | null } | null;
   checkInPlayer?: { id: string; name: string } | null;
 }
@@ -212,7 +213,7 @@ export function SessionTabScreen() {
           reclubUserId: p.player?.reclubUserId ?? null,
           amount: p.amount ?? 0,
           confirmedAt: p.confirmedAt ?? null,
-          facePhotoPath: p.player?.facePhotoPath ?? null,
+          facePhotoPath: p.player?.facePhotoPath ?? p.facePhotoUrl ?? null,
           status: p.status,
           partyCount: p.partyCount ?? 1,
         }))
@@ -308,7 +309,10 @@ export function SessionTabScreen() {
     const raw = session?.openedAt ?? (session as { startedAt?: string } | null)?.startedAt;
     if (!raw) return "—";
     const d = new Date(raw);
-    return Number.isNaN(d.getTime()) ? "—" : d.toLocaleTimeString();
+    if (Number.isNaN(d.getTime())) return "—";
+    const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const date = d.toLocaleDateString([], { month: "short", day: "numeric" });
+    return `${time} · ${date}`;
   })();
 
   return (

@@ -216,10 +216,10 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
           status?: string;
           partyCount?: number;
           confirmedAt?: string | null;
+          facePhotoUrl?: string | null;
           player?: { id: string; name: string; reclubUserId?: number | null; facePhotoPath?: string | null } | null;
           checkInPlayer?: { id: string; name: string } | null;
         }>;
-      // Fetch all payments (confirmed + cancelled) so walk-in count includes free-pass players
       }>(`/api/sessions/${session.id}/payments`);
       const ids = new Set<number>();
       let count = 0;
@@ -240,7 +240,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
           reclubUserId: p.player?.reclubUserId ?? null,
           amount: p.amount ?? 0,
           confirmedAt: p.confirmedAt ?? null,
-          facePhotoPath: p.player?.facePhotoPath ?? null,
+          facePhotoPath: p.player?.facePhotoPath ?? p.facePhotoUrl ?? null,
           partyCount: p.partyCount ?? 1,
           status: p.status,
         });
@@ -720,7 +720,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                               {player.isDefaultAvatar ? (
                                 <div
                                   className={cn(
-                                    "flex h-[57px] w-[57px] items-center justify-center rounded-full text-lg font-bold text-white",
+                                    "flex h-[63px] w-[63px] items-center justify-center rounded-full text-lg font-bold text-white",
                                     hasRing && "ring-[3px] ring-green-500"
                                   )}
                                   style={{ backgroundColor: initialsColor(player.name) }}
@@ -732,7 +732,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                                   src={player.avatarUrl}
                                   alt=""
                                   className={cn(
-                                    "h-[57px] w-[57px] rounded-full object-cover",
+                                    "h-[63px] w-[63px] rounded-full object-cover",
                                     hasRing && "ring-[3px] ring-green-500"
                                   )}
                                 />
@@ -782,7 +782,7 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
                           <div className="relative">
                             {p.facePhotoPath ? (
                               <img
-                                src={`/face-photos/${p.facePhotoPath}`}
+                                src={p.facePhotoPath}
                                 alt=""
                                 className={cn(
                                   "h-[52px] w-[52px] rounded-full object-cover",

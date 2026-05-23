@@ -172,11 +172,11 @@ function createStyles(t: AppColors) {
       height: 63,
       position: "relative",
     },
-    avatarImage: { width: 57, height: 57, borderRadius: 28.5 },
+    avatarImage: { width: 63, height: 63, borderRadius: 31.5 },
     initialsCircle: {
-      width: 57,
-      height: 57,
-      borderRadius: 28.5,
+      width: 63,
+      height: 63,
+      borderRadius: 31.5,
       alignItems: "center",
       justifyContent: "center",
     },
@@ -269,7 +269,7 @@ function createStyles(t: AppColors) {
       bottom: 0,
       left: 0,
       right: 0,
-      borderRadius: 28.5,
+      borderRadius: 31.5,
       backgroundColor: "rgba(0,0,0,0.55)",
       alignItems: "center",
       justifyContent: "flex-end",
@@ -1003,15 +1003,17 @@ export function ReclubRosterSection({
                 <FlatList
                   data={unmatchedPayments}
                   keyExtractor={(p) => p.paymentId}
-                  renderItem={({ item }) => (
+                  renderItem={({ item }) => {
+                    const faceUri = resolveMediaUrl(item.facePhotoPath);
+                    return (
                     <TouchableOpacity
                       style={styles.paymentRow}
                       onPress={() => sheetPlayer.reclubUserId !== null && handleLinkPlayer(item.playerId, sheetPlayer.reclubUserId)}
                       disabled={linkingPlayerId != null}
                       activeOpacity={0.7}
                     >
-                      {item.facePhotoPath ? (
-                        <Image source={{ uri: item.facePhotoPath }} style={styles.paymentAvatar} />
+                      {faceUri ? (
+                        <Image source={{ uri: faceUri }} style={styles.paymentAvatar} />
                       ) : (
                         <View
                           style={[styles.paymentInitials, { backgroundColor: initialsColor(item.playerName) }]}
@@ -1031,7 +1033,8 @@ export function ReclubRosterSection({
                         <ActivityIndicator size="small" color={theme.text} />
                       )}
                     </TouchableOpacity>
-                  )}
+                    );
+                  }}
                   ListEmptyComponent={
                     <Text style={[styles.noEventText, { paddingVertical: 20 }]}>
                       {t("reclubMatchSheetNoPayments")}
@@ -1076,12 +1079,14 @@ export function ReclubRosterSection({
                     )}
                     <Text style={styles.sheetPlayerName}>{sheetPlayer.name}</Text>
                   </View>
-                  {linked && (
+                  {linked && (() => {
+                    const linkedFaceUri = resolveMediaUrl(linked.facePhotoPath);
+                    return (
                     <>
                       <Text style={styles.linkedLabel}>{t("reclubInfoLinkedLabel")}</Text>
                       <View style={styles.linkedRow}>
-                        {linked.facePhotoPath ? (
-                          <Image source={{ uri: linked.facePhotoPath }} style={styles.paymentAvatar} />
+                        {linkedFaceUri ? (
+                          <Image source={{ uri: linkedFaceUri }} style={styles.paymentAvatar} />
                         ) : (
                           <View
                             style={[styles.paymentInitials, { backgroundColor: initialsColor(linked.playerName) }]}
@@ -1120,7 +1125,8 @@ export function ReclubRosterSection({
                         )}
                       </TouchableOpacity>
                     </>
-                  )}
+                    );
+                  })()}
                 </>
               );
             })()}
