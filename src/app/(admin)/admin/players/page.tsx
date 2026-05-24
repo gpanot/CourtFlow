@@ -113,6 +113,9 @@ interface PlayerRecord {
 interface CheckInInsights {
   firstTimeSignUpAt: string | null;
   firstTimeSignUpVenue: string | null;
+  registrationStaffName: string | null;
+  registrationStaffPhone: string | null;
+  registrationDevice: string | null;
   faceRegisteredAt: string | null;
   faceRegistrationSource: string | null;
   recognition?: {
@@ -306,6 +309,7 @@ export default function PlayersPage() {
   const activeFilterCount = [venueFilter, skillFilter, statusFilter, quickFilter !== "all" ? quickFilter : ""].filter(Boolean).length;
 
   const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" });
+  const fmtDateTime = (d: string) => new Date(d).toLocaleString("en-US", { month: "short", day: "numeric", year: "2-digit", hour: "numeric", minute: "2-digit" });
   const fmtMin = (m: number) => m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ""}`;
 
   const clearAllFilters = () => {
@@ -895,6 +899,7 @@ export default function PlayersPage() {
           onCloseSkill={() => setEditingSkillId(null)}
           onClose={() => { setDetailPlayer(null); setDetailSessions([]); setDetailCheckIn(null); setEditingSkillId(null); setEditMode(false); }}
           fmtDate={fmtDate}
+          fmtDateTime={fmtDateTime}
           fmtMin={fmtMin}
           editMode={editMode}
           editForm={editForm}
@@ -1286,6 +1291,7 @@ function PlayerDetailPanel({
   onCloseSkill,
   onClose,
   fmtDate,
+  fmtDateTime,
   fmtMin,
   editMode,
   editForm,
@@ -1310,6 +1316,7 @@ function PlayerDetailPanel({
   onCloseSkill: () => void;
   onClose: () => void;
   fmtDate: (d: string) => string;
+  fmtDateTime: (d: string) => string;
   fmtMin: (m: number) => string;
   editMode: boolean;
   editForm: { name: string; phone: string; gender: string; skillLevel: string; avatar: string };
@@ -1621,12 +1628,29 @@ function PlayerDetailPanel({
                   <p className="text-[10px] uppercase tracking-wide text-neutral-500">First time sign up</p>
                   <p className="text-sm font-medium text-white">
                     {checkInInsights.firstTimeSignUpAt
-                      ? `${fmtDate(checkInInsights.firstTimeSignUpAt)}${checkInInsights.firstTimeSignUpVenue ? ` · ${checkInInsights.firstTimeSignUpVenue}` : ""}`
+                      ? fmtDateTime(checkInInsights.firstTimeSignUpAt)
                       : "Not available"}
                   </p>
-                  <p className="mt-1.5 text-[10px] leading-snug text-neutral-500">
-                    Captures when this profile was first created, plus the venue when registration happened through kiosk, CourtPay, or staff check-in.
-                  </p>
+                  {checkInInsights.firstTimeSignUpVenue && (
+                    <p className="mt-1 text-xs text-neutral-400">{checkInInsights.firstTimeSignUpVenue}</p>
+                  )}
+                  {(checkInInsights.registrationStaffName || checkInInsights.registrationDevice) && (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-neutral-400">
+                      {checkInInsights.registrationStaffName && (
+                        <span>
+                          Staff: <span className="font-medium text-neutral-300">{checkInInsights.registrationStaffName}</span>
+                          {checkInInsights.registrationStaffPhone && (
+                            <span className="ml-1 text-neutral-500">({checkInInsights.registrationStaffPhone})</span>
+                          )}
+                        </span>
+                      )}
+                      {checkInInsights.registrationDevice && (
+                        <span>
+                          Device: <span className="font-medium text-neutral-300">{checkInInsights.registrationDevice}</span>
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="rounded-lg border border-neutral-800/80 bg-neutral-950/50 px-3 py-2">
                   <p className="text-[10px] uppercase tracking-wide text-neutral-500">Registered with face</p>

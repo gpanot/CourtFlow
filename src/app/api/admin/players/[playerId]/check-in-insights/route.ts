@@ -24,6 +24,7 @@ export async function GET(
         id: true,
         phone: true,
         registrationAt: true,
+        registrationVenueId: true,
         registrationVenue: { select: { name: true } },
         faceSubjectId: true,
         facePhotoPath: true,
@@ -109,6 +110,31 @@ export async function GET(
           ])
         : [0, []];
 
+    // Look up the session that was open at registration time to get staff + device info
+    let registrationStaffName: string | null = null;
+    let registrationStaffPhone: string | null = null;
+    let registrationDevice: string | null = null;
+    if (player.registrationAt && player.registrationVenueId) {
+      const regSession = await prisma.session.findFirst({
+        where: {
+          venueId: player.registrationVenueId,
+          openedAt: { lte: player.registrationAt },
+          OR: [
+            { closedAt: { gte: player.registrationAt } },
+            { closedAt: null },
+          ],
+        },
+        orderBy: { openedAt: "desc" },
+        select: {
+          openedOnDevice: true,
+          staff: { select: { name: true, phone: true } },
+        },
+      });
+      registrationStaffName = regSession?.staff?.name ?? null;
+      registrationStaffPhone = regSession?.staff?.phone ?? null;
+      registrationDevice = regSession?.openedOnDevice ?? null;
+    }
+
     const regFromAudit = faceRegisteredAudit?.createdAt ?? null;
     const regFromAttempt = createdNewPlayerAttempt?.createdAt ?? null;
     let faceRegisteredAt: string | null = null;
@@ -179,6 +205,9 @@ export async function GET(
     return json({
       firstTimeSignUpAt: player.registrationAt?.toISOString() ?? null,
       firstTimeSignUpVenue: player.registrationVenue?.name ?? null,
+      registrationStaffName,
+      registrationStaffPhone,
+      registrationDevice,
       faceRegisteredAt,
       faceRegistrationSource: faceRegisteredAudit?.action ?? (createdNewPlayerAttempt ? "kiosk_new_player" : null),
       recognition: {
