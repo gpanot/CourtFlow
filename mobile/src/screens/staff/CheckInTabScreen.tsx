@@ -981,6 +981,11 @@ export function CheckInTabScreen() {
               <Text style={styles.primaryBtnText}>{t("checkInRegisterBtn")}</Text>
             )}
           </TouchableOpacity>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginVertical: 4 }}>
+            <View style={{ flex: 1, height: 1, backgroundColor: "rgba(255,255,255,0.15)" }} />
+            <Text style={{ color: "rgba(255,255,255,0.4)", fontSize: 12 }}>{t("checkInOrDivider")}</Text>
+            <View style={{ flex: 1, height: 1, backgroundColor: "rgba(255,255,255,0.15)" }} />
+          </View>
           <TouchableOpacity
             style={[styles.ghostBtn, (loading || noFaceSubmitting) && styles.disabledBtn]}
             onPress={openNoFaceFlow}

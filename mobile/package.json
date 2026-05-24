@@ -3,8 +3,12 @@
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
+    "bump-version": "node scripts/bump-version.js",
+    "prestart": "npm run bump-version",
     "start": "expo start",
+    "preandroid": "npm run bump-version",
     "android": "expo run:android",
+    "preios": "npm run bump-version",
     "ios": "expo run:ios",
     "web": "expo start --web"
   },

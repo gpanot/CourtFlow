@@ -1272,6 +1272,11 @@ ${test.error ? `Error: ${test.error}` : ''}
                 t("staff.checkIn.addToQueue")
               )}
             </button>
+            <div className="flex items-center gap-3 my-1">
+              <div className="flex-1 h-px bg-neutral-700/50" />
+              <span className="text-xs text-neutral-500">{t("staff.checkIn.or")}</span>
+              <div className="flex-1 h-px bg-neutral-700/50" />
+            </div>
             <button
               type="button"
               onClick={openNoFaceFlow}

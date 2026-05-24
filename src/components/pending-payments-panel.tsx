@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import staffI18n from "@/i18n/staff-i18n";
-import { Banknote, QrCode, Loader2, Check, Clock, EllipsisVertical, Users } from "lucide-react";
+import { Banknote, QrCode, Loader2, Check, Clock, EllipsisVertical, Users, ArrowRightLeft } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { api } from "@/lib/api-client";
 import { getDeviceLabel } from "@/lib/device-label";
@@ -143,6 +143,8 @@ export function PendingPaymentsPanel({
   const [menuPaymentId, setMenuPaymentId] = useState<string | null>(null);
   const [groupTargetId, setGroupTargetId] = useState<string | null>(null);
   const [groupSaving, setGroupSaving] = useState(false);
+  const [changeMethodPaymentId, setChangeMethodPaymentId] = useState<string | null>(null);
+  const [changingMethod, setChangingMethod] = useState(false);
   const tickRef = useRef<NodeJS.Timeout | null>(null);
   const pollRef = useRef<NodeJS.Timeout | null>(null);
   const [, setTick] = useState(0);
@@ -225,17 +227,31 @@ export function PendingPaymentsPanel({
     };
   }, [payments.length]);
 
-  const handleConfirm = async (id: string) => {
+  const [confirmErrorId, setConfirmErrorId] = useState<string | null>(null);
+
+  const handleConfirm = async (id: string, attempt = 0) => {
     setActionLoading(id);
+    setConfirmErrorId(null);
     try {
-      await api.post("/api/staff/confirm-payment", {
-        pendingPaymentId: id,
-        confirmedOnDevice: getDeviceLabel(),
-      });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      try {
+        await api.post("/api/staff/confirm-payment", {
+          pendingPaymentId: id,
+          confirmedOnDevice: getDeviceLabel(),
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
       setPayments((prev) => prev.filter((p) => p.id !== id));
       void fetchPaidPayments();
     } catch (e) {
       console.error("Confirm failed:", e);
+      if (attempt < 1) {
+        setActionLoading(null);
+        return handleConfirm(id, attempt + 1);
+      }
+      setConfirmErrorId(id);
     } finally {
       setActionLoading(null);
     }
@@ -277,6 +293,23 @@ export function PendingPaymentsPanel({
     },
     [venueId, fetchPaidPayments]
   );
+
+  const handleChangePaymentMethod = async (newMethod: "cash" | "vietqr") => {
+    if (!changeMethodPaymentId) return;
+    setChangingMethod(true);
+    try {
+      await api.post("/api/staff/update-payment-method", {
+        pendingPaymentId: changeMethodPaymentId,
+        paymentMethod: newMethod,
+      });
+      setChangeMethodPaymentId(null);
+      await fetchPaidPayments();
+    } catch (e) {
+      console.error("Change payment method failed:", e);
+    } finally {
+      setChangingMethod(false);
+    }
+  };
 
   return (
     <div className="flex flex-1 flex-col min-h-0 space-y-3">
@@ -433,12 +466,19 @@ export function PendingPaymentsPanel({
                         type="button"
                         disabled={!!actionLoading}
                         onClick={() => handleConfirm(p.id)}
-                        className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-green-600 py-2 text-sm font-semibold text-white transition-colors hover:bg-green-500 disabled:opacity-50"
+                        className={cn(
+                          "flex-1 flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50",
+                          confirmErrorId === p.id
+                            ? "bg-red-600 hover:bg-red-500"
+                            : "bg-green-600 hover:bg-green-500"
+                        )}
                       >
                         {actionLoading === p.id && (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         )}
-                        {t("staff.dashboard.confirmPayment")}
+                        {confirmErrorId === p.id
+                          ? t("staff.dashboard.confirmRetry")
+                          : t("staff.dashboard.confirmPayment")}
                       </button>
                       <button
                         type="button"
@@ -592,6 +632,23 @@ export function PendingPaymentsPanel({
               <Users className="h-4 w-4" />
               {t("staff.dashboard.paymentGroup")}
             </button>
+            {(() => {
+              const mp = paidPayments.find((p) => p.id === menuPaymentId);
+              if (!mp || (mp.paymentMethod !== "cash" && mp.paymentMethod !== "vietqr")) return null;
+              return (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setChangeMethodPaymentId(menuPaymentId);
+                    setMenuPaymentId(null);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-neutral-200 hover:bg-neutral-800"
+                >
+                  <ArrowRightLeft className="h-4 w-4" />
+                  {t("staff.dashboard.paymentChangeMethod")}
+                </button>
+              );
+            })()}
           </div>
         </div>
       )}
@@ -671,6 +728,51 @@ export function PendingPaymentsPanel({
           </div>
         </div>
       )}
+
+      {changeMethodPaymentId && (() => {
+        const target = paidPayments.find((p) => p.id === changeMethodPaymentId);
+        const otherMethod = target?.paymentMethod === "cash" ? "vietqr" : "cash";
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+            onClick={() => !changingMethod && setChangeMethodPaymentId(null)}
+          >
+            <div
+              className="w-full max-w-xs rounded-2xl border border-neutral-700 bg-neutral-900 p-4"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="mb-3 text-center text-lg font-bold text-white">
+                {t("staff.dashboard.paymentChangeMethodTitle")}
+              </h3>
+              <button
+                type="button"
+                disabled={changingMethod}
+                onClick={() => void handleChangePaymentMethod(otherMethod as "cash" | "vietqr")}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-500 disabled:opacity-50"
+              >
+                {changingMethod ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <ArrowRightLeft className="h-4 w-4" />
+                    {otherMethod === "cash"
+                      ? t("staff.dashboard.paymentChangeMethodCash")
+                      : t("staff.dashboard.paymentChangeMethodQR")}
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setChangeMethodPaymentId(null)}
+                disabled={changingMethod}
+                className="mt-2 w-full rounded-lg bg-neutral-800 py-2 text-sm font-medium text-neutral-300 hover:bg-neutral-700"
+              >
+                {t("staff.dashboard.cancel")}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

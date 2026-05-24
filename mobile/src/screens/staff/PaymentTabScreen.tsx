@@ -412,6 +412,8 @@ export function PaymentTabScreen() {
   const [groupTargetId, setGroupTargetId] = useState<string | null>(null);
   const [groupTargetIsPending, setGroupTargetIsPending] = useState(false);
   const [groupAssigning, setGroupAssigning] = useState(false);
+  const [changeMethodPaymentId, setChangeMethodPaymentId] = useState<string | null>(null);
+  const [changingMethod, setChangingMethod] = useState(false);
 
   const walkInsCount = useMemo(
     () => paid.filter((p) => !p.player?.reclubUserId).length,
@@ -612,23 +614,40 @@ export function PaymentTabScreen() {
     });
   }, [navigation, pending.length, theme.red500]);
 
-  const handleConfirm = async (id: string) => {
+  const handleConfirm = async (id: string, attempt = 0) => {
     setActionId(id);
     try {
       const deviceName = getDeviceLabel();
-      await api.post("/api/staff/confirm-payment", {
-        pendingPaymentId: id,
-        ...(deviceName ? { confirmedOnDevice: deviceName } : {}),
-      });
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      try {
+        await api.post("/api/staff/confirm-payment", {
+          pendingPaymentId: id,
+          ...(deviceName ? { confirmedOnDevice: deviceName } : {}),
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
       await fetchAll();
     } catch (err) {
+      const isNetworkError =
+        err instanceof ApiRequestError ? err.status === 0 : true;
+      if (isNetworkError && attempt < 1) {
+        setActionId(null);
+        return handleConfirm(id, attempt + 1);
+      }
+      setActionId(null);
       Alert.alert(
         "Error",
-        err instanceof Error ? err.message : "Failed"
+        err instanceof Error ? err.message : "Failed",
+        [
+          { text: t("paymentGoBack"), style: "cancel" },
+          { text: t("paymentConfirm"), onPress: () => void handleConfirm(id, 0) },
+        ]
       );
-    } finally {
-      setActionId(null);
+      return;
     }
+    setActionId(null);
   };
 
   const handleCancelPaid = async (reason: "refunded" | "mistake" | "free_pass") => {
@@ -675,6 +694,26 @@ export function PaymentTabScreen() {
         },
       ]
     );
+  };
+
+  const handleChangePaymentMethod = async (newMethod: "cash" | "vietqr") => {
+    if (!changeMethodPaymentId) return;
+    setChangingMethod(true);
+    try {
+      await api.post("/api/staff/update-payment-method", {
+        pendingPaymentId: changeMethodPaymentId,
+        paymentMethod: newMethod,
+      });
+      setChangeMethodPaymentId(null);
+      await fetchAll();
+    } catch (err) {
+      Alert.alert(
+        "Error",
+        err instanceof Error ? err.message : "Failed to change payment method"
+      );
+    } finally {
+      setChangingMethod(false);
+    }
   };
 
   const handleCancel = (id: string) => {
@@ -1172,6 +1211,20 @@ export function PaymentTabScreen() {
                   <Text style={styles.menuItemTextNeutral}>{t("paymentGroup")}</Text>
                 </TouchableOpacity>
                 )}
+                {(menuPayment.paymentMethod === "cash" || menuPayment.paymentMethod === "vietqr") && (
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => {
+                    const id = menuPaymentId;
+                    setMenuPaymentId(null);
+                    if (id) setChangeMethodPaymentId(id);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="swap-horizontal-outline" size={18} color={theme.text} />
+                  <Text style={styles.menuItemTextNeutral}>{t("paymentChangeMethod")}</Text>
+                </TouchableOpacity>
+                )}
                 <TouchableOpacity
                   style={styles.menuItem}
                   onPress={() => {
@@ -1271,6 +1324,48 @@ export function PaymentTabScreen() {
               ) : (
                 <Text style={styles.groupModalDismissText}>{t("paymentGoBack")}</Text>
               )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Change payment method modal ──────────────────────────────── */}
+      <Modal
+        visible={changeMethodPaymentId !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !changingMethod && setChangeMethodPaymentId(null)}
+      >
+        <View style={styles.cancelModalOverlay}>
+          <View style={styles.cancelModalCard}>
+            <Text style={styles.cancelModalTitle}>{t("paymentChangeMethodTitle")}</Text>
+            {(() => {
+              const target = paid.find((p) => p.id === changeMethodPaymentId);
+              const currentMethod = target?.paymentMethod;
+              const otherMethod = currentMethod === "cash" ? "vietqr" : "cash";
+              return (
+                <TouchableOpacity
+                  style={[styles.cancelModalBtn, { backgroundColor: theme.blue600 }]}
+                  onPress={() => void handleChangePaymentMethod(otherMethod as "cash" | "vietqr")}
+                  disabled={changingMethod}
+                  activeOpacity={0.7}
+                >
+                  {changingMethod ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={{ color: "#fff", fontWeight: "700", fontSize: 15 }}>
+                      {otherMethod === "cash" ? t("paymentChangeMethodCash") : t("paymentChangeMethodQR")}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              );
+            })()}
+            <TouchableOpacity
+              style={styles.cancelModalDismiss}
+              onPress={() => setChangeMethodPaymentId(null)}
+              disabled={changingMethod}
+            >
+              <Text style={styles.cancelModalDismissText}>{t("paymentGoBack")}</Text>
             </TouchableOpacity>
           </View>
         </View>
