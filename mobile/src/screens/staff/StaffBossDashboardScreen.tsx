@@ -587,7 +587,10 @@ export function StaffBossDashboardScreen() {
           to: toIso,
         });
         const list = await api.get<SessionHistoryRow[]>(`/api/sessions/history?${q.toString()}`);
-        const sessions = Array.isArray(list) ? list : [];
+        const allSessions = Array.isArray(list) ? list : [];
+        const sessions = allSessions.filter(
+          (s) => (s.paymentRevenue ?? 0) > 0 || (s.playerCount ?? 0) > 0
+        );
         if (sessions.length === 0) {
           Alert.alert("", t("bossExportNoData"));
           return;
