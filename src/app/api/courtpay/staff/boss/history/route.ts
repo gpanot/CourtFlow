@@ -31,10 +31,6 @@ export async function GET(req: Request) {
     since.setDate(since.getDate() - days);
     since.setHours(0, 0, 0, 0);
 
-    // Fetch CourtPay billable payments for this venue.
-    // Keep this aligned with billing logic:
-    // - CourtPay only (checkInPlayerId not null)
-    // - include confirmed + cancelled (cancelled still went through)
     const partyForRow = (p: { partyCount: number }) => {
       const n = p.partyCount;
       return typeof n === "number" && n > 0 ? n : 1;
@@ -51,12 +47,12 @@ export async function GET(req: Request) {
         include: { checkInPlayer: true },
         orderBy: { confirmedAt: "desc" },
       }),
-      // Total all-time revenue
+      // Total all-time revenue — confirmed only
       prisma.pendingPayment.aggregate({
         where: {
           venueId,
           checkInPlayerId: { not: null },
-          status: { in: ["confirmed", "cancelled"] },
+          status: "confirmed",
         },
         _sum: { amount: true },
         _count: { id: true },
@@ -72,15 +68,15 @@ export async function GET(req: Request) {
 
     const allTimePeopleTotal = Number(allTimePeopleRows[0]?.s ?? 0);
 
-    // Revenue summary buckets
+    // Revenue summary buckets — revenue is confirmed-only; count/peopleTotal include cancelled
     const bucket = (from: Date, to?: Date) => {
       const filtered = recentPayments.filter((p) => {
         const t = (p.confirmedAt ?? p.createdAt).getTime();
         return t >= from.getTime() && (!to || t < to.getTime());
       });
       return {
-        total: filtered.reduce((s, p) => s + p.amount, 0),
-        count: filtered.length,
+        total: filtered.reduce((s, p) => s + (p.status === "confirmed" ? p.amount : 0), 0),
+        count: filtered.filter((p) => p.status === "confirmed").length,
         peopleTotal: filtered.reduce((s, p) => s + partyForRow(p), 0),
       };
     };
@@ -104,15 +100,17 @@ export async function GET(req: Request) {
       },
     };
 
-    // Daily revenue breakdown
+    // Daily revenue breakdown — revenue confirmed-only; count/peopleTotal include cancelled
     const dailyRevenue: Record<string, { date: string; total: number; count: number; peopleTotal: number }> = {};
     for (const p of recentPayments) {
       const day = (p.confirmedAt || p.createdAt).toISOString().slice(0, 10);
       if (!dailyRevenue[day]) {
         dailyRevenue[day] = { date: day, total: 0, count: 0, peopleTotal: 0 };
       }
-      dailyRevenue[day].total += p.amount;
-      dailyRevenue[day].count += 1;
+      if (p.status === "confirmed") {
+        dailyRevenue[day].total += p.amount;
+        dailyRevenue[day].count += 1;
+      }
       dailyRevenue[day].peopleTotal += partyForRow(p);
     }
 
@@ -148,15 +146,19 @@ export async function GET(req: Request) {
       if (!weekMap[weekKey]) {
         weekMap[weekKey] = { weekStart: weekKey, weekEnd: weekEndKey, total: 0, count: 0, peopleTotal: 0 };
       }
-      weekMap[weekKey].total += p.amount;
-      weekMap[weekKey].count += 1;
+      if (p.status === "confirmed") {
+        weekMap[weekKey].total += p.amount;
+        weekMap[weekKey].count += 1;
+      }
       weekMap[weekKey].peopleTotal += partyForRow(p);
 
       if (!monthlyMap[monthKey]) {
         monthlyMap[monthKey] = { month: monthKey, total: 0, count: 0, peopleTotal: 0, weeks: [] };
       }
-      monthlyMap[monthKey].total += p.amount;
-      monthlyMap[monthKey].count += 1;
+      if (p.status === "confirmed") {
+        monthlyMap[monthKey].total += p.amount;
+        monthlyMap[monthKey].count += 1;
+      }
       monthlyMap[monthKey].peopleTotal += partyForRow(p);
     }
 
