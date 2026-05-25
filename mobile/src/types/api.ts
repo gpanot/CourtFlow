@@ -65,6 +65,12 @@ export interface SessionHistoryRow {
   paymentSubCount?: number;
   /** Device model/name of the staff phone that opened this session. */
   openedOnDevice?: string | null;
+  /** Name of the staff member who opened the session. */
+  staffName?: string | null;
+  /** Session fee (VND) at the time the session was opened. */
+  sessionFee?: number | null;
+  /** Number of players expected from the Reclub roster. */
+  reclubExpected?: number | null;
 }
 
 export interface PendingPaymentPlayer {

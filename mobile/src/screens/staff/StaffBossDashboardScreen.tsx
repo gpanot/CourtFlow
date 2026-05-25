@@ -597,21 +597,43 @@ export function StaffBossDashboardScreen() {
           "Date",
           "Session start time",
           "Session end time",
+          "Duration (h:min)",
+          "Staff name",
+          "Initial price (VND)",
           "Total revenue (VND)",
           "Total payments",
-          "Payment breakdown (QR count, Cash count, Subs count)",
+          "QR count",
+          "Cash count",
+          "Subs count",
+          "Reclub (Expected)",
+          "Total players",
         ];
         const rows = sessions.map((s) => {
           const qr = s.paymentQrCount ?? 0;
           const cash = s.paymentCashCount ?? 0;
           const sub = s.paymentSubCount ?? 0;
+          let duration = "";
+          if (s.closedAt) {
+            const diffMs = new Date(s.closedAt).getTime() - new Date(s.openedAt).getTime();
+            const totalMin = Math.round(diffMs / 60000);
+            const h = Math.floor(totalMin / 60);
+            const min = totalMin % 60;
+            duration = `${h}:${String(min).padStart(2, "0")}`;
+          }
           return [
             formatDateDDMMYYYY(s.openedAt),
             formatTimeHHmm(s.openedAt),
             s.closedAt ? formatTimeHHmm(s.closedAt) : "",
+            duration,
+            s.staffName ?? "",
+            s.sessionFee ?? "",
             s.paymentRevenue ?? 0,
             s.paymentCount ?? 0,
-            `${qr} / ${cash} / ${sub}`,
+            qr,
+            cash,
+            sub,
+            s.reclubExpected ?? "",
+            s.playerCount ?? 0,
           ];
         });
         const dFrom = formatFilenameDateLocal(new Date(fromIso));

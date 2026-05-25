@@ -270,9 +270,11 @@ export function StaffSessionPaymentsDetail({
         "Amount paid (VND)",
         "Payment method (QR/Cash/Sub)",
         "Check-in time",
+        "Cancel reason",
       ];
       const rows = payments.map((p) => {
         const pl = getDisplayPlayer(p);
+        const isCancelled = p.status === "cancelled" || !!p.cancelReason;
         const skillRaw =
           p.player?.skillLevel != null
             ? String(p.player.skillLevel)
@@ -283,9 +285,10 @@ export function StaffSessionPaymentsDetail({
           pl.name,
           getExportPhone(p),
           skillRaw,
-          p.amount,
+          isCancelled ? 0 : p.amount,
           paymentMethodCsv(p),
           p.confirmedAt ? formatDateTimeDDMMYYYYHHmm(p.confirmedAt) : "",
+          p.cancelReason ?? "",
         ];
       });
       const csv = buildCsvString(headers, rows);

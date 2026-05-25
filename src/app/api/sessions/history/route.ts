@@ -47,18 +47,33 @@ export async function GET(request: NextRequest) {
             courtAssignments: true,
           },
         },
+        staff: { select: { name: true } },
       },
     });
 
-    const result = sessions.map((s) => ({
-      id: s.id,
-      date: s.date.toISOString(),
-      openedAt: s.openedAt.toISOString(),
-      closedAt: s.closedAt?.toISOString() ?? null,
-      playerCount: s._count.queueEntries,
-      gameCount: s._count.courtAssignments,
-      openedOnDevice: s.openedOnDevice ?? null,
-    }));
+    const result = sessions.map((s) => {
+      const reclubExpected: number | null = (() => {
+        const snap = s.reclubSnapshot as { totalExpected?: number } | null;
+        if (snap && typeof snap.totalExpected === "number") return snap.totalExpected;
+        const roster = s.reclubRoster as Array<{ players?: unknown[] }> | null;
+        if (Array.isArray(roster) && roster.length > 0) {
+          return roster.reduce((sum, ev) => sum + (Array.isArray(ev.players) ? ev.players.length : 0), 0);
+        }
+        return null;
+      })();
+      return {
+        id: s.id,
+        date: s.date.toISOString(),
+        openedAt: s.openedAt.toISOString(),
+        closedAt: s.closedAt?.toISOString() ?? null,
+        playerCount: s._count.queueEntries,
+        gameCount: s._count.courtAssignments,
+        openedOnDevice: s.openedOnDevice ?? null,
+        staffName: s.staff?.name ?? null,
+        sessionFee: s.sessionFee,
+        reclubExpected,
+      };
+    });
 
     const sessionsWithPayments = await Promise.all(
       result.map(async (s) => {
@@ -110,8 +125,11 @@ export async function GET(request: NextRequest) {
           else sub += 1;
         }
         const cancelledPayments = payments.filter((p) => p.status === "cancelled");
+        // For CourtPay sessions queue_entries is 0; use paymentPeopleTotal as the real player count
+        const playerCount = paymentPeopleTotal > 0 ? paymentPeopleTotal : s.playerCount;
         return {
           ...s,
+          playerCount,
           paymentCount: confirmedPayments.length,
           cancelledCount: cancelledPayments.length,
           paymentPeopleTotal,
