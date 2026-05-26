@@ -21,22 +21,21 @@ function venueShortCode(name: string): string {
   return name.replace(/\s+/g, "").substring(0, 4).toUpperCase();
 }
 
+/** Monday 00:00 → Sunday 23:59:59 in venue-local time (server TZ = Asia/Saigon). */
 export function getWeekBounds(refDate?: Date): {
   weekStart: Date;
   weekEnd: Date;
 } {
   const now = refDate ? new Date(refDate) : new Date();
-  // Use UTC day-of-week so behaviour is consistent regardless of server timezone.
-  const day = now.getUTCDay(); // 0=Sun … 6=Sat
-  const diffDays = day === 0 ? -6 : 1 - day; // shift to Monday
-  const weekStart = new Date(now);
-  weekStart.setUTCDate(now.getUTCDate() + diffDays);
-  weekStart.setUTCHours(0, 0, 0, 0);
-
+  const anchor = new Date(now);
+  anchor.setHours(0, 0, 0, 0);
+  const day = anchor.getDay(); // 0=Sun … 6=Sat
+  const diffDays = day === 0 ? -6 : 1 - day;
+  const weekStart = new Date(anchor);
+  weekStart.setDate(anchor.getDate() + diffDays);
   const weekEnd = new Date(weekStart);
-  weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
-  weekEnd.setUTCHours(23, 59, 59, 999);
-
+  weekEnd.setDate(weekStart.getDate() + 6);
+  weekEnd.setHours(23, 59, 59, 999);
   return { weekStart, weekEnd };
 }
 

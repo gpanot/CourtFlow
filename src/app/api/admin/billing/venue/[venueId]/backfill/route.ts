@@ -43,31 +43,33 @@ export async function POST(
     const { weekStart: currentWeekStart } = getWeekBounds();
     const results: { weekStart: string; weekEnd: string; invoiceId: string; totalAmount: number; status: string; payments: number }[] = [];
 
-    const cursor = getWeekBounds(earliest.confirmedAt);
-    let weekStart = cursor.weekStart;
+    let cursor = getWeekBounds(earliest.confirmedAt);
 
-    while (weekStart < currentWeekStart) {
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
-      weekEnd.setHours(23, 59, 59, 999);
-
+    while (cursor.weekStart < currentWeekStart) {
       try {
-        const invoice = await generateWeeklyInvoice(venueId, weekStart, weekEnd);
+        const invoice = await generateWeeklyInvoice(
+          venueId,
+          cursor.weekStart,
+          cursor.weekEnd
+        );
         results.push({
-          weekStart: weekStart.toISOString(),
-          weekEnd: weekEnd.toISOString(),
+          weekStart: cursor.weekStart.toISOString(),
+          weekEnd: cursor.weekEnd.toISOString(),
           invoiceId: invoice.id,
           totalAmount: invoice.totalAmount,
           status: invoice.status,
           payments: invoice.totalCheckins,
         });
       } catch (err) {
-        console.error(`Backfill: failed for week ${weekStart.toISOString()}`, err);
+        console.error(
+          `Backfill: failed for week ${cursor.weekStart.toISOString()}`,
+          err
+        );
       }
 
-      // Advance to next week
-      weekStart = new Date(weekStart);
-      weekStart.setDate(weekStart.getDate() + 7);
+      const next = new Date(cursor.weekStart);
+      next.setDate(next.getDate() + 7);
+      cursor = getWeekBounds(next);
     }
 
     return NextResponse.json({ message: "Backfill complete", created: results });
