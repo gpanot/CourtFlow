@@ -62,7 +62,7 @@ export async function GET(req: Request) {
         FROM pending_payments
         WHERE venue_id = ${venueId}
           AND check_in_player_id IS NOT NULL
-          AND status IN ('confirmed', 'cancelled')
+          AND status = 'confirmed'
       `,
     ]);
 

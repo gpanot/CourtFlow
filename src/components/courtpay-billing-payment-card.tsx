@@ -8,6 +8,7 @@ export interface CourtPayBillingPaymentCardData {
   playerName: string;
   playerPhone: string;
   playerSkillLevel?: string | null;
+  partyCount?: number;
   amount: number;
   paymentRef: string | null;
   paymentMethod: string;
@@ -89,6 +90,11 @@ export function CourtPayBillingPaymentCard({
         {payment.status === "cancelled" && (
           <span className="rounded bg-red-900/30 px-1.5 py-0.5 text-red-400">
             Cancelled
+          </span>
+        )}
+        {(payment.partyCount ?? 1) > 1 && (
+          <span className="rounded bg-amber-900/30 px-1.5 py-0.5 text-amber-300">
+            Party {payment.partyCount}
           </span>
         )}
       </div>

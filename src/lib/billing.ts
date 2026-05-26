@@ -81,6 +81,7 @@ async function getBillingRates(venueId: string) {
 interface CheckInWithRelations {
   id: string;
   checkInPlayerId: string | null;
+  partyCount: number;
   amount: number;
   paymentRef: string | null;
   paymentMethod: string;
@@ -123,6 +124,7 @@ async function getBillablePaymentsForPeriod(
     select: {
       id: true,
       checkInPlayerId: true,
+      partyCount: true,
       amount: true,
       paymentRef: true,
       paymentMethod: true,
@@ -164,6 +166,9 @@ function computeLineItems(
   let totalPayments = 0;
   let subscriptionPayments = 0;
   let sepayPayments = 0;
+  let baseAmount = 0;
+  let subscriptionAmount = 0;
+  let sepayAmount = 0;
   let totalAmount = 0;
   const lineItems: {
     checkInRecordId: string;
@@ -177,7 +182,11 @@ function computeLineItems(
 
   for (const payment of payments) {
     if (!payment.checkInPlayerId || !payment.confirmedAt) continue;
-    totalPayments++;
+    const partyCount =
+      typeof payment.partyCount === "number" && payment.partyCount > 0
+        ? payment.partyCount
+        : 1;
+    totalPayments += partyCount;
 
     const isSubscriptionPayment =
       payment.paymentMethod === "subscription" ||
@@ -189,10 +198,17 @@ function computeLineItems(
 
     const subAmount = isSubscriptionPayment ? rates.subAddon : 0;
     const sepayAmount = isSepayPayment ? rates.sepayAddon : 0;
-    const lineTotal = rates.baseRate + subAmount + sepayAmount;
+    const perPlayerTotal = rates.baseRate + subAmount + sepayAmount;
+    const lineTotal = perPlayerTotal * partyCount;
+    const lineBaseAmount = rates.baseRate * partyCount;
+    const lineSubAmount = subAmount * partyCount;
+    const lineSepayAmount = sepayAmount * partyCount;
 
-    if (isSubscriptionPayment) subscriptionPayments++;
-    if (isSepayPayment) sepayPayments++;
+    if (isSubscriptionPayment) subscriptionPayments += partyCount;
+    if (isSepayPayment) sepayPayments += partyCount;
+    baseAmount += lineBaseAmount;
+    subscriptionAmount += lineSubAmount;
+    sepayAmount += lineSepayAmount;
     totalAmount += lineTotal;
 
     lineItems.push({
@@ -200,9 +216,9 @@ function computeLineItems(
       checkInRecordId: payment.id,
       playerId: payment.checkInPlayerId,
       checkedInAt: payment.confirmedAt,
-      baseRate: rates.baseRate,
-      subscriptionAddon: subAmount,
-      sepayAddon: sepayAmount,
+      baseRate: lineBaseAmount,
+      subscriptionAddon: lineSubAmount,
+      sepayAddon: lineSepayAmount,
       lineTotal,
     });
   }
@@ -211,6 +227,9 @@ function computeLineItems(
     totalPayments,
     subscriptionPayments,
     sepayPayments,
+    baseAmount,
+    subscriptionAmount,
+    sepayAmount,
     totalAmount,
     lineItems,
   };
@@ -249,9 +268,9 @@ export async function generateWeeklyInvoice(
       totalCheckins: computed.totalPayments,
       subscriptionCheckins: computed.subscriptionPayments,
       sepayCheckins: computed.sepayPayments,
-      baseAmount: computed.totalPayments * rates.baseRate,
-      subscriptionAmount: computed.subscriptionPayments * rates.subAddon,
-      sepayAmount: computed.sepayPayments * rates.sepayAddon,
+      baseAmount: computed.baseAmount,
+      subscriptionAmount: computed.subscriptionAmount,
+      sepayAmount: computed.sepayAmount,
       totalAmount: billedTotal,
       status: billedTotal === 0 ? "paid" : "pending",
       paymentRef: ref,
@@ -320,9 +339,9 @@ export async function getCurrentWeekUsage(venueId: string) {
     totalCheckins: computed.totalPayments,
     subscriptionCheckins: computed.subscriptionPayments,
     sepayCheckins: computed.sepayPayments,
-    baseAmount: computed.totalPayments * rates.baseRate,
-    subscriptionAmount: computed.subscriptionPayments * rates.subAddon,
-    sepayAmount: computed.sepayPayments * rates.sepayAddon,
+    baseAmount: computed.baseAmount,
+    subscriptionAmount: computed.subscriptionAmount,
+    sepayAmount: computed.sepayAmount,
     estimatedTotal: computed.totalAmount,
     isFreeBase: rates.isFreeBase,
     isFreeSubAddon: rates.isFreeSubAddon,
@@ -373,6 +392,7 @@ export async function getBillablePaymentsForWeek(
         playerName: p.checkInPlayer.name,
         playerPhone: p.checkInPlayer.phone,
         playerSkillLevel: p.checkInPlayer.skillLevel,
+        partyCount: p.partyCount,
         amount: p.amount,
         paymentRef: p.paymentRef,
         paymentMethod: p.paymentMethod,
@@ -391,16 +411,34 @@ export async function getBillablePaymentsForWeek(
   return {
     payments: list,
     summary: {
-      totalPayments: list.length,
+      totalPayments: list.reduce(
+        (sum, p) => sum + (typeof p.partyCount === "number" && p.partyCount > 0 ? p.partyCount : 1),
+        0
+      ),
       totalAmount: list.reduce((sum, p) => sum + p.amount, 0),
-      sepayPayments: list.filter((p) => p.confirmedBy === "sepay").length,
-      cancelledPayments: list.filter((p) => p.status === "cancelled").length,
-      subscriptionPayments: list.filter(
-        (p) =>
+      sepayPayments: list.reduce(
+        (sum, p) =>
+          p.confirmedBy === "sepay"
+            ? sum + (typeof p.partyCount === "number" && p.partyCount > 0 ? p.partyCount : 1)
+            : sum,
+        0
+      ),
+      cancelledPayments: list.reduce(
+        (sum, p) =>
+          p.status === "cancelled"
+            ? sum + (typeof p.partyCount === "number" && p.partyCount > 0 ? p.partyCount : 1)
+            : sum,
+        0
+      ),
+      subscriptionPayments: list.reduce(
+        (sum, p) =>
           p.paymentMethod === "subscription" ||
           p.type === "subscription" ||
           p.type === "subscription_renewal"
-      ).length,
+            ? sum + (typeof p.partyCount === "number" && p.partyCount > 0 ? p.partyCount : 1)
+            : sum,
+        0
+      ),
     },
     weekStart,
     weekEnd,
