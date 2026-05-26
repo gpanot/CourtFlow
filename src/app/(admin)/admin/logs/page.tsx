@@ -47,7 +47,7 @@ interface LogsResponse {
   limit: number;
 }
 
-type ActionFilter = "all" | "login_success" | "login_failed" | "biometric_login";
+type ActionFilter = "all" | "login_success" | "login_failed" | "biometric_login" | "login_rate_limited";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -86,6 +86,7 @@ const ACTION_CONFIG: Record<string, { label: string; color: string; bg: string; 
   login_success: { label: "Login", color: "text-green-400", bg: "bg-green-500/10", Icon: CheckCircle2 },
   login_failed: { label: "Failed", color: "text-red-400", bg: "bg-red-500/10", Icon: XCircle },
   biometric_login: { label: "Biometric", color: "text-blue-400", bg: "bg-blue-500/10", Icon: Fingerprint },
+  login_rate_limited: { label: "Blocked", color: "text-amber-400", bg: "bg-amber-500/10", Icon: ShieldAlert },
 };
 
 function ActionBadge({ action }: { action: string }) {
@@ -180,12 +181,13 @@ export default function LogsPage() {
       <div className="flex flex-wrap items-end gap-3">
         {/* Action filter pills */}
         <div className="flex gap-1">
-          {(["all", "login_success", "login_failed", "biometric_login"] as ActionFilter[]).map((f) => {
+          {(["all", "login_success", "login_failed", "biometric_login", "login_rate_limited"] as ActionFilter[]).map((f) => {
             const labels: Record<ActionFilter, string> = {
               all: "All",
               login_success: "Success",
               login_failed: "Failed",
               biometric_login: "Biometric",
+              login_rate_limited: "Blocked",
             };
             return (
               <button

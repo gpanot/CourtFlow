@@ -17,6 +17,7 @@ function cleanup(windowMs: number) {
 
 /**
  * Returns true if the request should be BLOCKED (rate limit exceeded).
+ * Also records this call as a hit.
  */
 export function isRateLimited(
   key: string,
@@ -37,4 +38,30 @@ export function isRateLimited(
   timestamps.push(now);
   hitMap.set(key, timestamps);
   return false;
+}
+
+/**
+ * Check whether a key is currently over the limit WITHOUT recording a hit.
+ */
+export function isRateLimitedCheck(
+  key: string,
+  limit: number,
+  windowMs: number
+): boolean {
+  const now = Date.now();
+  const cutoff = now - windowMs;
+  const timestamps = (hitMap.get(key) ?? []).filter((t) => t > cutoff);
+  return timestamps.length >= limit;
+}
+
+/**
+ * Record a single failure hit for a key (does not check the limit).
+ */
+export function recordRateLimitHit(key: string, windowMs: number): void {
+  const now = Date.now();
+  cleanup(windowMs);
+  const cutoff = now - windowMs;
+  const timestamps = (hitMap.get(key) ?? []).filter((t) => t > cutoff);
+  timestamps.push(now);
+  hitMap.set(key, timestamps);
 }

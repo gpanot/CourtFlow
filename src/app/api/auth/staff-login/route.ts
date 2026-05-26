@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { staffAssignmentsToVenues } from "@/lib/staff-app-access";
 import { extractClientIp, resolveIpGeo } from "@/lib/resolve-ip-geo";
+import { isRateLimitedCheck, recordRateLimitHit } from "@/lib/rate-limit";
 
 async function logAuth(
   staffId: string | null,
@@ -39,6 +40,16 @@ export async function POST(request: NextRequest) {
     const ip = extractClientIp(request.headers);
     const userAgent = request.headers.get("user-agent");
 
+    // Rate-limit by IP (5 failures / 10 min) and by phone (10 failures / 10 min).
+    // We check BEFORE the DB lookup so locked-out IPs don't even reach the DB.
+    const WINDOW = 10 * 60 * 1000;
+    const ipKey = `staff-login-ip:${ip ?? "unknown"}`;
+    const phoneKey = `staff-login-phone:${phone}`;
+    if (isRateLimitedCheck(ipKey, 5, WINDOW) || isRateLimitedCheck(phoneKey, 10, WINDOW)) {
+      await logAuth(null, "login_rate_limited", phone, ip, userAgent);
+      return error("Too many login attempts. Please wait 10 minutes before trying again.", 429);
+    }
+
     const staff = await prisma.staffMember.findUnique({
       where: { phone },
       include: {
@@ -49,11 +60,15 @@ export async function POST(request: NextRequest) {
     });
 
     if (!staff) {
+      recordRateLimitHit(ipKey, WINDOW);
+      recordRateLimitHit(phoneKey, WINDOW);
       await logAuth(null, "login_failed", phone, ip, userAgent);
       return error("Invalid credentials", 401);
     }
 
     if (!comparePassword(password, staff.passwordHash)) {
+      recordRateLimitHit(ipKey, WINDOW);
+      recordRateLimitHit(phoneKey, WINDOW);
       await logAuth(staff.id, "login_failed", phone, ip, userAgent);
       return error("Invalid credentials", 401);
     }
