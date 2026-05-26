@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
       { ipAddress: { contains: search } },
       { city: { contains: search, mode: "insensitive" } },
       { country: { contains: search, mode: "insensitive" } },
+      { fingerprintId: { contains: search } },
     ];
   }
 

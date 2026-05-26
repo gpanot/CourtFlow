@@ -63,6 +63,25 @@ export default function StaffPage() {
   const [rememberMe, setRememberMe] = useState(true);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
+  const fingerprintRef = useRef<string | null>(null);
+
+  // Collect browser fingerprint in the background as soon as page loads
+  useEffect(() => {
+    let cancelled = false;
+    import("https://cdn.jsdelivr.net/npm/@thumbmarkjs/thumbmarkjs/dist/thumbmark.umd.js" as string)
+      .then((mod) => {
+        if (cancelled) return;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const TM = (mod as any).default ?? mod;
+        const tm = new TM.Thumbmark();
+        return tm.get();
+      })
+      .then((result: { thumbmark: string } | undefined) => {
+        if (!cancelled && result?.thumbmark) fingerprintRef.current = result.thumbmark;
+      })
+      .catch(() => { /* fingerprint is best-effort */ });
+    return () => { cancelled = true; };
+  }, []);
   const [showPassword, setShowPassword] = useState(false);
   const [pendingVenues, setPendingVenues] = useState<StaffVenue[] | null>(null);
   const [pendingTabletVenues, setPendingTabletVenues] = useState<StaffVenue[] | null>(null);
@@ -651,7 +670,11 @@ export default function StaffPage() {
           venueId: string | null;
           onboardingCompleted: boolean;
         };
-      }>("/api/auth/staff-login", { phone, password });
+      }>("/api/auth/staff-login", {
+        phone,
+        password,
+        ...(fingerprintRef.current ? { fingerprint: fingerprintRef.current } : {}),
+      });
 
       freshLoginChoiceRef.current = true;
       clearAuth();

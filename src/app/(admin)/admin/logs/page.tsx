@@ -15,6 +15,8 @@ import {
   Monitor,
   Smartphone,
   Clock,
+  Wifi,
+  AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 
@@ -31,6 +33,10 @@ interface StaffAuthLog {
   country: string | null;
   city: string | null;
   userAgent: string | null;
+  fingerprintId: string | null;
+  fingerprintConfidence: number | null;
+  isVpn: boolean | null;
+  isThreat: boolean | null;
   createdAt: string;
   staff: {
     id: string;
@@ -267,6 +273,7 @@ export default function LogsPage() {
                 <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">IP</th>
                 <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">Location</th>
                 <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">Device</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">Fingerprint</th>
                 <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">Time</th>
               </tr>
             </thead>
@@ -325,6 +332,35 @@ export default function LogsPage() {
                         )}
                         {device.label}
                       </span>
+                    </td>
+                    {/* Fingerprint */}
+                    <td className="px-4 py-3">
+                      {log.fingerprintId ? (
+                        <div className="flex flex-col gap-1">
+                          <span className="font-mono text-[10px] text-neutral-400" title={log.fingerprintId}>
+                            {log.fingerprintId.slice(0, 8)}…
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            {log.fingerprintConfidence != null && (
+                              <span className="text-[10px] text-neutral-500">
+                                {Math.round(log.fingerprintConfidence * 100)}%
+                              </span>
+                            )}
+                            {log.isVpn && (
+                              <span className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-semibold bg-sky-500/15 text-sky-400">
+                                <Wifi className="h-2.5 w-2.5" />VPN
+                              </span>
+                            )}
+                            {log.isThreat && (
+                              <span className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[9px] font-semibold bg-red-500/15 text-red-400">
+                                <AlertTriangle className="h-2.5 w-2.5" />Threat
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-neutral-600">—</span>
+                      )}
                     </td>
                     {/* Time */}
                     <td className="px-4 py-3">

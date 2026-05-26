@@ -1083,19 +1083,24 @@ model StickerJobQueue {
 }
 
 model StaffAuthLog {
-  id        String   @id @default(cuid())
-  staffId   String?  @map("staff_id")
-  action    String
-  phone     String?
-  ipAddress String?  @map("ip_address")
-  country   String?
-  city      String?
-  userAgent String?  @map("user_agent")
-  createdAt DateTime @default(now()) @map("created_at")
+  id                    String   @id @default(cuid())
+  staffId               String?  @map("staff_id")
+  action                String
+  phone                 String?
+  ipAddress             String?  @map("ip_address")
+  country               String?
+  city                  String?
+  userAgent             String?  @map("user_agent")
+  fingerprintId         String?  @map("fingerprint_id")
+  fingerprintConfidence Float?   @map("fingerprint_confidence")
+  isVpn                 Boolean? @map("is_vpn")
+  isThreat              Boolean? @map("is_threat")
+  createdAt             DateTime @default(now()) @map("created_at")
 
   staff StaffMember? @relation(fields: [staffId], references: [id], onDelete: SetNull)
 
   @@index([staffId])
   @@index([createdAt])
+  @@index([fingerprintId])
   @@map("staff_auth_logs")
 }
