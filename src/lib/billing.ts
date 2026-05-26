@@ -196,13 +196,13 @@ function computeLineItems(
     // SePay add-on applies only when webhook confirmed this payment.
     const isSepayPayment = payment.confirmedBy === "sepay";
 
-    const subAmount = isSubscriptionPayment ? rates.subAddon : 0;
-    const sepayAmount = isSepayPayment ? rates.sepayAddon : 0;
-    const perPlayerTotal = rates.baseRate + subAmount + sepayAmount;
+    const subAddonPerPlayer = isSubscriptionPayment ? rates.subAddon : 0;
+    const sepayAddonPerPlayer = isSepayPayment ? rates.sepayAddon : 0;
+    const perPlayerTotal = rates.baseRate + subAddonPerPlayer + sepayAddonPerPlayer;
     const lineTotal = perPlayerTotal * partyCount;
     const lineBaseAmount = rates.baseRate * partyCount;
-    const lineSubAmount = subAmount * partyCount;
-    const lineSepayAmount = sepayAmount * partyCount;
+    const lineSubAmount = subAddonPerPlayer * partyCount;
+    const lineSepayAmount = sepayAddonPerPlayer * partyCount;
 
     if (isSubscriptionPayment) subscriptionPayments += partyCount;
     if (isSepayPayment) sepayPayments += partyCount;
