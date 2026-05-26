@@ -1479,7 +1479,7 @@ export function StaffBossDashboardScreen() {
                   </View>
 
                   <Text style={{ fontSize: 10, color: theme.subtle, marginTop: 8 }}>
-                    {t("bossDashboardBillingTapView")} Base: {formatVND(billingCurrent.rates.baseRate)}đ · Sub: +{formatVND(billingCurrent.rates.subAddon)}đ · Auto-Payment: +{formatVND(billingCurrent.rates.sepayAddon)}đ per payment
+                    {t("bossDashboardBillingTapView")} Base: {formatVND(billingCurrent.rates.baseRate)}đ · Sub: +{formatVND(billingCurrent.rates.subAddon)}đ · Auto-Payment: +{formatVND(billingCurrent.rates.sepayAddon)}đ per player (check-in)
                   </Text>
                 </TouchableOpacity>
               )}

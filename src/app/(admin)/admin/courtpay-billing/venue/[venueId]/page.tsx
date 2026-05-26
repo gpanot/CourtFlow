@@ -549,7 +549,7 @@ export default function VenueBillingDetailPage() {
             {/* Base rate */}
             <div className="space-y-2">
               <label className="text-xs text-neutral-500 block">
-                Base rate per payment
+                Base rate per player (check-in)
               </label>
               <input
                 type="number"
@@ -703,7 +703,7 @@ export default function VenueBillingDetailPage() {
                               </span>
                             </p>
                             <p className="text-xs text-neutral-500 mt-0.5">
-                              {fmtShort(cw.weekStart)} – {fmtShort(cw.weekEnd)} · {cw.totalPayments} payments
+                              {fmtShort(cw.weekStart)} – {fmtShort(cw.weekEnd)} · {cw.totalPayments} players (check-in)
                             </p>
                           </div>
                         </div>
@@ -717,7 +717,7 @@ export default function VenueBillingDetailPage() {
                       {isExpanded && (
                         <div className="border-t border-neutral-800 bg-neutral-950/50 px-5 py-4 space-y-3">
                           <p className="text-xs text-neutral-500">
-                            Estimated bill for the week so far (rates × payments). Tap a session to see each CourtPay
+                            Estimated bill for the week so far (rates × players). Tap a session to see each CourtPay
                             payment.
                           </p>
                           {loadingPayments === weekKey ? (
@@ -727,7 +727,7 @@ export default function VenueBillingDetailPage() {
                           ) : payments ? (
                             <>
                               <p className="text-xs text-neutral-500">
-                                {payments.summary.totalPayments} payments · {payments.summary.sepayPayments} SePay ·{" "}
+                                {payments.summary.totalPayments} players (check-in) · {payments.summary.sepayPayments} SePay ·{" "}
                                 {payments.summary.subscriptionPayments} subscription
                               </p>
                               {payments.payments.length === 0 ? (
@@ -770,7 +770,7 @@ export default function VenueBillingDetailPage() {
                             {fmtShort(inv.weekStartDate)} – {fmtShort(inv.weekEndDate)}
                           </p>
                           <p className="text-xs text-neutral-500 mt-0.5">
-                            {inv.totalCheckins} payments
+                            {inv.totalCheckins} players (check-in)
                             {inv.paymentRef && (
                               <span className="ml-2 font-mono text-neutral-600">{inv.paymentRef}</span>
                             )}
@@ -890,7 +890,7 @@ export default function VenueBillingDetailPage() {
                         ) : payments ? (
                           <div className="space-y-2">
                             <p className="text-xs text-neutral-500">
-                              {payments.summary.totalPayments} payments · {payments.summary.sepayPayments} SePay ·{" "}
+                              {payments.summary.totalPayments} players (check-in) · {payments.summary.sepayPayments} SePay ·{" "}
                               {payments.summary.subscriptionPayments} subscription
                             </p>
                             {payments.payments.length === 0 ? (
@@ -958,7 +958,7 @@ export default function VenueBillingDetailPage() {
                         {fmtShort(inv.weekStartDate)} – {fmtShort(inv.weekEndDate)}
                       </p>
                       <p className="text-xs text-neutral-500 mt-0.5">
-                        {inv.totalCheckins} payments
+                        {inv.totalCheckins} players (check-in)
                         {inv.confirmedBy === "free_tier" && (
                           <span className="ml-2 text-green-400">Free tier</span>
                         )}
@@ -1017,7 +1017,7 @@ export default function VenueBillingDetailPage() {
                         {fmtShort(inv.weekStartDate)} – {fmtShort(inv.weekEndDate)}
                       </p>
                       <p className="text-xs text-neutral-500 mt-0.5">
-                        {inv.totalCheckins} payments
+                        {inv.totalCheckins} players (check-in)
                       </p>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
