@@ -3,5 +3,8 @@ import { RECLUB_CLUBS } from "@/lib/reclub";
 
 export const dynamic = "force-dynamic";
 export async function GET() {
-  return json(RECLUB_CLUBS);
+  const clubs = [...RECLUB_CLUBS].sort((a, b) =>
+    a.name.localeCompare(b.name, "vi", { sensitivity: "base" })
+  );
+  return json(clubs);
 }

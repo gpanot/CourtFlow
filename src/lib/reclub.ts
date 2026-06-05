@@ -14,15 +14,16 @@ export interface ReclubClub {
 }
 
 export const RECLUB_CLUBS: ReclubClub[] = [
-  { groupId: 298257, name: "NEXT11 Pickleball Club", slug: "next11-pickleball-club" },
-  { groupId: 22476, name: "Elite Sport Pickleball @Pacific", slug: "js-pickleball-club" },
-  { groupId: 11186, name: "Big Balls Pickle Club", slug: "big" },
-  { groupId: 14164, name: "Aspire Drill Club", slug: "aspire" },
-  { groupId: 30158, name: "Ace Squad Pickleball", slug: "pickleballacesquad" },
-  { groupId: 104121, name: "Top One", slug: "top-one" },
-  { groupId: 326472, name: "The MM Pickleball Club", slug: "the-mm-pickleball-club" },
   { groupId: 6648, name: "002 Pickleball Club (Thao Dien)", slug: "002-pickleball-club" },
   { groupId: 427921, name: "3UP Club", slug: "3up-club" },
+  { groupId: 30158, name: "Ace Squad Pickleball", slug: "pickleballacesquad" },
+  { groupId: 14164, name: "Aspire Drill Club", slug: "aspire" },
+  { groupId: 11186, name: "Big Balls Pickle Club", slug: "big" },
+  { groupId: 22476, name: "Elite Sport Pickleball @Pacific", slug: "js-pickleball-club" },
+  { groupId: 26728, name: "GOPICK Lương Định Của", slug: "gopick-pickleball-club-250ldc" },
+  { groupId: 298257, name: "NEXT11 Pickleball Club", slug: "next11-pickleball-club" },
+  { groupId: 326472, name: "The MM Pickleball Club", slug: "the-mm-pickleball-club" },
+  { groupId: 104121, name: "Top One", slug: "top-one" },
 ];
 
 const DEFAULT_AVATAR_HOST = "d1upr18ac2olqz.cloudfront.net/default-avatars";
