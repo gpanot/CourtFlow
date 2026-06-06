@@ -1,5 +1,4 @@
 const RECLUB_API = "https://api.reclub.co";
-const RECLUB_WEB = "https://reclub.co";
 
 const RECLUB_HEADERS: Record<string, string> = {
   "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
@@ -87,180 +86,90 @@ export async function fetchReclubEvents(groupId: number): Promise<ReclubEvent[]>
 }
 
 export interface ReclubPlayer {
-  /** null for guests added by name (no Reclub account) or players added by another user */
+  /** null for guests/friends added by another user (no own Reclub account involved) */
   reclubUserId: number | null;
   name: string;
   avatarUrl: string;
   isDefaultAvatar: boolean;
   gender: string;
-  /** true when this player was added as a +1 by another Reclub user (bring-a-friend) */
+  /** true when added as a +1 by another Reclub user (bring-a-friend, referenceType=3) */
   isAddedByFriend?: boolean;
 }
 
-interface RosterEntry {
-  userId: number | null;
-  createdAt: number; // unix seconds; used for sort (ASC = first-joined first, matches Reclub display)
-  lastStatusUpdatedAt: number; // ms; kept for reference
-  isSynthetic: boolean;
-  syntheticName?: string;
-  syntheticGender?: string;
+// Shape returned by GET /meets/by-ref/{referenceCode}
+interface ByRefParticipant {
+  referenceType: number; // 1=own account, 2=guest(no account), 3=added-by-friend
+  referenceId: number | null;
+  externalReference: { name?: string; gender?: string; level?: number } | null;
+  status: number; // 1=confirmed, 3=waitlist, others=not confirmed
+  lastStatusUpdatedAt: number; // ms epoch
+  createdAt: number; // unix seconds
 }
 
-async function fetchEventHtml(referenceCode: string, maxRetries = 3): Promise<string> {
-  const url = `${RECLUB_WEB}/m/${referenceCode}`;
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 15000);
-      const htmlRes = await fetch(url, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
-          Accept: "text/html",
-        },
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
-
-      if (!htmlRes.ok) {
-        throw new Error(`HTTP ${htmlRes.status}`);
-      }
-
-      const html = await htmlRes.text();
-      if (html.includes("__NUXT_DATA__")) return html;
-
-      console.warn(`[reclub] attempt ${attempt}/${maxRetries}: __NUXT_DATA__ missing (${html.length} bytes)`);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`[reclub] attempt ${attempt}/${maxRetries} failed for ${referenceCode}: ${msg}`);
-    }
-    if (attempt < maxRetries) await sleep(1500 * attempt);
-  }
-  throw new Error(`Could not fetch event page for ${referenceCode} after ${maxRetries} attempts`);
+interface ByRefMeet {
+  name: string;
+  participants: ByRefParticipant[];
 }
 
 export async function fetchReclubRoster(
   referenceCode: string
 ): Promise<{ eventName: string; players: ReclubPlayer[] }> {
-  const html = await fetchEventHtml(referenceCode);
+  // Single API call replaces the old HTML-scraping approach.
+  // Reclub stopped embedding participant data in __NUXT_DATA__ (as of ~June 2026).
+  const meet = (await reclubApiFetch(
+    `/meets/by-ref/${referenceCode}`
+  )) as ByRefMeet;
 
-  const nuxtMatch = html.match(
-    /<script[^>]*id="__NUXT_DATA__"[^>]*>([\s\S]*?)<\/script>/
-  );
-  if (!nuxtMatch) {
-    throw new Error("Could not find __NUXT_DATA__ in event page");
-  }
+  const confirmed = meet.participants.filter((p) => p.status === 1);
 
-  const raw: unknown[] = JSON.parse(nuxtMatch[1]);
+  // Sort by lastStatusUpdatedAt ASC — first confirmed first, matching Reclub's display order.
+  confirmed.sort((a, b) => a.lastStatusUpdatedAt - b.lastStatusUpdatedAt);
 
-  // Collect all confirmed participants with their lastStatusUpdatedAt timestamp.
-  // Reclub displays participants sorted by lastStatusUpdatedAt DESC (most-recently confirmed first).
-  const entries: RosterEntry[] = [];
-  const seenUserIds = new Set<number>();
-
-  for (const item of raw) {
-    if (
-      item &&
-      typeof item === "object" &&
-      !Array.isArray(item) &&
-      "referenceId" in item
-    ) {
-      const rec = item as Record<string, number>;
-      const status = raw[rec.status];
-      const userId = raw[rec.referenceId];
-
-      if (status !== 1) continue;
-
-      // lastStatusUpdatedAt is stored as ms in the NUXT payload
-      const lastUpdatedRaw = (rec as Record<string, unknown>).lastStatusUpdatedAt;
-      const lastUpdatedMs =
-        typeof lastUpdatedRaw === "number" && lastUpdatedRaw > 0
-          ? (raw[lastUpdatedRaw] as number | null) ?? 0
-          : 0;
-
-      // createdAt is stored as unix seconds in the NUXT payload
-      const createdAtRaw = (rec as Record<string, unknown>).createdAt;
-      const createdAtSec =
-        typeof createdAtRaw === "number" && createdAtRaw > 0
-          ? (raw[createdAtRaw] as number | null) ?? 0
-          : 0;
-
-      // Resolve externalReference — present for "added by" (bring-a-friend) entries
-      const extRefIndex = (rec as Record<string, unknown>).externalReference as number | undefined;
-      const extRef = extRefIndex !== undefined ? raw[extRefIndex] : undefined;
-      if (
-        extRef &&
-        typeof extRef === "object" &&
-        !Array.isArray(extRef) &&
-        "name" in extRef
-      ) {
-        const extObj = extRef as Record<string, number>;
-        const name = raw[extObj.name];
-        const gender = raw[extObj.gender];
-        if (typeof name === "string" && name.trim()) {
-          entries.push({
-            userId: typeof userId === "number" && userId > 0 ? userId : null,
-            createdAt: createdAtSec,
-            lastStatusUpdatedAt: lastUpdatedMs,
-            isSynthetic: true,
-            syntheticName: name.trim(),
-            syntheticGender: typeof gender === "string" ? gender : "",
-          });
-        }
-        // Skip — do not also add the adder's userId to the fetch set
-        continue;
-      }
-
-      if (typeof userId === "number" && userId > 0 && !seenUserIds.has(userId)) {
-        seenUserIds.add(userId);
-        entries.push({
-          userId,
-          createdAt: createdAtSec,
-          lastStatusUpdatedAt: lastUpdatedMs,
-          isSynthetic: false,
-        });
-      }
+  // Separate own-account users from synthetic (added-by-friend / guests)
+  const ownUserIds: number[] = [];
+  const seenIds = new Set<number>();
+  for (const p of confirmed) {
+    // referenceType 3 = added-by-friend (has externalReference.name)
+    // referenceType 2 = guest with no Reclub account (referenceId is the adder's id)
+    // referenceType 1 = own account
+    if (p.referenceType === 3 && p.externalReference?.name) continue; // synthetic, skip profile fetch
+    if (typeof p.referenceId === "number" && p.referenceId > 0 && !seenIds.has(p.referenceId)) {
+      seenIds.add(p.referenceId);
+      ownUserIds.push(p.referenceId);
     }
   }
 
-  // Sort by lastStatusUpdatedAt ASC — first confirmed appears first, matching Reclub's display order.
-  // Phoebe (organizer, confirmed days ago) → first. Nadya (just confirmed from waitlist) → last.
-  entries.sort((a, b) => a.lastStatusUpdatedAt - b.lastStatusUpdatedAt);
-
+  // Batch-fetch profiles for own-account users
   const BATCH = 50;
-  const realIds = entries.filter((e) => !e.isSynthetic && e.userId !== null).map((e) => e.userId as number);
   const playerMap = new Map<number, { name: string; imageUrl: string; gender: string }>();
-
-  for (let i = 0; i < realIds.length; i += BATCH) {
+  for (let i = 0; i < ownUserIds.length; i += BATCH) {
     if (i > 0) await sleep(300);
-
-    const batch = realIds.slice(i, i + BATCH);
-    const ids = batch.join(",");
+    const ids = ownUserIds.slice(i, i + BATCH).join(",");
     const data = (await reclubApiFetch(
       `/players/userIds?userIds=${ids}&scopes=BASIC_PROFILE`
     )) as { players?: Array<{ userId: number; name: string; imageUrl: string; gender: string }> };
-
     for (const p of data.players ?? []) {
       playerMap.set(p.userId, { name: p.name, imageUrl: p.imageUrl, gender: p.gender ?? "" });
     }
   }
 
-  // Build final player list in sorted order, resolving profiles for real players
   const players: ReclubPlayer[] = [];
-  for (const entry of entries) {
-    if (entry.isSynthetic) {
+  for (const p of confirmed) {
+    if (p.referenceType === 3 && p.externalReference?.name) {
+      // Added-by-friend — use the name from externalReference, no Reclub profile to fetch
       players.push({
         reclubUserId: null,
-        name: entry.syntheticName!,
+        name: p.externalReference.name.trim(),
         avatarUrl: "",
         isDefaultAvatar: true,
-        gender: entry.syntheticGender ?? "",
+        gender: p.externalReference.gender ?? "",
         isAddedByFriend: true,
       });
-    } else if (entry.userId !== null) {
-      const profile = playerMap.get(entry.userId);
+    } else if (typeof p.referenceId === "number" && p.referenceId > 0) {
+      const profile = playerMap.get(p.referenceId);
       if (profile) {
         players.push({
-          reclubUserId: entry.userId,
+          reclubUserId: p.referenceId,
           name: profile.name,
           avatarUrl: profile.imageUrl,
           isDefaultAvatar: profile.imageUrl.includes(DEFAULT_AVATAR_HOST),
@@ -270,10 +179,5 @@ export async function fetchReclubRoster(
     }
   }
 
-  const titleMatch = html.match(/<title[^>]*>([^<]*)<\/title>/i);
-  const eventName = titleMatch
-    ? titleMatch[1].replace(/ \| Reclub$/i, "").trim()
-    : referenceCode;
-
-  return { eventName, players };
+  return { eventName: meet.name, players };
 }

@@ -647,7 +647,9 @@ export function ReclubRosterSection({
     async (referenceCode: string) => {
       setLoading(true);
       try {
-        const data = await api.post<ReclubRosterData>("/api/reclub/fetch-roster", { referenceCode });
+        const data = await api.post<ReclubRosterData>("/api/reclub/fetch-roster", {
+          referenceCode,
+        });
         const updated = rosters.map((r) =>
           r.referenceCode === referenceCode ? data : r
         );
@@ -772,7 +774,7 @@ export function ReclubRosterSection({
                   styles.continueBtn,
                   selectedEventCodes.size === 0 && styles.continueBtnDisabled,
                 ]}
-                onPress={() => fetchAndSaveRosters([...selectedEventCodes])}
+                onPress={() => void fetchAndSaveRosters([...selectedEventCodes])}
                 disabled={selectedEventCodes.size === 0}
                 activeOpacity={0.7}
               >

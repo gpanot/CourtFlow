@@ -63,7 +63,8 @@ function parseErrorMessage(
 
 async function request<T>(
   url: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  _retryOnNetworkError = true
 ): Promise<T> {
   const token = useAuthStore.getState().token;
 
@@ -78,6 +79,13 @@ async function request<T>(
       },
     });
   } catch (e) {
+    // status:0 means the TCP connection was dropped before we got any response.
+    // This happens on Android when the HTTP keep-alive connection to Railway is
+    // recycled (~60-90s idle) between two back-to-back requests. A single retry
+    // opens a fresh connection and succeeds.
+    if (_retryOnNetworkError) {
+      return request<T>(url, options, false);
+    }
     const msg =
       e instanceof Error ? e.message : "Could not reach the server";
     throw new ApiRequestError(networkFetchFailureMessage(msg), { status: 0 });

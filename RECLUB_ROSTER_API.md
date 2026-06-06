@@ -1,6 +1,8 @@
 # Reclub — Fetch event participants (name + avatar)
 
-**No auth required. 2 HTTP requests. ~1 second.**
+**No auth required. 2 HTTP requests. ~0.5 second.**
+
+> **Updated June 2026:** Reclub stopped server-side-rendering participant data in `__NUXT_DATA__`. The HTML-scraping approach (Steps 2–3 below) no longer works. Use the **`/meets/by-ref/{referenceCode}`** API instead — see the [new approach](#new-approach-meets-by-ref) section.
 
 ---
 
@@ -9,8 +11,8 @@
 For any public Reclub event, you can retrieve the full participant list (display name + avatar URL) using only public endpoints. The flow is:
 
 1. Find the event's `referenceCode` via the group activities API
-2. Fetch the event web page, parse `__NUXT_DATA__` to extract `userId`s
-3. Batch-fetch player profiles to get names and avatar URLs
+2. ~~Fetch the event web page, parse `__NUXT_DATA__` to extract `userId`s~~ *(broken as of June 2026)*
+3. ~~Batch-fetch player profiles to get names and avatar URLs~~
 
 ---
 
@@ -391,6 +393,113 @@ def get_all_participants(reference_code):
 **Key rule:** when an entry has a non-null `externalReference.name`, emit a synthetic player from that name and **skip** adding the `userId` to the batch-fetch set. This prevents the adder from being counted twice (their own entry — with `extRef = null` — is still collected normally).
 
 *Updated: May 8, 2026*
+
+---
+
+---
+
+## New approach: `/meets/by-ref/` (June 2026+)
+
+Reclub stopped embedding participant data in `__NUXT_DATA__` around June 2026. Their frontend now fetches participants client-side via a dedicated API endpoint. This endpoint is public (no auth required) and returns the full meet object including all participants in a single call — no HTML scraping needed.
+
+### Step 2 replacement — fetch participants directly
+
+```
+GET https://api.reclub.co/meets/by-ref/{referenceCode}
+```
+
+Headers: same as Step 0 (`User-Agent`, `x-output-casing: camelCase`, `Accept: application/json`)
+
+**Response shape (relevant fields):**
+```json
+{
+  "name": "🇻🇳[ACE CLUBHOUSE D2]🇻🇳 ACE SQUAD ⭐️ (9AM-12:30PM)⭐️",
+  "participants": [
+    {
+      "referenceType": 1,
+      "referenceId": 1578483,
+      "externalReference": null,
+      "status": 1,
+      "lastStatusUpdatedAt": 1780713239164,
+      "createdAt": 1780713239
+    }
+  ]
+}
+```
+
+**`status` values:** `1` = confirmed, `3` = waitlist, `-1` = cancelled, `0` = pending, `5` = other. Only `status === 1` participants should be shown.
+
+**`referenceType` values:**
+| Value | Meaning | `externalReference` |
+|-------|---------|---------------------|
+| `1` | Own Reclub account | `null` — fetch profile via `/players/userIds` |
+| `2` | Guest (no Reclub account, added by another user) | `null` — `referenceId` is the adder's userId; skip profile fetch, no name available |
+| `3` | Added-by-friend (bring-a-friend) | `{ name: "Display Name", gender: "M"\|"F", level?: number }` — use this name directly |
+
+### Updated parsing logic
+
+```python
+def fetch_roster(reference_code):
+    """Fetch all confirmed participants for a Reclub event."""
+    url = f"https://api.reclub.co/meets/by-ref/{reference_code}"
+    data = api_get(url)  # api_get defined in Step 0
+
+    confirmed = [p for p in data["participants"] if p["status"] == 1]
+    # Sort by lastStatusUpdatedAt ASC = order in which players confirmed
+    confirmed.sort(key=lambda p: p["lastStatusUpdatedAt"])
+
+    # Collect userId for own-account players (referenceType 1 or 2 without externalReference)
+    own_ids = []
+    seen = set()
+    for p in confirmed:
+        if p["referenceType"] == 3 and p.get("externalReference"):
+            continue  # handled via externalReference.name below
+        ref_id = p.get("referenceId")
+        if isinstance(ref_id, int) and ref_id > 0 and ref_id not in seen:
+            seen.add(ref_id)
+            own_ids.append(ref_id)
+
+    # Batch-fetch profiles
+    profiles = get_profiles(own_ids)  # get_profiles defined in Step 3
+    profile_map = {p["userId"]: p for p in profiles}
+
+    players = []
+    for p in confirmed:
+        if p["referenceType"] == 3 and p.get("externalReference", {}).get("name"):
+            ext = p["externalReference"]
+            players.append({
+                "userId": None,
+                "name": ext["name"],
+                "gender": ext.get("gender", ""),
+                "is_added_by_friend": True,
+                "imageUrl": None,
+            })
+        elif isinstance(p.get("referenceId"), int) and p["referenceId"] > 0:
+            profile = profile_map.get(p["referenceId"])
+            if profile:
+                players.append({
+                    "userId": p["referenceId"],
+                    "name": profile["name"],
+                    "gender": profile.get("gender", ""),
+                    "is_added_by_friend": False,
+                    "imageUrl": profile["imageUrl"],
+                })
+
+    return {"event_name": data["name"], "players": players}
+```
+
+### Performance
+
+| Step | Requests | Time |
+|------|----------|------|
+| Find event (activities API) | 1 | ~0.3s |
+| Fetch participants (`/meets/by-ref/`) | 1 | ~0.2s |
+| Fetch profiles (batch API) | 1 per 50 players | ~0.4s |
+| **Total (typical 50-player event)** | **3** | **~0.9s** |
+
+The old approach required fetching + parsing a full HTML page (~47 KB); the new API response is ~10 KB and much faster.
+
+*Added: June 7, 2026*
 
 ---
 
