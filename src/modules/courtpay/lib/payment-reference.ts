@@ -40,9 +40,17 @@ export function extractPaymentRef(content: string): string | null {
   // Billing invoice refs: CF-BILL-ABCD-2026W16
   const billMatch = content.match(/CF-BILL-[A-Z0-9]{1,8}-\d{4}W\d{1,2}/);
   if (billMatch) return billMatch[0];
-  // Session / subscription refs: CF-SUB-XXXXXX or CF-SES-XXXXXX
+
+  // Standard format with dashes: CF-SES-XXXXXX / CF-SUB-XXXXXX
   const match = content.match(/CF-(SUB|SES)-[A-Z0-9]{6,8}/);
-  return match ? match[0] : null;
+  if (match) return match[0];
+
+  // Some banks (e.g. MB Bank) strip hyphens from transfer content:
+  // CFSES77KDJG → CF-SES-77KDJG, CFSUB77KDJG → CF-SUB-77KDJG
+  const noDashMatch = content.match(/CF(SUB|SES)([A-Z0-9]{6,8})/);
+  if (noDashMatch) return `CF-${noDashMatch[1]}-${noDashMatch[2]}`;
+
+  return null;
 }
 
 export function isSubscriptionRef(ref: string): boolean {
