@@ -50,13 +50,13 @@ export async function POST(request: NextRequest) {
     // Deduplication: SePay retries up to 7× and supports manual replay.
     // Log the sepayId; if already seen, return 200 immediately so SePay stops retrying.
     // The pendingPayment status check in processSepayWebhook also guards against double-confirm.
-    console.log(`[sepay-webhook] Processing transaction id=${payload.id} amount=${payload.transferAmount}`);
+    console.log(`[sepay-webhook] Processing transaction id=${payload.id} amount=${payload.transferAmount} code="${payload.code}" content="${payload.content}"`);
 
     const result = await processSepayWebhook(payload);
     if (result.matched) {
       console.log(`[sepay-webhook] Payment matched — paymentId: ${result.paymentId}`);
     } else {
-      console.log("[sepay-webhook] No matching payment found");
+      console.log(`[sepay-webhook] No matching payment found — code="${payload.code}" content="${payload.content}"`);
     }
   } catch (e) {
     console.error("[sepay-webhook] Error:", e);
