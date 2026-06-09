@@ -3,13 +3,18 @@ import type { JwtPayload } from "./auth";
 
 /**
  * Returns the venue IDs the caller is authorized to access.
- * - superadmin: venues they are assigned to (existing behavior)
- * - manager: venues where ownerId === auth.id
+ * - superadmin: venues they are assigned to
+ * - manager: venues they own OR are assigned to
  */
 export async function getAuthorizedVenueIds(auth: JwtPayload): Promise<string[]> {
   if (auth.role === "manager") {
     const venues = await prisma.venue.findMany({
-      where: { ownerId: auth.id },
+      where: {
+        OR: [
+          { ownerId: auth.id },
+          { staffAssignments: { some: { staffId: auth.id } } },
+        ],
+      },
       select: { id: true },
     });
     return venues.map((v) => v.id);
