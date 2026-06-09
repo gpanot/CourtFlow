@@ -489,8 +489,8 @@ function AutoPaymentSettings({
               alt="VietQR preview"
               className={
                 qrExpanded
-                  ? "w-full max-w-xs rounded-md bg-white object-contain transition-all"
-                  : "h-24 w-24 shrink-0 rounded-md bg-white object-contain transition-all"
+                  ? "w-full max-w-2xl rounded-md bg-white object-contain transition-all"
+                  : "h-48 w-48 shrink-0 rounded-md bg-white object-contain transition-all"
               }
             />
             <div className={qrExpanded ? "w-full space-y-0.5 text-center" : "min-w-0 flex-1 space-y-0.5 pt-1"}>
@@ -669,20 +669,39 @@ function AutoPaymentSettings({
             </div>
 
             {testPayment?.vietQR && (
-              <div className="rounded-lg border border-neutral-800 bg-black/40 p-3">
-                <div className="flex flex-wrap items-start gap-3">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={testPayment.vietQR}
-                    alt="Sepay test QR"
-                    className="h-36 w-36 rounded-md bg-white object-contain"
-                  />
-                  <div className="space-y-1 text-xs text-neutral-300">
-                    <p><span className="text-neutral-500">Ref:</span> <span className="font-mono">{testPayment.paymentRef || "-"}</span></p>
-                    <p><span className="text-neutral-500">Amount:</span> {testPayment.amount.toLocaleString()} VND</p>
-                    <p><span className="text-neutral-500">Bank:</span> {testPayment.bankBin || "-"} / {testPayment.bankAccount || "-"}</p>
-                    <p className="text-[11px] text-cyan-300/90">{testPayment.debugHint}</p>
+              <div className="rounded-lg border border-neutral-800 bg-black/40 p-3 space-y-3">
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Column 1 — CourtFlow VietQR (current) */}
+                  <div className="flex flex-col items-center gap-2">
+                    <p className="text-[11px] font-semibold text-neutral-400">CourtFlow VietQR</p>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={testPayment.vietQR}
+                      alt="CourtFlow VietQR"
+                      className="h-72 w-72 rounded-md bg-white object-contain"
+                    />
+                    <p className="text-[10px] text-neutral-500 text-center">img.vietqr.io — generic VietQR</p>
                   </div>
+
+                  {/* Column 2 — Sepay QR */}
+                  <div className="flex flex-col items-center gap-2">
+                    <p className="text-[11px] font-semibold text-cyan-400">Sepay QR</p>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`https://qr.sepay.vn/img?acc=${encodeURIComponent(testPayment.bankAccount || "")}&bank=${encodeURIComponent(testPayment.bankBin || "")}&amount=${testPayment.amount}&des=${encodeURIComponent(testPayment.paymentRef || "")}&template=compact`}
+                      alt="Sepay QR"
+                      className="h-72 w-72 rounded-md bg-white object-contain"
+                    />
+                    <p className="text-[10px] text-neutral-500 text-center">qr.sepay.vn — Sepay-routed QR</p>
+                  </div>
+                </div>
+
+                {/* Shared info row */}
+                <div className="space-y-1 text-xs text-neutral-300 border-t border-neutral-800 pt-2">
+                  <p><span className="text-neutral-500">Ref:</span> <span className="font-mono text-white">{testPayment.paymentRef || "-"}</span></p>
+                  <p><span className="text-neutral-500">Amount:</span> {testPayment.amount.toLocaleString()} VND</p>
+                  <p><span className="text-neutral-500">Bank / Account:</span> {testPayment.bankBin || "-"} / {testPayment.bankAccount || "-"}</p>
+                  <p className="text-[11px] text-cyan-300/90">{testPayment.debugHint}</p>
                 </div>
               </div>
             )}
