@@ -122,8 +122,10 @@ export default function StaffPage() {
             venueId: string | null; onboardingCompleted: boolean;
           };
         };
-        const currentRole = useSessionStore.getState().role;
-        if (data.staff.role !== currentRole) {
+        const store = useSessionStore.getState();
+        const roleChanged = data.staff.role !== store.role;
+        const onboardingChanged = data.staff.onboardingCompleted !== store.onboardingCompleted;
+        if (roleChanged || onboardingChanged) {
           setAuth({
             token: data.token,
             role: data.staff.role as "staff" | "manager" | "superadmin",
