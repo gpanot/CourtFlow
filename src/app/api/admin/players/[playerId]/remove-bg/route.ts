@@ -3,7 +3,7 @@ import { readFile } from "fs/promises";
 import { join } from "path";
 import { prisma } from "@/lib/db";
 import { error, json, notFound } from "@/lib/api-helpers";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireManagerOrSuperAdmin } from "@/lib/auth";
 import { removeBackgroundFromBase64 } from "@/lib/remove-bg";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,7 @@ export async function POST(
   { params }: { params: Promise<{ playerId: string }> }
 ) {
   try {
-    requireSuperAdmin(request.headers);
+    requireManagerOrSuperAdmin(request.headers);
 
     const { playerId } = await params;
     const player = await prisma.player.findUnique({

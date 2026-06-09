@@ -1,14 +1,14 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireManagerOrSuperAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 const MAX_TIERS_PER_VENUE = 4;
 
 export async function GET(request: NextRequest) {
   try {
-    requireSuperAdmin(request.headers);
+    requireManagerOrSuperAdmin(request.headers);
     const venueId = request.nextUrl.searchParams.get("venueId");
     if (!venueId) return error("venueId is required");
 
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    requireSuperAdmin(request.headers);
+    requireManagerOrSuperAdmin(request.headers);
     const body = await parseBody<{
       venueId: string;
       name: string;

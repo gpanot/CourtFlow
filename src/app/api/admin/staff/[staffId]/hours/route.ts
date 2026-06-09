@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireManagerOrSuperAdmin } from "@/lib/auth";
 import {
   isMonday,
   parseWeekStart,
@@ -21,7 +21,7 @@ export async function GET(
   { params }: { params: Promise<{ staffId: string }> }
 ) {
   try {
-    requireSuperAdmin(request.headers);
+    requireManagerOrSuperAdmin(request.headers);
     const { staffId } = await params;
 
     const weekStartParam = request.nextUrl.searchParams.get("weekStart");

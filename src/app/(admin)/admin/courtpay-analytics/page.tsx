@@ -376,15 +376,29 @@ export default function CourtPayAnalyticsPage() {
 
   const fetchVenues = useCallback(async () => {
     try {
-      const data = await api.get<{ venues: VenueOption[] }>(
-        "/api/admin/courtpay-analytics"
-      );
-      setVenues(data.venues);
-    } catch {
-      const fallback = await api.get<VenueOption[]>("/api/admin/venues");
-      setVenues(fallback);
+      let list: VenueOption[];
+      try {
+        const data = await api.get<{ venues: VenueOption[] }>(
+          "/api/admin/courtpay-analytics"
+        );
+        list = data.venues;
+      } catch {
+        list = await api.get<VenueOption[]>("/api/admin/venues");
+      }
+      setVenues(list);
+      // If the stored venue is not in the allowed list, reset to first allowed
+      const ids = list.map((v) => v.id);
+      setSelectedVenueId((prev) => {
+        if (prev && !ids.includes(prev)) {
+          storeVenueId("");
+          return "";
+        }
+        return prev;
+      });
+    } catch (e) {
+      console.error(e);
     }
-  }, []);
+  }, [storeVenueId]);
 
   const loadData = useCallback(async () => {
     if (!selectedVenueId) {
@@ -483,13 +497,16 @@ export default function CourtPayAnalyticsPage() {
 
   // Restore drill state when venues load and a venue is already stored
   useEffect(() => {
-    if (!storedVenueId || drill || venues.length === 0) return;
-    const v = venues.find((x) => x.id === storedVenueId);
+    if (drill || venues.length === 0) return;
+    const currentId = selectedVenueId || storedVenueId;
+    if (!currentId) return;
+    const v = venues.find((x) => x.id === currentId);
     if (v) {
-      setSelectedVenueId(storedVenueId);
-      setDrill({ level: "venue", venueId: storedVenueId, venueName: v.name });
+      setSelectedVenueId(v.id);
+      setDrill({ level: "venue", venueId: v.id, venueName: v.name });
     }
-  }, [venues, storedVenueId, drill]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [venues]);
 
   const handleExport = async () => {
     if (!drill && !selectedVenueId) return;

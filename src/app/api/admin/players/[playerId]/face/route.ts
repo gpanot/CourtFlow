@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { error, errorJson, json, notFound, parseBody } from "@/lib/api-helpers";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireManagerOrSuperAdmin } from "@/lib/auth";
 import { faceRecognitionService } from "@/lib/face-recognition";
 import { persistPlayerCheckInFacePhoto } from "@/lib/persist-player-check-in-photo";
 
@@ -21,7 +21,7 @@ export async function POST(
   { params }: { params: Promise<{ playerId: string }> }
 ) {
   try {
-    requireSuperAdmin(request.headers);
+    requireManagerOrSuperAdmin(request.headers);
     const { playerId } = await params;
     const body = await parseBody<{ imageBase64?: string }>(request);
     const imageBase64 = typeof body.imageBase64 === "string" ? body.imageBase64 : "";
@@ -72,7 +72,7 @@ export async function DELETE(
   { params }: { params: Promise<{ playerId: string }> }
 ) {
   try {
-    requireSuperAdmin(request.headers);
+    requireManagerOrSuperAdmin(request.headers);
     const { playerId } = await params;
 
     const existing = await prisma.player.findUnique({ where: { id: playerId } });

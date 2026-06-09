@@ -276,7 +276,7 @@ export default function PlayersPage() {
   }, [search, venueFilter, skillFilter, statusFilter, quickFilter, page, sortKey, sortDir]);
 
   useEffect(() => {
-    api.get<Venue[]>("/api/venues").then(setVenues).catch(console.error);
+    api.get<Venue[]>("/api/admin/venues").then(setVenues).catch(console.error);
   }, []);
 
   useEffect(() => {

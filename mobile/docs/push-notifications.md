@@ -116,11 +116,13 @@ apply plugin: "com.google.gms.google-services"
 
 ## 5. Server — initializing `firebase-admin`
 
-Store the service account JSON as an environment variable (as a JSON string):
+Store the **entire service account JSON** as a single environment variable — paste the raw JSON content as the value. This avoids splitting the key across `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, and `FIREBASE_PRIVATE_KEY` (common alternative but more error-prone, especially with the multiline private key).
 
 ```
-FIREBASE_SERVICE_ACCOUNT_JSON='{"type":"service_account","project_id":"...","private_key":"...","client_email":"...",...}'
+FIREBASE_SERVICE_ACCOUNT_JSON='{"type":"service_account","project_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n","client_email":"...@....iam.gserviceaccount.com",...}'
 ```
+
+> On Railway / Vercel / Render: paste the JSON value directly in the env var field (no surrounding quotes needed in the dashboard UI — only needed in `.env` files).
 
 Initialize once (lazy singleton):
 

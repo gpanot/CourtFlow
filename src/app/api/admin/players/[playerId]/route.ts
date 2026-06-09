@@ -3,7 +3,7 @@ import path from "path";
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody, notFound } from "@/lib/api-helpers";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireManagerOrSuperAdmin } from "@/lib/auth";
 import { faceRecognitionService } from "@/lib/face-recognition";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,7 @@ export async function GET(
   { params }: { params: Promise<{ playerId: string }> }
 ) {
   try {
-    requireSuperAdmin(request.headers);
+    requireManagerOrSuperAdmin(request.headers);
     const { playerId } = await params;
 
     const player = await prisma.player.findUnique({
@@ -101,7 +101,7 @@ export async function PATCH(
   { params }: { params: Promise<{ playerId: string }> }
 ) {
   try {
-    requireSuperAdmin(request.headers);
+    requireManagerOrSuperAdmin(request.headers);
     const { playerId } = await params;
 
     const existing = await prisma.player.findUnique({ where: { id: playerId } });
@@ -142,7 +142,7 @@ export async function DELETE(
   { params }: { params: Promise<{ playerId: string }> }
 ) {
   try {
-    requireSuperAdmin(request.headers);
+    requireManagerOrSuperAdmin(request.headers);
     const { playerId } = await params;
 
     const existing = await prisma.player.findUnique({ where: { id: playerId } });

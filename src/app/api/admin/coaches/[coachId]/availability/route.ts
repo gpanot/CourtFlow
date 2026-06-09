@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireManagerOrSuperAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export async function GET(
@@ -9,7 +9,7 @@ export async function GET(
   { params }: { params: Promise<{ coachId: string }> }
 ) {
   try {
-    requireSuperAdmin(request.headers);
+    requireManagerOrSuperAdmin(request.headers);
     const { coachId } = await params;
     const dateStr = request.nextUrl.searchParams.get("date");
     const venueId = request.nextUrl.searchParams.get("venueId");

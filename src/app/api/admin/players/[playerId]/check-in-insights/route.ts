@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, notFound } from "@/lib/api-helpers";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireManagerOrSuperAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 const FACE_REGISTRATION_AUDIT_ACTIONS = [
@@ -15,7 +15,7 @@ export async function GET(
   { params }: { params: Promise<{ playerId: string }> }
 ) {
   try {
-    requireSuperAdmin(request.headers);
+    requireManagerOrSuperAdmin(request.headers);
     const { playerId } = await params;
 
     const player = await prisma.player.findUnique({

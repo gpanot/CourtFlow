@@ -182,9 +182,16 @@ export default function VenueAnalyticsPage() {
   useEffect(() => {
     api.get<Venue[]>("/api/admin/venues").then((vs) => {
       setVenues(vs);
-      if (!selectedVenueId && vs.length > 0) setSelectedVenueId(vs[0].id);
+      const ids = vs.map((v) => v.id);
+      if (selectedVenueId && !ids.includes(selectedVenueId)) {
+        // Stale venue from another role/session — reset to first allowed venue
+        setSelectedVenueId(vs.length > 0 ? vs[0].id : "");
+      } else if (!selectedVenueId && vs.length > 0) {
+        setSelectedVenueId(vs[0].id);
+      }
     }).catch(console.error);
-  }, [selectedVenueId, setSelectedVenueId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const currentRange = useMemo(() => {
     return rangeKey === "custom" ? { from: customFrom, to: customTo } : getRangeDates(rangeKey);

@@ -1,15 +1,17 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { getAuthorizedVenueIds } from "@/lib/venue-scope";
 
 export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   try {
-    const auth = requireSuperAdmin(request.headers);
+    const auth = requireManagerOrSuperAdmin(request.headers);
+    const venueIds = await getAuthorizedVenueIds(auth);
 
     const venues = await prisma.venue.findMany({
-      where: { staffAssignments: { some: { staffId: auth.id } } },
+      where: { id: { in: venueIds } },
       include: {
         courts: { orderBy: { label: "asc" } },
         sessions: {
@@ -17,6 +19,7 @@ export async function GET(request: NextRequest) {
           take: 1,
           orderBy: { openedAt: "desc" },
         },
+        owner: { select: { id: true, name: true } },
         _count: { select: { staffAssignments: true } },
       },
     });
@@ -34,13 +37,14 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = requireSuperAdmin(request.headers);
+    const auth = requireManagerOrSuperAdmin(request.headers);
     const body = await parseBody<{ name: string; location?: string }>(request);
 
     const venue = await prisma.venue.create({
       data: {
         name: body.name,
         location: body.location || null,
+        ownerId: auth.role === "manager" ? auth.id : null,
         staffAssignments: {
           create: [{ staffId: auth.id, appAccess: ["courtflow"] }],
         },

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { getAuthorizedVenueIds } from "@/lib/venue-scope";
 import {
   computeKpis,
   fetchCourtPayPayments,
@@ -115,7 +116,8 @@ async function enrichPayments(
 
 export async function GET(req: Request) {
   try {
-    requireSuperAdmin(req.headers);
+    const auth = requireManagerOrSuperAdmin(req.headers);
+    const authorizedVenueIds = auth.role === "manager" ? await getAuthorizedVenueIds(auth) : null;
     const { searchParams } = new URL(req.url);
     const venueId = searchParams.get("venueId");
     const sessionId = searchParams.get("sessionId");
@@ -126,7 +128,10 @@ export async function GET(req: Request) {
 
     if (!venueId && !sessionId) {
       const venues = await prisma.venue.findMany({
-        where: { active: true },
+        where: {
+          active: true,
+          ...(authorizedVenueIds ? { id: { in: authorizedVenueIds } } : {}),
+        },
         select: { id: true, name: true },
         orderBy: { name: "asc" },
       });

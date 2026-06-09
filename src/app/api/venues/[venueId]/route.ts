@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, notFound, parseBody } from "@/lib/api-helpers";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireManagerOrSuperAdmin, requireSuperAdmin } from "@/lib/auth";
+import { assertVenueAccess } from "@/lib/venue-scope";
 import { emitToVenue } from "@/lib/socket-server";
 import { Prisma } from "@prisma/client";
 
@@ -28,15 +29,17 @@ export async function PATCH(
   { params }: { params: Promise<{ venueId: string }> }
 ) {
   try {
-    const auth = requireSuperAdmin(request.headers);
+    const auth = requireManagerOrSuperAdmin(request.headers);
     const { venueId } = await params;
-
-    const owned = await prisma.venue.count({
-      where: { id: venueId, staffAssignments: { some: { staffId: auth.id } } },
-    });
-    if (!owned) return error("You don't own this venue", 403);
+    await assertVenueAccess(auth, venueId);
 
     const body = await parseBody<Record<string, unknown>>(request);
+
+    // Only superadmins can reassign venue ownership
+    if ("ownerId" in body && auth.role !== "superadmin") {
+      return error("Only superadmins can reassign venue ownership", 403);
+    }
+
     const venue = await prisma.venue.update({
       where: { id: venueId },
       data: body,

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireManagerOrSuperAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export async function PATCH(
@@ -8,7 +8,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    requireSuperAdmin(req.headers);
+    requireManagerOrSuperAdmin(req.headers);
     const { id } = await params;
     const body = await req.json();
 

@@ -55,7 +55,7 @@ export default function LiveSessionsPage() {
   useEffect(() => {
     async function loadVenues() {
       try {
-        const venueList = await api.get<VenueMeta[]>("/api/venues");
+        const venueList = await api.get<VenueMeta[]>("/api/admin/venues");
         const statesMap: Record<string, VenueState> = {};
         const enriched: VenueMeta[] = [];
 

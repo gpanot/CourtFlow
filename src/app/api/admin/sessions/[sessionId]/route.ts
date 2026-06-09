@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireManagerOrSuperAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export async function DELETE(
@@ -9,7 +9,7 @@ export async function DELETE(
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    const auth = requireSuperAdmin(request.headers);
+    const auth = requireManagerOrSuperAdmin(request.headers);
     const { sessionId } = await params;
 
     const session = await prisma.session.findUnique({

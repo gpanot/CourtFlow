@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireManagerOrSuperAdmin } from "@/lib/auth";
 import sharp from "sharp";
 import { emitToVenue } from "@/lib/socket-server";
 
@@ -10,18 +10,27 @@ const MAX_SIZE = 5 * 1024 * 1024;
 const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"];
 const OUTPUT_SIZE = 512;
 
+async function assertVenueOwnership(auth: { id: string; role: string }, venueId: string) {
+  if (auth.role === "manager") {
+    const count = await prisma.venue.count({ where: { id: venueId, ownerId: auth.id } });
+    if (!count) throw new Error("Access denied to this venue");
+  } else {
+    const count = await prisma.venue.count({
+      where: { id: venueId, staffAssignments: { some: { staffId: auth.id } } },
+    });
+    if (!count) throw new Error("Access denied to this venue");
+  }
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ venueId: string }> }
 ) {
   try {
-    const auth = requireSuperAdmin(request.headers);
+    const auth = requireManagerOrSuperAdmin(request.headers);
     const { venueId } = await params;
 
-    const owned = await prisma.venue.count({
-      where: { id: venueId, staffAssignments: { some: { staffId: auth.id } } },
-    });
-    if (!owned) return error("You don't own this venue", 403);
+    await assertVenueOwnership(auth, venueId);
 
     const formData = await request.formData();
     const file = formData.get("logo") as File | null;
@@ -53,13 +62,10 @@ export async function DELETE(
   { params }: { params: Promise<{ venueId: string }> }
 ) {
   try {
-    const auth = requireSuperAdmin(request.headers);
+    const auth = requireManagerOrSuperAdmin(request.headers);
     const { venueId } = await params;
 
-    const owned = await prisma.venue.count({
-      where: { id: venueId, staffAssignments: { some: { staffId: auth.id } } },
-    });
-    if (!owned) return error("You don't own this venue", 403);
+    await assertVenueOwnership(auth, venueId);
 
     const venue = await prisma.venue.update({
       where: { id: venueId },

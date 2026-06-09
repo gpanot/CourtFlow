@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireManagerOrSuperAdmin } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   try {
-    const auth = requireSuperAdmin(req.headers);
+    const auth = requireManagerOrSuperAdmin(req.headers);
     const { searchParams } = new URL(req.url);
     const venueId = searchParams.get("venueId");
 

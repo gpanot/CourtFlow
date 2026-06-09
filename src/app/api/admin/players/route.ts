@@ -3,7 +3,8 @@ import { prisma } from "@/lib/db";
 import type { SkillLevel } from "@prisma/client";
 import { initialRankingScoreForSkillLevel } from "@/lib/ranking";
 import { json, error, parseBody } from "@/lib/api-helpers";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { getAuthorizedVenueIds } from "@/lib/venue-scope";
 import { enqueueStickerJobIfNeeded } from "@/lib/sticker-queue";
 
 export const dynamic = "force-dynamic";
@@ -21,8 +22,9 @@ interface AdminPlayersStatsPayload {
 const ADMIN_PLAYERS_STATS_TTL_MS = 30_000;
 let adminPlayersStatsCache: { expiresAt: number; stats: AdminPlayersStatsPayload } | null = null;
 
-async function getAdminPlayersStats(now: Date): Promise<AdminPlayersStatsPayload> {
-  if (adminPlayersStatsCache && adminPlayersStatsCache.expiresAt > now.getTime()) {
+async function getAdminPlayersStats(now: Date, venueIds: string[] | null): Promise<AdminPlayersStatsPayload> {
+  // Only cache the global (superadmin) version
+  if (!venueIds && adminPlayersStatsCache && adminPlayersStatsCache.expiresAt > now.getTime()) {
     return adminPlayersStatsCache.stats;
   }
 
@@ -31,20 +33,53 @@ async function getAdminPlayersStats(now: Date): Promise<AdminPlayersStatsPayload
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-  const [totalPlayers, newThisWeek, newThisMonth, skillCounts, activeEntries, globalPresenceAgg] = await Promise.all([
-    prisma.player.count(),
-    prisma.player.count({ where: { createdAt: { gte: sevenDaysAgo } } }),
-    prisma.player.count({ where: { createdAt: { gte: thirtyDaysAgo } } }),
-    prisma.player.groupBy({ by: ["skillLevel"], _count: true }),
+  // Base player filter: scope to manager's venues if applicable
+  const playerVenueFilter = venueIds
+    ? {
+        OR: [
+          { registrationVenueId: { in: venueIds } },
+          { queueEntries: { some: { session: { venueId: { in: venueIds } } } } },
+        ],
+      }
+    : {};
+
+  const sessionVenueFilter = venueIds ? { venueId: { in: venueIds } } : {};
+
+  const [totalPlayers, newThisWeek, newThisMonth, skillCounts, activeEntries] = await Promise.all([
+    prisma.player.count({ where: playerVenueFilter }),
+    prisma.player.count({ where: { ...playerVenueFilter, createdAt: { gte: sevenDaysAgo } } }),
+    prisma.player.count({ where: { ...playerVenueFilter, createdAt: { gte: thirtyDaysAgo } } }),
+    prisma.player.groupBy({ by: ["skillLevel"], _count: true, where: playerVenueFilter }),
     prisma.queueEntry.findMany({
       where: {
-        session: { status: "open" },
+        session: { status: "open", ...sessionVenueFilter },
         status: { in: ["waiting", "on_break", "playing", "assigned"] },
       },
       select: { playerId: true },
       distinct: ["playerId"],
     }),
-    prisma.$queryRaw<Array<{ globalPlayMinutes: bigint | number | null; globalWaitMinutes: bigint | number | null }>>`
+  ]);
+
+  // Aggregate play/wait minutes scoped to venue if needed
+  let globalPlayMinutes = 0;
+  let globalWaitMinutes = 0;
+  if (venueIds) {
+    const agg = await prisma.queueEntry.findMany({
+      where: { session: { venueId: { in: venueIds } } },
+      select: {
+        totalPlayMinutesToday: true,
+        joinedAt: true,
+        session: { select: { closedAt: true } },
+      },
+    });
+    for (const e of agg) {
+      globalPlayMinutes += e.totalPlayMinutesToday;
+      const sessionEnd = e.session.closedAt ?? now;
+      const presenceMin = Math.max(0, Math.round((sessionEnd.getTime() - e.joinedAt.getTime()) / 60000));
+      globalWaitMinutes += Math.max(0, presenceMin - e.totalPlayMinutesToday);
+    }
+  } else {
+    const globalPresenceAgg = await prisma.$queryRaw<Array<{ globalPlayMinutes: bigint | number | null; globalWaitMinutes: bigint | number | null }>>`
       SELECT
         COALESCE(SUM(q.total_play_minutes_today), 0) AS "globalPlayMinutes",
         COALESCE(
@@ -59,12 +94,12 @@ async function getAdminPlayersStats(now: Date): Promise<AdminPlayersStatsPayload
         ) AS "globalWaitMinutes"
       FROM queue_entries q
       JOIN sessions s ON s.id = q.session_id
-    `,
-  ]);
+    `;
+    const globalAgg = globalPresenceAgg[0];
+    globalPlayMinutes = Number(globalAgg?.globalPlayMinutes ?? 0);
+    globalWaitMinutes = Number(globalAgg?.globalWaitMinutes ?? 0);
+  }
 
-  const globalAgg = globalPresenceAgg[0];
-  const globalPlayMinutes = Number(globalAgg?.globalPlayMinutes ?? 0);
-  const globalWaitMinutes = Number(globalAgg?.globalWaitMinutes ?? 0);
   const totalPresence = globalWaitMinutes + globalPlayMinutes;
   const waitPlayRatio = totalPresence > 0
     ? Math.round((globalWaitMinutes / totalPresence) * 100)
@@ -83,16 +118,19 @@ async function getAdminPlayersStats(now: Date): Promise<AdminPlayersStatsPayload
     ),
   };
 
-  adminPlayersStatsCache = {
-    stats,
-    expiresAt: now.getTime() + ADMIN_PLAYERS_STATS_TTL_MS,
-  };
+  if (!venueIds) {
+    adminPlayersStatsCache = {
+      stats,
+      expiresAt: now.getTime() + ADMIN_PLAYERS_STATS_TTL_MS,
+    };
+  }
   return stats;
 }
 
 export async function GET(request: NextRequest) {
   try {
-    requireSuperAdmin(request.headers);
+    const auth = requireManagerOrSuperAdmin(request.headers);
+    const authorizedVenueIds = auth.role === "manager" ? await getAuthorizedVenueIds(auth) : null;
 
     const url = request.nextUrl;
     const search = url.searchParams.get("search")?.trim() || "";
@@ -139,7 +177,22 @@ export async function GET(request: NextRequest) {
     }
 
     if (venueId) {
+      // If manager, ensure they can only filter by their own venues
+      if (authorizedVenueIds && !authorizedVenueIds.includes(venueId)) {
+        return json({ players: [], stats: null, totalCount: 0, page: 1, limit, totalPages: 0, faceCounts: { withFace: 0, noFace: 0 } });
+      }
       where.queueEntries = { some: { session: { venueId } } };
+    }
+
+    // Manager isolation: only see players who registered at or have queue entries in their venues
+    if (authorizedVenueIds && !venueId) {
+      if (!where.AND) where.AND = [];
+      (where.AND as unknown[]).push({
+        OR: [
+          { registrationVenueId: { in: authorizedVenueIds } },
+          { queueEntries: { some: { session: { venueId: { in: authorizedVenueIds } } } } },
+        ],
+      });
     }
 
     if (status === "active") {
@@ -166,6 +219,15 @@ export async function GET(request: NextRequest) {
     }
     if (skillLevel) baseWhere.skillLevel = skillLevel;
     if (venueId) baseWhere.queueEntries = { some: { session: { venueId } } };
+    if (authorizedVenueIds && !venueId) {
+      if (!baseWhere.AND) baseWhere.AND = [];
+      (baseWhere.AND as unknown[]).push({
+        OR: [
+          { registrationVenueId: { in: authorizedVenueIds } },
+          { queueEntries: { some: { session: { venueId: { in: authorizedVenueIds } } } } },
+        ],
+      });
+    }
     if (status === "active") {
       baseWhere.queueEntries = {
         ...((baseWhere.queueEntries as object) || {}),
@@ -214,7 +276,7 @@ export async function GET(request: NextRequest) {
         include: playerInclude,
       }),
       prisma.player.count({ where }),
-      getAdminPlayersStats(now),
+      getAdminPlayersStats(now, authorizedVenueIds),
       prisma.player.count({ where: baseWhere }),
       prisma.player.count({ where: { ...baseWhere, gender: "male" } }),
       prisma.player.count({ where: { ...baseWhere, gender: "female" } }),
@@ -363,7 +425,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    requireSuperAdmin(request.headers);
+    requireManagerOrSuperAdmin(request.headers);
     const body = await parseBody<{
       name: string;
       phone: string;

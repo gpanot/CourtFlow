@@ -143,7 +143,7 @@ export default function CoachingPage() {
   const setSelectedVenueId = (id: string) => { _setSelectedVenueId(id); setStoredVenueId(id); };
 
   useEffect(() => {
-    api.get<Venue[]>("/api/venues").then((v) => {
+    api.get<Venue[]>("/api/admin/venues").then((v) => {
       setVenues(v);
       if (v.length > 0 && !selectedVenueId) {
         const match = storedVenueId && v.find((x) => x.id === storedVenueId);

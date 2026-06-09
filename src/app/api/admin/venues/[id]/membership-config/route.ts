@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody, notFound } from "@/lib/api-helpers";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { assertVenueAccess } from "@/lib/venue-scope";
 import { DEFAULT_MEMBERSHIP_CONFIG, type MembershipConfig } from "@/lib/booking";
 
 export const dynamic = "force-dynamic";
@@ -10,8 +11,9 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    requireSuperAdmin(request.headers);
+    const auth = requireManagerOrSuperAdmin(request.headers);
     const { id } = await params;
+    await assertVenueAccess(auth, id);
     const body = await parseBody<Partial<MembershipConfig>>(request);
 
     const venue = await prisma.venue.findUnique({ where: { id } });

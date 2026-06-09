@@ -1,12 +1,12 @@
 import { NextRequest } from "next/server";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireManagerOrSuperAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
 
 export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   try {
-    const auth = requireSuperAdmin(request.headers);
+    const auth = requireManagerOrSuperAdmin(request.headers);
 
     const ownedVenues = await prisma.venue.findMany({
       where: { staffAssignments: { some: { staffId: auth.id } } },
