@@ -1,0 +1,830 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { api } from "@/lib/api-client";
+import { useSessionStore } from "@/stores/session-store";
+import { cn } from "@/lib/cn";
+import {
+  Monitor,
+  Upload,
+  ImageIcon,
+  Settings,
+  CreditCard,
+  Zap,
+  Check,
+  Loader2,
+  ToggleLeft,
+  ToggleRight,
+} from "lucide-react";
+import { resolveTvLocale, tvI18n, type TvLocale } from "@/i18n/tv-i18n";
+import { VIETQR_BANKS, buildVietQRUrl } from "@/lib/vietqr";
+
+export const dynamic = "force-dynamic";
+
+interface VenueSettings {
+  logoSpin?: boolean;
+  tvLocale?: string;
+  autoApprovalPhone?: string;
+  autoApprovalCCCD?: string;
+  sepayEnabled?: boolean;
+  autoPaymentEnabled?: boolean;
+  [key: string]: unknown;
+}
+
+interface Venue {
+  id: string;
+  name: string;
+  logoUrl: string | null;
+  tvText: string | null;
+  settings: VenueSettings;
+  bankName: string | null;
+  bankAccount: string | null;
+  bankOwnerName: string | null;
+}
+
+type Tab = "config" | "auto-payment";
+
+export default function CourtPaySettingsPage() {
+  const [activeTab, setActiveTab] = useState<Tab>("config");
+  const [venues, setVenues] = useState<Venue[]>([]);
+  const [selectedVenueId, setSelectedVenueId] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+
+  const fetchVenues = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await api.get<Venue[]>("/api/admin/venues");
+      setVenues(data);
+      if (data.length > 0 && !selectedVenueId) {
+        setSelectedVenueId(data[0].id);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedVenueId]);
+
+  useEffect(() => {
+    void fetchVenues();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const selectedVenue = venues.find((v) => v.id === selectedVenueId) ?? null;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <Settings className="h-6 w-6 text-purple-400" />
+        <h1 className="text-xl font-bold text-white">CourtPay Settings</h1>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-neutral-800">
+        <button
+          onClick={() => setActiveTab("config")}
+          className={cn(
+            "px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px",
+            activeTab === "config"
+              ? "border-purple-500 text-white"
+              : "border-transparent text-neutral-400 hover:text-white"
+          )}
+        >
+          Config
+        </button>
+        <button
+          onClick={() => setActiveTab("auto-payment")}
+          className={cn(
+            "flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px",
+            activeTab === "auto-payment"
+              ? "border-purple-500 text-white"
+              : "border-transparent text-neutral-400 hover:text-white"
+          )}
+        >
+          <Zap className="h-3.5 w-3.5" />
+          Auto-payment
+        </button>
+      </div>
+
+      {/* Venue selector — shared across tabs */}
+      <div className="flex items-center gap-3">
+        <label className="text-sm text-neutral-400 whitespace-nowrap">Venue</label>
+        <select
+          value={selectedVenueId}
+          onChange={(e) => setSelectedVenueId(e.target.value)}
+          className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
+        >
+          {venues.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {loading && (
+        <p className="text-sm text-neutral-500">Loading venues…</p>
+      )}
+
+      {!loading && !selectedVenue && (
+        <p className="text-sm text-neutral-500">No venues available.</p>
+      )}
+
+      {activeTab === "config" && selectedVenue && (
+        <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 md:p-5">
+          <TVDisplaySettings
+            key={selectedVenue.id}
+            venueId={selectedVenue.id}
+            venueName={selectedVenue.name}
+            logoUrl={selectedVenue.logoUrl}
+            tvText={selectedVenue.tvText}
+            settings={selectedVenue.settings}
+            onRefresh={fetchVenues}
+          />
+        </div>
+      )}
+
+      {activeTab === "auto-payment" && selectedVenue && (
+        <AutoPaymentSettings
+          key={selectedVenue.id}
+          venue={selectedVenue}
+          onRefresh={fetchVenues}
+        />
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Auto-payment Settings Tab
+// ---------------------------------------------------------------------------
+
+function AutoPaymentSettings({
+  venue,
+  onRefresh,
+}: {
+  venue: Venue;
+  onRefresh: () => void;
+}) {
+  const token = useSessionStore((s) => s.token);
+
+  // Payment fields (shared with staff profile)
+  const [bankName, setBankName] = useState(venue.bankName || "");
+  const [bankAccount, setBankAccount] = useState(venue.bankAccount || "");
+  const [bankOwnerName, setBankOwnerName] = useState(venue.bankOwnerName || "");
+
+  // Sepay-specific identity fields
+  const [autoApprovalPhone, setAutoApprovalPhone] = useState(
+    typeof venue.settings.autoApprovalPhone === "string" ? venue.settings.autoApprovalPhone : ""
+  );
+  const [autoApprovalCCCD, setAutoApprovalCCCD] = useState(
+    typeof venue.settings.autoApprovalCCCD === "string" ? venue.settings.autoApprovalCCCD : ""
+  );
+
+  // Gateway + auto-payment toggles
+  const [sepayEnabled, setSepayEnabled] = useState(venue.settings.sepayEnabled === true);
+  const [autoPaymentEnabled, setAutoPaymentEnabled] = useState(
+    venue.settings.autoPaymentEnabled === true
+  );
+
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [qrExpanded, setQrExpanded] = useState(false);
+
+  // Sync when venue changes
+  useEffect(() => {
+    setBankName(venue.bankName || "");
+    setBankAccount(venue.bankAccount || "");
+    setBankOwnerName(venue.bankOwnerName || "");
+    setAutoApprovalPhone(
+      typeof venue.settings.autoApprovalPhone === "string" ? venue.settings.autoApprovalPhone : ""
+    );
+    setAutoApprovalCCCD(
+      typeof venue.settings.autoApprovalCCCD === "string" ? venue.settings.autoApprovalCCCD : ""
+    );
+    setSepayEnabled(venue.settings.sepayEnabled === true);
+    setAutoPaymentEnabled(venue.settings.autoPaymentEnabled === true);
+  }, [venue]);
+
+  const qrPreviewUrl = useMemo(() => {
+    if (!bankName || !bankAccount) return null;
+    return buildVietQRUrl({
+      bankBin: bankName,
+      accountNumber: bankAccount,
+      accountName: bankOwnerName,
+      amount: 10000,
+      description: "CourtPay Preview",
+    });
+  }, [bankName, bankAccount, bankOwnerName]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveError("");
+    setSaved(false);
+    try {
+      const res = await fetch("/api/admin/courtpay-payment-settings", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          venueId: venue.id,
+          bankName,
+          bankAccount,
+          bankOwnerName,
+          autoApprovalPhone,
+          autoApprovalCCCD,
+          sepayEnabled,
+          autoPaymentEnabled,
+        }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+      await onRefresh();
+    } catch {
+      setSaveError("Failed to save settings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggleSepay = async (value: boolean) => {
+    setSepayEnabled(value);
+    try {
+      const res = await fetch("/api/admin/courtpay-payment-settings", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ venueId: venue.id, sepayEnabled: value }),
+      });
+      if (!res.ok) throw new Error("Toggle failed");
+      await onRefresh();
+    } catch {
+      setSepayEnabled(!value);
+    }
+  };
+
+  const handleToggleAutoPayment = async (value: boolean) => {
+    setAutoPaymentEnabled(value);
+    // Turning OFF auto-payment also clears the gateway selection
+    if (!value) setSepayEnabled(false);
+    try {
+      const res = await fetch("/api/admin/courtpay-payment-settings", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          venueId: venue.id,
+          autoPaymentEnabled: value,
+          ...(!value ? { sepayEnabled: false } : {}),
+        }),
+      });
+      if (!res.ok) throw new Error("Toggle failed");
+      await onRefresh();
+    } catch {
+      setAutoPaymentEnabled(!value);
+      if (!value) setSepayEnabled(sepayEnabled);
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* 1. Auto-payment confirmation toggle — always first */}
+      <div className={cn(
+        "rounded-xl border p-4 md:p-5 space-y-3 transition-colors",
+        autoPaymentEnabled
+          ? "border-green-800/50 bg-green-950/10"
+          : "border-neutral-800 bg-neutral-900"
+      )}>
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            {autoPaymentEnabled ? (
+              <ToggleRight className="h-5 w-5 shrink-0 text-green-400" />
+            ) : (
+              <ToggleLeft className="h-5 w-5 shrink-0 text-neutral-500" />
+            )}
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-white">Auto-payment confirmation</p>
+              <p className="text-[11px] text-neutral-500 mt-0.5 leading-snug">
+                {autoPaymentEnabled
+                  ? "Payments are confirmed automatically via the selected gateway"
+                  : "Staff confirm payments manually — uses the standard VietQR"}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleToggleAutoPayment(!autoPaymentEnabled)}
+            className={cn(
+              "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none",
+              autoPaymentEnabled ? "bg-green-500" : "bg-neutral-700"
+            )}
+          >
+            <span
+              className={cn(
+                "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200",
+                autoPaymentEnabled ? "translate-x-5" : "translate-x-0"
+              )}
+            />
+          </button>
+        </div>
+      </div>
+
+      {/* 2. Payment Settings — always visible (shared with staff profile / simple VietQR) */}
+      <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 md:p-5 space-y-4">
+        <div className="flex items-center gap-2">
+          <CreditCard className="h-4 w-4 text-green-400" />
+          <p className="text-sm font-semibold text-white">Payment Settings</p>
+          <span className="text-[11px] text-neutral-500">— shared with staff payment profile</span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="mb-0.5 block text-[11px] text-neutral-500">Bank</label>
+            <select
+              value={bankName}
+              onChange={(e) => setBankName(e.target.value)}
+              className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none"
+            >
+              <option value="">— select —</option>
+              {VIETQR_BANKS.map((b) => (
+                <option key={b.bin} value={b.bin}>
+                  {b.name} — {b.bin}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-0.5 block text-[11px] text-neutral-500">Account Number</label>
+            <input
+              type="text"
+              value={bankAccount}
+              onChange={(e) => setBankAccount(e.target.value)}
+              placeholder="Account #"
+              className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-0.5 block text-[11px] text-neutral-500">Account Owner Name</label>
+          <input
+            type="text"
+            value={bankOwnerName}
+            onChange={(e) => setBankOwnerName(e.target.value)}
+            placeholder="Account name"
+            className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none"
+          />
+        </div>
+
+        {/* QR Preview */}
+        {qrPreviewUrl ? (
+          <button
+            type="button"
+            onClick={() => setQrExpanded((v) => !v)}
+            className={
+              qrExpanded
+                ? "flex w-full flex-col items-center gap-2 rounded-lg border border-neutral-800 bg-black/40 p-3 transition-all"
+                : "flex w-full items-start gap-3 rounded-lg border border-neutral-800 bg-black/40 p-2 text-left transition-all"
+            }
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={qrPreviewUrl}
+              alt="VietQR preview"
+              className={
+                qrExpanded
+                  ? "w-full max-w-xs rounded-md bg-white object-contain transition-all"
+                  : "h-24 w-24 shrink-0 rounded-md bg-white object-contain transition-all"
+              }
+            />
+            <div className={qrExpanded ? "w-full space-y-0.5 text-center" : "min-w-0 flex-1 space-y-0.5 pt-1"}>
+              <p className="text-[11px] font-medium text-purple-400">
+                {qrExpanded ? "Tap to collapse" : "QR Preview"}
+              </p>
+              <p className="truncate text-xs text-neutral-300">
+                {VIETQR_BANKS.find((b) => b.bin === bankName)?.name}
+              </p>
+              <p className="truncate text-xs text-neutral-500">{bankAccount}</p>
+              <p className="truncate text-xs text-neutral-500">{bankOwnerName}</p>
+            </div>
+          </button>
+        ) : bankName || bankAccount ? (
+          <p className="rounded-lg border border-amber-800/40 bg-amber-950/30 px-3 py-1.5 text-[11px] text-amber-400">
+            Fill bank and account # to see QR preview
+          </p>
+        ) : null}
+      </div>
+
+      {/* 3. Gateway + Identity — only visible when auto-payment is ON */}
+      {autoPaymentEnabled && (
+        <>
+          {/* Payment Gateway selector */}
+          <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 md:p-5 space-y-4">
+            <div className="flex items-center gap-2">
+              <Zap className="h-4 w-4 text-purple-400" />
+              <div>
+                <p className="text-sm font-semibold text-white">Payment Gateway</p>
+                <p className="text-[11px] text-neutral-500 mt-0.5">
+                  Select the service that will detect and confirm bank transfers automatically
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              {/* Sepay */}
+              <button
+                type="button"
+                onClick={() => void handleToggleSepay(!sepayEnabled)}
+                className={cn(
+                  "relative flex flex-col items-start gap-2 rounded-xl border p-4 text-left transition-all",
+                  sepayEnabled
+                    ? "border-purple-500 bg-purple-500/10"
+                    : "border-neutral-700 bg-neutral-900/60 hover:border-neutral-600"
+                )}
+              >
+                <div className="flex w-full items-center justify-between">
+                  <span className="text-sm font-semibold text-white">Sepay</span>
+                  <div
+                    className={cn(
+                      "h-4 w-4 rounded-full border-2 transition-colors",
+                      sepayEnabled
+                        ? "border-purple-500 bg-purple-500"
+                        : "border-neutral-600 bg-transparent"
+                    )}
+                  />
+                </div>
+                <p className="text-[11px] text-neutral-400 leading-snug">
+                  Bank transfer detection via Sepay webhook
+                </p>
+                {sepayEnabled && (
+                  <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-[10px] font-medium text-purple-300">
+                    Active
+                  </span>
+                )}
+              </button>
+
+              {/* PayOS — coming soon */}
+              <div className="relative flex flex-col items-start gap-2 rounded-xl border border-neutral-800 bg-neutral-900/40 p-4 opacity-50 cursor-not-allowed">
+                <div className="flex w-full items-center justify-between">
+                  <span className="text-sm font-semibold text-neutral-400">PayOS</span>
+                  <div className="h-4 w-4 rounded-full border-2 border-neutral-700 bg-transparent" />
+                </div>
+                <p className="text-[11px] text-neutral-500 leading-snug">
+                  QR code payment gateway
+                </p>
+                <span className="rounded-full bg-neutral-800 px-2 py-0.5 text-[10px] font-medium text-neutral-500">
+                  Coming soon
+                </span>
+              </div>
+            </div>
+
+            {!sepayEnabled && (
+              <p className="rounded-lg border border-amber-800/40 bg-amber-950/30 px-3 py-2 text-[11px] text-amber-400">
+                Select a gateway above to enable automatic payment confirmation.
+              </p>
+            )}
+          </div>
+
+          {/* Sepay Identity — only when Sepay is selected */}
+          {sepayEnabled && (
+            <div className="rounded-xl border border-fuchsia-900/30 bg-fuchsia-950/10 p-4 md:p-5 space-y-4">
+              <div className="flex items-center gap-2">
+                <Zap className="h-4 w-4 text-fuchsia-400" />
+                <div>
+                  <p className="text-sm font-semibold text-white">Sepay Identity</p>
+                  <p className="text-[11px] text-neutral-500 mt-0.5">
+                    Phone and CCCD linked to the bank account in Sepay
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="mb-0.5 block text-[11px] text-neutral-500">Phone Number</label>
+                  <input
+                    type="tel"
+                    inputMode="tel"
+                    value={autoApprovalPhone}
+                    onChange={(e) => setAutoApprovalPhone(e.target.value)}
+                    placeholder="0912 345 678"
+                    className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm text-white placeholder:text-neutral-600 focus:border-fuchsia-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-0.5 block text-[11px] text-neutral-500">CCCD / ID Number</label>
+                  <input
+                    type="text"
+                    value={autoApprovalCCCD}
+                    onChange={(e) => setAutoApprovalCCCD(e.target.value)}
+                    placeholder="012 345 678 901"
+                    className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm text-white placeholder:text-neutral-600 focus:border-fuchsia-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {saveError && <p className="text-xs text-red-400">{saveError}</p>}
+
+      <button
+        type="button"
+        disabled={saving}
+        onClick={() => void handleSave()}
+        className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-purple-600 py-2.5 text-sm font-semibold text-white hover:bg-purple-500 disabled:opacity-50 transition-colors"
+      >
+        {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+        {saved && <Check className="h-3.5 w-3.5" />}
+        {saved ? "Saved!" : "Save Settings"}
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// TV Display Settings (Config tab — unchanged)
+// ---------------------------------------------------------------------------
+
+function TVDisplaySettings({
+  venueId,
+  logoUrl,
+  tvText,
+  settings,
+  onRefresh,
+}: {
+  venueId: string;
+  venueName: string;
+  logoUrl: string | null;
+  tvText: string | null;
+  settings: VenueSettings;
+  onRefresh: () => void;
+}) {
+  const [text, setText] = useState(tvText || "");
+  const [spin, setSpin] = useState(!!settings.logoSpin);
+  const [savingText, setSavingText] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [removingLogo, setRemovingLogo] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const textDirty = text !== (tvText || "");
+
+  useEffect(() => { setSpin(!!settings.logoSpin); }, [settings.logoSpin]);
+  useEffect(() => { setText(tvText || ""); }, [tvText]);
+
+  const uploadLogo = async (file: File) => {
+    setUploading(true);
+    try {
+      const token = useSessionStore.getState().token;
+      const form = new FormData();
+      form.append("logo", file);
+      const res = await fetch(`/api/venues/${venueId}/logo`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      await onRefresh();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeLogo = async () => {
+    setRemovingLogo(true);
+    try {
+      const token = useSessionStore.getState().token;
+      const res = await fetch(`/api/venues/${venueId}/logo`, {
+        method: "DELETE",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Delete failed");
+      }
+      await onRefresh();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setRemovingLogo(false);
+    }
+  };
+
+  const saveText = async () => {
+    setSavingText(true);
+    try {
+      await api.patch(`/api/venues/${venueId}`, {
+        tvText: text.trim() || null,
+      });
+      await onRefresh();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setSavingText(false);
+    }
+  };
+
+  const toggleSpin = async (checked: boolean) => {
+    setSpin(checked);
+    try {
+      await api.patch(`/api/venues/${venueId}`, {
+        settings: { ...settings, logoSpin: checked },
+      });
+      await onRefresh();
+    } catch (e) {
+      alert((e as Error).message);
+      setSpin(!checked);
+    }
+  };
+
+  const tvLocale = resolveTvLocale(settings.tvLocale);
+  const previewT = tvI18n.getFixedT(tvLocale);
+
+  const setDisplayLanguage = async (loc: TvLocale) => {
+    try {
+      await api.patch(`/api/venues/${venueId}`, {
+        settings: { ...settings, tvLocale: loc },
+      });
+      await onRefresh();
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  };
+
+  const previewText = text || tvText || "";
+  const previewLines = previewText ? previewText.split("\n").slice(0, 4) : [];
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <h4 className="flex items-center gap-2 text-sm font-medium text-neutral-400 uppercase tracking-wider">
+          <Monitor className="h-4 w-4" /> TV Display
+        </h4>
+        <p className="text-xs text-neutral-600 mt-0.5 ml-6">Waiting Screen</p>
+      </div>
+
+      <div className="flex gap-4">
+        {/* Left: Controls */}
+        <div className="flex-1 min-w-0 space-y-3">
+          {/* Logo upload */}
+          <div className="space-y-2">
+            <label className="text-xs text-neutral-500">Venue Logo</label>
+            <div className="flex items-center gap-3">
+              {logoUrl ? (
+                <div className="relative h-14 w-14 shrink-0 rounded-full border border-neutral-700 bg-neutral-800 flex items-center justify-center overflow-hidden">
+                  <img src={logoUrl} alt="Venue logo" className="h-full w-full object-cover" />
+                </div>
+              ) : (
+                <div className="h-14 w-14 shrink-0 rounded-full border border-dashed border-neutral-700 bg-neutral-800/50 flex items-center justify-center">
+                  <ImageIcon className="h-5 w-5 text-neutral-600" />
+                </div>
+              )}
+              <div className="flex flex-col gap-1.5">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) uploadLogo(file);
+                    e.target.value = "";
+                  }}
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className="flex items-center gap-1.5 rounded-lg bg-neutral-800 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:bg-neutral-700 disabled:opacity-40"
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  {uploading ? "Uploading..." : logoUrl ? "Replace Logo" : "Upload Logo"}
+                </button>
+                {logoUrl && (
+                  <button
+                    onClick={removeLogo}
+                    disabled={removingLogo}
+                    className="text-xs text-neutral-500 hover:text-red-400 text-left disabled:opacity-40"
+                  >
+                    {removingLogo ? "Removing..." : "Remove logo"}
+                  </button>
+                )}
+              </div>
+            </div>
+            <p className="text-xs text-neutral-600">PNG, JPEG, WebP, or SVG. Max 5 MB.</p>
+          </div>
+
+          {/* Spin toggle */}
+          {logoUrl && (
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={spin}
+                onChange={(e) => toggleSpin(e.target.checked)}
+                className="h-4 w-4 rounded border-neutral-600 bg-neutral-800 text-purple-500 focus:ring-purple-500 focus:ring-offset-0 accent-purple-500"
+              />
+              <span className="text-xs text-neutral-400">Rotate logo 360° on TV</span>
+            </label>
+          )}
+
+          <div className="space-y-2">
+            <label className="text-xs text-neutral-500">TV display language</label>
+            <div className="inline-flex rounded-lg border border-neutral-700 p-0.5 bg-neutral-900/80">
+              <button
+                type="button"
+                onClick={() => setDisplayLanguage("en")}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                  tvLocale === "en"
+                    ? "bg-purple-600 text-white"
+                    : "text-neutral-400 hover:text-white hover:bg-neutral-800"
+                )}
+                title="English"
+              >
+                <span className="text-base leading-none" aria-hidden>🇬🇧</span>
+                English
+              </button>
+              <button
+                type="button"
+                onClick={() => setDisplayLanguage("vi")}
+                className={cn(
+                  "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                  tvLocale === "vi"
+                    ? "bg-purple-600 text-white"
+                    : "text-neutral-400 hover:text-white hover:bg-neutral-800"
+                )}
+                title="Tiếng Việt"
+              >
+                <span className="text-base leading-none" aria-hidden>🇻🇳</span>
+                Tiếng Việt
+              </button>
+            </div>
+            <p className="text-xs text-neutral-600">
+              On-screen text on <code className="text-neutral-500">/tv</code> uses this language. Custom lines above stay as you type them.
+            </p>
+          </div>
+
+          {/* TV Text */}
+          <div className="space-y-2">
+            <label className="text-xs text-neutral-500">Custom Text (1–4 lines)</label>
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={4}
+              placeholder={"e.g.\nWelcome to ACE SQUAD\nThe Granary\nSessions every Wednesday 7pm"}
+              className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none resize-none"
+            />
+            {textDirty && (
+              <button
+                onClick={saveText}
+                disabled={savingText}
+                className="rounded-lg bg-purple-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-40"
+              >
+                {savingText ? "Saving..." : "Save Text"}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Right: Live preview */}
+        <div className="shrink-0 w-56 md:w-64">
+          <p className="text-xs text-neutral-600 mb-1.5 text-center">Preview</p>
+          <div className="rounded-xl border border-neutral-800 bg-black aspect-video flex flex-col items-center justify-center gap-2.5 p-3 overflow-hidden">
+            {logoUrl ? (
+              <div className={cn(
+                "h-12 w-12 md:h-14 md:w-14 shrink-0 rounded-full overflow-hidden border border-neutral-700 bg-neutral-900",
+                spin && "animate-flip-y"
+              )}>
+                <img src={logoUrl} alt="Preview" className="h-full w-full object-cover" />
+              </div>
+            ) : (
+              <div className="h-12 w-12 md:h-14 md:w-14 shrink-0 rounded-full border border-dashed border-neutral-700 bg-neutral-900 flex items-center justify-center">
+                <ImageIcon className="h-4 w-4 text-neutral-700" />
+              </div>
+            )}
+            {previewLines.length > 0 && (
+              <div className="text-center space-y-0.5 max-w-full">
+                {previewLines.map((line, i) => (
+                  <p key={i} className={cn(
+                    "truncate text-neutral-500",
+                    i === 0 ? "text-[10px] font-semibold text-neutral-400" : "text-[8px]"
+                  )}>{line}</p>
+                ))}
+              </div>
+            )}
+            <p className="text-[8px] text-neutral-700 mt-0.5">{previewT("waitingSessionStart")}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

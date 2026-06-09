@@ -65,11 +65,19 @@ async function handleBillingPayment(
 /**
  * Process a SePay webhook payload: match payment, confirm, and activate subscription if applicable.
  * Returns true if a payment was matched and processed.
+ *
+ * Deduplication: SePay may send the same transaction multiple times (auto-retry up to 7×,
+ * plus manual replay from dashboard). We guard against this by checking whether the
+ * PendingPayment is still in "pending" status before writing — the unique paymentRef + status
+ * check makes the handler naturally idempotent without a separate log table.
  */
 export async function processSepayWebhook(
   payload: SepayWebhookPayload
 ): Promise<{ matched: boolean; paymentId?: string }> {
-  const ref = extractPaymentRef(payload.content);
+  // Prefer the pre-extracted `code` field (SePay parses it from content via payment prefix config).
+  // Fall back to regex scan of the raw `content` string if `code` is null/empty.
+  const searchText = payload.code || payload.content;
+  const ref = extractPaymentRef(searchText);
   if (!ref) {
     return { matched: false };
   }
@@ -88,6 +96,17 @@ export async function processSepayWebhook(
   }
 
   if (payload.transferAmount < pending.amount) {
+    return { matched: false };
+  }
+
+  // Only auto-confirm if the venue has auto-payment enabled via Sepay
+  const venue = await prisma.venue.findUnique({
+    where: { id: pending.venueId },
+    select: { settings: true },
+  });
+  const venueSettings = (venue?.settings ?? {}) as Record<string, unknown>;
+  if (!venueSettings.autoPaymentEnabled || !venueSettings.sepayEnabled) {
+    console.log(`[sepay-webhook] Auto-payment disabled for venue ${pending.venueId} — skipping auto-confirm`);
     return { matched: false };
   }
 

@@ -73,6 +73,7 @@ enum GamePreference {
 
 enum StaffRole {
   staff
+  manager
   superadmin
 }
 
@@ -132,6 +133,9 @@ model Venue {
   createdAt          DateTime  @default(now()) @map("created_at")
 
   billingStatus String @default("active") @map("billing_status")
+
+  ownerId String? @map("owner_id")
+  owner   StaffMember? @relation("VenueOwner", fields: [ownerId], references: [id], onDelete: SetNull)
 
   courts               Court[]
   sessions             Session[]
@@ -271,6 +275,7 @@ model StaffMember {
   faceRecognitionLogs   FaceRecognitionLog[]
   customPrices          PlayerCustomPrice[]
   authLogs              StaffAuthLog[]
+  ownedVenues           Venue[]  @relation("VenueOwner")
 
   @@map("staff_members")
 }
