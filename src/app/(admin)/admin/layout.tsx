@@ -7,7 +7,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { applyThemeMode, getStoredThemeMode, setStoredThemeMode, type ThemeMode } from "@/lib/theme-mode";
-import { LayoutDashboard, MapPin, Users, UserCircle, BarChart3, Monitor, Banknote, Crown, CalendarDays, GraduationCap, LogOut, Menu, X, CreditCard, Receipt, ScanFace, Sun, Moon, ChevronLeft, ChevronDown, ChevronRight, ShoppingBag, AlertTriangle, PieChart, ShieldAlert } from "lucide-react";
+import { LayoutDashboard, MapPin, Users, UserCircle, BarChart3, Monitor, Banknote, Crown, CalendarDays, GraduationCap, LogOut, Menu, X, CreditCard, Receipt, ScanFace, Sun, Moon, ChevronLeft, ChevronDown, ChevronRight, ShoppingBag, AlertTriangle, PieChart, ShieldAlert, Wallet, Settings } from "lucide-react";
 import { SetupWizardBanner } from "@/components/setup-wizard-banner";
 import { AiChatWidget } from "@/components/admin/AiChatWidget";
 
@@ -15,10 +15,12 @@ interface NavItem {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
+  superadminOnly?: boolean;
 }
 
 interface NavSection {
   label: string;
+  superadminOnly?: boolean;
   items: NavItem[];
 }
 
@@ -31,6 +33,7 @@ const topNavItems: NavItem[] = [
   { href: "/admin/staff", label: "Staff", icon: Users },
   { href: "/admin/players", label: "Players", icon: UserCircle },
   { href: "/admin/venue-analytics", label: "Venue Analytics", icon: PieChart },
+  { href: "/admin/my-billing", label: "My Billing", icon: Wallet, superadminOnly: false },
 ];
 
 const navSections: NavSection[] = [
@@ -38,7 +41,7 @@ const navSections: NavSection[] = [
     label: "CourtFlow - Social",
     items: [
       { href: "/admin/live", label: "Live Sessions", icon: Monitor },
-      { href: "/admin/payroll", label: "Payroll Hosts", icon: Banknote },
+      { href: "/admin/payroll", label: "Payroll Hosts", icon: Banknote, superadminOnly: true },
       { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
     ],
   },
@@ -46,13 +49,15 @@ const navSections: NavSection[] = [
     label: "CourtPay - Check-in",
     items: [
       { href: "/admin/courtpay", label: "CourtPay", icon: CreditCard },
-      { href: "/admin/courtpay-billing", label: "CP Billing", icon: Receipt },
-      { href: "/admin/kiosk-shop", label: "Kiosk Shop", icon: ShoppingBag },
+      { href: "/admin/courtpay-billing", label: "CP Billing", icon: Receipt, superadminOnly: true },
+      { href: "/admin/kiosk-shop", label: "Kiosk Shop", icon: ShoppingBag, superadminOnly: true },
       { href: "/admin/courtpay-analytics", label: "CP Analytics", icon: BarChart3 },
+      { href: "/admin/courtpay-settings", label: "CP Settings", icon: Settings },
     ],
   },
   {
     label: "Logs & Errors",
+    superadminOnly: true,
     items: [
       { href: "/admin/logs", label: "Logs", icon: ShieldAlert },
       { href: "/admin/face-recognition-test", label: "Face Recognition Test", icon: ScanFace },
@@ -61,10 +66,22 @@ const navSections: NavSection[] = [
   },
 ];
 
-const allNavItems: NavItem[] = [
-  ...topNavItems,
-  ...navSections.flatMap((s) => s.items),
-];
+function getFilteredNav(userRole: string) {
+  const isSuperAdmin = userRole === "superadmin";
+  const filteredTop = topNavItems.filter((item) => isSuperAdmin || !item.superadminOnly);
+  const filteredSections = navSections
+    .filter((section) => isSuperAdmin || !section.superadminOnly)
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => isSuperAdmin || !item.superadminOnly),
+    }))
+    .filter((section) => section.items.length > 0);
+  const allItems = [...filteredTop, ...filteredSections.flatMap((s) => s.items)];
+  return { topNavItems: filteredTop, navSections: filteredSections, allNavItems: allItems };
+}
+
+const isAdminRole = (r: string | null): r is "superadmin" | "manager" =>
+  r === "superadmin" || r === "manager";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { token, role, onboardingCompleted, clearAuth, staffPhone, staffName } = useSessionStore();
@@ -77,6 +94,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     try { return JSON.parse(localStorage.getItem("admin-nav-sections") || "{}"); } catch { return {}; }
   });
 
+  const { topNavItems: visibleTopItems, navSections: visibleSections, allNavItems: visibleAllItems } = getFilteredNav(role ?? "");
+
   const toggleSection = (label: string) => {
     setCollapsedSections((prev) => {
       const next = { ...prev, [label]: !prev[label] };
@@ -86,7 +105,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   };
 
   useEffect(() => {
-    if (token && role === "superadmin" && onboardingCompleted === false) {
+    if (token && isAdminRole(role) && onboardingCompleted === false) {
       router.replace("/onboarding");
     }
   }, [token, role, onboardingCompleted, router]);
@@ -110,11 +129,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     });
   };
 
-  if (!token || role !== "superadmin") {
+  if (!token || !isAdminRole(role)) {
     return (
       <div className="flex min-h-dvh items-center justify-center p-6">
         <div className="text-center">
-          <h1 className="mb-4 text-2xl font-bold text-purple-500">Super Admin</h1>
+          <h1 className="mb-4 text-2xl font-bold text-purple-500">Admin Panel</h1>
           <p className="mb-4 text-neutral-400">Please log in via the Staff portal first.</p>
           <Link href="/staff" className="text-blue-400 hover:underline">
             Go to Staff Login
@@ -132,7 +151,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <aside className="hidden md:block w-56 shrink-0 border-r border-neutral-800 p-4">
         <div className="mb-6">
           <div className="flex items-center justify-between gap-2">
-            <h1 className="text-lg font-bold text-purple-500">Admin Panel</h1>
+            <h1 className="text-lg font-bold text-purple-500">{role === "manager" ? "Manager Panel" : "Admin Panel"}</h1>
             <button
               type="button"
               onClick={toggleThemeMode}
@@ -152,7 +171,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
 
         <nav className="space-y-1">
-          {topNavItems.map((item) => {
+          {visibleTopItems.map((item) => {
             const active = pathname === item.href;
             return (
               <Link
@@ -171,7 +190,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             );
           })}
 
-          {navSections.map((section) => {
+          {visibleSections.map((section) => {
             const isCollapsed = collapsedSections[section.label] ?? false;
             const hasActive = section.items.some((item) => pathname === item.href);
             return (
@@ -244,7 +263,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
         <div className="min-w-0">
-          <h1 className="text-base font-bold text-purple-500">Admin Panel</h1>
+          <h1 className="text-base font-bold text-purple-500">{role === "manager" ? "Manager Panel" : "Admin Panel"}</h1>
           <p className="text-[10px] text-neutral-500 leading-none">CourtFlow</p>
         </div>
       </div>
@@ -254,7 +273,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="fixed inset-x-0 top-[57px] z-30 max-h-[min(70vh,calc(100dvh-9rem))] overflow-y-auto border-b border-neutral-800 bg-neutral-950/98 p-4 pb-6 backdrop-blur-sm md:hidden">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">Pages</p>
           <nav className="space-y-0.5">
-            {topNavItems.map((item) => {
+            {visibleTopItems.map((item) => {
               const active = pathname === item.href;
               return (
                 <Link
@@ -273,7 +292,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               );
             })}
 
-            {navSections.map((section) => {
+            {visibleSections.map((section) => {
               const isCollapsed = collapsedSections[section.label] ?? false;
               const hasActive = section.items.some((item) => pathname === item.href);
               return (
@@ -359,7 +378,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Mobile bottom tab bar — horizontal scroll */}
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-950/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm md:hidden">
         <div className="flex max-w-full flex-nowrap items-end overflow-x-auto overscroll-x-contain [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-          {allNavItems.map((item) => {
+          {visibleAllItems.map((item) => {
             const active = pathname === item.href;
             return (
               <Link

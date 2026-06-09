@@ -7,7 +7,7 @@ const JWT_EXPIRES_IN = "30d";
 
 export interface JwtPayload {
   id: string;
-  role: "player" | "staff" | "superadmin";
+  role: "player" | "staff" | "manager" | "superadmin";
   venueId?: string;
 }
 
@@ -107,8 +107,16 @@ export function requireAuth(headers: Headers): JwtPayload {
 
 export function requireStaff(headers: Headers): JwtPayload {
   const payload = requireAuth(headers);
-  if (payload.role !== "staff" && payload.role !== "superadmin") {
+  if (payload.role !== "staff" && payload.role !== "manager" && payload.role !== "superadmin") {
     throw new Error("Staff access required");
+  }
+  return payload;
+}
+
+export function requireManagerOrSuperAdmin(headers: Headers): JwtPayload {
+  const payload = requireAuth(headers);
+  if (payload.role !== "manager" && payload.role !== "superadmin") {
+    throw new Error("Manager or super admin access required");
   }
   return payload;
 }

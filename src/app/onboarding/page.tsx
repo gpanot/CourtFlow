@@ -91,7 +91,7 @@ export default function OnboardingPage() {
 
   useEffect(() => {
     if (completed) return;
-    if (!token || role !== "superadmin") {
+    if (!token || (role !== "superadmin" && role !== "manager")) {
       router.replace("/staff");
       return;
     }
@@ -182,7 +182,7 @@ export default function OnboardingPage() {
     if (step > 0) setStep(step - 1);
   };
 
-  if (!token || role !== "superadmin") return null;
+  if (!token || (role !== "superadmin" && role !== "manager")) return null;
 
   if (completed && createdVenue) {
     return <CompletionScreen venue={createdVenue} onContinue={() => router.push("/admin/staff")} />;

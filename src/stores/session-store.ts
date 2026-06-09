@@ -7,7 +7,7 @@ import { SELECTED_CLIENT_STORAGE_KEY } from "@/config/clients";
 
 interface AuthState {
   token: string | null;
-  role: "player" | "staff" | "superadmin" | null;
+  role: "player" | "staff" | "manager" | "superadmin" | null;
   playerId: string | null;
   staffId: string | null;
   staffName: string | null;

@@ -1,12 +1,12 @@
 import { NextRequest } from "next/server";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireManagerOrSuperAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 
 export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   try {
-    const auth = requireSuperAdmin(request.headers);
+    const auth = requireManagerOrSuperAdmin(request.headers);
 
     const body = await parseBody<{
       venueName: string;
@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
         playFrequency: body.playFrequency || null,
         playTypes: body.playTypes || [],
         painPoints: body.painPoints || [],
+        ownerId: auth.role === "manager" ? auth.id : null,
         staffAssignments: {
           create: [{ staffId: auth.id, appAccess: ["courtflow"] }],
         },
