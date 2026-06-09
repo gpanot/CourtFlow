@@ -38,7 +38,7 @@ export default function StaffPage() {
     name: string;
     phone: string;
     password: string;
-    role: "staff" | "superadmin";
+    role: "staff" | "manager" | "superadmin";
     venueIds: string[];
     venueAppAccess: Record<string, StaffAppAccessKind[]>;
     isCoach: boolean;
@@ -96,7 +96,7 @@ export default function StaffPage() {
       name: s.name,
       phone: s.phone,
       password: "",
-      role: s.role as "staff" | "superadmin",
+      role: s.role as "staff" | "manager" | "superadmin",
       venueIds: s.venues.map((v) => v.id),
       venueAppAccess,
       isCoach: s.isCoach,
@@ -253,8 +253,8 @@ export default function StaffPage() {
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  {s.role === "superadmin" ? (
-                    <Shield className="h-4 w-4 text-purple-400 shrink-0" />
+                  {s.role === "superadmin" || s.role === "manager" ? (
+                    <Shield className={cn("h-4 w-4 shrink-0", s.role === "superadmin" ? "text-purple-400" : "text-blue-400")} />
                   ) : (
                     <User className="h-4 w-4 text-blue-400 shrink-0" />
                   )}
@@ -359,12 +359,14 @@ export default function StaffPage() {
                 <label className="mb-1.5 block text-sm text-neutral-400">Role</label>
                 <select
                   value={form.role}
-                  onChange={(e) => setForm({ ...form, role: e.target.value as "staff" | "superadmin" })}
+                  onChange={(e) => setForm({ ...form, role: e.target.value as "staff" | "manager" | "superadmin" })}
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-white focus:border-purple-500 focus:outline-none"
                 >
                   <option value="staff">Staff</option>
+                  <option value="manager">Manager</option>
                   <option value="superadmin">Super Admin</option>
                 </select>
+                <p className="mt-1 text-[10px] text-neutral-600">build: 2026-06-09 · roles: staff, manager, superadmin</p>
               </div>
 
               <div>
