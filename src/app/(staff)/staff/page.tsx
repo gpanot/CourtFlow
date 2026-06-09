@@ -64,6 +64,7 @@ export default function StaffPage() {
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
   const fingerprintRef = useRef<string | null>(null);
+  const roleRefreshedRef = useRef(false);
 
   // Collect browser fingerprint in the background as soon as page loads
   useEffect(() => {
@@ -100,6 +101,43 @@ export default function StaffPage() {
   /** Skip staff-me bootstrap when we already resolved client for this staff+venue (e.g. single-app proceed). */
   const clientResolvedForKeyRef = useRef<string | null>(null);
   const router = useRouter();
+
+  // Silently refresh the JWT when returning to this page with an existing session.
+  // This picks up role changes (e.g. staff → manager) without requiring a full logout.
+  useEffect(() => {
+    if (!token || roleRefreshedRef.current) return;
+    roleRefreshedRef.current = true;
+    void (async () => {
+      try {
+        const res = await fetch("/api/auth/staff-refresh", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json() as {
+          token: string;
+          staff: {
+            id: string; name: string; phone: string;
+            role: string; venues: StaffVenue[];
+            venueId: string | null; onboardingCompleted: boolean;
+          };
+        };
+        const currentRole = useSessionStore.getState().role;
+        if (data.staff.role !== currentRole) {
+          setAuth({
+            token: data.token,
+            role: data.staff.role as "staff" | "manager" | "superadmin",
+            staffName: data.staff.name,
+            onboardingCompleted: data.staff.onboardingCompleted,
+          });
+          setLoginVenues(data.staff.venues);
+        }
+      } catch {
+        // silent — refresh is best-effort
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
   useEffect(() => {
     const mode = getStoredThemeMode();
@@ -251,7 +289,7 @@ export default function StaffPage() {
       return;
     }
 
-    if (token && staffId && (role === "superadmin" || role === "staff")) {
+    if (token && staffId && (role === "superadmin" || role === "manager" || role === "staff")) {
       // Fresh login should always land on "Continue as...".
       if (freshLoginChoiceRef.current) {
         setShowRoleChoice(true);
@@ -492,7 +530,7 @@ export default function StaffPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {role === "superadmin" && (
+              {(role === "superadmin" || role === "manager") && (
                 <button
                   onClick={() => {
                     freshLoginChoiceRef.current = false;
@@ -591,19 +629,21 @@ export default function StaffPage() {
                 </button>
               )}
 
-              <button
-                type="button"
-                onClick={() => setShowStickerKiosk(true)}
-                className="group flex w-full items-center gap-4 rounded-2xl border border-amber-500/25 bg-amber-500/5 p-4 text-left transition-all hover:border-amber-500/45 hover:bg-amber-500/10"
-              >
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 transition-colors group-hover:bg-amber-500/25">
-                  <Layers className="h-5 w-5 shrink-0 text-amber-400" />
-                </div>
-                <div className="min-w-0">
-                  <p className="font-semibold text-white">Sticker Kiosk</p>
-                  <p className="text-xs text-neutral-400">Full-screen sticker dispensing kiosk</p>
-                </div>
-              </button>
+              {role !== "manager" && (
+                <button
+                  type="button"
+                  onClick={() => setShowStickerKiosk(true)}
+                  className="group flex w-full items-center gap-4 rounded-2xl border border-amber-500/25 bg-amber-500/5 p-4 text-left transition-all hover:border-amber-500/45 hover:bg-amber-500/10"
+                >
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 transition-colors group-hover:bg-amber-500/25">
+                    <Layers className="h-5 w-5 shrink-0 text-amber-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-white">Sticker Kiosk</p>
+                    <p className="text-xs text-neutral-400">Full-screen sticker dispensing kiosk</p>
+                  </div>
+                </button>
+              )}
 
               {showOtherAppsEntry ? (
                 <button
@@ -683,14 +723,14 @@ export default function StaffPage() {
         staffId: data.staff.id,
         staffName: data.staff.name,
         staffPhone: data.staff.phone,
-        role: data.staff.role as "staff" | "superadmin",
+        role: data.staff.role as "staff" | "manager" | "superadmin",
         venueId: data.staff.venueId,
         onboardingCompleted: data.staff.onboardingCompleted,
         rememberMe,
       });
       setLoginVenues(data.staff.venues);
 
-      if (data.staff.role === "superadmin") {
+      if (data.staff.role === "superadmin" || data.staff.role === "manager") {
         if (!data.staff.onboardingCompleted) {
           router.replace("/onboarding");
           return;
