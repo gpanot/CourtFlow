@@ -42,6 +42,26 @@ interface Venue {
   bankOwnerName: string | null;
 }
 
+interface SepayTestPayment {
+  pendingPaymentId: string;
+  paymentRef: string | null;
+  amount: number;
+  status: string;
+  createdAt: string;
+  expiresAt: string;
+  confirmedAt?: string | null;
+  confirmedBy?: string | null;
+  cancelledAt?: string | null;
+  cancelReason?: string | null;
+  paymentMethod?: string | null;
+  vietQR?: string | null;
+  bankBin?: string | null;
+  bankAccount?: string | null;
+  autoPaymentEnabled: boolean;
+  sepayEnabled: boolean;
+  debugHint?: string;
+}
+
 type Tab = "config" | "auto-payment";
 
 export default function CourtPaySettingsPage() {
@@ -191,6 +211,11 @@ function AutoPaymentSettings({
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [qrExpanded, setQrExpanded] = useState(false);
+  const [testAmount, setTestAmount] = useState("1000");
+  const [creatingTest, setCreatingTest] = useState(false);
+  const [testError, setTestError] = useState("");
+  const [testPayment, setTestPayment] = useState<SepayTestPayment | null>(null);
+  const [pollingTest, setPollingTest] = useState(false);
 
   // Sync when venue changes
   useEffect(() => {
@@ -217,6 +242,42 @@ function AutoPaymentSettings({
       description: "CourtPay Preview",
     });
   }, [bankName, bankAccount, bankOwnerName]);
+
+  const fetchTestStatus = useCallback(async () => {
+    if (!testPayment) return;
+    setPollingTest(true);
+    try {
+      const params = new URLSearchParams({
+        venueId: venue.id,
+        pendingPaymentId: testPayment.pendingPaymentId,
+      });
+      const res = await fetch(`/api/admin/courtpay-payment-test?${params.toString()}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error("Failed to load test status");
+      const data = (await res.json()) as SepayTestPayment;
+      setTestPayment((prev) => (prev ? { ...prev, ...data } : data));
+    } catch {
+      // best-effort polling, keep UI interactive
+    } finally {
+      setPollingTest(false);
+    }
+  }, [testPayment, token, venue.id]);
+
+  useEffect(() => {
+    if (!testPayment) return;
+    if (testPayment.status !== "pending") return;
+    const timer = window.setInterval(() => {
+      void fetchTestStatus();
+    }, 3500);
+    return () => window.clearInterval(timer);
+  }, [testPayment, fetchTestStatus]);
+
+  useEffect(() => {
+    setTestAmount("1000");
+    setTestError("");
+    setTestPayment(null);
+  }, [venue.id]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -291,6 +352,33 @@ function AutoPaymentSettings({
     } catch {
       setAutoPaymentEnabled(!value);
       if (!value) setSepayEnabled(sepayEnabled);
+    }
+  };
+
+  const createSepayTest = async () => {
+    const parsed = Number(testAmount);
+    const amount = Number.isFinite(parsed) ? Math.max(1000, Math.floor(parsed)) : 1000;
+    setCreatingTest(true);
+    setTestError("");
+    try {
+      const res = await fetch("/api/admin/courtpay-payment-test", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ venueId: venue.id, amount }),
+      });
+      const data = (await res.json()) as SepayTestPayment | { error?: string };
+      if (!res.ok) {
+        throw new Error((data as { error?: string }).error || "Failed to create test QR");
+      }
+      setTestAmount(String(amount));
+      setTestPayment(data as SepayTestPayment);
+    } catch (e) {
+      setTestError((e as Error).message || "Failed to create test QR");
+    } finally {
+      setCreatingTest(false);
     }
   };
 
@@ -531,6 +619,111 @@ function AutoPaymentSettings({
               </div>
             </div>
           )}
+
+          <div className="rounded-xl border border-cyan-900/30 bg-cyan-950/10 p-4 md:p-5 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-white">Test Sepay / PayOS</p>
+                <p className="text-[11px] text-neutral-500 mt-0.5">
+                  Generate a real venue-based test QR and monitor auto-confirm debug state.
+                </p>
+              </div>
+              {pollingTest && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-cyan-800/60 bg-cyan-950/40 px-2 py-0.5 text-[10px] text-cyan-300">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Polling
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-end gap-2">
+              <div>
+                <label className="mb-0.5 block text-[11px] text-neutral-500">Amount (VND)</label>
+                <input
+                  type="number"
+                  min={1000}
+                  step={1000}
+                  value={testAmount}
+                  onChange={(e) => setTestAmount(e.target.value)}
+                  className="w-36 rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm text-white placeholder:text-neutral-600 focus:border-cyan-500 focus:outline-none"
+                />
+              </div>
+              <button
+                type="button"
+                disabled={creatingTest}
+                onClick={() => void createSepayTest()}
+                className="inline-flex items-center gap-1.5 rounded-md bg-cyan-600 px-3 py-2 text-xs font-semibold text-white hover:bg-cyan-500 disabled:opacity-50"
+              >
+                {creatingTest && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Generate test QR
+              </button>
+              {testPayment && (
+                <button
+                  type="button"
+                  onClick={() => void fetchTestStatus()}
+                  className="rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs font-semibold text-neutral-300 hover:border-neutral-600 hover:text-white"
+                >
+                  Refresh debug
+                </button>
+              )}
+            </div>
+
+            {testPayment?.vietQR && (
+              <div className="rounded-lg border border-neutral-800 bg-black/40 p-3">
+                <div className="flex flex-wrap items-start gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={testPayment.vietQR}
+                    alt="Sepay test QR"
+                    className="h-36 w-36 rounded-md bg-white object-contain"
+                  />
+                  <div className="space-y-1 text-xs text-neutral-300">
+                    <p><span className="text-neutral-500">Ref:</span> <span className="font-mono">{testPayment.paymentRef || "-"}</span></p>
+                    <p><span className="text-neutral-500">Amount:</span> {testPayment.amount.toLocaleString()} VND</p>
+                    <p><span className="text-neutral-500">Bank:</span> {testPayment.bankBin || "-"} / {testPayment.bankAccount || "-"}</p>
+                    <p className="text-[11px] text-cyan-300/90">{testPayment.debugHint}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {testPayment && (
+              <div className="rounded-lg border border-neutral-800 bg-neutral-950/60 p-3 text-xs">
+                <p className="mb-2 font-semibold text-neutral-300">Debug status</p>
+                <div className="grid grid-cols-1 gap-1 text-neutral-400">
+                  <p>
+                    <span className="text-neutral-500">Status:</span>{" "}
+                    <span
+                      className={cn(
+                        "font-semibold",
+                        testPayment.status === "confirmed"
+                          ? "text-green-400"
+                          : testPayment.status === "pending"
+                            ? "text-amber-400"
+                            : "text-red-400"
+                      )}
+                    >
+                      {testPayment.status}
+                    </span>
+                  </p>
+                  <p><span className="text-neutral-500">Auto-payment:</span> {testPayment.autoPaymentEnabled ? "ON" : "OFF"}</p>
+                  <p><span className="text-neutral-500">Sepay gateway:</span> {testPayment.sepayEnabled ? "ON" : "OFF"}</p>
+                  <p><span className="text-neutral-500">Created:</span> {new Date(testPayment.createdAt).toLocaleString()}</p>
+                  <p><span className="text-neutral-500">Expires:</span> {new Date(testPayment.expiresAt).toLocaleString()}</p>
+                  <p><span className="text-neutral-500">Payment method:</span> {testPayment.paymentMethod || "-"}</p>
+                  <p><span className="text-neutral-500">Confirmed by:</span> {testPayment.confirmedBy || "-"}</p>
+                  <p><span className="text-neutral-500">Confirmed at:</span> {testPayment.confirmedAt ? new Date(testPayment.confirmedAt).toLocaleString() : "-"}</p>
+                  <p><span className="text-neutral-500">Cancel reason:</span> {testPayment.cancelReason || "-"}</p>
+                </div>
+              </div>
+            )}
+
+            {testError && (
+              <p className="rounded-md border border-red-900/60 bg-red-950/20 px-3 py-2 text-[11px] text-red-300">
+                {testError}
+              </p>
+            )}
+          </div>
         </>
       )}
 
