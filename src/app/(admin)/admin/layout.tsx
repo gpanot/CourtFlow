@@ -132,12 +132,32 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (!token || !isAdminRole(role)) {
     return (
       <div className="flex min-h-dvh items-center justify-center p-6">
-        <div className="text-center">
+        <div className="text-center max-w-sm">
           <h1 className="mb-4 text-2xl font-bold text-purple-500">Admin Panel</h1>
           <p className="mb-4 text-neutral-400">Please log in via the Staff portal first.</p>
           <Link href="/staff" className="text-blue-400 hover:underline">
             Go to Staff Login
           </Link>
+          {/* Debug: show what role is cached — helps diagnose stale-session issues after role promotion */}
+          <div className="mt-6 rounded-lg border border-amber-800/50 bg-amber-950/30 px-4 py-3 text-left text-xs font-mono">
+            <p className="mb-1 font-semibold text-amber-400">🔍 Debug — session store</p>
+            <p className="text-neutral-400">token: <span className="text-white">{token ? `${token.slice(0, 20)}…` : "null"}</span></p>
+            <p className="text-neutral-400">role: <span className="text-white">{role ?? "null"}</span></p>
+            <p className="mt-2 text-amber-300/80">
+              {token && role === "staff"
+                ? "⚠️ Your role was recently changed to Manager. You need to sign out and sign back in to get a new session with the updated role."
+                : "No valid admin session found."}
+            </p>
+            {token && role === "staff" && (
+              <button
+                type="button"
+                onClick={clearAuth}
+                className="mt-3 w-full rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-500"
+              >
+                Sign out &amp; re-login →
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
