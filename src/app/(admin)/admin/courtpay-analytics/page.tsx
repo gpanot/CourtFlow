@@ -16,9 +16,11 @@ import {
   XCircle,
   CreditCard,
   ArrowLeft,
+  Trash2,
 } from "lucide-react";
 import type { PaymentDetailRow } from "@/lib/courtpay-analytics";
 import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
+import { useSessionStore } from "@/stores/session-store";
 
 export const dynamic = "force-dynamic";
 
@@ -480,6 +482,9 @@ function SectionHeader({
 }
 
 export default function CourtPayAnalyticsPage() {
+  const { role } = useSessionStore();
+  const isSuperAdmin = role === "superadmin";
+
   const {
     venueId: selectedVenueId,
     setVenueId: setSelectedVenueId,
@@ -495,7 +500,7 @@ export default function CourtPayAnalyticsPage() {
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [payments, setPayments] = useState<PaymentDetailRow[]>([]);
 
-  // Per-section selection state
+  // Per-section selection state (export)
   const [monthsSelectMode, setMonthsSelectMode] = useState(false);
   const [monthsSelected, setMonthsSelected] = useState<Set<string>>(new Set());
   const [weeksSelectMode, setWeeksSelectMode] = useState(false);
@@ -505,6 +510,12 @@ export default function CourtPayAnalyticsPage() {
   const [paymentsSelectMode, setPaymentsSelectMode] = useState(false);
   const [paymentsSelected, setPaymentsSelected] = useState<Set<string>>(new Set());
   const [exportingSelected, setExportingSelected] = useState(false);
+
+  // Session delete state (superadmin only)
+  const [sessionsDeleteMode, setSessionsDeleteMode] = useState(false);
+  const [sessionsDeleteSelected, setSessionsDeleteSelected] = useState<Set<string>>(new Set());
+  const [deletingSessions, setDeletingSessions] = useState(false);
+  const [deleteConfirmPhase, setDeleteConfirmPhase] = useState<"none" | "first" | "second">("none");
 
   const [sessionMeta, setSessionMeta] = useState<{
     title: string | null;
@@ -850,6 +861,40 @@ export default function CourtPayAnalyticsPage() {
     setExportingSelected(false);
   };
 
+  const handleDeleteSessions = async () => {
+    if (sessionsDeleteSelected.size === 0) return;
+    if (deleteConfirmPhase === "none") {
+      setDeleteConfirmPhase("first");
+      return;
+    }
+    if (deleteConfirmPhase === "first") {
+      setDeleteConfirmPhase("second");
+      return;
+    }
+    // Phase "second" — actually delete
+    setDeletingSessions(true);
+    try {
+      await api.delete("/api/admin/sessions", {
+        sessionIds: [...sessionsDeleteSelected],
+      });
+      // Remove deleted sessions from local state
+      setSessions((prev) => prev.filter((s) => !sessionsDeleteSelected.has(s.id)));
+      setSessionsDeleteMode(false);
+      setSessionsDeleteSelected(new Set());
+      setDeleteConfirmPhase("none");
+    } catch (e) {
+      console.error(e);
+      alert((e as Error).message ?? "Delete failed");
+    }
+    setDeletingSessions(false);
+  };
+
+  const cancelDeleteMode = () => {
+    setSessionsDeleteMode(false);
+    setSessionsDeleteSelected(new Set());
+    setDeleteConfirmPhase("none");
+  };
+
   const handleExportPayments = () => {
     if (paymentsSelected.size === 0) return;
     const selected = payments.filter((p) => paymentsSelected.has(p.id));
@@ -1039,15 +1084,103 @@ export default function CourtPayAnalyticsPage() {
 
           {currentLevel === "week" && drill?.level === "week" && (
             <section>
-              <SectionHeader
-                title="Sessions"
-                selectionMode={sessionsSelectMode}
-                selectedCount={sessionsSelected.size}
-                totalCount={sessions.length}
-                onToggleSelectionMode={() => { setSessionsSelectMode((v) => !v); setSessionsSelected(new Set()); }}
-                onExportSelected={() => void handleExportSessions()}
-                exportingSelected={exportingSelected}
-              />
+              {/* Sessions section header with Export + (superadmin) Delete controls */}
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h2 className="text-sm font-medium text-neutral-300">Sessions</h2>
+                <div className="flex items-center gap-2">
+                  {/* Delete action buttons (superadmin only, delete mode active) */}
+                  {isSuperAdmin && sessionsDeleteMode && sessionsDeleteSelected.size > 0 && (
+                    <>
+                      {deleteConfirmPhase === "none" && (
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteSessions()}
+                          className="flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          Delete ({sessionsDeleteSelected.size})
+                        </button>
+                      )}
+                      {deleteConfirmPhase === "first" && (
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteSessions()}
+                          className="flex items-center gap-1.5 rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-600 animate-pulse"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          Confirm delete?
+                        </button>
+                      )}
+                      {deleteConfirmPhase === "second" && (
+                        <button
+                          type="button"
+                          onClick={() => void handleDeleteSessions()}
+                          disabled={deletingSessions}
+                          className="flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-red-500 disabled:opacity-50 ring-2 ring-red-400"
+                        >
+                          {deletingSessions ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3 w-3" />
+                          )}
+                          ⚠ Permanently delete {sessionsDeleteSelected.size} session{sessionsDeleteSelected.size > 1 ? "s" : ""}?
+                        </button>
+                      )}
+                    </>
+                  )}
+
+                  {/* Export action button */}
+                  {sessionsSelectMode && sessionsSelected.size > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => void handleExportSessions()}
+                      disabled={exportingSelected}
+                      className="flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-600 disabled:opacity-50"
+                    >
+                      {exportingSelected ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+                      Export ({sessionsSelected.size})
+                    </button>
+                  )}
+
+                  {/* Export toggle */}
+                  {!sessionsDeleteMode && (
+                    <button
+                      type="button"
+                      onClick={() => { setSessionsSelectMode((v) => !v); setSessionsSelected(new Set()); }}
+                      className={cn(
+                        "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                        sessionsSelectMode
+                          ? "border-neutral-500 bg-neutral-800 text-neutral-300 hover:text-white"
+                          : "border-neutral-700 bg-neutral-900 text-neutral-400 hover:border-neutral-500 hover:text-white"
+                      )}
+                    >
+                      {sessionsSelectMode
+                        ? `Cancel${sessionsSelected.size > 0 ? ` (${sessionsSelected.size}/${sessions.length})` : ""}`
+                        : "Export"}
+                    </button>
+                  )}
+
+                  {/* Delete toggle (superadmin only) */}
+                  {isSuperAdmin && !sessionsSelectMode && (
+                    <button
+                      type="button"
+                      onClick={() => sessionsDeleteMode ? cancelDeleteMode() : (setSessionsDeleteMode(true), setSessionsDeleteSelected(new Set()))}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                        sessionsDeleteMode
+                          ? "border-red-700 bg-red-950/40 text-red-400 hover:text-red-300"
+                          : "border-neutral-700 bg-neutral-900 text-neutral-400 hover:border-red-700 hover:text-red-400"
+                      )}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      {sessionsDeleteMode
+                        ? `Cancel${sessionsDeleteSelected.size > 0 ? ` (${sessionsDeleteSelected.size}/${sessions.length})` : ""}`
+                        : "Delete"}
+                    </button>
+                  )}
+                </div>
+              </div>
+
               <DataTable
                 headers={["Date", "Session", "Host", "Payments", "Revenue", "Players", "Status"]}
                 rows={sessions.map((s) => ({
@@ -1065,14 +1198,21 @@ export default function CourtPayAnalyticsPage() {
                     <span key="st" className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium capitalize", s.status === "open" ? "bg-green-900/30 text-green-400" : "bg-neutral-800 text-neutral-400")}>{s.status}</span>,
                   ],
                 }))}
-                onRowClick={sessionsSelectMode ? undefined : (sessionId) => {
+                onRowClick={(sessionsSelectMode || sessionsDeleteMode) ? undefined : (sessionId) => {
                   const row = sessions.find((s) => s.id === sessionId);
                   if (!row || drill?.level !== "week") return;
                   setDrill({ level: "session", venueId: drill.venueId, venueName: drill.venueName, month: drill.month, monthLabel: drill.monthLabel, weekStart: drill.weekStart, weekEnd: drill.weekEnd, weekLabel: drill.weekLabel, sessionId: row.id, sessionLabel: row.title || new Date(row.openedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) });
                 }}
-                selectionMode={sessionsSelectMode}
-                selectedKeys={sessionsSelected}
-                onToggleRow={(key) => setSessionsSelected((prev) => toggleKey(prev, key))}
+                selectionMode={sessionsSelectMode || sessionsDeleteMode}
+                selectedKeys={sessionsSelectMode ? sessionsSelected : sessionsDeleteSelected}
+                onToggleRow={(key) => {
+                  if (sessionsDeleteMode) {
+                    setSessionsDeleteSelected((prev) => toggleKey(prev, key));
+                    setDeleteConfirmPhase("none");
+                  } else {
+                    setSessionsSelected((prev) => toggleKey(prev, key));
+                  }
+                }}
               />
             </section>
           )}
