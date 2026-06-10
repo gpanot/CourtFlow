@@ -185,6 +185,16 @@ export async function GET(req: Request) {
       ]);
       const kpis = computeKpis(sessionPayments, new Set([sessionId]));
 
+      const snap = session.reclubSnapshot as {
+        players?: Array<{
+          reclubUserId: number;
+          reclubName: string;
+          avatarUrl: string;
+          paid: boolean;
+        }>;
+      } | null;
+      const snapshotRoster = snap?.players?.filter((p) => p.reclubName) ?? [];
+
       return NextResponse.json({
         level: "session",
         venue: session.venue,
@@ -198,6 +208,7 @@ export async function GET(req: Request) {
           hostName: session.staff?.name ?? null,
           reclubReferenceCode: session.reclubReferenceCode,
           reclubEventName: session.reclubEventName,
+          reclubSnapshot: snapshotRoster,
         },
         kpis,
         payments: rows,

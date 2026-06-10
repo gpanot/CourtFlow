@@ -17,6 +17,11 @@ import {
   CreditCard,
   ArrowLeft,
   Trash2,
+  ExternalLink,
+  Link2,
+  Link2Off,
+  Search,
+  X,
 } from "lucide-react";
 import type { PaymentDetailRow } from "@/lib/courtpay-analytics";
 import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
@@ -518,6 +523,7 @@ export default function CourtPayAnalyticsPage() {
   const [deleteConfirmPhase, setDeleteConfirmPhase] = useState<"none" | "first" | "second">("none");
 
   const [sessionMeta, setSessionMeta] = useState<{
+    id: string;
     title: string | null;
     type: string;
     status: string;
@@ -526,7 +532,26 @@ export default function CourtPayAnalyticsPage() {
     hostName: string | null;
     reclubReferenceCode: string | null;
     reclubEventName: string | null;
+    reclubSnapshot: Array<{ reclubUserId: number; reclubName: string; avatarUrl: string; paid: boolean }>;
   } | null>(null);
+
+  // Reclub link/unlink modal state
+  const [reclubModal, setReclubModal] = useState<{
+    paymentId: string;
+    playerName: string;
+    playerPhone: string;
+    currentReclubUserId: number | null;
+    currentReclubName: string | null;
+  } | null>(null);
+  const [reclubModalData, setReclubModalData] = useState<{
+    snapshotRoster: Array<{ reclubUserId: number; reclubName: string; avatarUrl: string; paid: boolean }>;
+    dbPlayers: Array<{ id: string; name: string; phone: string; reclubUserId: number | null; taken: boolean }>;
+    currentReclubUserId: number | null;
+  } | null>(null);
+  const [reclubModalLoading, setReclubModalLoading] = useState(false);
+  const [reclubSearch, setReclubSearch] = useState("");
+  const [reclubSaving, setReclubSaving] = useState(false);
+  const [reclubTab, setReclubTab] = useState<"roster" | "search">("roster");
 
   const venueName = useMemo(() => {
     if (drill) return drill.venueName;
@@ -644,6 +669,7 @@ export default function CourtPayAnalyticsPage() {
           kpis: Kpis;
           payments: PaymentDetailRow[];
           session: {
+            id: string;
             title: string | null;
             type: string;
             status: string;
@@ -652,6 +678,7 @@ export default function CourtPayAnalyticsPage() {
             hostName: string | null;
             reclubReferenceCode: string | null;
             reclubEventName: string | null;
+            reclubSnapshot: Array<{ reclubUserId: number; reclubName: string; avatarUrl: string; paid: boolean }>;
           };
         }>(`/api/admin/courtpay-analytics?sessionId=${drill.sessionId}`);
         setKpis(data.kpis);
@@ -788,6 +815,75 @@ export default function CourtPayAnalyticsPage() {
     if (next.has(key)) next.delete(key); else next.add(key);
     return next;
   };
+
+  // ── Reclub link modal ────────────────────────────────────────────────────────
+
+  const openReclubModal = useCallback(async (payment: PaymentDetailRow) => {
+    setReclubModal({
+      paymentId: payment.id,
+      playerName: payment.playerName,
+      playerPhone: payment.playerPhone,
+      currentReclubUserId: payment.reclubUserId,
+      currentReclubName: payment.reclubName ?? null,
+    });
+    setReclubTab("roster");
+    setReclubSearch("");
+    setReclubModalData(null);
+    setReclubModalLoading(true);
+    try {
+      const data = await api.get<{
+        currentReclubUserId: number | null;
+        snapshotRoster: Array<{ reclubUserId: number; reclubName: string; avatarUrl: string; paid: boolean }>;
+        dbPlayers: Array<{ id: string; name: string; phone: string; reclubUserId: number | null; taken: boolean }>;
+      }>(`/api/admin/courtpay-payments/${payment.id}/reclub-link`);
+      setReclubModalData(data);
+    } catch (e) {
+      console.error("Failed to load reclub modal data", e);
+    } finally {
+      setReclubModalLoading(false);
+    }
+  }, []);
+
+  const searchReclubPlayers = useCallback(async (paymentId: string, q: string) => {
+    try {
+      const data = await api.get<{
+        currentReclubUserId: number | null;
+        snapshotRoster: Array<{ reclubUserId: number; reclubName: string; avatarUrl: string; paid: boolean }>;
+        dbPlayers: Array<{ id: string; name: string; phone: string; reclubUserId: number | null; taken: boolean }>;
+      }>(`/api/admin/courtpay-payments/${paymentId}/reclub-link?search=${encodeURIComponent(q)}`);
+      setReclubModalData(data);
+    } catch (e) {
+      console.error("Failed to search reclub players", e);
+    }
+  }, []);
+
+  const handleReclubAction = useCallback(async (action: "link" | "unlink", reclubUserId?: number) => {
+    if (!reclubModal) return;
+    setReclubSaving(true);
+    try {
+      const res = await api.patch<{ ok: boolean; reclubUserId: number | null }>(
+        `/api/admin/courtpay-payments/${reclubModal.paymentId}/reclub-link`,
+        { action, reclubUserId }
+      );
+      // Update the payment row in state
+      setPayments((prev) =>
+        prev.map((p) => {
+          if (p.id !== reclubModal.paymentId) return p;
+          if (action === "unlink") return { ...p, reclubUserId: null, reclubName: null };
+          const name =
+            reclubModalData?.snapshotRoster.find((r) => r.reclubUserId === reclubUserId)?.reclubName ??
+            reclubModalData?.dbPlayers.find((d) => d.reclubUserId === reclubUserId)?.name ??
+            String(reclubUserId);
+          return { ...p, reclubUserId: res.reclubUserId, reclubName: name };
+        })
+      );
+      setReclubModal(null);
+    } catch (e) {
+      alert((e as Error).message || "Failed to save");
+    } finally {
+      setReclubSaving(false);
+    }
+  }, [reclubModal, reclubModalData]);
 
   // Export selected months — session-consolidated format (matches mobile boss dashboard)
   const handleExportMonths = async () => {
@@ -1231,9 +1327,36 @@ export default function CourtPayAnalyticsPage() {
                   {sessionMeta.hostName ? ` · Host: ${sessionMeta.hostName}` : ""}
                 </p>
                 {(sessionMeta.reclubReferenceCode || sessionMeta.reclubEventName) && (
-                  <p className="mt-1 text-xs text-fuchsia-400">
-                    Reclub: {sessionMeta.reclubEventName || sessionMeta.reclubReferenceCode}
-                  </p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <p className="text-xs text-fuchsia-400">
+                      Reclub: {sessionMeta.reclubEventName || sessionMeta.reclubReferenceCode}
+                    </p>
+                    {sessionMeta.reclubSnapshot && sessionMeta.reclubSnapshot.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const snap = sessionMeta.reclubSnapshot;
+                          // Build a data URL to show the snapshot in a new tab
+                          const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Reclub Snapshot — ${sessionMeta.reclubEventName ?? sessionMeta.reclubReferenceCode}</title>
+<style>body{font-family:sans-serif;background:#111;color:#eee;padding:24px}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:8px 12px;border-bottom:1px solid #333}th{color:#aaa;font-size:12px}tr:hover td{background:#1a1a1a}.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px}.paid{background:#14532d;color:#4ade80}.unpaid{background:#3f1515;color:#f87171}</style>
+</head><body>
+<h2 style="color:#d946ef">${sessionMeta.reclubEventName ?? ""} <span style="color:#888;font-size:14px">${sessionMeta.reclubReferenceCode ?? ""}</span></h2>
+<p style="color:#888;font-size:13px">Snapshot · ${snap.length} roster players</p>
+<table><thead><tr><th>#</th><th>Reclub ID</th><th>Name</th><th>Status</th></tr></thead><tbody>
+${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img src="${p.avatarUrl}" style="width:24px;height:24px;border-radius:50%;vertical-align:middle;margin-right:8px" onerror="this.style.display='none'">${p.reclubName}</td><td><span class="badge ${p.paid ? "paid" : "unpaid"}">${p.paid ? "Paid" : "Unpaid"}</span></td></tr>`).join("")}
+</tbody></table></body></html>`;
+                          const blob = new Blob([html], { type: "text/html" });
+                          window.open(URL.createObjectURL(blob), "_blank");
+                        }}
+                        className="flex items-center gap-1 rounded-md bg-fuchsia-900/30 px-2 py-0.5 text-[11px] font-medium text-fuchsia-300 hover:bg-fuchsia-800/40 transition-colors"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        Snapshot ({sessionMeta.reclubSnapshot.length})
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
               <SectionHeader
@@ -1266,7 +1389,30 @@ export default function CourtPayAnalyticsPage() {
                     p.playerSkillLevel
                       ? <span key="skill" className="rounded-full bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-300 capitalize">{p.playerSkillLevel.replace(/_/g, " ")}</span>
                       : "—",
-                    p.reclubName ?? "—",
+                    <button
+                      key="reclub"
+                      type="button"
+                      onClick={() => void openReclubModal(p)}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded px-1.5 py-0.5 text-xs transition-colors text-left",
+                        p.reclubName
+                          ? "text-fuchsia-300 hover:bg-fuchsia-900/30"
+                          : "text-neutral-500 hover:bg-neutral-800"
+                      )}
+                      title="Click to link / unlink Reclub ID"
+                    >
+                      {p.reclubName ? (
+                        <>
+                          <Link2 className="h-3 w-3 shrink-0 opacity-60" />
+                          {p.reclubName}
+                        </>
+                      ) : (
+                        <>
+                          <Link2Off className="h-3 w-3 shrink-0 opacity-40" />
+                          —
+                        </>
+                      )}
+                    </button>,
                     <span
                       key="freq"
                       className={cn(
@@ -1311,6 +1457,176 @@ export default function CourtPayAnalyticsPage() {
               />
             </section>
           )}
+        </div>
+      )}
+
+      {/* ── Reclub Link / Unlink Modal ──────────────────────────────────────── */}
+      {reclubModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4"
+          onClick={() => { if (!reclubSaving) setReclubModal(null); }}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl border border-neutral-700 bg-neutral-900 p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-white">Link / Unlink Reclub ID</h3>
+                <p className="mt-0.5 text-xs text-neutral-400">
+                  {reclubModal.playerName} · {reclubModal.playerPhone}
+                </p>
+                {reclubModal.currentReclubUserId && (
+                  <p className="mt-1 text-xs text-fuchsia-400">
+                    Currently linked: <strong>{reclubModal.currentReclubName}</strong> (ID {reclubModal.currentReclubUserId})
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setReclubModal(null)}
+                disabled={reclubSaving}
+                className="rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Unlink button */}
+            {reclubModal.currentReclubUserId && (
+              <button
+                type="button"
+                onClick={() => void handleReclubAction("unlink")}
+                disabled={reclubSaving}
+                className="mb-4 flex w-full items-center justify-center gap-2 rounded-lg border border-red-800 py-2 text-xs font-medium text-red-400 hover:bg-red-950/30 disabled:opacity-50 transition-colors"
+              >
+                {reclubSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2Off className="h-3.5 w-3.5" />}
+                Unlink current Reclub ID
+              </button>
+            )}
+
+            {/* Tabs */}
+            <div className="mb-3 flex gap-1 rounded-lg bg-neutral-800 p-0.5">
+              {(["roster", "search"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setReclubTab(tab)}
+                  className={cn(
+                    "flex-1 rounded-md py-1.5 text-xs font-medium transition-colors capitalize",
+                    reclubTab === tab
+                      ? "bg-neutral-700 text-white"
+                      : "text-neutral-400 hover:text-white"
+                  )}
+                >
+                  {tab === "roster" ? "Session Roster" : "Search DB"}
+                </button>
+              ))}
+            </div>
+
+            {reclubModalLoading ? (
+              <div className="flex h-32 items-center justify-center">
+                <Loader2 className="h-5 w-5 animate-spin text-neutral-500" />
+              </div>
+            ) : (
+              <>
+                {reclubTab === "roster" && (
+                  <div className="space-y-1 max-h-64 overflow-y-auto">
+                    {(reclubModalData?.snapshotRoster ?? []).length === 0 ? (
+                      <p className="py-8 text-center text-xs text-neutral-500">No roster snapshot for this session</p>
+                    ) : (
+                      (reclubModalData?.snapshotRoster ?? []).map((player) => {
+                        const isCurrent = reclubModalData?.currentReclubUserId === player.reclubUserId;
+                        return (
+                          <button
+                            key={player.reclubUserId}
+                            type="button"
+                            disabled={reclubSaving || (player.paid && !isCurrent)}
+                            onClick={() => void handleReclubAction("link", player.reclubUserId)}
+                            className={cn(
+                              "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors",
+                              isCurrent
+                                ? "border border-fuchsia-700 bg-fuchsia-900/20 text-fuchsia-300"
+                                : player.paid
+                                  ? "cursor-not-allowed opacity-40 text-neutral-500"
+                                  : "hover:bg-neutral-800 text-neutral-200"
+                            )}
+                          >
+                            {player.avatarUrl ? (
+                              <img src={player.avatarUrl} alt="" className="h-7 w-7 rounded-full object-cover" />
+                            ) : (
+                              <div className="h-7 w-7 rounded-full bg-neutral-700" />
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-medium truncate">{player.reclubName}</p>
+                              <p className="text-[10px] text-neutral-500">ID {player.reclubUserId}</p>
+                            </div>
+                            {isCurrent && <Check className="h-3.5 w-3.5 text-fuchsia-400 shrink-0" />}
+                            {player.paid && !isCurrent && <span className="text-[10px] text-neutral-600">taken</span>}
+                            {reclubSaving && isCurrent && <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />}
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+
+                {reclubTab === "search" && (
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-500" />
+                      <input
+                        type="text"
+                        placeholder="Search by name or phone..."
+                        value={reclubSearch}
+                        onChange={(e) => {
+                          setReclubSearch(e.target.value);
+                          void searchReclubPlayers(reclubModal.paymentId, e.target.value);
+                        }}
+                        className="w-full rounded-lg border border-neutral-700 bg-neutral-800 py-2 pl-9 pr-3 text-xs text-white placeholder:text-neutral-500 focus:border-neutral-500 focus:outline-none"
+                      />
+                    </div>
+                    <div className="max-h-52 space-y-1 overflow-y-auto">
+                      {(reclubModalData?.dbPlayers ?? []).length === 0 ? (
+                        <p className="py-6 text-center text-xs text-neutral-500">No players with Reclub ID found</p>
+                      ) : (
+                        (reclubModalData?.dbPlayers ?? []).map((player) => {
+                          const isCurrent = reclubModalData?.currentReclubUserId === player.reclubUserId;
+                          return (
+                            <button
+                              key={player.id}
+                              type="button"
+                              disabled={reclubSaving || (player.taken && !isCurrent)}
+                              onClick={() => void handleReclubAction("link", player.reclubUserId!)}
+                              className={cn(
+                                "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors",
+                                isCurrent
+                                  ? "border border-fuchsia-700 bg-fuchsia-900/20 text-fuchsia-300"
+                                  : player.taken
+                                    ? "cursor-not-allowed opacity-40 text-neutral-500"
+                                    : "hover:bg-neutral-800 text-neutral-200"
+                              )}
+                            >
+                              <div className="h-7 w-7 rounded-full bg-neutral-700 flex items-center justify-center">
+                                <span className="text-[10px] text-neutral-400">{player.name[0]?.toUpperCase()}</span>
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-medium truncate">{player.name}</p>
+                                <p className="text-[10px] text-neutral-500">{player.phone} · ID {player.reclubUserId}</p>
+                              </div>
+                              {isCurrent && <Check className="h-3.5 w-3.5 text-fuchsia-400 shrink-0" />}
+                              {player.taken && !isCurrent && <span className="text-[10px] text-neutral-600">taken</span>}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>
