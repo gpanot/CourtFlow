@@ -136,7 +136,6 @@ function paymentRowsToCsv(rows: PaymentDetailRow[]): string[][] {
     p.paymentMethod,
     p.status,
     p.confirmedBy ?? "",
-    p.confirmedOnDevice ?? "",
     p.cancelReason ?? "",
   ]);
 }
@@ -156,9 +155,59 @@ const PAYMENT_CSV_HEADERS = [
   "Payment Method",
   "Status",
   "Confirmed By",
-  "Device",
   "Cancel Reason",
 ];
+
+// Session-consolidated export (matches mobile boss dashboard format)
+const SESSION_CSV_HEADERS = [
+  "Date",
+  "Session start time",
+  "Session end time",
+  "Duration (h:min)",
+  "Staff name",
+  "Initial price (VND)",
+  "Total revenue (VND)",
+  "Total payments",
+  "QR count",
+  "Cash count",
+  "Subs count",
+  "Reclub (Expected)",
+  "Total players",
+];
+
+interface SessionExportRow {
+  date: string;
+  sessionStart: string;
+  sessionEnd: string;
+  duration: string;
+  staffName: string;
+  initialPrice: number;
+  totalRevenue: number;
+  totalPayments: number;
+  qrCount: number;
+  cashCount: number;
+  subsCount: number;
+  reclubExpected: number | string;
+  totalPlayers: number;
+}
+
+function sessionRowsToCsv(rows: SessionExportRow[]): string[][] {
+  return rows.map((s) => [
+    s.date,
+    s.sessionStart,
+    s.sessionEnd,
+    s.duration,
+    s.staffName,
+    String(s.initialPrice),
+    String(s.totalRevenue),
+    String(s.totalPayments),
+    String(s.qrCount),
+    String(s.cashCount),
+    String(s.subsCount),
+    String(s.reclubExpected),
+    String(s.totalPlayers),
+  ]);
+}
 
 function StatCard({
   icon: Icon,
@@ -656,17 +705,16 @@ export default function CourtPayAnalyticsPage() {
         summaryRows.push(["", ""]);
       }
 
-      // At week level, prepend a sessions breakdown table
+      // At week level, prepend a sessions breakdown table (no Device column)
       if (drill?.level === "week" && sessions.length > 0) {
         summaryRows.push([
           "--- Sessions ---",
-          "", "", "", "", "", "", "",
+          "", "", "", "", "", "",
         ]);
         summaryRows.push([
           "Date",
           "Session",
           "Host",
-          "Device",
           "Payments",
           "Revenue (VND)",
           "Players",
@@ -677,14 +725,13 @@ export default function CourtPayAnalyticsPage() {
             new Date(s.openedAt).toLocaleString("en-GB"),
             s.title || s.type.replace(/_/g, " "),
             s.hostName ?? "",
-            s.openedOnDevice ?? "",
             String(s.paymentCount),
             String(s.revenue),
             String(s.playerCount),
             String(s.cancelledCount),
           ]);
         }
-        summaryRows.push(["", "", "", "", "", "", "", ""]);
+        summaryRows.push(["", "", "", "", "", "", ""]);
       }
 
       summaryRows.push(["--- Payment details ---", ""]);
@@ -706,47 +753,49 @@ export default function CourtPayAnalyticsPage() {
     return next;
   };
 
-  // Export selected months: each month → its own export (or all combined into one file)
+  // Export selected months — session-consolidated format (matches mobile boss dashboard)
   const handleExportMonths = async () => {
     if (!drill || monthsSelected.size === 0) return;
     setExportingSelected(true);
     try {
       const selected = months.filter((m) => monthsSelected.has(m.month));
       const allRows: string[][] = [];
+      const PAD = Array(SESSION_CSV_HEADERS.length).fill("");
       for (const m of selected) {
-        const params = new URLSearchParams({ export: "all", venueId: drill.venueId, month: m.month });
-        const data = await api.get<{ payments: PaymentDetailRow[] }>(`/api/admin/courtpay-analytics?${params}`);
-        if (allRows.length > 0) allRows.push(["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]);
-        allRows.push([`--- ${m.monthLabel} ---`, "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]);
-        allRows.push(...paymentRowsToCsv(data.payments));
+        const params = new URLSearchParams({ export: "sessions", venueId: drill.venueId, month: m.month });
+        const data = await api.get<{ sessions: SessionExportRow[] }>(`/api/admin/courtpay-analytics?${params}`);
+        if (allRows.length > 0) allRows.push(PAD);
+        allRows.push([`--- ${m.monthLabel} ---`, ...PAD.slice(1)]);
+        allRows.push(...sessionRowsToCsv(data.sessions));
       }
-      downloadCSV(`${venueName.replace(/\s+/g, "-")}_months-export.csv`, PAYMENT_CSV_HEADERS, allRows);
+      downloadCSV(`${venueName.replace(/\s+/g, "-")}_months-export.csv`, SESSION_CSV_HEADERS, allRows);
       setMonthsSelectMode(false);
       setMonthsSelected(new Set());
     } catch (e) { console.error(e); }
     setExportingSelected(false);
   };
 
+  // Export selected weeks — session-consolidated format (matches mobile boss dashboard)
   const handleExportWeeks = async () => {
     if (!drill || weeksSelected.size === 0) return;
     setExportingSelected(true);
     try {
       const selected = weeks.filter((w) => weeksSelected.has(w.weekStart));
       const allRows: string[][] = [];
+      const PAD = Array(SESSION_CSV_HEADERS.length).fill("");
       for (const w of selected) {
         const params = new URLSearchParams({
-          export: "all",
+          export: "sessions",
           venueId: drill.venueId,
           weekStart: w.weekStart.slice(0, 10),
           weekEnd: w.weekEnd.slice(0, 10),
-          month: drill.level === "month" ? drill.month : "",
         });
-        const data = await api.get<{ payments: PaymentDetailRow[] }>(`/api/admin/courtpay-analytics?${params}`);
-        if (allRows.length > 0) allRows.push(["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]);
-        allRows.push([`--- ${w.weekLabel} ---`, "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]);
-        allRows.push(...paymentRowsToCsv(data.payments));
+        const data = await api.get<{ sessions: SessionExportRow[] }>(`/api/admin/courtpay-analytics?${params}`);
+        if (allRows.length > 0) allRows.push(PAD);
+        allRows.push([`--- ${w.weekLabel} ---`, ...PAD.slice(1)]);
+        allRows.push(...sessionRowsToCsv(data.sessions));
       }
-      downloadCSV(`${venueName.replace(/\s+/g, "-")}_weeks-export.csv`, PAYMENT_CSV_HEADERS, allRows);
+      downloadCSV(`${venueName.replace(/\s+/g, "-")}_weeks-export.csv`, SESSION_CSV_HEADERS, allRows);
       setWeeksSelectMode(false);
       setWeeksSelected(new Set());
     } catch (e) { console.error(e); }
@@ -759,11 +808,12 @@ export default function CourtPayAnalyticsPage() {
     try {
       const selected = sessions.filter((s) => sessionsSelected.has(s.id));
       const allRows: string[][] = [];
+      const PAD = Array(PAYMENT_CSV_HEADERS.length).fill("");
       for (const s of selected) {
         const data = await api.get<{ payments: PaymentDetailRow[] }>(`/api/admin/courtpay-analytics?sessionId=${s.id}`);
-        if (allRows.length > 0) allRows.push(["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]);
+        if (allRows.length > 0) allRows.push(PAD);
         const label = s.title || new Date(s.openedAt).toLocaleDateString("en-GB");
-        allRows.push([`--- ${label} ---`, "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]);
+        allRows.push([`--- ${label} ---`, ...PAD.slice(1)]);
         allRows.push(...paymentRowsToCsv(data.payments));
       }
       downloadCSV(`sessions-export.csv`, PAYMENT_CSV_HEADERS, allRows);

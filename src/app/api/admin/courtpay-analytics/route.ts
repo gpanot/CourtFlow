@@ -125,6 +125,7 @@ export async function GET(req: Request) {
     const weekStartParam = searchParams.get("weekStart");
     const weekEndParam = searchParams.get("weekEnd");
     const exportAll = searchParams.get("export") === "all";
+    const exportSessions = searchParams.get("export") === "sessions";
 
     if (!venueId && !sessionId) {
       const venues = await prisma.venue.findMany({
@@ -254,6 +255,143 @@ export async function GET(req: Request) {
         to: to.toISOString(),
         payments: rows,
       });
+    }
+
+    // Export per-session consolidated rows (for monthly / weekly breakdown exports)
+    if (exportSessions) {
+      let from: Date;
+      let to: Date = new Date();
+      to.setHours(23, 59, 59, 999);
+
+      if (weekStartParam && weekEndParam) {
+        const ws = parseDateParam(weekStartParam);
+        const we = parseDateParam(weekEndParam);
+        if (!ws || !we) return NextResponse.json({ error: "Invalid week range" }, { status: 400 });
+        from = ws;
+        to = we;
+        to.setHours(23, 59, 59, 999);
+      } else if (month) {
+        const range = parseMonthParam(month);
+        if (!range) return NextResponse.json({ error: "Invalid month" }, { status: 400 });
+        from = range.start;
+        to = range.end;
+      } else {
+        from = new Date();
+        from.setMonth(from.getMonth() - 12);
+        from.setDate(1);
+        from.setHours(0, 0, 0, 0);
+      }
+
+      function classifyPmt(p: { paymentMethod: string; type: string }): "qr" | "cash" | "sub" {
+        if (p.paymentMethod === "cash") return "cash";
+        if (p.paymentMethod === "subscription" || p.type === "subscription") return "sub";
+        return "qr";
+      }
+
+      const rawSessions = await prisma.session.findMany({
+        where: {
+          venueId,
+          status: "closed",
+          openedAt: { gte: from, lte: to },
+        },
+        orderBy: { openedAt: "desc" },
+        include: {
+          staff: { select: { name: true } },
+          _count: { select: { queueEntries: true } },
+        },
+      });
+
+      const sessionRows = await Promise.all(
+        rawSessions.map(async (s) => {
+          const periodEnd = s.closedAt ? new Date(s.closedAt) : new Date();
+          const periodStart = new Date(s.openedAt);
+
+          const reclubExpected: number | null = (() => {
+            const snap = s.reclubSnapshot as { totalExpected?: number } | null;
+            if (snap && typeof snap.totalExpected === "number") return snap.totalExpected;
+            const roster = s.reclubRoster as Array<{ players?: unknown[] }> | null;
+            if (Array.isArray(roster) && roster.length > 0) {
+              return roster.reduce((sum, ev) => sum + (Array.isArray(ev.players) ? ev.players.length : 0), 0);
+            }
+            return null;
+          })();
+
+          const payments = await prisma.pendingPayment.findMany({
+            where: {
+              venueId,
+              OR: [
+                {
+                  status: "confirmed",
+                  OR: [
+                    { sessionId: s.id },
+                    { checkInPlayerId: { not: null }, confirmedAt: { gte: periodStart, lte: periodEnd } },
+                  ],
+                },
+                {
+                  status: "cancelled",
+                  cancelReason: { not: null },
+                  OR: [
+                    { sessionId: s.id },
+                    { checkInPlayerId: { not: null }, confirmedAt: { gte: periodStart, lte: periodEnd } },
+                  ],
+                },
+              ],
+            },
+            select: { amount: true, paymentMethod: true, type: true, partyCount: true, status: true, checkInPlayerId: true },
+          });
+
+          let qr = 0, cash = 0, sub = 0, paymentPeopleTotal = 0;
+          const confirmedPayments = payments.filter((p) => p.status === "confirmed");
+          for (const p of payments) {
+            const party = typeof p.partyCount === "number" && p.partyCount > 0 ? p.partyCount : 1;
+            paymentPeopleTotal += party;
+            if (p.status !== "confirmed") continue;
+            const b = classifyPmt(p);
+            if (b === "qr") qr += 1;
+            else if (b === "cash") cash += 1;
+            else sub += 1;
+          }
+
+          const playerCount = paymentPeopleTotal > 0 ? paymentPeopleTotal : s._count.queueEntries;
+          const revenue = confirmedPayments.reduce((sum, p) => sum + p.amount, 0);
+
+          let duration = "";
+          if (s.closedAt) {
+            const diffMs = s.closedAt.getTime() - s.openedAt.getTime();
+            const totalMin = Math.round(diffMs / 60000);
+            const h = Math.floor(totalMin / 60);
+            const min = totalMin % 60;
+            duration = `${h}:${String(min).padStart(2, "0")}`;
+          }
+
+          const fmtDate = (d: Date) => {
+            const dd = String(d.getDate()).padStart(2, "0");
+            const mm = String(d.getMonth() + 1).padStart(2, "0");
+            const yyyy = d.getFullYear();
+            return `${dd}/${mm}/${yyyy}`;
+          };
+          const fmtTime = (d: Date) =>
+            `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+
+          return {
+            date: fmtDate(s.openedAt),
+            sessionStart: fmtTime(s.openedAt),
+            sessionEnd: s.closedAt ? fmtTime(s.closedAt) : "",
+            duration,
+            staffName: s.staff?.name ?? "",
+            initialPrice: s.sessionFee,
+            totalRevenue: revenue,
+            totalPayments: confirmedPayments.length,
+            qrCount: qr,
+            cashCount: cash,
+            subsCount: sub,
+            reclubExpected: reclubExpected ?? "",
+            totalPlayers: playerCount,
+          };
+        })
+      );
+
+      return NextResponse.json({ level: "sessions-export", venue, sessions: sessionRows });
     }
 
     // Week level
