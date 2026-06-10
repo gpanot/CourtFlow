@@ -6,6 +6,7 @@ import { cn } from "@/lib/cn";
 import { PackageCard } from "@/modules/courtpay/components/PackageCard";
 import { PackageForm } from "@/modules/courtpay/components/PackageForm";
 import { SubscriberList } from "@/modules/courtpay/components/SubscriberList";
+import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
 import {
   Plus,
   Loader2,
@@ -18,10 +19,6 @@ import {
 
 export const dynamic = "force-dynamic";
 
-interface Venue {
-  id: string;
-  name: string;
-}
 
 interface PackageData {
   id: string;
@@ -73,12 +70,6 @@ interface Overview {
   monthRevenue: number;
   totalCheckIns: number;
   todayCheckIns: number;
-  autoApprovalProfiles: {
-    venueId: string;
-    venueName: string;
-    autoApprovalPhone: string;
-    autoApprovalCCCD: string;
-  }[];
 }
 
 type Tab = "packages" | "subscribers" | "payments";
@@ -95,8 +86,7 @@ const paymentStatusColors: Record<string, string> = {
 };
 
 export default function AdminCourtPayPage() {
-  const [venues, setVenues] = useState<Venue[]>([]);
-  const [selectedVenueId, setSelectedVenueId] = useState<string>("");
+  const { venueId: selectedVenueId, setVenueId: setSelectedVenueId, venues } = useAdminVenuePicker();
   const [tab, setTab] = useState<Tab>("packages");
   const [overview, setOverview] = useState<Overview | null>(null);
   const [packages, setPackages] = useState<PackageData[]>([]);
@@ -111,15 +101,6 @@ export default function AdminCourtPayPage() {
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingPkg, setEditingPkg] = useState<PackageData | null>(null);
-
-  const fetchVenues = useCallback(async () => {
-    try {
-      const data = await api.get<Venue[]>("/api/admin/venues");
-      setVenues(data);
-    } catch (e) {
-      console.error(e);
-    }
-  }, []);
 
   const fetchOverview = useCallback(async () => {
     try {
@@ -174,10 +155,6 @@ export default function AdminCourtPayPage() {
       console.error(e);
     }
   }, [selectedVenueId]);
-
-  useEffect(() => {
-    fetchVenues();
-  }, [fetchVenues]);
 
   useEffect(() => {
     setLoading(true);
@@ -261,18 +238,12 @@ export default function AdminCourtPayPage() {
             Subscription packages, check-in payments & subscribers
           </p>
         </div>
-        <select
-          value={selectedVenueId}
-          onChange={(e) => setSelectedVenueId(e.target.value)}
-          className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
-        >
-          <option value="">All venues</option>
-          {venues.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.name}
-            </option>
-          ))}
-        </select>
+        <AdminVenuePicker
+          venueId={selectedVenueId}
+          venues={venues}
+          onChange={setSelectedVenueId}
+          allowAll
+        />
       </div>
 
       {/* KPI cards */}
@@ -313,42 +284,6 @@ export default function AdminCourtPayPage() {
             </div>
           </div>
 
-          <div className="mb-6 rounded-xl border border-fuchsia-900/50 bg-fuchsia-950/20 p-4">
-            <div className="mb-2">
-              <p className="text-sm font-medium text-fuchsia-300">
-                Automatic payment approval onboarding data
-              </p>
-              <p className="text-xs text-neutral-400">
-                Collected from staff profile payment settings
-              </p>
-            </div>
-            {overview.autoApprovalProfiles.length === 0 ? (
-              <p className="text-xs text-neutral-500">No venue data available.</p>
-            ) : (
-              <div className="space-y-2">
-                {overview.autoApprovalProfiles.map((profile) => (
-                  <div
-                    key={profile.venueId}
-                    className="grid grid-cols-1 gap-1 rounded-lg border border-neutral-800 bg-neutral-900/60 px-3 py-2 text-xs sm:grid-cols-3 sm:items-center"
-                  >
-                    <p className="font-medium text-neutral-200">{profile.venueName}</p>
-                    <p className="text-neutral-400">
-                      Phone:{" "}
-                      <span className="font-mono text-neutral-300">
-                        {profile.autoApprovalPhone || "—"}
-                      </span>
-                    </p>
-                    <p className="text-neutral-400">
-                      CCCD:{" "}
-                      <span className="font-mono text-neutral-300">
-                        {profile.autoApprovalCCCD || "—"}
-                      </span>
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </>
       )}
 

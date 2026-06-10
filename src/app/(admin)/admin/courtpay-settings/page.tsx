@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api-client";
 import { useSessionStore } from "@/stores/session-store";
+import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
 import { cn } from "@/lib/cn";
 import {
   Monitor,
@@ -66,31 +67,33 @@ type Tab = "config" | "auto-payment";
 
 export default function CourtPaySettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>("config");
-  const [venues, setVenues] = useState<Venue[]>([]);
-  const [selectedVenueId, setSelectedVenueId] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [allVenues, setAllVenues] = useState<Venue[]>([]);
 
+  const {
+    venueId: selectedVenueId,
+    setVenueId: setSelectedVenueId,
+    venues: venueOptions,
+  } = useAdminVenuePicker({
+    autoSelect: true,
+    onVenuesLoaded: () => setLoading(false),
+  });
+
+  // Full venue details (settings, bankName, etc.) fetched separately
   const fetchVenues = useCallback(async () => {
-    setLoading(true);
     try {
       const data = await api.get<Venue[]>("/api/admin/venues");
-      setVenues(data);
-      if (data.length > 0 && !selectedVenueId) {
-        setSelectedVenueId(data[0].id);
-      }
+      setAllVenues(data);
     } catch (e) {
       console.error(e);
-    } finally {
-      setLoading(false);
     }
-  }, [selectedVenueId]);
+  }, []);
 
   useEffect(() => {
     void fetchVenues();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchVenues]);
 
-  const selectedVenue = venues.find((v) => v.id === selectedVenueId) ?? null;
+  const selectedVenue = allVenues.find((v) => v.id === selectedVenueId) ?? null;
 
   return (
     <div className="space-y-6">
@@ -129,17 +132,12 @@ export default function CourtPaySettingsPage() {
       {/* Venue selector — shared across tabs */}
       <div className="flex items-center gap-3">
         <label className="text-sm text-neutral-400 whitespace-nowrap">Venue</label>
-        <select
-          value={selectedVenueId}
-          onChange={(e) => setSelectedVenueId(e.target.value)}
+        <AdminVenuePicker
+          venueId={selectedVenueId}
+          venues={venueOptions}
+          onChange={setSelectedVenueId}
           className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
-        >
-          {venues.map((v) => (
-            <option key={v.id} value={v.id}>
-              {v.name}
-            </option>
-          ))}
-        </select>
+        />
       </div>
 
       {loading && (

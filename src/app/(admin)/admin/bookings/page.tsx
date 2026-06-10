@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { useAdminVenueStore } from "@/stores/admin-venue-store";
+import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
 import {
   ChevronLeft,
   ChevronRight,
@@ -147,10 +147,12 @@ const BLOCK_LABELS: Record<string, string> = {
 };
 
 export default function BookingsPage() {
-  const { selectedVenueId: storedVenueId, setSelectedVenueId: setStoredVenueId } = useAdminVenueStore();
+  const {
+    venueId: selectedVenueId,
+    setVenueId: setSelectedVenueId,
+    venues: venueOptions,
+  } = useAdminVenuePicker({ autoSelect: true });
   const [venues, setVenues] = useState<Venue[]>([]);
-  const [selectedVenueId, _setSelectedVenueId] = useState(storedVenueId ?? "");
-  const setSelectedVenueId = (id: string) => { _setSelectedVenueId(id); setStoredVenueId(id); };
   const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
   const [bookings, setBookings] = useState<BookingRecord[]>([]);
   const [availability, setAvailability] = useState<CourtSlotData[]>([]);
@@ -197,13 +199,8 @@ export default function BookingsPage() {
     try {
       const data = await api.get<Venue[]>("/api/admin/venues");
       setVenues(data);
-      if (data.length > 0 && !selectedVenueId) {
-        const stored = storedVenueId;
-        const match = stored && data.find((v) => v.id === stored);
-        setSelectedVenueId(match ? stored : data[0].id);
-      }
     } catch (e) { console.error(e); }
-  }, [selectedVenueId, storedVenueId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const fetchBookings = useCallback(async () => {
     if (!selectedVenueId) return;
@@ -544,13 +541,12 @@ export default function BookingsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-xl font-bold md:text-2xl">Court Bookings</h2>
-        <select
-          value={selectedVenueId}
-          onChange={(e) => setSelectedVenueId(e.target.value)}
+        <AdminVenuePicker
+          venueId={selectedVenueId}
+          venues={venueOptions}
+          onChange={setSelectedVenueId}
           className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
-        >
-          {venues.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-        </select>
+        />
       </div>
 
       <div className="flex items-center justify-between border-b border-neutral-800">

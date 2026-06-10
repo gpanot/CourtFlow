@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api-client";
-import { useAdminVenueStore } from "@/stores/admin-venue-store";
+import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
 import { cn } from "@/lib/cn";
 import {
   Calendar, TrendingUp, Users, DollarSign, Clock, BarChart3,
@@ -171,27 +171,16 @@ function ChartTooltip({ active, payload, label, suffix }: { active?: boolean; pa
 }
 
 export default function VenueAnalyticsPage() {
-  const { selectedVenueId, setSelectedVenueId } = useAdminVenueStore();
-  const [venues, setVenues] = useState<Venue[]>([]);
+  const {
+    venueId: selectedVenueId,
+    setVenueId: setSelectedVenueId,
+    venues,
+  } = useAdminVenuePicker({ autoSelect: true });
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(false);
   const [rangeKey, setRangeKey] = useState<RangeKey>("30d");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
-
-  useEffect(() => {
-    api.get<Venue[]>("/api/admin/venues").then((vs) => {
-      setVenues(vs);
-      const ids = vs.map((v) => v.id);
-      if (selectedVenueId && !ids.includes(selectedVenueId)) {
-        // Stale venue from another role/session — reset to first allowed venue
-        setSelectedVenueId(vs.length > 0 ? vs[0].id : "");
-      } else if (!selectedVenueId && vs.length > 0) {
-        setSelectedVenueId(vs[0].id);
-      }
-    }).catch(console.error);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const currentRange = useMemo(() => {
     return rangeKey === "custom" ? { from: customFrom, to: customTo } : getRangeDates(rangeKey);
@@ -393,10 +382,12 @@ export default function VenueAnalyticsPage() {
           <p className="text-xs text-neutral-500 mt-0.5">Court bookings, coaching, memberships, staff & players</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select value={selectedVenueId || ""} onChange={(e) => setSelectedVenueId(e.target.value)}
-            className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none">
-            {venues.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-          </select>
+          <AdminVenuePicker
+            venueId={selectedVenueId}
+            venues={venues}
+            onChange={setSelectedVenueId}
+            className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
+          />
           <div className="relative">
             <select value={rangeKey} onChange={(e) => setRangeKey(e.target.value as RangeKey)}
               className="appearance-none rounded-lg border border-neutral-700 bg-neutral-800 pl-3 pr-8 py-2 text-sm text-white focus:border-purple-500 focus:outline-none">

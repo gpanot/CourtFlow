@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { useAdminVenueStore } from "@/stores/admin-venue-store";
+import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
 import { PaymentConfirmModal, type PaymentModalData, type PaymentConfirmResult } from "@/components/admin/PaymentConfirmModal";
 import {
   Plus,
@@ -95,10 +95,12 @@ interface PlayerResult {
 }
 
 export default function MembershipsPage() {
-  const { selectedVenueId: storedVenueId, setSelectedVenueId: setStoredVenueId } = useAdminVenueStore();
+  const {
+    venueId: selectedVenueId,
+    setVenueId: setSelectedVenueId,
+    venues: venueOptions,
+  } = useAdminVenuePicker({ autoSelect: true });
   const [venues, setVenues] = useState<Venue[]>([]);
-  const [selectedVenueId, _setSelectedVenueId] = useState<string>(storedVenueId ?? "");
-  const setSelectedVenueId = (id: string) => { _setSelectedVenueId(id); setStoredVenueId(id); };
   const [tiers, setTiers] = useState<Tier[]>([]);
   const [memberships, setMemberships] = useState<MembershipRecord[]>([]);
   const [paymentSummary, setPaymentSummary] = useState<PaymentSummary | null>(null);
@@ -136,13 +138,8 @@ export default function MembershipsPage() {
     try {
       const data = await api.get<Venue[]>("/api/admin/venues");
       setVenues(data);
-      if (data.length > 0 && !selectedVenueId) {
-        const stored = storedVenueId;
-        const match = stored && data.find((v) => v.id === stored);
-        setSelectedVenueId(match ? stored : data[0].id);
-      }
     } catch (e) { console.error(e); }
-  }, [selectedVenueId, storedVenueId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const fetchTiers = useCallback(async () => {
     if (!selectedVenueId) return;
@@ -358,15 +355,12 @@ export default function MembershipsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-xl font-bold md:text-2xl">Memberships</h2>
-        <select
-          value={selectedVenueId}
-          onChange={(e) => setSelectedVenueId(e.target.value)}
+        <AdminVenuePicker
+          venueId={selectedVenueId}
+          venues={venueOptions}
+          onChange={setSelectedVenueId}
           className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
-        >
-          {venues.map((v) => (
-            <option key={v.id} value={v.id}>{v.name}</option>
-          ))}
-        </select>
+        />
       </div>
 
       <div className="flex gap-1 border-b border-neutral-800">

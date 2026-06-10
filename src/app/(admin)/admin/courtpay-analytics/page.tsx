@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { useAdminVenueStore } from "@/stores/admin-venue-store";
 import {
   BarChart3,
   ChevronRight,
@@ -19,6 +18,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import type { PaymentDetailRow } from "@/lib/courtpay-analytics";
+import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
 
 export const dynamic = "force-dynamic";
 
@@ -406,10 +406,11 @@ function SectionHeader({
 }
 
 export default function CourtPayAnalyticsPage() {
-  const { selectedVenueId: storedVenueId, setSelectedVenueId: storeVenueId } =
-    useAdminVenueStore();
-  const [venues, setVenues] = useState<VenueOption[]>([]);
-  const [selectedVenueId, setSelectedVenueId] = useState(storedVenueId ?? "");
+  const {
+    venueId: selectedVenueId,
+    setVenueId: setSelectedVenueId,
+    venues,
+  } = useAdminVenuePicker();
   const [drill, setDrill] = useState<Drill | null>(null);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -454,7 +455,6 @@ export default function CourtPayAnalyticsPage() {
         action: () => {
           setDrill(null);
           setSelectedVenueId("");
-          storeVenueId("");
         },
       },
     ];
@@ -505,32 +505,6 @@ export default function CourtPayAnalyticsPage() {
     }
     return crumbs;
   }, [drill]);
-
-  const fetchVenues = useCallback(async () => {
-    try {
-      let list: VenueOption[];
-      try {
-        const data = await api.get<{ venues: VenueOption[] }>(
-          "/api/admin/courtpay-analytics"
-        );
-        list = data.venues;
-      } catch {
-        list = await api.get<VenueOption[]>("/api/admin/venues");
-      }
-      setVenues(list);
-      // If the stored venue is not in the allowed list, reset to first allowed
-      const ids = list.map((v) => v.id);
-      setSelectedVenueId((prev) => {
-        if (prev && !ids.includes(prev)) {
-          storeVenueId("");
-          return "";
-        }
-        return prev;
-      });
-    } catch (e) {
-      console.error(e);
-    }
-  }, [storeVenueId]);
 
   const loadData = useCallback(async () => {
     if (!selectedVenueId) {
@@ -609,16 +583,11 @@ export default function CourtPayAnalyticsPage() {
   }, [selectedVenueId, drill]);
 
   useEffect(() => {
-    void fetchVenues();
-  }, [fetchVenues]);
-
-  useEffect(() => {
     void loadData();
   }, [loadData]);
 
   const handleVenueChange = (id: string) => {
     setSelectedVenueId(id);
-    storeVenueId(id);
     const v = venues.find((x) => x.id === id);
     if (id && v) {
       setDrill({ level: "venue", venueId: id, venueName: v.name });
@@ -630,7 +599,7 @@ export default function CourtPayAnalyticsPage() {
   // Restore drill state when venues load and a venue is already stored
   useEffect(() => {
     if (drill || venues.length === 0) return;
-    const currentId = selectedVenueId || storedVenueId;
+    const currentId = selectedVenueId;
     if (!currentId) return;
     const v = venues.find((x) => x.id === currentId);
     if (v) {
@@ -853,18 +822,11 @@ export default function CourtPayAnalyticsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={selectedVenueId}
-            onChange={(e) => handleVenueChange(e.target.value)}
-            className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
-          >
-            <option value="">Select venue…</option>
-            {venues.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name}
-              </option>
-            ))}
-          </select>
+          <AdminVenuePicker
+            venueId={selectedVenueId}
+            venues={venues}
+            onChange={handleVenueChange}
+          />
           {(drill || selectedVenueId) && (
             <button
               type="button"

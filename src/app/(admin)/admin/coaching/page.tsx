@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
-import { useAdminVenueStore } from "@/stores/admin-venue-store";
+import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
 import {
   GraduationCap,
   Package,
@@ -136,21 +136,12 @@ const STATUS_LABELS: Record<string, string> = {
 /* ─── Main Page ─── */
 
 export default function CoachingPage() {
-  const { selectedVenueId: storedVenueId, setSelectedVenueId: setStoredVenueId } = useAdminVenueStore();
+  const {
+    venueId: selectedVenueId,
+    setVenueId: setSelectedVenueId,
+    venues,
+  } = useAdminVenuePicker({ autoSelect: true });
   const [tab, setTab] = useState<"coaches" | "lessons">("coaches");
-  const [venues, setVenues] = useState<Venue[]>([]);
-  const [selectedVenueId, _setSelectedVenueId] = useState(storedVenueId ?? "");
-  const setSelectedVenueId = (id: string) => { _setSelectedVenueId(id); setStoredVenueId(id); };
-
-  useEffect(() => {
-    api.get<Venue[]>("/api/admin/venues").then((v) => {
-      setVenues(v);
-      if (v.length > 0 && !selectedVenueId) {
-        const match = storedVenueId && v.find((x) => x.id === storedVenueId);
-        setSelectedVenueId(match ? storedVenueId : v[0].id);
-      }
-    });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="space-y-6">
@@ -161,15 +152,12 @@ export default function CoachingPage() {
         </h2>
 
         {venues.length > 1 && (
-          <select
-            value={selectedVenueId}
-            onChange={(e) => setSelectedVenueId(e.target.value)}
+          <AdminVenuePicker
+            venueId={selectedVenueId}
+            venues={venues}
+            onChange={setSelectedVenueId}
             className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-teal-500 focus:outline-none"
-          >
-            {venues.map((v) => (
-              <option key={v.id} value={v.id}>{v.name}</option>
-            ))}
-          </select>
+          />
         )}
       </div>
 
