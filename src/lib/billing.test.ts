@@ -349,7 +349,7 @@ describe("getCurrentWeekUsage", () => {
     expect(result.sepayCheckins).toBe(1);
     // 5000 (cash) + 7000 (vietqr+sub) = 12000
     expect(result.estimatedTotal).toBe(12000);
-    expect(result.rates).toEqual({
+    expect(result.rates).toMatchObject({
       baseRate: 5000,
       subAddon: 1000,
       sepayAddon: 1000,

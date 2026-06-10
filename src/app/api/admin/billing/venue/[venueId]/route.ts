@@ -26,6 +26,9 @@ export async function GET(
           isFreeBase: true,
           isFreeSubAddon: true,
           isFreeSepayAddon: true,
+          billingModel: true,
+          monthlyRate: true,
+          monthlyPeriodStart: true,
         },
       }),
       prisma.billingInvoice.findMany({
@@ -41,6 +44,7 @@ export async function GET(
           subscriptionAmount: true,
           sepayAmount: true,
           status: true,
+          invoiceType: true,
           paymentRef: true,
           paidAt: true,
           confirmedBy: true,

@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { generateWeeklyInvoice, getPreviousWeekBounds } from "@/lib/billing";
+import {
+  generateWeeklyInvoice,
+  generateMonthlyInvoice,
+  getPreviousWeekBounds,
+  getPreviousMonthBounds,
+} from "@/lib/billing";
 
 export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
@@ -12,33 +17,75 @@ export async function GET(req: Request) {
   }
 
   try {
-    const { weekStart, weekEnd } = getPreviousWeekBounds();
+    const today = new Date();
+    const isFirstOfMonth = today.getDate() === 1;
+
     const venues = await prisma.venue.findMany({
       where: { active: true },
-      select: { id: true, name: true },
+      select: {
+        id: true,
+        name: true,
+        billingRate: {
+          select: {
+            billingModel: true,
+            monthlyRate: true,
+            monthlyPeriodStart: true,
+          },
+        },
+      },
     });
 
-    const results: { venueId: string; status: string; totalAmount: number }[] =
-      [];
+    const weeklyResults: { venueId: string; status: string; totalAmount: number }[] = [];
+    const monthlyResults: { venueId: string; status: string; totalAmount: number }[] = [];
+
+    const { weekStart, weekEnd } = getPreviousWeekBounds();
+    const { monthStart: prevMonthStart, monthEnd: prevMonthEnd } = getPreviousMonthBounds();
 
     for (const venue of venues) {
-      try {
-        const invoice = await generateWeeklyInvoice(
-          venue.id,
-          weekStart,
-          weekEnd
-        );
-        results.push({
-          venueId: venue.id,
-          status: invoice.status,
-          totalAmount: invoice.totalAmount,
-        });
-      } catch (err) {
-        console.error(
-          `Failed to generate invoice for venue ${venue.id}:`,
-          err
-        );
-        results.push({ venueId: venue.id, status: "error", totalAmount: 0 });
+      const billingModel = venue.billingRate?.billingModel ?? "per_payment";
+
+      if (billingModel === "monthly") {
+        // Monthly invoices are only generated on the 1st of the month
+        if (!isFirstOfMonth) continue;
+
+        try {
+          const monthlyPeriodStart = venue.billingRate?.monthlyPeriodStart ?? null;
+
+          // Determine the actual period start for this invoice.
+          // If the venue joined the monthly plan mid-previous-month, pro-rate from that date.
+          let periodStart = prevMonthStart;
+          if (
+            monthlyPeriodStart &&
+            monthlyPeriodStart >= prevMonthStart &&
+            monthlyPeriodStart <= prevMonthEnd
+          ) {
+            periodStart = new Date(monthlyPeriodStart);
+            periodStart.setHours(0, 0, 0, 0);
+          }
+
+          const invoice = await generateMonthlyInvoice(venue.id, periodStart, prevMonthEnd);
+          monthlyResults.push({
+            venueId: venue.id,
+            status: invoice.status,
+            totalAmount: invoice.totalAmount,
+          });
+        } catch (err) {
+          console.error(`Failed to generate monthly invoice for venue ${venue.id}:`, err);
+          monthlyResults.push({ venueId: venue.id, status: "error", totalAmount: 0 });
+        }
+      } else {
+        // per_payment venues: weekly invoices (unchanged behaviour)
+        try {
+          const invoice = await generateWeeklyInvoice(venue.id, weekStart, weekEnd);
+          weeklyResults.push({
+            venueId: venue.id,
+            status: invoice.status,
+            totalAmount: invoice.totalAmount,
+          });
+        } catch (err) {
+          console.error(`Failed to generate invoice for venue ${venue.id}:`, err);
+          weeklyResults.push({ venueId: venue.id, status: "error", totalAmount: 0 });
+        }
       }
     }
 
@@ -79,10 +126,12 @@ export async function GET(req: Request) {
 
     return NextResponse.json({
       success: true,
-      invoicesGenerated: results.length,
+      weeklyInvoicesGenerated: weeklyResults.length,
+      monthlyInvoicesGenerated: monthlyResults.length,
       overdueMarked: overdueInvoices.count,
       venuesSuspended: venuesToSuspend.length,
-      results,
+      weeklyResults,
+      monthlyResults,
     });
   } catch (err) {
     console.error("Cron generate-invoices error:", err);

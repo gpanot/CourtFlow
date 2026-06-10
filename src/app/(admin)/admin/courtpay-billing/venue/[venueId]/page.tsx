@@ -31,6 +31,9 @@ interface RatesData {
   isFreeBase: boolean;
   isFreeSubAddon: boolean;
   isFreeSepayAddon: boolean;
+  billingModel: "per_payment" | "monthly";
+  monthlyRate: number;
+  monthlyPeriodStart: string | null;
 }
 
 interface InvoiceRow {
@@ -43,6 +46,7 @@ interface InvoiceRow {
   subscriptionAmount: number;
   sepayAmount: number;
   status: string;
+  invoiceType: string;
   paymentRef: string | null;
   paidAt: string | null;
   confirmedBy: string | null;
@@ -123,6 +127,18 @@ function fmtShort(iso: string) {
     day: "numeric",
     month: "short",
   });
+}
+
+function fmtMonth(iso: string) {
+  return new Date(iso).toLocaleDateString("en-GB", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function fmtInvoicePeriod(inv: InvoiceRow) {
+  if (inv.invoiceType === "monthly") return fmtMonth(inv.weekStartDate);
+  return `${fmtShort(inv.weekStartDate)} – ${fmtShort(inv.weekEndDate)}`;
 }
 
 function localDayKey(iso: string | Date): string {
@@ -283,6 +299,9 @@ export default function VenueBillingDetailPage() {
           isFreeBase: false,
           isFreeSubAddon: false,
           isFreeSepayAddon: false,
+          billingModel: "per_payment",
+          monthlyRate: 0,
+          monthlyPeriodStart: null,
         }
       );
     } catch (e) {
@@ -512,7 +531,12 @@ export default function VenueBillingDetailPage() {
         {(
           [
             { id: "rates" as const, label: "Rates (custom)" },
-            { id: "weeks" as const, label: `Weeks (${weekRows.length})` },
+            {
+              id: "weeks" as const,
+              label: (detail.rates?.billingModel ?? "per_payment") === "monthly"
+                ? `Invoices (${weekRows.length})`
+                : `Weeks (${weekRows.length})`,
+            },
             { id: "paid" as const, label: `Paid (${paidInvoices.length})` },
           ] as const
         ).map(({ id, label }) => (
@@ -544,6 +568,70 @@ export default function VenueBillingDetailPage() {
               </span>
             )}
           </div>
+
+          {/* Billing model selector */}
+          <div className="space-y-2">
+            <p className="text-xs text-neutral-500 font-medium">Billing model</p>
+            <div className="flex gap-3">
+              {(
+                [
+                  { value: "per_payment" as const, label: "Per payment", desc: "Weekly invoice based on CourtPay transactions" },
+                  { value: "monthly" as const, label: "Monthly flat rate", desc: "Single monthly invoice at a fixed price" },
+                ] as const
+              ).map(({ value, label, desc }) => (
+                <label
+                  key={value}
+                  className={cn(
+                    "flex-1 flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                    ratesForm.billingModel === value
+                      ? "border-purple-500 bg-purple-950/20"
+                      : "border-neutral-700 hover:border-neutral-600"
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="billingModel"
+                    value={value}
+                    checked={ratesForm.billingModel === value}
+                    onChange={() =>
+                      setRatesForm({ ...ratesForm, billingModel: value })
+                    }
+                    className="mt-0.5 accent-purple-500"
+                  />
+                  <div>
+                    <p className="text-sm font-medium">{label}</p>
+                    <p className="text-[11px] text-neutral-500 mt-0.5">{desc}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Monthly rate input — only shown for monthly model */}
+          {ratesForm.billingModel === "monthly" && (
+            <div className="space-y-2 rounded-lg border border-neutral-700 bg-neutral-800/40 p-4">
+              <label className="text-xs text-neutral-500 block font-medium">
+                Monthly flat rate (VND)
+              </label>
+              <input
+                type="number"
+                value={ratesForm.monthlyRate}
+                onChange={(e) =>
+                  setRatesForm({ ...ratesForm, monthlyRate: parseInt(e.target.value) || 0 })
+                }
+                className="w-full max-w-xs rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white"
+                placeholder="e.g. 500000"
+              />
+              <p className="text-[11px] text-neutral-600">
+                First invoice will be pro-rated from the date billing is activated this month.
+                {ratesForm.monthlyPeriodStart && (
+                  <span className="ml-1 text-neutral-500">
+                    Current period start: {fmtDate(ratesForm.monthlyPeriodStart)}
+                  </span>
+                )}
+              </p>
+            </div>
+          )}
 
           <div className="grid grid-cols-3 gap-4">
             {/* Base rate */}
@@ -682,6 +770,7 @@ export default function VenueBillingDetailPage() {
 
                 if (row.kind === "current") {
                   const { cw } = row;
+                  const isMonthly = (detail.rates?.billingModel ?? "per_payment") === "monthly";
                   return (
                     <div key={weekKey}>
                       <button
@@ -697,13 +786,16 @@ export default function VenueBillingDetailPage() {
                           )}
                           <div>
                             <p className="text-sm font-medium flex flex-wrap items-center gap-2">
-                              <span>This week (in progress)</span>
+                              <span>{isMonthly ? "This month (in progress)" : "This week (in progress)"}</span>
                               <span className="text-[10px] font-semibold uppercase tracking-wide text-sky-400/90 bg-sky-950/40 border border-sky-800/50 rounded px-1.5 py-0.5">
                                 Not invoiced
                               </span>
                             </p>
                             <p className="text-xs text-neutral-500 mt-0.5">
-                              {fmtShort(cw.weekStart)} – {fmtShort(cw.weekEnd)} · {cw.totalPayments} players (check-in)
+                              {isMonthly
+                                ? fmtMonth(cw.weekStart)
+                                : `${fmtShort(cw.weekStart)} – ${fmtShort(cw.weekEnd)}`}
+                              {!isMonthly && ` · ${cw.totalPayments} players (check-in)`}
                             </p>
                           </div>
                         </div>
@@ -751,6 +843,7 @@ export default function VenueBillingDetailPage() {
                 const inv = row.invoice;
                 const isPaid = inv.status === "paid";
                 const isOverdue = inv.status === "overdue";
+                const isMonthlyInvoice = inv.invoiceType === "monthly";
 
                 return (
                   <div key={inv.id}>
@@ -766,11 +859,16 @@ export default function VenueBillingDetailPage() {
                           <ChevronRight className="h-4 w-4 text-neutral-500 shrink-0" />
                         )}
                         <div>
-                          <p className="text-sm font-medium">
-                            {fmtShort(inv.weekStartDate)} – {fmtShort(inv.weekEndDate)}
+                          <p className="text-sm font-medium flex items-center gap-2">
+                            {fmtInvoicePeriod(inv)}
+                            {isMonthlyInvoice && (
+                              <span className="text-[10px] font-semibold uppercase tracking-wide text-violet-400/80 bg-violet-950/40 border border-violet-800/50 rounded px-1.5 py-0.5">
+                                Monthly
+                              </span>
+                            )}
                           </p>
                           <p className="text-xs text-neutral-500 mt-0.5">
-                            {inv.totalCheckins} players (check-in)
+                            {isMonthlyInvoice ? "Flat rate" : `${inv.totalCheckins} players (check-in)`}
                             {inv.paymentRef && (
                               <span className="ml-2 font-mono text-neutral-600">{inv.paymentRef}</span>
                             )}
@@ -830,21 +928,30 @@ export default function VenueBillingDetailPage() {
                     {isExpanded && (
                       <div className="border-t border-neutral-800 bg-neutral-950/50 px-5 py-4 space-y-3">
                         <div className="grid grid-cols-2 gap-x-8 gap-y-1 text-xs mb-3">
-                          <div className="flex justify-between">
-                            <span className="text-neutral-500">Base charges</span>
-                            <span className="text-neutral-300">{formatVND(inv.baseAmount)} VND</span>
-                          </div>
-                          {inv.subscriptionAmount > 0 && (
+                          {isMonthlyInvoice ? (
                             <div className="flex justify-between">
-                              <span className="text-neutral-500">Subscription add-on</span>
-                              <span className="text-neutral-300">{formatVND(inv.subscriptionAmount)} VND</span>
+                              <span className="text-neutral-500">Monthly flat rate</span>
+                              <span className="text-neutral-300">{formatVND(inv.baseAmount)} VND</span>
                             </div>
-                          )}
-                          {inv.sepayAmount > 0 && (
-                            <div className="flex justify-between">
-                              <span className="text-neutral-500">SePay add-on</span>
-                              <span className="text-neutral-300">{formatVND(inv.sepayAmount)} VND</span>
-                            </div>
+                          ) : (
+                            <>
+                              <div className="flex justify-between">
+                                <span className="text-neutral-500">Base charges</span>
+                                <span className="text-neutral-300">{formatVND(inv.baseAmount)} VND</span>
+                              </div>
+                              {inv.subscriptionAmount > 0 && (
+                                <div className="flex justify-between">
+                                  <span className="text-neutral-500">Subscription add-on</span>
+                                  <span className="text-neutral-300">{formatVND(inv.subscriptionAmount)} VND</span>
+                                </div>
+                              )}
+                              {inv.sepayAmount > 0 && (
+                                <div className="flex justify-between">
+                                  <span className="text-neutral-500">SePay add-on</span>
+                                  <span className="text-neutral-300">{formatVND(inv.sepayAmount)} VND</span>
+                                </div>
+                              )}
+                            </>
                           )}
                           <div className="flex justify-between font-semibold">
                             <span className="text-neutral-400">Total billed</span>
@@ -879,32 +986,36 @@ export default function VenueBillingDetailPage() {
                           </p>
                         )}
 
-                        <p className="text-xs text-neutral-500">
-                          Open a session to see each CourtPay payment for that live session.
-                        </p>
-
-                        {loadingPayments === weekKey ? (
-                          <div className="flex justify-center py-3">
-                            <Loader2 className="h-4 w-4 animate-spin text-neutral-500" />
-                          </div>
-                        ) : payments ? (
-                          <div className="space-y-2">
+                        {!isMonthlyInvoice && (
+                          <>
                             <p className="text-xs text-neutral-500">
-                              {payments.summary.totalPayments} players (check-in) · {payments.summary.sepayPayments} SePay ·{" "}
-                              {payments.summary.subscriptionPayments} subscription
+                              Open a session to see each CourtPay payment for that live session.
                             </p>
-                            {payments.payments.length === 0 ? (
-                              <p className="text-xs text-neutral-600">No individual payment records found.</p>
-                            ) : (
-                              <BillingWeekSessionBuckets
-                                weekKey={weekKey}
-                                payments={payments.payments}
-                                expandedSessionComposite={expandedSessionComposite}
-                                setExpandedSessionComposite={setExpandedSessionComposite}
-                              />
-                            )}
-                          </div>
-                        ) : null}
+
+                            {loadingPayments === weekKey ? (
+                              <div className="flex justify-center py-3">
+                                <Loader2 className="h-4 w-4 animate-spin text-neutral-500" />
+                              </div>
+                            ) : payments ? (
+                              <div className="space-y-2">
+                                <p className="text-xs text-neutral-500">
+                                  {payments.summary.totalPayments} players (check-in) · {payments.summary.sepayPayments} SePay ·{" "}
+                                  {payments.summary.subscriptionPayments} subscription
+                                </p>
+                                {payments.payments.length === 0 ? (
+                                  <p className="text-xs text-neutral-600">No individual payment records found.</p>
+                                ) : (
+                                  <BillingWeekSessionBuckets
+                                    weekKey={weekKey}
+                                    payments={payments.payments}
+                                    expandedSessionComposite={expandedSessionComposite}
+                                    setExpandedSessionComposite={setExpandedSessionComposite}
+                                  />
+                                )}
+                              </div>
+                            ) : null}
+                          </>
+                        )}
                       </div>
                     )}
                   </div>
@@ -944,7 +1055,9 @@ export default function VenueBillingDetailPage() {
           <div className="rounded-xl border border-neutral-800 bg-neutral-900 overflow-hidden">
             <div className="px-5 py-3 border-b border-neutral-800">
               <p className="text-xs font-semibold text-neutral-400 uppercase tracking-wide">
-                Paid invoices by week
+                {(detail.rates?.billingModel ?? "per_payment") === "monthly"
+                  ? "Paid invoices by month"
+                  : "Paid invoices by week"}
               </p>
             </div>
             {paidInvoices.length === 0 ? (
@@ -954,11 +1067,16 @@ export default function VenueBillingDetailPage() {
                 {paidInvoices.map((inv) => (
                   <div key={inv.id} className="px-5 py-3 flex items-center justify-between gap-4">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium">
-                        {fmtShort(inv.weekStartDate)} – {fmtShort(inv.weekEndDate)}
+                      <p className="text-sm font-medium flex items-center gap-2">
+                        {fmtInvoicePeriod(inv)}
+                        {inv.invoiceType === "monthly" && (
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-violet-400/80 bg-violet-950/40 border border-violet-800/50 rounded px-1.5 py-0.5">
+                            Monthly
+                          </span>
+                        )}
                       </p>
                       <p className="text-xs text-neutral-500 mt-0.5">
-                        {inv.totalCheckins} players (check-in)
+                        {inv.invoiceType === "monthly" ? "Flat rate" : `${inv.totalCheckins} players (check-in)`}
                         {inv.confirmedBy === "free_tier" && (
                           <span className="ml-2 text-green-400">Free tier</span>
                         )}
@@ -1013,11 +1131,16 @@ export default function VenueBillingDetailPage() {
                 {pendingInvoices.map((inv) => (
                   <div key={inv.id} className="px-5 py-3 flex items-center justify-between gap-4">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium">
-                        {fmtShort(inv.weekStartDate)} – {fmtShort(inv.weekEndDate)}
+                      <p className="text-sm font-medium flex items-center gap-2">
+                        {fmtInvoicePeriod(inv)}
+                        {inv.invoiceType === "monthly" && (
+                          <span className="text-[10px] font-semibold uppercase tracking-wide text-violet-400/80 bg-violet-950/40 border border-violet-800/50 rounded px-1.5 py-0.5">
+                            Monthly
+                          </span>
+                        )}
                       </p>
                       <p className="text-xs text-neutral-500 mt-0.5">
-                        {inv.totalCheckins} players (check-in)
+                        {inv.invoiceType === "monthly" ? "Flat rate" : `${inv.totalCheckins} players (check-in)`}
                       </p>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">

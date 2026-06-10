@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/db";
 import type { BillingInvoice } from "@prisma/client";
 
+// ─── Week helpers ─────────────────────────────────────────────────────────────
+
 export function getWeekNumber(date: Date): number {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -46,6 +48,54 @@ export function getPreviousWeekBounds(): { weekStart: Date; weekEnd: Date } {
   return getWeekBounds(lastWeek);
 }
 
+// ─── Month helpers ────────────────────────────────────────────────────────────
+
+/** First moment of given month → last moment of the same month (venue-local time). */
+export function getMonthBounds(refDate?: Date): {
+  monthStart: Date;
+  monthEnd: Date;
+} {
+  const now = refDate ? new Date(refDate) : new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+  const monthEnd = new Date(
+    now.getFullYear(),
+    now.getMonth() + 1,
+    0, // last day of month
+    23, 59, 59, 999
+  );
+  return { monthStart, monthEnd };
+}
+
+export function getPreviousMonthBounds(): {
+  monthStart: Date;
+  monthEnd: Date;
+} {
+  const now = new Date();
+  const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  return getMonthBounds(prevMonth);
+}
+
+/**
+ * Pro-rate a monthly amount when the billing period covers only part of the month.
+ * Uses calendar day count (inclusive on both ends) to avoid DST/millisecond drift.
+ */
+export function proRateMonthlyAmount(
+  monthlyRate: number,
+  periodStart: Date,
+  periodEnd: Date,
+  monthStart: Date,
+  monthEnd: Date
+): number {
+  // Count calendar days by flooring to midnight to avoid sub-day rounding issues.
+  const floorMs = (d: Date) =>
+    new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const msPerDay = 1000 * 60 * 60 * 24;
+  const totalDays = Math.round((floorMs(monthEnd) - floorMs(monthStart)) / msPerDay) + 1;
+  const billedDays = Math.round((floorMs(periodEnd) - floorMs(periodStart)) / msPerDay) + 1;
+  const fraction = billedDays / totalDays;
+  return Math.round(monthlyRate * fraction);
+}
+
 async function getBillingRates(venueId: string) {
   const custom = await prisma.venueBillingRate.findUnique({
     where: { venueId },
@@ -60,6 +110,9 @@ async function getBillingRates(venueId: string) {
       isFreeSepayAddon: custom.isFreeSepayAddon,
       // isFree = all three free → invoice total is 0
       isFree: custom.isFreeBase && custom.isFreeSubAddon && custom.isFreeSepayAddon,
+      billingModel: custom.billingModel as "per_payment" | "monthly",
+      monthlyRate: custom.monthlyRate,
+      monthlyPeriodStart: custom.monthlyPeriodStart,
     };
   }
 
@@ -74,6 +127,9 @@ async function getBillingRates(venueId: string) {
     isFreeSubAddon: false,
     isFreeSepayAddon: false,
     isFree: false,
+    billingModel: "per_payment" as "per_payment" | "monthly",
+    monthlyRate: 0,
+    monthlyPeriodStart: null as Date | null,
   };
 }
 
@@ -283,6 +339,68 @@ export async function generateWeeklyInvoice(
   return invoice;
 }
 
+// ─── Monthly invoice generation ───────────────────────────────────────────────
+
+/**
+ * Generate (or return existing) a flat-rate monthly invoice for a venue.
+ * periodStart / periodEnd define the billed window — equal to the full calendar month
+ * for established monthly venues, or a pro-rated partial month for the first invoice.
+ * Idempotent: keyed on (venueId, periodStart) via the existing @@unique([venueId, weekStartDate]).
+ */
+export async function generateMonthlyInvoice(
+  venueId: string,
+  periodStart: Date,
+  periodEnd: Date
+): Promise<BillingInvoice> {
+  const existing = await prisma.billingInvoice.findUnique({
+    where: { venueId_weekStartDate: { venueId, weekStartDate: periodStart } },
+  });
+  if (existing) return existing;
+
+  const rates = await getBillingRates(venueId);
+  const venue = await prisma.venue.findUniqueOrThrow({ where: { id: venueId } });
+
+  // Determine whether this is a full month or pro-rated partial month.
+  const { monthStart, monthEnd } = getMonthBounds(periodStart);
+  const isFullMonth =
+    periodStart.getFullYear() === monthStart.getFullYear() &&
+    periodStart.getMonth() === monthStart.getMonth() &&
+    periodStart.getDate() === monthStart.getDate();
+
+  const totalAmount = isFullMonth
+    ? rates.monthlyRate
+    : proRateMonthlyAmount(rates.monthlyRate, periodStart, periodEnd, monthStart, monthEnd);
+
+  const year = periodStart.getFullYear();
+  const month = String(periodStart.getMonth() + 1).padStart(2, "0");
+  const ref = `CF-BILL-${venueShortCode(venue.name)}-${year}M${month}`;
+
+  const isFree = totalAmount === 0;
+
+  const invoice = await prisma.billingInvoice.create({
+    data: {
+      venueId,
+      // weekStartDate / weekEndDate reused for monthly range (idempotency key)
+      weekStartDate: periodStart,
+      weekEndDate: periodEnd,
+      invoiceType: "monthly",
+      totalCheckins: 0,
+      subscriptionCheckins: 0,
+      sepayCheckins: 0,
+      baseAmount: totalAmount,
+      subscriptionAmount: 0,
+      sepayAmount: 0,
+      totalAmount,
+      status: isFree ? "paid" : "pending",
+      paymentRef: ref,
+      confirmedBy: isFree ? "free_tier" : undefined,
+    },
+    include: { lineItems: true },
+  });
+
+  return invoice;
+}
+
 /** Same rule as GET /api/sessions/[sessionId]/payments: CourtPay rows often have no sessionId FK. */
 type SessionTimeWindow = {
   id: string;
@@ -327,6 +445,42 @@ function sessionToBillingPayload(s: SessionTimeWindow) {
 export async function getCurrentWeekUsage(venueId: string) {
   const { weekStart, weekEnd } = getWeekBounds();
   const rates = await getBillingRates(venueId);
+
+  // Monthly billing model: return a flat monthly estimate instead of per-payment count.
+  if (rates.billingModel === "monthly") {
+    const { monthStart, monthEnd } = getMonthBounds();
+    const now = new Date();
+    const daysElapsed =
+      Math.floor((now.getTime() - monthStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const totalDaysInMonth =
+      Math.round((monthEnd.getTime() - monthStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const estimatedTotal = Math.round((rates.monthlyRate * daysElapsed) / totalDaysInMonth);
+
+    return {
+      totalPayments: 0,
+      subscriptionPayments: 0,
+      sepayPayments: 0,
+      totalCheckins: 0,
+      subscriptionCheckins: 0,
+      sepayCheckins: 0,
+      baseAmount: estimatedTotal,
+      subscriptionAmount: 0,
+      sepayAmount: 0,
+      estimatedTotal,
+      isFreeBase: rates.isFreeBase,
+      isFreeSubAddon: rates.isFreeSubAddon,
+      isFreeSepayAddon: rates.isFreeSepayAddon,
+      isFree: rates.isFree,
+      billingModel: rates.billingModel,
+      monthlyRate: rates.monthlyRate,
+      weekStart: monthStart,
+      weekEnd: monthEnd,
+      periodStart: monthStart,
+      periodEnd: monthEnd,
+      rates,
+    };
+  }
+
   const payments = await getBillablePaymentsForPeriod(venueId, weekStart, weekEnd);
   const computed = computeLineItems(payments, rates);
 
@@ -346,8 +500,12 @@ export async function getCurrentWeekUsage(venueId: string) {
     isFreeSubAddon: rates.isFreeSubAddon,
     isFreeSepayAddon: rates.isFreeSepayAddon,
     isFree: rates.isFree,
+    billingModel: rates.billingModel,
+    monthlyRate: rates.monthlyRate,
     weekStart,
     weekEnd,
+    periodStart: weekStart,
+    periodEnd: weekEnd,
     rates,
   };
 }

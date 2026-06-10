@@ -23,6 +23,7 @@ export async function GET(req: Request) {
         totalCheckins: true,
         totalAmount: true,
         status: true,
+        invoiceType: true,
         paymentRef: true,
         paidAt: true,
         paidAmount: true,

@@ -168,6 +168,10 @@ interface BillingCurrentData {
   isFree?: boolean;
   weekStart: string;
   weekEnd: string;
+  periodStart?: string;
+  periodEnd?: string;
+  billingModel?: "per_payment" | "monthly";
+  monthlyRate?: number;
   rates: { baseRate: number; subAddon: number; sepayAddon: number };
 }
 
@@ -178,6 +182,7 @@ interface BillingInvoiceRow {
   totalCheckins: number;
   totalAmount: number;
   status: string;
+  invoiceType?: string;
   paymentRef: string | null;
   paidAt: string | null;
   paidAmount: number | null;
@@ -1388,101 +1393,123 @@ export function StaffBossDashboardScreen() {
           )}
           {tab === "billing" && (
             <>
-              {/* Current week live counter */}
-              {billingCurrent && (
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={() => {
-                    if (!venueId) return;
-                    navigation.navigate("StaffBillingWeekPayments", {
-                      venueId,
-                      weekStart: billingCurrent.weekStart,
-                      weekEnd: billingCurrent.weekEnd,
-                    });
-                  }}
-                  style={{ borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.card, padding: 14, marginBottom: 16 }}
-                >
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 10 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                      <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>{t("bossDashboardBillingThisWeek")}</Text>
-                      {billingCurrent.isFree && (
-                        <View style={{ backgroundColor: "rgba(22,163,74,0.2)", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
-                          <Text style={{ fontSize: 10, fontWeight: "700", color: "#4ade80" }}>FREE 🎁</Text>
-                        </View>
-                      )}
+              {/* Current period live counter (weekly or monthly) */}
+              {billingCurrent && (() => {
+                const isMonthly = billingCurrent.billingModel === "monthly";
+                const periodStart = billingCurrent.periodStart ?? billingCurrent.weekStart;
+                const periodEnd = billingCurrent.periodEnd ?? billingCurrent.weekEnd;
+                return (
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => {
+                      if (!venueId || isMonthly) return;
+                      navigation.navigate("StaffBillingWeekPayments", {
+                        venueId,
+                        weekStart: billingCurrent.weekStart,
+                        weekEnd: billingCurrent.weekEnd,
+                      });
+                    }}
+                    style={{ borderRadius: 12, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.card, padding: 14, marginBottom: 16 }}
+                  >
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 10 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                        <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>
+                          {isMonthly ? "This month" : t("bossDashboardBillingThisWeek")}
+                        </Text>
+                        {billingCurrent.isFree && (
+                          <View style={{ backgroundColor: "rgba(22,163,74,0.2)", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                            <Text style={{ fontSize: 10, fontWeight: "700", color: "#4ade80" }}>FREE 🎁</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={{ fontSize: 12, color: theme.muted }}>
+                        {isMonthly
+                          ? new Date(periodStart).toLocaleDateString(undefined, { month: "long", year: "numeric" })
+                          : `${new Date(periodStart).toLocaleDateString(undefined, { day: "numeric", month: "short" })} → ${new Date(periodEnd).toLocaleDateString(undefined, { day: "numeric", month: "short" })}`
+                        }
+                      </Text>
                     </View>
-                    <Text style={{ fontSize: 12, color: theme.muted }}>
-                      {new Date(billingCurrent.weekStart).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
-                      {" → "}
-                      {new Date(billingCurrent.weekEnd).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
-                    </Text>
-                  </View>
 
-                  <View style={{ gap: 6 }}>
-                    <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                      <Text style={{ fontSize: 13, color: theme.muted }}>{t("bossDashboardBillingPayments")}</Text>
-                      <Text style={{ fontSize: 13, color: theme.text }}>
-                        {billingCurrent.totalPayments ?? billingCurrent.totalCheckins}
-                      </Text>
-                    </View>
-                    <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                      <Text style={{ fontSize: 13, color: theme.muted }}>
-                        {t("bossDashboardBillingBase")} (×{formatVND(billingCurrent.rates.baseRate)})
-                      </Text>
-                      <Text style={{ fontSize: 13, color: theme.text }}>{formatVND(billingCurrent.baseAmount)} VND</Text>
-                    </View>
-                    {(billingCurrent.subscriptionPayments ?? billingCurrent.subscriptionCheckins) > 0 && (
-                      <>
-                        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                          <Text style={{ fontSize: 13, color: theme.muted }}>{t("bossDashboardBillingSubPayments")}</Text>
-                          <Text style={{ fontSize: 13, color: theme.text }}>
-                            {billingCurrent.subscriptionPayments ?? billingCurrent.subscriptionCheckins}
-                          </Text>
-                        </View>
-                        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                          <Text style={{ fontSize: 13, color: theme.muted }}>
-                            {t("bossDashboardBillingSubAddon")} (×{formatVND(billingCurrent.rates.subAddon)})
-                          </Text>
-                          <Text style={{ fontSize: 13, color: theme.text }}>{formatVND(billingCurrent.subscriptionAmount)} VND</Text>
-                        </View>
-                      </>
-                    )}
-                    {(billingCurrent.sepayPayments ?? billingCurrent.sepayCheckins) > 0 && (
-                      <>
-                        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                          <Text style={{ fontSize: 13, color: theme.muted }}>{t("bossDashboardBillingAutoPayment")}</Text>
-                          <Text style={{ fontSize: 13, color: theme.text }}>
-                            {billingCurrent.sepayPayments ?? billingCurrent.sepayCheckins}
-                          </Text>
-                        </View>
-                        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                          <Text style={{ fontSize: 13, color: theme.muted }}>
-                            {t("bossDashboardBillingSubAddon")} (×{formatVND(billingCurrent.rates.sepayAddon)})
-                          </Text>
-                          <Text style={{ fontSize: 13, color: theme.text }}>{formatVND(billingCurrent.sepayAmount)} VND</Text>
-                        </View>
-                      </>
-                    )}
-                    <View style={{ borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 8, marginTop: 4, flexDirection: "row", justifyContent: "space-between" }}>
-                      <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>{t("bossDashboardBillingEstimated")}</Text>
-                      {billingCurrent.isFree ? (
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                          <Text style={{ fontSize: 13, color: theme.muted, textDecorationLine: "line-through" }}>
-                            {formatVND(billingCurrent.baseAmount + billingCurrent.subscriptionAmount + billingCurrent.sepayAmount)} VND
-                          </Text>
-                          <Text style={{ fontSize: 14, fontWeight: "700", color: "#4ade80" }}>0 VND 🎁</Text>
-                        </View>
+                    <View style={{ gap: 6 }}>
+                      {isMonthly ? (
+                        <>
+                          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                            <Text style={{ fontSize: 13, color: theme.muted }}>Monthly flat rate</Text>
+                            <Text style={{ fontSize: 13, color: theme.text }}>{formatVND(billingCurrent.monthlyRate ?? 0)} VND</Text>
+                          </View>
+                          <View style={{ borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 8, marginTop: 4, flexDirection: "row", justifyContent: "space-between" }}>
+                            <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>Month-to-date estimate</Text>
+                            <Text style={{ fontSize: 14, fontWeight: "700", color: theme.purple400 }}>{formatVND(billingCurrent.estimatedTotal)} VND</Text>
+                          </View>
+                        </>
                       ) : (
-                        <Text style={{ fontSize: 14, fontWeight: "700", color: theme.purple400 }}>{formatVND(billingCurrent.estimatedTotal)} VND</Text>
+                        <>
+                          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                            <Text style={{ fontSize: 13, color: theme.muted }}>{t("bossDashboardBillingPayments")}</Text>
+                            <Text style={{ fontSize: 13, color: theme.text }}>
+                              {billingCurrent.totalPayments ?? billingCurrent.totalCheckins}
+                            </Text>
+                          </View>
+                          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                            <Text style={{ fontSize: 13, color: theme.muted }}>
+                              {t("bossDashboardBillingBase")} (×{formatVND(billingCurrent.rates.baseRate)})
+                            </Text>
+                            <Text style={{ fontSize: 13, color: theme.text }}>{formatVND(billingCurrent.baseAmount)} VND</Text>
+                          </View>
+                          {(billingCurrent.subscriptionPayments ?? billingCurrent.subscriptionCheckins) > 0 && (
+                            <>
+                              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                                <Text style={{ fontSize: 13, color: theme.muted }}>{t("bossDashboardBillingSubPayments")}</Text>
+                                <Text style={{ fontSize: 13, color: theme.text }}>
+                                  {billingCurrent.subscriptionPayments ?? billingCurrent.subscriptionCheckins}
+                                </Text>
+                              </View>
+                              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                                <Text style={{ fontSize: 13, color: theme.muted }}>
+                                  {t("bossDashboardBillingSubAddon")} (×{formatVND(billingCurrent.rates.subAddon)})
+                                </Text>
+                                <Text style={{ fontSize: 13, color: theme.text }}>{formatVND(billingCurrent.subscriptionAmount)} VND</Text>
+                              </View>
+                            </>
+                          )}
+                          {(billingCurrent.sepayPayments ?? billingCurrent.sepayCheckins) > 0 && (
+                            <>
+                              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                                <Text style={{ fontSize: 13, color: theme.muted }}>{t("bossDashboardBillingAutoPayment")}</Text>
+                                <Text style={{ fontSize: 13, color: theme.text }}>
+                                  {billingCurrent.sepayPayments ?? billingCurrent.sepayCheckins}
+                                </Text>
+                              </View>
+                              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                                <Text style={{ fontSize: 13, color: theme.muted }}>
+                                  {t("bossDashboardBillingSubAddon")} (×{formatVND(billingCurrent.rates.sepayAddon)})
+                                </Text>
+                                <Text style={{ fontSize: 13, color: theme.text }}>{formatVND(billingCurrent.sepayAmount)} VND</Text>
+                              </View>
+                            </>
+                          )}
+                          <View style={{ borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 8, marginTop: 4, flexDirection: "row", justifyContent: "space-between" }}>
+                            <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text }}>{t("bossDashboardBillingEstimated")}</Text>
+                            {billingCurrent.isFree ? (
+                              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                                <Text style={{ fontSize: 13, color: theme.muted, textDecorationLine: "line-through" }}>
+                                  {formatVND(billingCurrent.baseAmount + billingCurrent.subscriptionAmount + billingCurrent.sepayAmount)} VND
+                                </Text>
+                                <Text style={{ fontSize: 14, fontWeight: "700", color: "#4ade80" }}>0 VND 🎁</Text>
+                              </View>
+                            ) : (
+                              <Text style={{ fontSize: 14, fontWeight: "700", color: theme.purple400 }}>{formatVND(billingCurrent.estimatedTotal)} VND</Text>
+                            )}
+                          </View>
+                          <Text style={{ fontSize: 10, color: theme.subtle, marginTop: 4 }}>
+                            {t("bossDashboardBillingTapView")} Base: {formatVND(billingCurrent.rates.baseRate)}đ · Sub: +{formatVND(billingCurrent.rates.subAddon)}đ · Auto-Payment: +{formatVND(billingCurrent.rates.sepayAddon)}đ per player (check-in)
+                          </Text>
+                        </>
                       )}
                     </View>
-                  </View>
-
-                  <Text style={{ fontSize: 10, color: theme.subtle, marginTop: 8 }}>
-                    {t("bossDashboardBillingTapView")} Base: {formatVND(billingCurrent.rates.baseRate)}đ · Sub: +{formatVND(billingCurrent.rates.subAddon)}đ · Auto-Payment: +{formatVND(billingCurrent.rates.sepayAddon)}đ per player (check-in)
-                  </Text>
-                </TouchableOpacity>
-              )}
+                  </TouchableOpacity>
+                );
+              })()}
 
               {/* Past weeks — all invoices (pending, overdue, paid) */}
               {billingInvoices.length > 0 && (
@@ -1543,9 +1570,10 @@ export function StaffBossDashboardScreen() {
                                 {isPaid ? t("bossDashboardBillingWeekPaid") : isOverdue ? t("bossDashboardBillingOverdue") : t("bossDashboardBillingDue")}
                               </Text>
                               <Text style={{ fontSize: 12, color: theme.muted }}>
-                                {new Date(inv.weekStartDate).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
-                                {" → "}
-                                {new Date(inv.weekEndDate).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+                                {inv.invoiceType === "monthly"
+                                  ? new Date(inv.weekStartDate).toLocaleDateString(undefined, { month: "long", year: "numeric" })
+                                  : `${new Date(inv.weekStartDate).toLocaleDateString(undefined, { day: "numeric", month: "short" })} → ${new Date(inv.weekEndDate).toLocaleDateString(undefined, { day: "numeric", month: "short" })}`
+                                }
                               </Text>
                             </View>
 
@@ -1553,7 +1581,9 @@ export function StaffBossDashboardScreen() {
                             <View style={{ gap: 4 }}>
                               <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                                 <Text style={{ fontSize: 13, color: theme.muted }}>{t("bossDashboardBillingPayments")}</Text>
-                                <Text style={{ fontSize: 13, color: theme.text }}>{inv.totalCheckins}</Text>
+                                <Text style={{ fontSize: 13, color: theme.text }}>
+                                  {inv.invoiceType === "monthly" ? "Flat rate" : String(inv.totalCheckins)}
+                                </Text>
                               </View>
                               {/* Total billed */}
                               <View style={{ flexDirection: "row", justifyContent: "space-between" }}>

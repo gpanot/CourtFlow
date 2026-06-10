@@ -140,6 +140,10 @@ interface BillingCurrentData {
   estimatedTotal: number;
   weekStart: string;
   weekEnd: string;
+  periodStart?: string;
+  periodEnd?: string;
+  billingModel?: "per_payment" | "monthly";
+  monthlyRate?: number;
   rates: { baseRate: number; subAddon: number; sepayAddon: number };
 }
 
@@ -161,6 +165,7 @@ interface BillingInvoiceRow {
   totalCheckins: number;
   totalAmount: number;
   status: string;
+  invoiceType?: string;
   paymentRef: string | null;
   paidAt: string | null;
   paidAmount: number | null;
@@ -1040,98 +1045,125 @@ export default function BossDashboardPage() {
           </div>
         ) : tab === "billing" ? (
           <div className="space-y-6">
-            {/* Current week live counter */}
-            {billingCurrent && (
-              <button
-                className="w-full rounded-xl border border-neutral-800 bg-neutral-900 p-4 text-left"
-                onClick={handleToggleWeekPayments}
-              >
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-medium">This week</h3>
-                  <span className="text-xs text-neutral-500">
-                    {new Date(billingCurrent.weekStart).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                    {" → "}
-                    {new Date(billingCurrent.weekEnd).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                  </span>
-                </div>
-
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-neutral-400">Payments</span>
-                    <span>{billingCurrent.totalPayments ?? billingCurrent.totalCheckins}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-neutral-400">
-                      Base (×{formatVND(billingCurrent.rates.baseRate)})
+            {/* Current period live counter */}
+            {billingCurrent && (() => {
+              const isMonthly = billingCurrent.billingModel === "monthly";
+              const periodStart = billingCurrent.periodStart ?? billingCurrent.weekStart;
+              const periodEnd = billingCurrent.periodEnd ?? billingCurrent.weekEnd;
+              return (
+                <button
+                  className="w-full rounded-xl border border-neutral-800 bg-neutral-900 p-4 text-left"
+                  onClick={handleToggleWeekPayments}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-medium">{isMonthly ? "This month" : "This week"}</h3>
+                    <span className="text-xs text-neutral-500">
+                      {isMonthly
+                        ? new Date(periodStart).toLocaleDateString("en-GB", { month: "long", year: "numeric" })
+                        : <>
+                            {new Date(periodStart).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                            {" → "}
+                            {new Date(periodEnd).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                          </>
+                      }
                     </span>
-                    <span>{formatVND(billingCurrent.baseAmount)} VND</span>
                   </div>
 
-                  {(billingCurrent.subscriptionPayments ?? billingCurrent.subscriptionCheckins) > 0 && (
-                    <>
-                      <div className="flex justify-between">
-                        <span className="text-neutral-400">Subscription payments</span>
-                        <span>{billingCurrent.subscriptionPayments ?? billingCurrent.subscriptionCheckins}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-neutral-400">
-                          Add-on (×{formatVND(billingCurrent.rates.subAddon)})
-                        </span>
-                        <span>{formatVND(billingCurrent.subscriptionAmount)} VND</span>
-                      </div>
-                    </>
-                  )}
-
-                  {(billingCurrent.sepayPayments ?? billingCurrent.sepayCheckins) > 0 && (
-                    <>
-                      <div className="flex justify-between">
-                        <span className="text-neutral-400">Auto-payment confirmed</span>
-                        <span>{billingCurrent.sepayPayments ?? billingCurrent.sepayCheckins}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-neutral-400">
-                          Add-on (×{formatVND(billingCurrent.rates.sepayAddon)})
-                        </span>
-                        <span>{formatVND(billingCurrent.sepayAmount)} VND</span>
-                      </div>
-                    </>
-                  )}
-
-                  <div className="border-t border-neutral-800 pt-2 flex justify-between font-medium">
-                    <span>Estimated total</span>
-                    <span className="text-purple-400">{formatVND(billingCurrent.estimatedTotal)} VND</span>
-                  </div>
-                </div>
-
-                <p className="text-[10px] text-neutral-600 mt-3">
-                  Tap to view weekly payment details. Base: {formatVND(billingCurrent.rates.baseRate)}đ · Sub: +{formatVND(billingCurrent.rates.subAddon)}đ · Auto-Payment: +{formatVND(billingCurrent.rates.sepayAddon)}đ per payment
-                </p>
-                {weekPaymentsOpen && (
-                  <div className="mt-4 space-y-2 border-t border-neutral-800 pt-3">
-                    {weekPaymentsLoading ? (
-                      <div className="flex justify-center py-4">
-                        <Loader2 className="h-4 w-4 animate-spin text-neutral-500" />
-                      </div>
-                    ) : weekPayments ? (
+                  <div className="space-y-2 text-sm">
+                    {isMonthly ? (
                       <>
-                        <p className="text-xs text-neutral-500">
-                          {weekPayments.summary.totalPayments} payments · {formatVND(weekPayments.summary.totalAmount)} VND · {weekPayments.summary.sepayPayments} Auto-Payment
-                        </p>
-                        {weekPayments.payments.length === 0 ? (
-                          <p className="text-xs text-neutral-600">No payments this week.</p>
-                        ) : (
-                          weekPayments.payments.map((payment) => (
-                            <CourtPayBillingPaymentCard key={payment.id} payment={payment} />
-                          ))
-                        )}
+                        <div className="flex justify-between">
+                          <span className="text-neutral-400">Monthly flat rate</span>
+                          <span>{formatVND(billingCurrent.monthlyRate ?? 0)} VND</span>
+                        </div>
+                        <div className="border-t border-neutral-800 pt-2 flex justify-between font-medium">
+                          <span>Month-to-date estimate</span>
+                          <span className="text-purple-400">{formatVND(billingCurrent.estimatedTotal)} VND</span>
+                        </div>
                       </>
                     ) : (
-                      <p className="text-xs text-red-400">Could not load week payments.</p>
+                      <>
+                        <div className="flex justify-between">
+                          <span className="text-neutral-400">Payments</span>
+                          <span>{billingCurrent.totalPayments ?? billingCurrent.totalCheckins}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-neutral-400">
+                            Base (×{formatVND(billingCurrent.rates.baseRate)})
+                          </span>
+                          <span>{formatVND(billingCurrent.baseAmount)} VND</span>
+                        </div>
+
+                        {(billingCurrent.subscriptionPayments ?? billingCurrent.subscriptionCheckins) > 0 && (
+                          <>
+                            <div className="flex justify-between">
+                              <span className="text-neutral-400">Subscription payments</span>
+                              <span>{billingCurrent.subscriptionPayments ?? billingCurrent.subscriptionCheckins}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-neutral-400">
+                                Add-on (×{formatVND(billingCurrent.rates.subAddon)})
+                              </span>
+                              <span>{formatVND(billingCurrent.subscriptionAmount)} VND</span>
+                            </div>
+                          </>
+                        )}
+
+                        {(billingCurrent.sepayPayments ?? billingCurrent.sepayCheckins) > 0 && (
+                          <>
+                            <div className="flex justify-between">
+                              <span className="text-neutral-400">Auto-payment confirmed</span>
+                              <span>{billingCurrent.sepayPayments ?? billingCurrent.sepayCheckins}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-neutral-400">
+                                Add-on (×{formatVND(billingCurrent.rates.sepayAddon)})
+                              </span>
+                              <span>{formatVND(billingCurrent.sepayAmount)} VND</span>
+                            </div>
+                          </>
+                        )}
+
+                        <div className="border-t border-neutral-800 pt-2 flex justify-between font-medium">
+                          <span>Estimated total</span>
+                          <span className="text-purple-400">{formatVND(billingCurrent.estimatedTotal)} VND</span>
+                        </div>
+                      </>
                     )}
                   </div>
-                )}
-              </button>
-            )}
+
+                  {!isMonthly && (
+                    <p className="text-[10px] text-neutral-600 mt-3">
+                      Tap to view weekly payment details. Base: {formatVND(billingCurrent.rates.baseRate)}đ · Sub: +{formatVND(billingCurrent.rates.subAddon)}đ · Auto-Payment: +{formatVND(billingCurrent.rates.sepayAddon)}đ per payment
+                    </p>
+                  )}
+                  {weekPaymentsOpen && !isMonthly && (
+                    <div className="mt-4 space-y-2 border-t border-neutral-800 pt-3">
+                      {weekPaymentsLoading ? (
+                        <div className="flex justify-center py-4">
+                          <Loader2 className="h-4 w-4 animate-spin text-neutral-500" />
+                        </div>
+                      ) : weekPayments ? (
+                        <>
+                          <p className="text-xs text-neutral-500">
+                            {weekPayments.summary.totalPayments} payments · {formatVND(weekPayments.summary.totalAmount)} VND · {weekPayments.summary.sepayPayments} Auto-Payment
+                          </p>
+                          {weekPayments.payments.length === 0 ? (
+                            <p className="text-xs text-neutral-600">No payments this week.</p>
+                          ) : (
+                            weekPayments.payments.map((payment) => (
+                              <CourtPayBillingPaymentCard key={payment.id} payment={payment} />
+                            ))
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-xs text-red-400">Could not load week payments.</p>
+                      )}
+                    </div>
+                  )}
+                </button>
+              );
+            })()}
 
             {/* Pending / overdue invoices */}
             {billingInvoices
@@ -1186,11 +1218,18 @@ export default function BossDashboardPage() {
                           </div>
                         </div>
                         <p className="text-sm text-neutral-400 mb-1">
-                          Week {new Date(inv.weekStartDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                          {" – "}
-                          {new Date(inv.weekEndDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                          {inv.invoiceType === "monthly"
+                            ? new Date(inv.weekStartDate).toLocaleDateString("en-GB", { month: "long", year: "numeric" })
+                            : <>
+                                Week {new Date(inv.weekStartDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                                {" – "}
+                                {new Date(inv.weekEndDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                              </>
+                          }
                         </p>
-                        <p className="text-sm mb-1">{inv.totalCheckins} payments</p>
+                        <p className="text-sm mb-1">
+                          {inv.invoiceType === "monthly" ? "Monthly flat rate" : `${inv.totalCheckins} payments`}
+                        </p>
                         <div className="flex items-baseline justify-between mb-3">
                           <span className="text-xs text-neutral-500">Total billed</span>
                           <span className="text-lg font-bold text-purple-400">
@@ -1306,9 +1345,14 @@ export default function BossDashboardPage() {
                           >
                             <div>
                               <p className="text-sm">
-                                Week {new Date(inv.weekStartDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-                                {" – "}
-                                {new Date(inv.weekEndDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                                {inv.invoiceType === "monthly"
+                                  ? new Date(inv.weekStartDate).toLocaleDateString("en-GB", { month: "long", year: "numeric" })
+                                  : <>
+                                      Week {new Date(inv.weekStartDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                                      {" – "}
+                                      {new Date(inv.weekEndDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                                    </>
+                                }
                               </p>
                             </div>
                             <div className="flex items-center gap-2">

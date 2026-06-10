@@ -846,17 +846,23 @@ model BillingConfig {
 }
 
 model VenueBillingRate {
-  id                 String   @id @default(cuid())
-  venueId            String   @unique @map("venue_id")
-  baseRatePerCheckin Int      @default(5000) @map("base_rate_per_checkin")
-  subscriptionAddon  Int      @default(1000) @map("subscription_addon")
-  sepayAddon         Int      @default(1000) @map("sepay_addon")
+  id                 String    @id @default(cuid())
+  venueId            String    @unique @map("venue_id")
+  baseRatePerCheckin Int       @default(5000) @map("base_rate_per_checkin")
+  subscriptionAddon  Int       @default(1000) @map("subscription_addon")
+  sepayAddon         Int       @default(1000) @map("sepay_addon")
   /// Free flags per component — when true that component costs 0 on the weekly invoice
-  isFreeBase         Boolean  @default(false) @map("is_free_base")
-  isFreeSubAddon     Boolean  @default(false) @map("is_free_sub_addon")
-  isFreeSepayAddon   Boolean  @default(false) @map("is_free_sepay_addon")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  isFreeBase         Boolean   @default(false) @map("is_free_base")
+  isFreeSubAddon     Boolean   @default(false) @map("is_free_sub_addon")
+  isFreeSepayAddon   Boolean   @default(false) @map("is_free_sepay_addon")
+  /// "per_payment" (default) = weekly invoice per CourtPay payment; "monthly" = flat monthly rate
+  billingModel       String    @default("per_payment") @map("billing_model")
+  /// Flat monthly fee in VND — only used when billingModel = "monthly"
+  monthlyRate        Int       @default(0) @map("monthly_rate")
+  /// Date billing started under the monthly model — used to pro-rate the first invoice
+  monthlyPeriodStart DateTime? @map("monthly_period_start")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
 
   venue Venue @relation(fields: [venueId], references: [id])
 
@@ -876,9 +882,11 @@ model BillingInvoice {
   sepayAmount          Int       @default(0) @map("sepay_amount")
   totalAmount          Int       @default(0) @map("total_amount")
   status               String    @default("pending") // "pending" | "paid" | "overdue"
+  /// "weekly" (default, per_payment model) | "monthly"
+  invoiceType          String    @default("weekly") @map("invoice_type")
   paymentRef           String?   @unique @map("payment_ref")
   paidAt               DateTime? @map("paid_at")
-  confirmedBy          String?   @map("confirmed_by") // "sepay" | "manual_admin" | "payos" | "payos_admin" | "sepay_admin"
+  confirmedBy          String?   @map("confirmed_by") // "sepay" | "manual_admin" | "payos" | "payos_admin" | "sepay_admin" | "free_tier"
   paidAmount           Int?      @map("paid_amount")
   comment              String?   @map("comment")
   payosOrderCode       String?   @unique @map("payos_order_code")
