@@ -1,24 +1,46 @@
 # CourtFlow — Product Overview
 
-**Version 2.0 · March 2026**
+**Version 3.0 · June 2026**
 **Tagline:** The all-in-one court management platform for pickleball venues.
 
 ---
 
 ## What is CourtFlow?
 
-CourtFlow started as a real-time rotation system for 200+ player open-play sessions. It has evolved into a **complete court management platform** that handles everything a pickleball venue needs — from live session management and automated matchmaking to court bookings, memberships, staff payroll, and scheduling.
+CourtFlow started as a real-time rotation system for 200+ player open-play sessions. It has evolved into a **complete court management and payment platform** that handles everything a pickleball venue needs — from live session management and automated matchmaking to court bookings, memberships, staff payroll, coaching, on-site check-in payments, and automated bank reconciliation.
 
-The platform serves four distinct user types through dedicated interfaces:
+The platform has **two distinct products** that share the same backend:
+
+| Product | Form Factor | Primary Use |
+|---------|-------------|-------------|
+| **CourtFlow** | Web app (PWA) | Court operations, rotation, admin, analytics |
+| **CourtPay** | Mobile app (iOS / Android) | On-site check-in and payment collection |
+
+---
+
+## Interfaces
 
 | Interface | Users | Purpose |
 |-----------|-------|---------|
-| **Admin Panel** | Venue owners, managers | Full venue operations: bookings, memberships, payments, staff, analytics |
-| **Staff Dashboard** | Front-desk staff, session managers | Run live sessions, manage queue, assign courts, create bookings |
-| **Player App** | Members, walk-in players | Join queue, view courts, manage profile, book courts |
-| **TV Display** | Public screens at venue | Show live court status, queue, and branding |
+| **Admin Panel** (web) | Venue owners, managers | Full venue operations: bookings, memberships, payments, staff, analytics |
+| **Staff Dashboard** (web) | Front-desk staff, session managers | Run live sessions, manage queue, assign courts, create bookings |
+| **Player App** (web PWA) | Members, walk-in players | Join queue, view courts, manage profile, book courts |
+| **TV Display** (web) | Public screens at venue | Show live court status, queue, and venue branding |
+| **CourtPay Mobile** (RN) | Staff on the floor, venue owners, tablet kiosks | Check-in, collect payments, view earnings on the go |
 
-All interfaces are **PWA-ready** (Progressive Web App) with push notifications and work on any device.
+All web interfaces are **PWA-ready** (Progressive Web App) with web push notifications and work on any device.
+
+---
+
+## Roles
+
+| Role | Access |
+|------|--------|
+| `staff` | Staff Dashboard (web) + CourtPay Mobile (staff tabs) |
+| `manager` | Staff app + Admin panel (scoped to their venues) |
+| `superadmin` | Full access: all venues, all admin panel sections, billing, platform config |
+
+**App access scoping** — A manager's admin panel navigation is filtered based on the `appAccess` field of their venue assignments. If a manager's venues only include CourtPay venues, they only see CourtPay sections in the nav and vice versa.
 
 ---
 
@@ -42,8 +64,9 @@ The original heart of CourtFlow. Staff opens a session, players join a queue, an
 - Warmup mode (manual or auto-fill)
 - Break system with configurable durations (5, 10, 15, 20, 30 min)
 - GPS-based join radius to prevent remote queue joins
-- Session statistics and player history
+- Session statistics, player history, and feedback collection
 - TV Display mode for public screens
+- **Auto-close** — sessions open for more than 6 hours are automatically closed by a Railway cron job (hourly)
 
 **Session Types:**
 - **Open Play** — standard drop-in rotation (queue-based)
@@ -59,7 +82,7 @@ A calendar-based booking system where players reserve specific courts at specifi
 - **Day Planner Grid** — vertical timeline with courts as columns and time slots as rows, showing full daily occupancy at a glance
 - **Multi-slot booking** — select one or multiple consecutive time slots and book them together
 - **Multi-court selection** — select slots across multiple courts to block or schedule
-- **Dynamic pricing** — different prices per day of week and hour range (e.g., weekday morning $10, weekend evening $20)
+- **Dynamic pricing** — different prices per day of week and hour range (e.g., weekday morning vs. weekend evening)
 - **Booking management** — create, edit, cancel bookings; mark no-shows
 - **Conflict detection** — prevents double-booking with real-time availability checks
 - **Cancellation policy** — configurable hours-before-start cancellation window
@@ -77,16 +100,10 @@ A calendar-based booking system where players reserve specific courts at specifi
 Venues can configure recurring weekly schedules for Open Play and Competition sessions that automatically appear in the booking calendar.
 
 **How it works:**
-- Admin defines schedule entries in venue settings: type, title, days of week, time range, courts
+- Admin defines schedule entries per venue: type, title, days of week, time range, courts
 - Entries repeat every week automatically — no need to create individual records
-- Scheduled slots appear as colored blocks in the day planner (green = Open Play, blue = Competition)
+- Scheduled slots appear as colored blocks in the day planner
 - Walk-in bookings cannot overlap with scheduled times
-- Staff opening a live session does not affect the schedule display — the schedule is the plan, the session is the execution
-
-**Example schedule:**
-- Mon/Wed/Fri 8–10 AM: "Morning Open Play" (Courts A–D)
-- Thu 7–9 PM: "Thursday Night Competition" (All courts)
-- Sat 9 AM–12 PM: "Weekend Open Play" (All courts)
 
 ---
 
@@ -95,21 +112,14 @@ Venues can configure recurring weekly schedules for Open Play and Competition se
 For one-off events that don't fit the recurring schedule, admins can block court time directly from the booking grid.
 
 **Block types:**
-| Type | Color | Description |
-|------|-------|-------------|
-| **Open Play** | Green | One-off open play session (not in the weekly schedule) |
-| **Competition** | Blue | One-off competition event |
-| **Private Event** | Amber | Company events, private parties (no player booking) |
-| **Private Competition** | Orange | Invitation-only tournaments |
-| **Maintenance** | Grey | Court resurfacing, repairs, etc. |
 
-**UX flow:**
-1. Select time slots on one or more courts in the grid
-2. Choose from the floating action bar: **Open Play**, **Block Time**, or **+Book**
-3. Fill in type, title, courts, time range, and notes
-4. The block appears immediately in the grid with its distinct color
-
-Court blocks override the recurring schedule — useful for cancelling a regular Open Play for a special event.
+| Type | Description |
+|------|-------------|
+| **Open Play** | One-off open play session |
+| **Competition** | One-off competition event |
+| **Private Event** | Company events, private parties |
+| **Private Competition** | Invitation-only tournaments |
+| **Maintenance** | Court resurfacing, repairs |
 
 ---
 
@@ -118,59 +128,203 @@ Court blocks override the recurring schedule — useful for cancelling a regular
 Tiered membership plans with session tracking, payment management, and perks.
 
 **Membership Tiers:**
-- Admin creates tiers per venue (e.g., Basic $25/month — 5 sessions, Premium $50/month — unlimited)
+- Admin creates tiers per venue (e.g., Basic — 5 sessions/month, Premium — unlimited)
 - Each tier has: name, price, included sessions per cycle, cycle length (days), and perks
 - Perks are configurable text items (e.g., "-10% Coffee Shop", "Priority Tournament Registration")
 
 **Member Management:**
-- Activate/suspend/cancel memberships
+- Activate / suspend / cancel memberships
 - Track session usage (x/5 used) with inline editing for admin adjustments
 - Change tier mid-cycle with automatic payment adjustment
 - Automatic cycle renewal with session count reset
 - Automatic expiration of overdue memberships
 
 **Payment Tracking:**
-- Payment records auto-generated each billing cycle (UNPAID → PAID or OVERDUE)
+- Payment records auto-generated each billing cycle
 - Admin confirms payment with: amount, method (cash/bank transfer/other), date, proof image upload, notes
 - Payment history drawer per member
-- Ability to revert PAID back to UNPAID
 - Monthly payment summary dashboard (collected, unpaid, overdue)
-- Tier upgrade/downgrade adjusts the current unpaid payment amount
 
 ---
 
-### 6. Staff & Payroll
+### 6. Coaching Module
+
+**Coach Management:**
+- Admin creates coach profiles per venue with name, photo, bio, hourly rate, specializations, and availability windows
+- Coaches can be active or inactive per venue
+
+**Lesson Packages:**
+- Admin creates packages (e.g., "5 Private Lessons $200")
+- Package pricing, session count, duration per lesson, and validity days
+- Packages can be active or inactive
+
+**Lesson Scheduling:**
+- Book individual lessons: select coach, date, time, court, player, package
+- Lessons appear on the booking grid alongside court bookings
+- View lessons per coach or per venue
+
+---
+
+### 7. Staff & Payroll
 
 **Staff Management:**
-- Create staff accounts with roles (staff / superadmin)
-- Venue assignment
+- Create staff accounts with roles: `staff`, `manager`, `superadmin`
+- Venue assignment — staff can be assigned to multiple venues
+- Manager role grants admin panel access scoped to their venues
 - Password management with reset capability
-- Biometric login support
+- When a staff member is promoted to manager, `onboardingCompleted` is automatically set to `true`
 
 **Payroll:**
 - Automatic hours tracking based on session open/close times
-- Weekly payroll view with hours worked and amount
-- Cumulative hours tracking
-- Mark payments as paid with method and notes
-- Export payroll data
+- Weekly payroll view: hours worked, sessions closed, amount
+- Mark payments as paid with method, date, and notes
+- Export payroll data to CSV
+- Manager pays staff; superadmin oversees across all venues
 
 ---
 
-### 7. Player Directory
+### 8. Player Directory
 
 Admin can manage all players in the system:
 - Add, edit, delete player profiles
 - View player stats and session history
+- Set skill level, gender, game type preference
 - Filter by skill level, gender, game preference
 - Search by name or phone
+- Face photo management (for face recognition check-in)
 
 ---
 
-### 8. Analytics
+### 9. Analytics
 
-Dashboard with venue-wide statistics:
-- Total players, sessions, games played
-- Trends and usage patterns
+**Venue Analytics:**
+- Sessions, players, games played, revenue over configurable date ranges (7d, 30d, 90d, 1y, custom)
+- Booking revenue breakdown
+- Membership revenue
+- Coaching revenue
+- Player retention metrics
+- Court utilization
+
+**CourtPay Analytics:**
+- Per-venue payment analytics: monthly and weekly breakdowns
+- Session-level drill-down with payment details per player
+- KPIs: total revenue, payment count, unique players, sessions, avg revenue/session, cancelled count
+- **CSV Export:**
+  - Monthly / weekly breakdown → session-consolidated format (matches mobile boss dashboard): Date, Session start/end, Duration, Staff, Initial price, Total revenue, Total payments, QR/Cash/Subs count, Reclub (Expected), Total players. Sessions with zero revenue are excluded.
+  - Session drill-down → payment-per-row format: Confirmed At, Player, Phone, Skill Level, Amount, Method, Status, etc.
+  - Selective export — "Export" button per section enables checkbox row selection and exports only selected rows
+
+---
+
+### 10. Billing (CourtFlow SaaS)
+
+CourtFlow bills venues on a **usage-based SaaS model**.
+
+**How it works:**
+- Weekly invoices auto-generated every Monday
+- Invoice amount based on check-ins during the billing period × per-check-in rate
+- Venue pays via bank transfer; superadmin marks invoice as paid
+- Overdue invoices (>7 days unpaid) automatically escalate
+- Venues overdue >14 days are suspended
+
+**Admin billing features:**
+- Invoice list per venue with status (pending / paid / overdue / suspended)
+- Billing configuration per venue: bank details, rates, billing contact
+- Admin can mark invoices paid manually (with method, ref, notes)
+
+---
+
+## CourtPay Module
+
+CourtPay is the mobile-app layer for on-site check-in and payment. It uses the same backend APIs as CourtFlow.
+
+### Staff App (CourtPay Mobile — 3-tab interface)
+
+| Tab | Description |
+|-----|-------------|
+| **Session** | Open / close sessions, view active session stats, session history |
+| **Check-In** | Face recognition or manual check-in of players, payment status view |
+| **Payment** | View pending/confirmed/cancelled payments, manual confirm, QR display |
+
+**Additional staff screens:**
+- **Boss Dashboard** — earnings summary with weekly/monthly revenue charts, revenue export (session-consolidated CSV)
+- **Subscriptions** — list of active player subscriptions per venue
+- **Payment Settings** — configure session fee, bank details, payment methods, auto-payment status display
+- **Player Detail** — individual player profile, photo, subscription status, payment history
+- **Session History** — closed sessions list with revenue summary per session
+
+### Kiosk Mode (Tablet)
+
+Self-service tablet station at the venue entrance — no staff required:
+- **Venue select → Mode select → Check-In or Pay**
+- **Face recognition check-in** — player looks at the camera → face matched → auto check-in with VietQR payment generated
+- **QR code check-in** — player scans a personalized QR from their phone
+- **Wristband check-in** — NFC/QR on wristband
+- **PayOS sticker kiosk** — scan a sticker, pay via PayOS QR
+- On-screen payment display with real-time confirmation (socket event drives status update)
+
+### Payments
+
+**Payment methods:**
+- **VietQR** — generate a bank transfer QR code; player scans with their banking app and amount goes directly to venue's bank account
+- **Cash** — staff marks payment as cash; tracked in the system
+- **Subscription** — deduct from player's active membership; no bank transfer
+
+**Payment confirmation:**
+- **Manual** — staff taps confirm in the app
+- **Auto (Sepay)** — when enabled, Sepay webhook receives the bank transfer, matches it to the pending payment reference (`CF-SES-XXXXXX`), and auto-confirms without staff action. Supports bank-specific reference formatting (MB Bank strips hyphens/adds spaces — handled via regex normalization)
+
+**Sepay configuration (per venue, in CourtPay Settings → Auto-payment tab):**
+- Toggle: Auto-payment confirmation ON/OFF
+- Gateway: Sepay (active) or PayOS (coming soon)
+- Bank account, phone, CCCD
+- Test QR — generate a test payment showing both CourtFlow VietQR and Sepay QR side-by-side with real-time debug status panel
+
+### Reclub Integration
+
+- Staff can load Reclub event rosters into a session
+- Roster players are pre-identified at check-in by face or QR
+- Reclub snapshot captured at session close: expected vs. matched vs. walk-in counts
+- Used for Reclub billing reconciliation
+
+### Face Recognition (AWS Rekognition)
+
+- Players register their face photo at check-in
+- Face recognition used to identify returning players instantly
+- Duplicate face detection prevents double registration
+- Face search with similarity threshold
+- Admin can view face stats and run face recognition tests
+
+### Push Notifications (FCM — Firebase Cloud Messaging)
+
+- Staff receive push notifications for check-in events, payment confirmations, and session alerts
+- Supported on both iOS and Android via `@react-native-firebase/messaging`
+- Background message handling persisted to AsyncStorage for debug inspection
+- FCM Debug Screen in the mobile app: displays token, permission status, log of all message events (foreground / background / tapped / quit state), with "Send Test PNS" button
+
+---
+
+## Admin Panel Sections
+
+| Section | Description |
+|---------|-------------|
+| **Live** | Real-time monitor of all venues' court and session status |
+| **Bookings** | Day planner grid, booking management, schedule config, pricing rules |
+| **Coaching** | Coaches, lesson packages, lesson scheduling |
+| **Memberships** | CourtFlow membership tiers, member activation, payment tracking |
+| **Players** | Player directory with skill, stats, face photo management |
+| **Staff** | Staff accounts, roles, venue assignments |
+| **Payroll** | Weekly staff payroll tracking and export |
+| **Venues** | Venue config: courts, billing config, active/inactive |
+| **Venue Analytics** | Usage statistics, bookings, coaching, player metrics |
+| **Membership CourtPay** | CourtPay subscription packages, subscribers, payments |
+| **CourtPay Analytics** | Session/payment analytics with drill-down and CSV export |
+| **CourtPay Settings** | TV display, payment config, Sepay auto-payment, branding |
+| **CourtPay Billing** | SaaS invoice management per venue |
+| **Kiosk Shop** | PayOS sticker configuration and kiosk payment settings |
+| **My Billing** | Manager's own billing dashboard |
+
+**Navigation scoping:** Managers only see sections relevant to their assigned venues' `appAccess` (CourtFlow sections hidden if no CourtFlow venues; CourtPay sections hidden if no CourtPay venues).
 
 ---
 
@@ -182,52 +336,69 @@ Dashboard with venue-wide statistics:
 |-------|------------|
 | **Framework** | Next.js 14+ (App Router) |
 | **Language** | TypeScript |
-| **Database** | PostgreSQL |
+| **Database** | PostgreSQL (Railway-hosted) |
 | **ORM** | Prisma |
 | **Styling** | Tailwind CSS (dark theme) |
 | **State** | Zustand (client sessions) |
 | **Real-time** | Socket.io (WebSocket) |
 | **Auth** | JWT + bcrypt + OTP (phone-based for players, password for staff) |
-| **Push** | Web Push API (VAPID) |
+| **Web Push** | Web Push API (VAPID) |
+| **Mobile** | React Native (Expo) — iOS & Android |
+| **Mobile Push** | Firebase Cloud Messaging (FCM) via `@react-native-firebase/messaging` |
+| **Face Recognition** | AWS Rekognition |
+| **Payment Webhooks** | Sepay (auto-confirm bank transfers) + PayOS (kiosk sticker payments) |
+| **Hosting** | Railway (API + DB) |
 | **Icons** | Lucide React |
+
+### Cron Jobs (Railway)
+
+| Job | Schedule | Description |
+|-----|----------|-------------|
+| `auto-close-sessions` | Every hour (`0 * * * *`) | Closes sessions that have been open for more than 6 hours |
+| `generate-invoices` | Every Monday 00:01 (`1 0 * * 1`) | Generates weekly billing invoices, marks overdue, suspends unpaid venues |
+
+Both jobs are secured with `CRON_SECRET` bearer token auth.
 
 ### Key Design Decisions
 
-- **Venue-scoped data** — all data (courts, sessions, bookings, memberships) is scoped to a venue. A player can be a member at multiple venues.
-- **JSON settings** — venue configuration (pricing rules, schedule, membership contact) is stored as JSON in the `Venue.settings` field for flexibility without schema changes.
-- **Three booking models** — Walk-in bookings (`Booking`), live sessions (`Session`), and time blocks (`CourtBlock`) are separate models that all feed into a unified availability API.
-- **Cents-based pricing** — all prices stored in cents internally, displayed as dollars in the UI.
-- **Admin-first** — the admin panel is the primary interface; player and staff apps are secondary consumers of the same API.
+- **Venue-scoped data** — all data (courts, sessions, bookings, memberships, payments) is scoped to a venue
+- **JSON settings** — per-venue configuration (pricing rules, schedule, payment config, Sepay settings) stored as JSON in `Venue.settings` for flexibility without schema migrations
+- **Three booking models** — Walk-in bookings (`Booking`), live sessions (`Session`), and time blocks (`CourtBlock`) are separate models that all feed into a unified availability API
+- **Shared venue picker** — `AdminVenuePicker` / `useAdminVenuePicker` is a single component + hook used across all admin pages, fetching from `/api/admin/venues` (auth-scoped) and persisting selection via `useAdminVenueStore` (localStorage)
+- **Timezone** — server and all date/time logic runs in the venue's local timezone (`Asia/Saigon`, UTC+7); `setHours()` used throughout (never `setUTCHours`)
+- **Payment reference parsing** — `extractPaymentRef` handles MB Bank's hyphen/space stripping variations (`CF-SES-XXXXXX`, `CFSESXXXXXX`, `CF SES XXXXXX`)
 
 ### Real-Time Architecture
 
 ```
 Browser ←→ Socket.io ←→ Custom Express Server ←→ Next.js API
                 ↓
-         Push Notifications (Web Push)
+         Push Notifications (Web Push / FCM)
 ```
 
-Events flow through venue-scoped rooms (`venue:{id}`) and player-scoped rooms (`player:{id}`). Court updates, queue changes, and session events are broadcast in real-time to all connected clients.
+Events flow through venue-scoped rooms (`venue:{id}`) and player-scoped rooms (`player:{id}`). Court updates, queue changes, session events, and payment confirmations are broadcast in real-time to all connected clients.
 
 ---
 
 ## User Flows
 
-### Admin: Typical Day
+### Staff: Running an Open Play Session
 
-1. **Morning** — Check the day planner. Recurring Open Play sessions are already showing. Review any bookings or blocks.
-2. **Handle walk-ins** — Create bookings from the grid for walk-in players. Select court + time, search player, confirm.
-3. **Open Play time** — Staff opens a live session. Players join via QR. The system handles rotation. The schedule block on the calendar is unaffected.
-4. **Unexpected event** — A company wants 3 courts for 2 hours this afternoon. Admin selects the slots, taps "Block Time", creates a Private Event.
-5. **End of day** — Check membership payments. Confirm cash payments with proof. Review payroll.
+1. Open CourtPay mobile → select venue → Session tab
+2. Tap "Open Session" → session starts
+3. Players arrive and check in at the kiosk (face/QR) or staff checks them in manually
+4. Each player receives a VietQR payment QR; auto-confirmed via Sepay when payment is received
+5. End of session → tap "Close Session" (or session auto-closes after 6h if forgotten)
+6. Session summary shows revenue, players, confirmed payments
 
-### Player: Booking a Court
+### Admin: Monitoring CourtPay Revenue
 
-1. Open the Player App → select venue
-2. Browse available time slots
-3. Select court + time → confirm booking
-4. Receive push notification reminder before the booking
-5. Show up and play
+1. Admin Panel → CourtPay Analytics → select venue
+2. Monthly breakdown table shows revenue, sessions, players per month
+3. Click a month → weekly breakdown
+4. Click a week → session list for that week
+5. Click a session → payment-by-payment detail with player info, skill level, method
+6. Export selected months/weeks → session-consolidated CSV (matches boss dashboard format); zero-revenue sessions excluded
 
 ### Player: Joining Open Play
 
@@ -236,34 +407,24 @@ Events flow through venue-scoped rooms (`venue:{id}`) and player-scoped rooms (`
 3. Automatically join the queue
 4. Get matched into a group and assigned a court
 5. Play → get requeued → repeat
-6. Take breaks as needed → return to queue
 
 ---
 
-## Roadmap / Future Modules
+## Roadmap
 
 | Module | Status | Description |
 |--------|--------|-------------|
-| **Coach Booking** | Planned | Book private lessons with permanent venue coaches. Coach profiles, availability, hourly rates, booking flow. |
-| **Capacity & Waitlist** | Deferred | When all courts are booked, players join a waitlist and get notified on cancellation. |
-| **Online Payment** | Planned | Stripe/payment gateway integration for memberships and bookings. Currently manual (cash/transfer). |
-| **Player Booking App** | In progress | Full booking flow in the player app (currently admin/staff-only). |
-| **Tournament Module** | Planned | Bracket generation, seeding, scoring, and scheduling for organized tournaments. |
-
----
-
-## Color System (UI Reference)
-
-| Element | Color | Hex |
-|---------|-------|-----|
-| Walk-in Booking | Purple | `#7c3aed` |
-| Open Play (schedule + block) | Emerald | `#10b981` |
-| Competition (schedule + block) | Blue | `#3b82f6` |
-| Private Event | Amber | `#f59e0b` |
-| Private Competition | Orange | `#f97316` |
-| Maintenance | Neutral Grey | `#737373` |
-| Available Slot | Dashed border | `#262626` |
-| Selected Slot | Purple ring | `#7c3aed` |
+| **Sepay auto-payment** | Live | Bank transfer webhook auto-confirms CourtPay payments |
+| **Coaching module** | Live | Coach profiles, lesson packages, scheduling |
+| **Payroll** | Live | Staff hours tracking and payment management |
+| **Face recognition kiosk** | Live | AWS Rekognition for self-service check-in |
+| **Push notifications (FCM)** | Live | Staff and player mobile push notifications |
+| **PayOS (kiosk stickers)** | Live | PayOS QR-based sticker kiosk payments |
+| **Auto-close sessions** | Live | Automatic 6-hour session timeout |
+| **CourtPay analytics export** | Live | Session-consolidated CSV export for monthly/weekly data |
+| **PayOS (CourtPay gateway)** | Coming soon | PayOS as an alternative gateway for CourtPay auto-payment |
+| **Capacity & Waitlist** | Planned | When all courts are booked, players join a waitlist |
+| **Tournament Module** | Planned | Bracket generation, seeding, scoring, and scheduling |
 
 ---
 
@@ -275,8 +436,17 @@ Events flow through venue-scoped rooms (`venue:{id}`) and player-scoped rooms (`
 - **Typography:** System font stack, no custom fonts
 - **Icons:** Lucide (outline style, 16–24px)
 - **Corner radius:** 12px cards, 16px modals, full for badges/pills
-- **Components:** Buttons, modals, drawers, badges, toggle pills, inline editable fields, floating action bars, grid calendars
+- **Components:** Buttons, modals, drawers, badges, toggle pills, inline editable fields, floating action bars, grid calendars, data tables with selective export
 
----
+### Booking Grid Color System
 
-*CourtFlow is built and maintained as an open-source court management platform. For questions or contributions, see the repository.*
+| Element | Color | Hex |
+|---------|-------|-----|
+| Walk-in Booking | Purple | `#7c3aed` |
+| Open Play (schedule + block) | Emerald | `#10b981` |
+| Competition (schedule + block) | Blue | `#3b82f6` |
+| Private Event | Amber | `#f59e0b` |
+| Private Competition | Orange | `#f97316` |
+| Maintenance | Neutral Grey | `#737373` |
+| Available Slot | Dashed border | `#262626` |
+| Selected Slot | Purple ring | `#7c3aed` |

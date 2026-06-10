@@ -391,7 +391,10 @@ export async function GET(req: Request) {
         })
       );
 
-      return NextResponse.json({ level: "sessions-export", venue, sessions: sessionRows });
+      // Only include sessions that actually had revenue (exclude empty test/admin sessions)
+      const nonEmptySessions = sessionRows.filter((s) => s.totalRevenue > 0);
+
+      return NextResponse.json({ level: "sessions-export", venue, sessions: nonEmptySessions });
     }
 
     // Week level

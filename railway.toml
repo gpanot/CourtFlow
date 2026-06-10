@@ -4,3 +4,13 @@ buildCommand = "echo 'Using Dockerfile'"
 # Runs once per deploy before traffic switches (requires DATABASE_URL on the service).
 [deploy]
 releaseCommand = "npx prisma migrate deploy"
+
+# ── Railway Cron Jobs ──────────────────────────────────────────────────────────
+# Configure these as separate Railway "Cron" services in the Railway dashboard.
+# Each cron calls the app URL with Authorization: Bearer $CRON_SECRET
+#
+#  auto-close-sessions  → GET /api/cron/auto-close-sessions   every hour  (0 * * * *)
+#    Closes sessions that have been open for more than 6 hours.
+#
+#  generate-invoices    → GET /api/cron/generate-invoices      Mon 00:01  (1 0 * * 1)
+#    Generates weekly billing invoices and marks overdue ones.
