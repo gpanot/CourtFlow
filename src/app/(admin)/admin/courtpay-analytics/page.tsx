@@ -7,6 +7,7 @@ import { useAdminVenueStore } from "@/stores/admin-venue-store";
 import {
   BarChart3,
   ChevronRight,
+  Check,
   Download,
   Loader2,
   Users,
@@ -108,22 +109,32 @@ function downloadCSV(filename: string, headers: string[], rows: string[][]) {
   URL.revokeObjectURL(url);
 }
 
+function formatConfirmedAt(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
+}
+
 function paymentRowsToCsv(rows: PaymentDetailRow[]): string[][] {
   return rows.map((p) => [
-    p.confirmedAt ? new Date(p.confirmedAt).toLocaleString("en-GB") : "",
+    formatConfirmedAt(p.confirmedAt),
     p.sessionTitle ?? "",
     p.sessionType ?? "",
     p.hostName ?? "",
     p.playerName,
     p.playerPhone,
-    p.reclubUserId != null ? String(p.reclubUserId) : "",
+    p.playerSkillLevel ?? "",
     p.reclubName ?? "",
     String(p.checkInFrequency),
     String(p.amount),
     String(p.partyCount),
     p.paymentMethod,
     p.status,
-    p.confirmedAt ?? "",
     p.confirmedBy ?? "",
     p.confirmedOnDevice ?? "",
     p.cancelReason ?? "",
@@ -131,20 +142,19 @@ function paymentRowsToCsv(rows: PaymentDetailRow[]): string[][] {
 }
 
 const PAYMENT_CSV_HEADERS = [
-  "Date",
+  "Confirmed At",
   "Session Title",
   "Session Type",
   "Host",
   "Player Name",
   "Player Phone",
-  "Reclub ID",
+  "Skill Level",
   "Reclub Name",
   "Check-in Frequency",
   "Amount (VND)",
   "Party Count",
   "Payment Method",
   "Status",
-  "Confirmed At",
   "Confirmed By",
   "Device",
   "Cancel Reason",
@@ -225,16 +235,48 @@ function DataTable({
   headers,
   rows,
   onRowClick,
+  selectionMode = false,
+  selectedKeys,
+  onToggleRow,
 }: {
   headers: string[];
   rows: { key: string; cells: React.ReactNode[] }[];
   onRowClick?: (key: string) => void;
+  selectionMode?: boolean;
+  selectedKeys?: Set<string>;
+  onToggleRow?: (key: string) => void;
 }) {
+  const allSelected = rows.length > 0 && rows.every((r) => selectedKeys?.has(r.key));
+  const handleToggleAll = () => {
+    if (!onToggleRow) return;
+    if (allSelected) {
+      rows.forEach((r) => selectedKeys?.has(r.key) && onToggleRow(r.key));
+    } else {
+      rows.forEach((r) => !selectedKeys?.has(r.key) && onToggleRow(r.key));
+    }
+  };
+
   return (
     <div className="overflow-x-auto rounded-xl border border-neutral-800">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-neutral-800 bg-neutral-900/80">
+            {selectionMode && (
+              <th className="w-10 px-3 py-3">
+                <button
+                  type="button"
+                  onClick={handleToggleAll}
+                  className={cn(
+                    "flex h-4 w-4 items-center justify-center rounded border",
+                    allSelected
+                      ? "border-green-500 bg-green-600"
+                      : "border-neutral-600 bg-neutral-800 hover:border-neutral-400"
+                  )}
+                >
+                  {allSelected && <Check className="h-3 w-3 text-white" />}
+                </button>
+              </th>
+            )}
             {headers.map((h) => (
               <th
                 key={h}
@@ -243,44 +285,122 @@ function DataTable({
                 {h}
               </th>
             ))}
-            {onRowClick && <th className="w-8" />}
+            {onRowClick && !selectionMode && <th className="w-8" />}
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 ? (
             <tr>
               <td
-                colSpan={headers.length + (onRowClick ? 1 : 0)}
+                colSpan={headers.length + (onRowClick && !selectionMode ? 1 : 0) + (selectionMode ? 1 : 0)}
                 className="px-4 py-12 text-center text-neutral-500"
               >
                 No data for this period
               </td>
             </tr>
           ) : (
-            rows.map((row) => (
-              <tr
-                key={row.key}
-                onClick={() => onRowClick?.(row.key)}
-                className={cn(
-                  "border-b border-neutral-800/60 last:border-0",
-                  onRowClick && "cursor-pointer hover:bg-neutral-800/40"
-                )}
-              >
-                {row.cells.map((cell, i) => (
-                  <td key={i} className="px-4 py-3 text-neutral-200">
-                    {cell}
-                  </td>
-                ))}
-                {onRowClick && (
-                  <td className="px-2 py-3 text-neutral-500">
-                    <ChevronRight className="h-4 w-4" />
-                  </td>
-                )}
-              </tr>
-            ))
+            rows.map((row) => {
+              const isSelected = selectedKeys?.has(row.key) ?? false;
+              return (
+                <tr
+                  key={row.key}
+                  onClick={() => selectionMode ? onToggleRow?.(row.key) : onRowClick?.(row.key)}
+                  className={cn(
+                    "border-b border-neutral-800/60 last:border-0 cursor-pointer",
+                    selectionMode
+                      ? isSelected
+                        ? "bg-green-900/15 hover:bg-green-900/20"
+                        : "hover:bg-neutral-800/30"
+                      : onRowClick
+                        ? "hover:bg-neutral-800/40"
+                        : ""
+                  )}
+                >
+                  {selectionMode && (
+                    <td className="px-3 py-3">
+                      <div
+                        className={cn(
+                          "flex h-4 w-4 items-center justify-center rounded border",
+                          isSelected
+                            ? "border-green-500 bg-green-600"
+                            : "border-neutral-600 bg-neutral-800"
+                        )}
+                      >
+                        {isSelected && <Check className="h-3 w-3 text-white" />}
+                      </div>
+                    </td>
+                  )}
+                  {row.cells.map((cell, i) => (
+                    <td key={i} className="px-4 py-3 text-neutral-200">
+                      {cell}
+                    </td>
+                  ))}
+                  {onRowClick && !selectionMode && (
+                    <td className="px-2 py-3 text-neutral-500">
+                      <ChevronRight className="h-4 w-4" />
+                    </td>
+                  )}
+                </tr>
+              );
+            })
           )}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function SectionHeader({
+  title,
+  selectionMode,
+  selectedCount,
+  totalCount,
+  onToggleSelectionMode,
+  onExportSelected,
+  exportingSelected,
+}: {
+  title: string;
+  selectionMode: boolean;
+  selectedCount: number;
+  totalCount: number;
+  onToggleSelectionMode: () => void;
+  onExportSelected: () => void;
+  exportingSelected: boolean;
+}) {
+  return (
+    <div className="mb-3 flex items-center justify-between gap-2">
+      <h2 className="text-sm font-medium text-neutral-300">{title}</h2>
+      <div className="flex items-center gap-2">
+        {selectionMode && selectedCount > 0 && (
+          <button
+            type="button"
+            onClick={onExportSelected}
+            disabled={exportingSelected}
+            className="flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-600 disabled:opacity-50"
+          >
+            {exportingSelected ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Download className="h-3 w-3" />
+            )}
+            Export ({selectedCount})
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onToggleSelectionMode}
+          className={cn(
+            "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+            selectionMode
+              ? "border-neutral-500 bg-neutral-800 text-neutral-300 hover:text-white"
+              : "border-neutral-700 bg-neutral-900 text-neutral-400 hover:border-neutral-500 hover:text-white"
+          )}
+        >
+          {selectionMode
+            ? `Cancel${selectedCount > 0 ? ` (${selectedCount}/${totalCount})` : ""}`
+            : "Export"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -299,6 +419,18 @@ export default function CourtPayAnalyticsPage() {
   const [weeks, setWeeks] = useState<WeekRow[]>([]);
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [payments, setPayments] = useState<PaymentDetailRow[]>([]);
+
+  // Per-section selection state
+  const [monthsSelectMode, setMonthsSelectMode] = useState(false);
+  const [monthsSelected, setMonthsSelected] = useState<Set<string>>(new Set());
+  const [weeksSelectMode, setWeeksSelectMode] = useState(false);
+  const [weeksSelected, setWeeksSelected] = useState<Set<string>>(new Set());
+  const [sessionsSelectMode, setSessionsSelectMode] = useState(false);
+  const [sessionsSelected, setSessionsSelected] = useState<Set<string>>(new Set());
+  const [paymentsSelectMode, setPaymentsSelectMode] = useState(false);
+  const [paymentsSelected, setPaymentsSelected] = useState<Set<string>>(new Set());
+  const [exportingSelected, setExportingSelected] = useState(false);
+
   const [sessionMeta, setSessionMeta] = useState<{
     title: string | null;
     type: string;
@@ -599,6 +731,87 @@ export default function CourtPayAnalyticsPage() {
     setExporting(false);
   };
 
+  const toggleKey = (set: Set<string>, key: string): Set<string> => {
+    const next = new Set(set);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    return next;
+  };
+
+  // Export selected months: each month → its own export (or all combined into one file)
+  const handleExportMonths = async () => {
+    if (!drill || monthsSelected.size === 0) return;
+    setExportingSelected(true);
+    try {
+      const selected = months.filter((m) => monthsSelected.has(m.month));
+      const allRows: string[][] = [];
+      for (const m of selected) {
+        const params = new URLSearchParams({ export: "all", venueId: drill.venueId, month: m.month });
+        const data = await api.get<{ payments: PaymentDetailRow[] }>(`/api/admin/courtpay-analytics?${params}`);
+        if (allRows.length > 0) allRows.push(["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]);
+        allRows.push([`--- ${m.monthLabel} ---`, "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]);
+        allRows.push(...paymentRowsToCsv(data.payments));
+      }
+      downloadCSV(`${venueName.replace(/\s+/g, "-")}_months-export.csv`, PAYMENT_CSV_HEADERS, allRows);
+      setMonthsSelectMode(false);
+      setMonthsSelected(new Set());
+    } catch (e) { console.error(e); }
+    setExportingSelected(false);
+  };
+
+  const handleExportWeeks = async () => {
+    if (!drill || weeksSelected.size === 0) return;
+    setExportingSelected(true);
+    try {
+      const selected = weeks.filter((w) => weeksSelected.has(w.weekStart));
+      const allRows: string[][] = [];
+      for (const w of selected) {
+        const params = new URLSearchParams({
+          export: "all",
+          venueId: drill.venueId,
+          weekStart: w.weekStart.slice(0, 10),
+          weekEnd: w.weekEnd.slice(0, 10),
+          month: drill.level === "month" ? drill.month : "",
+        });
+        const data = await api.get<{ payments: PaymentDetailRow[] }>(`/api/admin/courtpay-analytics?${params}`);
+        if (allRows.length > 0) allRows.push(["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]);
+        allRows.push([`--- ${w.weekLabel} ---`, "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]);
+        allRows.push(...paymentRowsToCsv(data.payments));
+      }
+      downloadCSV(`${venueName.replace(/\s+/g, "-")}_weeks-export.csv`, PAYMENT_CSV_HEADERS, allRows);
+      setWeeksSelectMode(false);
+      setWeeksSelected(new Set());
+    } catch (e) { console.error(e); }
+    setExportingSelected(false);
+  };
+
+  const handleExportSessions = async () => {
+    if (sessionsSelected.size === 0) return;
+    setExportingSelected(true);
+    try {
+      const selected = sessions.filter((s) => sessionsSelected.has(s.id));
+      const allRows: string[][] = [];
+      for (const s of selected) {
+        const data = await api.get<{ payments: PaymentDetailRow[] }>(`/api/admin/courtpay-analytics?sessionId=${s.id}`);
+        if (allRows.length > 0) allRows.push(["", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]);
+        const label = s.title || new Date(s.openedAt).toLocaleDateString("en-GB");
+        allRows.push([`--- ${label} ---`, "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]);
+        allRows.push(...paymentRowsToCsv(data.payments));
+      }
+      downloadCSV(`sessions-export.csv`, PAYMENT_CSV_HEADERS, allRows);
+      setSessionsSelectMode(false);
+      setSessionsSelected(new Set());
+    } catch (e) { console.error(e); }
+    setExportingSelected(false);
+  };
+
+  const handleExportPayments = () => {
+    if (paymentsSelected.size === 0) return;
+    const selected = payments.filter((p) => paymentsSelected.has(p.id));
+    downloadCSV(`payments-export.csv`, PAYMENT_CSV_HEADERS, paymentRowsToCsv(selected));
+    setPaymentsSelectMode(false);
+    setPaymentsSelected(new Set());
+  };
+
   const goBack = () => {
     if (!drill) return;
     if (drill.level === "session") {
@@ -715,159 +928,112 @@ export default function CourtPayAnalyticsPage() {
 
           {currentLevel === "venue" && (
             <section>
-              <h2 className="mb-3 text-sm font-medium text-neutral-300">
-                Monthly breakdown (last 12 months)
-              </h2>
+              <SectionHeader
+                title="Monthly breakdown (last 12 months)"
+                selectionMode={monthsSelectMode}
+                selectedCount={monthsSelected.size}
+                totalCount={months.length}
+                onToggleSelectionMode={() => { setMonthsSelectMode((v) => !v); setMonthsSelected(new Set()); }}
+                onExportSelected={() => void handleExportMonths()}
+                exportingSelected={exportingSelected}
+              />
               <DataTable
-                headers={[
-                  "Month",
-                  "Sessions",
-                  "Payments",
-                  "Revenue",
-                  "Avg / session",
-                  "Cancelled",
-                ]}
+                headers={["Month", "Sessions", "Payments", "Revenue", "Avg / session", "Cancelled"]}
                 rows={months.map((m) => ({
                   key: m.month,
                   cells: [
                     m.monthLabel,
                     String(m.sessionCount),
                     String(m.totalPayments),
-                    <span key="rev" className="text-purple-400 font-medium">
-                      {formatVND(m.totalRevenue)} VND
-                    </span>,
+                    <span key="rev" className="text-purple-400 font-medium">{formatVND(m.totalRevenue)} VND</span>,
                     formatVND(m.avgRevenuePerSession),
                     String(m.cancelledCount),
                   ],
                 }))}
-                onRowClick={(month) => {
+                onRowClick={monthsSelectMode ? undefined : (month) => {
                   const row = months.find((m) => m.month === month);
                   if (!row || !drill) return;
-                  setDrill({
-                    level: "month",
-                    venueId: drill.venueId,
-                    venueName: drill.venueName,
-                    month: row.month,
-                    monthLabel: row.monthLabel,
-                  });
+                  setDrill({ level: "month", venueId: drill.venueId, venueName: drill.venueName, month: row.month, monthLabel: row.monthLabel });
                 }}
+                selectionMode={monthsSelectMode}
+                selectedKeys={monthsSelected}
+                onToggleRow={(key) => setMonthsSelected((prev) => toggleKey(prev, key))}
               />
             </section>
           )}
 
           {drill?.level === "month" && (
             <section>
-              <h2 className="mb-3 text-sm font-medium text-neutral-300">Weekly breakdown</h2>
+              <SectionHeader
+                title="Weekly breakdown"
+                selectionMode={weeksSelectMode}
+                selectedCount={weeksSelected.size}
+                totalCount={weeks.length}
+                onToggleSelectionMode={() => { setWeeksSelectMode((v) => !v); setWeeksSelected(new Set()); }}
+                onExportSelected={() => void handleExportWeeks()}
+                exportingSelected={exportingSelected}
+              />
               <DataTable
-                headers={[
-                  "Week",
-                  "Sessions",
-                  "Payments",
-                  "Revenue",
-                  "Avg / session",
-                  "Cancelled",
-                ]}
+                headers={["Week", "Sessions", "Payments", "Revenue", "Avg / session", "Cancelled"]}
                 rows={weeks.map((w) => ({
                   key: w.weekStart,
                   cells: [
                     w.weekLabel,
                     String(w.sessionCount),
                     String(w.totalPayments),
-                    <span key="rev" className="text-purple-400 font-medium">
-                      {formatVND(w.totalRevenue)} VND
-                    </span>,
+                    <span key="rev" className="text-purple-400 font-medium">{formatVND(w.totalRevenue)} VND</span>,
                     formatVND(w.avgRevenuePerSession),
                     String(w.cancelledCount),
                   ],
                 }))}
-                onRowClick={(weekStart) => {
+                onRowClick={weeksSelectMode ? undefined : (weekStart) => {
                   const row = weeks.find((w) => w.weekStart === weekStart);
                   if (!row || drill?.level !== "month") return;
-                  setDrill({
-                    level: "week",
-                    venueId: drill.venueId,
-                    venueName: drill.venueName,
-                    month: drill.month,
-                    monthLabel: drill.monthLabel,
-                    weekStart: row.weekStart,
-                    weekEnd: row.weekEnd,
-                    weekLabel: row.weekLabel,
-                  });
+                  setDrill({ level: "week", venueId: drill.venueId, venueName: drill.venueName, month: drill.month, monthLabel: drill.monthLabel, weekStart: row.weekStart, weekEnd: row.weekEnd, weekLabel: row.weekLabel });
                 }}
+                selectionMode={weeksSelectMode}
+                selectedKeys={weeksSelected}
+                onToggleRow={(key) => setWeeksSelected((prev) => toggleKey(prev, key))}
               />
             </section>
           )}
 
           {currentLevel === "week" && drill?.level === "week" && (
             <section>
-              <h2 className="mb-3 text-sm font-medium text-neutral-300">Sessions</h2>
+              <SectionHeader
+                title="Sessions"
+                selectionMode={sessionsSelectMode}
+                selectedCount={sessionsSelected.size}
+                totalCount={sessions.length}
+                onToggleSelectionMode={() => { setSessionsSelectMode((v) => !v); setSessionsSelected(new Set()); }}
+                onExportSelected={() => void handleExportSessions()}
+                exportingSelected={exportingSelected}
+              />
               <DataTable
-                headers={[
-                  "Date",
-                  "Session",
-                  "Host",
-                  "Payments",
-                  "Revenue",
-                  "Players",
-                  "Status",
-                ]}
+                headers={["Date", "Session", "Host", "Payments", "Revenue", "Players", "Status"]}
                 rows={sessions.map((s) => ({
                   key: s.id,
                   cells: [
-                    new Date(s.openedAt).toLocaleDateString("en-GB", {
-                      day: "numeric",
-                      month: "short",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    }),
+                    new Date(s.openedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }),
                     s.title || s.type.replace(/_/g, " "),
                     <div key="host" className="leading-tight">
                       <p>{s.hostName ?? "—"}</p>
-                      {s.openedOnDevice && (
-                        <p className="text-[10px] text-neutral-500 mt-0.5">
-                          {s.openedOnDevice}
-                        </p>
-                      )}
+                      {s.openedOnDevice && <p className="text-[10px] text-neutral-500 mt-0.5">{s.openedOnDevice}</p>}
                     </div>,
                     String(s.paymentCount),
-                    <span key="rev" className="text-purple-400 font-medium">
-                      {formatVND(s.revenue)} VND
-                    </span>,
+                    <span key="rev" className="text-purple-400 font-medium">{formatVND(s.revenue)} VND</span>,
                     String(s.playerCount),
-                    <span
-                      key="st"
-                      className={cn(
-                        "rounded-full px-2 py-0.5 text-[10px] font-medium capitalize",
-                        s.status === "open"
-                          ? "bg-green-900/30 text-green-400"
-                          : "bg-neutral-800 text-neutral-400"
-                      )}
-                    >
-                      {s.status}
-                    </span>,
+                    <span key="st" className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium capitalize", s.status === "open" ? "bg-green-900/30 text-green-400" : "bg-neutral-800 text-neutral-400")}>{s.status}</span>,
                   ],
                 }))}
-                onRowClick={(sessionId) => {
+                onRowClick={sessionsSelectMode ? undefined : (sessionId) => {
                   const row = sessions.find((s) => s.id === sessionId);
                   if (!row || drill?.level !== "week") return;
-                  setDrill({
-                    level: "session",
-                    venueId: drill.venueId,
-                    venueName: drill.venueName,
-                    month: drill.month,
-                    monthLabel: drill.monthLabel,
-                    weekStart: drill.weekStart,
-                    weekEnd: drill.weekEnd,
-                    weekLabel: drill.weekLabel,
-                    sessionId: row.id,
-                    sessionLabel:
-                      row.title ||
-                      new Date(row.openedAt).toLocaleDateString("en-GB", {
-                        day: "numeric",
-                        month: "short",
-                      }),
-                  });
+                  setDrill({ level: "session", venueId: drill.venueId, venueName: drill.venueName, month: drill.month, monthLabel: drill.monthLabel, weekStart: drill.weekStart, weekEnd: drill.weekEnd, weekLabel: drill.weekLabel, sessionId: row.id, sessionLabel: row.title || new Date(row.openedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) });
                 }}
+                selectionMode={sessionsSelectMode}
+                selectedKeys={sessionsSelected}
+                onToggleRow={(key) => setSessionsSelected((prev) => toggleKey(prev, key))}
               />
             </section>
           )}
@@ -891,12 +1057,20 @@ export default function CourtPayAnalyticsPage() {
                   </p>
                 )}
               </div>
-              <h2 className="text-sm font-medium text-neutral-300">Payment details</h2>
+              <SectionHeader
+                title="Payment details"
+                selectionMode={paymentsSelectMode}
+                selectedCount={paymentsSelected.size}
+                totalCount={payments.length}
+                onToggleSelectionMode={() => { setPaymentsSelectMode((v) => !v); setPaymentsSelected(new Set()); }}
+                onExportSelected={handleExportPayments}
+                exportingSelected={false}
+              />
               <DataTable
                 headers={[
                   "Player",
                   "Phone",
-                  "Reclub ID",
+                  "Skill",
                   "Reclub Name",
                   "Frequency",
                   "Amount",
@@ -910,7 +1084,9 @@ export default function CourtPayAnalyticsPage() {
                   cells: [
                     p.playerName,
                     p.playerPhone,
-                    p.reclubUserId != null ? String(p.reclubUserId) : "—",
+                    p.playerSkillLevel
+                      ? <span key="skill" className="rounded-full bg-neutral-800 px-1.5 py-0.5 text-[10px] text-neutral-300 capitalize">{p.playerSkillLevel.replace(/_/g, " ")}</span>
+                      : "—",
                     p.reclubName ?? "—",
                     <span
                       key="freq"
@@ -943,19 +1119,16 @@ export default function CourtPayAnalyticsPage() {
                       {p.status}
                     </span>,
                     <div key="conf" className="leading-tight">
-                      <p className="text-neutral-200">
-                        {p.confirmedAt
-                          ? new Date(p.confirmedAt).toLocaleString("en-GB")
-                          : "—"}
-                      </p>
+                      <p className="text-neutral-200">{formatConfirmedAt(p.confirmedAt) || "—"}</p>
                       {p.confirmedOnDevice && (
-                        <p className="text-[10px] text-neutral-500 mt-0.5">
-                          {p.confirmedOnDevice}
-                        </p>
+                        <p className="text-[10px] text-neutral-500 mt-0.5">{p.confirmedOnDevice}</p>
                       )}
                     </div>,
                   ],
                 }))}
+                selectionMode={paymentsSelectMode}
+                selectedKeys={paymentsSelected}
+                onToggleRow={(key) => setPaymentsSelected((prev) => toggleKey(prev, key))}
               />
             </section>
           )}

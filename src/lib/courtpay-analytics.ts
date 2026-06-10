@@ -62,10 +62,10 @@ const PAYMENT_SELECT = {
   cancelReason: true,
   cancelledAt: true,
   checkInPlayer: {
-    select: { id: true, name: true, phone: true },
+    select: { id: true, name: true, phone: true, skillLevel: true },
   },
   player: {
-    select: { id: true, name: true, phone: true, reclubUserId: true },
+    select: { id: true, name: true, phone: true, reclubUserId: true, skillLevel: true },
   },
   session: {
     select: {
@@ -156,6 +156,7 @@ export interface PaymentDetailRow {
   sessionClosedAt: string | null;
   playerName: string;
   playerPhone: string;
+  playerSkillLevel: string | null;
   reclubUserId: number | null;
   reclubName: string | null;
   checkInFrequency: number;
@@ -193,6 +194,9 @@ export function toPaymentDetail(
     sessionClosedAt: session?.closedAt?.toISOString() ?? null,
     playerName: payment.checkInPlayer?.name ?? payment.player?.name ?? "Unknown",
     playerPhone: payment.checkInPlayer?.phone ?? payment.player?.phone ?? "",
+    playerSkillLevel:
+      payment.checkInPlayer?.skillLevel ??
+      (payment.player?.skillLevel ? String(payment.player.skillLevel) : null),
     reclubUserId: reclub.reclubUserId,
     reclubName: reclub.reclubName,
     checkInFrequency: freq,
