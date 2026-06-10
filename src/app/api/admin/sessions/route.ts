@@ -1,9 +1,81 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSuperAdmin } from "@/lib/auth";
+import { requireSuperAdmin, requireManagerOrSuperAdmin } from "@/lib/auth";
 import { parseBody } from "@/lib/api-helpers";
+import { assertVenueAccess } from "@/lib/venue-scope";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * POST /api/admin/sessions
+ * Body: { venueId, openedAt, closedAt, title?, sessionFee?, staffId? }
+ *
+ * Manually creates a closed (backdated) session.
+ * Manager or superadmin only — caller must have access to the venue.
+ */
+export async function POST(req: NextRequest) {
+  try {
+    const auth = requireManagerOrSuperAdmin(req.headers);
+    const body = await parseBody<{
+      venueId: string;
+      openedAt: string;
+      closedAt: string;
+      title?: string;
+      sessionFee?: number;
+      staffId?: string;
+    }>(req);
+
+    const { venueId, openedAt, closedAt, title, sessionFee, staffId } = body;
+
+    if (!venueId || !openedAt || !closedAt) {
+      return NextResponse.json(
+        { error: "venueId, openedAt and closedAt are required" },
+        { status: 400 }
+      );
+    }
+
+    await assertVenueAccess(auth, venueId);
+
+    const openDate = new Date(openedAt);
+    const closeDate = new Date(closedAt);
+
+    if (isNaN(openDate.getTime()) || isNaN(closeDate.getTime())) {
+      return NextResponse.json({ error: "Invalid date format" }, { status: 400 });
+    }
+    if (closeDate <= openDate) {
+      return NextResponse.json(
+        { error: "closedAt must be after openedAt" },
+        { status: 400 }
+      );
+    }
+
+    const session = await prisma.session.create({
+      data: {
+        venueId,
+        staffId: staffId ?? null,
+        date: openDate,
+        openedAt: openDate,
+        closedAt: closeDate,
+        status: "closed",
+        type: "open_play",
+        title: title ?? null,
+        sessionFee: sessionFee ?? 0,
+      },
+      include: {
+        staff: { select: { name: true } },
+        venue: { select: { id: true, name: true } },
+      },
+    });
+
+    return NextResponse.json({ session }, { status: 201 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Internal server error";
+    const status =
+      message.includes("Access denied") ? 403 :
+      message.includes("access") || message.includes("token") ? 401 : 500;
+    return NextResponse.json({ error: message }, { status });
+  }
+}
 
 /**
  * DELETE /api/admin/sessions

@@ -22,6 +22,8 @@ import {
   Link2Off,
   Search,
   X,
+  Plus,
+  Pencil,
 } from "lucide-react";
 import type { PaymentDetailRow } from "@/lib/courtpay-analytics";
 import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
@@ -553,6 +555,52 @@ export default function CourtPayAnalyticsPage() {
   const [reclubSaving, setReclubSaving] = useState(false);
   const [reclubTab, setReclubTab] = useState<"roster" | "search">("roster");
 
+  // ── Session create/edit modal state ──────────────────────────────────────
+  type StaffOption = { id: string; name: string };
+  type ManualPaymentRow = {
+    id: string;
+    playerName: string;
+    playerPhone: string;
+    amount: number;
+    partyCount: number;
+    paymentMethod: string;
+    confirmedAt: string;
+  };
+  const [sessionModal, setSessionModal] = useState<{
+    mode: "create" | "edit";
+    sessionId?: string;
+    venueId: string;
+    // form fields
+    openedAt: string;
+    closedAt: string;
+    title: string;
+    sessionFee: string;
+    staffId: string;
+    // after-save state
+    savedSessionId: string | null;
+    payments: ManualPaymentRow[];
+  } | null>(null);
+  const [sessionModalSaving, setSessionModalSaving] = useState(false);
+  const [sessionModalStaff, setSessionModalStaff] = useState<StaffOption[]>([]);
+  const [sessionModalStaffLoading, setSessionModalStaffLoading] = useState(false);
+
+  // ── Add-payment modal state (nested inside session modal) ─────────────────
+  const [addPaymentOpen, setAddPaymentOpen] = useState(false);
+  const [addPaymentForm, setAddPaymentForm] = useState({
+    playerSearch: "",
+    playerPhone: "",
+    playerName: "",
+    amount: "",
+    partyCount: "1",
+    paymentMethod: "cash" as "cash" | "vietqr" | "subscription",
+    confirmedAt: "",
+  });
+  const [addPaymentPlayers, setAddPaymentPlayers] = useState<
+    Array<{ id: string; name: string; phone: string; skillLevel: string | null }>
+  >([]);
+  const [addPaymentSearching, setAddPaymentSearching] = useState(false);
+  const [addPaymentSaving, setAddPaymentSaving] = useState(false);
+
   const venueName = useMemo(() => {
     if (drill) return drill.venueName;
     return venues.find((v) => v.id === selectedVenueId)?.name ?? "";
@@ -884,6 +932,205 @@ export default function CourtPayAnalyticsPage() {
       setReclubSaving(false);
     }
   }, [reclubModal, reclubModalData]);
+
+  // ── Session modal handlers ────────────────────────────────────────────────
+
+  const openCreateSessionModal = useCallback(async () => {
+    if (!drill || drill.level === "venue") return;
+    const venueId = drill.venueId;
+    // Default times: today 08:00–11:00 local
+    const now = new Date();
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    setSessionModal({
+      mode: "create",
+      venueId,
+      openedAt: `${dateStr}T08:00`,
+      closedAt: `${dateStr}T11:00`,
+      title: "",
+      sessionFee: "0",
+      staffId: "",
+      savedSessionId: null,
+      payments: [],
+    });
+    setSessionModalStaff([]);
+    setSessionModalStaffLoading(true);
+    try {
+      const data = await api.get<{ staff: StaffOption[] }>(`/api/admin/staff?venueId=${venueId}`);
+      setSessionModalStaff(data.staff ?? []);
+    } catch { /* non-critical */ } finally {
+      setSessionModalStaffLoading(false);
+    }
+  }, [drill]);
+
+  const openEditSessionModal = useCallback(async (s: {
+    id: string; venueId: string; title: string | null; openedAt: string; closedAt: string | null;
+    sessionFee?: number; staffId?: string | null;
+  }) => {
+    const toLocal = (iso: string) => {
+      const d = new Date(iso);
+      const pad = (n: number) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+    setSessionModal({
+      mode: "edit",
+      sessionId: s.id,
+      venueId: s.venueId,
+      openedAt: toLocal(s.openedAt),
+      closedAt: s.closedAt ? toLocal(s.closedAt) : toLocal(s.openedAt),
+      title: s.title ?? "",
+      sessionFee: String(s.sessionFee ?? 0),
+      staffId: s.staffId ?? "",
+      savedSessionId: s.id,
+      payments: [],
+    });
+    setSessionModalStaff([]);
+    setSessionModalStaffLoading(true);
+    try {
+      const data = await api.get<{ staff: StaffOption[] }>(`/api/admin/staff?venueId=${s.venueId}`);
+      setSessionModalStaff(data.staff ?? []);
+    } catch { /* non-critical */ } finally {
+      setSessionModalStaffLoading(false);
+    }
+  }, []);
+
+  const handleSaveSession = useCallback(async () => {
+    if (!sessionModal) return;
+    setSessionModalSaving(true);
+    try {
+      if (sessionModal.mode === "create") {
+        const res = await api.post<{ session: { id: string } }>("/api/admin/sessions", {
+          venueId: sessionModal.venueId,
+          openedAt: new Date(sessionModal.openedAt).toISOString(),
+          closedAt: new Date(sessionModal.closedAt).toISOString(),
+          title: sessionModal.title || undefined,
+          sessionFee: Number(sessionModal.sessionFee) || 0,
+          staffId: sessionModal.staffId || undefined,
+        });
+        setSessionModal((prev) => prev ? { ...prev, savedSessionId: res.session.id, payments: [] } : null);
+        // Append to sessions list so table updates
+        setSessions((prev) => [
+          ...prev,
+          {
+            id: res.session.id,
+            openedAt: new Date(sessionModal.openedAt).toISOString(),
+            closedAt: new Date(sessionModal.closedAt).toISOString(),
+            status: "closed" as const,
+            type: "open_play",
+            title: sessionModal.title || null,
+            hostName: sessionModalStaff.find((s) => s.id === sessionModal.staffId)?.name ?? null,
+            openedOnDevice: null,
+            paymentCount: 0,
+            playerCount: 0,
+            revenue: 0,
+            cancelledCount: 0,
+          },
+        ]);
+      } else {
+        await api.patch(`/api/admin/sessions/${sessionModal.sessionId}`, {
+          openedAt: new Date(sessionModal.openedAt).toISOString(),
+          closedAt: new Date(sessionModal.closedAt).toISOString(),
+          title: sessionModal.title || null,
+          sessionFee: Number(sessionModal.sessionFee) || 0,
+          staffId: sessionModal.staffId || null,
+        });
+        // Update existing session in list
+        setSessions((prev) =>
+          prev.map((s) =>
+            s.id === sessionModal.sessionId
+              ? {
+                  ...s,
+                  openedAt: new Date(sessionModal.openedAt).toISOString(),
+                  closedAt: new Date(sessionModal.closedAt).toISOString(),
+                  title: sessionModal.title || null,
+                  hostName: sessionModalStaff.find((st) => st.id === sessionModal.staffId)?.name ?? s.hostName,
+                }
+              : s
+          )
+        );
+      }
+    } catch (e) {
+      alert((e as Error).message || "Failed to save session");
+    } finally {
+      setSessionModalSaving(false);
+    }
+  }, [sessionModal, sessionModalStaff]);
+
+  // ── Add-payment handlers ──────────────────────────────────────────────────
+
+  const searchCheckInPlayers = useCallback(async (venueId: string, q: string) => {
+    setAddPaymentSearching(true);
+    try {
+      const data = await api.get<{ players: Array<{ id: string; name: string; phone: string; skillLevel: string | null }> }>(
+        `/api/admin/courtpay-payments?venueId=${venueId}&search=${encodeURIComponent(q)}`
+      );
+      setAddPaymentPlayers(data.players ?? []);
+    } catch { /* ignore */ } finally {
+      setAddPaymentSearching(false);
+    }
+  }, []);
+
+  const openAddPayment = useCallback(() => {
+    if (!sessionModal?.savedSessionId) return;
+    const closedAtStr = sessionModal.closedAt;
+    setAddPaymentForm({
+      playerSearch: "",
+      playerPhone: "",
+      playerName: "",
+      amount: "",
+      partyCount: "1",
+      paymentMethod: "cash",
+      confirmedAt: closedAtStr,
+    });
+    setAddPaymentPlayers([]);
+    setAddPaymentOpen(true);
+  }, [sessionModal]);
+
+  const handleSavePayment = useCallback(async () => {
+    if (!sessionModal?.savedSessionId) return;
+    setAddPaymentSaving(true);
+    try {
+      const confirmedAt = new Date(addPaymentForm.confirmedAt).toISOString();
+      const res = await api.post<{ payment: { id: string; checkInPlayer: { name: string; phone: string } } }>(
+        "/api/admin/courtpay-payments",
+        {
+          sessionId: sessionModal.savedSessionId,
+          venueId: sessionModal.venueId,
+          playerPhone: addPaymentForm.playerPhone,
+          playerName: addPaymentForm.playerName,
+          amount: Number(addPaymentForm.amount),
+          partyCount: Number(addPaymentForm.partyCount) || 1,
+          paymentMethod: addPaymentForm.paymentMethod,
+          confirmedAt,
+        }
+      );
+      const newRow = {
+        id: res.payment.id,
+        playerName: res.payment.checkInPlayer.name,
+        playerPhone: res.payment.checkInPlayer.phone,
+        amount: Number(addPaymentForm.amount),
+        partyCount: Number(addPaymentForm.partyCount) || 1,
+        paymentMethod: addPaymentForm.paymentMethod,
+        confirmedAt,
+      };
+      setSessionModal((prev) =>
+        prev ? { ...prev, payments: [...prev.payments, newRow] } : null
+      );
+      // Update payment count in sessions list
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === sessionModal.savedSessionId
+            ? { ...s, paymentCount: s.paymentCount + 1, revenue: s.revenue + Number(addPaymentForm.amount) }
+            : s
+        )
+      );
+      setAddPaymentOpen(false);
+    } catch (e) {
+      alert((e as Error).message || "Failed to add payment");
+    } finally {
+      setAddPaymentSaving(false);
+    }
+  }, [sessionModal, addPaymentForm]);
 
   // Export selected months — session-consolidated format (matches mobile boss dashboard)
   const handleExportMonths = async () => {
@@ -1256,6 +1503,18 @@ export default function CourtPayAnalyticsPage() {
                     </button>
                   )}
 
+                  {/* Create session button (manager / superadmin, not in select/delete mode) */}
+                  {!sessionsSelectMode && !sessionsDeleteMode && (
+                    <button
+                      type="button"
+                      onClick={() => void openCreateSessionModal()}
+                      className="flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-400 hover:border-blue-600 hover:text-blue-400 transition-colors"
+                    >
+                      <Plus className="h-3 w-3" />
+                      Session
+                    </button>
+                  )}
+
                   {/* Delete toggle (superadmin only) */}
                   {isSuperAdmin && !sessionsSelectMode && (
                     <button
@@ -1278,7 +1537,7 @@ export default function CourtPayAnalyticsPage() {
               </div>
 
               <DataTable
-                headers={["Date", "Session", "Host", "Payments", "Revenue", "Players", "Status"]}
+                headers={["Date", "Session", "Host", "Payments", "Revenue", "Players", "Status", ""]}
                 rows={sessions.map((s) => ({
                   key: s.id,
                   cells: [
@@ -1292,6 +1551,28 @@ export default function CourtPayAnalyticsPage() {
                     <span key="rev" className="text-purple-400 font-medium">{formatVND(s.revenue)} VND</span>,
                     String(s.playerCount),
                     <span key="st" className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium capitalize", s.status === "open" ? "bg-green-900/30 text-green-400" : "bg-neutral-800 text-neutral-400")}>{s.status}</span>,
+                    (!sessionsSelectMode && !sessionsDeleteMode)
+                      ? <button
+                          key="edit"
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void openEditSessionModal({
+                              id: s.id,
+                              venueId: drill!.venueId,
+                              title: s.title,
+                              openedAt: s.openedAt,
+                              closedAt: s.closedAt,
+                              sessionFee: 0,
+                              staffId: null,
+                            });
+                          }}
+                          className="rounded p-1 text-neutral-500 hover:bg-neutral-800 hover:text-white transition-colors"
+                          title="Edit session"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      : null,
                   ],
                 }))}
                 onRowClick={(sessionsSelectMode || sessionsDeleteMode) ? undefined : (sessionId) => {
@@ -1626,6 +1907,333 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
                 )}
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Session Create / Edit Modal ──────────────────────────────────────── */}
+      {sessionModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => { if (!sessionModalSaving) setSessionModal(null); }}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl border border-neutral-700 bg-neutral-900 shadow-2xl overflow-y-auto max-h-[90vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-4 border-b border-neutral-800">
+              <div>
+                <h3 className="text-sm font-semibold text-white">
+                  {sessionModal.mode === "create" ? "Create Session" : "Edit Session"}
+                </h3>
+                <p className="mt-0.5 text-xs text-neutral-400">
+                  {sessionModal.mode === "create" ? "Manually backfill a closed session" : "Update session details"}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSessionModal(null)}
+                disabled={sessionModalSaving}
+                className="rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-4">
+              {/* Open date/time */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">Open time</label>
+                  <input
+                    type="datetime-local"
+                    value={sessionModal.openedAt}
+                    onChange={(e) => setSessionModal((p) => p ? { ...p, openedAt: e.target.value } : null)}
+                    className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-xs text-white focus:border-neutral-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">Close time</label>
+                  <input
+                    type="datetime-local"
+                    value={sessionModal.closedAt}
+                    onChange={(e) => setSessionModal((p) => p ? { ...p, closedAt: e.target.value } : null)}
+                    className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-xs text-white focus:border-neutral-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Title */}
+              <div>
+                <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">Title (optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Open Play"
+                  value={sessionModal.title}
+                  onChange={(e) => setSessionModal((p) => p ? { ...p, title: e.target.value } : null)}
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-xs text-white placeholder:text-neutral-500 focus:border-neutral-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Session fee */}
+              <div>
+                <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">Session fee (VND)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1000"
+                  value={sessionModal.sessionFee}
+                  onChange={(e) => setSessionModal((p) => p ? { ...p, sessionFee: e.target.value } : null)}
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-xs text-white focus:border-neutral-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Host */}
+              <div>
+                <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">Host (optional)</label>
+                {sessionModalStaffLoading ? (
+                  <div className="flex items-center gap-2 text-xs text-neutral-500 py-2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading staff…
+                  </div>
+                ) : (
+                  <select
+                    value={sessionModal.staffId}
+                    onChange={(e) => setSessionModal((p) => p ? { ...p, staffId: e.target.value } : null)}
+                    className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-xs text-white focus:border-neutral-500 focus:outline-none"
+                  >
+                    <option value="">— No host —</option>
+                    {sessionModalStaff.map((st) => (
+                      <option key={st.id} value={st.id}>{st.name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Save button */}
+              {!sessionModal.savedSessionId && (
+                <button
+                  type="button"
+                  onClick={() => void handleSaveSession()}
+                  disabled={sessionModalSaving || !sessionModal.openedAt || !sessionModal.closedAt}
+                  className="w-full rounded-lg bg-blue-700 py-2.5 text-xs font-semibold text-white hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                >
+                  {sessionModalSaving ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "Create session"}
+                </button>
+              )}
+
+              {sessionModal.savedSessionId && sessionModal.mode === "edit" && (
+                <button
+                  type="button"
+                  onClick={() => void handleSaveSession()}
+                  disabled={sessionModalSaving}
+                  className="w-full rounded-lg bg-blue-700 py-2.5 text-xs font-semibold text-white hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                >
+                  {sessionModalSaving ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "Save changes"}
+                </button>
+              )}
+
+              {/* Payments section — visible after session is saved */}
+              {sessionModal.savedSessionId && (
+                <div className="border-t border-neutral-800 pt-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-xs font-semibold text-neutral-300 uppercase tracking-wide">
+                      Payments ({sessionModal.payments.length})
+                    </h4>
+                    <button
+                      type="button"
+                      onClick={openAddPayment}
+                      className="flex items-center gap-1 rounded-lg border border-neutral-700 px-2.5 py-1 text-[11px] font-medium text-neutral-400 hover:border-blue-600 hover:text-blue-400 transition-colors"
+                    >
+                      <Plus className="h-3 w-3" />
+                      Add payment
+                    </button>
+                  </div>
+
+                  {sessionModal.payments.length === 0 ? (
+                    <p className="text-center text-xs text-neutral-600 py-4">No payments yet</p>
+                  ) : (
+                    <div className="space-y-1 max-h-48 overflow-y-auto">
+                      {sessionModal.payments.map((p) => (
+                        <div
+                          key={p.id}
+                          className="flex items-center justify-between rounded-lg bg-neutral-800 px-3 py-2 text-xs"
+                        >
+                          <div className="min-w-0">
+                            <p className="font-medium text-white truncate">{p.playerName}</p>
+                            <p className="text-[10px] text-neutral-500">{p.playerPhone}</p>
+                          </div>
+                          <div className="text-right shrink-0 ml-3">
+                            <p className="text-purple-400 font-medium">{formatVND(p.amount)} VND</p>
+                            <p className="text-[10px] text-neutral-500 capitalize">{p.paymentMethod} · ×{p.partyCount}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Add Payment Modal ────────────────────────────────────────────────── */}
+      {addPaymentOpen && sessionModal?.savedSessionId && (
+        <div
+          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/70 p-4"
+          onClick={() => { if (!addPaymentSaving) setAddPaymentOpen(false); }}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl border border-neutral-700 bg-neutral-900 p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-white">Add Payment</h3>
+              <button
+                type="button"
+                onClick={() => setAddPaymentOpen(false)}
+                disabled={addPaymentSaving}
+                className="rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Player search */}
+              <div>
+                <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">Player</label>
+                <div className="relative mb-2">
+                  <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-500" />
+                  {addPaymentSearching && <Loader2 className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-neutral-500" />}
+                  <input
+                    type="text"
+                    placeholder="Search existing player by name or phone…"
+                    value={addPaymentForm.playerSearch}
+                    onChange={(e) => {
+                      const q = e.target.value;
+                      setAddPaymentForm((p) => ({ ...p, playerSearch: q }));
+                      if (q.length >= 2) void searchCheckInPlayers(sessionModal.venueId, q);
+                      else setAddPaymentPlayers([]);
+                    }}
+                    className="w-full rounded-lg border border-neutral-700 bg-neutral-800 py-2 pl-9 pr-3 text-xs text-white placeholder:text-neutral-500 focus:border-neutral-500 focus:outline-none"
+                  />
+                </div>
+                {/* Search results */}
+                {addPaymentPlayers.length > 0 && (
+                  <div className="mb-2 rounded-lg border border-neutral-700 bg-neutral-800 max-h-36 overflow-y-auto">
+                    {addPaymentPlayers.map((pl) => (
+                      <button
+                        key={pl.id}
+                        type="button"
+                        onClick={() => {
+                          setAddPaymentForm((p) => ({
+                            ...p,
+                            playerName: pl.name,
+                            playerPhone: pl.phone,
+                            playerSearch: pl.name,
+                          }));
+                          setAddPaymentPlayers([]);
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs hover:bg-neutral-700 transition-colors"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-medium text-white">{pl.name}</p>
+                          <p className="text-[10px] text-neutral-400">{pl.phone}{pl.skillLevel ? ` · ${pl.skillLevel.replace(/_/g, " ")}` : ""}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {/* Walk-in fields */}
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    placeholder="Name *"
+                    value={addPaymentForm.playerName}
+                    onChange={(e) => setAddPaymentForm((p) => ({ ...p, playerName: e.target.value }))}
+                    className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-xs text-white placeholder:text-neutral-500 focus:border-neutral-500 focus:outline-none"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Phone (leave blank for walk-in)"
+                    value={addPaymentForm.playerPhone}
+                    onChange={(e) => setAddPaymentForm((p) => ({ ...p, playerPhone: e.target.value }))}
+                    className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-xs text-white placeholder:text-neutral-500 focus:border-neutral-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Amount + party */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">Amount (VND) *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1000"
+                    placeholder="e.g. 50000"
+                    value={addPaymentForm.amount}
+                    onChange={(e) => setAddPaymentForm((p) => ({ ...p, amount: e.target.value }))}
+                    className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-xs text-white placeholder:text-neutral-500 focus:border-neutral-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">Party count</label>
+                  <select
+                    value={addPaymentForm.partyCount}
+                    onChange={(e) => setAddPaymentForm((p) => ({ ...p, partyCount: e.target.value }))}
+                    className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-xs text-white focus:border-neutral-500 focus:outline-none"
+                  >
+                    {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n} {n === 1 ? "person" : "people"}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* Payment method */}
+              <div>
+                <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">Payment method</label>
+                <div className="flex gap-2">
+                  {(["cash", "vietqr", "subscription"] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setAddPaymentForm((p) => ({ ...p, paymentMethod: m }))}
+                      className={cn(
+                        "flex-1 rounded-lg border py-2 text-xs font-medium capitalize transition-colors",
+                        addPaymentForm.paymentMethod === m
+                          ? "border-blue-600 bg-blue-900/30 text-blue-300"
+                          : "border-neutral-700 text-neutral-400 hover:border-neutral-500 hover:text-white"
+                      )}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Confirmed at */}
+              <div>
+                <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">Confirmed at</label>
+                <input
+                  type="datetime-local"
+                  value={addPaymentForm.confirmedAt}
+                  onChange={(e) => setAddPaymentForm((p) => ({ ...p, confirmedAt: e.target.value }))}
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-xs text-white focus:border-neutral-500 focus:outline-none"
+                />
+              </div>
+
+              {/* Save */}
+              <button
+                type="button"
+                onClick={() => void handleSavePayment()}
+                disabled={addPaymentSaving || !addPaymentForm.playerName || !addPaymentForm.amount || !addPaymentForm.confirmedAt}
+                className="w-full rounded-lg bg-blue-700 py-2.5 text-xs font-semibold text-white hover:bg-blue-600 disabled:opacity-50 transition-colors"
+              >
+                {addPaymentSaving ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "Add payment"}
+              </button>
+            </div>
           </div>
         </div>
       )}
