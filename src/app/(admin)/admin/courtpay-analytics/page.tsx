@@ -209,6 +209,31 @@ function sessionRowsToCsv(rows: SessionExportRow[]): string[][] {
   ]);
 }
 
+/** Totals row: label in col 0, sums for revenue/payments/QR/Cash/Subs */
+function sessionTotalsRow(rows: SessionExportRow[]): string[] {
+  const totalRevenue = rows.reduce((s, r) => s + r.totalRevenue, 0);
+  const totalPayments = rows.reduce((s, r) => s + r.totalPayments, 0);
+  const totalQr = rows.reduce((s, r) => s + r.qrCount, 0);
+  const totalCash = rows.reduce((s, r) => s + r.cashCount, 0);
+  const totalSubs = rows.reduce((s, r) => s + r.subsCount, 0);
+  // Columns: Date, Start, End, Duration, Staff, Initial price, Revenue, Payments, QR, Cash, Subs, Reclub, Players
+  return [
+    "TOTAL",   // 0  Date
+    "",        // 1  Session start time
+    "",        // 2  Session end time
+    "",        // 3  Duration
+    "",        // 4  Staff name
+    "",        // 5  Initial price
+    String(totalRevenue),   // 6  Total revenue
+    String(totalPayments),  // 7  Total payments
+    String(totalQr),        // 8  QR count
+    String(totalCash),      // 9  Cash count
+    String(totalSubs),      // 10 Subs count
+    "",        // 11 Reclub (Expected)
+    "",        // 12 Total players
+  ];
+}
+
 function StatCard({
   icon: Icon,
   label,
@@ -767,6 +792,7 @@ export default function CourtPayAnalyticsPage() {
         if (allRows.length > 0) allRows.push(PAD);
         allRows.push([`--- ${m.monthLabel} ---`, ...PAD.slice(1)]);
         allRows.push(...sessionRowsToCsv(data.sessions));
+        if (data.sessions.length > 0) allRows.push(sessionTotalsRow(data.sessions));
       }
       downloadCSV(`${venueName.replace(/\s+/g, "-")}_months-export.csv`, SESSION_CSV_HEADERS, allRows);
       setMonthsSelectMode(false);
@@ -794,6 +820,7 @@ export default function CourtPayAnalyticsPage() {
         if (allRows.length > 0) allRows.push(PAD);
         allRows.push([`--- ${w.weekLabel} ---`, ...PAD.slice(1)]);
         allRows.push(...sessionRowsToCsv(data.sessions));
+        if (data.sessions.length > 0) allRows.push(sessionTotalsRow(data.sessions));
       }
       downloadCSV(`${venueName.replace(/\s+/g, "-")}_weeks-export.csv`, SESSION_CSV_HEADERS, allRows);
       setWeeksSelectMode(false);
