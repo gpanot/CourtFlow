@@ -16,11 +16,13 @@ interface NavItem {
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   superadminOnly?: boolean;
+  requiresApp?: "courtflow" | "courtpay";
 }
 
 interface NavSection {
   label: string;
   superadminOnly?: boolean;
+  requiresApp?: "courtflow" | "courtpay";
   items: NavItem[];
 }
 
@@ -39,6 +41,7 @@ const topNavItems: NavItem[] = [
 const navSections: NavSection[] = [
   {
     label: "CourtFlow - Social",
+    requiresApp: "courtflow",
     items: [
       { href: "/admin/live", label: "Live Sessions", icon: Monitor },
       { href: "/admin/payroll", label: "Payroll Hosts", icon: Banknote, superadminOnly: true },
@@ -47,6 +50,7 @@ const navSections: NavSection[] = [
   },
   {
     label: "CourtPay - Check-in",
+    requiresApp: "courtpay",
     items: [
       { href: "/admin/courtpay", label: "CourtPay", icon: CreditCard },
       { href: "/admin/courtpay-billing", label: "CP Billing", icon: Receipt, superadminOnly: true },
@@ -66,11 +70,20 @@ const navSections: NavSection[] = [
   },
 ];
 
-function getFilteredNav(userRole: string) {
+function getFilteredNav(
+  userRole: string,
+  appAccess: { hasCourtflow: boolean; hasCourtpay: boolean } = { hasCourtflow: true, hasCourtpay: true }
+) {
   const isSuperAdmin = userRole === "superadmin";
+  // Superadmins always see everything; managers are gated by their venue app access
+  const appFilter = (app: "courtflow" | "courtpay" | undefined) => {
+    if (isSuperAdmin || !app) return true;
+    return app === "courtflow" ? appAccess.hasCourtflow : appAccess.hasCourtpay;
+  };
+
   const filteredTop = topNavItems.filter((item) => isSuperAdmin || !item.superadminOnly);
   const filteredSections = navSections
-    .filter((section) => isSuperAdmin || !section.superadminOnly)
+    .filter((section) => (isSuperAdmin || !section.superadminOnly) && appFilter(section.requiresApp))
     .map((section) => ({
       ...section,
       items: section.items.filter((item) => isSuperAdmin || !item.superadminOnly),
@@ -93,8 +106,27 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     if (typeof window === "undefined") return {};
     try { return JSON.parse(localStorage.getItem("admin-nav-sections") || "{}"); } catch { return {}; }
   });
+  // App access flags derived from the manager's venue assignments (superadmins always have both)
+  const [appAccess, setAppAccess] = useState({ hasCourtflow: true, hasCourtpay: true });
 
-  const { topNavItems: visibleTopItems, navSections: visibleSections, allNavItems: visibleAllItems } = getFilteredNav(role ?? "");
+  useEffect(() => {
+    if (!token || role === "superadmin") return;
+    void fetch("/api/auth/staff-me", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data: { venues?: { appAccess?: string[] }[] } | null) => {
+        if (!data?.venues) return;
+        const allAccess = data.venues.flatMap((v) => v.appAccess ?? []);
+        setAppAccess({
+          hasCourtflow: allAccess.includes("courtflow"),
+          hasCourtpay: allAccess.includes("courtpay"),
+        });
+      })
+      .catch(() => {});
+  }, [token, role]);
+
+  const { topNavItems: visibleTopItems, navSections: visibleSections, allNavItems: visibleAllItems } = getFilteredNav(role ?? "", appAccess);
 
   const toggleSection = (label: string) => {
     setCollapsedSections((prev) => {
