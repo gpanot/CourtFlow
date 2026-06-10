@@ -174,6 +174,10 @@ export interface VenuePaymentSettings {
   autoApprovalCCCD?: string;
   /** When false the CourtPay subscription offer screen is skipped entirely */
   showSubscriptionsInFlow?: boolean;
+  /** Set by admin in CourtPay settings — read-only in staff app */
+  autoPaymentEnabled?: boolean;
+  /** Set by admin in CourtPay settings — read-only in staff app */
+  sepayEnabled?: boolean;
 }
 
 export interface SubscriptionPackage {

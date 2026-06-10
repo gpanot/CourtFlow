@@ -41,14 +41,11 @@ export function extractPaymentRef(content: string): string | null {
   const billMatch = content.match(/CF-BILL-[A-Z0-9]{1,8}-\d{4}W\d{1,2}/);
   if (billMatch) return billMatch[0];
 
-  // Standard format with dashes: CF-SES-XXXXXX / CF-SUB-XXXXXX
-  const match = content.match(/CF-(SUB|SES)-[A-Z0-9]{6,8}/);
-  if (match) return match[0];
-
-  // Some banks (e.g. MB Bank) strip hyphens from transfer content:
-  // CFSES77KDJG → CF-SES-77KDJG, CFSUB77KDJG → CF-SUB-77KDJG
-  const noDashMatch = content.match(/CF(SUB|SES)([A-Z0-9]{6,8})/);
-  if (noDashMatch) return `CF-${noDashMatch[1]}-${noDashMatch[2]}`;
+  // Banks may transmit the ref with dashes, spaces, or no separator at all.
+  // Normalise by collapsing any separator (-, space, or nothing) between CF/SUB|SES/suffix.
+  // Handles: CF-SES-XXXXXX | CF SES XXXXXX | CFSES XXXXXX | CFSESXXXXXX
+  const flexMatch = content.match(/CF[-\s]?(SUB|SES)[-\s]?([A-Z0-9]{6,8})/);
+  if (flexMatch) return `CF-${flexMatch[1]}-${flexMatch[2]}`;
 
   return null;
 }

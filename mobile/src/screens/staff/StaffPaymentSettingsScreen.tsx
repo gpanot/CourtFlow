@@ -495,6 +495,56 @@ export function StaffPaymentSettingsScreen() {
             )}
           </View>
 
+          {/* Auto-payment status (read-only, set by admin) */}
+          {!loading && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="flash-outline" size={16} color={settings.autoPaymentEnabled ? theme.green400 : theme.dimmed} />
+                <Text style={styles.sectionHeaderText}>{t("paySettingsAutoPaymentStatus")}</Text>
+              </View>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                  backgroundColor: settings.autoPaymentEnabled
+                    ? "rgba(22,163,74,0.12)"
+                    : "rgba(107,114,128,0.10)",
+                  borderRadius: 8,
+                  padding: 10,
+                  borderWidth: 1,
+                  borderColor: settings.autoPaymentEnabled
+                    ? "rgba(22,163,74,0.35)"
+                    : theme.borderLight,
+                }}
+              >
+                <View
+                  style={{
+                    width: 10,
+                    height: 10,
+                    borderRadius: 5,
+                    backgroundColor: settings.autoPaymentEnabled ? theme.green400 : theme.dimmed,
+                  }}
+                />
+                <Text
+                  style={{
+                    flex: 1,
+                    fontSize: 12,
+                    color: settings.autoPaymentEnabled ? theme.green400 : theme.muted,
+                    fontWeight: "500",
+                  }}
+                >
+                  {settings.autoPaymentEnabled
+                    ? t("paySettingsAutoPaymentOn")
+                    : t("paySettingsAutoPaymentOff")}
+                </Text>
+              </View>
+              <Text style={{ fontSize: 11, color: theme.subtle, marginTop: 2 }}>
+                Managed by admin in CourtPay settings.
+              </Text>
+            </View>
+          )}
+
           {/* Sound */}
           <View style={styles.section}>
             <View style={styles.sectionHeader}>

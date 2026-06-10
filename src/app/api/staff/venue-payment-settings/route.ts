@@ -45,6 +45,8 @@ export async function GET(request: NextRequest) {
       autoApprovalCCCD: typeof settings.autoApprovalCCCD === "string" ? settings.autoApprovalCCCD : "",
       showSubscriptionsInFlow: settings.showSubscriptionsInFlow !== false, // default true
       reclubRoster: openSession?.reclubRoster ?? null,
+      autoPaymentEnabled: settings.autoPaymentEnabled === true,
+      sepayEnabled: settings.sepayEnabled === true,
     });
   } catch (e) {
     return error((e as Error).message, 500);

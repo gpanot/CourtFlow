@@ -7,11 +7,10 @@
  */
 
 export function extractPaymentRef(content: string): string | null {
-  const match = content.match(/CF-(SUB|SES)-[A-Z0-9]{6,8}/);
-  if (match) return match[0];
-  // MB Bank and some others strip hyphens: CFSES77KDJG → CF-SES-77KDJG
-  const noDashMatch = content.match(/CF(SUB|SES)([A-Z0-9]{6,8})/);
-  if (noDashMatch) return `CF-${noDashMatch[1]}-${noDashMatch[2]}`;
+  // Banks may transmit the ref with dashes, spaces, or no separator at all.
+  // Handles: CF-SES-XXXXXX | CF SES XXXXXX | CFSES XXXXXX | CFSESXXXXXX
+  const flexMatch = content.match(/CF[-\s]?(SUB|SES)[-\s]?([A-Z0-9]{6,8})/);
+  if (flexMatch) return `CF-${flexMatch[1]}-${flexMatch[2]}`;
   return null;
 }
 
