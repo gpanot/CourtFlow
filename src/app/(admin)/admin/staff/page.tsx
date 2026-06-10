@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api-client";
+import { useSessionStore } from "@/stores/session-store";
 import { cn } from "@/lib/cn";
 import { Plus, Shield, User, Pencil, Trash2, KeyRound, X, Check, GraduationCap } from "lucide-react";
 import type { StaffAppAccessKind } from "@/lib/staff-app-access";
@@ -29,6 +30,7 @@ interface Staff {
 type ModalMode = null | "create" | "edit" | "delete" | "reset-password";
 
 export default function StaffPage() {
+  const callerRole = useSessionStore((s) => s.role);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [venues, setVenues] = useState<StaffVenue[]>([]);
   const [modalMode, setModalMode] = useState<ModalMode>(null);
@@ -60,7 +62,7 @@ export default function StaffPage() {
   const fetchAll = async () => {
     const [s, v] = await Promise.all([
       api.get<Staff[]>("/api/admin/staff"),
-      api.get<StaffVenue[]>("/api/venues"),
+      api.get<StaffVenue[]>("/api/admin/venues"),
     ]);
     setStaff(s);
     setVenues(v);
@@ -364,7 +366,7 @@ export default function StaffPage() {
                 >
                   <option value="staff">Staff</option>
                   <option value="manager">Manager</option>
-                  <option value="superadmin">Super Admin</option>
+                  {callerRole === "superadmin" && <option value="superadmin">Super Admin</option>}
                 </select>
                 <p className="mt-1 text-[10px] text-neutral-600">build: 2026-06-09 · roles: staff, manager, superadmin</p>
               </div>

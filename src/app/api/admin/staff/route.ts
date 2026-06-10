@@ -21,6 +21,8 @@ export async function GET(request: NextRequest) {
             ],
           }
         : {
+            // Managers must never see superadmin accounts
+            role: { not: "superadmin" as const },
             OR: [
               { id: auth.id },
               { venueAssignments: { some: { venueId: { in: ownedVenueIds } } } },
