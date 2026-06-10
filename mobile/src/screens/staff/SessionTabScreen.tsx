@@ -248,7 +248,14 @@ export function SessionTabScreen() {
       await fetchState();
       await fetchHistory();
     } catch (err) {
-      Alert.alert("Error", err instanceof Error ? err.message : "Failed");
+      const msg = err instanceof Error ? err.message : "Failed";
+      // "Already open" means another device opened it first — just sync state silently
+      if (msg.toLowerCase().includes("already open")) {
+        await fetchState();
+        await fetchHistory();
+      } else {
+        Alert.alert("Error", msg);
+      }
     } finally {
       setActionLoading(false);
     }
@@ -268,7 +275,14 @@ export function SessionTabScreen() {
             await fetchState();
             await fetchHistory();
           } catch (err) {
-            Alert.alert("Error", err instanceof Error ? err.message : "Failed");
+            const msg = err instanceof Error ? err.message : "Failed";
+            // "Already closed" means another device closed it first — just sync state silently
+            if (msg.toLowerCase().includes("already closed")) {
+              await fetchState();
+              await fetchHistory();
+            } else {
+              Alert.alert("Error", msg);
+            }
           } finally {
             setActionLoading(false);
           }
