@@ -199,6 +199,7 @@ export async function PATCH(
           data: {
             name: cip?.name ?? phone,
             phone,
+            gender: "other",
             reclubUserId: body.reclubUserId,
           },
         });
