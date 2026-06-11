@@ -1,6 +1,6 @@
 # CourtFlow — Product Overview
 
-**Version 3.0 · June 2026**
+**Version 3.1 · June 11, 2026**
 **Tagline:** The all-in-one court management platform for pickleball venues.
 
 ---
@@ -185,13 +185,23 @@ Tiered membership plans with session tracking, payment management, and perks.
 
 ### 8. Player Directory
 
-Admin can manage all players in the system:
-- Add, edit, delete player profiles
+Player management is split across two admin pages, scoped by product:
+
+**CourtFlow Players** (`/admin/players` — CourtFlow Social section):
+- Add, edit, delete player profiles for rotation / open-play
 - View player stats and session history
 - Set skill level, gender, game type preference
 - Filter by skill level, gender, game preference
 - Search by name or phone
 - Face photo management (for face recognition check-in)
+
+**CP Players** (`/admin/courtpay-players` — CourtPay section):
+- Mirrors the mobile boss dashboard player roster
+- KPIs: total players, new this week, active subscriptions, avg return, return rate (15d)
+- Searchable, sortable player list with face thumbnails
+- Player detail drawer: visit history, subscription status, package history, check-in history, Reclub link
+- Inline edit modal for name, gender, skill level
+- Credit add/deduct actions
 
 ---
 
@@ -208,7 +218,7 @@ Admin can manage all players in the system:
 **CourtPay Analytics:**
 - Per-venue payment analytics: monthly and weekly breakdowns
 - Session-level drill-down with payment details per player
-- KPIs: total revenue, payment count, unique players, sessions, avg revenue/session, cancelled count
+- KPIs: total revenue, payment count, unique players (full venue roster count — same definition as CP Players), sessions, avg revenue/session, cancelled count
 - **CSV Export:**
   - Monthly / weekly breakdown → session-consolidated format (matches mobile boss dashboard): Date, Session start/end, Duration, Staff, Initial price, Total revenue, Total payments, QR/Cash/Subs count, Reclub (Expected), Total players. Sessions with zero revenue are excluded.
   - Session drill-down → payment-per-row format: Confirmed At, Player, Phone, Skill Level, Amount, Method, Status, etc.
@@ -218,18 +228,33 @@ Admin can manage all players in the system:
 
 ### 10. Billing (CourtFlow SaaS)
 
-CourtFlow bills venues on a **usage-based SaaS model**.
+CourtFlow bills venues on a **usage-based or flat-monthly SaaS model**.
+
+**Billing models (per venue):**
+
+| Model | Invoice cadence | Amount |
+|-------|-----------------|--------|
+| **Per payment** (default) | Weekly (every Monday) | Check-ins × base rate + subscription addon + Sepay addon |
+| **Monthly** | 1st of each month | Flat monthly rate (VND); first invoice pro-rated from start date |
 
 **How it works:**
-- Weekly invoices auto-generated every Monday
-- Invoice amount based on check-ins during the billing period × per-check-in rate
+- Weekly invoices auto-generated every Monday for `per_payment` venues
+- Monthly invoices auto-generated on the 1st for `monthly` venues
 - Venue pays via bank transfer; superadmin marks invoice as paid
 - Overdue invoices (>7 days unpaid) automatically escalate
 - Venues overdue >14 days are suspended
 
+**Monthly subscription lifecycle:**
+- Superadmin sets billing model, flat rate, start date, and optional end date per venue (CourtPay Billing → venue detail)
+- Status: `active` | `cancelled` | `inactive`
+- Cancel flow — admin cancels; cron auto-reverts venue to `per_payment` on next invoice run
+- Expired subscriptions (end date passed) — cron auto-reverts to `per_payment`
+- Managers see their active monthly plan in **My Billing** (rate, status, start/end dates, recent invoices)
+
 **Admin billing features:**
 - Invoice list per venue with status (pending / paid / overdue / suspended)
-- Billing configuration per venue: bank details, rates, billing contact
+- Billing configuration per venue: bank details, rates, billing contact, billing model
+- VND amount inputs display with comma separators (e.g. 5,000) via `AmountInput`
 - Admin can mark invoices paid manually (with method, ref, notes)
 
 ---
@@ -274,6 +299,12 @@ Self-service tablet station at the venue entrance — no staff required:
 - **Manual** — staff taps confirm in the app
 - **Auto (Sepay)** — when enabled, Sepay webhook receives the bank transfer, matches it to the pending payment reference (`CF-SES-XXXXXX`), and auto-confirms without staff action. Supports bank-specific reference formatting (MB Bank strips hyphens/adds spaces — handled via regex normalization)
 
+**Display configuration (per venue, in CourtPay Settings → Config tab):**
+- Applies to all venue display surfaces: tablet kiosk, TV display, and phone waiting screens
+- Venue logo upload/remove, spinning logo toggle
+- Waiting screen custom text (multi-line)
+- Display language (English / Vietnamese) with live preview
+
 **Sepay configuration (per venue, in CourtPay Settings → Auto-payment tab):**
 - Toggle: Auto-payment confirmation ON/OFF
 - Gateway: Sepay (active) or PayOS (coming soon)
@@ -294,6 +325,7 @@ Self-service tablet station at the venue entrance — no staff required:
 - Duplicate face detection prevents double registration
 - Face search with similarity threshold
 - Admin can view face stats and run face recognition tests
+- **Face thumbnails** — 96×96 WebP generated at enrollment (`sharp`); served via `/api/uploads/players/thumbs/{playerId}` with on-demand disk cache; used in CP Players, boss player lists (PWA + mobile); backfill script (`npm run backfill:face-thumbs`) for existing photos
 
 ### Push Notifications (FCM — Firebase Cloud Messaging)
 
@@ -312,19 +344,22 @@ Self-service tablet station at the venue entrance — no staff required:
 | **Bookings** | Day planner grid, booking management, schedule config, pricing rules |
 | **Coaching** | Coaches, lesson packages, lesson scheduling |
 | **Memberships** | CourtFlow membership tiers, member activation, payment tracking |
-| **Players** | Player directory with skill, stats, face photo management |
+| **Players** | CourtFlow player directory — skill, stats, face photo management (CourtFlow Social section) |
+| **CP Players** | CourtPay player roster — KPIs, detail drawer, subscriptions, check-in history, face thumbnails |
 | **Staff** | Staff accounts, roles, venue assignments |
 | **Payroll** | Weekly staff payroll tracking and export |
 | **Venues** | Venue config: courts, billing config, active/inactive |
 | **Venue Analytics** | Usage statistics, bookings, coaching, player metrics |
 | **Membership CourtPay** | CourtPay subscription packages, subscribers, payments |
 | **CourtPay Analytics** | Session/payment analytics with drill-down and CSV export |
-| **CourtPay Settings** | TV display, payment config, Sepay auto-payment, branding |
+| **CourtPay Settings** | Tablet/TV/Phone display (logo, waiting screen text, locale), payment config, Sepay auto-payment, branding |
 | **CourtPay Billing** | SaaS invoice management per venue |
 | **Kiosk Shop** | PayOS sticker configuration and kiosk payment settings |
 | **My Billing** | Manager's own billing dashboard |
 
 **Navigation scoping:** Managers only see sections relevant to their assigned venues' `appAccess` (CourtFlow sections hidden if no CourtFlow venues; CourtPay sections hidden if no CourtPay venues).
+
+**Admin i18n:** Admin panel supports English and Vietnamese (`admin-i18n`, locale files in `src/i18n/locales/admin/`). Language preference is set in Admin Settings.
 
 ---
 
@@ -355,7 +390,7 @@ Self-service tablet station at the venue entrance — no staff required:
 | Job | Schedule | Description |
 |-----|----------|-------------|
 | `auto-close-sessions` | Every hour (`0 * * * *`) | Closes sessions that have been open for more than 6 hours |
-| `generate-invoices` | Every Monday 00:01 (`1 0 * * 1`) | Generates weekly billing invoices, marks overdue, suspends unpaid venues |
+| `generate-invoices` | Every Monday 00:01 (`1 0 * * 1`) | Generates weekly invoices (`per_payment` venues); on the 1st of each month also generates monthly invoices, reverts cancelled/expired monthly subscriptions to `per_payment`; marks overdue, suspends unpaid venues |
 
 Both jobs are secured with `CRON_SECRET` bearer token auth.
 
@@ -400,6 +435,21 @@ Events flow through venue-scoped rooms (`venue:{id}`) and player-scoped rooms (`
 5. Click a session → payment-by-payment detail with player info, skill level, method
 6. Export selected months/weeks → session-consolidated CSV (matches boss dashboard format); zero-revenue sessions excluded
 
+### Admin: Managing CourtPay Players
+
+1. Admin Panel → CP Players → select venue
+2. Review KPIs (total players, new this week, subscriptions, return rate)
+3. Search or sort the player list; face thumbnails load from cached WebP thumbs
+4. Click a player → detail drawer shows subscriptions, check-in history, Reclub link
+5. Edit player profile or adjust credit balance inline
+
+### Manager: Viewing Billing Plan
+
+1. Admin Panel → My Billing
+2. Per-venue card shows billing model (per-check-in rates or monthly flat rate)
+3. For monthly venues: see active/cancelled status, start date, and optional end date
+4. Scroll to recent invoices table (read-only)
+
 ### Player: Joining Open Play
 
 1. Arrive at venue during scheduled Open Play
@@ -422,6 +472,10 @@ Events flow through venue-scoped rooms (`venue:{id}`) and player-scoped rooms (`
 | **PayOS (kiosk stickers)** | Live | PayOS QR-based sticker kiosk payments |
 | **Auto-close sessions** | Live | Automatic 6-hour session timeout |
 | **CourtPay analytics export** | Live | Session-consolidated CSV export for monthly/weekly data |
+| **CP Players (admin)** | Live | CourtPay player roster page with KPIs, detail drawer, face thumbnails |
+| **Monthly SaaS billing** | Live | Flat monthly subscription with start/end dates, cancel flow, pro-rated first invoice |
+| **Admin panel i18n** | Live | English + Vietnamese for admin pages |
+| **Face thumbnails** | Live | 96px WebP thumbs for fast player list avatars (PWA + mobile + CP Players) |
 | **PayOS (CourtPay gateway)** | Coming soon | PayOS as an alternative gateway for CourtPay auto-payment |
 | **Capacity & Waitlist** | Planned | When all courts are booked, players join a waitlist |
 | **Tournament Module** | Planned | Bracket generation, seeding, scoring, and scheduling |
