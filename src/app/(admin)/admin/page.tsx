@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import adminI18n from "@/i18n/admin-i18n";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import {
@@ -125,6 +127,7 @@ function PlayerAvatarImg({ photo, avatar, size = "md" }: { photo: string | null;
 }
 
 export default function AdminOverview() {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -141,7 +144,7 @@ export default function AdminOverview() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <h2 className="text-xl font-bold md:text-2xl">Dashboard</h2>
+        <h2 className="text-xl font-bold md:text-2xl">{t("overview.dashboard")}</h2>
         <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-28 animate-pulse rounded-xl border border-neutral-800 bg-neutral-900" />
@@ -157,7 +160,7 @@ export default function AdminOverview() {
   }
 
   if (!data) {
-    return <p className="text-neutral-500">Failed to load dashboard.</p>;
+    return <p className="text-neutral-500">{t("overview.failedToLoad")}</p>;
   }
 
   const hasAlerts =
@@ -169,7 +172,7 @@ export default function AdminOverview() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold md:text-2xl">Dashboard</h2>
+        <h2 className="text-xl font-bold md:text-2xl">{t("overview.dashboard")}</h2>
         <p className="text-xs text-neutral-500">
           {new Date().toLocaleDateString(undefined, {
             weekday: "long",
@@ -184,27 +187,27 @@ export default function AdminOverview() {
       <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
         <KpiCard
           icon={DollarSign}
-          label="Today's Revenue"
+          label={t("overview.todayRevenue")}
           value={fmtPrice(data.revenue.todayBookings)}
-          sub={`${data.bookings.todayCount} booking${data.bookings.todayCount !== 1 ? "s" : ""}`}
+          sub={t("overview.bookingCount", { count: data.bookings.todayCount })}
           color="text-green-400"
           bgColor="bg-green-500/10"
         />
         <KpiCard
           icon={TrendingUp}
-          label="This Week"
+          label={t("overview.thisWeek")}
           value={fmtPrice(data.revenue.weekBookings)}
-          sub={`${data.bookings.weekCount} booking${data.bookings.weekCount !== 1 ? "s" : ""}`}
+          sub={t("overview.bookingCount", { count: data.bookings.weekCount })}
           color="text-blue-400"
           bgColor="bg-blue-500/10"
         />
         <KpiCard
           icon={Banknote}
-          label="Monthly Revenue"
+          label={t("overview.monthlyRevenue")}
           value={fmtPrice(data.revenue.monthTotal)}
           sub={
             data.revenue.monthMemberships + data.revenue.monthCoaching > 0
-              ? `Bookings ${fmtPrice(data.revenue.monthBookings)}`
+              ? `${t("overview.bookings")} ${fmtPrice(data.revenue.monthBookings)}`
               : undefined
           }
           color="text-purple-400"
@@ -212,12 +215,12 @@ export default function AdminOverview() {
         />
         <KpiCard
           icon={Crown}
-          label="Active Members"
+          label={t("overview.activeMembers")}
           value={String(data.memberships.totalActive)}
           sub={
             data.memberships.unpaidCount > 0
-              ? `${data.memberships.unpaidCount} unpaid`
-              : "All caught up"
+              ? `${data.memberships.unpaidCount} ${t("overview.unpaid")}`
+              : t("overview.allCaughtUp")
           }
           color="text-amber-400"
           bgColor="bg-amber-500/10"
@@ -229,19 +232,19 @@ export default function AdminOverview() {
         <div className="grid gap-3 grid-cols-3">
           <MiniStat
             icon={CalendarDays}
-            label="Bookings"
+            label={t("overview.bookings")}
             value={fmtPrice(data.revenue.monthBookings)}
             color="text-blue-400"
           />
           <MiniStat
             icon={Crown}
-            label="Memberships"
+            label={t("overview.memberships")}
             value={fmtPrice(data.revenue.monthMemberships)}
             color="text-amber-400"
           />
           <MiniStat
             icon={GraduationCap}
-            label="Coaching"
+            label={t("overview.coaching")}
             value={fmtPrice(data.revenue.monthCoaching)}
             color="text-teal-400"
           />
@@ -256,8 +259,8 @@ export default function AdminOverview() {
               icon={AlertTriangle}
               color="text-red-400"
               bg="bg-red-500/10 border-red-500/20"
-              text={`${data.memberships.overdueCount} overdue membership payment${data.memberships.overdueCount !== 1 ? "s" : ""} (${fmtPrice(data.memberships.overdueAmount)})`}
-              action="View"
+              text={t("overview.overduePayments", { count: data.memberships.overdueCount, amount: fmtPrice(data.memberships.overdueAmount) })}
+              action={t("overview.view")}
               onClick={() => router.push("/admin/memberships")}
             />
           )}
@@ -266,8 +269,8 @@ export default function AdminOverview() {
               icon={CreditCard}
               color="text-amber-400"
               bg="bg-amber-500/10 border-amber-500/20"
-              text={`${data.staff.unpaidPayrollCount} unpaid payroll record${data.staff.unpaidPayrollCount !== 1 ? "s" : ""}`}
-              action="Review"
+              text={t("overview.unpaidPayroll", { count: data.staff.unpaidPayrollCount })}
+              action={t("overview.review")}
               onClick={() => router.push("/admin/payroll")}
             />
           )}
@@ -276,8 +279,8 @@ export default function AdminOverview() {
               icon={GraduationCap}
               color="text-teal-400"
               bg="bg-teal-500/10 border-teal-500/20"
-              text={`${data.coaching.unpaidCount} unpaid coaching lesson${data.coaching.unpaidCount !== 1 ? "s" : ""} (${fmtPrice(data.coaching.unpaidAmount)})`}
-              action="View"
+              text={t("overview.unpaidCoaching", { count: data.coaching.unpaidCount, amount: fmtPrice(data.coaching.unpaidAmount) })}
+              action={t("overview.view")}
               onClick={() => router.push("/admin/coaching")}
             />
           )}
@@ -286,8 +289,8 @@ export default function AdminOverview() {
               icon={Clock}
               color="text-purple-400"
               bg="bg-purple-500/10 border-purple-500/20"
-              text={`${data.memberships.expiringThisWeek} membership${data.memberships.expiringThisWeek !== 1 ? "s" : ""} expiring this week`}
-              action="View"
+              text={t("overview.expiringMemberships", { count: data.memberships.expiringThisWeek })}
+              action={t("overview.view")}
               onClick={() => router.push("/admin/memberships")}
             />
           )}
@@ -300,19 +303,19 @@ export default function AdminOverview() {
           <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
             <h3 className="flex items-center gap-2 text-sm font-semibold">
               <CalendarCheck className="h-4 w-4 text-purple-400" />
-              Upcoming Today
+              {t("overview.upcomingToday")}
             </h3>
             <button
               onClick={() => router.push("/admin/bookings")}
               className="flex items-center gap-1 text-xs text-neutral-500 hover:text-white transition-colors"
             >
-              All bookings <ArrowRight className="h-3 w-3" />
+              {t("overview.allBookings")} <ArrowRight className="h-3 w-3" />
             </button>
           </div>
           <div className="divide-y divide-neutral-800/50">
             {data.bookings.upcomingToday.length === 0 ? (
               <p className="px-4 py-8 text-center text-sm text-neutral-500">
-                No more bookings today
+                {t("overview.noMoreBookingsToday")}
               </p>
             ) : (
               data.bookings.upcomingToday.map((b) => (
@@ -340,7 +343,7 @@ export default function AdminOverview() {
           {data.bookings.tomorrowCount > 0 && (
             <div className="border-t border-neutral-800 px-4 py-2.5">
               <p className="text-xs text-neutral-500">
-                Tomorrow: <span className="text-neutral-300 font-medium">{data.bookings.tomorrowCount} booking{data.bookings.tomorrowCount !== 1 ? "s" : ""}</span>
+                {t("overview.tomorrow")}: <span className="text-neutral-300 font-medium">{t("overview.bookingCount", { count: data.bookings.tomorrowCount })}</span>
               </p>
             </div>
           )}
@@ -351,32 +354,32 @@ export default function AdminOverview() {
           <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
             <h3 className="flex items-center gap-2 text-sm font-semibold">
               <TrendingUp className="h-4 w-4 text-blue-400" />
-              Weekly Summary
+              {t("overview.weeklySummary")}
             </h3>
           </div>
           <div className="p-4 space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <SummaryItem
                 icon={CalendarDays}
-                label="Bookings"
+                label={t("overview.bookings")}
                 value={String(data.bookings.weekCount)}
                 color="text-blue-400"
               />
               <SummaryItem
                 icon={DollarSign}
-                label="Revenue"
+                label={t("overview.revenue")}
                 value={fmtPrice(data.revenue.weekBookings)}
                 color="text-green-400"
               />
               <SummaryItem
                 icon={XCircle}
-                label="Cancelled"
+                label={t("overview.cancelled")}
                 value={String(data.bookings.cancelledThisWeek)}
                 color="text-red-400"
               />
               <SummaryItem
                 icon={UserX}
-                label="No-shows"
+                label={t("overview.noShows")}
                 value={String(data.bookings.noShowThisWeek)}
                 color="text-amber-400"
               />
@@ -384,17 +387,17 @@ export default function AdminOverview() {
 
             {(data.coaching.lessonsToday > 0 || data.coaching.lessonsThisWeek > 0) && (
               <div className="border-t border-neutral-800 pt-3">
-                <p className="text-xs text-neutral-500 mb-2">Coaching</p>
+                <p className="text-xs text-neutral-500 mb-2">{t("overview.coaching")}</p>
                 <div className="grid grid-cols-2 gap-3">
                   <SummaryItem
                     icon={GraduationCap}
-                    label="Today"
+                    label={t("overview.today")}
                     value={String(data.coaching.lessonsToday)}
                     color="text-teal-400"
                   />
                   <SummaryItem
                     icon={GraduationCap}
-                    label="This week"
+                    label={t("overview.thisWeek")}
                     value={String(data.coaching.lessonsThisWeek)}
                     color="text-teal-400"
                   />
@@ -404,7 +407,7 @@ export default function AdminOverview() {
 
             {/* Venue info */}
             <div className="border-t border-neutral-800 pt-3">
-              <p className="text-xs text-neutral-500 mb-2">Venues</p>
+              <p className="text-xs text-neutral-500 mb-2">{t("overview.venues")}</p>
               <div className="space-y-1.5">
                 {data.venues.map((v) => (
                   <div
@@ -416,7 +419,7 @@ export default function AdminOverview() {
                       <span className="text-neutral-300">{v.name}</span>
                     </span>
                     <span className="text-xs text-neutral-500">
-                      {v.bookableCourts}/{v.totalCourts} courts bookable
+                      {v.bookableCourts}/{v.totalCourts} {t("overview.courtsBookable")}
                     </span>
                   </div>
                 ))}
@@ -428,10 +431,10 @@ export default function AdminOverview() {
                 <div className="flex items-center justify-between text-sm">
                   <span className="flex items-center gap-1.5">
                     <Users className="h-3 w-3 text-neutral-500" />
-                    <span className="text-neutral-300">Staff</span>
+                    <span className="text-neutral-300">{t("overview.staff")}</span>
                   </span>
                   <span className="text-xs text-neutral-500">
-                    {data.staff.totalCount} member{data.staff.totalCount !== 1 ? "s" : ""}
+                    {t("overview.staffMembers", { count: data.staff.totalCount })}
                   </span>
                 </div>
               </div>
@@ -445,13 +448,13 @@ export default function AdminOverview() {
         <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
           <h3 className="flex items-center gap-2 text-sm font-semibold">
             <Clock className="h-4 w-4 text-neutral-400" />
-            Recent Bookings
-          </h3>
-          <button
-            onClick={() => router.push("/admin/bookings")}
-            className="flex items-center gap-1 text-xs text-neutral-500 hover:text-white transition-colors"
-          >
-            View all <ArrowRight className="h-3 w-3" />
+              {t("overview.recentBookings")}
+            </h3>
+            <button
+              onClick={() => router.push("/admin/bookings")}
+              className="flex items-center gap-1 text-xs text-neutral-500 hover:text-white transition-colors"
+            >
+              {t("overview.viewAll")} <ArrowRight className="h-3 w-3" />
           </button>
         </div>
 
@@ -460,12 +463,12 @@ export default function AdminOverview() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-neutral-800 text-xs text-neutral-500">
-                <th className="px-4 py-2.5 text-left font-medium">Player</th>
-                <th className="px-4 py-2.5 text-left font-medium">Court</th>
-                <th className="px-4 py-2.5 text-left font-medium">Date</th>
-                <th className="px-4 py-2.5 text-left font-medium">Time</th>
-                <th className="px-4 py-2.5 text-left font-medium">Status</th>
-                <th className="px-4 py-2.5 text-right font-medium">Price</th>
+                <th className="px-4 py-2.5 text-left font-medium">{t("overview.player")}</th>
+                <th className="px-4 py-2.5 text-left font-medium">{t("overview.court")}</th>
+                <th className="px-4 py-2.5 text-left font-medium">{t("overview.date")}</th>
+                <th className="px-4 py-2.5 text-left font-medium">{t("overview.time")}</th>
+                <th className="px-4 py-2.5 text-left font-medium">{t("overview.status")}</th>
+                <th className="px-4 py-2.5 text-right font-medium">{t("overview.price")}</th>
               </tr>
             </thead>
             <tbody>
@@ -498,7 +501,7 @@ export default function AdminOverview() {
               {data.recentBookings.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-4 py-8 text-center text-neutral-500">
-                    No bookings yet
+                    {t("overview.noBookings")}
                   </td>
                 </tr>
               )}
@@ -526,17 +529,17 @@ export default function AdminOverview() {
             </div>
           ))}
           {data.recentBookings.length === 0 && (
-            <p className="px-4 py-8 text-center text-sm text-neutral-500">No bookings yet</p>
+            <p className="px-4 py-8 text-center text-sm text-neutral-500">{t("overview.noBookings")}</p>
           )}
         </div>
       </section>
 
       {/* Quick Links */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <QuickLink label="Bookings" icon={CalendarDays} onClick={() => router.push("/admin/bookings")} />
-        <QuickLink label="Memberships" icon={Crown} onClick={() => router.push("/admin/memberships")} />
-        <QuickLink label="Coaching" icon={GraduationCap} onClick={() => router.push("/admin/coaching")} />
-        <QuickLink label="Payroll" icon={CreditCard} onClick={() => router.push("/admin/payroll")} />
+        <QuickLink label={t("overview.bookings")} icon={CalendarDays} onClick={() => router.push("/admin/bookings")} />
+        <QuickLink label={t("overview.memberships")} icon={Crown} onClick={() => router.push("/admin/memberships")} />
+        <QuickLink label={t("overview.coaching")} icon={GraduationCap} onClick={() => router.push("/admin/coaching")} />
+        <QuickLink label={t("overview.payroll")} icon={CreditCard} onClick={() => router.push("/admin/payroll")} />
       </div>
     </div>
   );
@@ -585,7 +588,7 @@ function MiniStat({
       <Icon className={cn("h-4 w-4 shrink-0", color)} />
       <div className="min-w-0">
         <p className="text-sm font-bold">{value}</p>
-        <p className="text-[10px] text-neutral-500">{label} this month</p>
+        <p className="text-[10px] text-neutral-500">{label}</p>
       </div>
     </div>
   );

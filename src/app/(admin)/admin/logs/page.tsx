@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useSessionStore } from "@/stores/session-store";
+import { useTranslation } from "react-i18next";
+import adminI18n from "@/i18n/admin-i18n";
 import {
   ChevronLeft,
   ChevronRight,
@@ -88,14 +90,15 @@ function parseDevice(ua: string | null): { label: string; isMobile: boolean } {
   return { label: os ? `${browser} / ${os}` : browser, isMobile: mobile };
 }
 
-const ACTION_CONFIG: Record<string, { label: string; color: string; bg: string; Icon: typeof CheckCircle2 }> = {
-  login_success: { label: "Login", color: "text-green-400", bg: "bg-green-500/10", Icon: CheckCircle2 },
-  login_failed: { label: "Failed", color: "text-red-400", bg: "bg-red-500/10", Icon: XCircle },
-  biometric_login: { label: "Biometric", color: "text-blue-400", bg: "bg-blue-500/10", Icon: Fingerprint },
-  login_rate_limited: { label: "Blocked", color: "text-amber-400", bg: "bg-amber-500/10", Icon: ShieldAlert },
-};
 
 function ActionBadge({ action }: { action: string }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
+  const ACTION_CONFIG: Record<string, { label: string; color: string; bg: string; Icon: typeof CheckCircle2 }> = {
+    login_success: { label: t("logs.login"), color: "text-green-400", bg: "bg-green-500/10", Icon: CheckCircle2 },
+    login_failed: { label: t("logs.failed"), color: "text-red-400", bg: "bg-red-500/10", Icon: XCircle },
+    biometric_login: { label: t("logs.biometric"), color: "text-blue-400", bg: "bg-blue-500/10", Icon: Fingerprint },
+    login_rate_limited: { label: t("logs.blocked"), color: "text-amber-400", bg: "bg-amber-500/10", Icon: ShieldAlert },
+  };
   const cfg = ACTION_CONFIG[action] ?? {
     label: action,
     color: "text-neutral-400",
@@ -115,6 +118,7 @@ function ActionBadge({ action }: { action: string }) {
 const LIMIT = 30;
 
 export default function LogsPage() {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const { token } = useSessionStore();
   const [logs, setLogs] = useState<StaffAuthLog[]>([]);
   const [total, setTotal] = useState(0);
@@ -169,8 +173,7 @@ export default function LogsPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-white">Logs</h1>
-        <p className="text-sm text-neutral-400 mt-0.5">Track staff authentication activity and detect suspicious access.</p>
+        <h1 className="text-2xl font-bold text-white">{t("logs.title")}</h1>
       </div>
 
       {/* Tab bar */}
@@ -179,7 +182,7 @@ export default function LogsPage() {
           className="flex items-center gap-2 rounded-t-lg border-b-2 border-purple-400 px-4 py-2.5 text-sm font-medium text-purple-400 -mb-px"
         >
           <ShieldAlert className="h-4 w-4" />
-          Staff Auth Logs
+          {t("logs.title")}
         </button>
       </div>
 
@@ -189,11 +192,11 @@ export default function LogsPage() {
         <div className="flex gap-1">
           {(["all", "login_success", "login_failed", "biometric_login", "login_rate_limited"] as ActionFilter[]).map((f) => {
             const labels: Record<ActionFilter, string> = {
-              all: "All",
-              login_success: "Success",
-              login_failed: "Failed",
-              biometric_login: "Biometric",
-              login_rate_limited: "Blocked",
+              all: t("logs.allActions"),
+              login_success: t("logs.login"),
+              login_failed: t("logs.failed"),
+              biometric_login: t("logs.biometric"),
+              login_rate_limited: t("logs.blocked"),
             };
             return (
               <button
@@ -217,7 +220,7 @@ export default function LogsPage() {
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-500" />
           <input
             type="text"
-            placeholder="Staff name, phone, IP..."
+            placeholder={t("logs.search")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="h-8 w-52 rounded-lg border border-neutral-700 bg-neutral-900 pl-8 pr-3 text-xs text-white placeholder-neutral-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
@@ -247,7 +250,7 @@ export default function LogsPage() {
           className="ml-auto flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200 disabled:opacity-50 transition-colors"
         >
           <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
-          Refresh
+          {t("logs.refresh")}
         </button>
       </div>
 
@@ -255,26 +258,25 @@ export default function LogsPage() {
       {loading ? (
         <div className="flex items-center justify-center py-16 text-neutral-500">
           <RefreshCw className="h-5 w-5 animate-spin mr-2" />
-          Loading...
+          {t("logs.loading")}
         </div>
       ) : logs.length === 0 ? (
         <div className="rounded-xl border border-neutral-800 bg-neutral-900/30 py-16 text-center">
           <ShieldAlert className="mx-auto mb-3 h-10 w-10 text-neutral-700" />
-          <p className="text-neutral-400 font-medium">No auth logs found</p>
-          <p className="text-sm text-neutral-600 mt-1">Staff login events will appear here as they happen.</p>
+          <p className="text-neutral-400 font-medium">{t("logs.noLogs")}</p>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-neutral-800">
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-neutral-800 bg-neutral-900/70">
-                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">Staff</th>
-                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">Action</th>
-                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">IP</th>
-                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">Location</th>
-                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">Device</th>
-                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">Fingerprint</th>
-                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">Time</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">{t("logs.phone")}</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">{t("logs.action")}</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">{t("logs.ipAddress")}</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">{t("logs.location")}</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">{t("logs.device")}</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">{t("logs.fingerprint")}</th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">{t("logs.time")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-800/60">
@@ -298,7 +300,7 @@ export default function LogsPage() {
                         </div>
                       ) : (
                         <div>
-                          <p className="text-neutral-400 italic">Unknown</p>
+                          <p className="text-neutral-400 italic">{t("logs.unknown")}</p>
                           {log.phone && <p className="text-xs text-neutral-500">{log.phone}</p>}
                         </div>
                       )}
@@ -381,13 +383,14 @@ export default function LogsPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-sm text-neutral-400">
           <span>
-            {total} total &middot; page {page} of {totalPages}
+            {t("logs.page", { current: page, total: totalPages })}
           </span>
           <div className="flex gap-1">
             <button
               onClick={() => handlePageChange(page - 1)}
               disabled={page <= 1 || loading}
               className="rounded-lg p-2 hover:bg-neutral-800 disabled:opacity-40 transition-colors"
+              aria-label={t("logs.previous")}
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
@@ -395,6 +398,7 @@ export default function LogsPage() {
               onClick={() => handlePageChange(page + 1)}
               disabled={page >= totalPages || loading}
               className="rounded-lg p-2 hover:bg-neutral-800 disabled:opacity-40 transition-colors"
+              aria-label={t("logs.next")}
             >
               <ChevronRight className="h-4 w-4" />
             </button>

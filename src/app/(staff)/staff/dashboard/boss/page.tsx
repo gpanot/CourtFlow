@@ -7,6 +7,7 @@ import { staffProfileHomeHref } from "@/config/clients";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { ArrowLeft, Loader2, DollarSign, Clock, TrendingUp, Receipt, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
+import { PlayerAvatarThumb } from "@/components/player-avatar-thumb";
 import { QRCodeSVG } from "qrcode.react";
 import { useSocket } from "@/hooks/use-socket";
 import {
@@ -28,6 +29,7 @@ interface PlayerRow {
   skillLevel: string | null;
   facePhotoPath: string | null;
   avatarPhotoPath: string | null;
+  linkedPlayerId?: string | null;
   checkInCount: number;
   avgReturnDays: number | null;
   lastSeenAt: string | null;
@@ -978,32 +980,22 @@ export default function BossDashboardPage() {
                     const isFemale = p.gender?.toLowerCase() === "female";
                     const isMale = p.gender?.toLowerCase() === "male";
                     const nameColor = isFemale ? "text-pink-300" : isMale ? "text-blue-300" : "text-white";
-                    const initials = p.name.trim().charAt(0).toUpperCase();
                     const lastSeen = p.lastSeenAt
                       ? new Date(p.lastSeenAt).toLocaleDateString(undefined, { day: "2-digit", month: "short" })
                       : "—";
-                    const avatarUrl = p.avatarPhotoPath
-                      ? `${p.avatarPhotoPath}${p.avatarPhotoPath.includes("?") ? "&" : "?"}w=80`
-                      : null;
                     return (
                       <div
                         key={`${p.source}-${p.id}`}
                         className="flex items-center gap-3 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-2.5"
                       >
                         {/* Avatar */}
-                        <div className="flex-shrink-0 w-10 h-10 rounded-full overflow-hidden bg-purple-900/30 flex items-center justify-center">
-                          {avatarUrl ? (
-                            <img
-                              src={avatarUrl}
-                              alt={p.name}
-                              className="w-full h-full object-cover"
-                              loading="lazy"
-                              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                            />
-                          ) : (
-                            <span className="text-base font-bold text-purple-300">{initials}</span>
-                          )}
-                        </div>
+                        <PlayerAvatarThumb
+                          facePhotoPath={p.facePhotoPath}
+                          avatarPhotoPath={p.avatarPhotoPath}
+                          playerId={p.linkedPlayerId ?? (p.source === "self" ? p.id : null)}
+                          avatar={p.name.trim().charAt(0).toUpperCase()}
+                          sizeClass="h-10 w-10 flex-shrink-0"
+                        />
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">

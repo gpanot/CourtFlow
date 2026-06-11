@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import adminI18n from "@/i18n/admin-i18n";
 import { useSessionStore } from "@/stores/session-store";
 import { VIETQR_BANKS, buildVietQRUrl } from "@/lib/vietqr";
 import {
@@ -203,6 +205,7 @@ function PlayerStickerSlideOver({
 type GenderFilter = "all" | "male" | "female";
 
 function StickerExplorerTab({ token }: { token: string }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [packs, setPacks] = useState<ExplorerPack[]>([]);
   const [loading, setLoading] = useState(true);
   const [genderFilter, setGenderFilter] = useState<GenderFilter>("all");
@@ -256,20 +259,20 @@ function StickerExplorerTab({ token }: { token: string }) {
       {/* Filter bar */}
       <div className="flex items-center gap-2 pb-4 flex-wrap">
         <button type="button" className={filterBtnCls(genderFilter === "all")} onClick={() => setGenderFilter("all")}>
-          All ({counts.all})
+          {t("players.filterAll")} ({counts.all})
         </button>
         <button type="button" className={filterBtnCls(genderFilter === "male")} onClick={() => setGenderFilter("male")}>
-          Male ({counts.male})
+          {t("players.filterMale")} ({counts.male})
         </button>
         <button type="button" className={filterBtnCls(genderFilter === "female")} onClick={() => setGenderFilter("female")}>
-          Female ({counts.female})
+          {t("players.filterFemale")} ({counts.female})
         </button>
       </div>
 
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-16 text-neutral-600">
           <Layers className="h-10 w-10 opacity-40" />
-          <p className="text-sm">No sticker packs found.</p>
+          <p className="text-sm">{t("kioskShop.noPacksFound")}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -389,6 +392,7 @@ function PaymentSettingsSection({
 }: {
   token: string;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [price, setPrice] = useState("");
   const [bankBin, setBankBin] = useState("");
   const [bankAccount, setBankAccount] = useState("");
@@ -470,12 +474,12 @@ function PaymentSettingsSection({
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <CreditCard className="h-4 w-4 text-green-400" />
-        <p className="text-sm font-medium text-neutral-200">Payment Settings</p>
+        <p className="text-sm font-medium text-neutral-200">{t("kioskShop.paymentSettings")}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="mb-0.5 block text-[11px] text-neutral-500">Sticker Price (VND)</label>
+          <label className="mb-0.5 block text-[11px] text-neutral-500">{t("kioskShop.stickerPrice")}</label>
           <input
             type="text"
             inputMode="numeric"
@@ -489,13 +493,13 @@ function PaymentSettingsSection({
           />
         </div>
         <div>
-          <label className="mb-0.5 block text-[11px] text-neutral-500">Bank</label>
+          <label className="mb-0.5 block text-[11px] text-neutral-500">{t("kioskShop.bank")}</label>
           <select
             value={bankBin}
             onChange={(e) => setBankBin(e.target.value)}
             className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none"
           >
-            <option value="">— select —</option>
+            <option value="">— {t("kioskShop.select")} —</option>
             {VIETQR_BANKS.map((b) => (
               <option key={b.bin} value={b.bin}>
                 {b.name} — {b.bin}
@@ -507,7 +511,7 @@ function PaymentSettingsSection({
 
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="mb-0.5 block text-[11px] text-neutral-500">Account Number</label>
+          <label className="mb-0.5 block text-[11px] text-neutral-500">{t("kioskShop.accountNumber")}</label>
           <input
             type="text"
             value={bankAccount}
@@ -517,7 +521,7 @@ function PaymentSettingsSection({
           />
         </div>
         <div>
-          <label className="mb-0.5 block text-[11px] text-neutral-500">Account Owner Name</label>
+          <label className="mb-0.5 block text-[11px] text-neutral-500">{t("kioskShop.accountOwnerName")}</label>
           <input
             type="text"
             value={bankOwnerName}
@@ -551,7 +555,7 @@ function PaymentSettingsSection({
           />
           <div className={qrExpanded ? "w-full space-y-0.5 text-center" : "min-w-0 flex-1 space-y-0.5 pt-1"}>
             <p className="text-[11px] font-medium text-purple-400">
-              {qrExpanded ? "Tap to collapse" : "QR Preview"}
+              {qrExpanded ? t("kioskShop.tapToCollapse") : t("kioskShop.qrPreview")}
             </p>
             <p className="truncate text-xs text-neutral-300">
               {VIETQR_BANKS.find((b) => b.bin === bankBin)?.name}
@@ -565,7 +569,7 @@ function PaymentSettingsSection({
         </button>
       ) : bankBin || bankAccount ? (
         <p className="rounded-lg border border-amber-800/40 bg-amber-950/30 px-3 py-1.5 text-[11px] text-amber-400">
-          Fill bank, account # and price to see QR preview
+          {t("kioskShop.fillBankForQr")}
         </p>
       ) : null}
 
@@ -579,7 +583,7 @@ function PaymentSettingsSection({
       >
         {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
         {saved && <Check className="h-3.5 w-3.5" />}
-        {saved ? "Saved!" : "Save Payment Settings"}
+        {saved ? t("common.saved") : t("kioskShop.savePaymentSettings")}
       </button>
     </div>
   );
@@ -598,6 +602,7 @@ function TemplateRow({
   token: string;
   onDeleted: (id: string) => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [name, setName] = useState(template.name);
   const [malePrompt, setMalePrompt] = useState(template.malePrompt);
   const [femalePrompt, setFemalePrompt] = useState(template.femalePrompt);
@@ -652,7 +657,7 @@ function TemplateRow({
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Template name"
+          placeholder={t("kioskShop.templateName")}
           className="flex-1 rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm font-medium text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none"
         />
         <button
@@ -669,22 +674,22 @@ function TemplateRow({
       {/* Prompts grid */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="mb-1 block text-[11px] font-medium text-blue-400">Male Prompt</label>
+          <label className="mb-1 block text-[11px] font-medium text-blue-400">{t("kioskShop.malePrompt")}</label>
           <textarea
             value={malePrompt}
             onChange={(e) => setMalePrompt(e.target.value)}
             rows={5}
-            placeholder="Prompt for male players..."
+            placeholder={t("kioskShop.malePromptPlaceholder")}
             className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-xs text-white placeholder:text-neutral-600 focus:border-blue-500 focus:outline-none resize-y"
           />
         </div>
         <div>
-          <label className="mb-1 block text-[11px] font-medium text-pink-400">Female Prompt</label>
+          <label className="mb-1 block text-[11px] font-medium text-pink-400">{t("kioskShop.femalePrompt")}</label>
           <textarea
             value={femalePrompt}
             onChange={(e) => setFemalePrompt(e.target.value)}
             rows={5}
-            placeholder="Prompt for female players..."
+            placeholder={t("kioskShop.femalePromptPlaceholder")}
             className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-xs text-white placeholder:text-neutral-600 focus:border-pink-500 focus:outline-none resize-y"
           />
         </div>
@@ -705,7 +710,7 @@ function TemplateRow({
           ) : (
             <Save className="h-3 w-3" />
           )}
-          {saved ? "Saved!" : "Save"}
+          {saved ? t("common.saved") : t("common.save")}
         </button>
       )}
     </div>
@@ -727,6 +732,7 @@ function DraftTemplateRow({
   onCreated: (template: StickerTemplateRow) => void;
   onCancel: (draftId: string) => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [name, setName] = useState(draft.name);
   const [malePrompt, setMalePrompt] = useState(draft.malePrompt);
   const [femalePrompt, setFemalePrompt] = useState(draft.femalePrompt);
@@ -764,7 +770,7 @@ function DraftTemplateRow({
           type="text"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Template name (e.g. Fun1)"
+          placeholder={t("kioskShop.templateNameExample")}
           autoFocus
           className="flex-1 rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm font-medium text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none"
         />
@@ -780,22 +786,22 @@ function DraftTemplateRow({
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="mb-1 block text-[11px] font-medium text-blue-400">Male Prompt</label>
+          <label className="mb-1 block text-[11px] font-medium text-blue-400">{t("kioskShop.malePrompt")}</label>
           <textarea
             value={malePrompt}
             onChange={(e) => setMalePrompt(e.target.value)}
             rows={5}
-            placeholder="Prompt for male players..."
+            placeholder={t("kioskShop.malePromptPlaceholder")}
             className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-xs text-white placeholder:text-neutral-600 focus:border-blue-500 focus:outline-none resize-y"
           />
         </div>
         <div>
-          <label className="mb-1 block text-[11px] font-medium text-pink-400">Female Prompt</label>
+          <label className="mb-1 block text-[11px] font-medium text-pink-400">{t("kioskShop.femalePrompt")}</label>
           <textarea
             value={femalePrompt}
             onChange={(e) => setFemalePrompt(e.target.value)}
             rows={5}
-            placeholder="Prompt for female players..."
+            placeholder={t("kioskShop.femalePromptPlaceholder")}
             className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-xs text-white placeholder:text-neutral-600 focus:border-pink-500 focus:outline-none resize-y"
           />
         </div>
@@ -810,7 +816,7 @@ function DraftTemplateRow({
         className="flex items-center gap-1.5 rounded-md bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-purple-500 disabled:opacity-50 transition-colors"
       >
         {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
-        Add Template
+        {t("kioskShop.addTemplate")}
       </button>
     </div>
   );
@@ -821,6 +827,7 @@ function DraftTemplateRow({
 // ---------------------------------------------------------------------------
 
 function TemplatesSection({ token }: { token: string }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [templates, setTemplates] = useState<StickerTemplateRow[]>([]);
   const [drafts, setDrafts] = useState<DraftTemplate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -868,7 +875,7 @@ function TemplatesSection({ token }: { token: string }) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Sticker className="h-4 w-4 text-purple-400" />
-          <p className="text-sm font-medium text-neutral-200">Sticker Templates</p>
+          <p className="text-sm font-medium text-neutral-200">{t("kioskShop.stickerTemplates")}</p>
         </div>
         <button
           type="button"
@@ -876,7 +883,7 @@ function TemplatesSection({ token }: { token: string }) {
           className="flex items-center gap-1.5 rounded-md border border-purple-700/60 bg-purple-900/30 px-3 py-1.5 text-xs font-medium text-purple-300 hover:bg-purple-900/50 transition-colors"
         >
           <Plus className="h-3.5 w-3.5" />
-          Add Template
+          {t("kioskShop.addTemplate")}
         </button>
       </div>
 
@@ -884,10 +891,10 @@ function TemplatesSection({ token }: { token: string }) {
       {(templates.length > 0 || drafts.length > 0) && (
         <div className="grid grid-cols-2 gap-3 px-1">
           <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-blue-400">
-            <span>Male</span>
+            <span>{t("players.male")}</span>
           </div>
           <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-pink-400">
-            <span>Female</span>
+            <span>{t("players.female")}</span>
           </div>
         </div>
       )}
@@ -898,8 +905,8 @@ function TemplatesSection({ token }: { token: string }) {
         </div>
       ) : templates.length === 0 && drafts.length === 0 ? (
         <div className="rounded-lg border border-dashed border-neutral-700 p-8 text-center">
-          <p className="text-sm text-neutral-500">No templates yet.</p>
-          <p className="mt-1 text-xs text-neutral-600">Add a template to customize sticker generation per gender.</p>
+          <p className="text-sm text-neutral-500">{t("kioskShop.noTemplates")}</p>
+          <p className="mt-1 text-xs text-neutral-600">{t("kioskShop.addTemplateHint")}</p>
         </div>
       ) : null}
 
@@ -950,6 +957,7 @@ function StatCard({ title, value, subtitle }: { title: string; value: string; su
 }
 
 function StickerStatsTab({ token }: { token: string }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [stats, setStats] = useState<StickerStats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -980,36 +988,36 @@ function StickerStatsTab({ token }: { token: string }) {
       {/* Metric cards */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard
-          title="Face Scans Today"
+          title={t("kioskShop.faceScansToday")}
           value={String(stats.scansToday)}
-          subtitle={`All time: ${stats.scansTotal}`}
+          subtitle={`${t("kioskShop.allTime")}: ${stats.scansTotal}`}
         />
         <StatCard
-          title="Purchases Today"
+          title={t("kioskShop.purchasesToday")}
           value={String(stats.purchasesToday)}
-          subtitle={`All time: ${stats.purchasesTotal}`}
+          subtitle={`${t("kioskShop.allTime")}: ${stats.purchasesTotal}`}
         />
         <StatCard
-          title="Revenue Today"
+          title={t("kioskShop.revenueToday")}
           value={fmtVND(stats.revenueToday)}
-          subtitle={`Total: ${fmtVND(stats.revenueTotal)}`}
+          subtitle={`${t("common.total")}: ${fmtVND(stats.revenueTotal)}`}
         />
         <StatCard
-          title="Conversion Rate"
+          title={t("kioskShop.conversionRate")}
           value={`${stats.conversionRate}%`}
-          subtitle="Scans → Purchases"
+          subtitle={t("kioskShop.scansToPurchases")}
         />
       </div>
 
       {/* Bar chart */}
       <div className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4">
-        <p className="text-xs font-medium text-neutral-400 mb-4">Last 7 days — Scans vs Purchases</p>
+        <p className="text-xs font-medium text-neutral-400 mb-4">{t("kioskShop.last7DaysTitle")}</p>
         <div className="flex items-center gap-4 mb-3">
           <span className="flex items-center gap-1.5 text-[11px] text-neutral-500">
-            <span className="inline-block w-3 h-2 rounded-sm bg-blue-500" /> Scans
+            <span className="inline-block w-3 h-2 rounded-sm bg-blue-500" /> {t("kioskShop.scans")}
           </span>
           <span className="flex items-center gap-1.5 text-[11px] text-neutral-500">
-            <span className="inline-block w-3 h-2 rounded-sm bg-green-400" /> Purchases
+            <span className="inline-block w-3 h-2 rounded-sm bg-green-400" /> {t("kioskShop.tabPurchases")}
           </span>
         </div>
         <BarChartComponent data={stats.last7Days} />
@@ -1036,6 +1044,7 @@ function fmtDateTime(iso: string): string {
 }
 
 function StickerPurchasesTab({ token }: { token: string }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -1105,23 +1114,23 @@ function StickerPurchasesTab({ token }: { token: string }) {
       {purchases.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-16 text-neutral-600">
           <Receipt className="h-10 w-10 opacity-40" />
-          <p className="text-sm">No purchases yet.</p>
+          <p className="text-sm">{t("kioskShop.noPurchases")}</p>
         </div>
       ) : (
         <>
-          <p className="text-xs text-neutral-500">Showing {purchases.length} of {total} purchases</p>
+          <p className="text-xs text-neutral-500">{t("players.showing")} {purchases.length} {t("common.of")} {total} {t("kioskShop.purchasesLower")}</p>
 
           {/* Table */}
           <div className="rounded-xl border border-neutral-800 overflow-hidden">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-neutral-800 bg-neutral-900/80">
-                  <th className="px-3 py-2.5 text-left text-[11px] font-medium text-neutral-500">Date &amp; Time</th>
-                  <th className="px-3 py-2.5 text-left text-[11px] font-medium text-neutral-500">Player</th>
-                  <th className="px-3 py-2.5 text-left text-[11px] font-medium text-neutral-500">Amount</th>
-                  <th className="px-3 py-2.5 text-left text-[11px] font-medium text-neutral-500 hidden sm:table-cell">Payment Code</th>
-                  <th className="px-3 py-2.5 text-left text-[11px] font-medium text-neutral-500 hidden md:table-cell">Order Code</th>
-                  <th className="px-3 py-2.5 text-right text-[11px] font-medium text-neutral-500">Action</th>
+                  <th className="px-3 py-2.5 text-left text-[11px] font-medium text-neutral-500">{t("kioskShop.dateTime")}</th>
+                  <th className="px-3 py-2.5 text-left text-[11px] font-medium text-neutral-500">{t("players.colPlayer")}</th>
+                  <th className="px-3 py-2.5 text-left text-[11px] font-medium text-neutral-500">{t("kioskShop.amount")}</th>
+                  <th className="px-3 py-2.5 text-left text-[11px] font-medium text-neutral-500 hidden sm:table-cell">{t("kioskShop.paymentCode")}</th>
+                  <th className="px-3 py-2.5 text-left text-[11px] font-medium text-neutral-500 hidden md:table-cell">{t("kioskShop.orderCode")}</th>
+                  <th className="px-3 py-2.5 text-right text-[11px] font-medium text-neutral-500">{t("kioskShop.action")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-800/60">
@@ -1148,21 +1157,21 @@ function StickerPurchasesTab({ token }: { token: string }) {
                     <td className="px-3 py-2.5 text-right">
                       {confirmDeleteId === p.id ? (
                         <div className="flex items-center justify-end gap-1.5">
-                          <span className="text-[10px] text-neutral-400 whitespace-nowrap">Mark unpaid?</span>
+                          <span className="text-[10px] text-neutral-400 whitespace-nowrap">{t("kioskShop.markUnpaid")}</span>
                           <button
                             type="button"
                             disabled={deleting}
                             onClick={() => void handleDelete(p.id)}
                             className="rounded px-2 py-0.5 text-[11px] font-medium bg-red-600 text-white hover:bg-red-500 disabled:opacity-50 whitespace-nowrap"
                           >
-                            {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : "Confirm"}
+                            {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : t("kioskShop.confirm")}
                           </button>
                           <button
                             type="button"
                             onClick={() => setConfirmDeleteId(null)}
                             className="rounded px-2 py-0.5 text-[11px] text-neutral-400 hover:text-white"
                           >
-                            Cancel
+                            {t("common.cancel")}
                           </button>
                         </div>
                       ) : (
@@ -1194,7 +1203,7 @@ function StickerPurchasesTab({ token }: { token: string }) {
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <span className="text-xs text-neutral-500 tabular-nums">
-                Page {page} of {totalPages}
+                {t("kioskShop.page")} {page} {t("common.of")} {totalPages}
               </span>
               <button
                 type="button"
@@ -1220,6 +1229,7 @@ const CHROMA_DEFAULTS = { chromaTolerance: 40, featherRadius: 1.5 };
 const CHROMA_RECOMMENDED = { chromaTolerance: 65, featherRadius: 0.8 };
 
 function ChromaSettingsSection({ token }: { token: string }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [tolerance, setTolerance] = useState<number | "">(65);
   const [feather, setFeather] = useState<number | "">(0.8);
   const [loading, setLoading] = useState(true);
@@ -1266,7 +1276,7 @@ function ChromaSettingsSection({ token }: { token: string }) {
   if (loading) {
     return (
       <div className="flex items-center gap-2 text-neutral-500 text-sm py-8">
-        <Loader2 className="h-4 w-4 animate-spin" /> Loading settings…
+        <Loader2 className="h-4 w-4 animate-spin" /> {t("kioskShop.loadingSettings")}
       </div>
     );
   }
@@ -1274,7 +1284,7 @@ function ChromaSettingsSection({ token }: { token: string }) {
   return (
     <div className="space-y-6 max-w-lg">
       <div>
-        <h2 className="text-base font-semibold text-white mb-1">Background Removal — Chroma Key</h2>
+        <h2 className="text-base font-semibold text-white mb-1">{t("kioskShop.chromaTitle")}</h2>
         <p className="text-xs text-neutral-500">
           Controls how aggressively the green (#00FF00) background is removed when splitting stickers.
           Applied to both the auto-queue processor and the manual split in the player admin.
@@ -1288,14 +1298,14 @@ function ChromaSettingsSection({ token }: { token: string }) {
           onClick={() => applyPreset(CHROMA_RECOMMENDED)}
           className="flex items-center gap-1.5 rounded-lg border border-green-700 bg-green-950/40 px-3 py-1.5 text-xs font-medium text-green-400 hover:bg-green-900/40 transition-colors"
         >
-          <Check className="h-3 w-3" /> Current recommended (65 / 0.8)
+          <Check className="h-3 w-3" /> {t("kioskShop.currentRecommended")}
         </button>
         <button
           type="button"
           onClick={() => applyPreset(CHROMA_DEFAULTS)}
           className="flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800/40 px-3 py-1.5 text-xs font-medium text-neutral-400 hover:bg-neutral-700/40 transition-colors"
         >
-          <RotateCcw className="h-3 w-3" /> Original defaults (40 / 1.5)
+          <RotateCcw className="h-3 w-3" /> {t("kioskShop.originalDefaults")}
         </button>
       </div>
 
@@ -1353,7 +1363,7 @@ function ChromaSettingsSection({ token }: { token: string }) {
         className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
         {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : saved ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}
-        {saving ? "Saving…" : saved ? "Saved!" : "Save settings"}
+        {saving ? t("common.saving") : saved ? t("common.saved") : t("kioskShop.saveSettings")}
       </button>
     </div>
   );
@@ -1364,6 +1374,7 @@ function ChromaSettingsSection({ token }: { token: string }) {
 // ---------------------------------------------------------------------------
 
 export default function KioskShopPage() {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const token = useSessionStore((s) => s.token);
   const [activeTab, setActiveTab] = useState<ActiveTab>("stickers");
 
@@ -1376,36 +1387,36 @@ export default function KioskShopPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <ShoppingBag className="h-6 w-6 text-purple-400" />
-        <h1 className="text-xl font-bold text-white">Kiosk Shop</h1>
+        <h1 className="text-xl font-bold text-white">{t("kioskShop.title")}</h1>
       </div>
 
       {/* Tab bar */}
       <div className="flex gap-1 border-b border-neutral-800">
         <button type="button" className={tabCls("stickers")} onClick={() => setActiveTab("stickers")}>
-          Stickers
+          {t("kioskShop.tabStickers")}
         </button>
         <button type="button" className={tabCls("explorer")} onClick={() => setActiveTab("explorer")}>
           <span className="flex items-center gap-1.5">
             <Layers className="h-3.5 w-3.5" />
-            Explorer
+            {t("kioskShop.tabExplorer")}
           </span>
         </button>
         <button type="button" className={tabCls("stats")} onClick={() => setActiveTab("stats")}>
           <span className="flex items-center gap-1.5">
             <BarChart2 className="h-3.5 w-3.5" />
-            Stats
+            {t("kioskShop.tabStats")}
           </span>
         </button>
         <button type="button" className={tabCls("purchases")} onClick={() => setActiveTab("purchases")}>
           <span className="flex items-center gap-1.5">
             <Receipt className="h-3.5 w-3.5" />
-            Purchases
+            {t("kioskShop.tabPurchases")}
           </span>
         </button>
         <button type="button" className={tabCls("settings")} onClick={() => setActiveTab("settings")}>
           <span className="flex items-center gap-1.5">
             <Settings className="h-3.5 w-3.5" />
-            Settings
+            {t("settings.title")}
           </span>
         </button>
       </div>

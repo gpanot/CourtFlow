@@ -24,6 +24,7 @@
     "enroll:faces": "tsx scripts/reenroll-mock-players.ts",
     "clear:failed:faces:dry": "tsx scripts/clear-failed-faces.ts --dry-run",
     "clear:failed:faces": "tsx scripts/clear-failed-faces.ts",
+    "backfill:face-thumbs": "tsx scripts/backfill-player-face-thumbs.ts",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage"

@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import adminI18n from "@/i18n/admin-i18n";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import {
@@ -267,45 +269,46 @@ function StatCard({
 }
 
 function KpiGrid({ kpis }: { kpis: Kpis }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
       <StatCard
         icon={DollarSign}
-        label="Revenue (confirmed)"
+        label={t("courtpayAnalytics.revenueConfirmed")}
         value={`${formatVND(kpis.totalRevenue)}`}
         color="text-purple-400"
       />
       <StatCard
         icon={BarChart3}
-        label="Payments"
+        label={t("courtpayAnalytics.payments")}
         value={String(kpis.totalPayments)}
         color="text-blue-400"
       />
       <StatCard
         icon={Users}
-        label="Unique players"
+        label={t("courtpayAnalytics.totalPlayers")}
         value={String(kpis.uniquePlayers)}
         color="text-emerald-400"
       />
       <StatCard
         icon={Calendar}
-        label="Sessions"
+        label={t("courtpayAnalytics.sessions")}
         value={String(kpis.sessionCount)}
         color="text-amber-400"
       />
       <StatCard
         icon={TrendingUp}
-        label="Avg / session"
+        label={t("courtpayAnalytics.avgPerSession")}
         value={`${formatVND(kpis.avgRevenuePerSession)}`}
         color="text-cyan-400"
       />
       <StatCard
         icon={XCircle}
-        label="Cancelled"
+        label={t("courtpayAnalytics.cancelled")}
         value={String(kpis.cancelledCount)}
         sub={
           kpis.subscriptionRevenue > 0
-            ? `Sub revenue: ${formatVND(kpis.subscriptionRevenue)}`
+            ? `${t("courtpayAnalytics.subRevenue")}: ${formatVND(kpis.subscriptionRevenue)}`
             : undefined
         }
         color="text-red-400"
@@ -450,6 +453,7 @@ function SectionHeader({
   onExportSelected: () => void;
   exportingSelected: boolean;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   return (
     <div className="mb-3 flex items-center justify-between gap-2">
       <h2 className="text-sm font-medium text-neutral-300">{title}</h2>
@@ -466,7 +470,7 @@ function SectionHeader({
             ) : (
               <Download className="h-3 w-3" />
             )}
-            Export ({selectedCount})
+            {t("courtpayAnalytics.export")} ({selectedCount})
           </button>
         )}
         <button
@@ -480,8 +484,8 @@ function SectionHeader({
           )}
         >
           {selectionMode
-            ? `Cancel${selectedCount > 0 ? ` (${selectedCount}/${totalCount})` : ""}`
-            : "Export"}
+            ? `${t("common.cancel")}${selectedCount > 0 ? ` (${selectedCount}/${totalCount})` : ""}`
+            : t("courtpayAnalytics.export")}
         </button>
       </div>
     </div>
@@ -489,6 +493,7 @@ function SectionHeader({
 }
 
 export default function CourtPayAnalyticsPage() {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const { role } = useSessionStore();
   const isSuperAdmin = role === "superadmin";
 
@@ -609,7 +614,7 @@ export default function CourtPayAnalyticsPage() {
   const breadcrumbs = useMemo(() => {
     const crumbs: { label: string; action: () => void }[] = [
       {
-        label: "All venues",
+        label: t("courtpayAnalytics.allVenues"),
         action: () => {
           setDrill(null);
           setSelectedVenueId("");
@@ -810,7 +815,7 @@ export default function CourtPayAnalyticsPage() {
         summaryRows.push(["--- Summary ---", ""]);
         summaryRows.push(["Total Revenue", String(kpis.totalRevenue)]);
         summaryRows.push(["Total Payments", String(kpis.totalPayments)]);
-        summaryRows.push(["Unique Players", String(kpis.uniquePlayers)]);
+        summaryRows.push(["Total Players", String(kpis.uniquePlayers)]);
         summaryRows.push(["Sessions", String(kpis.sessionCount)]);
         summaryRows.push(["Cancelled", String(kpis.cancelledCount)]);
         summaryRows.push(["", ""]);
@@ -1281,9 +1286,9 @@ export default function CourtPayAnalyticsPage() {
     <div>
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold text-white">CourtPay Analytics</h1>
+          <h1 className="text-xl font-bold text-white">{t("courtpayAnalytics.title")}</h1>
           <p className="text-sm text-neutral-500">
-            Venue performance, drill-down by month / week / session, CSV export for accounting
+            {t("courtpayAnalytics.subtitle")}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -1304,7 +1309,7 @@ export default function CourtPayAnalyticsPage() {
               ) : (
                 <Download className="h-3.5 w-3.5" />
               )}
-              Export CSV
+              {t("courtpayAnalytics.exportCsv")}
             </button>
           )}
         </div>
@@ -1318,7 +1323,7 @@ export default function CourtPayAnalyticsPage() {
             className="flex items-center gap-1 rounded-lg border border-neutral-700 px-2 py-1 text-neutral-400 hover:text-white"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
-            Back
+            {t("common.back")}
           </button>
           {breadcrumbs.map((c, i) => (
             <span key={i} className="flex items-center gap-2">
@@ -1343,7 +1348,7 @@ export default function CourtPayAnalyticsPage() {
       {!selectedVenueId ? (
         <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-12 text-center text-neutral-500">
           <CreditCard className="mx-auto mb-3 h-10 w-10 text-neutral-600" />
-          Select a venue to view CourtPay analytics
+          {t("courtpayAnalytics.selectVenue")}
         </div>
       ) : loading ? (
         <div className="flex justify-center py-20">
@@ -1356,7 +1361,7 @@ export default function CourtPayAnalyticsPage() {
           {currentLevel === "venue" && (
             <section>
               <SectionHeader
-                title="Monthly breakdown (last 12 months)"
+                title={t("courtpayAnalytics.monthlyBreakdown")}
                 selectionMode={monthsSelectMode}
                 selectedCount={monthsSelected.size}
                 totalCount={months.length}
@@ -1365,7 +1370,7 @@ export default function CourtPayAnalyticsPage() {
                 exportingSelected={exportingSelected}
               />
               <DataTable
-                headers={["Month", "Sessions", "Payments", "Revenue", "Avg / session", "Cancelled"]}
+                headers={[t("courtpayAnalytics.month"), t("courtpayAnalytics.sessions"), t("courtpayAnalytics.payments"), t("courtpayAnalytics.revenue"), t("courtpayAnalytics.avgPerSession"), t("courtpayAnalytics.cancelled")]}
                 rows={months.map((m) => ({
                   key: m.month,
                   cells: [
@@ -1392,7 +1397,7 @@ export default function CourtPayAnalyticsPage() {
           {drill?.level === "month" && (
             <section>
               <SectionHeader
-                title="Weekly breakdown"
+                title={t("courtpayAnalytics.weeklyBreakdown")}
                 selectionMode={weeksSelectMode}
                 selectedCount={weeksSelected.size}
                 totalCount={weeks.length}
@@ -1401,7 +1406,7 @@ export default function CourtPayAnalyticsPage() {
                 exportingSelected={exportingSelected}
               />
               <DataTable
-                headers={["Week", "Sessions", "Payments", "Revenue", "Avg / session", "Cancelled"]}
+                headers={[t("courtpayAnalytics.week"), t("courtpayAnalytics.sessions"), t("courtpayAnalytics.payments"), t("courtpayAnalytics.revenue"), t("courtpayAnalytics.avgPerSession"), t("courtpayAnalytics.cancelled")]}
                 rows={weeks.map((w) => ({
                   key: w.weekStart,
                   cells: [
@@ -1429,7 +1434,7 @@ export default function CourtPayAnalyticsPage() {
             <section>
               {/* Sessions section header with Export + (superadmin) Delete controls */}
               <div className="mb-3 flex items-center justify-between gap-2">
-                <h2 className="text-sm font-medium text-neutral-300">Sessions</h2>
+                <h2 className="text-sm font-medium text-neutral-300">{t("courtpayAnalytics.sessions")}</h2>
                 <div className="flex items-center gap-2">
                   {/* Delete action buttons (superadmin only, delete mode active) */}
                   {isSuperAdmin && sessionsDeleteMode && sessionsDeleteSelected.size > 0 && (
@@ -1441,7 +1446,7 @@ export default function CourtPayAnalyticsPage() {
                           className="flex items-center gap-1.5 rounded-lg bg-red-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700"
                         >
                           <Trash2 className="h-3 w-3" />
-                          Delete ({sessionsDeleteSelected.size})
+                          {t("common.delete")} ({sessionsDeleteSelected.size})
                         </button>
                       )}
                       {deleteConfirmPhase === "first" && (
@@ -1451,7 +1456,7 @@ export default function CourtPayAnalyticsPage() {
                           className="flex items-center gap-1.5 rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-600 animate-pulse"
                         >
                           <Trash2 className="h-3 w-3" />
-                          Confirm delete?
+                          {t("courtpayAnalytics.confirmDelete")}
                         </button>
                       )}
                       {deleteConfirmPhase === "second" && (
@@ -1466,7 +1471,7 @@ export default function CourtPayAnalyticsPage() {
                           ) : (
                             <Trash2 className="h-3 w-3" />
                           )}
-                          ⚠ Permanently delete {sessionsDeleteSelected.size} session{sessionsDeleteSelected.size > 1 ? "s" : ""}?
+                          ⚠ {t("courtpayAnalytics.permanentlyDelete")} {sessionsDeleteSelected.size} {sessionsDeleteSelected.size > 1 ? t("courtpayAnalytics.sessionsPlural") : t("courtpayAnalytics.session")}?
                         </button>
                       )}
                     </>
@@ -1481,7 +1486,7 @@ export default function CourtPayAnalyticsPage() {
                       className="flex items-center gap-1.5 rounded-lg bg-green-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-600 disabled:opacity-50"
                     >
                       {exportingSelected ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
-                      Export ({sessionsSelected.size})
+                      {t("courtpayAnalytics.export")} ({sessionsSelected.size})
                     </button>
                   )}
 
@@ -1498,8 +1503,8 @@ export default function CourtPayAnalyticsPage() {
                       )}
                     >
                       {sessionsSelectMode
-                        ? `Cancel${sessionsSelected.size > 0 ? ` (${sessionsSelected.size}/${sessions.length})` : ""}`
-                        : "Export"}
+                        ? `${t("common.cancel")}${sessionsSelected.size > 0 ? ` (${sessionsSelected.size}/${sessions.length})` : ""}`
+                        : t("courtpayAnalytics.export")}
                     </button>
                   )}
 
@@ -1511,7 +1516,7 @@ export default function CourtPayAnalyticsPage() {
                       className="flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-1.5 text-xs font-medium text-neutral-400 hover:border-blue-600 hover:text-blue-400 transition-colors"
                     >
                       <Plus className="h-3 w-3" />
-                      Session
+                      {t("courtpayAnalytics.session")}
                     </button>
                   )}
 
@@ -1529,15 +1534,15 @@ export default function CourtPayAnalyticsPage() {
                     >
                       <Trash2 className="h-3 w-3" />
                       {sessionsDeleteMode
-                        ? `Cancel${sessionsDeleteSelected.size > 0 ? ` (${sessionsDeleteSelected.size}/${sessions.length})` : ""}`
-                        : "Delete"}
+                        ? `${t("common.cancel")}${sessionsDeleteSelected.size > 0 ? ` (${sessionsDeleteSelected.size}/${sessions.length})` : ""}`
+                        : t("common.delete")}
                     </button>
                   )}
                 </div>
               </div>
 
               <DataTable
-                headers={["Date", "Session", "Host", "Payments", "Revenue", "Players", "Status", ""]}
+                headers={[t("courtpayAnalytics.date"), t("courtpayAnalytics.session"), t("courtpayAnalytics.host"), t("courtpayAnalytics.payments"), t("courtpayAnalytics.revenue"), t("players.colPlayer"), t("courtpayAnalytics.status"), ""]}
                 rows={sessions.map((s) => ({
                   key: s.id,
                   cells: [
@@ -1605,12 +1610,12 @@ export default function CourtPayAnalyticsPage() {
                   {sessionMeta.closedAt
                     ? ` → ${new Date(sessionMeta.closedAt).toLocaleString("en-GB")}`
                     : " · open"}
-                  {sessionMeta.hostName ? ` · Host: ${sessionMeta.hostName}` : ""}
+                  {sessionMeta.hostName ? ` · ${t("courtpayAnalytics.host")}: ${sessionMeta.hostName}` : ""}
                 </p>
                 {(sessionMeta.reclubReferenceCode || sessionMeta.reclubEventName) && (
                   <div className="mt-1 flex items-center gap-2">
                     <p className="text-xs text-fuchsia-400">
-                      Reclub: {sessionMeta.reclubEventName || sessionMeta.reclubReferenceCode}
+                      Reclub: {sessionMeta.reclubEventName ?? sessionMeta.reclubReferenceCode}
                     </p>
                     {sessionMeta.reclubSnapshot && sessionMeta.reclubSnapshot.length > 0 && (
                       <button
@@ -1641,7 +1646,7 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
                 )}
               </div>
               <SectionHeader
-                title="Payment details"
+                title={t("courtpayAnalytics.paymentDetails")}
                 selectionMode={paymentsSelectMode}
                 selectedCount={paymentsSelected.size}
                 totalCount={payments.length}
@@ -1651,16 +1656,16 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
               />
               <DataTable
                 headers={[
-                  "Player",
-                  "Phone",
-                  "Skill",
-                  "Reclub Name",
-                  "Frequency",
-                  "Amount",
-                  "Party",
-                  "Method",
-                  "Status",
-                  "Confirmed",
+                  t("players.colPlayer"),
+                  t("players.colPhone"),
+                  t("courtpayAnalytics.skill"),
+                  t("courtpayAnalytics.reclubName"),
+                  t("courtpayAnalytics.frequency"),
+                  t("kioskShop.amount"),
+                  t("courtpayAnalytics.party"),
+                  t("courtpayAnalytics.method"),
+                  t("courtpayAnalytics.status"),
+                  t("courtpayAnalytics.confirmed"),
                 ]}
                 rows={payments.map((p) => ({
                   key: p.id,
@@ -1754,13 +1759,13 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
             {/* Header */}
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-sm font-semibold text-white">Link / Unlink Reclub ID</h3>
+                <h3 className="text-sm font-semibold text-white">{t("courtpayAnalytics.linkUnlinkReclub")}</h3>
                 <p className="mt-0.5 text-xs text-neutral-400">
                   {reclubModal.playerName} · {reclubModal.playerPhone}
                 </p>
                 {reclubModal.currentReclubUserId && (
                   <p className="mt-1 text-xs text-fuchsia-400">
-                    Currently linked: <strong>{reclubModal.currentReclubName}</strong> (ID {reclubModal.currentReclubUserId})
+                    {t("courtpayAnalytics.currentlyLinked")}: <strong>{reclubModal.currentReclubName}</strong> (ID {reclubModal.currentReclubUserId})
                   </p>
                 )}
               </div>
@@ -1783,7 +1788,7 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
                 className="mb-4 flex w-full items-center justify-center gap-2 rounded-lg border border-red-800 py-2 text-xs font-medium text-red-400 hover:bg-red-950/30 disabled:opacity-50 transition-colors"
               >
                 {reclubSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Link2Off className="h-3.5 w-3.5" />}
-                Unlink current Reclub ID
+                {t("courtpayAnalytics.unlinkReclub")}
               </button>
             )}
 
@@ -1801,7 +1806,7 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
                       : "text-neutral-400 hover:text-white"
                   )}
                 >
-                  {tab === "roster" ? "Session Roster" : "Search DB"}
+                  {tab === "roster" ? t("courtpayAnalytics.sessionRoster") : t("courtpayAnalytics.searchDb")}
                 </button>
               ))}
             </div>
@@ -1815,7 +1820,7 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
                 {reclubTab === "roster" && (
                   <div className="space-y-1 max-h-64 overflow-y-auto">
                     {(reclubModalData?.snapshotRoster ?? []).length === 0 ? (
-                      <p className="py-8 text-center text-xs text-neutral-500">No roster snapshot for this session</p>
+                      <p className="py-8 text-center text-xs text-neutral-500">{t("courtpayAnalytics.noRosterSnapshot")}</p>
                     ) : (
                       (reclubModalData?.snapshotRoster ?? []).map((player) => {
                         const isCurrent = reclubModalData?.currentReclubUserId === player.reclubUserId;
@@ -1859,7 +1864,7 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
                       <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-500" />
                       <input
                         type="text"
-                        placeholder="Search by name or phone..."
+                        placeholder={t("players.searchPlaceholder")}
                         value={reclubSearch}
                         onChange={(e) => {
                           setReclubSearch(e.target.value);
@@ -1870,7 +1875,7 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
                     </div>
                     <div className="max-h-52 space-y-1 overflow-y-auto">
                       {(reclubModalData?.dbPlayers ?? []).length === 0 ? (
-                        <p className="py-6 text-center text-xs text-neutral-500">No players with Reclub ID found</p>
+                        <p className="py-6 text-center text-xs text-neutral-500">{t("courtpayAnalytics.noPlayersWithReclub")}</p>
                       ) : (
                         (reclubModalData?.dbPlayers ?? []).map((player) => {
                           const isCurrent = reclubModalData?.currentReclubUserId === player.reclubUserId;
@@ -1925,10 +1930,10 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
             <div className="flex items-center justify-between gap-3 px-5 pt-5 pb-4 border-b border-neutral-800">
               <div>
                 <h3 className="text-sm font-semibold text-white">
-                  {sessionModal.mode === "create" ? "Create Session" : "Edit Session"}
+                  {sessionModal.mode === "create" ? t("courtpayAnalytics.createSession") : t("courtpayAnalytics.editSession")}
                 </h3>
                 <p className="mt-0.5 text-xs text-neutral-400">
-                  {sessionModal.mode === "create" ? "Manually backfill a closed session" : "Update session details"}
+                  {sessionModal.mode === "create" ? t("courtpayAnalytics.backfillSession") : t("courtpayAnalytics.updateSession")}
                 </p>
               </div>
               <button
@@ -1945,7 +1950,7 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
               {/* Open date/time */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">Open time</label>
+                  <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">{t("courtpayAnalytics.openTime")}</label>
                   <input
                     type="datetime-local"
                     value={sessionModal.openedAt}
@@ -1954,7 +1959,7 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
                   />
                 </div>
                 <div>
-                  <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">Close time</label>
+                  <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">{t("courtpayAnalytics.closeTime")}</label>
                   <input
                     type="datetime-local"
                     value={sessionModal.closedAt}
@@ -1966,7 +1971,7 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
 
               {/* Title */}
               <div>
-                <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">Title (optional)</label>
+                  <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">{t("bookings.titleOptional")}</label>
                 <input
                   type="text"
                   placeholder="e.g. Open Play"
@@ -1978,7 +1983,7 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
 
               {/* Session fee */}
               <div>
-                <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">Session fee (VND)</label>
+                  <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">{t("courtpayAnalytics.sessionFee")}</label>
                 <input
                   type="number"
                   min="0"
@@ -1991,18 +1996,18 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
 
               {/* Host */}
               <div>
-                <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">Host (optional)</label>
-                {sessionModalStaffLoading ? (
-                  <div className="flex items-center gap-2 text-xs text-neutral-500 py-2">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading staff…
-                  </div>
-                ) : (
-                  <select
-                    value={sessionModal.staffId}
-                    onChange={(e) => setSessionModal((p) => p ? { ...p, staffId: e.target.value } : null)}
-                    className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-xs text-white focus:border-neutral-500 focus:outline-none"
-                  >
-                    <option value="">— No host —</option>
+                  <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">{t("courtpayAnalytics.hostOptional")}</label>
+                  {sessionModalStaffLoading ? (
+                    <div className="flex items-center gap-2 text-xs text-neutral-500 py-2">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t("courtpayAnalytics.loadingStaff")}
+                    </div>
+                  ) : (
+                    <select
+                      value={sessionModal.staffId}
+                      onChange={(e) => setSessionModal((p) => p ? { ...p, staffId: e.target.value } : null)}
+                      className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-xs text-white focus:border-neutral-500 focus:outline-none"
+                    >
+                      <option value="">— {t("courtpayAnalytics.noHost")} —</option>
                     {sessionModalStaff.map((st) => (
                       <option key={st.id} value={st.id}>{st.name}</option>
                     ))}
@@ -2018,7 +2023,7 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
                   disabled={sessionModalSaving || !sessionModal.openedAt || !sessionModal.closedAt}
                   className="w-full rounded-lg bg-blue-700 py-2.5 text-xs font-semibold text-white hover:bg-blue-600 disabled:opacity-50 transition-colors"
                 >
-                  {sessionModalSaving ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "Create session"}
+                  {sessionModalSaving ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : t("courtpayAnalytics.createSession")}
                 </button>
               )}
 
@@ -2029,7 +2034,7 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
                   disabled={sessionModalSaving}
                   className="w-full rounded-lg bg-blue-700 py-2.5 text-xs font-semibold text-white hover:bg-blue-600 disabled:opacity-50 transition-colors"
                 >
-                  {sessionModalSaving ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "Save changes"}
+                  {sessionModalSaving ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : t("common.saveChanges")}
                 </button>
               )}
 
@@ -2038,7 +2043,7 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
                 <div className="border-t border-neutral-800 pt-4">
                   <div className="flex items-center justify-between mb-3">
                     <h4 className="text-xs font-semibold text-neutral-300 uppercase tracking-wide">
-                      Payments ({sessionModal.payments.length})
+                      {t("courtpayAnalytics.payments")} ({sessionModal.payments.length})
                     </h4>
                     <button
                       type="button"
@@ -2046,12 +2051,12 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
                       className="flex items-center gap-1 rounded-lg border border-neutral-700 px-2.5 py-1 text-[11px] font-medium text-neutral-400 hover:border-blue-600 hover:text-blue-400 transition-colors"
                     >
                       <Plus className="h-3 w-3" />
-                      Add payment
+                      {t("courtpayAnalytics.addPayment")}
                     </button>
                   </div>
 
                   {sessionModal.payments.length === 0 ? (
-                    <p className="text-center text-xs text-neutral-600 py-4">No payments yet</p>
+                    <p className="text-center text-xs text-neutral-600 py-4">{t("courtpayAnalytics.noPaymentsYet")}</p>
                   ) : (
                     <div className="space-y-1 max-h-48 overflow-y-auto">
                       {sessionModal.payments.map((p) => (
@@ -2089,7 +2094,7 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-white">Add Payment</h3>
+              <h3 className="text-sm font-semibold text-white">{t("courtpayAnalytics.addPayment")}</h3>
               <button
                 type="button"
                 onClick={() => setAddPaymentOpen(false)}
@@ -2103,13 +2108,13 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
             <div className="space-y-4">
               {/* Player search */}
               <div>
-                <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">Player</label>
+                <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">{t("players.colPlayer")}</label>
                 <div className="relative mb-2">
                   <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-neutral-500" />
                   {addPaymentSearching && <Loader2 className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-neutral-500" />}
                   <input
                     type="text"
-                    placeholder="Search existing player by name or phone…"
+                    placeholder={t("courtpayAnalytics.searchPlayer")}
                     value={addPaymentForm.playerSearch}
                     onChange={(e) => {
                       const q = e.target.value;
@@ -2168,7 +2173,7 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
               {/* Amount + party */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">Amount (VND) *</label>
+                  <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">{t("courtpayAnalytics.amountVnd")}</label>
                   <input
                     type="number"
                     min="0"
@@ -2180,7 +2185,7 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
                   />
                 </div>
                 <div>
-                  <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">Party count</label>
+                  <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">{t("courtpayAnalytics.partyCount")}</label>
                   <select
                     value={addPaymentForm.partyCount}
                     onChange={(e) => setAddPaymentForm((p) => ({ ...p, partyCount: e.target.value }))}
@@ -2193,7 +2198,7 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
 
               {/* Payment method */}
               <div>
-                <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">Payment method</label>
+                  <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">{t("courtpayAnalytics.paymentMethod")}</label>
                 <div className="flex gap-2">
                   {(["cash", "vietqr", "subscription"] as const).map((m) => (
                     <button
@@ -2215,7 +2220,7 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
 
               {/* Confirmed at */}
               <div>
-                <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">Confirmed at</label>
+                  <label className="block mb-1 text-[11px] font-medium text-neutral-400 uppercase tracking-wide">{t("courtpayAnalytics.confirmedAt")}</label>
                 <input
                   type="datetime-local"
                   value={addPaymentForm.confirmedAt}
@@ -2231,7 +2236,7 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
                 disabled={addPaymentSaving || !addPaymentForm.playerName || !addPaymentForm.amount || !addPaymentForm.confirmedAt}
                 className="w-full rounded-lg bg-blue-700 py-2.5 text-xs font-semibold text-white hover:bg-blue-600 disabled:opacity-50 transition-colors"
               >
-                {addPaymentSaving ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : "Add payment"}
+                {addPaymentSaving ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : t("courtpayAnalytics.addPayment")}
               </button>
             </div>
           </div>

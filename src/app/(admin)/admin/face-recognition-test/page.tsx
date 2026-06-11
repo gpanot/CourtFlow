@@ -4,12 +4,15 @@ import { useState } from "react";
 import { ScanFace, BarChart3 } from "lucide-react";
 import { FaceRecognitionTestTab } from "./face-recognition-test-tab";
 import { FaceStatsTab } from "./face-stats-tab";
+import { useTranslation } from "react-i18next";
+import adminI18n from "@/i18n/admin-i18n";
 
 export const dynamic = "force-dynamic";
 
 type ActiveTab = "test" | "stats";
 
 export default function FaceRecognitionTestPage() {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [activeTab, setActiveTab] = useState<ActiveTab>("test");
 
   const tabCls = (tab: ActiveTab) =>
@@ -23,13 +26,13 @@ export default function FaceRecognitionTestPage() {
         <button type="button" className={tabCls("test")} onClick={() => setActiveTab("test")}>
           <span className="flex items-center gap-1.5">
             <ScanFace className="h-3.5 w-3.5" />
-            Face Recognition Test
+            {t("faceTest.tabTest")}
           </span>
         </button>
         <button type="button" className={tabCls("stats")} onClick={() => setActiveTab("stats")}>
           <span className="flex items-center gap-1.5">
             <BarChart3 className="h-3.5 w-3.5" />
-            Face Stats
+            {t("faceTest.tabStats")}
           </span>
         </button>
       </div>

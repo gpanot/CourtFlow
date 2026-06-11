@@ -74,7 +74,7 @@ export async function GET(req: Request) {
       ) ?? null;
       const linkedPlayer = await prisma.player.findFirst({
         where: { phone: player.phone },
-        select: { facePhotoPath: true, avatarPhotoPath: true, reclubUserId: true },
+        select: { id: true, facePhotoPath: true, avatarPhotoPath: true, reclubUserId: true },
       });
 
       const reclubProfile = linkedPlayer?.reclubUserId
@@ -91,6 +91,7 @@ export async function GET(req: Request) {
           skillLevel: player.skillLevel,
           facePhotoPath: linkedPlayer?.facePhotoPath ?? null,
           avatarPhotoPath: linkedPlayer?.avatarPhotoPath ?? null,
+          linkedPlayerId: linkedPlayer?.id ?? null,
           reclubUserId: linkedPlayer?.reclubUserId ?? null,
           reclubName: reclubProfile?.name ?? null,
           reclubAvatarUrl: reclubProfile?.avatarUrl ?? null,
@@ -173,6 +174,7 @@ export async function GET(req: Request) {
         skillLevel: player.skillLevel,
         facePhotoPath: player.facePhotoPath,
         avatarPhotoPath: player.avatarPhotoPath,
+        linkedPlayerId: player.id,
         reclubUserId: player.reclubUserId ?? null,
         reclubName: selfReclubProfile?.name ?? null,
         reclubAvatarUrl: selfReclubProfile?.avatarUrl ?? null,

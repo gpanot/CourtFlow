@@ -10,6 +10,8 @@ import {
   ChevronRight,
   CheckCircle2,
 } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import adminI18n from "@/i18n/admin-i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -75,6 +77,7 @@ function formatVND(n: number) {
 }
 
 export default function CourtPayBillingPage() {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const router = useRouter();
   const [config, setConfig] = useState<BillingConfig | null>(null);
   const [configForm, setConfigForm] = useState<BillingConfig | null>(null);
@@ -136,21 +139,21 @@ export default function CourtPayBillingPage() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">
-      <h2 className="text-xl font-bold">CourtPay Billing</h2>
+      <h2 className="text-xl font-bold">{t("courtpayBilling.title")}</h2>
 
       {/* Section 1: Billing Config */}
       {configForm && (
         <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-6">
-          <h3 className="text-base font-semibold mb-1">Billing configuration</h3>
+          <h3 className="text-base font-semibold mb-1">{t("courtpayBilling.billingConfig")}</h3>
           <p className="text-xs text-neutral-500 mb-5">
-            Your bank details for VietQR payment + default rates applied to new venues
+            {t("courtpayBilling.billingConfigDesc")}
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
-              <h4 className="text-sm font-medium text-neutral-400">Your bank details</h4>
+              <h4 className="text-sm font-medium text-neutral-400">{t("courtpayBilling.yourBankDetails")}</h4>
               <div>
-                <label className="text-xs text-neutral-500 mb-1 block">Bank</label>
+                <label className="text-xs text-neutral-500 mb-1 block">{t("courtpayBilling.bank")}</label>
                 <select
                   value={configForm.bankBin}
                   onChange={(e) =>
@@ -158,7 +161,7 @@ export default function CourtPayBillingPage() {
                   }
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white"
                 >
-                  <option value="">Select bank...</option>
+                  <option value="">{t("courtpayBilling.selectBank")}</option>
                   {VIETQR_BANKS.map((b) => (
                     <option key={b.bin} value={b.bin}>
                       {b.name}
@@ -167,7 +170,7 @@ export default function CourtPayBillingPage() {
                 </select>
               </div>
               <div>
-                <label className="text-xs text-neutral-500 mb-1 block">Account number</label>
+                <label className="text-xs text-neutral-500 mb-1 block">{t("courtpayBilling.accountNumber")}</label>
                 <input
                   type="text"
                   value={configForm.bankAccount}
@@ -179,7 +182,7 @@ export default function CourtPayBillingPage() {
                 />
               </div>
               <div>
-                <label className="text-xs text-neutral-500 mb-1 block">Account holder name</label>
+                <label className="text-xs text-neutral-500 mb-1 block">{t("courtpayBilling.accountHolder")}</label>
                 <input
                   type="text"
                   value={configForm.bankOwner}
@@ -193,10 +196,10 @@ export default function CourtPayBillingPage() {
             </div>
 
             <div className="space-y-4">
-              <h4 className="text-sm font-medium text-neutral-400">Default rates</h4>
+              <h4 className="text-sm font-medium text-neutral-400">{t("courtpayBilling.defaultRatesTitle")}</h4>
               <div>
                 <label className="text-xs text-neutral-500 mb-1 block">
-                  Base rate per payment (VND)
+                  {t("courtpayBilling.baseRatePerPayment")}
                 </label>
                 <input
                   type="number"
@@ -212,7 +215,7 @@ export default function CourtPayBillingPage() {
               </div>
               <div>
                 <label className="text-xs text-neutral-500 mb-1 block">
-                  Subscription add-on (VND)
+                  {t("courtpayBilling.subscriptionAddon")}
                 </label>
                 <input
                   type="number"
@@ -228,7 +231,7 @@ export default function CourtPayBillingPage() {
               </div>
               <div>
                 <label className="text-xs text-neutral-500 mb-1 block">
-                  SePay-confirmed add-on (VND)
+                  {t("courtpayBilling.sepayAddonLabel")}
                 </label>
                 <input
                   type="number"
@@ -247,7 +250,7 @@ export default function CourtPayBillingPage() {
 
           {/* Payment gateway toggle */}
           <div className="mt-6 pt-5 border-t border-neutral-800">
-            <h4 className="text-sm font-medium text-neutral-400 mb-3">Payment gateway</h4>
+            <h4 className="text-sm font-medium text-neutral-400 mb-3">{t("courtpayBilling.paymentGateway")}</h4>
             <div className="flex gap-2">
               {(
                 [
@@ -270,7 +273,7 @@ export default function CourtPayBillingPage() {
                 >
                   {label}
                   {!available && (
-                    <span className="ml-1.5 text-[10px] text-neutral-600">(coming soon)</span>
+                    <span className="ml-1.5 text-[10px] text-neutral-600">({t("courtpayBilling.comingSoon")})</span>
                   )}
                 </button>
               ))}
@@ -288,11 +291,11 @@ export default function CourtPayBillingPage() {
               ) : (
                 <Save className="h-4 w-4" />
               )}
-              Save
+              {t("courtpayBilling.save")}
             </button>
             {saved && (
               <span className="flex items-center gap-1 text-sm text-green-400">
-                <CheckCircle2 className="h-4 w-4" /> Saved
+                <CheckCircle2 className="h-4 w-4" /> {t("courtpayBilling.saved")}
               </span>
             )}
           </div>
@@ -303,17 +306,17 @@ export default function CourtPayBillingPage() {
       {overview && (
         <div className="grid grid-cols-3 gap-4">
           <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
-            <p className="text-xs text-neutral-500 mb-1">Active venues</p>
+            <p className="text-xs text-neutral-500 mb-1">{t("courtpayBilling.activeVenues")}</p>
             <p className="text-2xl font-bold">{overview.summary.activeVenues}</p>
           </div>
           <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
-            <p className="text-xs text-neutral-500 mb-1">This week revenue</p>
+            <p className="text-xs text-neutral-500 mb-1">{t("courtpayBilling.thisWeekRevenue")}</p>
             <p className="text-2xl font-bold text-purple-400">
               {formatVND(overview.summary.thisWeekRevenue)}
             </p>
           </div>
           <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
-            <p className="text-xs text-neutral-500 mb-1">Overdue</p>
+            <p className="text-xs text-neutral-500 mb-1">{t("courtpayBilling.overdueCount")}</p>
             <p className={cn("text-2xl font-bold", overview.summary.overdueCount > 0 ? "text-amber-400" : "text-neutral-400")}>
               {overview.summary.overdueCount}
             </p>
@@ -325,7 +328,7 @@ export default function CourtPayBillingPage() {
       {overview && (
         <div className="rounded-xl border border-neutral-800 bg-neutral-900">
           <div className="px-6 py-4 border-b border-neutral-800">
-            <h3 className="text-base font-semibold">All venues</h3>
+            <h3 className="text-base font-semibold">{t("courtpayBilling.allVenuesTitle")}</h3>
           </div>
           <div className="divide-y divide-neutral-800">
             {overview.venues.map((v) => (
@@ -337,7 +340,7 @@ export default function CourtPayBillingPage() {
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm">{v.name}</p>
                   <p className="text-xs text-neutral-500 mt-0.5">
-                    {v.thisWeekPayments} payments this week
+                    {v.thisWeekPayments} {t("courtpayBilling.paymentsThisWeek")}
                   </p>
                 </div>
                 <div className="flex items-center gap-4">
@@ -358,10 +361,10 @@ export default function CourtPayBillingPage() {
                   >
                     {v.latestInvoiceStatus
                       ? v.latestInvoiceStatus === "paid"
-                        ? "Paid ✓"
+                        ? t("courtpayBilling.paidCheck")
                         : v.latestInvoiceStatus === "overdue"
-                          ? "Overdue ⚠"
-                          : "Pending"
+                          ? t("courtpayBilling.overdueWarn")
+                          : t("courtpayBilling.pending")
                       : "—"}
                   </span>
                   <ChevronRight className="h-4 w-4 text-neutral-500" />
@@ -375,30 +378,30 @@ export default function CourtPayBillingPage() {
       {/* Section 3: Revenue summary */}
       {revenue && (
         <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-6">
-          <h3 className="text-base font-semibold mb-4">Your revenue</h3>
+          <h3 className="text-base font-semibold mb-4">{t("courtpayBilling.yourRevenue")}</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div>
-              <p className="text-xs text-neutral-500 mb-1">This week (est)</p>
+              <p className="text-xs text-neutral-500 mb-1">{t("courtpayBilling.thisWeekEst")}</p>
               <p className="text-lg font-bold text-purple-400">
                 {formatVND(revenue.thisWeek)} VND
               </p>
             </div>
             <div>
-              <p className="text-xs text-neutral-500 mb-1">This month</p>
+              <p className="text-xs text-neutral-500 mb-1">{t("courtpayBilling.thisMonth")}</p>
               <p className="text-lg font-bold">{formatVND(revenue.thisMonth)} VND</p>
             </div>
             <div>
-              <p className="text-xs text-neutral-500 mb-1">All time</p>
+              <p className="text-xs text-neutral-500 mb-1">{t("courtpayBilling.allTime")}</p>
               <p className="text-lg font-bold">{formatVND(revenue.allTime)} VND</p>
             </div>
             <div>
-              <p className="text-xs text-neutral-500 mb-1">Paid this month</p>
+              <p className="text-xs text-neutral-500 mb-1">{t("courtpayBilling.paidThisMonth")}</p>
               <p className="text-lg font-bold text-green-400">
                 {formatVND(revenue.paidThisMonth)} VND
               </p>
             </div>
             <div>
-              <p className="text-xs text-neutral-500 mb-1">Outstanding</p>
+              <p className="text-xs text-neutral-500 mb-1">{t("courtpayBilling.outstanding")}</p>
               <p
                 className={cn(
                   "text-lg font-bold",

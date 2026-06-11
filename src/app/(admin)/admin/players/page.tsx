@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useTranslation } from "react-i18next";
+import adminI18n from "@/i18n/admin-i18n";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { PlayerAvatarThumb } from "@/components/player-avatar-thumb";
@@ -190,6 +192,7 @@ const SKILL_COLORS: Record<string, string> = {
 };
 
 export default function PlayersPage() {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [quickFilter, setQuickFilter] = useState<"all" | "male" | "female" | "no_face">("all");
   const [players, setPlayers] = useState<PlayerRecord[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
@@ -407,14 +410,14 @@ export default function PlayersPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold md:text-2xl">Player Directory</h2>
+        <h2 className="text-xl font-bold md:text-2xl">{t("players.title")}</h2>
         <div className="flex items-center gap-3">
-          <span className="text-sm text-neutral-500">{total} player{total !== 1 ? "s" : ""}</span>
+          <span className="text-sm text-neutral-500">{total} {total !== 1 ? t("players.playersPlural") : t("players.player")}</span>
           <button
             onClick={() => setShowCreatePlayer(true)}
             className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-500"
           >
-            <Plus className="h-4 w-4" /> Add Player
+            <Plus className="h-4 w-4" /> {t("players.addPlayer")}
           </button>
         </div>
       </div>
@@ -423,18 +426,18 @@ export default function PlayersPage() {
       {stats && (
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-2 md:grid-cols-6 md:gap-3">
-            <StatCard icon={Users} label="Total Players" value={stats.totalPlayers} color="text-purple-400" />
-            <StatCard icon={Activity} label="Active Today" value={stats.activeToday} color="text-green-400" highlight={stats.activeToday > 0} />
-            <StatCard icon={UserPlus} label="New This Week" value={stats.newThisWeek} sub={`${stats.newThisMonth} this month`} color="text-blue-400" />
-            <StatCard icon={Clock} label="Total Play Time" value={fmtPlayTime(stats.totalPlayMinutes)} color="text-amber-400" />
-            <StatCard icon={Hourglass} label="Total Wait Time" value={fmtPlayTime(stats.totalWaitMinutes)} color="text-orange-400" />
+            <StatCard icon={Users} label={t("players.totalPlayers")} value={stats.totalPlayers} color="text-purple-400" />
+            <StatCard icon={Activity} label={t("players.activeToday")} value={stats.activeToday} color="text-green-400" highlight={stats.activeToday > 0} />
+            <StatCard icon={UserPlus} label={t("players.newThisWeek")} value={stats.newThisWeek} sub={`${stats.newThisMonth} ${t("players.thisMonth")}`} color="text-blue-400" />
+            <StatCard icon={Clock} label={t("players.totalPlayTime")} value={fmtPlayTime(stats.totalPlayMinutes)} color="text-amber-400" />
+            <StatCard icon={Hourglass} label={t("players.totalWaitTime")} value={fmtPlayTime(stats.totalWaitMinutes)} color="text-orange-400" />
             <WaitRatioCard ratio={stats.waitPlayRatio} />
           </div>
 
           {/* Skill distribution bar */}
           {stats.totalPlayers > 0 && (
             <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 md:p-4">
-              <p className="mb-2.5 text-xs font-medium text-neutral-400">Skill Distribution</p>
+              <p className="mb-2.5 text-xs font-medium text-neutral-400">{t("players.skillDistribution")}</p>
               <div className="flex h-2.5 overflow-hidden rounded-full">
                 {skillOrder.map((level) => {
                   const count = stats.skillDistribution[level] ?? 0;
@@ -484,10 +487,10 @@ export default function PlayersPage() {
         <div className="flex flex-wrap items-center gap-1.5">
           {(
             [
-              { key: "all", label: "All" },
-              { key: "male", label: "Male" },
-              { key: "female", label: "Female" },
-              { key: "no_face", label: "No face" },
+              { key: "all", label: t("players.filterAll") },
+              { key: "male", label: t("players.filterMale") },
+              { key: "female", label: t("players.filterFemale") },
+              { key: "no_face", label: t("players.filterNoFace") },
             ] as { key: "all" | "male" | "female" | "no_face"; label: string }[]
           ).map((opt) => {
             const count = filterCounts?.[opt.key];
@@ -518,7 +521,7 @@ export default function PlayersPage() {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
             <input
               type="text"
-              placeholder="Search by name or phone..."
+              placeholder={t("players.searchPlaceholder")}
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               className="w-full rounded-lg border border-neutral-700 bg-neutral-800 pl-9 pr-4 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
@@ -582,7 +585,7 @@ export default function PlayersPage() {
                 onClick={clearAllFilters}
                 className="mt-1 rounded-lg bg-neutral-800 py-2 text-xs text-neutral-400 hover:text-white"
               >
-                Clear all filters
+                {t("players.clearAllFilters")}
               </button>
             )}
           </div>
@@ -594,18 +597,18 @@ export default function PlayersPage() {
         <table className="w-full text-left text-xs">
           <thead className="border-b border-neutral-800 text-neutral-400">
             <tr>
-              <SortableHeader label="Player" sortKey="name" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
-              <th className="px-2.5 py-2.5">Face</th>
-              <SortableHeader label="Phone" sortKey="phone" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
-              <SortableHeader label="Sticker" sortKey="stickers" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
-              <SortableHeader label="Gender" sortKey="gender" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
-              <SortableHeader label="Sess." sortKey="totalSessions" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
-              <SortableHeader label="Games" sortKey="totalGames" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
-              <SortableHeader label="Play" sortKey="totalPlayMinutes" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
-              <SortableHeader label="Wait" sortKey="totalWaitMinutes" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
-              <SortableHeader label="W/P" sortKey="waitPlayRatio" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
-              <SortableHeader label="Venues" sortKey="venues" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
-              <SortableHeader label="Session C" sortKey="checkInCount" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
+              <SortableHeader label={t("players.colPlayer")} sortKey="name" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
+              <th className="px-2.5 py-2.5">{t("players.colFace")}</th>
+              <SortableHeader label={t("players.colPhone")} sortKey="phone" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
+              <SortableHeader label={t("players.colSticker")} sortKey="stickers" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
+              <SortableHeader label={t("players.colGender")} sortKey="gender" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
+              <SortableHeader label={t("players.colSessions")} sortKey="totalSessions" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
+              <SortableHeader label={t("players.colGames")} sortKey="totalGames" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
+              <SortableHeader label={t("players.colPlay")} sortKey="totalPlayMinutes" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
+              <SortableHeader label={t("players.colWait")} sortKey="totalWaitMinutes" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
+              <SortableHeader label={t("players.colWP")} sortKey="waitPlayRatio" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
+              <SortableHeader label={t("players.colVenues")} sortKey="venues" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} />
+              <SortableHeader label={t("players.colCheckIns")} sortKey="checkInCount" currentKey={sortKey} currentDir={sortDir} onToggle={toggleSort} align="right" />
               <th className="px-2.5 py-2.5 w-16"></th>
             </tr>
           </thead>
@@ -688,7 +691,7 @@ export default function PlayersPage() {
             ))}
             {!loading && players.length === 0 && (
               <tr>
-                <td colSpan={13} className="px-4 py-8 text-center text-neutral-500">No players found</td>
+                <td colSpan={13} className="px-4 py-8 text-center text-neutral-500">{t("players.noPlayersFound")}</td>
               </tr>
             )}
           </tbody>
@@ -743,10 +746,10 @@ export default function PlayersPage() {
               <span className="tabular-nums">{p.phone}</span>
               <span className="capitalize">{p.gender}</span>
               <FaceStatusBadge hasFace={p.hasFace ?? !!p.faceSubjectId} isWalkIn={!!p.isWalkIn} compact />
-              <span>{p.totalSessions} sessions</span>
-              <span>{p.totalGames} games</span>
-              <span>{fmtMin(p.totalPlayMinutes)} play</span>
-              <span>{fmtMin(p.totalWaitMinutes)} wait</span>
+              <span>{p.totalSessions} {t("players.sessions")}</span>
+              <span>{p.totalGames} {t("players.games")}</span>
+              <span>{fmtMin(p.totalPlayMinutes)} {t("players.play")}</span>
+              <span>{fmtMin(p.totalWaitMinutes)} {t("players.wait")}</span>
               <RatioBadge ratio={p.waitPlayRatio} />
             </div>
             {(p.venues.length > 0 || p.lastSeen) && (
@@ -769,15 +772,15 @@ export default function PlayersPage() {
           </div>
         ))}
         {!loading && players.length === 0 && (
-          <p className="py-8 text-center text-sm text-neutral-500">No players found</p>
+          <p className="py-8 text-center text-sm text-neutral-500">{t("players.noPlayersFound")}</p>
         )}
       </div>
 
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-sm">
-          <span className="text-neutral-500 text-xs md:text-sm">
-            <span className="hidden sm:inline">Showing </span>{(page - 1) * 50 + 1}–{Math.min(page * 50, total)} of {total}
+            <span className="text-neutral-500 text-xs md:text-sm">
+            <span className="hidden sm:inline">{t("players.showing")} </span>{(page - 1) * 50 + 1}–{Math.min(page * 50, total)} {t("common.of")} {total}
           </span>
           <div className="flex items-center gap-1">
             <button
@@ -785,14 +788,14 @@ export default function PlayersPage() {
               disabled={page === 1}
               className="hidden sm:inline-block rounded px-2 py-1 text-xs text-neutral-400 hover:bg-neutral-800 disabled:opacity-30"
             >
-              First
+              {t("players.first")}
             </button>
             <button
               onClick={() => setPage(page - 1)}
               disabled={page === 1}
               className="rounded px-2 py-1 text-xs text-neutral-400 hover:bg-neutral-800 disabled:opacity-30"
             >
-              Prev
+              {t("players.prev")}
             </button>
             <span className="px-2 text-xs text-neutral-400">
               {page} / {totalPages}
@@ -802,14 +805,14 @@ export default function PlayersPage() {
               disabled={page >= totalPages}
               className="rounded px-2 py-1 text-xs text-neutral-400 hover:bg-neutral-800 disabled:opacity-30"
             >
-              Next
+              {t("players.next")}
             </button>
             <button
               onClick={() => setPage(totalPages)}
               disabled={page >= totalPages}
               className="hidden sm:inline-block rounded px-2 py-1 text-xs text-neutral-400 hover:bg-neutral-800 disabled:opacity-30"
             >
-              Last
+              {t("players.last")}
             </button>
           </div>
         </div>
@@ -819,21 +822,21 @@ export default function PlayersPage() {
       {showCreatePlayer && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowCreatePlayer(false)}>
           <div className="w-full max-w-md mx-4 rounded-2xl border border-neutral-700 bg-neutral-900 p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold">Add Player</h3>
+            <h3 className="text-lg font-bold">{t("players.addPlayer")}</h3>
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-neutral-400">Name</label>
+                <label className="text-xs text-neutral-400">{t("players.name")}</label>
                 <input
                   type="text"
                   value={createForm.name}
                   onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
-                  placeholder="Player name"
+                  placeholder={t("players.playerName")}
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
                   autoFocus
                 />
               </div>
               <div>
-                <label className="text-xs text-neutral-400">Phone</label>
+                <label className="text-xs text-neutral-400">{t("players.phone")}</label>
                 <input
                   type="tel"
                   value={createForm.phone}
@@ -844,28 +847,28 @@ export default function PlayersPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-neutral-400">Gender</label>
+                  <label className="text-xs text-neutral-400">{t("players.gender")}</label>
                   <select
                     value={createForm.gender}
                     onChange={(e) => setCreateForm({ ...createForm, gender: e.target.value })}
                     className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
                   >
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                    <option value="other">Other</option>
+                    <option value="male">{t("players.male")}</option>
+                    <option value="female">{t("players.female")}</option>
+                    <option value="other">{t("players.other")}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-neutral-400">Skill Level</label>
+                  <label className="text-xs text-neutral-400">{t("players.skillLevel")}</label>
                   <select
                     value={createForm.skillLevel}
                     onChange={(e) => setCreateForm({ ...createForm, skillLevel: e.target.value })}
                     className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
                   >
-                    <option value="beginner">Beginner</option>
-                    <option value="intermediate">Intermediate</option>
-                    <option value="advanced">Advanced</option>
-                    <option value="pro">Pro</option>
+                    <option value="beginner">{t("players.beginner")}</option>
+                    <option value="intermediate">{t("players.intermediate")}</option>
+                    <option value="advanced">{t("players.advanced")}</option>
+                    <option value="pro">{t("players.pro")}</option>
                   </select>
                 </div>
               </div>
@@ -875,11 +878,11 @@ export default function PlayersPage() {
                 onClick={createPlayer}
                 disabled={!createForm.name.trim() || !createForm.phone.trim() || creating}
                 className="flex-1 rounded-xl bg-purple-600 py-3 font-semibold text-white hover:bg-purple-500 disabled:opacity-40"
-              >{creating ? "Creating..." : "Add Player"}</button>
+              >{creating ? t("common.creating") : t("players.addPlayer")}</button>
               <button
                 onClick={() => setShowCreatePlayer(false)}
                 className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
-              >Cancel</button>
+              >{t("common.cancel")}</button>
             </div>
           </div>
         </div>
@@ -1333,6 +1336,7 @@ function PlayerDetailPanel({
   }) => void;
   onReclubUnlinked: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [detailTab, setDetailTab] = useState<"profile" | "stickers">("profile");
 
   const handleDownloadCheckInPhoto = useCallback(async () => {
@@ -1428,7 +1432,7 @@ function PlayerDetailPanel({
               )}
             >
               <LayoutList className="h-3.5 w-3.5" />
-              Profile
+              {t("players.tabProfile")}
             </button>
             <button
               type="button"
@@ -1441,7 +1445,7 @@ function PlayerDetailPanel({
               )}
             >
               <Sticker className="h-3.5 w-3.5" />
-              Stickers
+              {t("players.tabStickers")}
             </button>
           </div>
         </div>
@@ -1463,7 +1467,7 @@ function PlayerDetailPanel({
             <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
               <div className="mb-2 flex items-start justify-between gap-2">
                 <p className="text-[11px] text-neutral-500 leading-snug">
-                  Check-in photo (first face registration)
+                  {t("players.checkInPhoto")}
                 </p>
                 <button
                   type="button"
@@ -1472,7 +1476,7 @@ function PlayerDetailPanel({
                   title="Download check-in photo"
                 >
                   <Download className="h-3.5 w-3.5" />
-                  Download
+                  {t("players.download")}
                 </button>
               </div>
               {/* Served from Express/static /uploads — same origin as admin */}
@@ -1482,36 +1486,36 @@ function PlayerDetailPanel({
           {/* Edit form */}
           {editMode ? (
             <div className="space-y-3 rounded-xl border border-purple-600/30 bg-purple-600/5 p-4">
-              <h4 className="text-sm font-semibold text-purple-300">Edit Player</h4>
+              <h4 className="text-sm font-semibold text-purple-300">{t("players.editPlayer")}</h4>
               <div>
-                <label className="text-xs text-neutral-400">Name</label>
+                <label className="text-xs text-neutral-400">{t("players.name")}</label>
                 <input type="text" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className={inputCls} />
               </div>
               <div>
-                <label className="text-xs text-neutral-400">Phone</label>
+                <label className="text-xs text-neutral-400">{t("players.phone")}</label>
                 <input type="tel" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} className={inputCls} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-neutral-400">Gender</label>
+                  <label className="text-xs text-neutral-400">{t("players.gender")}</label>
                   <select value={editForm.gender} onChange={(e) => setEditForm({ ...editForm, gender: e.target.value })} className={inputCls}>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                    <option value="other">Other</option>
+                    <option value="male">{t("players.male")}</option>
+                    <option value="female">{t("players.female")}</option>
+                    <option value="other">{t("players.other")}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-neutral-400">Skill Level</label>
+                  <label className="text-xs text-neutral-400">{t("players.skillLevel")}</label>
                   <select value={editForm.skillLevel} onChange={(e) => setEditForm({ ...editForm, skillLevel: e.target.value })} className={inputCls}>
-                    <option value="beginner">Beginner</option>
-                    <option value="intermediate">Intermediate</option>
-                    <option value="advanced">Advanced</option>
-                    <option value="pro">Pro</option>
+                    <option value="beginner">{t("players.beginner")}</option>
+                    <option value="intermediate">{t("players.intermediate")}</option>
+                    <option value="advanced">{t("players.advanced")}</option>
+                    <option value="pro">{t("players.pro")}</option>
                   </select>
                 </div>
               </div>
               <div>
-                <label className="text-xs text-neutral-400">Avatar Emoji</label>
+                <label className="text-xs text-neutral-400">{t("players.avatarEmoji")}</label>
                 <input type="text" value={editForm.avatar} onChange={(e) => setEditForm({ ...editForm, avatar: e.target.value })} className={inputCls} />
               </div>
               <div className="flex gap-2">
@@ -1519,11 +1523,11 @@ function PlayerDetailPanel({
                   onClick={onSaveEdit}
                   disabled={!editForm.name.trim() || !editForm.phone.trim() || savingEdit}
                   className="flex-1 rounded-lg bg-purple-600 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-40"
-                >{savingEdit ? "Saving..." : "Save"}</button>
+                >{savingEdit ? t("common.saving") : t("common.save")}</button>
                 <button
                   onClick={onCancelEdit}
                   className="flex-1 rounded-lg bg-neutral-800 py-2 text-sm text-neutral-400 hover:text-white"
-                >Cancel</button>
+                >{t("common.cancel")}</button>
               </div>
               <div className="border-t border-neutral-800 pt-3">
                 <button
@@ -1532,7 +1536,7 @@ function PlayerDetailPanel({
                   disabled={deleteBusy || savingEdit}
                   className="text-sm font-medium text-red-400/90 hover:text-red-400 disabled:opacity-40"
                 >
-                  {deleteBusy ? "Deleting…" : "Delete player"}
+                  {deleteBusy ? t("players.deleting") : t("players.deletePlayer")}
                 </button>
               </div>
             </div>
@@ -1540,7 +1544,7 @@ function PlayerDetailPanel({
             /* Player info */
             <div className="grid grid-cols-2 gap-2">
               <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-                <p className="text-[11px] text-neutral-500 mb-1">Skill Level</p>
+                <p className="text-[11px] text-neutral-500 mb-1">{t("players.skillLevel")}</p>
                 <SkillBadge
                   playerId={player.id}
                   level={player.skillLevel}
@@ -1552,11 +1556,11 @@ function PlayerDetailPanel({
                 />
               </div>
               <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-                <p className="text-[11px] text-neutral-500 mb-1">Gender</p>
+                <p className="text-[11px] text-neutral-500 mb-1">{t("players.gender")}</p>
                 <p className="text-sm font-medium capitalize">{player.gender}</p>
               </div>
               <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-                <p className="text-[11px] text-neutral-500 mb-1">Ranking Score</p>
+                <p className="text-[11px] text-neutral-500 mb-1">{t("players.rankingScore")}</p>
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-sm font-bold tabular-nums">{player.rankingScore}</span>
                   <span className="text-[10px] text-neutral-500">/ 450</span>
@@ -1567,14 +1571,14 @@ function PlayerDetailPanel({
                     style={{ width: `${Math.round(((player.rankingScore - 50) / 400) * 100)}%` }}
                   />
                 </div>
-                <p className="mt-1 text-[10px] text-neutral-500 tabular-nums">{player.rankingCount} ranking{player.rankingCount !== 1 ? "s" : ""} recorded</p>
+                <p className="mt-1 text-[10px] text-neutral-500 tabular-nums">{player.rankingCount} {t("players.rankingsRecorded")}</p>
               </div>
               <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-                <p className="text-[11px] text-neutral-500 mb-1">Registered</p>
+                <p className="text-[11px] text-neutral-500 mb-1">{t("players.registered")}</p>
                 <p className="text-sm font-medium">{fmtDate(player.createdAt)}</p>
               </div>
               <div className="col-span-2 rounded-lg border border-neutral-800 bg-neutral-900 p-3">
-                <p className="text-[11px] text-neutral-500 mb-1">Last Seen</p>
+                <p className="text-[11px] text-neutral-500 mb-1">{t("players.lastSeen")}</p>
                 <p className="text-sm font-medium">{player.lastSeen ? fmtDate(player.lastSeen.date) : "—"}</p>
                 {player.lastSeen && <p className="text-[10px] text-neutral-500">{player.lastSeen.venue}</p>}
               </div>
@@ -1597,22 +1601,22 @@ function PlayerDetailPanel({
             <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-2.5 text-center">
               <Gamepad2 className="h-4 w-4 mx-auto mb-1 text-purple-400" />
               <p className="text-sm font-bold tabular-nums">{player.totalGames}</p>
-              <p className="text-[10px] text-neutral-500">Games</p>
+              <p className="text-[10px] text-neutral-500">{t("players.games")}</p>
             </div>
             <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-2.5 text-center">
               <CalendarDays className="h-4 w-4 mx-auto mb-1 text-blue-400" />
               <p className="text-sm font-bold tabular-nums">{player.totalSessions}</p>
-              <p className="text-[10px] text-neutral-500">Sessions</p>
+              <p className="text-[10px] text-neutral-500">{t("players.sessions")}</p>
             </div>
             <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-2.5 text-center">
               <Timer className="h-4 w-4 mx-auto mb-1 text-amber-400" />
               <p className="text-sm font-bold tabular-nums">{fmtMin(player.totalPlayMinutes)}</p>
-              <p className="text-[10px] text-neutral-500">Play Time</p>
+              <p className="text-[10px] text-neutral-500">{t("players.playTime")}</p>
             </div>
             <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-2.5 text-center">
               <Star className="h-4 w-4 mx-auto mb-1 text-yellow-400" />
               <p className="text-sm font-bold tabular-nums">{avgFeedback ?? "—"}</p>
-              <p className="text-[10px] text-neutral-500">Avg Rating</p>
+              <p className="text-[10px] text-neutral-500">{t("players.avgRating")}</p>
             </div>
           </div>
 
@@ -1620,16 +1624,16 @@ function PlayerDetailPanel({
           <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
             <div className="mb-3 flex items-center gap-2">
               <Fingerprint className="h-4 w-4 text-purple-400" />
-              <p className="text-xs font-medium text-neutral-300">Check-in &amp; sign-in</p>
+              <p className="text-xs font-medium text-neutral-300">{t("players.checkInSignIn")}</p>
             </div>
             {checkInInsights ? (
               <div className="space-y-3">
                 <div className="rounded-lg border border-neutral-800/80 bg-neutral-950/50 px-3 py-2">
-                  <p className="text-[10px] uppercase tracking-wide text-neutral-500">First time sign up</p>
+                  <p className="text-[10px] uppercase tracking-wide text-neutral-500">{t("players.firstTimeSignUp")}</p>
                   <p className="text-sm font-medium text-white">
                     {checkInInsights.firstTimeSignUpAt
                       ? fmtDateTime(checkInInsights.firstTimeSignUpAt)
-                      : "Not available"}
+                      : t("players.notAvailable")}
                   </p>
                   {checkInInsights.firstTimeSignUpVenue && (
                     <p className="mt-1 text-xs text-neutral-400">{checkInInsights.firstTimeSignUpVenue}</p>
@@ -1638,7 +1642,7 @@ function PlayerDetailPanel({
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-neutral-400">
                       {checkInInsights.registrationStaffName && (
                         <span>
-                          Staff: <span className="font-medium text-neutral-300">{checkInInsights.registrationStaffName}</span>
+                          {t("players.staff")}: <span className="font-medium text-neutral-300">{checkInInsights.registrationStaffName}</span>
                           {checkInInsights.registrationStaffPhone && (
                             <span className="ml-1 text-neutral-500">({checkInInsights.registrationStaffPhone})</span>
                           )}
@@ -1646,31 +1650,31 @@ function PlayerDetailPanel({
                       )}
                       {checkInInsights.registrationDevice && (
                         <span>
-                          Device: <span className="font-medium text-neutral-300">{checkInInsights.registrationDevice}</span>
+                          {t("players.device")}: <span className="font-medium text-neutral-300">{checkInInsights.registrationDevice}</span>
                         </span>
                       )}
                     </div>
                   )}
                 </div>
                 <div className="rounded-lg border border-neutral-800/80 bg-neutral-950/50 px-3 py-2">
-                  <p className="text-[10px] uppercase tracking-wide text-neutral-500">Registered with face</p>
+                  <p className="text-[10px] uppercase tracking-wide text-neutral-500">{t("players.registeredWithFace")}</p>
                   <p className="text-sm font-medium text-white">
                     {checkInInsights.faceRegisteredAt
                       ? `${fmtDate(checkInInsights.faceRegisteredAt)} · ${formatCheckInSource(checkInInsights.faceRegistrationSource)}`
-                      : "Not on file (no staff/kiosk face enrollment event)"}
+                      : t("players.noFaceEnrollment")}
                   </p>
                   <p className="mt-1.5 text-[10px] leading-snug text-neutral-500">
-                    This line is the first staff/kiosk &quot;face registration&quot; event in the log. It is not the same as a stored photo or cloud face match below.
+                    {t("players.faceRegistrationNote")}
                   </p>
                 </div>
                 {checkInInsights.recognition && (
                   <div className="space-y-2 rounded-lg border border-neutral-800/80 bg-neutral-950/50 px-3 py-2">
                     <p className="text-[10px] uppercase tracking-wide text-neutral-500">
-                      Picture &amp; kiosk recognition
+                      {t("players.pictureKioskRecognition")}
                     </p>
                     <ul className="space-y-1.5 text-[11px] text-neutral-300">
                       <li className="flex items-center justify-between gap-2">
-                        <span className="text-neutral-400">Cloud face (kiosk / TV match)</span>
+                        <span className="text-neutral-400">{t("players.cloudFace")}</span>
                         <span
                           className={
                             checkInInsights.recognition.rekognitionEnrolled
@@ -1682,7 +1686,7 @@ function PlayerDetailPanel({
                         </span>
                       </li>
                       <li className="flex items-center justify-between gap-2">
-                        <span className="text-neutral-400">Check-in photo file</span>
+                        <span className="text-neutral-400">{t("players.checkInPhotoFile")}</span>
                         <span
                           className={
                             checkInInsights.recognition.facePhotoOnFile
@@ -1694,7 +1698,7 @@ function PlayerDetailPanel({
                         </span>
                       </li>
                       <li className="flex items-center justify-between gap-2">
-                        <span className="text-neutral-400">App avatar photo</span>
+                        <span className="text-neutral-400">{t("players.appAvatarPhoto")}</span>
                         <span
                           className={
                             checkInInsights.recognition.avatarPhotoOnFile
@@ -1723,28 +1727,28 @@ function PlayerDetailPanel({
                 <div className="grid grid-cols-2 gap-2">
                   <div className="rounded-lg border border-neutral-800 bg-neutral-950/50 px-2.5 py-2 text-center">
                     <p className="text-lg font-bold tabular-nums text-white">{checkInInsights.counts.courtpayCheckIns}</p>
-                    <p className="text-[10px] text-neutral-500">CourtPay check-ins</p>
+                    <p className="text-[10px] text-neutral-500">{t("players.courtpayCheckIns")}</p>
                   </div>
                   <div className="rounded-lg border border-neutral-800 bg-neutral-950/50 px-2.5 py-2 text-center">
                     <p className="text-lg font-bold tabular-nums text-emerald-400/90">{checkInInsights.counts.appFaceSignIns}</p>
-                    <p className="text-[10px] text-neutral-500">App face sign-ins</p>
+                    <p className="text-[10px] text-neutral-500">{t("players.appFaceSignIns")}</p>
                   </div>
                   <div className="rounded-lg border border-neutral-800 bg-neutral-950/50 px-2.5 py-2 text-center">
                     <p className="text-lg font-bold tabular-nums text-amber-400/90">{checkInInsights.counts.wristbandSignIns}</p>
-                    <p className="text-[10px] text-neutral-500">Wristband # (fallback)</p>
+                    <p className="text-[10px] text-neutral-500">{t("players.wristbandFallback")}</p>
                   </div>
                   <div className="rounded-lg border border-neutral-800 bg-neutral-950/50 px-2.5 py-2 text-center">
                     <p className="text-lg font-bold tabular-nums text-sky-400/90">{checkInInsights.counts.phoneOtpSignIns}</p>
                     <p className="text-[10px] text-neutral-500 flex items-center justify-center gap-1">
                       <Smartphone className="h-3 w-3 shrink-0 opacity-70" />
-                      Phone / OTP
+                      {t("players.phoneOtp")}
                     </p>
                   </div>
                 </div>
                 <div>
-                  <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">Recent activity</p>
+                  <p className="mb-1.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">{t("players.recentActivity")}</p>
                   {checkInInsights.timeline.length === 0 ? (
-                    <p className="py-2 text-center text-[11px] text-neutral-600">No CourtPay or app sign-in events logged yet</p>
+                    <p className="py-2 text-center text-[11px] text-neutral-600">{t("players.noSignInEvents")}</p>
                   ) : (
                     <ul className="max-h-48 space-y-1.5 overflow-y-auto pr-1">
                       {checkInInsights.timeline.map((row, i) => (
@@ -1766,19 +1770,19 @@ function PlayerDetailPanel({
                     </ul>
                   )}
                   <p className="mt-2 text-[10px] text-neutral-600">
-                    CourtPay rows come from successful check-ins in the CourtPay flow. App sign-ins are recorded from this release onward.
+                    {t("players.courtpayNote")}
                   </p>
                 </div>
               </div>
             ) : (
-              <p className="text-center text-[11px] text-neutral-600 py-2">Could not load check-in summary</p>
+              <p className="text-center text-[11px] text-neutral-600 py-2">{t("players.couldNotLoadCheckIn")}</p>
             )}
           </div>
 
           {/* Venues */}
           {player.venues.length > 0 && (
             <div>
-              <p className="text-xs font-medium text-neutral-400 mb-2">Venues</p>
+              <p className="text-xs font-medium text-neutral-400 mb-2">{t("players.venues")}</p>
               <div className="flex flex-wrap gap-1.5">
                 {player.venues.map((v) => (
                   <span key={v.id} className="inline-flex items-center gap-1 rounded-lg bg-neutral-900 border border-neutral-800 px-2 py-1 text-xs text-neutral-300">
@@ -1792,13 +1796,13 @@ function PlayerDetailPanel({
 
           {/* Session history */}
           <div>
-            <p className="text-xs font-medium text-neutral-400 mb-2">Session History</p>
+            <p className="text-xs font-medium text-neutral-400 mb-2">{t("players.sessionHistory")}</p>
             {loading ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-5 w-5 animate-spin text-neutral-500" />
               </div>
             ) : sessions.length === 0 ? (
-              <p className="text-center py-6 text-sm text-neutral-500">No sessions yet</p>
+              <p className="text-center py-6 text-sm text-neutral-500">{t("players.noSessionsYet")}</p>
             ) : (
               <div className="space-y-2">
                 {sessions.map((s) => (
@@ -1818,15 +1822,15 @@ function PlayerDetailPanel({
                     <div className="grid grid-cols-3 gap-2 text-center">
                       <div>
                         <p className="text-sm font-bold tabular-nums">{s.gamesPlayed}</p>
-                        <p className="text-[10px] text-neutral-500">Games</p>
+                        <p className="text-[10px] text-neutral-500">{t("players.games")}</p>
                       </div>
                       <div>
                         <p className="text-sm font-bold tabular-nums">{fmtMin(s.totalPlayMinutes)}</p>
-                        <p className="text-[10px] text-neutral-500">Play Time</p>
+                        <p className="text-[10px] text-neutral-500">{t("players.playTime")}</p>
                       </div>
                       <div>
                         <p className="text-sm font-bold tabular-nums">{s.partnersCount}</p>
-                        <p className="text-[10px] text-neutral-500">Partners</p>
+                        <p className="text-[10px] text-neutral-500">{t("players.partners")}</p>
                       </div>
                     </div>
                     {(s.gamesByType.men > 0 || s.gamesByType.women > 0 || s.gamesByType.mixed > 0) && (

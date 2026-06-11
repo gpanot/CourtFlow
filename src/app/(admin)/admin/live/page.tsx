@@ -10,6 +10,7 @@ import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { Wifi, WifiOff, Monitor, ChevronLeft } from "lucide-react";
 import { resolveTvLocale, tvI18n } from "@/i18n/tv-i18n";
+import adminI18n from "@/i18n/admin-i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,7 @@ interface VenueMeta {
 
 export default function LiveSessionsPage() {
   const { t } = useTranslation("translation", { i18n: tvI18n });
+  const { t: ta } = useTranslation("translation", { i18n: adminI18n });
   const [venues, setVenues] = useState<VenueMeta[]>([]);
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
   const [venueStates, setVenueStates] = useState<Record<string, VenueState>>({});
@@ -136,16 +138,16 @@ export default function LiveSessionsPage() {
   }, [selectedVenueId, venues]);
 
   if (loading) {
-    return <p className="text-neutral-500">Loading venues...</p>;
+    return <p className="text-neutral-500">{ta("live.title")}...</p>;
   }
 
   if (venues.length === 0) {
     return (
       <div className="space-y-4">
-        <h2 className="text-xl font-bold md:text-2xl">Live Sessions</h2>
+        <h2 className="text-xl font-bold md:text-2xl">{ta("live.title")}</h2>
         <div className="flex flex-col items-center justify-center rounded-xl border border-neutral-800 bg-neutral-900 py-16">
           <Monitor className="mb-3 h-10 w-10 text-neutral-600" />
-          <p className="text-neutral-400">No venues configured yet.</p>
+          <p className="text-neutral-400">{ta("live.noVenues")}</p>
         </div>
       </div>
     );
@@ -154,9 +156,9 @@ export default function LiveSessionsPage() {
   if (!selectedVenueId) {
     return (
       <div className="space-y-4">
-        <h2 className="text-xl font-bold md:text-2xl">Live Sessions</h2>
+        <h2 className="text-xl font-bold md:text-2xl">{ta("live.title")}</h2>
         <p className="text-sm text-neutral-400">
-          Select a venue to monitor its live TV display.
+          {ta("live.selectVenue")}
         </p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {venues.map((v) => {
@@ -173,22 +175,22 @@ export default function LiveSessionsPage() {
                   <span className="font-semibold">{v.name}</span>
                   {v.hasActiveSession ? (
                     <span className="rounded-full bg-green-600/20 px-2 py-0.5 text-xs font-medium text-green-400">
-                      Live
+                      {t("live")}
                     </span>
                   ) : (
                     <span className="rounded-full bg-neutral-700 px-2 py-0.5 text-xs font-medium text-neutral-400">
-                      Inactive
+                      {ta("live.noActiveSession")}
                     </span>
                   )}
                 </div>
                 {v.hasActiveSession && state && (
                   <div className="flex gap-3 text-xs text-neutral-400">
-                    <span>{courtCount} courts</span>
-                    <span>{waitingCount} in queue</span>
+                    <span>{courtCount} {ta("venues.courts")}</span>
+                    <span>{waitingCount} {ta("live.inQueue")}</span>
                   </div>
                 )}
                 <span className="text-xs text-purple-400 opacity-0 transition-opacity group-hover:opacity-100">
-                  View live display →
+                  {ta("live.back")} →
                 </span>
               </button>
             );
@@ -228,7 +230,7 @@ export default function LiveSessionsPage() {
           </button>
         )}
         <div className="flex-1">
-          <h2 className="text-xl font-bold md:text-2xl">Live Sessions</h2>
+          <h2 className="text-xl font-bold md:text-2xl">{ta("live.title")}</h2>
           {venues.length > 1 && (
             <p className="text-sm text-neutral-400">{venueName}</p>
           )}

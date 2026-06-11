@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api-client";
 import { Loader2, Receipt, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { useTranslation } from "react-i18next";
+import adminI18n from "@/i18n/admin-i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -45,17 +47,18 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-const statusConfig: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; className: string }> = {
-  paid: { label: "Paid", icon: CheckCircle2, className: "text-emerald-400" },
-  pending: { label: "Pending", icon: Clock, className: "text-yellow-400" },
-  overdue: { label: "Overdue", icon: AlertTriangle, className: "text-red-400" },
-};
-
 export default function MyBillingPage() {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [venues, setVenues] = useState<VenueInfo[]>([]);
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const statusConfig: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; className: string }> = {
+    paid: { label: t("myBilling.paid"), icon: CheckCircle2, className: "text-emerald-400" },
+    pending: { label: t("myBilling.pending"), icon: Clock, className: "text-yellow-400" },
+    overdue: { label: t("myBilling.overdue"), icon: AlertTriangle, className: "text-red-400" },
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -82,18 +85,18 @@ export default function MyBillingPage() {
   }
 
   if (error) {
-    return <p className="text-red-400 p-4">Error: {error}</p>;
+    return <p className="text-red-400 p-4">{t("myBilling.error")}: {error}</p>;
   }
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold">My Billing</h1>
-        <p className="text-sm text-neutral-400 mt-1">View billing invoices for your venues (read-only).</p>
+        <h1 className="text-2xl font-bold">{t("myBilling.title")}</h1>
+        <p className="text-sm text-neutral-400 mt-1">{t("myBilling.subtitle")}</p>
       </div>
 
       {venues.length === 0 ? (
-        <p className="text-neutral-500">No venues assigned.</p>
+        <p className="text-neutral-500">{t("myBilling.noVenues")}</p>
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -110,12 +113,12 @@ export default function MyBillingPage() {
                 </div>
                 {v.rate ? (
                   <div className="text-xs text-neutral-400 space-y-0.5">
-                    <p>Base rate: {v.rate.isFreeBase ? "Free" : formatVND(v.rate.baseRatePerCheckin)} / check-in</p>
-                    <p>Sub addon: {v.rate.isFreeSubAddon ? "Free" : formatVND(v.rate.subscriptionAddon)}</p>
-                    <p>SePay addon: {v.rate.isFreeSepayAddon ? "Free" : formatVND(v.rate.sepayAddon)}</p>
+                    <p>{t("myBilling.baseRate")}: {v.rate.isFreeBase ? t("myBilling.free") : formatVND(v.rate.baseRatePerCheckin)} {t("myBilling.perCheckin")}</p>
+                    <p>{t("myBilling.subAddon")}: {v.rate.isFreeSubAddon ? t("myBilling.free") : formatVND(v.rate.subscriptionAddon)}</p>
+                    <p>{t("myBilling.sepayAddon")}: {v.rate.isFreeSepayAddon ? t("myBilling.free") : formatVND(v.rate.sepayAddon)}</p>
                   </div>
                 ) : (
-                  <p className="text-xs text-neutral-500">Default rates apply</p>
+                  <p className="text-xs text-neutral-500">{t("myBilling.defaultRates")}</p>
                 )}
               </div>
             ))}
@@ -124,21 +127,21 @@ export default function MyBillingPage() {
           <div>
             <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
               <Receipt className="h-5 w-5 text-purple-400" />
-              Recent Invoices
+              {t("myBilling.recentInvoices")}
             </h2>
             {invoices.length === 0 ? (
-              <p className="text-neutral-500 text-sm">No invoices yet.</p>
+              <p className="text-neutral-500 text-sm">{t("myBilling.noInvoices")}</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-neutral-800 text-neutral-400 text-left">
-                      <th className="py-2 pr-4 font-medium">Venue</th>
-                      <th className="py-2 pr-4 font-medium">Week</th>
-                      <th className="py-2 pr-4 font-medium text-right">Check-ins</th>
-                      <th className="py-2 pr-4 font-medium text-right">Amount</th>
-                      <th className="py-2 pr-4 font-medium">Status</th>
-                      <th className="py-2 font-medium">Paid at</th>
+                      <th className="py-2 pr-4 font-medium">{t("myBilling.venue")}</th>
+                      <th className="py-2 pr-4 font-medium">{t("myBilling.week")}</th>
+                      <th className="py-2 pr-4 font-medium text-right">{t("myBilling.checkIns")}</th>
+                      <th className="py-2 pr-4 font-medium text-right">{t("myBilling.amount")}</th>
+                      <th className="py-2 pr-4 font-medium">{t("myBilling.status")}</th>
+                      <th className="py-2 font-medium">{t("myBilling.paidAt")}</th>
                     </tr>
                   </thead>
                   <tbody>

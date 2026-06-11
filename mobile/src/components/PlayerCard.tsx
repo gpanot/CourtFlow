@@ -9,7 +9,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useAppColors } from "../theme/use-app-colors";
 import type { AppColors } from "../theme/palettes";
-import { resolveMediaUrl } from "../lib/media-url";
+import { getPlayerListPhotoUri } from "../lib/player-list-photo-url";
 
 export interface PlayerCardRow {
   id: string;
@@ -20,6 +20,7 @@ export interface PlayerCardRow {
   skillLevel: string | null;
   facePhotoPath: string | null;
   avatarPhotoPath: string | null;
+  linkedPlayerId?: string | null;
   checkInCount: number;
   avgReturnDays: number | null;
   lastSeenAt: string | null;
@@ -152,12 +153,12 @@ export function PlayerCard({
   const styles = createStyles(theme);
   const [imgError, setImgError] = useState(false);
 
-  // Prefer avatarPhotoPath (thumbnail) only — facePhotoPath is full-res and slow to load.
-  // Append ?w=80 so any image proxy/CDN can serve a smaller version.
-  const rawPhoto = resolveMediaUrl(p.avatarPhotoPath ?? null);
-  const photoUri = rawPhoto
-    ? `${rawPhoto}${rawPhoto.includes("?") ? "&" : "?"}w=80`
-    : null;
+  const photoUri = getPlayerListPhotoUri({
+    avatarPhotoPath: p.avatarPhotoPath,
+    linkedPlayerId: p.linkedPlayerId,
+    playerId: p.id,
+    source: p.source,
+  });
   const initials = p.name.trim().charAt(0).toUpperCase();
   const isCourtPay = p.source === "courtpay";
   const isFemale = p.gender?.toLowerCase() === "female";

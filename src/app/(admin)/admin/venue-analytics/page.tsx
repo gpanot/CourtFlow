@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api-client";
 import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
 import { cn } from "@/lib/cn";
+import { useTranslation } from "react-i18next";
+import adminI18n from "@/i18n/admin-i18n";
 import {
   Calendar, TrendingUp, Users, DollarSign, Clock, BarChart3,
   Building2, UserCheck, CreditCard, ChevronDown, GraduationCap,
@@ -171,6 +173,7 @@ function ChartTooltip({ active, payload, label, suffix }: { active?: boolean; pa
 }
 
 export default function VenueAnalyticsPage() {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const {
     venueId: selectedVenueId,
     setVenueId: setSelectedVenueId,
@@ -378,8 +381,8 @@ export default function VenueAnalyticsPage() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 className="text-xl font-bold md:text-2xl">Venue Analytics</h2>
-          <p className="text-xs text-neutral-500 mt-0.5">Court bookings, coaching, memberships, staff & players</p>
+          <h2 className="text-xl font-bold md:text-2xl">{t("venueAnalytics.title")}</h2>
+          <p className="text-xs text-neutral-500 mt-0.5">{t("venueAnalytics.subtitle")}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <AdminVenuePicker
@@ -402,39 +405,39 @@ export default function VenueAnalyticsPage() {
         <div className="flex items-center gap-2">
           <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)}
             className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none" />
-          <span className="text-neutral-500 text-sm">to</span>
+          <span className="text-neutral-500 text-sm">{t("venueAnalytics.to")}</span>
           <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)}
             className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none" />
         </div>
       )}
 
-      {loading && <p className="text-neutral-500 text-sm">Loading analytics...</p>}
+      {loading && <p className="text-neutral-500 text-sm">{t("venueAnalytics.loading")}</p>}
 
       {data && !loading && (
         <>
           {/* ===== OVERVIEW ROW ===== */}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5 md:gap-4">
-            <StatCard icon={Building2} label="Bookable Courts" value={String(data.overview.bookableCourtCount)} color="text-purple-400" />
-            <StatCard icon={Users} label="Registered Players" value={data.overview.totalPlayers.toLocaleString()} color="text-blue-400" />
-            <StatCard icon={UserCheck} label="Active Members" value={String(data.memberships.activeCount)} color="text-emerald-400" />
-            <StatCard icon={GraduationCap} label="Coaching Lessons" value={String(data.coaching.totalLessons)} color="text-orange-400" />
-            <StatCard icon={Users} label="Total Staff" value={String(data.staff.totalStaff)} sub={data.staff.coachCount > 0 ? `${data.staff.coachCount} coach${data.staff.coachCount > 1 ? "es" : ""}` : undefined} color="text-amber-400" />
+            <StatCard icon={Building2} label={t("venueAnalytics.bookableCourts")} value={String(data.overview.bookableCourtCount)} color="text-purple-400" />
+            <StatCard icon={Users} label={t("venueAnalytics.registeredPlayers")} value={data.overview.totalPlayers.toLocaleString()} color="text-blue-400" />
+            <StatCard icon={UserCheck} label={t("venueAnalytics.activeMembers")} value={String(data.memberships.activeCount)} color="text-emerald-400" />
+            <StatCard icon={GraduationCap} label={t("venueAnalytics.coachingLessons")} value={String(data.coaching.totalLessons)} color="text-orange-400" />
+            <StatCard icon={Users} label={t("venueAnalytics.totalStaff")} value={String(data.staff.totalStaff)} sub={data.staff.coachCount > 0 ? `${data.staff.coachCount} coach${data.staff.coachCount > 1 ? "es" : ""}` : undefined} color="text-amber-400" />
           </div>
 
           {/* ===== COURT BOOKINGS ===== */}
-          <Section title="Court Bookings" icon={Calendar} onExport={exportCourtBookings}>
+          <Section title={t("venueAnalytics.courtBookings")} icon={Calendar} onExport={exportCourtBookings}>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6 md:gap-4">
-              <StatCard icon={BarChart3} label="Total Bookings" value={String(data.courtBookings.totalBookings)} sub={data.courtBookings.cancelledBookings > 0 ? `${data.courtBookings.cancelledBookings} cancelled` : undefined} color="text-blue-400" />
-              <StatCard icon={TrendingUp} label="Utilization" value={`${data.courtBookings.utilizationPct}%`} sub={`${data.courtBookings.totalBookedHours}h / ${data.courtBookings.totalAvailableHours}h`} color="text-emerald-400" />
-              <StatCard icon={DollarSign} label="Booking Revenue" value={fmtPrice(data.courtBookings.bookingRevenue)} color="text-green-400" />
-              <StatCard icon={Clock} label="Hours Booked" value={String(data.courtBookings.totalBookedHours)} color="text-indigo-400" />
-              <StatCard icon={TrendingUp} label={`Projected ${data.monthProjection.monthLabel}`} value={fmtPrice(data.monthProjection.projectedRevenue)} sub={`${fmtPrice(data.monthProjection.actualRevenue)} actual so far`} color="text-purple-400" />
-              <StatCard icon={Clock} label="Projected Hours" value={String(data.monthProjection.projectedHours)} sub={`${data.monthProjection.actualHours}h actual so far`} color="text-pink-400" />
+              <StatCard icon={BarChart3} label={t("venueAnalytics.totalBookings")} value={String(data.courtBookings.totalBookings)} sub={data.courtBookings.cancelledBookings > 0 ? `${data.courtBookings.cancelledBookings} ${t("venueAnalytics.cancelled")}` : undefined} color="text-blue-400" />
+              <StatCard icon={TrendingUp} label={t("venueAnalytics.utilization")} value={`${data.courtBookings.utilizationPct}%`} sub={`${data.courtBookings.totalBookedHours}h / ${data.courtBookings.totalAvailableHours}h`} color="text-emerald-400" />
+              <StatCard icon={DollarSign} label={t("venueAnalytics.bookingRevenue")} value={fmtPrice(data.courtBookings.bookingRevenue)} color="text-green-400" />
+              <StatCard icon={Clock} label={t("venueAnalytics.hoursBooked")} value={String(data.courtBookings.totalBookedHours)} color="text-indigo-400" />
+              <StatCard icon={TrendingUp} label={`${t("venueAnalytics.projected")} ${data.monthProjection.monthLabel}`} value={fmtPrice(data.monthProjection.projectedRevenue)} sub={`${fmtPrice(data.monthProjection.actualRevenue)} ${t("venueAnalytics.actualSoFar")}`} color="text-purple-400" />
+              <StatCard icon={Clock} label={t("venueAnalytics.projectedHours")} value={String(data.monthProjection.projectedHours)} sub={`${data.monthProjection.actualHours}h ${t("venueAnalytics.actualSoFar")}`} color="text-pink-400" />
             </div>
 
             {/* Month revenue chart with projections */}
             <div className="mt-4">
-              <ChartCard title={`${data.monthProjection.monthLabel} Revenue — Actual vs Projected`}>
+              <ChartCard title={`${data.monthProjection.monthLabel} ${t("venueAnalytics.revenueActualVsProjected")}`}>
                 <ResponsiveContainer width="100%" height={220}>
                   <BarChart data={data.monthProjection.days} barGap={0}>
                     <XAxis dataKey="day" tick={{ fill: "#737373", fontSize: 9 }} tickLine={false} axisLine={false}
@@ -444,7 +447,7 @@ export default function VenueAnalyticsPage() {
                       tickFormatter={(v: number) => v >= 100000 ? `${Math.round(v / 100000)}k` : v >= 1000 ? `${Math.round(v / 1000)}` : String(v)} />
                     <Tooltip content={<MonthTooltip />} cursor={{ fill: "rgba(139,92,246,0.06)" }} />
                     <Legend
-                      formatter={(value: string) => <span className="text-[11px] text-neutral-400">{value === "revenue" ? "Actual" : "Projected"}</span>}
+                      formatter={(value: string) => <span className="text-[11px] text-neutral-400">{value === "revenue" ? t("venueAnalytics.actual") : t("venueAnalytics.projectedLabel")}</span>}
                       iconType="square"
                       wrapperStyle={{ paddingTop: 8 }}
                     />
@@ -458,7 +461,7 @@ export default function VenueAnalyticsPage() {
 
             <div className="grid gap-4 md:grid-cols-2 mt-4">
               {bookingChartData.length > 0 && (
-                <ChartCard title="Bookings per Day">
+                <ChartCard title={t("venueAnalytics.bookingsPerDay")}>
                   <ResponsiveContainer width="100%" height={200}>
                     <BarChart data={bookingChartData}>
                       <XAxis dataKey="date" tick={{ fill: "#737373", fontSize: 10 }} tickLine={false} axisLine={false} />
@@ -472,7 +475,7 @@ export default function VenueAnalyticsPage() {
                 </ChartCard>
               )}
               {courtChartData.length > 0 && (
-                <ChartCard title="Hours per Court">
+                <ChartCard title={t("venueAnalytics.hoursPerCourt")}>
                   <ResponsiveContainer width="100%" height={200}>
                     <BarChart data={courtChartData} layout="vertical">
                       <XAxis type="number" tick={{ fill: "#737373", fontSize: 10 }} tickLine={false} axisLine={false} />
@@ -487,12 +490,12 @@ export default function VenueAnalyticsPage() {
               )}
             </div>
             <div className="mt-4">
-              <ChartCard title="Peak Hours Heatmap">
+              <ChartCard title={t("venueAnalytics.peakHoursHeatmap")}>
                 <div className="overflow-x-auto">
                   <table className="w-full min-w-[480px]">
                     <thead>
                       <tr>
-                        <th className="w-12 text-left text-[10px] font-medium text-neutral-500 pb-1">Hour</th>
+                        <th className="w-12 text-left text-[10px] font-medium text-neutral-500 pb-1">{t("venueAnalytics.hour")}</th>
                         {DAY_LABELS.map((d) => <th key={d} className="text-center text-[10px] font-medium text-neutral-500 pb-1">{d}</th>)}
                       </tr>
                     </thead>
@@ -519,28 +522,28 @@ export default function VenueAnalyticsPage() {
                   </table>
                 </div>
                 <div className="flex items-center gap-2 mt-2 text-[10px] text-neutral-500">
-                  <span>Less</span>
+                  <span>{t("venueAnalytics.less")}</span>
                   <div className="flex gap-0.5">
                     {[0, 0.25, 0.5, 0.75, 1].map((v) => (
                       <div key={v} className="h-3 w-5 rounded-sm" style={{ backgroundColor: v === 0 ? "rgba(38,38,38,0.6)" : `rgba(139,92,246,${0.15 + v * 0.85})` }} />
                     ))}
                   </div>
-                  <span>More</span>
+                  <span>{t("venueAnalytics.more")}</span>
                 </div>
               </ChartCard>
             </div>
 
             {/* Extra KPIs row */}
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4 mt-4">
-              <StatCard icon={Repeat} label="Repeat Booker Rate" value={`${data.courtBookings.repeatBookerPct}%`} sub={`${data.courtBookings.repeatBookers} of ${data.courtBookings.uniqueBookers} bookers`} color="text-cyan-400" />
-              <StatCard icon={XCircle} label="Cancellation Rate" value={`${data.courtBookings.cancellationPct}%`} sub={`${data.courtBookings.cancelledBookings} cancelled`} color="text-red-400" />
-              <StatCard icon={Layers} label="Combined Utilization" value={`${data.courtBookings.combinedUtilizationPct}%`} sub={`${data.courtBookings.combinedBookedHours}h (bookings + coaching)`} color="text-teal-400" />
-              <StatCard icon={Activity} label="Open Play Sessions" value={String(data.courtBookings.openPlaySessions)} sub={`${data.courtBookings.openPlayHours}h total`} color="text-orange-400" />
+              <StatCard icon={Repeat} label={t("venueAnalytics.repeatBookerRate")} value={`${data.courtBookings.repeatBookerPct}%`} sub={`${data.courtBookings.repeatBookers} of ${data.courtBookings.uniqueBookers} bookers`} color="text-cyan-400" />
+              <StatCard icon={XCircle} label={t("venueAnalytics.cancellationRate")} value={`${data.courtBookings.cancellationPct}%`} sub={`${data.courtBookings.cancelledBookings} ${t("venueAnalytics.cancelled")}`} color="text-red-400" />
+              <StatCard icon={Layers} label={t("venueAnalytics.combinedUtilization")} value={`${data.courtBookings.combinedUtilizationPct}%`} sub={`${data.courtBookings.combinedBookedHours}h (bookings + coaching)`} color="text-teal-400" />
+              <StatCard icon={Activity} label={t("venueAnalytics.openPlaySessions")} value={String(data.courtBookings.openPlaySessions)} sub={`${data.courtBookings.openPlayHours}h total`} color="text-orange-400" />
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 mt-4">
               {/* Revenue by day of week */}
-              <ChartCard title="Revenue by Day of Week">
+              <ChartCard title={t("venueAnalytics.revenueByDow")}>
                 <ResponsiveContainer width="100%" height={200}>
                   <BarChart data={dowChartData}>
                     <XAxis dataKey="name" tick={{ fill: "#a3a3a3", fontSize: 11 }} tickLine={false} axisLine={false} />
@@ -552,12 +555,12 @@ export default function VenueAnalyticsPage() {
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
-                <p className="text-[10px] text-neutral-500 mt-1">Revenue in cents · Red = weekends</p>
+                <p className="text-[10px] text-neutral-500 mt-1">{t("venueAnalytics.revenueInCentsNote")}</p>
               </ChartCard>
 
               {/* Month-over-month comparison */}
               {momData && (
-                <ChartCard title={`Month-over-Month: ${data.courtBookings.mom.prevMonthLabel} vs ${data.courtBookings.mom.currentMonthLabel}`}>
+                <ChartCard title={`${t("venueAnalytics.monthOverMonth")}: ${data.courtBookings.mom.prevMonthLabel} vs ${data.courtBookings.mom.currentMonthLabel}`}>
                   <div className="space-y-2">
                     {momData.map((row) => {
                       const prev = row.isCents ? fmtPrice(row.prev) : row.isPct ? `${row.prev}%` : String(row.prev);
@@ -590,23 +593,23 @@ export default function VenueAnalyticsPage() {
                       );
                     })}
                   </div>
-                  <p className="text-[10px] text-neutral-500 mt-2">Current month figures are partial (through today)</p>
+                  <p className="text-[10px] text-neutral-500 mt-2">{t("venueAnalytics.partialMonth")}</p>
                 </ChartCard>
               )}
             </div>
           </Section>
 
           {/* ===== COACHING ===== */}
-          <Section title="Coaching" icon={GraduationCap} onExport={exportCoaching}>
+          <Section title={t("venueAnalytics.coachingSectionTitle")} icon={GraduationCap} onExport={exportCoaching}>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-              <StatCard icon={BarChart3} label="Total Lessons" value={String(data.coaching.totalLessons)} sub={data.coaching.cancelledLessons > 0 ? `${data.coaching.cancelledLessons} cancelled` : undefined} color="text-orange-400" />
-              <StatCard icon={Clock} label="Coaching Hours" value={String(data.coaching.totalHours)} color="text-indigo-400" />
-              <StatCard icon={DollarSign} label="Lesson Revenue" value={fmtPrice(data.coaching.lessonRevenue)} sub={data.coaching.unpaidCount > 0 ? `${data.coaching.unpaidCount} unpaid` : undefined} color="text-green-400" />
-              <StatCard icon={Users} label="Type Split" value={`${data.coaching.lessonTypeBreakdown.private}P / ${data.coaching.lessonTypeBreakdown.group}G`} sub="Private / Group" color="text-purple-400" />
+              <StatCard icon={BarChart3} label={t("venueAnalytics.totalLessons")} value={String(data.coaching.totalLessons)} sub={data.coaching.cancelledLessons > 0 ? `${data.coaching.cancelledLessons} ${t("venueAnalytics.cancelled")}` : undefined} color="text-orange-400" />
+              <StatCard icon={Clock} label={t("venueAnalytics.coachingHours")} value={String(data.coaching.totalHours)} color="text-indigo-400" />
+              <StatCard icon={DollarSign} label={t("venueAnalytics.lessonRevenue")} value={fmtPrice(data.coaching.lessonRevenue)} sub={data.coaching.unpaidCount > 0 ? `${data.coaching.unpaidCount} ${t("venueAnalytics.unpaid")}` : undefined} color="text-green-400" />
+              <StatCard icon={Users} label={t("venueAnalytics.typeSplit")} value={`${data.coaching.lessonTypeBreakdown.private}P / ${data.coaching.lessonTypeBreakdown.group}G`} sub={t("venueAnalytics.privateGroup")} color="text-purple-400" />
             </div>
             <div className="grid gap-4 md:grid-cols-2 mt-4">
               {lessonChartData.length > 0 && (
-                <ChartCard title="Lessons per Day">
+                <ChartCard title={t("venueAnalytics.lessonsPerDay")}>
                   <ResponsiveContainer width="100%" height={200}>
                     <BarChart data={lessonChartData}>
                       <XAxis dataKey="date" tick={{ fill: "#737373", fontSize: 10 }} tickLine={false} axisLine={false} />
@@ -620,7 +623,7 @@ export default function VenueAnalyticsPage() {
                 </ChartCard>
               )}
               {coachChartData.length > 0 && (
-                <ChartCard title="Lessons per Coach">
+                <ChartCard title={t("venueAnalytics.lessonsPerCoach")}>
                   <ResponsiveContainer width="100%" height={200}>
                     <BarChart data={coachChartData} layout="vertical">
                       <XAxis type="number" tick={{ fill: "#737373", fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} />
@@ -636,7 +639,7 @@ export default function VenueAnalyticsPage() {
             </div>
             {data.coaching.perCoach.length > 0 && (
               <div className="mt-4">
-                <ChartCard title="Coach Breakdown">
+                <ChartCard title={t("venueAnalytics.coachBreakdown")}>
                   <div className="max-h-[200px] overflow-y-auto space-y-1.5">
                     {data.coaching.perCoach.map((c) => (
                       <div key={c.name} className="flex items-center justify-between rounded-lg bg-neutral-800/50 px-3 py-2">
@@ -654,16 +657,16 @@ export default function VenueAnalyticsPage() {
           </Section>
 
           {/* ===== MEMBERSHIPS ===== */}
-          <Section title="Memberships" icon={CreditCard} onExport={exportMemberships}>
+          <Section title={t("venueAnalytics.membershipsSectionTitle")} icon={CreditCard} onExport={exportMemberships}>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-              <StatCard icon={UserCheck} label="Active Members" value={String(data.memberships.activeCount)} sub={data.memberships.suspendedCount > 0 ? `${data.memberships.suspendedCount} suspended` : undefined} color="text-emerald-400" />
-              <StatCard icon={TrendingUp} label="New (Period)" value={String(data.memberships.newInPeriod)} color="text-blue-400" />
-              <StatCard icon={DollarSign} label="Monthly MRR" value={fmtPrice(data.memberships.membershipMRR)} color="text-green-400" />
-              <StatCard icon={BarChart3} label="Session Usage" value={data.memberships.sessionUsage.unlimitedCount > 0 ? `${data.memberships.sessionUsage.totalUsed}` : `${data.memberships.sessionUsage.totalUsed}/${data.memberships.sessionUsage.totalIncluded}`} sub={data.memberships.sessionUsage.unlimitedCount > 0 ? `${data.memberships.sessionUsage.unlimitedCount} unlimited` : undefined} color="text-amber-400" />
+              <StatCard icon={UserCheck} label={t("venueAnalytics.activeMembers")} value={String(data.memberships.activeCount)} sub={data.memberships.suspendedCount > 0 ? `${data.memberships.suspendedCount} ${t("venueAnalytics.suspended")}` : undefined} color="text-emerald-400" />
+              <StatCard icon={TrendingUp} label={t("venueAnalytics.newPeriod")} value={String(data.memberships.newInPeriod)} color="text-blue-400" />
+              <StatCard icon={DollarSign} label={t("venueAnalytics.monthlyMrr")} value={fmtPrice(data.memberships.membershipMRR)} color="text-green-400" />
+              <StatCard icon={BarChart3} label={t("venueAnalytics.sessionUsage")} value={data.memberships.sessionUsage.unlimitedCount > 0 ? `${data.memberships.sessionUsage.totalUsed}` : `${data.memberships.sessionUsage.totalUsed}/${data.memberships.sessionUsage.totalIncluded}`} sub={data.memberships.sessionUsage.unlimitedCount > 0 ? `${data.memberships.sessionUsage.unlimitedCount} ${t("venueAnalytics.unlimited")}` : undefined} color="text-amber-400" />
             </div>
             <div className="grid gap-4 md:grid-cols-2 mt-4">
               {tierChartData.length > 0 && (
-                <ChartCard title="Members per Tier">
+                <ChartCard title={t("venueAnalytics.membersPerTier")}>
                   <ResponsiveContainer width="100%" height={200}>
                     <BarChart data={tierChartData}>
                       <XAxis dataKey="name" tick={{ fill: "#a3a3a3", fontSize: 11 }} tickLine={false} axisLine={false} />
@@ -676,34 +679,34 @@ export default function VenueAnalyticsPage() {
                   </ResponsiveContainer>
                 </ChartCard>
               )}
-              <ChartCard title="Revenue per Tier">
+              <ChartCard title={t("venueAnalytics.revenuePerTier")}>
                 <div className="space-y-2">
-                  {data.memberships.tierBreakdown.map((t) => (
-                    <div key={t.name} className="flex items-center justify-between rounded-lg bg-neutral-800/50 px-3 py-2">
+                  {data.memberships.tierBreakdown.map((tier) => (
+                    <div key={tier.name} className="flex items-center justify-between rounded-lg bg-neutral-800/50 px-3 py-2">
                       <div>
-                        <p className="text-sm font-medium text-white">{t.name}</p>
-                        <p className="text-[11px] text-neutral-500">{t.count} member{t.count !== 1 ? "s" : ""}</p>
+                        <p className="text-sm font-medium text-white">{tier.name}</p>
+                        <p className="text-[11px] text-neutral-500">{tier.count} member{tier.count !== 1 ? "s" : ""}</p>
                       </div>
-                      <p className="text-sm font-semibold text-green-400">{fmtPrice(t.revenue)}/mo</p>
+                      <p className="text-sm font-semibold text-green-400">{fmtPrice(tier.revenue)}/mo</p>
                     </div>
                   ))}
-                  {data.memberships.tierBreakdown.length === 0 && <p className="text-sm text-neutral-500 py-4 text-center">No active tiers</p>}
+                  {data.memberships.tierBreakdown.length === 0 && <p className="text-sm text-neutral-500 py-4 text-center">{t("venueAnalytics.noActiveTiers")}</p>}
                 </div>
               </ChartCard>
             </div>
           </Section>
 
           {/* ===== STAFF & PAYROLL ===== */}
-          <Section title="Staff & Payroll" icon={Users} onExport={exportStaff}>
+          <Section title={t("venueAnalytics.staffPayrollSectionTitle")} icon={Users} onExport={exportStaff}>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-              <StatCard icon={Users} label="Total Staff" value={String(data.staff.totalStaff)} sub={data.staff.coachCount > 0 ? `${data.staff.coachCount} coach${data.staff.coachCount > 1 ? "es" : ""}` : undefined} color="text-blue-400" />
-              <StatCard icon={Clock} label="Total Hours" value={String(data.staff.totalHours)} color="text-indigo-400" />
-              <StatCard icon={DollarSign} label="Payroll Cost" value={fmtPrice(data.staff.totalPayrollCost)} color="text-amber-400" />
-              <StatCard icon={TrendingUp} label="Avg Hours/Staff" value={data.staff.totalStaff > 0 ? String(Math.round(data.staff.totalHours / data.staff.totalStaff * 10) / 10) : "0"} color="text-purple-400" />
+              <StatCard icon={Users} label={t("venueAnalytics.totalStaff")} value={String(data.staff.totalStaff)} sub={data.staff.coachCount > 0 ? `${data.staff.coachCount} coach${data.staff.coachCount > 1 ? "es" : ""}` : undefined} color="text-blue-400" />
+              <StatCard icon={Clock} label={t("venueAnalytics.totalHours")} value={String(data.staff.totalHours)} color="text-indigo-400" />
+              <StatCard icon={DollarSign} label={t("venueAnalytics.payrollCost")} value={fmtPrice(data.staff.totalPayrollCost)} color="text-amber-400" />
+              <StatCard icon={TrendingUp} label={t("venueAnalytics.avgHoursPerStaff")} value={data.staff.totalStaff > 0 ? String(Math.round(data.staff.totalHours / data.staff.totalStaff * 10) / 10) : "0"} color="text-purple-400" />
             </div>
             <div className="grid gap-4 md:grid-cols-2 mt-4">
               {staffChartData.length > 0 && (
-                <ChartCard title="Hours per Staff (Top 10)">
+                <ChartCard title={t("venueAnalytics.hoursPerStaff")}>
                   <ResponsiveContainer width="100%" height={200}>
                     <BarChart data={staffChartData} layout="vertical">
                       <XAxis type="number" tick={{ fill: "#737373", fontSize: 10 }} tickLine={false} axisLine={false} />
@@ -716,13 +719,13 @@ export default function VenueAnalyticsPage() {
                   </ResponsiveContainer>
                 </ChartCard>
               )}
-              <ChartCard title="Staff Breakdown">
+              <ChartCard title={t("venueAnalytics.staffBreakdown")}>
                 <div className="max-h-[200px] overflow-y-auto space-y-1.5">
                   {data.staff.staffBreakdown.map((s) => (
                     <div key={s.name} className="flex items-center justify-between rounded-lg bg-neutral-800/50 px-3 py-2">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-medium text-white">{s.name}</p>
-                        {s.isCoach && <span className="rounded bg-indigo-500/20 px-1.5 py-0.5 text-[9px] font-medium text-indigo-300">Coach</span>}
+                        {s.isCoach && <span className="rounded bg-indigo-500/20 px-1.5 py-0.5 text-[9px] font-medium text-indigo-300">{t("staff.coach")}</span>}
                       </div>
                       <div className="text-right">
                         <p className="text-sm tabular-nums text-neutral-300">{s.hours}h</p>
@@ -730,23 +733,23 @@ export default function VenueAnalyticsPage() {
                       </div>
                     </div>
                   ))}
-                  {data.staff.staffBreakdown.length === 0 && <p className="text-sm text-neutral-500 py-4 text-center">No payroll data in this period</p>}
+                  {data.staff.staffBreakdown.length === 0 && <p className="text-sm text-neutral-500 py-4 text-center">{t("venueAnalytics.noPayrollData")}</p>}
                 </div>
               </ChartCard>
             </div>
           </Section>
 
           {/* ===== PLAYERS ===== */}
-          <Section title="Players" icon={UserCircle} onExport={exportPlayers}>
+          <Section title={t("venueAnalytics.playersSectionTitle")} icon={UserCircle} onExport={exportPlayers}>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-              <StatCard icon={Users} label="Total Registered" value={data.players.totalRegistered.toLocaleString()} color="text-blue-400" />
-              <StatCard icon={TrendingUp} label="New (Period)" value={String(data.players.newInPeriod)} color="text-emerald-400" />
-              <StatCard icon={Activity} label="Active (Period)" value={String(data.players.activeInPeriod)} sub="booked or had lessons" color="text-purple-400" />
-              <StatCard icon={UserCheck} label="Walk-ins" value={String(data.players.walkInCount)} color="text-amber-400" />
+              <StatCard icon={Users} label={t("venueAnalytics.totalRegistered")} value={data.players.totalRegistered.toLocaleString()} color="text-blue-400" />
+              <StatCard icon={TrendingUp} label={t("venueAnalytics.newPeriod")} value={String(data.players.newInPeriod)} color="text-emerald-400" />
+              <StatCard icon={Activity} label={t("venueAnalytics.activePeriod")} value={String(data.players.activeInPeriod)} sub={t("venueAnalytics.bookedOrLessons")} color="text-purple-400" />
+              <StatCard icon={UserCheck} label={t("venueAnalytics.walkIns")} value={String(data.players.walkInCount)} color="text-amber-400" />
             </div>
             <div className="grid gap-4 md:grid-cols-2 mt-4">
               {regChartData.length > 0 && (
-                <ChartCard title="New Registrations per Day">
+                <ChartCard title={t("venueAnalytics.newRegistrationsPerDay")}>
                   <ResponsiveContainer width="100%" height={200}>
                     <BarChart data={regChartData}>
                       <XAxis dataKey="date" tick={{ fill: "#737373", fontSize: 10 }} tickLine={false} axisLine={false} />
@@ -760,7 +763,7 @@ export default function VenueAnalyticsPage() {
                 </ChartCard>
               )}
               {skillChartData.length > 0 && (
-                <ChartCard title="Skill Level Distribution">
+                <ChartCard title={t("venueAnalytics.skillLevelDistribution")}>
                   <ResponsiveContainer width="100%" height={200}>
                     <BarChart data={skillChartData}>
                       <XAxis dataKey="name" tick={{ fill: "#a3a3a3", fontSize: 11 }} tickLine={false} axisLine={false} />
@@ -775,7 +778,7 @@ export default function VenueAnalyticsPage() {
               )}
             </div>
             <div className="grid gap-4 md:grid-cols-2 mt-4">
-              <ChartCard title="Gender Breakdown">
+              <ChartCard title={t("venueAnalytics.genderBreakdown")}>
                 <div className="space-y-2">
                   {Object.entries(data.players.genderBreakdown).map(([gender, count]) => (
                     <div key={gender} className="flex items-center justify-between rounded-lg bg-neutral-800/50 px-3 py-2">
@@ -786,7 +789,7 @@ export default function VenueAnalyticsPage() {
                 </div>
               </ChartCard>
               {data.players.topBookers.length > 0 && (
-                <ChartCard title="Top Bookers (Period)">
+                <ChartCard title={t("venueAnalytics.topBookers")}>
                   <div className="max-h-[200px] overflow-y-auto space-y-1.5">
                     {data.players.topBookers.map((p, i) => (
                       <div key={`${p.name}-${i}`} className="flex items-center justify-between rounded-lg bg-neutral-800/50 px-3 py-2">

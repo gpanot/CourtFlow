@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireStaff } from "@/lib/auth";
+import { getVenueRosterPlayerCount } from "@/lib/courtpay-analytics";
 
 export const dynamic = "force-dynamic";
 /**
@@ -118,13 +119,14 @@ export async function GET(req: Request) {
       courtPayPhones.length > 0
         ? await prisma.player.findMany({
             where: { phone: { in: courtPayPhones } },
-            select: { phone: true, facePhotoPath: true, avatarPhotoPath: true },
+            select: { id: true, phone: true, facePhotoPath: true, avatarPhotoPath: true },
           })
         : [];
     const faceByPhone = new Map(
       linkedPlayers.map((p) => [
         p.phone,
         {
+          id: p.id,
           facePhotoPath: p.facePhotoPath ?? null,
           avatarPhotoPath: p.avatarPhotoPath ?? null,
         },
@@ -153,6 +155,7 @@ export async function GET(req: Request) {
           skillLevel: p.skillLevel ?? null,
           facePhotoPath: p.facePhotoPath ?? null,
           avatarPhotoPath: p.avatarPhotoPath ?? null,
+          linkedPlayerId: p.id,
           checkInCount: dates.length,
           avgReturnDays: avgReturn,
           lastSeenAt,
@@ -177,6 +180,7 @@ export async function GET(req: Request) {
           skillLevel: p.skillLevel ?? null,
           facePhotoPath: linked?.facePhotoPath ?? null,
           avatarPhotoPath: linked?.avatarPhotoPath ?? null,
+          linkedPlayerId: linked?.id ?? null,
           checkInCount: p._count.checkIns,
           avgReturnDays: avgReturn,
           lastSeenAt,
@@ -188,7 +192,7 @@ export async function GET(req: Request) {
     ];
 
     // KPI stats
-    const totalPlayers = players.length;
+    const totalPlayers = await getVenueRosterPlayerCount(venueId);
     const newThisWeek = players.filter(
       (p) => new Date(p.registeredAt) >= sevenDaysAgo
     ).length;

@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useSessionStore } from "@/stores/session-store";
 import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Clock, Eye, MapPin, RefreshCw, ScanFace, X } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { useTranslation } from "react-i18next";
+import adminI18n from "@/i18n/admin-i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -96,6 +98,7 @@ function DuplicateDetailModal({
   onClose: () => void;
   onMarkReviewed: (id: string, reviewed: boolean, note: string) => Promise<void>;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [note, setNote] = useState(log.reviewNote ?? "");
   const [saving, setSaving] = useState(false);
 
@@ -118,7 +121,7 @@ function DuplicateDetailModal({
         <div className="flex items-center justify-between border-b border-neutral-800 px-6 py-4">
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-amber-400" />
-            <h2 className="text-base font-semibold text-white">Sign-up Duplicate Detail</h2>
+            <h2 className="text-base font-semibold text-white">{t("logErrors.duplicateDetail")}</h2>
           </div>
           <button onClick={onClose} className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-white">
             <X className="h-4 w-4" />
@@ -129,16 +132,16 @@ function DuplicateDetailModal({
           {/* Photos comparison */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">New Sign-up Attempt</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">{t("logErrors.newSignupAttempt")}</p>
               <PlayerPhoto src={log.newPlayerPhotoPath} alt="New sign-up photo" size={180} />
               <div className="space-y-1 text-sm">
-                <p className="font-medium text-white">{log.newPlayerName ?? <span className="text-neutral-500 italic">No name provided</span>}</p>
-                <p className="text-neutral-400">{log.newPlayerPhone ?? <span className="text-neutral-500 italic">No phone provided</span>}</p>
+                <p className="font-medium text-white">{log.newPlayerName ?? <span className="text-neutral-500 italic">{t("logErrors.noName")}</span>}</p>
+                <p className="text-neutral-400">{log.newPlayerPhone ?? <span className="text-neutral-500 italic">{t("logErrors.noPhone")}</span>}</p>
               </div>
             </div>
 
             <div className="space-y-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Matched Existing Player</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">{t("logErrors.matchedExisting")}</p>
               <PlayerPhoto src={existingPhotoSrc} alt={log.matchedPlayer.name} size={180} />
               <div className="space-y-1 text-sm">
                 <p className="font-medium text-white">{log.matchedPlayer.name}</p>
@@ -150,11 +153,11 @@ function DuplicateDetailModal({
 
           {/* AWS Details */}
           <div className="rounded-xl border border-neutral-700 bg-neutral-800/50 p-4 space-y-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">AWS Rekognition Details</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">{t("logErrors.awsDetails")}</p>
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               <div>
-                <p className="text-xs text-neutral-500">Similarity Score</p>
+                <p className="text-xs text-neutral-500">{t("logErrors.similarityScore")}</p>
                 <p className={cn(
                   "text-lg font-bold tabular-nums",
                   log.similarityScore != null && log.similarityScore >= 95 ? "text-red-400" : "text-amber-400"
@@ -163,26 +166,26 @@ function DuplicateDetailModal({
                 </p>
               </div>
               <div>
-                <p className="text-xs text-neutral-500">Threshold</p>
+                <p className="text-xs text-neutral-500">{t("logErrors.threshold")}</p>
                 <p className="text-lg font-bold tabular-nums text-neutral-300">
                   {log.threshold != null ? `${log.threshold}%` : "—"}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-neutral-500">Source</p>
+                <p className="text-xs text-neutral-500">{t("logErrors.source")}</p>
                 <p className="text-sm font-medium text-neutral-300 capitalize">{log.source}</p>
               </div>
               <div>
-                <p className="text-xs text-neutral-500">Venue</p>
+                <p className="text-xs text-neutral-500">{t("logErrors.venue")}</p>
                 <p className="text-sm font-medium text-neutral-300">{log.venue?.name ?? "—"}</p>
               </div>
               <div>
-                <p className="text-xs text-neutral-500">Detected at</p>
+                <p className="text-xs text-neutral-500">{t("logErrors.detectedAt")}</p>
                 <p className="text-sm text-neutral-300">{formatDate(log.createdAt)}</p>
               </div>
               {log.awsFaceId && (
                 <div>
-                  <p className="text-xs text-neutral-500">AWS Face ID</p>
+                  <p className="text-xs text-neutral-500">{t("logErrors.awsFaceId")}</p>
                   <p className="text-xs font-mono text-neutral-400 break-all">{log.awsFaceId}</p>
                 </div>
               )}
@@ -191,7 +194,7 @@ function DuplicateDetailModal({
             {log.awsDetail && (
               <details className="mt-2">
                 <summary className="cursor-pointer text-xs text-neutral-500 hover:text-neutral-300">
-                  Raw AWS payload
+                  {t("logErrors.rawAwsPayload")}
                 </summary>
                 <pre className="mt-2 rounded-lg bg-neutral-900 p-3 text-[10px] text-neutral-400 overflow-x-auto">
                   {JSON.stringify(log.awsDetail, null, 2)}
@@ -202,19 +205,19 @@ function DuplicateDetailModal({
 
           {/* Review section */}
           <div className="rounded-xl border border-neutral-700 bg-neutral-800/50 p-4 space-y-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Admin Review</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">{t("logErrors.adminReview")}</p>
 
             {log.reviewed && log.reviewedAt && (
               <p className="text-xs text-green-400 flex items-center gap-1">
                 <CheckCircle2 className="h-3.5 w-3.5" />
-                Reviewed on {formatDate(log.reviewedAt)}
+                {t("logErrors.reviewedOn")} {formatDate(log.reviewedAt)}
               </p>
             )}
 
             <textarea
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Add a review note (e.g. 'Confirmed different player — hat/shadow caused false positive')"
+              placeholder={t("logErrors.reviewNotePlaceholder")}
               className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white placeholder-neutral-500 resize-none focus:outline-none focus:ring-1 focus:ring-purple-500"
               rows={3}
             />
@@ -232,9 +235,9 @@ function DuplicateDetailModal({
               {saving ? (
                 <RefreshCw className="h-4 w-4 animate-spin" />
               ) : log.reviewed ? (
-                <><X className="h-4 w-4" /> Mark as Unreviewed</>
+                <><X className="h-4 w-4" /> {t("logErrors.markUnreviewed")}</>
               ) : (
-                <><CheckCircle2 className="h-4 w-4" /> Mark as Reviewed</>
+                <><CheckCircle2 className="h-4 w-4" /> {t("logErrors.markReviewed")}</>
               )}
             </button>
           </div>
@@ -253,6 +256,7 @@ function DuplicateLogCard({
   log: SignupDuplicateLog;
   onClick: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const existingPhotoSrc =
     log.matchedPlayer.avatarPhotoPath ?? log.matchedPlayer.facePhotoPath ?? null;
 
@@ -286,24 +290,24 @@ function DuplicateLogCard({
             <p className="truncate text-sm font-medium text-white">
               {log.newPlayerName ? (
                 <>
-                  <span className="text-neutral-400">New:</span> {log.newPlayerName}
+                  <span className="text-neutral-400">{t("logErrors.new")}:</span> {log.newPlayerName}
                   {log.newPlayerPhone && <span className="text-neutral-500"> · {log.newPlayerPhone}</span>}
                 </>
               ) : (
-                <span className="text-neutral-500 italic">Anonymous sign-up attempt</span>
+                <span className="text-neutral-500 italic">{t("logErrors.anonymousAttempt")}</span>
               )}
             </p>
             <p className="truncate text-xs text-neutral-400">
-              <span className="text-neutral-500">Matched:</span> {log.matchedPlayer.name} · {log.matchedPlayer.phone}
+              <span className="text-neutral-500">{t("logErrors.matched")}:</span> {log.matchedPlayer.name} · {log.matchedPlayer.phone}
             </p>
           </div>
           {log.reviewed ? (
             <span className="shrink-0 flex items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-[10px] font-medium text-green-400">
-              <CheckCircle2 className="h-3 w-3" /> Reviewed
+              <CheckCircle2 className="h-3 w-3" /> {t("logErrors.reviewed")}
             </span>
           ) : (
             <span className="shrink-0 flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-400">
-              <AlertTriangle className="h-3 w-3" /> Pending
+              <AlertTriangle className="h-3 w-3" /> {t("logErrors.pending")}
             </span>
           )}
         </div>
@@ -314,11 +318,11 @@ function DuplicateLogCard({
               "font-semibold tabular-nums",
               log.similarityScore >= 95 ? "text-red-400" : "text-amber-400"
             )}>
-              {log.similarityScore.toFixed(1)}% similarity
+              {log.similarityScore.toFixed(1)}% {t("logErrors.similarity")}
             </span>
           )}
           {log.threshold != null && (
-            <span>threshold: {log.threshold}%</span>
+            <span>{t("logErrors.thresholdLabel")}: {log.threshold}%</span>
           )}
           <span className="capitalize">{log.source}</span>
           {log.venue && (
@@ -346,6 +350,7 @@ function DuplicateLogCard({
 type FilterTab = "all" | "pending" | "reviewed";
 
 export default function LogErrorsPage() {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const { token } = useSessionStore();
   const [activeTab, setActiveTab] = useState<"signup-duplicate">("signup-duplicate");
   const [filterTab, setFilterTab] = useState<FilterTab>("pending");
@@ -413,9 +418,9 @@ export default function LogErrorsPage() {
     <div className="space-y-6">
       {/* Page header */}
       <div>
-        <h1 className="text-2xl font-bold text-white">Log Errors</h1>
+        <h1 className="text-2xl font-bold text-white">{t("logErrors.title")}</h1>
         <p className="text-sm text-neutral-400 mt-0.5">
-          Review system error events flagged for admin attention.
+          {t("logErrors.subtitle")}
         </p>
       </div>
 
@@ -431,7 +436,7 @@ export default function LogErrorsPage() {
           )}
         >
           <AlertTriangle className="h-4 w-4" />
-          Sign-up Duplicates
+          {t("logErrors.signupDuplicates")}
           {pendingCount !== undefined && pendingCount > 0 && (
             <span className="rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-400">
               {pendingCount}
@@ -445,11 +450,7 @@ export default function LogErrorsPage() {
         <div className="space-y-4">
           {/* Description */}
           <div className="rounded-xl border border-neutral-800 bg-neutral-900/50 p-4 text-sm text-neutral-400">
-            <p>
-              When a new player tries to sign up and AWS Rekognition detects their face as already registered,
-              the attempt is blocked and recorded here. This helps identify cases where the detection may have
-              been a <strong className="text-neutral-200">false positive</strong> (e.g. hat, shadow, similar appearance).
-            </p>
+            <p dangerouslySetInnerHTML={{ __html: t("logErrors.description") }} />
           </div>
 
           {/* Filter tabs */}
@@ -465,7 +466,7 @@ export default function LogErrorsPage() {
                     : "text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200"
                 )}
               >
-                {f}
+                {f === "pending" ? t("logErrors.filterPending") : f === "reviewed" ? t("logErrors.filterReviewed") : t("logErrors.filterAll")}
               </button>
             ))}
             <button
@@ -474,7 +475,7 @@ export default function LogErrorsPage() {
               className="ml-auto flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs text-neutral-400 hover:bg-neutral-800 hover:text-neutral-200 disabled:opacity-50 transition-colors"
             >
               <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
-              Refresh
+              {t("common.refresh")}
             </button>
           </div>
 
@@ -482,18 +483,18 @@ export default function LogErrorsPage() {
           {loading ? (
             <div className="flex items-center justify-center py-16 text-neutral-500">
               <RefreshCw className="h-5 w-5 animate-spin mr-2" />
-              Loading…
+              {t("common.loading")}
             </div>
           ) : logs.length === 0 ? (
             <div className="rounded-xl border border-neutral-800 bg-neutral-900/30 py-16 text-center">
               <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-neutral-700" />
               <p className="text-neutral-400 font-medium">
-                {filterTab === "pending" ? "No pending duplicates" : "No entries found"}
+                {filterTab === "pending" ? t("logErrors.noPending") : t("logErrors.noEntries")}
               </p>
               <p className="text-sm text-neutral-600 mt-1">
                 {filterTab === "pending"
-                  ? "All sign-up duplicate events have been reviewed."
-                  : "Sign-up duplicate events will appear here when detected."}
+                  ? t("logErrors.allReviewed")
+                  : t("logErrors.willAppear")}
               </p>
             </div>
           ) : (
@@ -511,7 +512,7 @@ export default function LogErrorsPage() {
           {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex items-center justify-between text-sm text-neutral-400">
-              <span>{total} total · page {page} of {totalPages}</span>
+              <span>{total} {t("common.total")} · {t("common.page")} {page} {t("common.of")} {totalPages}</span>
               <div className="flex gap-1">
                 <button
                   onClick={() => handlePageChange(page - 1)}

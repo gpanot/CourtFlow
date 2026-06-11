@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import adminI18n from "@/i18n/admin-i18n";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
@@ -147,6 +149,7 @@ const BLOCK_LABELS: Record<string, string> = {
 };
 
 export default function BookingsPage() {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const {
     venueId: selectedVenueId,
     setVenueId: setSelectedVenueId,
@@ -540,7 +543,7 @@ export default function BookingsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-xl font-bold md:text-2xl">Court Bookings</h2>
+        <h2 className="text-xl font-bold md:text-2xl">{t("bookings.title")}</h2>
         <AdminVenuePicker
           venueId={selectedVenueId}
           venues={venueOptions}
@@ -552,8 +555,8 @@ export default function BookingsPage() {
       <div className="flex items-center justify-between border-b border-neutral-800">
         <div className="flex gap-1">
         {([
-          { key: "bookings" as const, label: "Court Bookings", icon: Calendar },
-          { key: "settings" as const, label: "Settings", icon: Settings },
+          { key: "bookings" as const, label: t("bookings.title"), icon: Calendar },
+          { key: "settings" as const, label: t("settings.title"), icon: Settings },
         ]).map((tab) => (
           <button
             key={tab.key}
@@ -576,19 +579,19 @@ export default function BookingsPage() {
               onClick={() => openBlockModal("open_play")}
               className="flex items-center gap-1.5 rounded-lg border border-emerald-700/50 bg-emerald-900/20 px-3 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-900/40"
             >
-              <Users className="h-4 w-4" /> Open Play
+              <Users className="h-4 w-4" /> {t("bookings.openPlay")}
             </button>
             <button
               onClick={() => openBlockModal()}
               className="flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm font-medium text-neutral-300 hover:bg-neutral-700 hover:text-white"
             >
-              <Ban className="h-4 w-4" /> Block Time
+              <Ban className="h-4 w-4" /> {t("bookings.blockTime")}
             </button>
             <button
               onClick={openCreateFresh}
               className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-500"
             >
-              <Plus className="h-4 w-4" /> New Booking
+              <Plus className="h-4 w-4" /> {t("bookings.newBooking")}
             </button>
           </div>
         )}
@@ -636,7 +639,7 @@ export default function BookingsPage() {
           onClick={() => setSelectedDate(formatDate(new Date()))}
           className="rounded-lg bg-neutral-800 px-3 py-1.5 text-xs text-neutral-400 hover:text-white"
         >
-          Today
+          {t("bookings.today")}
         </button>
 
         {/* Selection action bar — same row as date nav */}
@@ -646,8 +649,8 @@ export default function BookingsPage() {
               <p className="text-xs font-semibold text-white truncate">
                 {selectionCourtIds.length === 1
                   ? selectedSlots[selectionCourtIds[0]].courtLabel
-                  : `${selectionCourtIds.length} courts`}
-                {" "}— {selectionTotalSlots} slot{selectionTotalSlots > 1 ? "s" : ""}
+                  : `${selectionCourtIds.length} ${t("bookings.courtsPlural")}`}
+                {" "}— {selectionTotalSlots} {selectionTotalSlots > 1 ? t("bookings.slotsPlural") : t("bookings.slot")}
               </p>
               <p className="text-[10px] text-neutral-400">
                 {formatTime(selectionTimeRange.first.startTime)} – {formatTime(selectionTimeRange.last.endTime)}
@@ -660,21 +663,21 @@ export default function BookingsPage() {
               onClick={() => openBlockFromSelection("open_play")}
               className="flex items-center gap-1 rounded-lg border border-emerald-600/50 bg-emerald-600/20 px-2 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-600/30 transition-colors"
             >
-              <Users className="h-3.5 w-3.5" /> Open Play
+              <Users className="h-3.5 w-3.5" /> {t("bookings.openPlay")}
             </button>
             <button
               onClick={() => openBlockFromSelection()}
               className="flex items-center gap-1 rounded-lg border border-amber-600/50 bg-amber-600/20 px-2 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-600/30 transition-colors"
             >
-              <Ban className="h-3.5 w-3.5" /> Block
+              <Ban className="h-3.5 w-3.5" /> {t("bookings.block")}
             </button>
             <button
               onClick={openCreateFromSelection}
               disabled={!canBookFromSelection}
               className="flex items-center gap-1 rounded-lg bg-purple-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-purple-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              title={!canBookFromSelection ? "Select consecutive slots on a single court to book" : ""}
+              title={!canBookFromSelection ? t("bookings.consecutiveSlotsHint") : ""}
             >
-              <Plus className="h-3.5 w-3.5" /> Book
+              <Plus className="h-3.5 w-3.5" /> {t("bookings.book")}
             </button>
             <button
               onClick={clearSelection}
@@ -692,14 +695,14 @@ export default function BookingsPage() {
             className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors", viewMode === "court" ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400 hover:text-white")}
             title="Court View"
           >
-            <LayoutGrid className="h-3.5 w-3.5" /> Courts
+            <LayoutGrid className="h-3.5 w-3.5" /> {t("bookings.courtView")}
           </button>
           <button
             onClick={() => { setViewMode("time"); localStorage.setItem("bookings-view-mode", "time"); }}
             className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors border-l border-neutral-700", viewMode === "time" ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400 hover:text-white")}
             title="Time View"
           >
-            <TableProperties className="h-3.5 w-3.5" /> Time
+            <TableProperties className="h-3.5 w-3.5" /> {t("bookings.timeView")}
           </button>
         </div>
       </div>
@@ -707,8 +710,8 @@ export default function BookingsPage() {
       {/* Day Planner Grid */}
       {availability.length === 0 ? (
         <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-12 text-center">
-          <p className="text-neutral-500">No bookable courts configured for this venue.</p>
-          <p className="text-xs text-neutral-600 mt-1">Enable &quot;Bookable&quot; on courts in Venues settings.</p>
+          <p className="text-neutral-500">{t("bookings.noBookableCourts")}</p>
+          <p className="text-xs text-neutral-600 mt-1">{t("bookings.enableBookableHint")}</p>
         </div>
       ) : viewMode === "time" ? (() => {
         const courts = availability;
@@ -1048,10 +1051,10 @@ export default function BookingsPage() {
       {/* Bookings List */}
       <section className="space-y-3">
         <h3 className="text-sm font-medium uppercase tracking-wider text-neutral-400">
-          Bookings for {new Date(selectedDate + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
+          {t("bookings.bookingsFor")} {new Date(selectedDate + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
         </h3>
         {bookings.length === 0 ? (
-          <p className="text-sm text-neutral-500">No bookings for this date.</p>
+          <p className="text-sm text-neutral-500">{t("bookings.noBookingsForDate")}</p>
         ) : (
           <div className="space-y-2">
             {bookings.map((b) => (
@@ -1077,9 +1080,9 @@ export default function BookingsPage() {
                 </div>
                 {b.status === "confirmed" && (
                   <div className="flex gap-1 shrink-0">
-                    <button onClick={() => openEditModal(b)} className="rounded-lg px-2 py-1 text-xs text-blue-400 hover:bg-blue-900/30">Edit</button>
-                    <button onClick={() => cancelBooking(b.id)} className="rounded-lg px-2 py-1 text-xs text-red-400 hover:bg-red-900/30">Cancel</button>
-                    <button onClick={() => markNoShow(b.id)} className="rounded-lg px-2 py-1 text-xs text-amber-400 hover:bg-amber-900/30">No-show</button>
+                    <button onClick={() => openEditModal(b)} className="rounded-lg px-2 py-1 text-xs text-blue-400 hover:bg-blue-900/30">{t("common.edit")}</button>
+                    <button onClick={() => cancelBooking(b.id)} className="rounded-lg px-2 py-1 text-xs text-red-400 hover:bg-red-900/30">{t("bookings.cancel")}</button>
+                    <button onClick={() => markNoShow(b.id)} className="rounded-lg px-2 py-1 text-xs text-amber-400 hover:bg-amber-900/30">{t("bookings.noShow")}</button>
                   </div>
                 )}
               </div>
@@ -1094,17 +1097,17 @@ export default function BookingsPage() {
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={closeCreateModal}>
           <div className="w-full max-w-md mx-4 rounded-2xl border border-neutral-700 bg-neutral-900 p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold">New Booking</h3>
+            <h3 className="text-lg font-bold">{t("bookings.newBooking")}</h3>
 
             {/* Court selector */}
             <div className="space-y-2">
-              <label className="text-xs text-neutral-400">Court</label>
+              <label className="text-xs text-neutral-400">{t("bookings.court")}</label>
               <select
                 value={newCourtId}
                 onChange={(e) => { setNewCourtId(e.target.value); setNewSlotTime(""); }}
                 className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
               >
-                <option value="">Select court...</option>
+                <option value="">{t("bookings.selectCourt")}</option>
                 {availability.map((c) => (
                   <option key={c.courtId} value={c.courtId}>{c.courtLabel}</option>
                 ))}
@@ -1114,13 +1117,13 @@ export default function BookingsPage() {
             {/* Time slot selector */}
             {newCourtId && (
               <div className="space-y-2">
-                <label className="text-xs text-neutral-400">Time Slot</label>
+                <label className="text-xs text-neutral-400">{t("bookings.timeSlot")}</label>
                 <select
                   value={newSlotTime}
                   onChange={(e) => setNewSlotTime(e.target.value)}
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
                 >
-                  <option value="">Select time...</option>
+                  <option value="">{t("bookings.selectTime")}</option>
                   {availableSlotsForCourt(newCourtId).map((s) => (
                     <option key={s.startTime} value={s.startTime}>
                       {formatTime(s.startTime)} – {formatTime(s.endTime)}  ({fmtPrice(s.priceInCents)})
@@ -1152,19 +1155,19 @@ export default function BookingsPage() {
 
             {/* Player search */}
             <div className="space-y-2">
-              <label className="text-xs text-neutral-400">Player</label>
+              <label className="text-xs text-neutral-400">{t("bookings.player")}</label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
                 <input
                   type="text"
-                  placeholder="Search by name or phone..."
+                  placeholder={t("bookings.searchByNameOrPhone")}
                   value={playerSearch}
                   onChange={(e) => { setPlayerSearch(e.target.value); setSelectedPlayer(null); }}
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-800 pl-9 pr-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
                   autoFocus={!createSlot}
                 />
               </div>
-              {searching && <p className="text-xs text-neutral-500">Searching...</p>}
+              {searching && <p className="text-xs text-neutral-500">{t("bookings.searching")}</p>}
               {playerResults.length > 0 && !selectedPlayer && (
                 <div className="max-h-40 overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-800">
                   {playerResults.map((p) => (
@@ -1180,7 +1183,7 @@ export default function BookingsPage() {
                 </div>
               )}
               {selectedPlayer && (
-                <p className="text-sm text-green-400">Selected: {selectedPlayer.name}</p>
+                <p className="text-sm text-green-400">{t("bookings.selected")}: {selectedPlayer.name}</p>
               )}
             </div>
 
@@ -1189,11 +1192,11 @@ export default function BookingsPage() {
                 onClick={createBooking}
                 disabled={!selectedPlayer || !newCourtId || !newSlotTime || saving}
                 className="flex-1 rounded-xl bg-purple-600 py-3 font-semibold text-white hover:bg-purple-500 disabled:opacity-40"
-              >{saving ? "Booking..." : "Book"}</button>
+              >{saving ? t("bookings.booking") : t("bookings.book")}</button>
               <button
                 onClick={closeCreateModal}
                 className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
-              >Cancel</button>
+              >{t("common.cancel")}</button>
             </div>
           </div>
         </div>
@@ -1203,7 +1206,7 @@ export default function BookingsPage() {
       {editBooking && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={closeEditModal}>
           <div className="w-full max-w-md mx-4 rounded-2xl border border-neutral-700 bg-neutral-900 p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold">Edit Booking</h3>
+            <h3 className="text-lg font-bold">{t("bookings.editBooking")}</h3>
 
             <div className="rounded-lg bg-neutral-800 p-3 text-sm">
               <p className="font-medium text-purple-300">{editBooking.player.name}</p>
@@ -1212,7 +1215,7 @@ export default function BookingsPage() {
 
             {/* Court selector */}
             <div className="space-y-2">
-              <label className="text-xs text-neutral-400">Court</label>
+              <label className="text-xs text-neutral-400">{t("bookings.court")}</label>
               <select
                 value={editCourtId}
                 onChange={(e) => { setEditCourtId(e.target.value); setEditSlotTime(""); }}
@@ -1226,7 +1229,7 @@ export default function BookingsPage() {
 
             {/* Time slot selector */}
             <div className="space-y-2">
-              <label className="text-xs text-neutral-400">Time Slot</label>
+              <label className="text-xs text-neutral-400">{t("bookings.timeSlot")}</label>
               <select
                 value={editSlotTime}
                 onChange={(e) => setEditSlotTime(e.target.value)}
@@ -1243,7 +1246,7 @@ export default function BookingsPage() {
             {/* Price preview */}
             {editSlotTime && getSlotPrice(editCourtId, editSlotTime) !== null && (
               <p className="text-sm text-neutral-400">
-                New price: <span className="font-semibold text-purple-400">{fmtPrice(getSlotPrice(editCourtId, editSlotTime)!)}</span>
+                {t("bookings.newPrice")}: <span className="font-semibold text-purple-400">{fmtPrice(getSlotPrice(editCourtId, editSlotTime)!)}</span>
               </p>
             )}
 
@@ -1252,22 +1255,22 @@ export default function BookingsPage() {
                 onClick={saveEdit}
                 disabled={saving}
                 className="flex-1 rounded-xl bg-purple-600 py-3 font-semibold text-white hover:bg-purple-500 disabled:opacity-40"
-              >{saving ? "Saving..." : "Save Changes"}</button>
+              >{saving ? t("common.saving") : t("common.saveChanges")}</button>
               <button
                 onClick={closeEditModal}
                 className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
-              >Cancel</button>
+              >{t("common.cancel")}</button>
             </div>
 
             <div className="border-t border-neutral-800 pt-3 flex gap-2">
               <button
                 onClick={() => { closeEditModal(); cancelBooking(editBooking.id); }}
                 className="flex-1 rounded-xl border border-red-800/50 py-2 text-sm text-red-400 hover:bg-red-900/20"
-              >Cancel Booking</button>
+              >{t("bookings.cancelBooking")}</button>
               <button
                 onClick={() => { closeEditModal(); markNoShow(editBooking.id); }}
                 className="flex-1 rounded-xl border border-amber-800/50 py-2 text-sm text-amber-400 hover:bg-amber-900/20"
-              >Mark No-Show</button>
+              >{t("bookings.markNoShow")}</button>
             </div>
           </div>
         </div>
@@ -1281,9 +1284,9 @@ export default function BookingsPage() {
               {blockForm.type === "open_play" ? <Users className="h-5 w-5 text-emerald-400" /> :
                blockForm.type === "competition" ? <Trophy className="h-5 w-5 text-blue-400" /> :
                <Ban className="h-5 w-5 text-neutral-400" />}
-              {blockForm.type === "open_play" ? "Schedule Open Play" :
-               blockForm.type === "competition" ? "Schedule Competition" :
-               "Block Court Time"}
+              {blockForm.type === "open_play" ? t("bookings.scheduleOpenPlay") :
+               blockForm.type === "competition" ? t("bookings.scheduleCompetition") :
+               t("bookings.blockCourtTime")}
             </h3>
             <p className="text-xs text-neutral-500">
               {new Date(selectedDate + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
@@ -1291,27 +1294,27 @@ export default function BookingsPage() {
 
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-neutral-400">Type</label>
+                <label className="text-xs text-neutral-400">{t("bookings.type")}</label>
                 <select value={blockForm.type} onChange={(e) => setBlockForm({ ...blockForm, type: e.target.value })}
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none">
-                  <option value="open_play">Open Play</option>
-                  <option value="competition">Competition</option>
-                  <option value="private_event">Private Event</option>
-                  <option value="private_competition">Private Competition</option>
-                  <option value="maintenance">Maintenance</option>
+                  <option value="open_play">{t("bookings.openPlay")}</option>
+                  <option value="competition">{t("bookings.competition")}</option>
+                  <option value="private_event">{t("bookings.privateEvent")}</option>
+                  <option value="private_competition">{t("bookings.privateCompetition")}</option>
+                  <option value="maintenance">{t("bookings.maintenance")}</option>
                 </select>
               </div>
 
               <div>
-                <label className="text-xs text-neutral-400">Title (optional)</label>
+                <label className="text-xs text-neutral-400">{t("bookings.titleOptional")}</label>
                 <input type="text" value={blockForm.title}
                   onChange={(e) => setBlockForm({ ...blockForm, title: e.target.value })}
-                  placeholder={blockForm.type === "maintenance" ? "e.g. Court resurfacing" : "e.g. ABC Corp Team Building"}
+                  placeholder={blockForm.type === "maintenance" ? t("bookings.courtResurfacingPlaceholder") : t("bookings.teamBuildingPlaceholder")}
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none" />
               </div>
 
               <div>
-                <label className="text-xs text-neutral-400 mb-1.5 block">Courts</label>
+                <label className="text-xs text-neutral-400 mb-1.5 block">{t("bookings.courts")}</label>
                 <div className="flex flex-wrap gap-2">
                   {availability.map((c) => (
                     <button key={c.courtId} onClick={() => toggleBlockCourt(c.courtId)}
@@ -1328,7 +1331,7 @@ export default function BookingsPage() {
                     <button
                       onClick={() => setBlockForm({ ...blockForm, courtIds: blockForm.courtIds.length === availability.length ? [] : availability.map((c) => c.courtId) })}
                       className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs text-neutral-500 hover:text-white transition-colors">
-                      {blockForm.courtIds.length === availability.length ? "Deselect All" : "Select All"}
+                      {blockForm.courtIds.length === availability.length ? t("common.deselectAll") : t("common.selectAll")}
                     </button>
                   )}
                 </div>
@@ -1336,20 +1339,20 @@ export default function BookingsPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-neutral-400">Start Hour</label>
+                  <label className="text-xs text-neutral-400">{t("bookings.startHour")}</label>
                   <select value={blockForm.startHour} onChange={(e) => setBlockForm({ ...blockForm, startHour: e.target.value })}
                     className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none">
-                    <option value="">Select...</option>
+                    <option value="">{t("bookings.select")}</option>
                     {allSlotTimes.map((s) => (
                       <option key={s.startTime} value={String(s.hour)}>{formatTime(s.startTime)}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-neutral-400">End Hour</label>
+                  <label className="text-xs text-neutral-400">{t("bookings.endHour")}</label>
                   <select value={blockForm.endHour} onChange={(e) => setBlockForm({ ...blockForm, endHour: e.target.value })}
                     className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none">
-                    <option value="">Select...</option>
+                    <option value="">{t("bookings.select")}</option>
                     {allSlotTimes.filter((s) => !blockForm.startHour || s.hour > parseInt(blockForm.startHour)).map((s) => (
                       <option key={s.endTime} value={String(s.hour + 1)}>{formatTime(s.endTime)}</option>
                     ))}
@@ -1358,10 +1361,10 @@ export default function BookingsPage() {
               </div>
 
               <div>
-                <label className="text-xs text-neutral-400">Notes (optional)</label>
+                <label className="text-xs text-neutral-400">{t("bookings.notesOptional")}</label>
                 <textarea value={blockForm.note}
                   onChange={(e) => setBlockForm({ ...blockForm, note: e.target.value })}
-                  placeholder="Additional details..."
+                  placeholder={t("bookings.additionalDetails")}
                   rows={2}
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none resize-none" />
               </div>
@@ -1379,7 +1382,7 @@ export default function BookingsPage() {
                 {saving ? "Saving..." : blockForm.type === "open_play" ? "Create Open Play" : blockForm.type === "competition" ? "Create Competition" : "Block Time"}
               </button>
               <button onClick={() => setShowBlockModal(false)}
-                className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700">Cancel</button>
+                className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700">{t("common.cancel")}</button>
             </div>
           </div>
         </div>
@@ -1388,7 +1391,7 @@ export default function BookingsPage() {
       {/* Active Court Blocks for the day */}
       {courtBlocks.length > 0 && (
         <section className="space-y-3">
-          <h3 className="text-sm font-medium uppercase tracking-wider text-neutral-400">Court Blocks</h3>
+          <h3 className="text-sm font-medium uppercase tracking-wider text-neutral-400">{t("bookings.courtBlocks")}</h3>
           <div className="space-y-2">
             {courtBlocks.map((bl) => (
               <div key={bl.id} className={cn(
@@ -1417,13 +1420,13 @@ export default function BookingsPage() {
                       {formatTime(bl.startTime)} – {formatTime(bl.endTime)}
                     </span>
                     <span>
-                      {bl.courtIds.length} court{bl.courtIds.length > 1 ? "s" : ""}
+                      {bl.courtIds.length} {bl.courtIds.length > 1 ? t("bookings.courtsPlural") : t("bookings.court")}
                     </span>
                     {bl.note && <span className="italic">{bl.note}</span>}
                   </div>
                 </div>
                 <button onClick={() => deleteBlock(bl.id)}
-                  className="rounded-lg px-2 py-1 text-xs text-red-400 hover:bg-red-900/30">Remove</button>
+                  className="rounded-lg px-2 py-1 text-xs text-red-400 hover:bg-red-900/30">{t("common.remove")}</button>
               </div>
             ))}
           </div>
@@ -1508,6 +1511,7 @@ function BookingConfigSection({
   settings: VenueSettings;
   onRefresh: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [bCfg, setBCfg] = useState(() => parseCfg(settings));
   const [grid, setGrid] = useState<PriceGrid>(() => rulesToGrid(parseCfg(settings).pricingRules));
   const [editingCell, setEditingCell] = useState<{ day: number; hour: number } | null>(null);
@@ -1592,30 +1596,30 @@ function BookingConfigSection({
   return (
     <div className="space-y-4">
       <h4 className="flex items-center gap-2 text-sm font-medium text-neutral-400 uppercase tracking-wider">
-        <CalendarDays className="h-4 w-4" /> Booking Config
+        <CalendarDays className="h-4 w-4" /> {t("bookings.bookingConfig")}
       </h4>
       <div className="space-y-4">
         <div className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-800/30 p-3">
-          <p className="text-xs font-medium text-neutral-300">General</p>
+          <p className="text-xs font-medium text-neutral-300">{t("bookings.general")}</p>
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
             <div>
-              <label className="text-[10px] text-neutral-500">Slot (min)</label>
+              <label className="text-[10px] text-neutral-500">{t("bookings.slotMin")}</label>
               <input type="number" value={bCfg.slotDurationMinutes} onChange={(e) => { setBCfg({ ...bCfg, slotDurationMinutes: Number(e.target.value) }); setDirty(true); }} className={inputCls} />
             </div>
             <div>
-              <label className="text-[10px] text-neutral-500">Open Hour</label>
+              <label className="text-[10px] text-neutral-500">{t("bookings.openHour")}</label>
               <input type="number" min={0} max={23} value={bCfg.bookingStartHour} onChange={(e) => { setBCfg({ ...bCfg, bookingStartHour: Number(e.target.value) }); setDirty(true); }} className={inputCls} />
             </div>
             <div>
-              <label className="text-[10px] text-neutral-500">Close Hour</label>
+              <label className="text-[10px] text-neutral-500">{t("bookings.closeHour")}</label>
               <input type="number" min={0} max={24} value={bCfg.bookingEndHour} onChange={(e) => { setBCfg({ ...bCfg, bookingEndHour: Number(e.target.value) }); setDirty(true); }} className={inputCls} />
             </div>
             <div>
-              <label className="text-[10px] text-neutral-500">Cancel (hrs)</label>
+              <label className="text-[10px] text-neutral-500">{t("bookings.cancelHrs")}</label>
               <input type="number" value={bCfg.cancellationHours} onChange={(e) => { setBCfg({ ...bCfg, cancellationHours: Number(e.target.value) }); setDirty(true); }} className={inputCls} />
             </div>
             <div>
-              <label className="text-[10px] text-neutral-500">Default ($)</label>
+              <label className="text-[10px] text-neutral-500">{t("bookings.defaultPrice")}</label>
               <input type="text" inputMode="numeric" value={centsToDollars(bCfg.defaultPriceInCents).toLocaleString("en-US")}
                 onChange={(e) => { const v = parseInt(e.target.value.replace(/[^0-9]/g, "") || "0", 10); setBCfg({ ...bCfg, defaultPriceInCents: dollarsToCents(v) }); setDirty(true); }} className={inputCls} />
             </div>
@@ -1623,14 +1627,14 @@ function BookingConfigSection({
         </div>
         <div className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-800/30 p-3">
           <div className="flex items-center justify-between">
-            <p className="text-xs font-medium text-neutral-300">Pricing Schedule <span className="text-neutral-600 font-normal">— click a slot to edit price ($)</span></p>
-            {dirty && <span className="rounded-full bg-amber-600/20 px-2 py-0.5 text-[10px] font-medium text-amber-400">Unsaved changes</span>}
+            <p className="text-xs font-medium text-neutral-300">{t("bookings.pricingSchedule")} <span className="text-neutral-600 font-normal">— {t("bookings.clickToEditPrice")}</span></p>
+            {dirty && <span className="rounded-full bg-amber-600/20 px-2 py-0.5 text-[10px] font-medium text-amber-400">{t("bookings.unsavedChanges")}</span>}
           </div>
           <div className="overflow-x-auto -mx-1 px-1">
             <table className="border-collapse text-[10px] table-fixed">
               <thead>
                 <tr>
-                  <th className="sticky left-0 z-10 bg-neutral-900 px-1 py-1 text-left font-medium text-neutral-500 w-[80px]">Day</th>
+                  <th className="sticky left-0 z-10 bg-neutral-900 px-1 py-1 text-left font-medium text-neutral-500 w-[80px]">{t("bookings.day")}</th>
                   {activeHours.map((h) => <th key={h} className="px-0 py-1 text-center font-medium text-neutral-500 w-[46px]">{h}:00</th>)}
                   <th className="px-1 py-1 text-center font-medium text-neutral-500 min-w-[50px]">Quick</th>
                 </tr>
@@ -1673,12 +1677,12 @@ function BookingConfigSection({
             </table>
           </div>
           <div className="flex items-center gap-3 text-[10px] text-neutral-600">
-            <span className="flex items-center gap-1"><span className="inline-block h-3 w-5 rounded bg-neutral-800/60" /> = default price</span>
-            <span className="flex items-center gap-1"><span className="inline-block h-3 w-5 rounded bg-purple-600/20 border border-purple-600/20" /> = custom price</span>
+            <span className="flex items-center gap-1"><span className="inline-block h-3 w-5 rounded bg-neutral-800/60" /> = {t("bookings.defaultPriceLegend")}</span>
+            <span className="flex items-center gap-1"><span className="inline-block h-3 w-5 rounded bg-purple-600/20 border border-purple-600/20" /> = {t("bookings.customPriceLegend")}</span>
           </div>
           <button onClick={saveBookingConfig} disabled={savingBooking}
             className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-500 disabled:opacity-40">
-            <Save className="h-3 w-3" /> {savingBooking ? "Saving..." : "Save Booking Config"}
+            <Save className="h-3 w-3" /> {savingBooking ? t("common.saving") : t("bookings.saveBookingConfig")}
           </button>
         </div>
       </div>
@@ -1711,6 +1715,7 @@ function ScheduleConfigSection({
   courts: VenueCourt[];
   onRefresh: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const parseSchedule = (): ScheduleEntry[] => {
     const raw = (settings.scheduleConfig as { entries?: Record<string, unknown>[] }) || {};
     if (!Array.isArray(raw.entries)) return [];
@@ -1759,25 +1764,25 @@ function ScheduleConfigSection({
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-semibold text-white flex items-center gap-2">
-          <CalendarDays className="h-4 w-4 text-emerald-400" /> Weekly Schedule (Open Play / Competition)
+          <CalendarDays className="h-4 w-4 text-emerald-400" /> {t("bookings.weeklySchedule")}
         </h4>
         <button onClick={openAdd} className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500">
-          <Plus className="h-3 w-3" /> Add Slot
+          <Plus className="h-3 w-3" /> {t("bookings.addSlot")}
         </button>
       </div>
-      {entries.length === 0 && !showAdd && <p className="text-xs text-neutral-500 py-4 text-center">No recurring schedule configured. Add Open Play or Competition slots that repeat weekly.</p>}
+      {entries.length === 0 && !showAdd && <p className="text-xs text-neutral-500 py-4 text-center">{t("bookings.noRecurringSchedule")}</p>}
       {sortedEntries.map((entry) => (
         <div key={entry.id} className={cn("flex items-center gap-3 rounded-lg border p-2.5", entry.type === "open_play" && "border-emerald-800/30 bg-emerald-900/10", entry.type === "competition" && "border-blue-800/30 bg-blue-900/10")}>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               {entry.type === "open_play" ? <Users className="h-3.5 w-3.5 text-emerald-400" /> : <Trophy className="h-3.5 w-3.5 text-blue-400" />}
               <span className={cn("text-sm font-medium", entry.type === "open_play" ? "text-emerald-200" : "text-blue-200")}>{entry.title}</span>
-              <span className="text-[10px] rounded-full px-2 py-0.5 bg-neutral-800 text-neutral-400">{entry.type === "open_play" ? "Open Play" : "Competition"}</span>
+              <span className="text-[10px] rounded-full px-2 py-0.5 bg-neutral-800 text-neutral-400">{entry.type === "open_play" ? t("bookings.openPlay") : t("bookings.competition")}</span>
             </div>
             <div className="flex items-center gap-3 mt-1 text-xs text-neutral-400">
               <span className="flex items-center gap-1 font-medium">{entry.daysOfWeek.map((d) => DAY_SHORT_SCHED[d]).join(", ")}</span>
               <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{fmtHour(entry.startHour)} – {fmtHour(entry.endHour)}</span>
-              <span>{entry.courtIds.length === bookable.length ? "All courts" : `${entry.courtIds.length} court${entry.courtIds.length > 1 ? "s" : ""}`}</span>
+              <span>{entry.courtIds.length === bookable.length ? t("bookings.allCourts") : `${entry.courtIds.length} ${entry.courtIds.length > 1 ? t("bookings.courtsPlural") : t("bookings.court")}`}</span>
             </div>
           </div>
           <button onClick={() => openEdit(entry)} className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-white"><Pencil className="h-3.5 w-3.5" /></button>
@@ -1786,15 +1791,15 @@ function ScheduleConfigSection({
       ))}
       {showAdd && (
         <div className="rounded-lg border border-neutral-700 bg-neutral-800/50 p-3 space-y-3">
-          <p className="text-xs font-semibold text-white">{editId ? "Edit Schedule Entry" : "New Schedule Entry"}</p>
+          <p className="text-xs font-semibold text-white">{editId ? t("bookings.editScheduleEntry") : t("bookings.newScheduleEntry")}</p>
           <div>
-            <label className="text-[10px] text-neutral-500">Type</label>
+            <label className="text-[10px] text-neutral-500">{t("bookings.type")}</label>
             <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value as "open_play" | "competition" })} className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-sm text-white focus:border-emerald-500 focus:outline-none">
-              <option value="open_play">Open Play</option><option value="competition">Competition</option>
+              <option value="open_play">{t("bookings.openPlay")}</option><option value="competition">{t("bookings.competition")}</option>
             </select>
           </div>
           <div>
-            <label className="text-[10px] text-neutral-500 mb-1.5 block">Days</label>
+            <label className="text-[10px] text-neutral-500 mb-1.5 block">{t("bookings.days")}</label>
             <div className="flex gap-1.5">
               {DAY_NAMES_FULL.map((name, i) => (
                 <button key={i} onClick={() => toggleDay(i)} className={cn("rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors flex-1 text-center",
@@ -1803,27 +1808,27 @@ function ScheduleConfigSection({
             </div>
           </div>
           <div>
-            <label className="text-[10px] text-neutral-500">Title</label>
+            <label className="text-[10px] text-neutral-500">{t("bookings.titleLabel")}</label>
             <input type="text" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })}
-              placeholder={form.type === "open_play" ? "e.g. Morning Open Play" : "e.g. Thursday Night Competition"}
+              placeholder={form.type === "open_play" ? t("bookings.openPlayPlaceholder") : t("bookings.competitionPlaceholder")}
               className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-sm text-white placeholder:text-neutral-600 focus:border-emerald-500 focus:outline-none" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[10px] text-neutral-500">Start</label>
+              <label className="text-[10px] text-neutral-500">{t("bookings.start")}</label>
               <select value={form.startHour} onChange={(e) => setForm({ ...form, startHour: parseInt(e.target.value) })} className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-sm text-white focus:border-emerald-500 focus:outline-none">
                 {allHours.map((h) => <option key={h} value={h}>{fmtHour(h)}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-[10px] text-neutral-500">End</label>
+              <label className="text-[10px] text-neutral-500">{t("bookings.end")}</label>
               <select value={form.endHour} onChange={(e) => setForm({ ...form, endHour: parseInt(e.target.value) })} className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-sm text-white focus:border-emerald-500 focus:outline-none">
                 {allHours.filter((h) => h > form.startHour).map((h) => <option key={h} value={h}>{fmtHour(h)}</option>)}
               </select>
             </div>
           </div>
           <div>
-            <label className="text-[10px] text-neutral-500 mb-1.5 block">Courts</label>
+            <label className="text-[10px] text-neutral-500 mb-1.5 block">{t("bookings.courts")}</label>
             <div className="flex flex-wrap gap-1.5">
               {bookable.map((c) => (
                 <button key={c.id} onClick={() => toggleCourt(c.id)} className={cn("rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors",
@@ -1831,16 +1836,16 @@ function ScheduleConfigSection({
               ))}
               {bookable.length > 1 && (
                 <button onClick={() => { const ids = bookable.map((c) => c.id); setForm({ ...form, courtIds: form.courtIds.length === ids.length ? [] : ids }); }}
-                  className="rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-xs text-neutral-500 hover:text-white transition-colors">{form.courtIds.length === bookable.length ? "Deselect All" : "Select All"}</button>
+                  className="rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-xs text-neutral-500 hover:text-white transition-colors">{form.courtIds.length === bookable.length ? t("common.deselectAll") : t("common.selectAll")}</button>
               )}
             </div>
           </div>
           <div className="flex gap-2">
             <button onClick={submitEntry} disabled={saving || !form.courtIds.length || !form.title.trim() || !form.daysOfWeek.length || form.startHour >= form.endHour}
               className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-40">
-              <Save className="h-3 w-3" /> {saving ? "Saving..." : editId ? "Update" : "Add"}
+              <Save className="h-3 w-3" /> {saving ? t("common.saving") : editId ? t("common.update") : t("common.add")}
             </button>
-            <button onClick={() => { setShowAdd(false); setEditId(null); }} className="rounded-lg px-3 py-1.5 text-xs text-neutral-400 hover:text-white hover:bg-neutral-700">Cancel</button>
+            <button onClick={() => { setShowAdd(false); setEditId(null); }} className="rounded-lg px-3 py-1.5 text-xs text-neutral-400 hover:text-white hover:bg-neutral-700">{t("common.cancel")}</button>
           </div>
         </div>
       )}

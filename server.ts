@@ -68,6 +68,28 @@ app.prepare().then(() => {
     });
   });
 
+  // On-demand thumb handler: generate + cache 96px WebP if not already on disk
+  expressApp.get("/uploads/players/thumbs/:playerId", async (req, res) => {
+    const rawId = req.params.playerId;
+    const playerId = rawId.endsWith(".webp") ? rawId.slice(0, -5) : rawId;
+    const thumbFile = path.join(process.cwd(), "uploads", "players", "thumbs", `${playerId}.webp`);
+    // Dynamically import to avoid loading sharp until needed
+    const { ensureFaceThumb } = await import("./src/lib/player-face-thumb").catch(() => ({ ensureFaceThumb: null }));
+    if (!ensureFaceThumb) { res.status(500).end(); return; }
+    try {
+      const ok = await ensureFaceThumb(playerId);
+      if (ok) {
+        res.setHeader("Cache-Control", "public, max-age=86400, immutable");
+        res.sendFile(thumbFile);
+      } else {
+        res.status(404).end();
+      }
+    } catch (e) {
+      console.error("[thumb] ensureFaceThumb error:", e);
+      res.status(500).end();
+    }
+  });
+
   expressApp.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
   // In dev, proxy /uploads to production when the file doesn't exist locally

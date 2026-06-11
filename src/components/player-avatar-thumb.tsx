@@ -1,13 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import { UserRound } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { isPlayerAvatarImageSrc } from "@/lib/player-avatar-display";
+import { getPlayerListPhotoUrl } from "@/lib/player-list-photo-url";
 
 export interface PlayerAvatarThumbProps {
   /** Player-uploaded avatar photo — highest priority */
   avatarPhotoPath?: string | null;
   facePhotoPath?: string | null;
+  /** Player id used to build a WebP thumb URL when no avatarPhotoPath is available */
+  playerId?: string | null;
   avatar?: string | null;
   className?: string;
   /** Tailwind size classes, e.g. h-10 w-10 */
@@ -19,12 +23,18 @@ export interface PlayerAvatarThumbProps {
 export function PlayerAvatarThumb({
   avatarPhotoPath,
   facePhotoPath,
+  playerId,
   avatar,
   className,
   sizeClass = "h-10 w-10",
   textFallbackClassName = "text-lg",
 }: PlayerAvatarThumbProps) {
-  const photoSrc = avatarPhotoPath || facePhotoPath;
+  const [imgError, setImgError] = useState(false);
+
+  const photoSrc = !imgError
+    ? getPlayerListPhotoUrl({ avatarPhotoPath, facePhotoPath, playerId })
+    : null;
+
   return (
     <div
       className={cn(
@@ -35,10 +45,16 @@ export function PlayerAvatarThumb({
     >
       {photoSrc ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={photoSrc} alt="" className="h-full w-full object-cover object-center" />
+        <img
+          src={photoSrc}
+          alt=""
+          loading="lazy"
+          className="h-full w-full object-cover object-top"
+          onError={() => setImgError(true)}
+        />
       ) : isPlayerAvatarImageSrc(avatar) ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={avatar!} alt="" className="h-full w-full object-cover object-center" />
+        <img src={avatar!} alt="" loading="lazy" className="h-full w-full object-cover object-center" />
       ) : avatar?.trim() ? (
         <div
           className={cn(

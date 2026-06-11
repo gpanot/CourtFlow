@@ -3,6 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
+import { useTranslation } from "react-i18next";
+import adminI18n from "@/i18n/admin-i18n";
 import { PackageCard } from "@/modules/courtpay/components/PackageCard";
 import { PackageForm } from "@/modules/courtpay/components/PackageForm";
 import { SubscriberList } from "@/modules/courtpay/components/SubscriberList";
@@ -86,6 +88,7 @@ const paymentStatusColors: Record<string, string> = {
 };
 
 export default function AdminCourtPayPage() {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const { venueId: selectedVenueId, setVenueId: setSelectedVenueId, venues } = useAdminVenuePicker();
   const [tab, setTab] = useState<Tab>("packages");
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -232,10 +235,10 @@ export default function AdminCourtPayPage() {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-white">
-            Membership CourtPay
+            {t("courtpay.title")}
           </h1>
           <p className="text-sm text-neutral-500">
-            Subscription packages, check-in payments & subscribers
+            {t("courtpay.subtitle")}
           </p>
         </div>
         <AdminVenuePicker
@@ -252,16 +255,16 @@ export default function AdminCourtPayPage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
             <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
               <div className="flex items-center gap-2 text-neutral-400 text-xs mb-1">
-                <Users className="h-3.5 w-3.5" /> Active Subscribers
+                <Users className="h-3.5 w-3.5" /> {t("courtpay.activeSubscribers")}
               </div>
               <p className="text-2xl font-bold">{overview.activeSubscribers}</p>
               <p className="text-xs text-neutral-500">
-                of {overview.totalSubscribers} total
+                {t("courtpay.ofTotal", { count: overview.totalSubscribers })}
               </p>
             </div>
             <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
               <div className="flex items-center gap-2 text-neutral-400 text-xs mb-1">
-                <DollarSign className="h-3.5 w-3.5" /> Month Revenue
+                <DollarSign className="h-3.5 w-3.5" /> {t("courtpay.monthRevenue")}
               </div>
               <p className="text-2xl font-bold text-purple-400">
                 {formatVND(overview.monthRevenue)}
@@ -269,17 +272,17 @@ export default function AdminCourtPayPage() {
             </div>
             <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
               <div className="flex items-center gap-2 text-neutral-400 text-xs mb-1">
-                <Package className="h-3.5 w-3.5" /> Packages
+                <Package className="h-3.5 w-3.5" /> {t("courtpay.packages")}
               </div>
               <p className="text-2xl font-bold">{overview.totalPackages}</p>
             </div>
             <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
               <div className="flex items-center gap-2 text-neutral-400 text-xs mb-1">
-                <TrendingUp className="h-3.5 w-3.5" /> Check-ins Today
+                <TrendingUp className="h-3.5 w-3.5" /> {t("courtpay.checkInsToday")}
               </div>
               <p className="text-2xl font-bold">{overview.todayCheckIns}</p>
               <p className="text-xs text-neutral-500">
-                {overview.totalCheckIns} all time
+                {overview.totalCheckIns} {t("courtpay.allTime")}
               </p>
             </div>
           </div>
@@ -289,18 +292,18 @@ export default function AdminCourtPayPage() {
 
       {/* Tabs */}
       <div className="flex gap-1 mb-6 border-b border-neutral-800 pb-1">
-        {(["packages", "subscribers", "payments"] as Tab[]).map((t) => (
+        {(["packages", "subscribers", "payments"] as Tab[]).map((tabId) => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
+            key={tabId}
+            onClick={() => setTab(tabId)}
             className={cn(
               "rounded-lg px-4 py-2 text-sm font-medium capitalize transition-colors",
-              tab === t
+              tab === tabId
                 ? "bg-purple-600/20 text-purple-400"
                 : "text-neutral-400 hover:text-white"
             )}
           >
-            {t}
+            {t(`courtpay.tab${tabId.charAt(0).toUpperCase()}${tabId.slice(1)}`)}
           </button>
         ))}
       </div>
@@ -313,7 +316,7 @@ export default function AdminCourtPayPage() {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-medium text-neutral-300">
-              {packages.length} package(s)
+              {t("courtpay.packageLabel", { count: packages.length })}
             </h2>
             <div className="flex gap-2">
               {selectedVenueId && (
@@ -322,13 +325,13 @@ export default function AdminCourtPayPage() {
                   className="flex items-center gap-1.5 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:bg-neutral-800"
                 >
                   <Sparkles className="h-3.5 w-3.5" />
-                  Create defaults
+                  {t("courtpay.createDefaults")}
                 </button>
               )}
               <button
                 onClick={() => {
                   if (!selectedVenueId) {
-                    alert("Select a venue first");
+                    alert(t("courtpay.selectVenueFirst"));
                     return;
                   }
                   setShowForm(true);
@@ -336,7 +339,7 @@ export default function AdminCourtPayPage() {
                 className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-500"
               >
                 <Plus className="h-3.5 w-3.5" />
-                Add package
+                {t("courtpay.addPackage")}
               </button>
             </div>
           </div>
@@ -344,8 +347,8 @@ export default function AdminCourtPayPage() {
           {packages.length === 0 ? (
             <div className="py-16 text-center text-neutral-500">
               {selectedVenueId
-                ? "No packages for this venue"
-                : "No packages created yet"}
+                ? t("courtpay.noPackagesVenue")
+                : t("courtpay.noPackagesYet")}
             </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -365,7 +368,7 @@ export default function AdminCourtPayPage() {
         <div>
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-sm font-medium text-neutral-300">
-              {subscribers.length} subscriber(s)
+              {t("courtpay.subscriberLabel", { count: subscribers.length })}
             </h2>
           </div>
           <SubscriberList
@@ -397,22 +400,22 @@ export default function AdminCourtPayPage() {
           {paymentSummary && (
             <div className="grid grid-cols-3 gap-3 mb-6">
               <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
-                <p className="text-xs text-neutral-400">Collected (month)</p>
+                <p className="text-xs text-neutral-400">{t("courtpay.collectedMonth")}</p>
                 <p className="text-lg font-bold text-purple-400">
                   {formatVND(paymentSummary.monthTotal)}
                 </p>
                 <p className="text-xs text-neutral-500">
-                  {paymentSummary.monthCount} payments
+                  {paymentSummary.monthCount} {t("courtpay.payments")}
                 </p>
               </div>
               <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
-                <p className="text-xs text-neutral-400">Pending</p>
+                <p className="text-xs text-neutral-400">{t("courtpay.pending")}</p>
                 <p className="text-lg font-bold text-yellow-400">
                   {paymentSummary.pendingCount}
                 </p>
               </div>
               <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
-                <p className="text-xs text-neutral-400">Total Records</p>
+                <p className="text-xs text-neutral-400">{t("courtpay.totalRecords")}</p>
                 <p className="text-lg font-bold">{payments.length}</p>
               </div>
             </div>
@@ -420,7 +423,7 @@ export default function AdminCourtPayPage() {
 
           {payments.length === 0 ? (
             <div className="py-16 text-center text-neutral-500">
-              No payments in the last 30 days
+              {t("courtpay.noPayments")}
             </div>
           ) : (
             <div className="space-y-2">

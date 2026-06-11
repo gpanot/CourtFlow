@@ -6,6 +6,8 @@ import { useSessionStore } from "@/stores/session-store";
 import { cn } from "@/lib/cn";
 import { Plus, Shield, User, Pencil, Trash2, KeyRound, X, Check, GraduationCap } from "lucide-react";
 import type { StaffAppAccessKind } from "@/lib/staff-app-access";
+import { useTranslation } from "react-i18next";
+import adminI18n from "@/i18n/admin-i18n";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +32,7 @@ interface Staff {
 type ModalMode = null | "create" | "edit" | "delete" | "reset-password";
 
 export default function StaffPage() {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const callerRole = useSessionStore((s) => s.role);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [venues, setVenues] = useState<StaffVenue[]>([]);
@@ -237,12 +240,12 @@ export default function StaffPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold md:text-2xl">Staff Management</h2>
+        <h2 className="text-xl font-bold md:text-2xl">{t("staff.title")}</h2>
         <button
           onClick={openCreate}
           className="flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-500 md:px-4"
         >
-          <Plus className="h-4 w-4" /> Add Staff
+          <Plus className="h-4 w-4" /> {t("staff.addStaff")}
         </button>
       </div>
 
@@ -264,14 +267,14 @@ export default function StaffPage() {
                   <span className="rounded bg-neutral-800 px-2 py-0.5 text-xs text-neutral-400 capitalize">{s.role}</span>
                   {s.isCoach && (
                     <span className="flex items-center gap-1 rounded bg-teal-600/20 px-2 py-0.5 text-xs text-teal-400">
-                      <GraduationCap className="h-3 w-3" /> Coach
+                      <GraduationCap className="h-3 w-3" /> {t("staff.coach")}
                     </span>
                   )}
                 </div>
                 <p className="text-sm text-neutral-500 mb-2">{s.phone}</p>
                 <div className="flex flex-wrap gap-1">
                   {s.venues.length === 0 && (
-                    <span className="rounded bg-neutral-800 px-2 py-0.5 text-xs text-neutral-500">No venue assigned</span>
+                    <span className="rounded bg-neutral-800 px-2 py-0.5 text-xs text-neutral-500">{t("staff.noVenue")}</span>
                   )}
                   {s.venues.map((v) => (
                     <span key={v.id} className="rounded bg-blue-600/15 px-2 py-0.5 text-xs text-blue-400">{v.name}</span>
@@ -307,7 +310,7 @@ export default function StaffPage() {
         ))}
 
         {staff.length === 0 && (
-          <p className="py-12 text-center text-neutral-500">No staff members yet</p>
+          <p className="py-12 text-center text-neutral-500">{t("staff.noStaff")}</p>
         )}
       </div>
 
@@ -320,7 +323,7 @@ export default function StaffPage() {
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold">
-                {modalMode === "create" ? "Add Staff Member" : `Edit ${selectedStaff?.name}`}
+                {modalMode === "create" ? t("staff.addStaffMember") : `${t("staff.edit")} ${selectedStaff?.name}`}
               </h3>
               <button onClick={closeModal} className="text-neutral-400 hover:text-white">
                 <X className="h-5 w-5" />
@@ -332,7 +335,7 @@ export default function StaffPage() {
             <div className="space-y-3">
               <input
                 type="text"
-                placeholder="Name"
+                placeholder={t("staff.namePlaceholder")}
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
@@ -342,14 +345,14 @@ export default function StaffPage() {
                 <>
                   <input
                     type="tel"
-                    placeholder="Phone"
+                    placeholder={t("staff.phonePlaceholder")}
                     value={form.phone}
                     onChange={(e) => setForm({ ...form, phone: e.target.value })}
                     className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
                   />
                   <input
                     type="password"
-                    placeholder="Password"
+                    placeholder={t("staff.passwordPlaceholder")}
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
                     className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
@@ -358,21 +361,21 @@ export default function StaffPage() {
               )}
 
               <div>
-                <label className="mb-1.5 block text-sm text-neutral-400">Role</label>
+                <label className="mb-1.5 block text-sm text-neutral-400">{t("staff.role")}</label>
                 <select
                   value={form.role}
                   onChange={(e) => setForm({ ...form, role: e.target.value as "staff" | "manager" | "superadmin" })}
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-white focus:border-purple-500 focus:outline-none"
                 >
-                  <option value="staff">Staff</option>
-                  <option value="manager">Manager</option>
-                  {callerRole === "superadmin" && <option value="superadmin">Super Admin</option>}
+                  <option value="staff">{t("staff.roleStaff")}</option>
+                  <option value="manager">{t("staff.roleManager")}</option>
+                  {callerRole === "superadmin" && <option value="superadmin">{t("staff.roleSuperAdmin")}</option>}
                 </select>
                 <p className="mt-1 text-[10px] text-neutral-600">build: 2026-06-09 · roles: staff, manager, superadmin</p>
               </div>
 
               <div>
-                <label className="mb-1.5 block text-sm text-neutral-400">Venues</label>
+                <label className="mb-1.5 block text-sm text-neutral-400">{t("staff.venues")}</label>
                 <div className="flex flex-wrap gap-2">
                   {venues.map((v) => (
                     <button
@@ -390,16 +393,16 @@ export default function StaffPage() {
                     </button>
                   ))}
                   {venues.length === 0 && (
-                    <p className="text-sm text-neutral-500">No venues available</p>
+                    <p className="text-sm text-neutral-500">{t("staff.noVenuesAvailable")}</p>
                   )}
                 </div>
               </div>
 
               {form.venueIds.length > 0 && (
                 <div>
-                  <label className="mb-1.5 block text-sm text-neutral-400">App access</label>
+                  <label className="mb-1.5 block text-sm text-neutral-400">{t("staff.appAccess")}</label>
                   <p className="mb-2 text-xs text-neutral-500">
-                    Choose which staff PWA each venue opens (both can be enabled).
+                    {t("staff.appAccessDesc")}
                   </p>
                   <div className="space-y-3">
                     {form.venueIds.map((vid) => {
@@ -407,7 +410,7 @@ export default function StaffPage() {
                       const apps = form.venueAppAccess[vid] ?? ["courtflow"];
                       return (
                         <div key={vid} className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-3">
-                          <p className="mb-2 text-xs font-medium text-neutral-300">Venue: {vname}</p>
+                          <p className="mb-2 text-xs font-medium text-neutral-300">{t("staff.venueLabel")}: {vname}</p>
                           <div className="flex flex-wrap gap-2">
                             <button
                               type="button"
@@ -447,7 +450,7 @@ export default function StaffPage() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <GraduationCap className="h-4 w-4 text-teal-400" />
-                    <label className="text-sm text-neutral-300">Coach</label>
+                    <label className="text-sm text-neutral-300">{t("staff.coach")}</label>
                   </div>
                   <button
                     type="button"
@@ -468,9 +471,9 @@ export default function StaffPage() {
 
                 {form.isCoach && (
                   <div className="mt-3">
-                    <label className="mb-1.5 block text-sm text-neutral-400">Coach Bio</label>
+                    <label className="mb-1.5 block text-sm text-neutral-400">{t("staff.coachBio")}</label>
                     <textarea
-                      placeholder="Short bio for this coach..."
+                      placeholder={t("staff.coachBioPlaceholder")}
                       value={form.coachBio}
                       onChange={(e) => setForm({ ...form, coachBio: e.target.value })}
                       rows={3}
@@ -487,13 +490,13 @@ export default function StaffPage() {
                 disabled={saving}
                 className="flex-1 rounded-xl bg-purple-600 py-3 font-semibold text-white hover:bg-purple-500 disabled:opacity-50"
               >
-                {saving ? "Saving..." : modalMode === "create" ? "Create" : "Save Changes"}
+                {saving ? t("common.saving") : modalMode === "create" ? t("common.create") : t("staff.saveChanges")}
               </button>
               <button
                 onClick={closeModal}
                 className="rounded-xl bg-neutral-800 px-6 py-3 text-neutral-300 hover:bg-neutral-700"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
             </div>
           </div>
@@ -511,9 +514,9 @@ export default function StaffPage() {
               <div className="rounded-full bg-red-600/20 p-3">
                 <Trash2 className="h-6 w-6 text-red-400" />
               </div>
-              <h3 className="text-lg font-bold">Delete {selectedStaff.name}?</h3>
+              <h3 className="text-lg font-bold">{t("staff.deleteTitle")} {selectedStaff.name}?</h3>
               <p className="text-sm text-neutral-400">
-                This will permanently remove this staff member. They will no longer be able to log in.
+                {t("staff.deleteBody")}
               </p>
             </div>
 
@@ -525,13 +528,13 @@ export default function StaffPage() {
                 disabled={saving}
                 className="flex-1 rounded-xl bg-red-600 py-3 font-semibold text-white hover:bg-red-500 disabled:opacity-50"
               >
-                {saving ? "Deleting..." : "Yes, Delete"}
+                {saving ? t("staff.deleting") : t("staff.yesDelete")}
               </button>
               <button
                 onClick={closeModal}
                 className="flex-1 rounded-xl bg-neutral-800 py-3 text-neutral-300 hover:bg-neutral-700"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
             </div>
           </div>
@@ -546,20 +549,20 @@ export default function StaffPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold">Reset Password</h3>
+              <h3 className="text-lg font-bold">{t("staff.resetPassword")}</h3>
               <button onClick={closeModal} className="text-neutral-400 hover:text-white">
                 <X className="h-5 w-5" />
               </button>
             </div>
             <p className="text-sm text-neutral-400 mb-4">
-              Set a new password for <strong>{selectedStaff.name}</strong>
+              {t("staff.resetPasswordFor")} <strong>{selectedStaff.name}</strong>
             </p>
 
             {err && <p className="mb-3 rounded-lg bg-red-900/30 p-2 text-sm text-red-400">{err}</p>}
 
             <input
               type="password"
-              placeholder="New password"
+              placeholder={t("staff.newPasswordPlaceholder")}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               autoFocus
@@ -572,13 +575,13 @@ export default function StaffPage() {
                 disabled={saving || !newPassword}
                 className="flex-1 rounded-xl bg-amber-600 py-3 font-semibold text-white hover:bg-amber-500 disabled:opacity-50"
               >
-                {saving ? "Resetting..." : "Reset Password"}
+                {saving ? t("staff.resetting") : t("staff.resetPassword")}
               </button>
               <button
                 onClick={closeModal}
                 className="rounded-xl bg-neutral-800 px-6 py-3 text-neutral-300 hover:bg-neutral-700"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
             </div>
           </div>

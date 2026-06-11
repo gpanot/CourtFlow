@@ -4,6 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api-client";
 import { useSessionStore } from "@/stores/session-store";
 import { cn } from "@/lib/cn";
+import { useTranslation } from "react-i18next";
+import adminI18n from "@/i18n/admin-i18n";
 import {
   Plus,
   MapPin,
@@ -39,6 +41,7 @@ interface Venue {
 }
 
 export default function VenuesPage() {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const { role } = useSessionStore();
   const [venues, setVenues] = useState<Venue[]>([]);
   const [showCreate, setShowCreate] = useState(false);
@@ -78,12 +81,12 @@ export default function VenuesPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold md:text-2xl">Venues</h2>
+        <h2 className="text-xl font-bold md:text-2xl">{t("venues.title")}</h2>
         <button
           onClick={() => setShowCreate(!showCreate)}
           className="flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-500 md:px-4"
         >
-          <Plus className="h-4 w-4" /> Add Venue
+          <Plus className="h-4 w-4" /> {t("venues.addVenue")}
         </button>
       </div>
 
@@ -91,7 +94,7 @@ export default function VenuesPage() {
         <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 space-y-3">
           <input
             type="text"
-            placeholder="Venue name"
+            placeholder={t("venues.venueName")}
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
@@ -100,7 +103,7 @@ export default function VenuesPage() {
           />
           <input
             type="text"
-            placeholder="Location (optional)"
+            placeholder={t("venues.location")}
             value={newLocation}
             onChange={(e) => setNewLocation(e.target.value)}
             className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
@@ -112,7 +115,7 @@ export default function VenuesPage() {
               disabled={!newName.trim()}
               className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
             >
-              Create Venue
+              {t("venues.createVenue")}
             </button>
             <button
               onClick={() => {
@@ -122,7 +125,7 @@ export default function VenuesPage() {
               }}
               className="rounded-lg bg-neutral-800 px-4 py-2 text-sm text-neutral-400 hover:text-white"
             >
-              Cancel
+              {t("venues.cancel")}
             </button>
           </div>
         </div>
@@ -143,7 +146,7 @@ export default function VenuesPage() {
         ))}
         {venues.length === 0 && (
           <p className="py-12 text-center text-neutral-500">
-            No venues yet. Create one to get started.
+            {t("venues.noVenuesYet")}
           </p>
         )}
       </div>
@@ -164,6 +167,7 @@ function VenueCard({
   onToggle: () => void;
   onRefresh: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(venue.name);
   const [editLocation, setEditLocation] = useState(venue.location || "");
@@ -243,13 +247,13 @@ function VenueCard({
                   disabled={saving || !editName.trim()}
                   className="rounded-lg bg-green-600 px-3 py-1.5 text-sm text-white hover:bg-green-500 disabled:opacity-40"
                 >
-                  Save
+                  {saving ? t("venues.saving") : t("venues.save")}
                 </button>
                 <button
                   onClick={cancelEdit}
                   className="rounded-lg bg-neutral-700 px-3 py-1.5 text-sm text-neutral-300 hover:bg-neutral-600"
                 >
-                  Cancel
+                  {t("venues.cancel")}
                 </button>
               </div>
             </div>
@@ -271,7 +275,7 @@ function VenueCard({
                   <h3 className="text-base font-semibold md:text-lg">{venue.name}</h3>
                   {hasActiveSession && (
                     <span className="rounded-full bg-green-600/20 px-2 py-0.5 text-xs font-medium text-green-400">
-                      Live
+                      {t("venues.live")}
                     </span>
                   )}
                 </div>
@@ -281,10 +285,10 @@ function VenueCard({
                   </p>
                 )}
                 <div className="mt-1.5 flex items-center gap-3 text-xs text-neutral-500">
-                  <span>{venue.courts.length} courts</span>
-                  <span>{venue._count.staff} staff</span>
+                  <span>{venue.courts.length} {t("venues.courts")}</span>
+                  <span>{venue._count.staff} {t("venues.staff")}</span>
                   {venue.owner && (
-                    <span className="text-purple-400">Owner: {venue.owner.name}</span>
+                    <span className="text-purple-400">{t("venues.owner")}: {venue.owner.name}</span>
                   )}
                 </div>
               </div>
@@ -293,14 +297,14 @@ function VenueCard({
                 <button
                   onClick={() => setEditing(true)}
                   className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white"
-                  title="Edit"
+                  title={t("venues.edit")}
                 >
                   <Pencil className="h-4 w-4" />
                 </button>
                 <button
                   onClick={() => setDeleteStep(1)}
                   className="rounded-lg p-2 text-neutral-500 hover:bg-red-900/40 hover:text-red-400"
-                  title="Delete venue"
+                  title={t("venues.deleteVenue")}
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -339,12 +343,12 @@ function VenueCard({
                   <div className="rounded-full bg-red-600/20 p-3">
                     <AlertTriangle className="h-6 w-6 text-red-400" />
                   </div>
-                  <h3 className="text-lg font-bold">Delete {venue.name}?</h3>
+                  <h3 className="text-lg font-bold">{t("venues.deleteConfirmTitle", { name: venue.name })}</h3>
                   <p className="text-sm text-neutral-400">
-                    This will permanently delete the venue, all its courts, sessions, and game history.
+                    {t("venues.deleteConfirmBody")}
                     {hasActiveSession && (
                       <span className="mt-1 block font-medium text-amber-400">
-                        This venue has an active session. Close it first.
+                        {t("venues.deleteActiveSession")}
                       </span>
                     )}
                   </p>
@@ -355,13 +359,13 @@ function VenueCard({
                     disabled={hasActiveSession}
                     className="flex-1 rounded-xl bg-red-600 py-3 font-semibold text-white hover:bg-red-500 disabled:opacity-40"
                   >
-                    Yes, delete it
+                    {t("venues.yesDelete")}
                   </button>
                   <button
                     onClick={() => setDeleteStep(0)}
                     className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
                   >
-                    Cancel
+                    {t("venues.cancel")}
                   </button>
                 </div>
               </>
@@ -371,10 +375,9 @@ function VenueCard({
                   <div className="rounded-full bg-red-600/20 p-3">
                     <AlertTriangle className="h-6 w-6 text-red-400" />
                   </div>
-                  <h3 className="text-lg font-bold">This cannot be undone</h3>
+                  <h3 className="text-lg font-bold">{t("venues.cannotBeUndone")}</h3>
                   <p className="text-sm text-neutral-400">
-                    All data for <span className="font-semibold text-neutral-200">{venue.name}</span> will be permanently deleted, including{" "}
-                    <span className="text-neutral-200">{venue.courts.length} courts</span> and all session history.
+                    {t("venues.cannotBeUndoneBody", { name: venue.name, courts: venue.courts.length })}
                   </p>
                 </div>
                 <div className="flex gap-3">
@@ -383,14 +386,14 @@ function VenueCard({
                     disabled={deleting}
                     className="flex-1 rounded-xl bg-red-600 py-3 font-semibold text-white hover:bg-red-500 disabled:opacity-50"
                   >
-                    {deleting ? "Deleting..." : "Permanently Delete"}
+                    {deleting ? t("venues.deleting") : t("venues.permanentlyDelete")}
                   </button>
                   <button
                     onClick={() => setDeleteStep(0)}
                     disabled={deleting}
                     className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700 disabled:opacity-50"
                   >
-                    Cancel
+                    {t("venues.cancel")}
                   </button>
                 </div>
               </>
@@ -418,6 +421,7 @@ function VenueOwnerSelect({
   currentOwner: { id: string; name: string } | null;
   onRefresh: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [managers, setManagers] = useState<ManagerOption[]>([]);
   const [selectedId, setSelectedId] = useState(currentOwner?.id ?? "");
   const [saving, setSaving] = useState(false);
@@ -454,7 +458,7 @@ function VenueOwnerSelect({
   return (
     <div className="space-y-2">
       <h4 className="text-sm font-medium text-neutral-400 uppercase tracking-wider">
-        Venue Owner (Manager)
+        {t("venues.venueOwner")}
       </h4>
       <div className="flex items-center gap-2">
         <select
@@ -462,7 +466,7 @@ function VenueOwnerSelect({
           onChange={(e) => setSelectedId(e.target.value)}
           className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
         >
-          <option value="">No owner (platform)</option>
+          <option value="">{t("venues.noOwner")}</option>
           {managers.map((m) => (
             <option key={m.id} value={m.id}>
               {m.name} ({m.phone})
@@ -475,12 +479,12 @@ function VenueOwnerSelect({
             disabled={saving}
             className="rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-40"
           >
-            {saving ? "Saving..." : "Save Owner"}
+            {saving ? t("venues.saving") : t("venues.saveOwner")}
           </button>
         )}
       </div>
       <p className="text-xs text-neutral-600">
-        Assign a manager to own this venue. Managers can only see and manage venues they own.
+        {t("venues.ownerHint")}
       </p>
     </div>
   );

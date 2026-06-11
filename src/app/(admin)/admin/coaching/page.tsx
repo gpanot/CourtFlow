@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import adminI18n from "@/i18n/admin-i18n";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
@@ -136,6 +138,7 @@ const STATUS_LABELS: Record<string, string> = {
 /* ─── Main Page ─── */
 
 export default function CoachingPage() {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const {
     venueId: selectedVenueId,
     setVenueId: setSelectedVenueId,
@@ -148,7 +151,7 @@ export default function CoachingPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="text-xl font-bold md:text-2xl flex items-center gap-2">
           <GraduationCap className="h-6 w-6 text-teal-400" />
-          Coaching
+          {t("coaching.title")}
         </h2>
 
         {venues.length > 1 && (
@@ -169,7 +172,7 @@ export default function CoachingPage() {
             tab === "coaches" ? "bg-teal-600 text-white" : "text-neutral-400 hover:text-white"
           )}
         >
-          <Package className="h-4 w-4" /> Coaches & Packages
+          <Package className="h-4 w-4" /> {t("coaching.tabCoachesPackages")}
         </button>
         <button
           onClick={() => setTab("lessons")}
@@ -178,7 +181,7 @@ export default function CoachingPage() {
             tab === "lessons" ? "bg-teal-600 text-white" : "text-neutral-400 hover:text-white"
           )}
         >
-          <CalendarDays className="h-4 w-4" /> Lessons
+          <CalendarDays className="h-4 w-4" /> {t("coaching.tabLessons")}
         </button>
       </div>
 
@@ -195,6 +198,7 @@ export default function CoachingPage() {
 /* ─── Tab 1: Coaches & Packages ─── */
 
 function CoachesTab({ venueId }: { venueId: string }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [coaches, setCoaches] = useState<Coach[]>([]);
   const [expandedCoachId, setExpandedCoachId] = useState<string | null>(null);
   const [pkgModal, setPkgModal] = useState<{ mode: "create" | "edit"; coachId: string; pkg?: CoachPackage } | null>(null);
@@ -285,9 +289,9 @@ function CoachesTab({ venueId }: { venueId: string }) {
       {coaches.length === 0 && (
         <div className="py-12 text-center">
           <GraduationCap className="h-10 w-10 text-neutral-600 mx-auto mb-3" />
-          <p className="text-neutral-400 mb-2">No coaches yet</p>
+          <p className="text-neutral-400 mb-2">{t("coaching.noCoaches")}</p>
           <p className="text-sm text-neutral-500">
-            Go to <span className="text-teal-400">Staff Management</span> and enable the Coach toggle on a staff member.
+            {t("coaching.noCoachesHint")} <span className="text-teal-400">{t("coaching.staffManagement")}</span> {t("coaching.noCoachesHint2")}
           </p>
         </div>
       )}
@@ -307,10 +311,10 @@ function CoachesTab({ venueId }: { venueId: string }) {
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold">{coach.name}</span>
                   <span className="rounded bg-neutral-800 px-2 py-0.5 text-xs text-neutral-400">
-                    {coach.packages.length} package{coach.packages.length !== 1 ? "s" : ""}
+                    {t("coaching.packageCount", { count: coach.packages.length })}
                   </span>
                   <span className="rounded bg-neutral-800 px-2 py-0.5 text-xs text-neutral-400">
-                    {coach.lessonCount} lesson{coach.lessonCount !== 1 ? "s" : ""}
+                    {t("coaching.lessonCount", { count: coach.lessonCount })}
                   </span>
                 </div>
                 {coach.coachBio && (
@@ -323,17 +327,17 @@ function CoachesTab({ venueId }: { venueId: string }) {
             {expanded && (
               <div className="border-t border-neutral-800 p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-semibold text-neutral-300">Packages</h4>
+                  <h4 className="text-sm font-semibold text-neutral-300">{t("coaching.packages")}</h4>
                   <button
                     onClick={() => openCreatePkg(coach.id)}
                     className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-500"
                   >
-                    <Plus className="h-3 w-3" /> Add Package
+                    <Plus className="h-3 w-3" /> {t("coaching.addPackage")}
                   </button>
                 </div>
 
                 {coach.packages.length === 0 && (
-                  <p className="text-sm text-neutral-500 py-2">No packages yet. Add one to start booking lessons.</p>
+                  <p className="text-sm text-neutral-500 py-2">{t("coaching.noPackages")}</p>
                 )}
 
                 <div className="grid gap-2">
@@ -346,7 +350,7 @@ function CoachesTab({ venueId }: { venueId: string }) {
                             "rounded px-2 py-0.5 text-xs",
                             pkg.lessonType === "private" ? "bg-purple-600/20 text-purple-400" : "bg-blue-600/20 text-blue-400"
                           )}>
-                            {pkg.lessonType === "private" ? "Private" : "Group"}
+                            {pkg.lessonType === "private" ? t("coaching.private") : t("coaching.group")}
                           </span>
                         </div>
                         <div className="flex items-center gap-3 mt-1 text-xs text-neutral-500">
@@ -389,7 +393,7 @@ function CoachesTab({ venueId }: { venueId: string }) {
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold">
-                {pkgModal.mode === "create" ? "Add Package" : "Edit Package"}
+                {pkgModal.mode === "create" ? t("coaching.addPackage") : t("coaching.editPackage")}
               </h3>
               <button onClick={() => setPkgModal(null)} className="text-neutral-400 hover:text-white">
                 <X className="h-5 w-5" />
@@ -401,13 +405,13 @@ function CoachesTab({ venueId }: { venueId: string }) {
             <div className="space-y-3">
               <input
                 type="text"
-                placeholder="Package name (e.g. 1hr Private Lesson)"
+                placeholder={t("coaching.packageNamePlaceholder")}
                 value={pkgForm.name}
                 onChange={(e) => setPkgForm({ ...pkgForm, name: e.target.value })}
                 className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-white placeholder:text-neutral-500 focus:border-teal-500 focus:outline-none"
               />
               <textarea
-                placeholder="Description (optional)"
+                placeholder={t("coaching.descriptionOptional")}
                 value={pkgForm.description}
                 onChange={(e) => setPkgForm({ ...pkgForm, description: e.target.value })}
                 rows={2}
@@ -415,18 +419,18 @@ function CoachesTab({ venueId }: { venueId: string }) {
               />
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1.5 block text-sm text-neutral-400">Type</label>
+                  <label className="mb-1.5 block text-sm text-neutral-400">{t("coaching.type")}</label>
                   <select
                     value={pkgForm.lessonType}
                     onChange={(e) => setPkgForm({ ...pkgForm, lessonType: e.target.value as "private" | "group" })}
                     className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-white focus:border-teal-500 focus:outline-none"
                   >
-                    <option value="private">Private</option>
-                    <option value="group">Group</option>
+                    <option value="private">{t("coaching.private")}</option>
+                    <option value="group">{t("coaching.group")}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm text-neutral-400">Duration (hours)</label>
+                  <label className="mb-1.5 block text-sm text-neutral-400">{t("coaching.durationHours")}</label>
                   <select
                     value={pkgForm.durationHours}
                     onChange={(e) => setPkgForm({ ...pkgForm, durationHours: e.target.value })}
@@ -440,7 +444,7 @@ function CoachesTab({ venueId }: { venueId: string }) {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1.5 block text-sm text-neutral-400">Price ($)</label>
+                  <label className="mb-1.5 block text-sm text-neutral-400">{t("coaching.priceLabel")}</label>
                   <input
                     type="text"
                     inputMode="numeric"
@@ -451,7 +455,7 @@ function CoachesTab({ venueId }: { venueId: string }) {
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-sm text-neutral-400">Sessions</label>
+                  <label className="mb-1.5 block text-sm text-neutral-400">{t("coaching.sessions")}</label>
                   <input
                     type="text"
                     inputMode="numeric"
@@ -469,13 +473,13 @@ function CoachesTab({ venueId }: { venueId: string }) {
                 disabled={saving}
                 className="flex-1 rounded-xl bg-teal-600 py-3 font-semibold text-white hover:bg-teal-500 disabled:opacity-50"
               >
-                {saving ? "Saving..." : pkgModal.mode === "create" ? "Create" : "Save Changes"}
+                {saving ? t("common.saving") : pkgModal.mode === "create" ? t("common.create") : t("common.save")}
               </button>
               <button
                 onClick={() => setPkgModal(null)}
                 className="rounded-xl bg-neutral-800 px-6 py-3 text-neutral-300 hover:bg-neutral-700"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
             </div>
           </div>
@@ -500,6 +504,7 @@ function localDateISO(d: Date): string {
 }
 
 function LessonsTab({ venueId }: { venueId: string }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [selectedDate, setSelectedDate] = useState(() => localDateISO(new Date()));
   const [lessons, setLessons] = useState<CoachLesson[]>([]);
   const [coaches, setCoaches] = useState<Coach[]>([]);
@@ -803,21 +808,21 @@ function LessonsTab({ venueId }: { venueId: string }) {
             className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-teal-500 focus:outline-none"
           />
           <span className="text-sm text-neutral-400">
-            {activeLessons.length} lesson{activeLessons.length !== 1 ? "s" : ""}
+            {t("coaching.lessonCount", { count: activeLessons.length })}
           </span>
         </div>
         <button
           onClick={openBookModal}
           className="flex items-center gap-2 rounded-lg bg-teal-600 px-3 py-2 text-sm font-medium text-white hover:bg-teal-500"
         >
-          <Plus className="h-4 w-4" /> Book Lesson
+          <Plus className="h-4 w-4" /> {t("coaching.bookLesson")}
         </button>
       </div>
 
       {activeLessons.length === 0 && cancelledLessons.length === 0 && (
         <div className="py-12 text-center">
           <CalendarDays className="h-10 w-10 text-neutral-600 mx-auto mb-3" />
-          <p className="text-neutral-400">No lessons for this date</p>
+          <p className="text-neutral-400">{t("coaching.noLessons")}</p>
         </div>
       )}
 
@@ -843,7 +848,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
                     "rounded px-2 py-0.5 text-xs",
                     lesson.package.lessonType === "private" ? "bg-purple-600/20 text-purple-400" : "bg-blue-600/20 text-blue-400"
                   )}>
-                    {lesson.package.lessonType === "private" ? "Private" : "Group"}
+                    {lesson.package.lessonType === "private" ? t("coaching.private") : t("coaching.group")}
                   </span>
                 </div>
                 <div className="flex items-center gap-3 text-sm text-neutral-400 flex-wrap">
@@ -856,7 +861,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
                     {lesson.player.name}
                   </span>
                   {lesson.court && (
-                    <span className="text-neutral-500">Court: {lesson.court.label}</span>
+                    <span className="text-neutral-500">{t("coaching.court")}: {lesson.court.label}</span>
                   )}
                   <span className="text-neutral-500">${centsToDollars(lesson.priceInCents)}</span>
                 </div>
@@ -882,7 +887,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
                       onClick={() => openPaymentModal(lesson)}
                       className="flex items-center gap-1.5 rounded-lg bg-amber-600/15 px-2.5 py-1 text-xs font-medium text-amber-400 hover:bg-amber-600/25 transition-colors"
                     >
-                      <DollarSign className="h-3 w-3" /> Unpaid — Record Payment
+                      <DollarSign className="h-3 w-3" /> {t("coaching.unpaidRecordPayment")}
                     </button>
                   )}
                 </div>
@@ -902,7 +907,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
 
       {cancelledLessons.length > 0 && (
         <div className="space-y-2">
-          <h4 className="text-sm font-medium text-neutral-500">Cancelled</h4>
+          <h4 className="text-sm font-medium text-neutral-500">{t("coaching.cancelled")}</h4>
           {cancelledLessons.map((lesson) => (
             <div key={lesson.id} className="rounded-xl border border-neutral-800/50 bg-neutral-900/50 p-3 opacity-60">
               <div className="flex items-center gap-2 flex-wrap text-sm">
@@ -927,7 +932,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
             {/* Left panel — Form fields */}
             <div className="w-full md:w-[340px] shrink-0 border-b md:border-b-0 md:border-r border-neutral-800 p-5 overflow-y-auto">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold">{editingLesson ? "Edit Lesson" : "Book Lesson"}</h3>
+                <h3 className="text-lg font-bold">{editingLesson ? t("coaching.editLesson") : t("coaching.bookLesson")}</h3>
                 <button onClick={() => setShowBookModal(false)} className="text-neutral-400 hover:text-white md:hidden">
                   <X className="h-5 w-5" />
                 </button>
@@ -937,13 +942,13 @@ function LessonsTab({ venueId }: { venueId: string }) {
 
               <div className="space-y-3">
                 <div>
-                  <label className="mb-1.5 block text-sm text-neutral-400">Coach</label>
+                  <label className="mb-1.5 block text-sm text-neutral-400">{t("coaching.coach")}</label>
                   <select
                     value={bookForm.coachId}
                     onChange={(e) => { setBookForm({ ...bookForm, coachId: e.target.value, packageId: "" }); setSelectedSlots([]); }}
                     className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-sm text-white focus:border-teal-500 focus:outline-none"
                   >
-                    <option value="">Select a coach...</option>
+                    <option value="">{t("coaching.selectCoach")}</option>
                     {coaches.map((c) => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
@@ -952,16 +957,16 @@ function LessonsTab({ venueId }: { venueId: string }) {
 
                 {bookForm.coachId && (
                   <div>
-                    <label className="mb-1.5 block text-sm text-neutral-400">Package</label>
+                    <label className="mb-1.5 block text-sm text-neutral-400">{t("coaching.packageLabel")}</label>
                     {coachPackages.length === 0 ? (
-                      <p className="text-sm text-neutral-500">No packages for this coach.</p>
+                      <p className="text-sm text-neutral-500">{t("coaching.noPackagesForCoach")}</p>
                     ) : (
                       <select
                         value={bookForm.packageId}
                         onChange={(e) => { setBookForm({ ...bookForm, packageId: e.target.value }); setSelectedSlots([]); }}
                         className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-sm text-white focus:border-teal-500 focus:outline-none"
                       >
-                        <option value="">Select a package...</option>
+                        <option value="">{t("coaching.selectPackage")}</option>
                         {coachPackages.map((p) => (
                           <option key={p.id} value={p.id}>
                             {p.name} — ${formatPrice(centsToDollars(p.priceInCents))} ({p.durationMin / 60}h)
@@ -973,7 +978,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
                 )}
 
                 <div>
-                  <label className="mb-1.5 block text-sm text-neutral-400">Player</label>
+                  <label className="mb-1.5 block text-sm text-neutral-400">{t("coaching.player")}</label>
                   {bookForm.playerId ? (
                     <div className="flex items-center gap-2 rounded-lg border border-teal-600 bg-teal-600/10 px-3 py-2">
                       <User className="h-4 w-4 text-teal-400" />
@@ -990,7 +995,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
                         <Search className="h-4 w-4 text-neutral-500" />
                         <input
                           type="text"
-                          placeholder="Search by name or phone..."
+                          placeholder={t("coaching.searchPlayerPlaceholder")}
                           value={bookForm.playerSearch}
                           onChange={(e) => setBookForm({ ...bookForm, playerSearch: e.target.value })}
                           className="w-full bg-transparent py-2 text-sm text-white placeholder:text-neutral-500 focus:outline-none"
@@ -1016,7 +1021,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
                 </div>
 
                 <textarea
-                  placeholder="Note (optional)"
+                  placeholder={t("coaching.noteOptional")}
                   value={bookForm.note}
                   onChange={(e) => setBookForm({ ...bookForm, note: e.target.value })}
                   rows={2}
@@ -1025,7 +1030,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
 
                 {editingLesson && (
                   <div>
-                    <label className="mb-1.5 block text-sm text-neutral-400">Status</label>
+                    <label className="mb-1.5 block text-sm text-neutral-400">{t("coaching.status")}</label>
                     <div className="grid grid-cols-2 gap-2">
                       {(["confirmed", "completed", "no_show", "cancelled"] as const).map((s) => (
                         <button
@@ -1049,7 +1054,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
                 {selectedSlots.length > 0 && (
                   <div className="rounded-lg border border-teal-600/40 bg-teal-600/10 p-3">
                     <p className="text-xs text-teal-400 font-medium mb-1">
-                      {selectedSlots.length} slot{selectedSlots.length > 1 ? "s" : ""} selected
+                      {t("coaching.slotsSelected", { count: selectedSlots.length })}
                     </p>
                     <p className="text-sm font-semibold">{selectedSlots[0].courtLabel}</p>
                     <p className="text-xs text-neutral-400">
@@ -1069,27 +1074,27 @@ function LessonsTab({ venueId }: { venueId: string }) {
                   disabled={saving || deleting || !bookForm.coachId || !bookForm.packageId || !bookForm.playerId || selectedSlots.length === 0}
                   className="w-full rounded-xl bg-teal-600 py-3 font-semibold text-white hover:bg-teal-500 disabled:opacity-50"
                 >
-                  {saving ? "Saving..." : editingLesson ? "Save Changes" : "Book Lesson"}
+                  {saving ? t("common.saving") : editingLesson ? t("common.save") : t("coaching.bookLesson")}
                 </button>
 
                 {editingLesson && (
                   confirmDelete ? (
                     <div className="rounded-xl border border-red-600/40 bg-red-600/10 p-3 space-y-2">
-                      <p className="text-sm text-red-400 font-medium text-center">Permanently delete this lesson?</p>
+                      <p className="text-sm text-red-400 font-medium text-center">{t("coaching.confirmDelete")}</p>
                       <div className="flex gap-2">
                         <button
                           onClick={handleDelete}
                           disabled={deleting}
                           className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50"
                         >
-                          {deleting ? "Deleting..." : "Yes, Delete"}
+                          {deleting ? t("coaching.deleting") : t("coaching.yesDelete")}
                         </button>
                         <button
                           onClick={() => setConfirmDelete(false)}
                           disabled={deleting}
                           className="flex-1 rounded-lg bg-neutral-800 py-2 text-sm font-medium text-neutral-400 hover:text-white"
                         >
-                          Cancel
+                          {t("common.cancel")}
                         </button>
                       </div>
                     </div>
@@ -1098,7 +1103,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
                       onClick={() => setConfirmDelete(true)}
                       className="w-full rounded-xl bg-red-600/10 py-2.5 text-sm font-medium text-red-400 hover:bg-red-600/20 flex items-center justify-center gap-2 transition-colors"
                     >
-                      <Trash2 className="h-3.5 w-3.5" /> Delete Lesson
+                      <Trash2 className="h-3.5 w-3.5" /> {t("coaching.deleteLesson")}
                     </button>
                   )
                 )}

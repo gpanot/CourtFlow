@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
+import { writeFaceThumb } from "@/lib/player-face-thumb";
 
 const PLAYERS_DIR = path.join(process.cwd(), "uploads", "players");
 
@@ -29,6 +30,10 @@ export async function savePlayerFacePhotoFromBase64(
     const buf = Buffer.from(b64, "base64");
     if (buf.length < 100) return null;
     await writeFile(dest, buf);
+    // Generate small WebP thumbnail for fast list loading — fire and forget
+    writeFaceThumb(playerId, buf).catch((e) =>
+      console.error("[savePlayerFacePhoto] thumb generation failed:", e)
+    );
     return `/uploads/players/${filename}`;
   } catch (e) {
     console.error("[savePlayerFacePhoto] write failed:", e);

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
+import adminI18n from "@/i18n/admin-i18n";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
@@ -95,6 +97,7 @@ interface PlayerResult {
 }
 
 export default function MembershipsPage() {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const {
     venueId: selectedVenueId,
     setVenueId: setSelectedVenueId,
@@ -354,7 +357,7 @@ export default function MembershipsPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-xl font-bold md:text-2xl">Memberships</h2>
+        <h2 className="text-xl font-bold md:text-2xl">{t("memberships.title")}</h2>
         <AdminVenuePicker
           venueId={selectedVenueId}
           venues={venueOptions}
@@ -365,8 +368,8 @@ export default function MembershipsPage() {
 
       <div className="flex gap-1 border-b border-neutral-800">
         {([
-          { key: "memberships" as const, label: "Memberships", icon: Crown },
-          { key: "settings" as const, label: "Settings", icon: Settings },
+          { key: "memberships" as const, label: t("memberships.title"), icon: Crown },
+          { key: "settings" as const, label: t("settings.title"), icon: Settings },
         ]).map((tab) => (
           <button
             key={tab.key}
@@ -401,17 +404,17 @@ export default function MembershipsPage() {
           <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
             <DollarSign className="h-4 w-4 text-green-400 mb-1" />
             <p className="text-lg font-bold text-green-400">{fmtPrice(paymentSummary.totalCollected)}</p>
-            <p className="text-[11px] text-neutral-500">Collected this month</p>
+            <p className="text-[11px] text-neutral-500">{t("memberships.collectedThisMonth")}</p>
           </div>
           <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
             <Clock className="h-4 w-4 text-amber-400 mb-1" />
             <p className="text-lg font-bold text-amber-400">{paymentSummary.unpaidCount}</p>
-            <p className="text-[11px] text-neutral-500">Unpaid ({fmtPrice(paymentSummary.unpaidAmount)})</p>
+            <p className="text-[11px] text-neutral-500">{t("memberships.unpaid")} ({fmtPrice(paymentSummary.unpaidAmount)})</p>
           </div>
           <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
             <AlertTriangle className="h-4 w-4 text-red-400 mb-1" />
             <p className="text-lg font-bold text-red-400">{paymentSummary.overdueCount}</p>
-            <p className="text-[11px] text-neutral-500">Overdue</p>
+            <p className="text-[11px] text-neutral-500">{t("memberships.overdue")}</p>
           </div>
           <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 flex items-center justify-center">
             <button
@@ -423,7 +426,7 @@ export default function MembershipsPage() {
                   : "bg-neutral-800 text-neutral-400 hover:text-white"
               )}
             >
-              {filterPayment === "UNPAID" ? "Show All" : "Show Unpaid Only"}
+              {filterPayment === "UNPAID" ? t("memberships.showAll") : t("memberships.showUnpaidOnly")}
             </button>
           </div>
         </div>
@@ -433,14 +436,14 @@ export default function MembershipsPage() {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium uppercase tracking-wider text-neutral-400">
-            Tiers ({activeTiers.length}/4)
+            {t("memberships.tiers")} ({activeTiers.length}/4)
           </h3>
           {activeTiers.length < 4 && (
             <button
               onClick={() => setShowCreateTier(true)}
               className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-500"
             >
-              <Plus className="h-3.5 w-3.5" /> Add Tier
+              <Plus className="h-3.5 w-3.5" /> {t("memberships.addTier")}
             </button>
           )}
         </div>
@@ -451,7 +454,7 @@ export default function MembershipsPage() {
             setForm={setTierForm}
             onSave={createTier}
             onCancel={() => { setShowCreateTier(false); setTierForm({ name: "", price: "", sessionsIncluded: "", showBadge: false, perks: [] }); }}
-            title="New Tier"
+            title={t("memberships.newTierTitle")}
             allPerks={allPerks}
           />
         )}
@@ -465,7 +468,7 @@ export default function MembershipsPage() {
                 setForm={setEditTierForm}
                 onSave={() => updateTier(tier.id)}
                 onCancel={() => setEditingTierId(null)}
-                title="Edit Tier"
+                title={t("memberships.editTierTitle")}
                 allPerks={allPerks}
               />
             ) : (
@@ -490,7 +493,7 @@ export default function MembershipsPage() {
                   </div>
                 </div>
                 <p className="text-xs text-neutral-400">
-                  {tier.sessionsIncluded === null ? "Unlimited sessions" : `${tier.sessionsIncluded} sessions/month`}
+                  {tier.sessionsIncluded === null ? t("memberships.unlimitedSessions") : t("memberships.sessionsPerMonth", { count: tier.sessionsIncluded })}
                 </p>
                 {((tier.perks as string[]) || []).length > 0 && (
                   <ul className="space-y-0.5">
@@ -502,15 +505,15 @@ export default function MembershipsPage() {
                     ))}
                   </ul>
                 )}
-                <p className="text-xs text-neutral-500">{tier._count.memberships} active member{tier._count.memberships !== 1 ? "s" : ""}</p>
+                <p className="text-xs text-neutral-500">{t("memberships.activeMembers", { count: tier._count.memberships })}</p>
               </div>
             )
           ))}
         </div>
 
-        {tiers.some((t) => !t.isActive) && (
+        {tiers.some((tier) => !tier.isActive) && (
           <p className="text-xs text-neutral-600">
-            {tiers.filter((t) => !t.isActive).length} inactive tier(s) hidden
+            {t("memberships.inactiveTiersHidden", { count: tiers.filter((tier) => !tier.isActive).length })}
           </p>
         )}
       </section>
@@ -518,33 +521,33 @@ export default function MembershipsPage() {
       {/* Members List */}
       <section className="space-y-3">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h3 className="text-sm font-medium uppercase tracking-wider text-neutral-400">Members</h3>
+          <h3 className="text-sm font-medium uppercase tracking-wider text-neutral-400">{t("memberships.members")}</h3>
           <div className="flex flex-wrap gap-2">
             <select value={filterTier} onChange={(e) => setFilterTier(e.target.value)}
               className="rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-white focus:border-purple-500 focus:outline-none">
-              <option value="all">All Tiers</option>
-              {activeTiers.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              <option value="all">{t("memberships.allTiers")}</option>
+              {activeTiers.map((tier) => <option key={tier.id} value={tier.id}>{tier.name}</option>)}
             </select>
             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
               className="rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-white focus:border-purple-500 focus:outline-none">
-              <option value="all">All Status</option>
-              <option value="active">Active</option>
-              <option value="suspended">Suspended</option>
-              <option value="expired">Expired</option>
-              <option value="cancelled">Cancelled</option>
+              <option value="all">{t("memberships.allStatus")}</option>
+              <option value="active">{t("memberships.statusActive")}</option>
+              <option value="suspended">{t("memberships.statusSuspended")}</option>
+              <option value="expired">{t("memberships.statusExpired")}</option>
+              <option value="cancelled">{t("memberships.statusCancelled")}</option>
             </select>
             <select value={filterPayment} onChange={(e) => setFilterPayment(e.target.value)}
               className="rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-white focus:border-purple-500 focus:outline-none">
-              <option value="all">All Payments</option>
-              <option value="UNPAID">Unpaid</option>
-              <option value="PAID">Paid</option>
-              <option value="OVERDUE">Overdue</option>
+              <option value="all">{t("memberships.allPayments")}</option>
+              <option value="UNPAID">{t("memberships.unpaid")}</option>
+              <option value="PAID">{t("memberships.paid")}</option>
+              <option value="OVERDUE">{t("memberships.overdue")}</option>
             </select>
             <button
               onClick={() => setShowActivate(true)}
               className="flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-500"
             >
-              <UserPlus className="h-3.5 w-3.5" /> Activate
+              <UserPlus className="h-3.5 w-3.5" /> {t("memberships.activate")}
             </button>
           </div>
         </div>
@@ -553,17 +556,17 @@ export default function MembershipsPage() {
         {showActivate && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowActivate(false)}>
             <div className="w-full max-w-md mx-4 rounded-2xl border border-neutral-700 bg-neutral-900 p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-              <h3 className="text-lg font-bold">Activate Membership</h3>
+              <h3 className="text-lg font-bold">{t("memberships.activateMembership")}</h3>
               <div className="space-y-2">
-                <label className="text-xs text-neutral-400">Search Player</label>
+                <label className="text-xs text-neutral-400">{t("memberships.searchPlayer")}</label>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
-                  <input type="text" placeholder="Name or phone..." value={playerSearch}
+                  <input type="text" placeholder={t("memberships.searchPlayerPlaceholder")} value={playerSearch}
                     onChange={(e) => { setPlayerSearch(e.target.value); setSelectedPlayer(null); }}
                     className="w-full rounded-lg border border-neutral-700 bg-neutral-800 pl-9 pr-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
                     autoFocus />
                 </div>
-                {searching && <p className="text-xs text-neutral-500">Searching...</p>}
+                {searching && <p className="text-xs text-neutral-500">{t("memberships.searching")}</p>}
                 {playerResults.length > 0 && !selectedPlayer && (
                   <div className="max-h-40 overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-800">
                     {playerResults.map((p) => (
@@ -575,23 +578,23 @@ export default function MembershipsPage() {
                     ))}
                   </div>
                 )}
-                {selectedPlayer && <p className="text-sm text-green-400">Selected: {selectedPlayer.name} ({selectedPlayer.phone})</p>}
+                {selectedPlayer && <p className="text-sm text-green-400">{t("memberships.selected")}: {selectedPlayer.name} ({selectedPlayer.phone})</p>}
               </div>
               <div className="space-y-2">
-                <label className="text-xs text-neutral-400">Tier</label>
+                <label className="text-xs text-neutral-400">{t("memberships.tier")}</label>
                 <select value={activateTierId} onChange={(e) => setActivateTierId(e.target.value)}
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none">
-                  <option value="">Select tier...</option>
-                  {activeTiers.map((t) => (
-                    <option key={t.id} value={t.id}>{t.name} — {fmtPrice(t.priceInCents)}/mo</option>
+                  <option value="">{t("memberships.selectTier")}</option>
+                  {activeTiers.map((tier) => (
+                    <option key={tier.id} value={tier.id}>{tier.name} — {fmtPrice(tier.priceInCents)}/mo</option>
                   ))}
                 </select>
               </div>
               <div className="flex gap-3">
                 <button onClick={activateMembership} disabled={!selectedPlayer || !activateTierId}
-                  className="flex-1 rounded-xl bg-green-600 py-3 font-semibold text-white hover:bg-green-500 disabled:opacity-40">Activate</button>
+                  className="flex-1 rounded-xl bg-green-600 py-3 font-semibold text-white hover:bg-green-500 disabled:opacity-40">{t("memberships.activate")}</button>
                 <button onClick={() => { setShowActivate(false); setSelectedPlayer(null); setPlayerSearch(""); setActivateTierId(""); }}
-                  className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700">Cancel</button>
+                  className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700">{t("common.cancel")}</button>
               </div>
             </div>
           </div>
@@ -602,13 +605,13 @@ export default function MembershipsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-neutral-800 bg-neutral-900/50 text-left text-xs text-neutral-500">
-                <th className="px-4 py-3 font-medium">Player</th>
-                <th className="px-4 py-3 font-medium">Tier</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Usage</th>
-                <th className="px-4 py-3 font-medium">Payment</th>
-                <th className="px-4 py-3 font-medium">Renewal</th>
-                <th className="px-4 py-3 font-medium">Actions</th>
+                <th className="px-4 py-3 font-medium">{t("memberships.player")}</th>
+                <th className="px-4 py-3 font-medium">{t("memberships.tier")}</th>
+                <th className="px-4 py-3 font-medium">{t("memberships.status")}</th>
+                <th className="px-4 py-3 font-medium">{t("memberships.usage")}</th>
+                <th className="px-4 py-3 font-medium">{t("memberships.payment")}</th>
+                <th className="px-4 py-3 font-medium">{t("memberships.renewal")}</th>
+                <th className="px-4 py-3 font-medium">{t("memberships.actions")}</th>
               </tr>
             </thead>
             <tbody>
@@ -649,7 +652,7 @@ export default function MembershipsPage() {
                         title="Click to edit usage"
                       >
                         {m.tier.sessionsIncluded === null
-                          ? `${m.sessionsUsed} (unlimited)`
+                          ? `${m.sessionsUsed} (${t("memberships.unlimited")})`
                           : `${m.sessionsUsed} / ${m.tier.sessionsIncluded}`}
                         <Pencil className="ml-1 inline h-2.5 w-2.5 opacity-0 group-hover:opacity-100" />
                       </button>
@@ -699,7 +702,7 @@ export default function MembershipsPage() {
               {memberships.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-4 py-12 text-center text-neutral-500">
-                    No memberships found. Activate one to get started.
+                    {t("memberships.noMemberships")}
                   </td>
                 </tr>
               )}
@@ -717,40 +720,40 @@ export default function MembershipsPage() {
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowChangeTier(null)}>
             <div className="w-full max-w-sm mx-4 rounded-2xl border border-neutral-700 bg-neutral-900 p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-              <h3 className="text-lg font-bold">Change Tier</h3>
+              <h3 className="text-lg font-bold">{t("memberships.changeTier")}</h3>
               <p className="text-sm text-neutral-400">
                 <span className="text-white font-medium">{m.player.name}</span>
-                {" — currently on "}
+                {" — "}{t("memberships.currentlyOn")}{" "}
                 <span className="text-purple-400 font-medium">{m.tier.name}</span>
               </p>
               <div className="space-y-2">
-                <label className="text-xs text-neutral-400">New Tier</label>
+                <label className="text-xs text-neutral-400">{t("memberships.newTier")}</label>
                 <select value={changeTierValue} onChange={(e) => setChangeTierValue(e.target.value)}
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none">
-                  {activeTiers.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name} — {fmtPrice(t.priceInCents)}/mo
-                      {t.sessionsIncluded !== null ? ` (${t.sessionsIncluded} sessions)` : " (unlimited)"}
+                  {activeTiers.map((tier) => (
+                    <option key={tier.id} value={tier.id}>
+                      {tier.name} — {fmtPrice(tier.priceInCents)}/mo
+                      {tier.sessionsIncluded !== null ? ` (${tier.sessionsIncluded} ${t("memberships.sessions")})` : ` (${t("memberships.unlimited")})`}
                     </option>
                   ))}
                 </select>
                 {changeTierValue && changeTierValue !== m.tierId && (() => {
-                  const newTier = activeTiers.find((t) => t.id === changeTierValue);
+                  const newTier = activeTiers.find((tier) => tier.id === changeTierValue);
                   if (!newTier) return null;
                   const diff = newTier.priceInCents - m.tier.priceInCents;
                   return (
                     <p className={cn("text-xs font-medium", diff > 0 ? "text-amber-400" : diff < 0 ? "text-green-400" : "text-neutral-500")}>
-                      {diff > 0 ? `↑ Upgrade (+${fmtPrice(diff)}/mo)` : diff < 0 ? `↓ Downgrade (${fmtPrice(diff)}/mo)` : "Same price"}
-                      {" — current unpaid payment will be adjusted"}
+                      {diff > 0 ? `↑ ${t("memberships.upgrade")} (+${fmtPrice(diff)}/mo)` : diff < 0 ? `↓ ${t("memberships.downgrade")} (${fmtPrice(diff)}/mo)` : t("memberships.samePrice")}
+                      {" — "}{t("memberships.paymentAdjusted")}
                     </p>
                   );
                 })()}
               </div>
               <div className="flex gap-3">
                 <button onClick={() => changeTier(showChangeTier)} disabled={changeTierValue === m.tierId}
-                  className="flex-1 rounded-xl bg-purple-600 py-3 font-semibold text-white hover:bg-purple-500 disabled:opacity-40">Save</button>
+                  className="flex-1 rounded-xl bg-purple-600 py-3 font-semibold text-white hover:bg-purple-500 disabled:opacity-40">{t("common.save")}</button>
                 <button onClick={() => { setShowChangeTier(null); setChangeTierValue(""); }}
-                  className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700">Cancel</button>
+                  className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700">{t("common.cancel")}</button>
               </div>
             </div>
           </div>
@@ -775,7 +778,7 @@ export default function MembershipsPage() {
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-800 bg-neutral-950 px-4 py-3">
               <div>
                 <h3 className="font-semibold">{historyMembership.player.name}</h3>
-                <p className="text-xs text-neutral-500">{historyMembership.tier.name} — Payment History</p>
+                <p className="text-xs text-neutral-500">{historyMembership.tier.name} — {t("memberships.paymentHistory")}</p>
               </div>
               <button onClick={() => setShowPaymentHistory(false)} className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-white">
                 <X className="h-5 w-5" />
@@ -783,9 +786,9 @@ export default function MembershipsPage() {
             </div>
             <div className="p-4 space-y-3">
               {loadingHistory ? (
-                <p className="text-center py-8 text-neutral-500">Loading...</p>
+                <p className="text-center py-8 text-neutral-500">{t("common.loading")}</p>
               ) : paymentHistory.length === 0 ? (
-                <p className="text-center py-8 text-neutral-500">No payment records yet.</p>
+                <p className="text-center py-8 text-neutral-500">{t("memberships.noPaymentRecords")}</p>
               ) : (
                 paymentHistory.map((p) => {
                   const isOverdue = p.status === "UNPAID" && new Date(p.periodEnd) < new Date();
@@ -808,7 +811,7 @@ export default function MembershipsPage() {
                         )}
                       </div>
                       {p.paidAt && (
-                        <p className="text-[10px] text-neutral-500">Paid on {new Date(p.paidAt).toLocaleDateString()}</p>
+                        <p className="text-[10px] text-neutral-500">{t("payroll.paidOn")} {new Date(p.paidAt).toLocaleDateString()}</p>
                       )}
                       {p.proofUrl && (
                         <a href={p.proofUrl} target="_blank" rel="noopener noreferrer"
@@ -825,7 +828,7 @@ export default function MembershipsPage() {
                           onClick={() => markHistoryPaymentPaid(p.id)}
                           className="w-full rounded-lg bg-green-600/15 py-1.5 text-xs font-medium text-green-400 hover:bg-green-600/25 transition-colors"
                         >
-                          Mark as Paid
+                          {t("memberships.markAsPaid")}
                         </button>
                       )}
                       {displayStatus === "PAID" && (
@@ -833,7 +836,7 @@ export default function MembershipsPage() {
                           onClick={() => revertPaymentToUnpaid(p.id)}
                           className="w-full rounded-lg bg-amber-600/15 py-1.5 text-xs font-medium text-amber-400 hover:bg-amber-600/25 transition-colors flex items-center justify-center gap-1.5"
                         >
-                          <Undo2 className="h-3 w-3" /> Revert to Unpaid
+                          <Undo2 className="h-3 w-3" /> {t("memberships.revertToUnpaid")}
                         </button>
                       )}
                     </div>
@@ -908,6 +911,7 @@ function TierFormCard({
   title: string;
   allPerks: string[];
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [newPerk, setNewPerk] = useState("");
 
   const togglePerk = (perk: string) => {
@@ -933,16 +937,16 @@ function TierFormCard({
   return (
     <div className="rounded-xl border border-neutral-700 bg-neutral-900 p-4 space-y-3">
       <h4 className="text-sm font-semibold">{title}</h4>
-      <input type="text" placeholder="Tier name" value={form.name}
+      <input type="text" placeholder={t("memberships.tierName")} value={form.name}
         onChange={(e) => setForm({ ...form, name: e.target.value })} className={inputCls} autoFocus />
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-xs text-neutral-500">Price ($)</label>
+          <label className="text-xs text-neutral-500">{t("memberships.price")}</label>
           <input type="text" inputMode="numeric" value={form.price}
             onChange={(e) => { const digits = e.target.value.replace(/[^0-9]/g, ""); setForm({ ...form, price: digits ? parseInt(digits, 10).toLocaleString("en-US") : "" }); }} placeholder="0" className={inputCls} />
         </div>
         <div>
-          <label className="text-xs text-neutral-500">Sessions/mo (blank=unlimited)</label>
+          <label className="text-xs text-neutral-500">{t("memberships.sessionsPerMoLabel")}</label>
           <input type="text" inputMode="numeric" value={form.sessionsIncluded}
             onChange={(e) => setForm({ ...form, sessionsIncluded: e.target.value })} placeholder="∞" className={inputCls} />
         </div>
@@ -950,10 +954,10 @@ function TierFormCard({
       <label className="flex items-center gap-2 cursor-pointer select-none">
         <input type="checkbox" checked={form.showBadge} onChange={(e) => setForm({ ...form, showBadge: e.target.checked })}
           className="h-4 w-4 rounded border-neutral-600 bg-neutral-800 text-purple-500 accent-purple-500" />
-        <span className="text-xs text-neutral-400">Show badge in app</span>
+        <span className="text-xs text-neutral-400">{t("memberships.showBadge")}</span>
       </label>
       <div className="space-y-2">
-        <label className="text-xs text-neutral-500">Perks / Offers</label>
+        <label className="text-xs text-neutral-500">{t("memberships.perks")}</label>
         {combined.length > 0 && (
           <div className="space-y-1">
             {combined.map((perk) => (
@@ -968,17 +972,17 @@ function TierFormCard({
         <div className="flex gap-1.5">
           <input type="text" value={newPerk} onChange={(e) => setNewPerk(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addPerk(); } }}
-            placeholder="Add a perk, e.g. -10% Coffee Shop"
+            placeholder={t("memberships.addPerkPlaceholder")}
             className="flex-1 rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1.5 text-xs text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none" />
           <button type="button" onClick={addPerk} disabled={!newPerk.trim()}
-            className="rounded-lg bg-neutral-700 px-2.5 py-1.5 text-xs font-medium text-neutral-300 hover:bg-neutral-600 disabled:opacity-40">Add</button>
+            className="rounded-lg bg-neutral-700 px-2.5 py-1.5 text-xs font-medium text-neutral-300 hover:bg-neutral-600 disabled:opacity-40">{t("memberships.add")}</button>
         </div>
       </div>
       <div className="flex gap-2">
         <button onClick={onSave} disabled={!form.name.trim()}
-          className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-40">Save</button>
+          className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-40">{t("common.save")}</button>
         <button onClick={onCancel}
-          className="rounded-lg bg-neutral-800 px-4 py-2 text-sm text-neutral-400 hover:text-white">Cancel</button>
+          className="rounded-lg bg-neutral-800 px-4 py-2 text-sm text-neutral-400 hover:text-white">{t("common.cancel")}</button>
       </div>
     </div>
   );
@@ -993,6 +997,7 @@ function MembershipContactSection({
   settings: VenueSettings;
   onRefresh: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const membershipConfig = {
     contactWhatsApp: null as string | null,
     contactEmail: null as string | null,
@@ -1024,23 +1029,23 @@ function MembershipContactSection({
   return (
     <div className="space-y-3">
       <h4 className="flex items-center gap-2 text-sm font-medium text-neutral-400 uppercase tracking-wider">
-        Membership Contact
+        {t("memberships.membershipContact")}
       </h4>
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-[10px] text-neutral-500">WhatsApp Number</label>
+          <label className="text-[10px] text-neutral-500">{t("memberships.whatsapp")}</label>
           <input type="text" value={mCfg.contactWhatsApp || ""} onChange={(e) => setMCfg({ ...mCfg, contactWhatsApp: e.target.value || null })}
             placeholder="+1234567890" className={inputCls} />
         </div>
         <div>
-          <label className="text-[10px] text-neutral-500">Contact Email</label>
+          <label className="text-[10px] text-neutral-500">{t("memberships.contactEmail")}</label>
           <input type="email" value={mCfg.contactEmail || ""} onChange={(e) => setMCfg({ ...mCfg, contactEmail: e.target.value || null })}
             placeholder="contact@venue.com" className={inputCls} />
         </div>
       </div>
       <button onClick={saveConfig} disabled={saving}
         className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-500 disabled:opacity-40">
-        <Save className="h-3 w-3" /> {saving ? "Saving..." : "Save Contact Config"}
+        <Save className="h-3 w-3" /> {saving ? t("common.saving") : t("memberships.saveContactConfig")}
       </button>
     </div>
   );

@@ -296,15 +296,26 @@ export function resolvePaymentSession(
   return inferSessionForPayment(payment.confirmedAt, candidates);
 }
 
+/**
+ * Full venue roster — same definition as CP Players / boss dashboard:
+ * self check-in players (queue at venue) + CourtPay check-in players, all-time, not deduped by phone.
+ */
+export async function getVenueRosterPlayerCount(venueId: string): Promise<number> {
+  const [selfCount, courtPayCount] = await Promise.all([
+    prisma.player.count({
+      where: { queueEntries: { some: { session: { venueId } } } },
+    }),
+    prisma.checkInPlayer.count({ where: { venueId } }),
+  ]);
+  return selfCount + courtPayCount;
+}
+
 export function computeKpis(
   payments: CourtPayPaymentRow[],
-  sessionIds: Set<string>
+  sessionIds: Set<string>,
+  rosterPlayerCount?: number
 ): AggregateKpis {
   const confirmed = payments.filter((p) => p.status === "confirmed");
-  const playerIds = new Set<string>();
-  for (const p of payments) {
-    if (p.checkInPlayerId) playerIds.add(p.checkInPlayerId);
-  }
   const totalRevenue = confirmed.reduce((s, p) => s + p.amount, 0);
   const subscriptionRevenue = confirmed
     .filter(
@@ -318,7 +329,7 @@ export function computeKpis(
   return {
     totalRevenue,
     totalPayments: payments.length,
-    uniquePlayers: playerIds.size,
+    uniquePlayers: rosterPlayerCount ?? new Set(payments.map((p) => p.checkInPlayerId).filter(Boolean)).size,
     sessionCount,
     cancelledCount: payments.filter((p) => p.status === "cancelled").length,
     subscriptionRevenue,

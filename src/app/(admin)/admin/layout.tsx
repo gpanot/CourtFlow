@@ -10,6 +10,8 @@ import { applyThemeMode, getStoredThemeMode, setStoredThemeMode, type ThemeMode 
 import { LayoutDashboard, MapPin, Users, UserCircle, BarChart3, Monitor, Banknote, Crown, CalendarDays, GraduationCap, LogOut, Menu, X, CreditCard, Receipt, ScanFace, Sun, Moon, ChevronLeft, ChevronDown, ChevronRight, ShoppingBag, AlertTriangle, PieChart, ShieldAlert, Wallet, Settings } from "lucide-react";
 import { SetupWizardBanner } from "@/components/setup-wizard-banner";
 import { AiChatWidget } from "@/components/admin/AiChatWidget";
+import { useTranslation } from "react-i18next";
+import adminI18n from "@/i18n/admin-i18n";
 
 interface NavItem {
   href: string;
@@ -27,45 +29,47 @@ interface NavSection {
 }
 
 const topNavItems: NavItem[] = [
-  { href: "/admin", label: "Overview", icon: LayoutDashboard },
-  { href: "/admin/venues", label: "Venues", icon: MapPin },
-  { href: "/admin/bookings", label: "Bookings", icon: CalendarDays },
-  { href: "/admin/memberships", label: "Memberships", icon: Crown },
-  { href: "/admin/coaching", label: "Coaching", icon: GraduationCap },
-  { href: "/admin/staff", label: "Staff", icon: Users },
-  { href: "/admin/players", label: "Players", icon: UserCircle },
-  { href: "/admin/venue-analytics", label: "Venue Analytics", icon: PieChart },
-  { href: "/admin/my-billing", label: "My Billing", icon: Wallet, superadminOnly: false },
+  { href: "/admin", label: "nav.overview", icon: LayoutDashboard },
+  { href: "/admin/venues", label: "nav.venues", icon: MapPin },
+  { href: "/admin/bookings", label: "nav.bookings", icon: CalendarDays },
+  { href: "/admin/memberships", label: "nav.memberships", icon: Crown },
+  { href: "/admin/coaching", label: "nav.coaching", icon: GraduationCap },
+  { href: "/admin/staff", label: "nav.staff", icon: Users },
+  { href: "/admin/venue-analytics", label: "nav.venueAnalytics", icon: PieChart },
+  { href: "/admin/my-billing", label: "nav.myBilling", icon: Wallet, superadminOnly: false },
+  { href: "/admin/settings", label: "nav.settings", icon: Settings },
 ];
 
 const navSections: NavSection[] = [
   {
-    label: "CourtFlow - Social",
+    label: "nav.courtflowSocial",
     requiresApp: "courtflow",
     items: [
-      { href: "/admin/live", label: "Live Sessions", icon: Monitor },
-      { href: "/admin/payroll", label: "Payroll Hosts", icon: Banknote, superadminOnly: true },
-      { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
+      { href: "/admin/live", label: "nav.liveSessions", icon: Monitor },
+      { href: "/admin/payroll", label: "nav.payrollHosts", icon: Banknote, superadminOnly: true },
+      { href: "/admin/analytics", label: "nav.analytics", icon: BarChart3 },
+      { href: "/admin/players", label: "nav.players", icon: UserCircle },
     ],
   },
   {
-    label: "CourtPay - Check-in",
+    label: "nav.courtpayCheckin",
     requiresApp: "courtpay",
     items: [
-      { href: "/admin/courtpay", label: "CourtPay", icon: CreditCard },
-      { href: "/admin/courtpay-billing", label: "CP Billing", icon: Receipt, superadminOnly: true },
-      { href: "/admin/kiosk-shop", label: "Kiosk Shop", icon: ShoppingBag, superadminOnly: true },
-      { href: "/admin/courtpay-analytics", label: "CP Analytics", icon: BarChart3 },
-      { href: "/admin/courtpay-settings", label: "CP Settings", icon: Settings },
+      { href: "/admin/courtpay", label: "nav.courtpay", icon: CreditCard },
+      { href: "/admin/courtpay-players", label: "nav.cpPlayers", icon: UserCircle },
+      { href: "/admin/courtpay-billing", label: "nav.cpBilling", icon: Receipt, superadminOnly: true },
+      { href: "/admin/kiosk-shop", label: "nav.kioskShop", icon: ShoppingBag, superadminOnly: true },
+      { href: "/admin/courtpay-analytics", label: "nav.cpAnalytics", icon: BarChart3 },
+      { href: "/admin/courtpay-settings", label: "nav.cpSettings", icon: Settings },
     ],
   },
   {
-    label: "Logs & Errors",
+    label: "nav.logsErrors",
     superadminOnly: true,
     items: [
-      { href: "/admin/logs", label: "Logs", icon: ShieldAlert },
-      { href: "/admin/face-recognition-test", label: "Face Recognition Test", icon: ScanFace },
-      { href: "/admin/log-errors", label: "Log Errors", icon: AlertTriangle },
+      { href: "/admin/logs", label: "nav.logs", icon: ShieldAlert },
+      { href: "/admin/face-recognition-test", label: "nav.faceRecognitionTest", icon: ScanFace },
+      { href: "/admin/log-errors", label: "nav.logErrors", icon: AlertTriangle },
     ],
   },
 ];
@@ -100,6 +104,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const { token, role, onboardingCompleted, clearAuth, staffPhone, staffName } = useSessionStore();
   const pathname = usePathname();
   const router = useRouter();
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
@@ -165,20 +170,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     return (
       <div className="flex min-h-dvh items-center justify-center p-6">
         <div className="text-center max-w-sm">
-          <h1 className="mb-4 text-2xl font-bold text-purple-500">Admin Panel</h1>
-          <p className="mb-4 text-neutral-400">Please log in via the Staff portal first.</p>
+          <h1 className="mb-4 text-2xl font-bold text-purple-500">{t("layout.adminPanelTitle")}</h1>
+          <p className="mb-4 text-neutral-400">{t("layout.pleaseLogin")}</p>
           <Link href="/staff" className="text-blue-400 hover:underline">
-            Go to Staff Login
+            {t("layout.goToStaffLogin")}
           </Link>
           {/* Debug: show what role is cached — helps diagnose stale-session issues after role promotion */}
           <div className="mt-6 rounded-lg border border-amber-800/50 bg-amber-950/30 px-4 py-3 text-left text-xs font-mono">
-            <p className="mb-1 font-semibold text-amber-400">🔍 Debug — session store</p>
+            <p className="mb-1 font-semibold text-amber-400">🔍 {t("layout.debugSession")}</p>
             <p className="text-neutral-400">token: <span className="text-white">{token ? `${token.slice(0, 20)}…` : "null"}</span></p>
             <p className="text-neutral-400">role: <span className="text-white">{role ?? "null"}</span></p>
             <p className="mt-2 text-amber-300/80">
               {token && role === "staff"
-                ? "⚠️ Your role was recently changed to Manager. You need to sign out and sign back in to get a new session with the updated role."
-                : "No valid admin session found."}
+                ? `⚠️ ${t("layout.roleRecentlyChanged")}`
+                : t("layout.noValidSession")}
             </p>
             {token && role === "staff" && (
               <button
@@ -186,7 +191,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 onClick={clearAuth}
                 className="mt-3 w-full rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-500"
               >
-                Sign out &amp; re-login →
+                {t("layout.signOutRelogin")}
               </button>
             )}
           </div>
@@ -203,18 +208,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <aside className="hidden md:block w-56 shrink-0 border-r border-neutral-800 p-4">
         <div className="mb-6">
           <div className="flex items-center justify-between gap-2">
-            <h1 className="text-lg font-bold text-purple-500">{role === "manager" ? "Manager Panel" : "Admin Panel"}</h1>
+            <h1 className="text-lg font-bold text-purple-500">{role === "manager" ? t("layout.managerPanel") : t("layout.adminPanel")}</h1>
             <button
               type="button"
               onClick={toggleThemeMode}
-              aria-label={themeMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-              title={themeMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              aria-label={themeMode === "dark" ? t("layout.switchToLight") : t("layout.switchToDark")}
+              title={themeMode === "dark" ? t("layout.switchToLight") : t("layout.switchToDark")}
               className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800 hover:text-white"
             >
               {themeMode === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
           </div>
-          <p className="text-xs text-neutral-500">CourtFlow</p>
+          <p className="text-xs text-neutral-500">{t("layout.courtflow")}</p>
           {(staffName || staffPhone) && (
             <p className="mt-1 text-xs text-neutral-400 truncate" title={staffPhone ?? undefined}>
               {staffName ?? staffPhone}
@@ -237,7 +242,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 )}
               >
                 <item.icon className="h-4 w-4" />
-                {item.label}
+                {t(item.label)}
               </Link>
             );
           })}
@@ -258,7 +263,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   )}
                 >
                   {isCollapsed ? <ChevronRight className="h-3 w-3 shrink-0" /> : <ChevronDown className="h-3 w-3 shrink-0" />}
-                  {section.label}
+                  {t(section.label)}
                 </button>
                 {!isCollapsed && (
                   <div className="mt-0.5 space-y-0.5">
@@ -276,7 +281,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                           )}
                         >
                           <item.icon className="h-4 w-4" />
-                          {item.label}
+                          {t(item.label)}
                         </Link>
                       );
                     })}
@@ -292,13 +297,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             onClick={() => router.push("/staff")}
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-neutral-400 hover:bg-neutral-800 hover:text-white"
           >
-            <ChevronLeft className="h-4 w-4" /> Continue as...
+            <ChevronLeft className="h-4 w-4" /> {t("layout.continueAs")}
           </button>
           <button
             onClick={clearAuth}
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-neutral-400 hover:bg-neutral-800 hover:text-white"
           >
-            <LogOut className="h-4 w-4" /> Sign Out
+            <LogOut className="h-4 w-4" /> {t("layout.signOut")}
           </button>
         </div>
       </aside>
@@ -310,20 +315,20 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           className="-ml-0.5 shrink-0 rounded-lg p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white"
           aria-expanded={mobileMenuOpen}
-          aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+          aria-label={mobileMenuOpen ? t("common.close") : t("common.search")}
         >
           {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
         <div className="min-w-0">
-          <h1 className="text-base font-bold text-purple-500">{role === "manager" ? "Manager Panel" : "Admin Panel"}</h1>
-          <p className="text-[10px] text-neutral-500 leading-none">CourtFlow</p>
+          <h1 className="text-base font-bold text-purple-500">{role === "manager" ? t("layout.managerPanel") : t("layout.adminPanel")}</h1>
+          <p className="text-[10px] text-neutral-500 leading-none">{t("layout.courtflow")}</p>
         </div>
       </div>
 
       {/* Mobile slide-down menu: all pages + sign out */}
       {mobileMenuOpen && (
         <div className="fixed inset-x-0 top-[57px] z-30 max-h-[min(70vh,calc(100dvh-9rem))] overflow-y-auto border-b border-neutral-800 bg-neutral-950/98 p-4 pb-6 backdrop-blur-sm md:hidden">
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">Pages</p>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">{t("layout.pages")}</p>
           <nav className="space-y-0.5">
             {visibleTopItems.map((item) => {
               const active = pathname === item.href;
@@ -339,7 +344,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   )}
                 >
                   <item.icon className="h-4 w-4 shrink-0" />
-                  {item.label}
+                  {t(item.label)}
                 </Link>
               );
             })}
@@ -360,7 +365,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                     )}
                   >
                     {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                    {section.label}
+                    {t(section.label)}
                   </button>
                   {!isCollapsed && section.items.map((item) => {
                     const active = pathname === item.href;
@@ -376,7 +381,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                         )}
                       >
                         <item.icon className="h-4 w-4 shrink-0" />
-                        {item.label}
+                        {t(item.label)}
                       </Link>
                     );
                   })}
@@ -398,7 +403,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             }}
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-neutral-400 hover:bg-neutral-800 hover:text-white"
           >
-            <ChevronLeft className="h-4 w-4" /> Continue as...
+            <ChevronLeft className="h-4 w-4" /> {t("layout.continueAs")}
           </button>
           <button
             type="button"
@@ -408,7 +413,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             }}
             className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm text-red-400 hover:bg-neutral-800"
           >
-            <LogOut className="h-4 w-4" /> Sign Out
+            <LogOut className="h-4 w-4" /> {t("layout.signOut")}
           </button>
         </div>
       )}
@@ -444,7 +449,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 )}
               >
                 <item.icon className={cn("h-5 w-5 shrink-0", active && "text-purple-400")} />
-                <span className="line-clamp-2 w-full">{item.label}</span>
+                <span className="line-clamp-2 w-full">{t(item.label)}</span>
               </Link>
             );
           })}

@@ -5,6 +5,7 @@ import { getAuthorizedVenueIds } from "@/lib/venue-scope";
 import {
   computeKpis,
   fetchCourtPayPayments,
+  getVenueRosterPlayerCount,
   getWeekEndLocal,
   getWeekStartLocal,
   monthKey,
@@ -183,7 +184,8 @@ export async function GET(req: Request) {
       const rows = await enrichPayments(session.venueId, sessionPayments, [
         sessionCandidate,
       ]);
-      const kpis = computeKpis(sessionPayments, new Set([sessionId]));
+      const rosterPlayerCount = await getVenueRosterPlayerCount(session.venueId);
+      const kpis = computeKpis(sessionPayments, new Set([sessionId]), rosterPlayerCount);
 
       const snap = session.reclubSnapshot as {
         players?: Array<{
@@ -420,6 +422,8 @@ export async function GET(req: Request) {
       }
       we.setHours(23, 59, 59, 999);
 
+      const rosterPlayerCount = await getVenueRosterPlayerCount(venueId);
+
       const [payments, sessionCandidates] = await Promise.all([
         fetchCourtPayPayments({ venueId, from: ws, to: we }),
         prisma.session.findMany({
@@ -505,7 +509,7 @@ export async function GET(req: Request) {
             new Date(b.openedAt).getTime() - new Date(a.openedAt).getTime()
         );
 
-      const kpis = computeKpis(payments, collectSessionIds(payments));
+      const kpis = computeKpis(payments, collectSessionIds(payments), rosterPlayerCount);
 
       return NextResponse.json({
         level: "week",
@@ -534,10 +538,12 @@ export async function GET(req: Request) {
         to: range.end,
       });
 
+      const rosterPlayerCount = await getVenueRosterPlayerCount(venueId);
+
       const weekBuckets = groupByWeek(payments);
       const weeks = [...weekBuckets.entries()]
         .map(([, b]) => {
-          const kpis = computeKpis(b.payments, b.sessionIds);
+          const kpis = computeKpis(b.payments, b.sessionIds, rosterPlayerCount);
           return {
             weekStart: b.weekStart.toISOString(),
             weekEnd: b.weekEnd.toISOString(),
@@ -550,7 +556,7 @@ export async function GET(req: Request) {
             new Date(b.weekStart).getTime() - new Date(a.weekStart).getTime()
         );
 
-      const kpis = computeKpis(payments, collectSessionIds(payments));
+      const kpis = computeKpis(payments, collectSessionIds(payments), rosterPlayerCount);
 
       return NextResponse.json({
         level: "month",
@@ -570,10 +576,11 @@ export async function GET(req: Request) {
     from.setHours(0, 0, 0, 0);
 
     const payments = await fetchCourtPayPayments({ venueId, from, to });
+    const rosterPlayerCount = await getVenueRosterPlayerCount(venueId);
     const monthBuckets = groupByMonth(payments);
     const months = [...monthBuckets.entries()]
       .map(([key, b]) => {
-        const kpis = computeKpis(b.payments, b.sessionIds);
+        const kpis = computeKpis(b.payments, b.sessionIds, rosterPlayerCount);
         const [y, m] = key.split("-").map(Number);
         const label = new Date(y, m - 1, 1).toLocaleDateString("en-GB", {
           month: "long",
@@ -583,7 +590,7 @@ export async function GET(req: Request) {
       })
       .sort((a, b) => b.month.localeCompare(a.month));
 
-    const kpis = computeKpis(payments, collectSessionIds(payments));
+    const kpis = computeKpis(payments, collectSessionIds(payments), rosterPlayerCount);
 
     return NextResponse.json({
       level: "venue",

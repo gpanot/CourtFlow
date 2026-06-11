@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import adminI18n from "@/i18n/admin-i18n";
 import { api } from "@/lib/api-client";
 import { useSessionStore } from "@/stores/session-store";
 import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
@@ -66,6 +68,7 @@ interface SepayTestPayment {
 type Tab = "config" | "auto-payment";
 
 export default function CourtPaySettingsPage() {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [activeTab, setActiveTab] = useState<Tab>("config");
   const [loading, setLoading] = useState(true);
   const [allVenues, setAllVenues] = useState<Venue[]>([]);
@@ -99,7 +102,7 @@ export default function CourtPaySettingsPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Settings className="h-6 w-6 text-purple-400" />
-        <h1 className="text-xl font-bold text-white">CourtPay Settings</h1>
+        <h1 className="text-xl font-bold text-white">{t("courtpaySettings.title")}</h1>
       </div>
 
       {/* Tabs */}
@@ -113,7 +116,7 @@ export default function CourtPaySettingsPage() {
               : "border-transparent text-neutral-400 hover:text-white"
           )}
         >
-          Config
+          {t("courtpaySettings.tabConfig")}
         </button>
         <button
           onClick={() => setActiveTab("auto-payment")}
@@ -125,13 +128,13 @@ export default function CourtPaySettingsPage() {
           )}
         >
           <Zap className="h-3.5 w-3.5" />
-          Auto-payment
+          {t("courtpaySettings.tabAutoPayment")}
         </button>
       </div>
 
       {/* Venue selector — shared across tabs */}
       <div className="flex items-center gap-3">
-        <label className="text-sm text-neutral-400 whitespace-nowrap">Venue</label>
+        <label className="text-sm text-neutral-400 whitespace-nowrap">{t("courtpaySettings.venueLabel")}</label>
         <AdminVenuePicker
           venueId={selectedVenueId}
           venues={venueOptions}
@@ -141,11 +144,11 @@ export default function CourtPaySettingsPage() {
       </div>
 
       {loading && (
-        <p className="text-sm text-neutral-500">Loading venues…</p>
+        <p className="text-sm text-neutral-500">{t("common.loading")}</p>
       )}
 
       {!loading && !selectedVenue && (
-        <p className="text-sm text-neutral-500">No venues available.</p>
+        <p className="text-sm text-neutral-500">{t("common.noData")}</p>
       )}
 
       {activeTab === "config" && selectedVenue && (
@@ -184,6 +187,7 @@ function AutoPaymentSettings({
   venue: Venue;
   onRefresh: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const token = useSessionStore((s) => s.token);
 
   // Payment fields (shared with staff profile)
@@ -397,11 +401,11 @@ function AutoPaymentSettings({
               <ToggleLeft className="h-5 w-5 shrink-0 text-neutral-500" />
             )}
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-white">Auto-payment confirmation</p>
+              <p className="text-sm font-semibold text-white">{t("courtpaySettings.autoPayment")}</p>
               <p className="text-[11px] text-neutral-500 mt-0.5 leading-snug">
                 {autoPaymentEnabled
-                  ? "Payments are confirmed automatically via the selected gateway"
-                  : "Staff confirm payments manually — uses the standard VietQR"}
+                  ? t("courtpaySettings.autoPaymentOn")
+                  : t("courtpaySettings.autoPaymentOff")}
               </p>
             </div>
           </div>
@@ -427,19 +431,19 @@ function AutoPaymentSettings({
       <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 md:p-5 space-y-4">
         <div className="flex items-center gap-2">
           <CreditCard className="h-4 w-4 text-green-400" />
-          <p className="text-sm font-semibold text-white">Payment Settings</p>
-          <span className="text-[11px] text-neutral-500">— shared with staff payment profile</span>
+          <p className="text-sm font-semibold text-white">{t("courtpaySettings.paymentSettings")}</p>
+          <span className="text-[11px] text-neutral-500">— {t("courtpaySettings.sharedWithStaff")}</span>
         </div>
 
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="mb-0.5 block text-[11px] text-neutral-500">Bank</label>
+            <label className="mb-0.5 block text-[11px] text-neutral-500">{t("courtpaySettings.bank")}</label>
             <select
               value={bankName}
               onChange={(e) => setBankName(e.target.value)}
               className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none"
             >
-              <option value="">— select —</option>
+              <option value="">— {t("courtpaySettings.select")} —</option>
               {VIETQR_BANKS.map((b) => (
                 <option key={b.bin} value={b.bin}>
                   {b.name} — {b.bin}
@@ -448,24 +452,24 @@ function AutoPaymentSettings({
             </select>
           </div>
           <div>
-            <label className="mb-0.5 block text-[11px] text-neutral-500">Account Number</label>
+            <label className="mb-0.5 block text-[11px] text-neutral-500">{t("courtpaySettings.accountNumber")}</label>
             <input
               type="text"
               value={bankAccount}
               onChange={(e) => setBankAccount(e.target.value)}
-              placeholder="Account #"
+              placeholder={t("courtpaySettings.accountNumberPlaceholder")}
               className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none"
             />
           </div>
         </div>
 
         <div>
-          <label className="mb-0.5 block text-[11px] text-neutral-500">Account Owner Name</label>
-          <input
-            type="text"
-            value={bankOwnerName}
-            onChange={(e) => setBankOwnerName(e.target.value)}
-            placeholder="Account name"
+          <label className="mb-0.5 block text-[11px] text-neutral-500">{t("courtpaySettings.accountOwnerName")}</label>
+            <input
+              type="text"
+              value={bankOwnerName}
+              onChange={(e) => setBankOwnerName(e.target.value)}
+              placeholder={t("courtpaySettings.accountNamePlaceholder")}
             className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none"
           />
         </div>
@@ -493,7 +497,7 @@ function AutoPaymentSettings({
             />
             <div className={qrExpanded ? "w-full space-y-0.5 text-center" : "min-w-0 flex-1 space-y-0.5 pt-1"}>
               <p className="text-[11px] font-medium text-purple-400">
-                {qrExpanded ? "Tap to collapse" : "QR Preview"}
+                {qrExpanded ? t("courtpaySettings.tapToCollapse") : t("courtpaySettings.qrPreview")}
               </p>
               <p className="truncate text-xs text-neutral-300">
                 {VIETQR_BANKS.find((b) => b.bin === bankName)?.name}
@@ -504,7 +508,7 @@ function AutoPaymentSettings({
           </button>
         ) : bankName || bankAccount ? (
           <p className="rounded-lg border border-amber-800/40 bg-amber-950/30 px-3 py-1.5 text-[11px] text-amber-400">
-            Fill bank and account # to see QR preview
+            {t("courtpaySettings.fillBankForQr")}
           </p>
         ) : null}
       </div>
@@ -517,9 +521,9 @@ function AutoPaymentSettings({
             <div className="flex items-center gap-2">
               <Zap className="h-4 w-4 text-purple-400" />
               <div>
-                <p className="text-sm font-semibold text-white">Payment Gateway</p>
+                <p className="text-sm font-semibold text-white">{t("courtpaySettings.paymentGateway")}</p>
                 <p className="text-[11px] text-neutral-500 mt-0.5">
-                  Select the service that will detect and confirm bank transfers automatically
+                  {t("courtpaySettings.gatewayDesc")}
                 </p>
               </div>
             </div>
@@ -548,11 +552,11 @@ function AutoPaymentSettings({
                   />
                 </div>
                 <p className="text-[11px] text-neutral-400 leading-snug">
-                  Bank transfer detection via Sepay webhook
+                  {t("courtpaySettings.sepayDesc")}
                 </p>
                 {sepayEnabled && (
                   <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-[10px] font-medium text-purple-300">
-                    Active
+                    {t("courtpaySettings.active")}
                   </span>
                 )}
               </button>
@@ -564,17 +568,17 @@ function AutoPaymentSettings({
                   <div className="h-4 w-4 rounded-full border-2 border-neutral-700 bg-transparent" />
                 </div>
                 <p className="text-[11px] text-neutral-500 leading-snug">
-                  QR code payment gateway
+                  {t("courtpaySettings.payosDesc")}
                 </p>
                 <span className="rounded-full bg-neutral-800 px-2 py-0.5 text-[10px] font-medium text-neutral-500">
-                  Coming soon
+                  {t("courtpaySettings.comingSoon")}
                 </span>
               </div>
             </div>
 
             {!sepayEnabled && (
               <p className="rounded-lg border border-amber-800/40 bg-amber-950/30 px-3 py-2 text-[11px] text-amber-400">
-                Select a gateway above to enable automatic payment confirmation.
+                {t("courtpaySettings.selectGatewayHint")}
               </p>
             )}
           </div>
@@ -585,16 +589,16 @@ function AutoPaymentSettings({
               <div className="flex items-center gap-2">
                 <Zap className="h-4 w-4 text-fuchsia-400" />
                 <div>
-                  <p className="text-sm font-semibold text-white">Sepay Identity</p>
+                  <p className="text-sm font-semibold text-white">{t("courtpaySettings.sepayIdentity")}</p>
                   <p className="text-[11px] text-neutral-500 mt-0.5">
-                    Phone and CCCD linked to the bank account in Sepay
+                    {t("courtpaySettings.sepayIdentityDesc")}
                   </p>
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="mb-0.5 block text-[11px] text-neutral-500">Phone Number</label>
+                  <label className="mb-0.5 block text-[11px] text-neutral-500">{t("courtpaySettings.phoneNumber")}</label>
                   <input
                     type="tel"
                     inputMode="tel"
@@ -605,7 +609,7 @@ function AutoPaymentSettings({
                   />
                 </div>
                 <div>
-                  <label className="mb-0.5 block text-[11px] text-neutral-500">CCCD / ID Number</label>
+                  <label className="mb-0.5 block text-[11px] text-neutral-500">{t("courtpaySettings.cccdId")}</label>
                   <input
                     type="text"
                     value={autoApprovalCCCD}
@@ -621,22 +625,22 @@ function AutoPaymentSettings({
           <div className="rounded-xl border border-cyan-900/30 bg-cyan-950/10 p-4 md:p-5 space-y-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-white">Test Sepay / PayOS</p>
+                <p className="text-sm font-semibold text-white">{t("courtpaySettings.testSepay")}</p>
                 <p className="text-[11px] text-neutral-500 mt-0.5">
-                  Generate a real venue-based test QR and monitor auto-confirm debug state.
+                  {t("courtpaySettings.testSepayDesc")}
                 </p>
               </div>
               {pollingTest && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-cyan-800/60 bg-cyan-950/40 px-2 py-0.5 text-[10px] text-cyan-300">
                   <Loader2 className="h-3 w-3 animate-spin" />
-                  Polling
+                  {t("courtpaySettings.polling")}
                 </span>
               )}
             </div>
 
             <div className="flex flex-wrap items-end gap-2">
               <div>
-                <label className="mb-0.5 block text-[11px] text-neutral-500">Amount (VND)</label>
+                <label className="mb-0.5 block text-[11px] text-neutral-500">{t("courtpaySettings.amountVnd")}</label>
                 <input
                   type="number"
                   min={1000}
@@ -653,7 +657,7 @@ function AutoPaymentSettings({
                 className="inline-flex items-center gap-1.5 rounded-md bg-cyan-600 px-3 py-2 text-xs font-semibold text-white hover:bg-cyan-500 disabled:opacity-50"
               >
                 {creatingTest && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                Generate test QR
+                {t("courtpaySettings.generateTestQr")}
               </button>
               {testPayment && (
                 <button
@@ -661,7 +665,7 @@ function AutoPaymentSettings({
                   onClick={() => void fetchTestStatus()}
                   className="rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs font-semibold text-neutral-300 hover:border-neutral-600 hover:text-white"
                 >
-                  Refresh debug
+                  {t("courtpaySettings.refreshDebug")}
                 </button>
               )}
             </div>
@@ -754,7 +758,7 @@ function AutoPaymentSettings({
       >
         {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
         {saved && <Check className="h-3.5 w-3.5" />}
-        {saved ? "Saved!" : "Save Settings"}
+        {saved ? t("common.saved") : t("courtpaySettings.saveSettings")}
       </button>
     </div>
   );

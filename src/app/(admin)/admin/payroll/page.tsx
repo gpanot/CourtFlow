@@ -4,6 +4,8 @@ import { Suspense, useState, useEffect, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { useSessionStore } from "@/stores/session-store";
+import { useTranslation } from "react-i18next";
+import adminI18n from "@/i18n/admin-i18n";
 import { PayrollStatusBadge } from "@/components/admin/PayrollStatusBadge";
 import { StaffHoursDrawer } from "@/components/admin/StaffHoursDrawer";
 import { ChevronLeft, ChevronRight, Download, AlertCircle, RefreshCw } from "lucide-react";
@@ -107,6 +109,7 @@ export default function PayrollPage() {
 }
 
 function PayrollContent() {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const searchParams = useSearchParams();
   const router = useRouter();
   const token = useSessionStore((s) => s.token);
@@ -206,13 +209,13 @@ function PayrollContent() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-white">Payroll</h1>
+        <h1 className="text-2xl font-bold text-white">{t("payroll.title")}</h1>
         <button
           onClick={handleExport}
           className="flex items-center gap-2 rounded-xl border border-purple-500/40 px-4 py-2 text-sm font-medium text-purple-400 transition-colors hover:bg-purple-500/10"
         >
           <Download className="h-4 w-4" />
-          Export Week CSV
+          {t("payroll.exportCsv")}
         </button>
       </div>
 
@@ -220,19 +223,19 @@ function PayrollContent() {
       {data && !loading && (
         <div className="flex flex-wrap gap-6 rounded-xl bg-neutral-800 p-4">
           <div>
-            <p className="text-xs text-neutral-400">Staff</p>
+            <p className="text-xs text-neutral-400">{t("payroll.staff")}</p>
             <p className="text-xl font-bold text-white">{data.summary.totalStaff}</p>
           </div>
           <div>
-            <p className="text-xs text-neutral-400">Total Hours</p>
+            <p className="text-xs text-neutral-400">{t("payroll.totalHours")}</p>
             <p className="text-xl font-bold text-white">{data.summary.totalHours.toFixed(1)}</p>
           </div>
           <div>
-            <p className="text-xs text-neutral-400">Unpaid</p>
+            <p className="text-xs text-neutral-400">{t("payroll.unpaid")}</p>
             <p className="text-xl font-bold text-amber-500">{data.summary.unpaidCount}</p>
           </div>
           <div>
-            <p className="text-xs text-neutral-400">Paid</p>
+            <p className="text-xs text-neutral-400">{t("payroll.paid")}</p>
             <p className="text-xl font-bold text-green-500">{data.summary.paidCount}</p>
           </div>
         </div>
@@ -273,7 +276,7 @@ function PayrollContent() {
                 : "text-neutral-400 hover:bg-neutral-800 hover:text-white"
             )}
           >
-            Last Week
+            {t("payroll.lastWeek")}
           </button>
           <button
             onClick={() => router.push(`/admin/payroll?week=${currentMonday}`)}
@@ -284,7 +287,7 @@ function PayrollContent() {
                 : "text-neutral-400 hover:bg-neutral-800 hover:text-white"
             )}
           >
-            This Week
+            {t("payroll.thisWeek")}
           </button>
         </div>
       </div>
@@ -302,19 +305,19 @@ function PayrollContent() {
       {errorMsg && !loading && (
         <div className="flex flex-col items-center gap-3 py-12">
           <AlertCircle className="h-8 w-8 text-red-500" />
-          <p className="text-neutral-400">Failed to load payroll data</p>
+          <p className="text-neutral-400">{t("payroll.failedToLoad")}</p>
           <button
             onClick={fetchPayroll}
             className="flex items-center gap-2 rounded-lg bg-neutral-800 px-4 py-2 text-sm text-white hover:bg-neutral-700"
           >
-            <RefreshCw className="h-4 w-4" /> Retry
+            <RefreshCw className="h-4 w-4" /> {t("payroll.retry")}
           </button>
         </div>
       )}
 
       {/* Empty */}
       {data && !loading && data.staff.length === 0 && (
-        <p className="py-12 text-center text-neutral-400">No sessions found for this week</p>
+        <p className="py-12 text-center text-neutral-400">{t("payroll.noSessions")}</p>
       )}
 
       {/* Staff table */}
@@ -323,12 +326,12 @@ function PayrollContent() {
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-neutral-700 bg-neutral-900/50">
-                <th className="px-4 py-3 font-medium text-neutral-400">Staff</th>
-                <th className="hidden px-4 py-3 font-medium text-neutral-400 sm:table-cell">Venue(s)</th>
-                <th className="px-4 py-3 text-right font-medium text-neutral-400">Hours</th>
-                <th className="px-4 py-3 text-right font-medium text-neutral-400">Amount</th>
-                <th className="px-4 py-3 font-medium text-neutral-400">Status</th>
-                <th className="px-4 py-3 text-right font-medium text-neutral-400">Action</th>
+                <th className="px-4 py-3 font-medium text-neutral-400">{t("payroll.staff")}</th>
+                <th className="hidden px-4 py-3 font-medium text-neutral-400 sm:table-cell">{t("payroll.venues")}</th>
+                <th className="px-4 py-3 text-right font-medium text-neutral-400">{t("payroll.hours")}</th>
+                <th className="px-4 py-3 text-right font-medium text-neutral-400">{t("payroll.amount")}</th>
+                <th className="px-4 py-3 font-medium text-neutral-400">{t("payroll.status")}</th>
+                <th className="px-4 py-3 text-right font-medium text-neutral-400">{t("payroll.action")}</th>
               </tr>
             </thead>
             <tbody>
@@ -356,7 +359,7 @@ function PayrollContent() {
                         <p className="font-mono font-medium text-white">${formatAmount(row.amount)}</p>
                         {row.paidDate && (
                           <p className="text-[10px] text-neutral-500">
-                            Paid on: {formatShortDate(row.paidDate)}
+                            {t("payroll.paidOn")}: {formatShortDate(row.paidDate)}
                           </p>
                         )}
                       </div>
@@ -376,7 +379,7 @@ function PayrollContent() {
                         }}
                         className="rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-purple-500"
                       >
-                        Mark Paid
+                        {t("payroll.markPaid")}
                       </button>
                     ) : (
                       <button
@@ -386,7 +389,7 @@ function PayrollContent() {
                         }}
                         className="rounded-lg border border-neutral-600 px-3 py-1.5 text-xs font-medium text-neutral-300 transition-colors hover:bg-neutral-700"
                       >
-                        Undo
+                        {t("payroll.undo")}
                       </button>
                     )}
                   </td>
@@ -395,7 +398,7 @@ function PayrollContent() {
 
               {/* Footer total */}
               <tr className="bg-neutral-900/30">
-                <td className="px-4 py-3 font-medium text-white">TOTAL</td>
+                <td className="px-4 py-3 font-medium text-white">{t("payroll.total")}</td>
                 <td className="hidden px-4 py-3 sm:table-cell">—</td>
                 <td className="px-4 py-3 text-right font-mono font-bold text-white">
                   {data.summary.totalHours.toFixed(1)} h
@@ -404,7 +407,7 @@ function PayrollContent() {
                   ${formatAmount(data.staff.reduce((sum, s) => sum + (s.amount ?? 0), 0))}
                 </td>
                 <td className="px-4 py-3 text-xs text-neutral-400">
-                  {data.summary.unpaidCount} unpaid
+                  {data.summary.unpaidCount} {t("payroll.unpaid").toLowerCase()}
                 </td>
                 <td className="px-4 py-3">—</td>
               </tr>
@@ -430,14 +433,14 @@ function PayrollContent() {
         <>
           <div className="fixed inset-0 z-50 bg-black/50" onClick={() => !mpSubmitting && setMarkPaidTarget(null)} />
           <div className="fixed left-1/2 top-1/2 z-50 w-[90vw] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-neutral-700 bg-neutral-900 p-5 shadow-2xl">
-            <h3 className="mb-1 text-base font-bold text-white">Mark as Paid</h3>
+            <h3 className="mb-1 text-base font-bold text-white">{t("payroll.markAsPaid")}</h3>
             <p className="mb-4 text-sm text-neutral-400">
               {markPaidTarget.name} — {markPaidTarget.totalHours.toFixed(1)} h
             </p>
 
             <div className="space-y-3">
               <div>
-                <label className="mb-1 block text-xs font-medium text-neutral-400">Amount ($)</label>
+                <label className="mb-1 block text-xs font-medium text-neutral-400">{t("payroll.amountLabel")}</label>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -450,7 +453,7 @@ function PayrollContent() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-neutral-400">Payment Date</label>
+                <label className="mb-1 block text-xs font-medium text-neutral-400">{t("payroll.paymentDate")}</label>
                 <input
                   type="date"
                   value={mpDate}
@@ -460,33 +463,37 @@ function PayrollContent() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-neutral-400">Payment Method</label>
+                <label className="mb-1 block text-xs font-medium text-neutral-400">{t("payroll.paymentMethod")}</label>
                 <div className="flex gap-2">
-                  {["Bank Transfer", "Cash", "Other"].map((m) => (
+                  {[
+                    { key: "Bank Transfer", label: t("payroll.bankTransfer") },
+                    { key: "Cash", label: t("payroll.cash") },
+                    { key: "Other", label: t("payroll.other") },
+                  ].map(({ key, label }) => (
                     <button
-                      key={m}
+                      key={key}
                       type="button"
-                      onClick={() => setMpMethod(m)}
+                      onClick={() => setMpMethod(key)}
                       className={cn(
                         "flex-1 rounded-lg py-2 text-xs font-medium transition-colors",
-                        mpMethod === m
+                        mpMethod === key
                           ? "bg-purple-600 text-white"
                           : "border border-neutral-600 text-neutral-400 hover:bg-neutral-800 hover:text-white"
                       )}
                     >
-                      {m}
+                      {label}
                     </button>
                   ))}
                 </div>
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-neutral-400">Note (optional)</label>
+                <label className="mb-1 block text-xs font-medium text-neutral-400">{t("payroll.noteOptional")}</label>
                 <input
                   type="text"
                   value={mpNote}
                   onChange={(e) => setMpNote(e.target.value.slice(0, 200))}
-                  placeholder="Any additional details..."
+                  placeholder={t("payroll.notePlaceholder")}
                   className="w-full rounded-lg border border-neutral-600 bg-neutral-800 px-3 py-2 text-sm text-white placeholder-neutral-500 outline-none focus:border-purple-500"
                 />
                 {mpNote.length >= 150 && (
@@ -501,14 +508,14 @@ function PayrollContent() {
                 disabled={mpSubmitting}
                 className="flex-1 rounded-xl border border-neutral-600 py-2 text-sm font-medium text-neutral-300 transition-colors hover:bg-neutral-800"
               >
-                Cancel
+                {t("common.cancel")}
               </button>
               <button
                 onClick={handleMarkPaidSubmit}
                 disabled={mpSubmitting}
                 className="flex-1 rounded-xl bg-purple-600 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-500 disabled:opacity-50"
               >
-                {mpSubmitting ? "Saving..." : "Confirm Payment"}
+                {mpSubmitting ? t("common.saving") : t("payroll.confirmPayment")}
               </button>
             </div>
           </div>
