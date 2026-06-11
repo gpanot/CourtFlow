@@ -13,7 +13,6 @@ import {
   TrendingUp,
   Clock,
   AlertTriangle,
-  CreditCard,
   GraduationCap,
   MapPin,
   ArrowRight,
@@ -165,7 +164,6 @@ export default function AdminOverview() {
 
   const hasAlerts =
     data.memberships.overdueCount > 0 ||
-    data.staff.unpaidPayrollCount > 0 ||
     data.coaching.unpaidCount > 0 ||
     data.memberships.expiringThisWeek > 0;
 
@@ -262,16 +260,6 @@ export default function AdminOverview() {
               text={t("overview.overduePayments", { count: data.memberships.overdueCount, amount: fmtPrice(data.memberships.overdueAmount) })}
               action={t("overview.view")}
               onClick={() => router.push("/admin/memberships")}
-            />
-          )}
-          {data.staff.unpaidPayrollCount > 0 && (
-            <AlertBanner
-              icon={CreditCard}
-              color="text-amber-400"
-              bg="bg-amber-500/10 border-amber-500/20"
-              text={t("overview.unpaidPayroll", { count: data.staff.unpaidPayrollCount })}
-              action={t("overview.review")}
-              onClick={() => router.push("/admin/payroll")}
             />
           )}
           {data.coaching.unpaidCount > 0 && (
@@ -535,11 +523,10 @@ export default function AdminOverview() {
       </section>
 
       {/* Quick Links */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         <QuickLink label={t("overview.bookings")} icon={CalendarDays} onClick={() => router.push("/admin/bookings")} />
         <QuickLink label={t("overview.memberships")} icon={Crown} onClick={() => router.push("/admin/memberships")} />
         <QuickLink label={t("overview.coaching")} icon={GraduationCap} onClick={() => router.push("/admin/coaching")} />
-        <QuickLink label={t("overview.payroll")} icon={CreditCard} onClick={() => router.push("/admin/payroll")} />
       </div>
     </div>
   );
