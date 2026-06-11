@@ -882,7 +882,7 @@ function TVDisplaySettings({
     <div className="space-y-3">
       <div>
         <h4 className="flex items-center gap-2 text-sm font-medium text-neutral-400 uppercase tracking-wider">
-          <Monitor className="h-4 w-4" /> TV Display
+          <Monitor className="h-4 w-4" /> Tablet/TV/Phone Display
         </h4>
         <p className="text-xs text-neutral-600 mt-0.5 ml-6">Waiting Screen</p>
       </div>
@@ -946,12 +946,12 @@ function TVDisplaySettings({
                 onChange={(e) => toggleSpin(e.target.checked)}
                 className="h-4 w-4 rounded border-neutral-600 bg-neutral-800 text-purple-500 focus:ring-purple-500 focus:ring-offset-0 accent-purple-500"
               />
-              <span className="text-xs text-neutral-400">Rotate logo 360° on TV</span>
+              <span className="text-xs text-neutral-400">Rotate logo</span>
             </label>
           )}
 
           <div className="space-y-2">
-            <label className="text-xs text-neutral-500">TV display language</label>
+            <label className="text-xs text-neutral-500">Default language</label>
             <div className="inline-flex rounded-lg border border-neutral-700 p-0.5 bg-neutral-900/80">
               <button
                 type="button"
