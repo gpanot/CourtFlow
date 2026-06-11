@@ -4,9 +4,9 @@ interface PhotoOptions {
   playerId?: string | null;
 }
 
-/** URL path for a player's 96px WebP thumbnail (browser-safe, no Node.js imports). */
+/** URL path for a player's 96px WebP thumbnail (Next.js API — works in production Docker). */
 function thumbUrl(playerId: string): string {
-  return `/uploads/players/thumbs/${playerId}.webp`;
+  return `/api/uploads/players/thumbs/${playerId}`;
 }
 
 /** Parse the player id embedded in a facePhotoPath like `/uploads/players/{id}.jpg`. */

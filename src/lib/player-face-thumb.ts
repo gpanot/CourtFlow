@@ -8,7 +8,7 @@ const PLAYERS_DIR = path.join(process.cwd(), "uploads", "players");
 
 /** URL path returned to the browser for a player face thumbnail. */
 export function faceThumbPath(playerId: string): string {
-  return `/uploads/players/thumbs/${playerId}.webp`;
+  return `/api/uploads/players/thumbs/${playerId}`;
 }
 
 /** Extract playerId from a stored facePhotoPath like `/uploads/players/{id}.jpg`. */

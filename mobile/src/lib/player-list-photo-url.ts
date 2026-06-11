@@ -28,7 +28,7 @@ export function getPlayerListPhotoUri(opts: PhotoOptions): string | null {
     (opts.source === "self" ? opts.playerId?.trim() : null);
 
   if (linkedId) {
-    return resolveMediaUrl(`/uploads/players/thumbs/${linkedId}.webp`);
+    return resolveMediaUrl(`/api/uploads/players/thumbs/${linkedId}`);
   }
 
   return null;
