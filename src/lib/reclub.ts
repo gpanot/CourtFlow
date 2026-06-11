@@ -21,6 +21,7 @@ export const RECLUB_CLUBS: ReclubClub[] = [
   { groupId: 22476, name: "Elite Sport Pickleball @Pacific", slug: "js-pickleball-club" },
   { groupId: 26728, name: "GOPICK Lương Định Của", slug: "gopick-pickleball-club-250ldc" },
   { groupId: 298257, name: "NEXT11 Pickleball Club", slug: "next11-pickleball-club" },
+  { groupId: 10888, name: "Player1st - Pickleball Performance Center", slug: "player1st" },
   { groupId: 326472, name: "The MM Pickleball Club", slug: "the-mm-pickleball-club" },
   { groupId: 104121, name: "Top One", slug: "top-one" },
 ];
