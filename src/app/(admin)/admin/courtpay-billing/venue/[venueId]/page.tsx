@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, type Dispatch, type SetStateAction } from "react";
+import React, { useEffect, useState, useCallback, type Dispatch, type SetStateAction } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
@@ -112,6 +112,72 @@ interface BillingConfig {
 
 function formatVND(n: number) {
   return new Intl.NumberFormat("vi-VN").format(n);
+}
+
+function AmountInput({
+  value,
+  onChange,
+  disabled,
+  placeholder,
+  className,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  disabled?: boolean;
+  placeholder?: string;
+  className?: string;
+}) {
+  const [raw, setRaw] = React.useState<string | null>(null);
+  const displayValue = raw !== null ? raw : formatVND(value);
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={displayValue}
+      disabled={disabled}
+      placeholder={placeholder}
+      className={className}
+      onChange={(e) => {
+        const digits = e.target.value.replace(/[^\d]/g, "");
+        setRaw(digits);
+        onChange(parseInt(digits, 10) || 0);
+      }}
+      onBlur={() => setRaw(null)}
+      onFocus={() => setRaw(String(value || ""))}
+    />
+  );
+}
+
+/** For the mark-paid modal where value is a string state */
+function AmountInputString({
+  value,
+  onChange,
+  placeholder,
+  className,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  const numVal = parseInt(value.replace(/[^\d]/g, ""), 10) || 0;
+  const [focused, setFocused] = React.useState(false);
+  const displayValue = focused ? value.replace(/[^\d]/g, "") : (numVal ? formatVND(numVal) : value);
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={displayValue}
+      placeholder={placeholder}
+      className={className}
+      onChange={(e) => {
+        const digits = e.target.value.replace(/[^\d]/g, "");
+        onChange(digits);
+      }}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+    />
+  );
 }
 
 function fmtDate(iso: string) {
@@ -409,7 +475,7 @@ export default function VenueBillingDetailPage() {
       await api.post(
         `/api/admin/billing/venue/${venueId}/invoices/${payModal.invoiceId}/mark-paid`,
         {
-          amount: payAmount.trim() !== "" && !isNaN(parseInt(payAmount)) ? parseInt(payAmount) : payModal.totalAmount,
+          amount: (() => { const n = parseInt(payAmount.replace(/[^\d]/g, ""), 10); return n > 0 ? n : payModal.totalAmount; })(),
           method: payMethod,
           comment: payComment.trim() || undefined,
         }
@@ -613,14 +679,11 @@ export default function VenueBillingDetailPage() {
               <label className="text-xs text-neutral-500 block font-medium">
                 Monthly flat rate (VND)
               </label>
-              <input
-                type="number"
+              <AmountInput
                 value={ratesForm.monthlyRate}
-                onChange={(e) =>
-                  setRatesForm({ ...ratesForm, monthlyRate: parseInt(e.target.value) || 0 })
-                }
+                onChange={(v) => setRatesForm({ ...ratesForm, monthlyRate: v })}
+                placeholder="e.g. 500,000"
                 className="w-full max-w-xs rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white"
-                placeholder="e.g. 500000"
               />
               <p className="text-[11px] text-neutral-600">
                 First invoice will be pro-rated from the date billing is activated this month.
@@ -639,13 +702,11 @@ export default function VenueBillingDetailPage() {
               <label className="text-xs text-neutral-500 block">
                 Base rate per player (check-in)
               </label>
-              <input
-                type="number"
+              <AmountInput
                 value={ratesForm.baseRatePerCheckin}
-                onChange={(e) =>
-                  setRatesForm({ ...ratesForm, baseRatePerCheckin: parseInt(e.target.value) || 0 })
-                }
+                onChange={(v) => setRatesForm({ ...ratesForm, baseRatePerCheckin: v })}
                 disabled={ratesForm.isFreeBase}
+                placeholder="e.g. 5,000"
                 className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white disabled:opacity-40"
               />
               <label className="flex items-center gap-1.5 cursor-pointer select-none">
@@ -665,13 +726,11 @@ export default function VenueBillingDetailPage() {
               <label className="text-xs text-neutral-500 block">
                 Subscription add-on
               </label>
-              <input
-                type="number"
+              <AmountInput
                 value={ratesForm.subscriptionAddon}
-                onChange={(e) =>
-                  setRatesForm({ ...ratesForm, subscriptionAddon: parseInt(e.target.value) || 0 })
-                }
+                onChange={(v) => setRatesForm({ ...ratesForm, subscriptionAddon: v })}
                 disabled={ratesForm.isFreeSubAddon}
+                placeholder="e.g. 1,000"
                 className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white disabled:opacity-40"
               />
               <label className="flex items-center gap-1.5 cursor-pointer select-none">
@@ -691,13 +750,11 @@ export default function VenueBillingDetailPage() {
               <label className="text-xs text-neutral-500 block">
                 SePay-confirmed add-on
               </label>
-              <input
-                type="number"
+              <AmountInput
                 value={ratesForm.sepayAddon}
-                onChange={(e) =>
-                  setRatesForm({ ...ratesForm, sepayAddon: parseInt(e.target.value) || 0 })
-                }
+                onChange={(v) => setRatesForm({ ...ratesForm, sepayAddon: v })}
                 disabled={ratesForm.isFreeSepayAddon}
+                placeholder="e.g. 1,000"
                 className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white disabled:opacity-40"
               />
               <label className="flex items-center gap-1.5 cursor-pointer select-none">
@@ -1192,14 +1249,13 @@ export default function VenueBillingDetailPage() {
             <div className="space-y-4">
               <div>
                 <label className="text-xs text-neutral-500 mb-1 block">Amount paid (VND)</label>
-                <input
-                  type="number"
+                <AmountInputString
                   value={payAmount}
-                  onChange={(e) => setPayAmount(e.target.value)}
+                  onChange={setPayAmount}
+                  placeholder={formatVND(payModal.totalAmount)}
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white"
-                  placeholder={String(payModal.totalAmount)}
                 />
-                {parseInt(payAmount) !== payModal.totalAmount && (
+                {(parseInt(payAmount.replace(/[^\d]/g, ""), 10) || 0) !== payModal.totalAmount && (
                   <p className="text-[10px] text-amber-400 mt-1">
                     Invoice total: {formatVND(payModal.totalAmount)} VND
                   </p>

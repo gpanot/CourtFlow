@@ -396,7 +396,7 @@ Display:
   - logging
 
 #### Face engine
-- CompreFace for recognition and enrollment
+- AWS Rekognition for recognition and enrollment
 
 #### Database
 - Postgres / Supabase Postgres
@@ -606,7 +606,7 @@ System should handle:
 - backend timeout
 - camera permission lost
 - network failure
-- CompreFace unavailable
+- AWS Rekognition unavailable
 
 ---
 
@@ -683,7 +683,7 @@ Not for MVP, but should remain possible later:
 2. Add live camera stream
 3. Add face-detection trigger logic
 4. Add backend endpoint for processing face
-5. Connect backend to CompreFace
+5. Connect backend to AWS Rekognition
 6. Implement 4-hour rule
 7. Implement queue number generation
 8. Add host review mode

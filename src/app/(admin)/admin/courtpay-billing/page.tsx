@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
@@ -74,6 +74,45 @@ interface RevenueSummary {
 
 function formatVND(n: number) {
   return new Intl.NumberFormat("vi-VN").format(n);
+}
+
+/** Props for a formatted amount input (no spinner arrows, comma-separated) */
+function AmountInput({
+  value,
+  onChange,
+  disabled,
+  placeholder,
+  className,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  disabled?: boolean;
+  placeholder?: string;
+  className?: string;
+}) {
+  const [raw, setRaw] = React.useState<string | null>(null);
+  const displayValue = raw !== null ? raw : formatVND(value);
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={displayValue}
+      disabled={disabled}
+      placeholder={placeholder}
+      className={className}
+      onChange={(e) => {
+        const digits = e.target.value.replace(/[^\d]/g, "");
+        setRaw(digits);
+        onChange(parseInt(digits, 10) || 0);
+      }}
+      onBlur={() => {
+        setRaw(null);
+      }}
+      onFocus={() => {
+        setRaw(String(value || ""));
+      }}
+    />
+  );
 }
 
 export default function CourtPayBillingPage() {
@@ -201,15 +240,10 @@ export default function CourtPayBillingPage() {
                 <label className="text-xs text-neutral-500 mb-1 block">
                   {t("courtpayBilling.baseRatePerPayment")}
                 </label>
-                <input
-                  type="number"
+                <AmountInput
                   value={configForm.defaultBaseRate}
-                  onChange={(e) =>
-                    setConfigForm({
-                      ...configForm,
-                      defaultBaseRate: parseInt(e.target.value) || 0,
-                    })
-                  }
+                  onChange={(v) => setConfigForm({ ...configForm, defaultBaseRate: v })}
+                  placeholder="e.g. 5,000"
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white"
                 />
               </div>
@@ -217,15 +251,10 @@ export default function CourtPayBillingPage() {
                 <label className="text-xs text-neutral-500 mb-1 block">
                   {t("courtpayBilling.subscriptionAddon")}
                 </label>
-                <input
-                  type="number"
+                <AmountInput
                   value={configForm.defaultSubAddon}
-                  onChange={(e) =>
-                    setConfigForm({
-                      ...configForm,
-                      defaultSubAddon: parseInt(e.target.value) || 0,
-                    })
-                  }
+                  onChange={(v) => setConfigForm({ ...configForm, defaultSubAddon: v })}
+                  placeholder="e.g. 1,000"
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white"
                 />
               </div>
@@ -233,15 +262,10 @@ export default function CourtPayBillingPage() {
                 <label className="text-xs text-neutral-500 mb-1 block">
                   {t("courtpayBilling.sepayAddonLabel")}
                 </label>
-                <input
-                  type="number"
+                <AmountInput
                   value={configForm.defaultSepayAddon}
-                  onChange={(e) =>
-                    setConfigForm({
-                      ...configForm,
-                      defaultSepayAddon: parseInt(e.target.value) || 0,
-                    })
-                  }
+                  onChange={(v) => setConfigForm({ ...configForm, defaultSepayAddon: v })}
+                  placeholder="e.g. 1,000"
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white"
                 />
               </div>
