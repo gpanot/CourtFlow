@@ -16,6 +16,11 @@ interface VenueRate {
   isFreeBase: boolean;
   isFreeSubAddon: boolean;
   isFreeSepayAddon: boolean;
+  billingModel?: "per_payment" | "monthly";
+  monthlyRate?: number;
+  monthlyPeriodStart?: string | null;
+  monthlyEndDate?: string | null;
+  monthlyStatus?: string;
 }
 
 interface VenueInfo {
@@ -113,9 +118,33 @@ export default function MyBillingPage() {
                 </div>
                 {v.rate ? (
                   <div className="text-xs text-neutral-400 space-y-0.5">
-                    <p>{t("myBilling.baseRate")}: {v.rate.isFreeBase ? t("myBilling.free") : formatVND(v.rate.baseRatePerCheckin)} {t("myBilling.perCheckin")}</p>
-                    <p>{t("myBilling.subAddon")}: {v.rate.isFreeSubAddon ? t("myBilling.free") : formatVND(v.rate.subscriptionAddon)}</p>
-                    <p>{t("myBilling.sepayAddon")}: {v.rate.isFreeSepayAddon ? t("myBilling.free") : formatVND(v.rate.sepayAddon)}</p>
+                    {v.rate.billingModel === "monthly" ? (
+                      <>
+                        <p className="font-medium text-purple-400">
+                          Monthly: {formatVND(v.rate.monthlyRate ?? 0)}/month
+                        </p>
+                        <p>
+                          {v.rate.monthlyStatus === "active" && (
+                            <span className="text-emerald-400">Active</span>
+                          )}
+                          {v.rate.monthlyStatus === "cancelled" && (
+                            <span className="text-red-400">Cancelled</span>
+                          )}
+                          {v.rate.monthlyPeriodStart && (
+                            <span className="ml-1">· since {formatDate(v.rate.monthlyPeriodStart)}</span>
+                          )}
+                        </p>
+                        {v.rate.monthlyEndDate && (
+                          <p>Expires: {formatDate(v.rate.monthlyEndDate)}</p>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <p>{t("myBilling.baseRate")}: {v.rate.isFreeBase ? t("myBilling.free") : formatVND(v.rate.baseRatePerCheckin)} {t("myBilling.perCheckin")}</p>
+                        <p>{t("myBilling.subAddon")}: {v.rate.isFreeSubAddon ? t("myBilling.free") : formatVND(v.rate.subscriptionAddon)}</p>
+                        <p>{t("myBilling.sepayAddon")}: {v.rate.isFreeSepayAddon ? t("myBilling.free") : formatVND(v.rate.sepayAddon)}</p>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <p className="text-xs text-neutral-500">{t("myBilling.defaultRates")}</p>

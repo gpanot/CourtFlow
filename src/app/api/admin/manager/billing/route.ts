@@ -38,6 +38,11 @@ export async function GET(request: NextRequest) {
           isFreeBase: true,
           isFreeSubAddon: true,
           isFreeSepayAddon: true,
+          billingModel: true,
+          monthlyRate: true,
+          monthlyPeriodStart: true,
+          monthlyEndDate: true,
+          monthlyStatus: true,
         },
       }),
     ]);

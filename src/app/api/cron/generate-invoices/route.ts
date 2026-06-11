@@ -30,6 +30,8 @@ export async function GET(req: Request) {
             billingModel: true,
             monthlyRate: true,
             monthlyPeriodStart: true,
+            monthlyEndDate: true,
+            monthlyStatus: true,
           },
         },
       },
@@ -48,11 +50,30 @@ export async function GET(req: Request) {
         // Monthly invoices are only generated on the 1st of the month
         if (!isFirstOfMonth) continue;
 
+        const monthlyStatus = venue.billingRate?.monthlyStatus ?? "inactive";
+        const monthlyEndDate = venue.billingRate?.monthlyEndDate ?? null;
+
+        // Skip cancelled subscriptions — auto-revert to per_payment
+        if (monthlyStatus === "cancelled") {
+          await prisma.venueBillingRate.update({
+            where: { venueId: venue.id },
+            data: { billingModel: "per_payment", monthlyStatus: "inactive" },
+          });
+          continue;
+        }
+
+        // Skip expired subscriptions (end date has passed)
+        if (monthlyEndDate && prevMonthEnd > monthlyEndDate) {
+          await prisma.venueBillingRate.update({
+            where: { venueId: venue.id },
+            data: { billingModel: "per_payment", monthlyStatus: "inactive" },
+          });
+          continue;
+        }
+
         try {
           const monthlyPeriodStart = venue.billingRate?.monthlyPeriodStart ?? null;
 
-          // Determine the actual period start for this invoice.
-          // If the venue joined the monthly plan mid-previous-month, pro-rate from that date.
           let periodStart = prevMonthStart;
           if (
             monthlyPeriodStart &&

@@ -861,6 +861,10 @@ model VenueBillingRate {
   monthlyRate        Int       @default(0) @map("monthly_rate")
   /// Date billing started under the monthly model — used to pro-rate the first invoice
   monthlyPeriodStart DateTime? @map("monthly_period_start")
+  /// Optional end date for the monthly subscription — null means no expiry
+  monthlyEndDate     DateTime? @map("monthly_end_date")
+  /// "active" | "cancelled" | "inactive"
+  monthlyStatus      String    @default("inactive") @map("monthly_status")
   createdAt          DateTime  @default(now()) @map("created_at")
   updatedAt          DateTime  @updatedAt @map("updated_at")
 

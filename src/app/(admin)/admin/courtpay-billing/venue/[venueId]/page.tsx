@@ -34,6 +34,8 @@ interface RatesData {
   billingModel: "per_payment" | "monthly";
   monthlyRate: number;
   monthlyPeriodStart: string | null;
+  monthlyEndDate: string | null;
+  monthlyStatus: string;
 }
 
 interface InvoiceRow {
@@ -347,6 +349,11 @@ export default function VenueBillingDetailPage() {
   const [payMethod, setPayMethod] = useState<"manual" | "payos" | "sepay">("manual");
   const [payComment, setPayComment] = useState("");
 
+  // Subscription actions
+  const [subActionLoading, setSubActionLoading] = useState(false);
+  const [editingSubAmount, setEditingSubAmount] = useState(false);
+  const [newSubAmount, setNewSubAmount] = useState(0);
+
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const fetchDetail = useCallback(async () => {
     setLoading(true);
@@ -368,6 +375,8 @@ export default function VenueBillingDetailPage() {
           billingModel: "per_payment",
           monthlyRate: 0,
           monthlyPeriodStart: null,
+          monthlyEndDate: null,
+          monthlyStatus: "inactive",
         }
       );
     } catch (e) {
@@ -486,6 +495,45 @@ export default function VenueBillingDetailPage() {
       console.error(e);
     }
     setMarkingPaid(null);
+  };
+
+  const cancelSubscription = async () => {
+    if (!confirm("Cancel monthly subscription? It will run to the end of the current period, then no more invoices will be generated.")) return;
+    setSubActionLoading(true);
+    try {
+      await api.patch(`/api/admin/billing/venue/${venueId}/rates`, { action: "cancel" });
+      await fetchDetail();
+    } catch (e) {
+      console.error(e);
+    }
+    setSubActionLoading(false);
+  };
+
+  const reactivateSubscription = async () => {
+    setSubActionLoading(true);
+    try {
+      await api.patch(`/api/admin/billing/venue/${venueId}/rates`, { action: "reactivate" });
+      await fetchDetail();
+    } catch (e) {
+      console.error(e);
+    }
+    setSubActionLoading(false);
+  };
+
+  const updateSubAmount = async () => {
+    if (newSubAmount <= 0) return;
+    setSubActionLoading(true);
+    try {
+      await api.patch(`/api/admin/billing/venue/${venueId}/rates`, {
+        action: "update_amount",
+        monthlyRate: newSubAmount,
+      });
+      setEditingSubAmount(false);
+      await fetchDetail();
+    } catch (e) {
+      console.error(e);
+    }
+    setSubActionLoading(false);
   };
 
   const markUnpaid = async (invoiceId: string) => {
@@ -673,26 +721,103 @@ export default function VenueBillingDetailPage() {
             </div>
           </div>
 
-          {/* Monthly rate input — only shown for monthly model */}
+          {/* Monthly subscription settings — only shown for monthly model */}
           {ratesForm.billingModel === "monthly" && (
-            <div className="space-y-2 rounded-lg border border-neutral-700 bg-neutral-800/40 p-4">
-              <label className="text-xs text-neutral-500 block font-medium">
-                Monthly flat rate (VND)
-              </label>
-              <AmountInput
-                value={ratesForm.monthlyRate}
-                onChange={(v) => setRatesForm({ ...ratesForm, monthlyRate: v })}
-                placeholder="e.g. 500,000"
-                className="w-full max-w-xs rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white"
-              />
-              <p className="text-[11px] text-neutral-600">
-                First invoice will be pro-rated from the date billing is activated this month.
-                {ratesForm.monthlyPeriodStart && (
-                  <span className="ml-1 text-neutral-500">
-                    Current period start: {fmtDate(ratesForm.monthlyPeriodStart)}
-                  </span>
-                )}
-              </p>
+            <div className="space-y-4 rounded-lg border border-neutral-700 bg-neutral-800/40 p-4">
+              {/* Status badge */}
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-neutral-500 font-medium">Status:</span>
+                <span
+                  className={cn(
+                    "text-xs px-2 py-0.5 rounded-full font-medium",
+                    ratesForm.monthlyStatus === "active"
+                      ? "bg-green-900/30 text-green-400"
+                      : ratesForm.monthlyStatus === "cancelled"
+                      ? "bg-red-900/30 text-red-400"
+                      : "bg-neutral-800 text-neutral-500"
+                  )}
+                >
+                  {ratesForm.monthlyStatus === "active"
+                    ? "Active"
+                    : ratesForm.monthlyStatus === "cancelled"
+                    ? "Cancelled"
+                    : "Inactive"}
+                </span>
+              </div>
+
+              {/* Monthly rate */}
+              <div className="space-y-1">
+                <label className="text-xs text-neutral-500 block font-medium">
+                  Monthly flat rate (VND)
+                </label>
+                <AmountInput
+                  value={ratesForm.monthlyRate}
+                  onChange={(v) => setRatesForm({ ...ratesForm, monthlyRate: v })}
+                  placeholder="e.g. 500,000"
+                  className="w-full max-w-xs rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white"
+                />
+              </div>
+
+              {/* Start date */}
+              <div className="space-y-1">
+                <label className="text-xs text-neutral-500 block font-medium">
+                  Start date
+                </label>
+                <input
+                  type="date"
+                  value={ratesForm.monthlyPeriodStart ? ratesForm.monthlyPeriodStart.substring(0, 10) : ""}
+                  onChange={(e) =>
+                    setRatesForm({
+                      ...ratesForm,
+                      monthlyPeriodStart: e.target.value || null,
+                    })
+                  }
+                  className="w-full max-w-xs rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white"
+                />
+                <p className="text-[11px] text-neutral-600">
+                  First invoice will be pro-rated from this date.
+                </p>
+              </div>
+
+              {/* End date + No expiry */}
+              <div className="space-y-1">
+                <label className="text-xs text-neutral-500 block font-medium">
+                  End date
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="date"
+                    value={ratesForm.monthlyEndDate ? ratesForm.monthlyEndDate.substring(0, 10) : ""}
+                    onChange={(e) =>
+                      setRatesForm({
+                        ...ratesForm,
+                        monthlyEndDate: e.target.value || null,
+                      })
+                    }
+                    disabled={!ratesForm.monthlyEndDate && ratesForm.monthlyEndDate === null}
+                    className="w-full max-w-xs rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white disabled:opacity-40"
+                  />
+                  <label className="flex items-center gap-1.5 cursor-pointer select-none whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      checked={ratesForm.monthlyEndDate === null}
+                      onChange={(e) =>
+                        setRatesForm({
+                          ...ratesForm,
+                          monthlyEndDate: e.target.checked
+                            ? null
+                            : new Date(Date.now() + 30 * 86400000).toISOString().substring(0, 10),
+                        })
+                      }
+                      className="h-3.5 w-3.5 rounded accent-purple-500"
+                    />
+                    <span className="text-xs text-neutral-400">No expiry</span>
+                  </label>
+                </div>
+                <p className="text-[11px] text-neutral-600">
+                  Subscription will auto-expire after this date. No further invoices will be generated.
+                </p>
+              </div>
             </div>
           )}
 
@@ -800,6 +925,121 @@ export default function VenueBillingDetailPage() {
       {/* ── Weeks tab ─────────────────────────────────────────────────────── */}
       {tab === "weeks" && (
         <div className="space-y-3">
+          {/* Subscription summary card */}
+          {detail.rates?.billingModel === "monthly" &&
+            (detail.rates.monthlyStatus === "active" || detail.rates.monthlyStatus === "cancelled") && (
+              <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold">Monthly Subscription</h3>
+                    <span
+                      className={cn(
+                        "text-xs px-2 py-0.5 rounded-full font-medium",
+                        detail.rates.monthlyStatus === "active"
+                          ? "bg-green-900/30 text-green-400"
+                          : "bg-red-900/30 text-red-400"
+                      )}
+                    >
+                      {detail.rates.monthlyStatus === "active" ? "Active" : "Cancelled"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <p className="text-xs text-neutral-500 mb-0.5">Amount</p>
+                    <p className="font-semibold">{formatVND(detail.rates.monthlyRate)} VND/month</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-neutral-500 mb-0.5">Period</p>
+                    <p className="font-medium">
+                      {detail.rates.monthlyPeriodStart
+                        ? fmtDate(detail.rates.monthlyPeriodStart)
+                        : "—"}{" "}
+                      →{" "}
+                      {detail.rates.monthlyEndDate
+                        ? fmtDate(detail.rates.monthlyEndDate)
+                        : "No expiry"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-neutral-500 mb-0.5">Next invoice</p>
+                    <p className="font-medium">
+                      {detail.rates.monthlyStatus === "cancelled"
+                        ? "None (cancelled)"
+                        : (() => {
+                            const now = new Date();
+                            const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+                            return fmtDate(nextMonth.toISOString());
+                          })() + " (auto)"}
+                    </p>
+                  </div>
+                </div>
+
+                {detail.rates.monthlyStatus === "cancelled" && (
+                  <p className="text-xs text-amber-400">
+                    Cancelled — runs until end of current billing period. No further invoices will be generated.
+                  </p>
+                )}
+
+                {/* Actions */}
+                <div className="flex items-center gap-3 pt-1">
+                  {editingSubAmount ? (
+                    <div className="flex items-center gap-2">
+                      <AmountInput
+                        value={newSubAmount}
+                        onChange={setNewSubAmount}
+                        placeholder="New amount"
+                        className="w-40 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-white"
+                      />
+                      <button
+                        onClick={() => void updateSubAmount()}
+                        disabled={subActionLoading || newSubAmount <= 0}
+                        className="rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-500 disabled:opacity-50"
+                      >
+                        {subActionLoading ? <Loader2 className="h-3 w-3 animate-spin inline" /> : "Save"}
+                      </button>
+                      <button
+                        onClick={() => setEditingSubAmount(false)}
+                        className="text-xs text-neutral-500 hover:text-white"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setNewSubAmount(detail.rates?.monthlyRate ?? 0);
+                        setEditingSubAmount(true);
+                      }}
+                      disabled={subActionLoading}
+                      className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-400 hover:text-white hover:border-neutral-500 disabled:opacity-50"
+                    >
+                      Update Amount
+                    </button>
+                  )}
+
+                  {detail.rates.monthlyStatus === "active" ? (
+                    <button
+                      onClick={() => void cancelSubscription()}
+                      disabled={subActionLoading}
+                      className="rounded-lg border border-red-800/50 px-3 py-1.5 text-xs text-red-400 hover:bg-red-900/20 disabled:opacity-50"
+                    >
+                      {subActionLoading ? <Loader2 className="h-3 w-3 animate-spin inline" /> : "Cancel Subscription"}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => void reactivateSubscription()}
+                      disabled={subActionLoading}
+                      className="rounded-lg border border-green-800/50 px-3 py-1.5 text-xs text-green-400 hover:bg-green-900/20 disabled:opacity-50"
+                    >
+                      {subActionLoading ? <Loader2 className="h-3 w-3 animate-spin inline" /> : "Reactivate"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
           {/* Backfill toolbar */}
           <div className="flex items-center gap-3">
             <button

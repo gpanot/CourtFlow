@@ -29,6 +29,8 @@ export async function GET(
           billingModel: true,
           monthlyRate: true,
           monthlyPeriodStart: true,
+          monthlyEndDate: true,
+          monthlyStatus: true,
         },
       }),
       prisma.billingInvoice.findMany({
