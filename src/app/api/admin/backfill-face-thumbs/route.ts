@@ -8,10 +8,17 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 export async function POST(req: Request) {
-  try {
-    requireSuperAdmin(req.headers);
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Accept either a JWT superadmin token OR a matching SITE_PASSWORD header
+  const sitePassword = process.env.SITE_PASSWORD;
+  const xSecret = req.headers.get("x-admin-secret");
+  const secretOk = sitePassword && xSecret === sitePassword;
+
+  if (!secretOk) {
+    try {
+      requireSuperAdmin(req.headers);
+    } catch {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
   }
 
   const players = await prisma.player.findMany({
