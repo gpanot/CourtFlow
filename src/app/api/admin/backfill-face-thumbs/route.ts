@@ -8,10 +8,12 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 export async function POST(req: Request) {
-  // Accept either a JWT superadmin token OR a matching SITE_PASSWORD header
-  const sitePassword = process.env.SITE_PASSWORD;
-  const xSecret = req.headers.get("x-admin-secret");
-  const secretOk = sitePassword && xSecret === sitePassword;
+  // Accept either a JWT superadmin token OR a matching SITE_PASSWORD query param / header
+  const sitePassword = process.env.SITE_PASSWORD?.trim();
+  const { searchParams } = new URL(req.url);
+  const querySecret = searchParams.get("secret")?.trim();
+  const headerSecret = req.headers.get("x-admin-secret")?.trim();
+  const secretOk = sitePassword && (querySecret === sitePassword || headerSecret === sitePassword);
 
   if (!secretOk) {
     try {
