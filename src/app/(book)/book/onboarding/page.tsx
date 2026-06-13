@@ -103,7 +103,16 @@ export default function OnboardingPage() {
   const canContinue = phone.length >= 8 && phoneStatus !== "taken" && phoneStatus !== "checking" && gender && skillLevel && !saving;
 
   async function handleProfileContinue() {
-    if (!canContinue) return;
+    if (!phone || phone.trim().length < 8) {
+      setError("Phone number is required (min 8 digits)");
+      return;
+    }
+    if (!gender) { setError("Please select a gender"); return; }
+    if (!skillLevel) { setError("Please select a skill level"); return; }
+    if (!canContinue) {
+      console.log("[onboarding] canContinue=false", { phone: phone.length, phoneStatus, gender, skillLevel, saving });
+      return;
+    }
     setError(null);
     setVenuesLoading(true);
     try {
@@ -126,13 +135,16 @@ export default function OnboardingPage() {
   async function submitOnboarding(venueId: string | null) {
     setSaving(true);
     setError(null);
+    const payload = { phone: phone.trim(), gender, skillLevel, venueId };
+    console.log("[onboarding] submitOnboarding payload:", payload);
     try {
       const res = await fetch("/api/public/account/onboarding", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, gender, skillLevel, venueId }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
+      console.log("[onboarding] API response:", res.status, data);
       if (!res.ok) {
         if (data.existingPlayerId) {
           setLinkPrompt({ existingPlayerId: data.existingPlayerId, phone });

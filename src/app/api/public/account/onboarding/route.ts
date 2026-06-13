@@ -14,7 +14,9 @@ export async function POST(request: NextRequest) {
       venueId?: string | null;
     };
 
-    if (!phone || phone.length < 8) return error("Phone number is required", 400);
+    console.log("[onboarding API] received:", { playerId, phone, phoneLen: phone?.length, gender, skillLevel, venueId });
+
+    if (!phone || phone.length < 8) return error(`Phone number is required (got "${phone}", len=${phone?.length})`, 400);
     if (!["male", "female"].includes(gender)) return error("Invalid gender", 400);
     if (!["beginner", "intermediate", "advanced", "pro"].includes(skillLevel))
       return error("Invalid skill level", 400);
