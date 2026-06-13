@@ -4,16 +4,18 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { X, ZoomIn, ZoomOut, RotateCw, Check } from "lucide-react";
 import { cn } from "@/lib/cn";
 
-const MAX_OUTPUT_SIZE = 400;
-const MAX_FILE_BYTES = 200 * 1024;
+const DEFAULT_OUTPUT_SIZE = 400;
+const DEFAULT_MAX_FILE_BYTES = 200 * 1024;
 
 interface AvatarPhotoCropperProps {
   file: File;
   onCropped: (blob: Blob) => void;
   onCancel: () => void;
+  outputSize?: number;
+  maxFileBytes?: number;
 }
 
-export function AvatarPhotoCropper({ file, onCropped, onCancel }: AvatarPhotoCropperProps) {
+export function AvatarPhotoCropper({ file, onCropped, onCancel, outputSize = DEFAULT_OUTPUT_SIZE, maxFileBytes = DEFAULT_MAX_FILE_BYTES }: AvatarPhotoCropperProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -93,15 +95,15 @@ export function AvatarPhotoCropper({ file, onCropped, onCancel }: AvatarPhotoCro
     setProcessing(true);
 
     const outCanvas = document.createElement("canvas");
-    outCanvas.width = MAX_OUTPUT_SIZE;
-    outCanvas.height = MAX_OUTPUT_SIZE;
+    outCanvas.width = outputSize;
+    outCanvas.height = outputSize;
     const ctx = outCanvas.getContext("2d")!;
 
-    ctx.translate(MAX_OUTPUT_SIZE / 2, MAX_OUTPUT_SIZE / 2);
+    ctx.translate(outputSize / 2, outputSize / 2);
     ctx.rotate((rotation * Math.PI) / 180);
     ctx.scale(zoom, zoom);
 
-    const scale = MAX_OUTPUT_SIZE / Math.min(img.width, img.height);
+    const scale = outputSize / Math.min(img.width, img.height);
     const w = img.width * scale;
     const h = img.height * scale;
     ctx.drawImage(img, -w / 2 + offset.x, -h / 2 + offset.y, w, h);
@@ -112,13 +114,13 @@ export function AvatarPhotoCropper({ file, onCropped, onCancel }: AvatarPhotoCro
       blob = await new Promise<Blob | null>((res) =>
         outCanvas.toBlob(res, "image/jpeg", quality)
       );
-      if (blob && blob.size <= MAX_FILE_BYTES) break;
+      if (blob && blob.size <= maxFileBytes) break;
       quality -= 0.05;
     }
 
-    if (!blob || blob.size > MAX_FILE_BYTES) {
+    if (!blob || blob.size > maxFileBytes) {
       const smallCanvas = document.createElement("canvas");
-      const smallSize = 200;
+      const smallSize = Math.round(outputSize / 2);
       smallCanvas.width = smallSize;
       smallCanvas.height = smallSize;
       const sCtx = smallCanvas.getContext("2d")!;
@@ -145,8 +147,8 @@ export function AvatarPhotoCropper({ file, onCropped, onCancel }: AvatarPhotoCro
         <div className="relative mx-auto aspect-square w-full max-w-[280px] overflow-hidden rounded-full border-2 border-neutral-600 bg-neutral-800">
           <canvas
             ref={canvasRef}
-            width={MAX_OUTPUT_SIZE}
-            height={MAX_OUTPUT_SIZE}
+            width={outputSize}
+            height={outputSize}
             className="h-full w-full cursor-move touch-none"
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}

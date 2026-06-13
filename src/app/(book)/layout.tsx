@@ -3,6 +3,8 @@ import "../globals.css";
 import { BookSessionProvider } from "./book/components/BookSessionProvider";
 import { ThemeProvider } from "./book/components/ThemeProvider";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Book | CourtFlow",
   description: "Book courts, coaches, and packages",

@@ -1,0 +1,22 @@
+---
+# Build Performance Rules
+
+## Route Groups
+The app has 5 route groups that all compile in one next build:
+- (admin) — admin panel
+- (book) — player booking portal
+- (player) — player PWA
+- (staff) — staff dashboard  
+- (tv) — TV display
+- (courtpay) — CourtPay PWA
+
+## Static Generation
+- Never use generateStaticParams in any (book), (player), or (staff) route
+- Always add export const dynamic = 'force-dynamic' to all pages under (book)/
+- Never add getStaticProps patterns to any customer-facing portal page
+- Admin pages can be dynamic too — no page in this app benefits from static generation since all data is venue-scoped and auth-gated
+
+## Dependencies
+- Always check if a package already exists in the codebase before installing a new one
+- Never install two packages that do the same thing (e.g. two date libraries, two auth libraries)
+---

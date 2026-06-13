@@ -1,14 +1,15 @@
 "use client";
+export const dynamic = "force-dynamic";
 
-import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState, useRef } from "react";
 import { bankNameFromBin } from "@/lib/vietqr";
 import { usePlayerVenue } from "../../../components/PlayerVenueContext";
 import { usePlayerSession } from "../../../components/usePlayerSession";
 import { portalFetch } from "@/lib/portal-fetch";
 
-function formatPrice(cents: number) {
-  return new Intl.NumberFormat("vi-VN").format(cents) + " VND";
+function formatPrice(p: number) {
+  return new Intl.NumberFormat("vi-VN").format(p) + " VND";
 }
 
 interface LessonDetail {
@@ -31,12 +32,17 @@ interface BankInfo {
 export default function LessonPaymentPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { status } = usePlayerSession();
   const { venueId: playerVenueId } = usePlayerVenue();
   const [lesson, setLesson] = useState<LessonDetail | null>(null);
   const [bank, setBank] = useState<BankInfo | null>(null);
   const [uploading, setUploading] = useState(false);
   const [proofSubmitted, setProofSubmitted] = useState(false);
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const holdExpires = searchParams.get("holdExpires");
 
   useEffect(() => {
     if (status === "unauthenticated") { router.replace("/book/login"); return; }
@@ -56,6 +62,22 @@ export default function LessonPaymentPage() {
       .then((v) => setBank({ bankName: v.bankName || "", bankAccount: v.bankAccount || "", bankOwnerName: v.bankOwnerName || "" }));
   }, [status, id, router, playerVenueId]);
 
+  useEffect(() => {
+    if (!holdExpires || proofSubmitted) return;
+    const expiresAt = new Date(holdExpires).getTime();
+    const tick = () => {
+      const left = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
+      setSecondsLeft(left);
+      if (left <= 0) {
+        if (timerRef.current) clearInterval(timerRef.current);
+        portalFetch(`/api/public/coach-sessions/${id}`, { method: "DELETE" }).catch(() => {});
+      }
+    };
+    tick();
+    timerRef.current = setInterval(tick, 1000);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [holdExpires, id, proofSubmitted]);
+
   async function handleProofSubmit() {
     setUploading(true);
     try {
@@ -71,13 +93,26 @@ export default function LessonPaymentPage() {
 
   if (!lesson) return <div className="px-4 pt-12 text-[var(--cm-text-muted)]">Loading...</div>;
 
+  if (holdExpires && lesson.paymentStatus === "pending" && secondsLeft <= 0) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60dvh] px-6 text-center">
+        <div className="text-4xl mb-4">⏱</div>
+        <h2 className="text-lg font-bold mb-2">Payment window expired</h2>
+        <p className="text-sm text-[var(--cm-text-sec)] mb-6">The session is now available for others to book.</p>
+        <button onClick={() => router.replace("/book")} className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm">
+          Book Again
+        </button>
+      </div>
+    );
+  }
+
   if (proofSubmitted) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60dvh] px-6 text-center">
         <div className="w-16 h-16 bg-[var(--cm-green)]/15 rounded-full flex items-center justify-center mb-4">
           <span className="text-2xl text-[var(--cm-green)]">✓</span>
         </div>
-        <h2 className="text-lg font-bold mb-2">Payment submitted</h2>
+        <h2 className="text-lg font-bold mb-2">Verifying payment</h2>
         <p className="text-sm text-[var(--cm-text-sec)] mb-2">
           {lesson.coach.name} · {lesson.package.name}
         </p>
@@ -109,6 +144,16 @@ export default function LessonPaymentPage() {
       <p className="text-sm text-[var(--cm-text-sec)] mb-4">
         {lesson.coach.name} · {lesson.package.name}
       </p>
+
+      {holdExpires && secondsLeft > 0 && (
+        <div className={`text-center py-2 px-4 rounded-xl mb-4 text-sm font-medium ${
+          secondsLeft < 60
+            ? "bg-[var(--cm-red)]/10 text-[var(--cm-red)]"
+            : "bg-[var(--cm-orange)]/10 text-[var(--cm-orange)]"
+        }`}>
+          Time left to pay: {Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, "0")}
+        </div>
+      )}
 
       {qrUrl && (
         <div className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-4 text-center">

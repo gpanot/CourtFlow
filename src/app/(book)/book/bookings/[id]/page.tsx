@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = "force-dynamic";
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -6,8 +7,8 @@ import { usePlayerVenue } from "../../components/PlayerVenueContext";
 import { usePlayerSession } from "../../components/usePlayerSession";
 import { portalFetch } from "@/lib/portal-fetch";
 
-function formatPrice(cents: number) {
-  return new Intl.NumberFormat("vi-VN").format(cents) + " VND";
+function formatPrice(p: number) {
+  return new Intl.NumberFormat("vi-VN").format(p) + " VND";
 }
 
 interface VenueContact {

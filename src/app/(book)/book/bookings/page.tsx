@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = "force-dynamic";
 import { portalFetch } from "@/lib/portal-fetch";
 
 import { usePlayerSession } from "../components/usePlayerSession";
@@ -29,8 +30,8 @@ interface LessonItem {
   package: { name: string };
 }
 
-function formatPrice(cents: number) {
-  return new Intl.NumberFormat("vi-VN").format(cents) + " VND";
+function formatPrice(p: number) {
+  return new Intl.NumberFormat("vi-VN").format(p) + " VND";
 }
 
 function PaymentPill({ status }: { status: string | null }) {

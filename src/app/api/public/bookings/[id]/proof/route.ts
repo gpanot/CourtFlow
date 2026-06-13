@@ -48,7 +48,7 @@ export async function POST(
 
     await prisma.booking.update({
       where: { id },
-      data: { paymentStatus: "proof_submitted", paymentProofUrl: proofUrl },
+      data: { paymentStatus: "proof_submitted", paymentProofUrl: proofUrl, holdExpiresAt: null },
     });
 
     return json({ success: true, proofUrl });

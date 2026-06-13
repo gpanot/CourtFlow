@@ -138,8 +138,7 @@ function formatTime(iso: string): string {
 }
 
 function fmtPrice(cents: number): string {
-  const d = Math.round(cents / 100);
-  return `$${d.toLocaleString("en-US")}`;
+  return new Intl.NumberFormat("vi-VN").format(cents);
 }
 
 const BLOCK_LABELS: Record<string, string> = {
@@ -1555,8 +1554,8 @@ function BookingConfigSection({
     setDirty(false);
   }, [settings]);
 
-  const centsToDollars = (c: number) => Math.round(c / 100);
-  const dollarsToCents = (d: number) => Math.round(d * 100);
+  const centsToDollars = (c: number) => c;
+  const dollarsToCents = (d: number) => d;
   const resolve = (cell: number | null) => cell ?? bCfg.defaultPriceInCents;
 
   const updateCell = (day: number, hour: number, cents: number) => {
@@ -1620,7 +1619,7 @@ function BookingConfigSection({
   const inputCls = "w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-white focus:border-purple-500 focus:outline-none";
   const activeHours: number[] = [];
   for (let h = bCfg.bookingStartHour; h < bCfg.bookingEndHour; h++) activeHours.push(h);
-  const fmtDollars = (c: number) => { const d = Math.round(c / 100); return d.toLocaleString("en-US"); };
+  const fmtDollars = (c: number) => c.toLocaleString("vi-VN");
 
   return (
     <div className="space-y-4">

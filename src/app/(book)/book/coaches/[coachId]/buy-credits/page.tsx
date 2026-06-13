@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = "force-dynamic";
 import { portalFetch } from "@/lib/portal-fetch";
 
 import { useParams, useRouter, useSearchParams } from "next/navigation";
@@ -6,8 +7,8 @@ import { usePlayerSession } from "../../../components/usePlayerSession";
 import { useState, useEffect, Suspense } from "react";
 import { usePlayerVenue } from "../../../components/PlayerVenueContext";
 
-function formatPrice(cents: number) {
-  return new Intl.NumberFormat("vi-VN").format(cents) + " VND";
+function formatPrice(p: number) {
+  return new Intl.NumberFormat("vi-VN").format(p) + " VND";
 }
 
 function BuyCreditsContent() {
@@ -46,7 +47,8 @@ function BuyCreditsContent() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Purchase failed");
-      router.push(`/book/pay/credit/${data.credit.id}`);
+      const expires = data.payment?.holdExpiresAt ? `?holdExpires=${encodeURIComponent(data.payment.holdExpiresAt)}` : "";
+      router.push(`/book/pay/credit/${data.credit.id}${expires}`);
     } catch (e) {
       setError((e as Error).message);
       setPurchasing(false);

@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = "force-dynamic";
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -44,12 +45,12 @@ function formatDate(d: Date) {
   return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
-function formatHour(h: number) {
-  return `${h.toString().padStart(2, "0")}:00`;
+function formatPrice(p: number) {
+  return new Intl.NumberFormat("vi-VN").format(p) + " VND";
 }
 
-function formatPrice(cents: number) {
-  return new Intl.NumberFormat("vi-VN").format(cents) + " VND";
+function formatHour(h: number) {
+  return `${h.toString().padStart(2, "0")}:00`;
 }
 
 export default function VenueHomePage() {

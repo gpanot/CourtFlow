@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = "force-dynamic";
 import { portalFetch } from "@/lib/portal-fetch";
 
 import { usePlayerSession } from "../../components/usePlayerSession";

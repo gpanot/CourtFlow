@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { usePlayerSession } from "./usePlayerSession";
+import { useState, useEffect } from "react";
 
 const HIDDEN_PATHS = ["/book/login", "/book/intro", "/book/onboarding"];
 
@@ -17,8 +18,13 @@ export function BottomNav() {
   const pathname = usePathname();
   const { status } = usePlayerSession();
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
 
-  if (status !== "authenticated" || HIDDEN_PATHS.includes(pathname)) return null;
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const visible = mounted && status === "authenticated" && !HIDDEN_PATHS.includes(pathname);
 
   function isActive(href: string) {
     if (href === "/book") return pathname === "/book";
@@ -32,8 +38,12 @@ export function BottomNav() {
     }
   }
 
+  if (!visible) return null;
+
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[var(--cm-bg-card)] border-t border-[var(--cm-border)] pb-[env(safe-area-inset-bottom)]">
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-50 bg-[var(--cm-bg-card)] border-t border-[var(--cm-border)] pb-[env(safe-area-inset-bottom)]"
+    >
       <div className="flex max-w-lg mx-auto">
         {tabs.map((tab) => {
           const active = isActive(tab.href);

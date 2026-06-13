@@ -1,11 +1,13 @@
 "use client";
+export const dynamic = "force-dynamic";
 import { portalFetch } from "@/lib/portal-fetch";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { usePlayerSession } from "../../components/usePlayerSession";
 import { signOutToIntro } from "../../lib/sign-out-to-intro";
 import { useTheme } from "../../components/ThemeProvider";
+import { AvatarPhotoCropper } from "@/components/avatar-photo-cropper";
 
 const SKILL_LEVELS = ["beginner", "intermediate", "advanced", "pro"] as const;
 const GENDERS = ["male", "female"] as const;
@@ -24,11 +26,15 @@ export default function EditProfilePage() {
   const [gender, setGender] = useState("");
   const [skillLevel, setSkillLevel] = useState("");
   const [email, setEmail] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteStep, setDeleteStep] = useState<"confirm" | "deleting" | "done">("confirm");
+
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/book/login");
@@ -41,10 +47,32 @@ export default function EditProfilePage() {
           setGender(p.gender ?? "");
           setSkillLevel(p.skillLevel ?? "");
           setEmail(p.email ?? "");
+          setAvatarUrl(p.avatar ?? null);
           setLoaded(true);
         });
     }
   }, [status, router]);
+
+  function handleAvatarFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setCropFile(file);
+    e.target.value = "";
+  }
+
+  async function handleCropped(blob: Blob) {
+    setCropFile(null);
+    try {
+      const formData = new FormData();
+      formData.append("avatar", blob, "avatar.jpg");
+      const res = await portalFetch("/api/public/account/avatar", { method: "POST", body: formData });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Upload failed"); }
+      const data = await res.json();
+      setAvatarUrl(data.avatarPhotoPath);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
 
   async function handleDelete() {
     setDeleteStep("deleting");
@@ -89,7 +117,29 @@ export default function EditProfilePage() {
       <button onClick={() => router.back()} className="text-sm text-[var(--cm-text-sec)] mb-6">
         ← Back
       </button>
-      <h1 className="text-xl font-bold mb-6 text-[var(--cm-text)]">Edit Profile</h1>
+      <h1 className="text-xl font-bold mb-4 text-[var(--cm-text)]">Edit Profile</h1>
+
+      {/* Avatar */}
+      <div className="flex flex-col items-center mb-6">
+        <button
+          onClick={() => fileRef.current?.click()}
+          className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-[var(--cm-border)] hover:border-[var(--cm-accent)] transition-colors"
+        >
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-[var(--cm-accent-bg)] flex items-center justify-center text-2xl">🏓</div>
+          )}
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+          </div>
+        </button>
+        <p className="text-xs text-[var(--cm-text-muted)] mt-1.5">Tap to change photo</p>
+        <input ref={fileRef} type="file" accept="image/*" onChange={handleAvatarFileChange} className="hidden" />
+      </div>
 
       {error && (
         <div className="mb-4 p-3 bg-[var(--cm-red)]/10 text-[var(--cm-red)] text-sm rounded-xl">{error}</div>
@@ -185,6 +235,16 @@ export default function EditProfilePage() {
           Delete my account and data
         </button>
       </div>
+
+      {cropFile && (
+        <AvatarPhotoCropper
+          file={cropFile}
+          onCropped={handleCropped}
+          onCancel={() => setCropFile(null)}
+          outputSize={500}
+          maxFileBytes={500 * 1024}
+        />
+      )}
 
       {/* Delete confirmation modal */}
       {showDeleteConfirm && (

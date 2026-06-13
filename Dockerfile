@@ -26,11 +26,11 @@ COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/sounds ./sounds
-RUN mkdir -p /app/uploads/players /app/uploads/players/avatars
+RUN mkdir -p /app/uploads/players /app/uploads/players/avatars /app/uploads/coaches/photos
 EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 # Railway mounts a persistent volume at /app/uploads. The volume is owned by
 # root, so the container runs as root to guarantee write access for face photos
 # and avatars. Sub-dirs are created at startup in case the volume is fresh.
-CMD ["sh", "-c", "npx prisma migrate deploy && mkdir -p /app/uploads/players /app/uploads/players/avatars && node server.js"]
+CMD ["sh", "-c", "npx prisma migrate deploy && mkdir -p /app/uploads/players /app/uploads/players/avatars /app/uploads/coaches/photos && node server.js"]

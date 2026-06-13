@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import {
@@ -11,7 +11,9 @@ import {
   Calendar,
   Save,
   Loader2,
+  Camera,
 } from "lucide-react";
+import { AvatarPhotoCropper } from "@/components/avatar-photo-cropper";
 
 /* ─── Types ─── */
 
@@ -54,7 +56,7 @@ const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const LANGUAGES = ["English", "Vietnamese", "Thai", "Japanese", "Korean"];
 const SPECIALTIES = ["Pickleball", "Tennis", "Badminton", "Ping Pong"];
-const FOCUS_LEVELS = ["Beginner", "Advance", "Pro"];
+const FOCUS_LEVELS = ["Beginner", "Advanced", "Pro"];
 const YEARS_OPTIONS = ["<2", "2-5", "5+"];
 const GROUP_SIZES = ["1-1", "2", "3", "4", "4+"];
 const GENDERS = ["Male", "Female", "Other"];
@@ -115,6 +117,9 @@ export function CoachProfileEditor({ coach, onClose, onSaved }: Props) {
   // Profile state
   const [bio, setBio] = useState(coach.coachBio ?? "");
   const [photo, setPhoto] = useState(coach.coachPhoto ?? "");
+  const [cropFile, setCropFile] = useState<File | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [dupr, setDupr] = useState(coach.coachDupr ?? "");
   const [gender, setGender] = useState(coach.coachGender ?? "");
   const [languages, setLanguages] = useState<string[]>(coach.coachLanguages ?? []);
@@ -168,6 +173,26 @@ export function CoachProfileEditor({ coach, onClose, onSaved }: Props) {
 
   function toggleSingle(current: string, val: string): string {
     return current === val ? "" : val;
+  }
+
+  /* ─── Photo upload ─── */
+
+  async function handleCropped(blob: Blob) {
+    setCropFile(null);
+    setUploadingPhoto(true);
+    try {
+      const form = new FormData();
+      form.append("photo", blob, "photo.jpg");
+      const res = await api.upload<{ coachPhoto: string }>(
+        `/api/admin/coaches/${coach.id}/photo`,
+        form
+      );
+      setPhoto(res.coachPhoto);
+    } catch (e) {
+      setErr((e as Error).message || "Failed to upload photo");
+    } finally {
+      setUploadingPhoto(false);
+    }
   }
 
   /* ─── Availability helpers ─── */
@@ -276,7 +301,8 @@ export function CoachProfileEditor({ coach, onClose, onSaved }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60" onClick={onClose}>
+    <>
+      <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/60" onClick={onClose}>
       <div
         className="w-full max-w-lg rounded-t-2xl md:rounded-2xl border border-neutral-700 bg-neutral-900 max-h-[90dvh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
@@ -315,19 +341,57 @@ export function CoachProfileEditor({ coach, onClose, onSaved }: Props) {
         <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
           {tab === "profile" ? (
             <>
-              {/* Avatar URL */}
+              {/* Profile Photo */}
               <div>
-                <label className="block text-xs font-medium text-neutral-400 mb-1.5">Avatar URL</label>
+                <label className="block text-xs font-medium text-neutral-400 mb-2">Profile Photo</label>
+                <div className="flex items-center gap-4">
+                  <div className="relative shrink-0">
+                    <div className="h-20 w-20 rounded-full overflow-hidden border-2 border-neutral-700 bg-neutral-800 flex items-center justify-center">
+                      {photo ? (
+                        <img src={photo} alt="Coach photo" className="h-full w-full object-cover" />
+                      ) : (
+                        <User className="h-8 w-8 text-neutral-600" />
+                      )}
+                    </div>
+                    {uploadingPhoto && (
+                      <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/50">
+                        <Loader2 className="h-5 w-5 animate-spin text-white" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingPhoto}
+                      className="flex items-center gap-1.5 rounded-lg border border-neutral-700 px-3 py-2 text-xs font-medium text-neutral-300 hover:border-teal-500 hover:text-teal-300 transition-colors disabled:opacity-50"
+                    >
+                      <Camera className="h-3.5 w-3.5" />
+                      {photo ? "Change photo" : "Upload photo"}
+                    </button>
+                    {photo && (
+                      <button
+                        type="button"
+                        onClick={() => setPhoto("")}
+                        className="flex items-center gap-1.5 rounded-lg border border-neutral-800 px-3 py-1.5 text-xs text-red-400 hover:border-red-600/40 hover:bg-red-600/10 transition-colors"
+                      >
+                        <Trash2 className="h-3 w-3" /> Remove
+                      </button>
+                    )}
+                    <p className="text-[10px] text-neutral-600">JPG/PNG/WebP · max 500KB · will be cropped to square</p>
+                  </div>
+                </div>
                 <input
-                  type="text"
-                  value={photo}
-                  onChange={(e) => setPhoto(e.target.value)}
-                  placeholder="https://..."
-                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-teal-500 focus:outline-none"
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) setCropFile(f);
+                    e.target.value = "";
+                  }}
                 />
-                {photo && (
-                  <img src={photo} alt="Preview" className="mt-2 h-16 w-16 rounded-full object-cover border border-neutral-700" />
-                )}
               </div>
 
               {/* DUPR Level */}
@@ -560,6 +624,16 @@ export function CoachProfileEditor({ coach, onClose, onSaved }: Props) {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+      {cropFile && (
+        <AvatarPhotoCropper
+          file={cropFile}
+          onCropped={handleCropped}
+          onCancel={() => setCropFile(null)}
+          outputSize={500}
+          maxFileBytes={500 * 1024}
+        />
+      )}
+    </>
   );
 }

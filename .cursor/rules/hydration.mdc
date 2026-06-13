@@ -1,0 +1,38 @@
+---
+# Hydration Rules — Never Break SSR
+
+## The Core Rule
+Never conditionally render layout elements based on client-only state.
+Every component must render identically on server and client on the first pass.
+
+## Banned Patterns — Never Use These
+- if (typeof window !== 'undefined') to decide whether to render a component
+- const [mounted, setMounted] = useState(false) + useEffect(() => setMounted(true)) used to gate rendering
+- Rendering a nav, sidebar, footer, or any layout element only after mount
+- Adding or removing classNames in useEffect based on window size or scroll position on first render
+
+## Correct Patterns
+
+### For components that must know about the client environment:
+Use suppressHydrationWarning on the specific element, not the whole tree.
+
+### For bottom nav / mobile nav with safe area insets:
+Always render the nav on both server and client.
+Always include the bottom padding (pb-20 or equivalent) on the parent <main> unconditionally.
+Use CSS env(safe-area-inset-bottom) directly in className — it is safe for SSR.
+
+### For conditional UI based on auth state:
+Render a skeleton or null placeholder that has the same DOM shape on server and client.
+Never render completely different component trees based on a client-only auth check.
+
+### For anything that genuinely needs client-only rendering (charts, maps, etc.):
+Use Next.js dynamic import with ssr: false:
+  const MyComponent = dynamic(() => import('./MyComponent'), { ssr: false })
+This is the only acceptable way to skip SSR for a component.
+
+## When You See a Hydration Error
+1. Find the component named in the error (e.g. BottomNav.tsx line 36)
+2. Look for any useState(false) + useEffect setMounted pattern
+3. Look for typeof window checks
+4. Remove them — render the element unconditionally
+5. If padding or className differs, make it unconditional too

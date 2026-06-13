@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = "force-dynamic";
 
 import { usePlayerSession } from "../components/usePlayerSession";
 import { signOutToIntro } from "../lib/sign-out-to-intro";

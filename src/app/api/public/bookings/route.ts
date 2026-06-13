@@ -130,7 +130,13 @@ export async function GET(request: NextRequest) {
     const { playerId } = await requirePortalAuth(request);
 
     const bookings = await prisma.booking.findMany({
-      where: { playerId },
+      where: {
+        playerId,
+        NOT: {
+          status: "cancelled",
+          paymentStatus: { not: { in: ["paid", "proof_submitted", "PAID"] } },
+        },
+      },
       include: { court: { select: { label: true } } },
       orderBy: { startTime: "desc" },
     });

@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = "force-dynamic";
 import { portalFetch } from "@/lib/portal-fetch";
 
 import { useParams, useRouter } from "next/navigation";
@@ -25,8 +26,8 @@ interface CoachProfile {
   availability: { hour: number; available: boolean }[];
 }
 
-function formatPrice(cents: number) {
-  return new Intl.NumberFormat("vi-VN").format(cents) + " VND";
+function formatPrice(p: number) {
+  return new Intl.NumberFormat("vi-VN").format(p) + " VND";
 }
 
 function formatHour(h: number) {
@@ -120,7 +121,8 @@ export default function CoachProfilePage() {
       if (data.paidWithCredit) {
         router.push("/book/bookings");
       } else {
-        router.push(`/book/pay/lesson/${data.lesson.id}`);
+        const expires = data.payment?.holdExpiresAt ? `?holdExpires=${encodeURIComponent(data.payment.holdExpiresAt)}` : "";
+        router.push(`/book/pay/lesson/${data.lesson.id}${expires}`);
       }
     } catch (e) {
       setBookingError((e as Error).message);

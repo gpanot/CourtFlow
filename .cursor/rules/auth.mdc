@@ -1,0 +1,32 @@
+---
+description: Auth architecture rules for staff, player portal, and OAuth flows
+alwaysApply: true
+---
+
+# Auth Architecture Rules
+
+## Staff Auth
+- Staff login uses custom JWT + bcrypt
+- Never replace or modify the existing staff auth system
+- Staff token stored in httpOnly cookie or localStorage as "staff_token"
+- Verify with src/lib/auth.ts patterns
+
+## Player Portal Auth
+- Email/password login and signup use a custom JWT flow — never next-auth credentials provider
+- POST /api/public/auth/login handles email/password, returns { token, user }
+- Token signed with JWT_SECRET, stored in localStorage as "player_token"
+- Helper functions live in src/lib/player-auth.ts
+- Protected routes check player_token and redirect to /book/login if missing
+
+## OAuth (Google, Apple)
+- Google and Apple sign-in use next-auth v5
+- next-auth is ONLY used for OAuth providers — never for credentials provider
+- trustHost: true must be set in the NextAuth() config
+- Never add credentials provider to the NextAuth() config
+
+## General Rules
+- Never install or use next-auth credentials provider for any new auth flow
+- Never use manual fetch to /api/auth/callback/credentials or /api/auth/csrf
+- Never use signIn("credentials") from next-auth/react
+- When adding a new login flow, follow the custom JWT pattern in src/lib/auth.ts
+- Always add AUTH_SECRET and JWT_SECRET to .env.example when setting up auth

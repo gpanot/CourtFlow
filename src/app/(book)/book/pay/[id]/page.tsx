@@ -1,4 +1,5 @@
 "use client";
+export const dynamic = "force-dynamic";
 
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState, useRef, useCallback } from "react";
@@ -7,8 +8,8 @@ import { usePlayerVenue } from "../../components/PlayerVenueContext";
 import { usePlayerSession } from "../../components/usePlayerSession";
 import { portalFetch } from "@/lib/portal-fetch";
 
-function formatPrice(cents: number) {
-  return new Intl.NumberFormat("vi-VN").format(cents) + " đ";
+function formatPrice(p: number) {
+  return new Intl.NumberFormat("vi-VN").format(p) + " VND";
 }
 
 interface BookingDetail {
@@ -84,17 +85,20 @@ export default function PaymentPage() {
 
   // Hold timer
   useEffect(() => {
-    if (!booking?.holdExpiresAt) return;
+    if (!booking?.holdExpiresAt || proofSubmitted) return;
     const expiresAt = new Date(booking.holdExpiresAt).getTime();
     const tick = () => {
       const left = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
       setSecondsLeft(left);
-      if (left <= 0 && timerRef.current) clearInterval(timerRef.current);
+      if (left <= 0) {
+        if (timerRef.current) clearInterval(timerRef.current);
+        portalFetch(`/api/public/bookings/${id}`, { method: "DELETE" }).catch(() => {});
+      }
     };
     tick();
     timerRef.current = setInterval(tick, 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [booking?.holdExpiresAt]);
+  }, [booking?.holdExpiresAt, id, proofSubmitted]);
 
   // Auto-payment polling
   useEffect(() => {
@@ -183,8 +187,8 @@ export default function PaymentPage() {
         <div className="w-16 h-16 bg-[var(--cm-green)]/15 rounded-full flex items-center justify-center mb-4">
           <span className="text-2xl text-[var(--cm-green)]">✓</span>
         </div>
-        <h2 className="text-lg font-bold mb-2">Payment submitted</h2>
-        <p className="text-sm text-[var(--cm-text-sec)] mb-1">The venue will verify your transfer shortly.</p>
+        <h2 className="text-lg font-bold mb-2">Verifying payment</h2>
+        <p className="text-sm text-[var(--cm-text-sec)] mb-1">Your proof has been submitted. The venue will verify shortly.</p>
         {booking.paymentRef && (
           <p className="text-sm font-semibold text-[var(--cm-accent)] mb-6">{booking.paymentRef}</p>
         )}
