@@ -5,7 +5,7 @@ import { requirePortalAuth } from "@/lib/portal-auth";
 
 export async function POST(request: NextRequest) {
   try {
-    const { playerId } = await requirePortalAuth();
+    const { playerId } = await requirePortalAuth(request);
     const body = await request.json();
     const { phone, gender, skillLevel, venueId } = body as {
       phone: string;

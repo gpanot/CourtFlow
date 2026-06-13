@@ -8,7 +8,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { playerId } = await requirePortalAuth();
+    const { playerId } = await requirePortalAuth(request);
     const { id } = await params;
     const body = await request.json();
     const { proofUrl } = body as { proofUrl: string };

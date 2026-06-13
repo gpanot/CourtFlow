@@ -1,8 +1,9 @@
 "use client";
+import { portalFetch } from "@/lib/portal-fetch";
 
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
+import { usePlayerSession } from "../../components/usePlayerSession";
 import { usePlayerVenue } from "../../components/PlayerVenueContext";
 
 interface Package {
@@ -35,7 +36,7 @@ function formatHour(h: number) {
 export default function CoachProfilePage() {
   const { coachId } = useParams<{ coachId: string }>();
   const router = useRouter();
-  const { status } = useSession();
+  const { status } = usePlayerSession();
   const { venueId: playerVenueId } = usePlayerVenue();
   const [coach, setCoach] = useState<CoachProfile | null>(null);
   const [selectedPkg, setSelectedPkg] = useState<Package | null>(null);
@@ -100,7 +101,7 @@ export default function CoachProfilePage() {
     startTime.setHours(selectedHour, 0, 0, 0);
 
     try {
-      const res = await fetch("/api/public/coach-sessions", {
+      const res = await portalFetch("/api/public/coach-sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -339,7 +340,7 @@ function CoachSessionSummary({
   const [credits, setCredits] = useState<{ id: string; remaining: number }[]>([]);
 
   useEffect(() => {
-    fetch("/api/public/account")
+    portalFetch("/api/public/account")
       .then((r) => r.json())
       .then((data) => {
         const coachCredits = (data.coachCredits || [])

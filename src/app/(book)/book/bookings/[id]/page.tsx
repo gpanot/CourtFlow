@@ -1,9 +1,10 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { usePlayerVenue } from "../../components/PlayerVenueContext";
+import { usePlayerSession } from "../../components/usePlayerSession";
+import { portalFetch } from "@/lib/portal-fetch";
 
 function formatPrice(cents: number) {
   return new Intl.NumberFormat("vi-VN").format(cents) + " VND";
@@ -59,7 +60,7 @@ function ProgressStepper({ paymentStatus }: { paymentStatus: string | null }) {
 export default function BookingDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { status } = useSession();
+  const { status } = usePlayerSession();
   const { venueId: playerVenueId } = usePlayerVenue();
   const [booking, setBooking] = useState<Record<string, unknown> | null>(null);
   const [venueContact, setVenueContact] = useState<VenueContact | null>(null);
@@ -69,11 +70,11 @@ export default function BookingDetailPage() {
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/book/login");
     if (status === "authenticated") {
-      fetch(`/api/public/bookings/${id}`)
+      portalFetch(`/api/public/bookings/${id}`)
         .then((r) => r.json())
         .then(setBooking);
       const vq = playerVenueId ? `?venueId=${playerVenueId}` : "";
-      fetch(`/api/public/venue${vq}`)
+      portalFetch(`/api/public/venue${vq}`)
         .then((r) => r.json())
         .then((v) =>
           setVenueContact({ name: v.name, location: v.location, contactPhone: v.contactPhone })
@@ -84,7 +85,7 @@ export default function BookingDetailPage() {
 
   async function handleCancel() {
     setCancelling(true);
-    const res = await fetch(`/api/public/bookings/${id}`, { method: "DELETE" });
+    const res = await portalFetch(`/api/public/bookings/${id}`, { method: "DELETE" });
     if (res.ok) {
       router.replace("/book/bookings");
     } else {

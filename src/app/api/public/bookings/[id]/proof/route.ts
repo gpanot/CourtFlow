@@ -12,7 +12,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { playerId } = await requirePortalAuth();
+    const { playerId } = await requirePortalAuth(request);
     const { id } = await params;
 
     const booking = await prisma.booking.findFirst({

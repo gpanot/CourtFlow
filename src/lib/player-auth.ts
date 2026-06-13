@@ -1,8 +1,6 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import Apple from "next-auth/providers/apple";
-import Credentials from "next-auth/providers/credentials";
-import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db";
 
 /** A phone is a real user-provided phone only if it doesn't carry a provider placeholder prefix. */
@@ -31,6 +29,7 @@ declare module "@auth/core/jwt" {
 }
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  trustHost: true,
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -44,30 +43,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           }),
         ]
       : []),
-    Credentials({
-      id: "credentials",
-      name: "Email & Password",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-      },
-      async authorize(credentials) {
-        const email = credentials?.email as string | undefined;
-        const password = credentials?.password as string | undefined;
-        if (!email || !password) return null;
-
-        const account = await prisma.playerAccount.findUnique({
-          where: { provider_providerAccountId: { provider: "credentials", providerAccountId: email.toLowerCase() } },
-          include: { player: true },
-        });
-        if (!account?.passwordHash) return null;
-
-        const valid = await bcrypt.compare(password, account.passwordHash);
-        if (!valid) return null;
-
-        return { id: account.player.id, email: account.email ?? email, name: account.player.name };
-      },
-    }),
   ],
   session: { strategy: "jwt" },
   pages: {
@@ -132,16 +107,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         return token;
       }
 
-      if (account?.provider === "credentials" && token.sub) {
-        const player = await prisma.player.findUnique({
-          where: { id: token.sub },
-          select: { id: true, phone: true, registrationVenueId: true },
-        });
-        if (player) {
-          token.playerId = player.id;
-          token.onboardingComplete = isOnboardingComplete(player.phone, player.registrationVenueId);
-        }
-      } else if (account?.providerAccountId) {
+      if (account?.providerAccountId) {
         const pa = await prisma.playerAccount.findUnique({
           where: {
             provider_providerAccountId: {

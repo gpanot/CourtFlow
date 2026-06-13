@@ -7,11 +7,11 @@ import { checkCancellationPolicy } from "@/lib/booking";
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { playerId } = await requirePortalAuth();
+    const { playerId } = await requirePortalAuth(request);
     const { id } = await params;
 
     const booking = await prisma.booking.findFirst({
@@ -31,11 +31,11 @@ export async function GET(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { playerId } = await requirePortalAuth();
+    const { playerId } = await requirePortalAuth(request);
     const { id } = await params;
 
     const booking = await prisma.booking.findFirst({

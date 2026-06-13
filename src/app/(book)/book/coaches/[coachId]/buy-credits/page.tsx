@@ -1,7 +1,8 @@
 "use client";
+import { portalFetch } from "@/lib/portal-fetch";
 
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { usePlayerSession } from "../../../components/usePlayerSession";
 import { useState, useEffect, Suspense } from "react";
 import { usePlayerVenue } from "../../../components/PlayerVenueContext";
 
@@ -13,7 +14,7 @@ function BuyCreditsContent() {
   const { coachId } = useParams<{ coachId: string }>();
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { status } = useSession();
+  const { status } = usePlayerSession();
   const { venueId: playerVenueId } = usePlayerVenue();
   const [coachName, setCoachName] = useState("");
   const [purchasing, setPurchasing] = useState(false);
@@ -38,7 +39,7 @@ function BuyCreditsContent() {
     setPurchasing(true);
     setError(null);
     try {
-      const res = await fetch("/api/public/packages", {
+      const res = await portalFetch("/api/public/packages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ coachId, packageId, quantity: qty, totalPrice: total, venueId: playerVenueId || undefined }),

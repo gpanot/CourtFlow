@@ -1,8 +1,9 @@
 "use client";
+import { portalFetch } from "@/lib/portal-fetch";
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { usePlayerSession } from "../../components/usePlayerSession";
 
 interface Credit {
   id: string;
@@ -14,7 +15,7 @@ interface Credit {
 }
 
 export default function CreditsPage() {
-  const { status } = useSession();
+  const { status } = usePlayerSession();
   const router = useRouter();
   const [credits, setCredits] = useState<Credit[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -22,7 +23,7 @@ export default function CreditsPage() {
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/book/login");
     if (status === "authenticated") {
-      fetch("/api/public/account")
+      portalFetch("/api/public/account")
         .then((r) => r.json())
         .then((data) => {
           setCredits(data.coachCredits || []);

@@ -14,7 +14,7 @@ const HOLD_MINUTES = 5;
 
 export async function POST(request: NextRequest) {
   try {
-    const { playerId } = await requirePortalAuth();
+    const { playerId } = await requirePortalAuth(request);
     const body = await request.json();
     const { courtId, date: dateStr, startTime: startTimeStr, venueId: bodyVenueId, slotCount: rawSlotCount } = body as {
       courtId: string;
@@ -125,9 +125,9 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const { playerId } = await requirePortalAuth();
+    const { playerId } = await requirePortalAuth(request);
 
     const bookings = await prisma.booking.findMany({
       where: { playerId },

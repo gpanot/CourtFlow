@@ -1,7 +1,8 @@
 "use client";
+import { portalFetch } from "@/lib/portal-fetch";
 
 import { useSearchParams, useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { usePlayerSession } from "../components/usePlayerSession";
 import { useEffect, useState, Suspense, useMemo } from "react";
 import { usePlayerVenue } from "../components/PlayerVenueContext";
 
@@ -12,7 +13,7 @@ function formatPrice(cents: number) {
 function ConfirmContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const { status } = useSession();
+  const { status } = usePlayerSession();
   const { venueId: playerVenueId } = usePlayerVenue();
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +74,7 @@ function ConfirmContent() {
     setCreating(true);
     setError(null);
     try {
-      const res = await fetch("/api/public/bookings", {
+      const res = await portalFetch("/api/public/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

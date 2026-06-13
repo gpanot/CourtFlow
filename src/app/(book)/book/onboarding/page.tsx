@@ -3,6 +3,7 @@
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback, useRef } from "react";
+import { getPlayerToken, getPlayerFromToken } from "@/lib/player-token";
 
 const SKILL_LEVELS = ["beginner", "intermediate", "advanced", "pro"] as const;
 const GENDERS = ["male", "female"] as const;
@@ -17,6 +18,12 @@ interface PortalVenue {
 export default function OnboardingPage() {
   const { data: session, status, update } = useSession();
   const router = useRouter();
+
+  // Resolve auth header for both credentials and OAuth paths
+  const authHeader: Record<string, string> = getPlayerToken()
+    ? { Authorization: `Bearer ${getPlayerToken()}` }
+    : {};
+  const isCredentialsAuth = !!getPlayerFromToken();
 
   const [step, setStep] = useState<"profile" | "venue">("profile");
   const [phone, setPhone] = useState("");
@@ -36,18 +43,21 @@ export default function OnboardingPage() {
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
   const [initialCheckDone, setInitialCheckDone] = useState(false);
 
+  // Redirect if not authenticated at all
   useEffect(() => {
+    if (isCredentialsAuth) return; // credentials user is always "authenticated"
     if (status === "unauthenticated") router.replace("/book/login");
     if (status === "authenticated" && session?.onboardingComplete) {
       router.replace("/book");
     }
-  }, [status, session, router]);
+  }, [status, session, router, isCredentialsAuth]);
 
   // If the player already has a real phone but no venue, skip to venue step
   useEffect(() => {
-    if (status !== "authenticated" || initialCheckDone) return;
+    const ready = isCredentialsAuth || status === "authenticated";
+    if (!ready || initialCheckDone) return;
     setInitialCheckDone(true);
-    fetch("/api/public/account")
+    fetch("/api/public/account", { headers: authHeader })
       .then((r) => r.json())
       .then((profile) => {
         const hasRealPhone = profile.phone && !profile.phone.startsWith("oauth_") && !profile.phone.startsWith("email_");
@@ -60,9 +70,9 @@ export default function OnboardingPage() {
             .then((r) => r.json())
             .then((data: PortalVenue[]) => {
               if (data.length === 0) {
-                submitOnboarding(null);
+                submitOnboarding(null, profile.phone);
               } else if (data.length === 1) {
-                submitOnboarding(data[0].id);
+                submitOnboarding(data[0].id, profile.phone);
               } else {
                 setVenues(data);
                 setStep("venue");
@@ -74,7 +84,7 @@ export default function OnboardingPage() {
       })
       .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, initialCheckDone]);
+  }, [status, initialCheckDone, isCredentialsAuth]);
 
   const checkPhone = useCallback(async (value: string) => {
     const normalized = value.replace(/\s+/g, "");
@@ -132,22 +142,23 @@ export default function OnboardingPage() {
     }
   }
 
-  async function submitOnboarding(venueId: string | null) {
+  async function submitOnboarding(venueId: string | null, overridePhone?: string) {
+    const phoneToSend = (overridePhone || phone).trim();
     setSaving(true);
     setError(null);
-    const payload = { phone: phone.trim(), gender, skillLevel, venueId };
+    const payload = { phone: phoneToSend, gender, skillLevel, venueId };
     console.log("[onboarding] submitOnboarding payload:", payload);
     try {
       const res = await fetch("/api/public/account/onboarding", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeader },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
       console.log("[onboarding] API response:", res.status, data);
       if (!res.ok) {
         if (data.existingPlayerId) {
-          setLinkPrompt({ existingPlayerId: data.existingPlayerId, phone });
+          setLinkPrompt({ existingPlayerId: data.existingPlayerId, phone: phoneToSend });
           setSaving(false);
           setVenuesLoading(false);
           setStep("profile");
@@ -155,7 +166,9 @@ export default function OnboardingPage() {
         }
         throw new Error(data.error || "Failed to save profile");
       }
-      await update({ playerId: data.playerId });
+      if (!isCredentialsAuth) {
+        await update({ playerId: data.playerId });
+      }
       router.replace("/book");
     } catch (e) {
       setError((e as Error).message);
@@ -166,7 +179,7 @@ export default function OnboardingPage() {
 
   async function handleVenueSelect(venueId: string) {
     setSelectedVenueId(venueId);
-    await submitOnboarding(venueId);
+    await submitOnboarding(venueId, phone);
   }
 
   async function handleLink(link: boolean) {
@@ -176,7 +189,7 @@ export default function OnboardingPage() {
     try {
       const res = await fetch("/api/public/account/relink", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeader },
         body: JSON.stringify({
           existingPlayerId: linkPrompt.existingPlayerId,
           link,
@@ -187,7 +200,9 @@ export default function OnboardingPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
-      await update({ playerId: data.playerId });
+      if (!isCredentialsAuth) {
+        await update({ playerId: data.playerId });
+      }
       setLinkPrompt(null);
       router.replace("/book");
     } catch (e) {

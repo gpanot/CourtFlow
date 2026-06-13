@@ -1,8 +1,9 @@
 "use client";
+import { portalFetch } from "@/lib/portal-fetch";
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { usePlayerSession } from "../../components/usePlayerSession";
 import { signOutToIntro } from "../../lib/sign-out-to-intro";
 import { useTheme } from "../../components/ThemeProvider";
 
@@ -15,7 +16,7 @@ const THEME_OPTIONS = [
 ];
 
 export default function EditProfilePage() {
-  const { status } = useSession();
+  const { status } = usePlayerSession();
   const router = useRouter();
   const { mode, setMode } = useTheme();
   const [name, setName] = useState("");
@@ -32,7 +33,7 @@ export default function EditProfilePage() {
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/book/login");
     if (status === "authenticated") {
-      fetch("/api/public/account")
+      portalFetch("/api/public/account")
         .then((r) => r.json())
         .then((p) => {
           setName(p.name ?? "");
@@ -48,7 +49,7 @@ export default function EditProfilePage() {
   async function handleDelete() {
     setDeleteStep("deleting");
     try {
-      const res = await fetch("/api/public/account", { method: "DELETE" });
+      const res = await portalFetch("/api/public/account", { method: "DELETE" });
       if (!res.ok) throw new Error("Deletion failed");
       setDeleteStep("done");
       setTimeout(() => signOutToIntro(), 1500);
@@ -63,7 +64,7 @@ export default function EditProfilePage() {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch("/api/public/account", {
+      const res = await portalFetch("/api/public/account", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, phone, gender, skillLevel }),

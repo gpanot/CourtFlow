@@ -1,10 +1,11 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { useEffect, useState, useRef, useCallback } from "react";
 import { bankNameFromBin } from "@/lib/vietqr";
 import { usePlayerVenue } from "../../components/PlayerVenueContext";
+import { usePlayerSession } from "../../components/usePlayerSession";
+import { portalFetch } from "@/lib/portal-fetch";
 
 function formatPrice(cents: number) {
   return new Intl.NumberFormat("vi-VN").format(cents) + " đ";
@@ -32,7 +33,7 @@ interface VenuePayInfo {
 export default function PaymentPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { status } = useSession();
+  const { status } = usePlayerSession();
   const { venueId: playerVenueId } = usePlayerVenue();
   const [booking, setBooking] = useState<BookingDetail | null>(null);
   const [venueInfo, setVenueInfo] = useState<VenuePayInfo | null>(null);
@@ -48,7 +49,7 @@ export default function PaymentPage() {
 
   const loadBooking = useCallback(async () => {
     try {
-      const res = await fetch(`/api/public/bookings/${id}`);
+      const res = await portalFetch(`/api/public/bookings/${id}`);
       if (!res.ok) { setLoadError(true); return; }
       const data = await res.json();
       setBooking(data);
@@ -100,7 +101,7 @@ export default function PaymentPage() {
     if (!venueInfo?.autoPayment || !booking || booking.paymentStatus !== "pending") return;
     pollRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/public/bookings/${id}`);
+        const res = await portalFetch(`/api/public/bookings/${id}`);
         if (!res.ok) return;
         const data = await res.json();
         if (data.paymentStatus === "paid") {
@@ -128,13 +129,13 @@ export default function PaymentPage() {
       if (proofFile) {
         const formData = new FormData();
         formData.append("proof", proofFile);
-        const res = await fetch(`/api/public/bookings/${id}/proof`, {
+        const res = await portalFetch(`/api/public/bookings/${id}/proof`, {
           method: "POST",
           body: formData,
         });
         if (res.ok) setProofSubmitted(true);
       } else {
-        const res = await fetch(`/api/public/bookings/${id}/proof`, {
+        const res = await portalFetch(`/api/public/bookings/${id}/proof`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ proofUrl: "pending_proof" }),
@@ -146,7 +147,7 @@ export default function PaymentPage() {
   }
 
   async function handleCancel() {
-    await fetch(`/api/public/bookings/${id}`, { method: "DELETE" });
+    await portalFetch(`/api/public/bookings/${id}`, { method: "DELETE" });
     router.replace("/book");
   }
 

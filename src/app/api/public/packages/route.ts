@@ -12,7 +12,7 @@ const CREDIT_EXPIRY_DAYS = 90;
 
 export async function POST(request: NextRequest) {
   try {
-    const { playerId } = await requirePortalAuth();
+    const { playerId } = await requirePortalAuth(request);
     const body = await request.json();
     const { coachId, packageId, quantity, totalPrice, venueId: bodyVenueId } = body as {
       coachId: string;

@@ -1,10 +1,11 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { bankNameFromBin } from "@/lib/vietqr";
 import { usePlayerVenue } from "../../../components/PlayerVenueContext";
+import { usePlayerSession } from "../../../components/usePlayerSession";
+import { portalFetch } from "@/lib/portal-fetch";
 
 function formatPrice(cents: number) {
   return new Intl.NumberFormat("vi-VN").format(cents) + " VND";
@@ -29,7 +30,7 @@ interface BankInfo {
 export default function CreditPaymentPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { status } = useSession();
+  const { status } = usePlayerSession();
   const { venueId: playerVenueId } = usePlayerVenue();
   const [credit, setCredit] = useState<CreditDetail | null>(null);
   const [bank, setBank] = useState<BankInfo | null>(null);
@@ -40,7 +41,7 @@ export default function CreditPaymentPage() {
     if (status === "unauthenticated") { router.replace("/book/login"); return; }
     if (status !== "authenticated") return;
 
-    fetch(`/api/public/credits/${id}`)
+    portalFetch(`/api/public/credits/${id}`)
       .then((r) => r.json())
       .then((data) => {
         setCredit(data);
@@ -49,7 +50,7 @@ export default function CreditPaymentPage() {
       });
 
     const vq = playerVenueId ? `?venueId=${playerVenueId}` : "";
-    fetch(`/api/public/venue${vq}`)
+    portalFetch(`/api/public/venue${vq}`)
       .then((r) => r.json())
       .then((v) => setBank({ bankName: v.bankName || "", bankAccount: v.bankAccount || "", bankOwnerName: v.bankOwnerName || "" }));
   }, [status, id, router, playerVenueId]);
@@ -57,7 +58,7 @@ export default function CreditPaymentPage() {
   async function handleProofSubmit() {
     setUploading(true);
     try {
-      const res = await fetch(`/api/public/credits/${id}/proof`, {
+      const res = await portalFetch(`/api/public/credits/${id}/proof`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ proofUrl: "pending_proof" }),

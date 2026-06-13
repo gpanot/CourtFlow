@@ -1,6 +1,7 @@
 "use client";
+import { portalFetch } from "@/lib/portal-fetch";
 
-import { useSession } from "next-auth/react";
+import { usePlayerSession } from "../../components/usePlayerSession";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { usePlayerVenue } from "../../components/PlayerVenueContext";
@@ -13,7 +14,7 @@ interface PortalVenue {
 }
 
 export default function ChangeVenuePage() {
-  const { status, update } = useSession();
+  const { status, session } = usePlayerSession();
   const router = useRouter();
   const { refresh: refreshVenue } = usePlayerVenue();
 
@@ -30,8 +31,8 @@ export default function ChangeVenuePage() {
     if (status !== "authenticated") return;
 
     Promise.all([
-      fetch("/api/public/venues").then((r) => r.json()),
-      fetch("/api/public/account").then((r) => r.json()),
+      portalFetch("/api/public/venues").then((r) => r.json()),
+      portalFetch("/api/public/account").then((r) => r.json()),
     ])
       .then(([venueList, profile]) => {
         setVenues(Array.isArray(venueList) ? venueList : []);
@@ -45,7 +46,7 @@ export default function ChangeVenuePage() {
     if (venueId === currentVenueId) return;
     setSaving(venueId);
     try {
-      const res = await fetch("/api/public/account", {
+      const res = await portalFetch("/api/public/account", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ venueId }),
@@ -53,7 +54,6 @@ export default function ChangeVenuePage() {
       if (!res.ok) throw new Error("Failed to update venue");
       const data = await res.json();
       setCurrentVenueId(venueId);
-      await update({ playerId: data.id });
       refreshVenue();
       router.push("/book/account");
     } catch (e) {

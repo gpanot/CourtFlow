@@ -6,11 +6,11 @@ import { requirePortalAuth } from "@/lib/portal-auth";
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { playerId } = await requirePortalAuth();
+    const { playerId } = await requirePortalAuth(request);
     const { id } = await params;
 
     const lesson = await prisma.coachLesson.findFirst({

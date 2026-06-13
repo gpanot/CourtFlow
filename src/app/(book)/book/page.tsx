@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { usePlayerSession } from "./components/usePlayerSession";
 import Link from "next/link";
 import { usePlayerVenue } from "./components/PlayerVenueContext";
 
@@ -53,7 +53,7 @@ function formatPrice(cents: number) {
 }
 
 export default function VenueHomePage() {
-  const { status } = useSession();
+  const { status } = usePlayerSession();
   const router = useRouter();
   const { venueId: playerVenueId } = usePlayerVenue();
   const [venue, setVenue] = useState<VenueInfo | null>(null);

@@ -3,9 +3,9 @@ import { json, error } from "@/lib/api-helpers";
 import { prisma } from "@/lib/db";
 import { requirePortalAuth } from "@/lib/portal-auth";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const { playerId } = await requirePortalAuth();
+    const { playerId } = await requirePortalAuth(request);
 
     const player = await prisma.player.findUniqueOrThrow({
       where: { id: playerId },
@@ -75,9 +75,9 @@ export async function GET() {
  * (OAuth tokens / password hash). Bookings, payments, coach lessons are retained for
  * financial/operational records but no longer linked to identifiable data.
  */
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
   try {
-    const { playerId } = await requirePortalAuth();
+    const { playerId } = await requirePortalAuth(request);
 
     await prisma.$transaction(async (tx) => {
       // 1. Hard-delete OAuth / credential accounts (removes tokens & password hashes)
@@ -113,7 +113,7 @@ export async function DELETE() {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const { playerId } = await requirePortalAuth();
+    const { playerId } = await requirePortalAuth(request);
     const body = await request.json();
     const { name, phone, gender, skillLevel, venueId } = body as {
       name?: string;

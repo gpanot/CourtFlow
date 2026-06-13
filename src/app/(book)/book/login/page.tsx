@@ -1,12 +1,12 @@
 "use client";
 
-import { signIn, useSession } from "next-auth/react";
+import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import Image from "next/image";
+import { setPlayerToken, getPlayerFromToken } from "@/lib/player-token";
 
 function LoginContent() {
-  const { status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/book";
@@ -25,13 +25,14 @@ function LoginContent() {
   const [suPassword2, setSuPassword2] = useState("");
 
   useEffect(() => {
-    if (status === "authenticated") { router.replace(callbackUrl); return; }
-    if (status === "unauthenticated" && typeof window !== "undefined") {
-      if (!localStorage.getItem("intro_seen")) {
-        router.replace("/book/intro");
-      }
+    if (typeof window === "undefined") return;
+    // Already logged in via credentials token → redirect
+    if (getPlayerFromToken()) { router.replace(callbackUrl); return; }
+    // Show intro to new visitors
+    if (!localStorage.getItem("intro_seen")) {
+      router.replace("/book/intro");
     }
-  }, [status, router, callbackUrl]);
+  }, [router, callbackUrl]);
 
   function switchTab(t: "signin" | "signup") {
     setTab(t);
@@ -55,15 +56,17 @@ function LoginContent() {
     setLoading("email-signin");
     setError(null);
     try {
-      const res = await signIn("credentials", {
-        email: siEmail,
-        password: siPassword,
-        redirect: false,
+      const res = await fetch("/api/public/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: siEmail, password: siPassword }),
       });
-      if (res?.error) {
-        setError("Invalid email or password.");
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Invalid email or password.");
       } else {
-        router.replace(callbackUrl);
+        setPlayerToken(data.token);
+        router.replace(data.onboardingComplete ? callbackUrl : "/book/onboarding");
       }
     } catch {
       setError("Sign-in failed. Please try again.");
@@ -92,17 +95,19 @@ function LoginContent() {
       const data = await res.json();
       if (!res.ok) { setError(data.error || "Sign-up failed."); setLoading(null); return; }
 
-      const signInRes = await signIn("credentials", {
-        email: suEmail,
-        password: suPassword,
-        redirect: false,
+      const loginRes = await fetch("/api/public/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: suEmail, password: suPassword }),
       });
-      if (signInRes?.error) {
+      const loginData = await loginRes.json();
+      if (!loginRes.ok) {
         setSuccess("Account created! Please sign in.");
         setTab("signin");
         setSiEmail(suEmail);
       } else {
-        router.replace(callbackUrl);
+        setPlayerToken(loginData.token);
+        router.replace("/book/onboarding");
       }
     } catch {
       setError("Sign-up failed. Please try again.");

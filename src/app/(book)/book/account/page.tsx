@@ -1,10 +1,12 @@
 "use client";
 
-import { useSession } from "next-auth/react";
+import { usePlayerSession } from "../components/usePlayerSession";
 import { signOutToIntro } from "../lib/sign-out-to-intro";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { portalFetch } from "@/lib/portal-fetch";
+import { getPlayerFromToken } from "@/lib/player-token";
 
 interface Profile {
   id: string;
@@ -28,23 +30,24 @@ interface Profile {
 }
 
 export default function AccountPage() {
-  const { status } = useSession();
+  const { status } = usePlayerSession();
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
 
   useEffect(() => {
-    if (status === "unauthenticated") {
+    const hasCredentials = getPlayerFromToken();
+    if (!hasCredentials && status === "unauthenticated") {
       router.replace("/book/login?callbackUrl=/book/account");
     }
-    if (status === "authenticated") {
-      fetch("/api/public/account")
+    if (hasCredentials || status === "authenticated") {
+      portalFetch("/api/public/account")
         .then((r) => r.json())
         .then(setProfile)
         .catch(() => {});
     }
   }, [status, router]);
 
-  if (status === "loading" || !profile) {
+  if ((!getPlayerFromToken() && status === "loading") || !profile) {
     return (
       <div className="px-4 pt-12">
         <div className="h-6 bg-[var(--cm-bg-card)] rounded w-32 mb-4 animate-pulse" />

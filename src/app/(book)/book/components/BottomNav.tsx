@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { usePlayerSession } from "./usePlayerSession";
 
 const HIDDEN_PATHS = ["/book/login", "/book/intro", "/book/onboarding"];
 
@@ -16,7 +15,7 @@ const tabs = [
 
 export function BottomNav() {
   const pathname = usePathname();
-  const { status } = useSession();
+  const { status } = usePlayerSession();
   const router = useRouter();
 
   if (status !== "authenticated" || HIDDEN_PATHS.includes(pathname)) return null;

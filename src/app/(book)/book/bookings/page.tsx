@@ -1,6 +1,7 @@
 "use client";
+import { portalFetch } from "@/lib/portal-fetch";
 
-import { useSession } from "next-auth/react";
+import { usePlayerSession } from "../components/usePlayerSession";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -49,7 +50,7 @@ function PaymentPill({ status }: { status: string | null }) {
 }
 
 export default function MyBookingsPage() {
-  const { status } = useSession();
+  const { status } = usePlayerSession();
   const router = useRouter();
   const [tab, setTab] = useState<"courts" | "sessions">("courts");
   const [bookings, setBookings] = useState<BookingItem[]>([]);
@@ -62,8 +63,8 @@ export default function MyBookingsPage() {
     }
     if (status === "authenticated") {
       Promise.all([
-        fetch("/api/public/bookings").then((r) => r.json()),
-        fetch("/api/public/coach-sessions").then((r) => r.json()).catch(() => []),
+        portalFetch("/api/public/bookings").then((r) => r.json()),
+        portalFetch("/api/public/coach-sessions").then((r) => r.json()).catch(() => []),
       ]).then(([b, l]) => {
         setBookings(b);
         setLessons(l);
