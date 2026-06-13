@@ -31,6 +31,8 @@ interface Venue {
   name: string;
   location: string | null;
   active: boolean;
+  portalEnabled: boolean;
+  contactPhone: string | null;
   logoUrl: string | null;
   tvText: string | null;
   settings: VenueSettings;
@@ -171,6 +173,7 @@ function VenueCard({
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(venue.name);
   const [editLocation, setEditLocation] = useState(venue.location || "");
+  const [editContactPhone, setEditContactPhone] = useState(venue.contactPhone || "");
   const [saving, setSaving] = useState(false);
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
   const [deleting, setDeleting] = useState(false);
@@ -182,6 +185,7 @@ function VenueCard({
       await api.patch(`/api/venues/${venue.id}`, {
         name: editName.trim(),
         location: editLocation.trim() || null,
+        contactPhone: editContactPhone.trim() || null,
       });
       setEditing(false);
       await onRefresh();
@@ -196,6 +200,7 @@ function VenueCard({
     setEditing(false);
     setEditName(venue.name);
     setEditLocation(venue.location || "");
+    setEditContactPhone(venue.contactPhone || "");
   };
 
   const handleDelete = async () => {
@@ -241,6 +246,17 @@ function VenueCard({
                   if (e.key === "Escape") cancelEdit();
                 }}
               />
+              <input
+                type="tel"
+                value={editContactPhone}
+                onChange={(e) => setEditContactPhone(e.target.value)}
+                placeholder="Contact Phone (e.g. +84 123 456 789)"
+                className="w-full rounded-lg border border-neutral-600 bg-neutral-800 px-3 py-1.5 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveVenue();
+                  if (e.key === "Escape") cancelEdit();
+                }}
+              />
               <div className="flex gap-2">
                 <button
                   onClick={saveVenue}
@@ -278,10 +294,20 @@ function VenueCard({
                       {t("venues.live")}
                     </span>
                   )}
+                  {venue.portalEnabled && (
+                    <span className="rounded-full bg-blue-600/20 px-2 py-0.5 text-xs font-medium text-blue-400">
+                      Player Portal
+                    </span>
+                  )}
                 </div>
                 {venue.location && (
                   <p className="flex items-center gap-1 text-xs text-neutral-400 md:text-sm">
                     <MapPin className="h-3 w-3 shrink-0" /> {venue.location}
+                  </p>
+                )}
+                {venue.contactPhone && (
+                  <p className="flex items-center gap-1 text-xs text-neutral-400 md:text-sm">
+                    📞 {venue.contactPhone}
                   </p>
                 )}
                 <div className="mt-1.5 flex items-center gap-3 text-xs text-neutral-500">
@@ -318,6 +344,11 @@ function VenueCard({
             <CourtsManager
               venueId={venue.id}
               courts={venue.courts}
+              onRefresh={onRefresh}
+            />
+            <PortalToggle
+              venueId={venue.id}
+              enabled={venue.portalEnabled}
               onRefresh={onRefresh}
             />
             {role === "superadmin" && (
@@ -405,6 +436,61 @@ function VenueCard({
   );
 }
 
+
+function PortalToggle({
+  venueId,
+  enabled,
+  onRefresh,
+}: {
+  venueId: string;
+  enabled: boolean;
+  onRefresh: () => void;
+}) {
+  const [saving, setSaving] = useState(false);
+
+  const toggle = async () => {
+    setSaving(true);
+    try {
+      await api.patch(`/api/venues/${venueId}`, { portalEnabled: !enabled });
+      await onRefresh();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-1">
+      <h4 className="text-sm font-medium text-neutral-400 uppercase tracking-wider">
+        Player Booking Portal
+      </h4>
+      <label className="flex items-center gap-3 cursor-pointer">
+        <button
+          onClick={toggle}
+          disabled={saving}
+          className={cn(
+            "relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50",
+            enabled ? "bg-green-600" : "bg-neutral-700"
+          )}
+        >
+          <span
+            className={cn(
+              "inline-block h-4 w-4 rounded-full bg-white transition-transform",
+              enabled ? "translate-x-6" : "translate-x-1"
+            )}
+          />
+        </button>
+        <span className="text-sm text-neutral-300">
+          {enabled ? "Enabled" : "Disabled"}
+        </span>
+      </label>
+      <p className="text-xs text-neutral-600">
+        When enabled, players can book courts and coaches at this venue via the web portal.
+      </p>
+    </div>
+  );
+}
 
 interface ManagerOption {
   id: string;

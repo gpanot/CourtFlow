@@ -118,9 +118,11 @@ enum SubscriptionStatus {
 model Venue {
   id                 String    @id @default(cuid())
   name               String
+  slug               String?   @unique
   location           String?
   settings           Json      @default("{}")
   active             Boolean   @default(true)
+  portalEnabled      Boolean   @default(false) @map("portal_enabled")
   expectedMaxPlayers Int?      @map("expected_max_players")
   playFrequency      String?   @map("play_frequency")
   playTypes          String[]  @default([]) @map("play_types")
@@ -130,6 +132,7 @@ model Venue {
   bankName           String?   @map("bank_name")
   bankAccount        String?   @map("bank_account")
   bankOwnerName      String?   @map("bank_owner_name")
+  contactPhone       String?   @map("contact_phone")
   createdAt          DateTime  @default(now()) @map("created_at")
 
   billingStatus String @default("active") @map("billing_status")
@@ -156,6 +159,7 @@ model Venue {
   faceRecognitionLogs  FaceRecognitionLog[]
   registeredPlayers    Player[]             @relation("PlayerRegistrationVenue")
   signupDuplicateLogs  SignupDuplicateLog[]
+  playerCoachCredits   PlayerCoachCredit[]
 
   @@map("venues")
 }
@@ -164,6 +168,7 @@ model Player {
   id                    String         @id @default(cuid())
   name                  String
   phone                 String         @unique
+  email                 String?        @map("email")
   avatar                String         @default("🏓")
   skillLevel            SkillLevel     @default(beginner) @map("skill_level")
   gender                Gender
@@ -201,6 +206,8 @@ model Player {
   stickerSessions       StickerSession[]
   signupDuplicateLogs   SignupDuplicateLog[]
   stickerJobs           StickerJobQueue[]
+  accounts              PlayerAccount[]
+  coachCredits          PlayerCoachCredit[]
 
   @@index([registrationVenueId])
   @@map("players")
@@ -237,7 +244,7 @@ model StaffVenueAssignment {
   id        String   @id @default(cuid())
   staffId   String   @map("staff_id")
   venueId   String   @map("venue_id")
-  appAccess String[] @default(["courtflow"]) @map("app_access")
+  appAccess String[] @default(["courtpay"]) @map("app_access")
 
   staff StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
   venue Venue       @relation(fields: [venueId], references: [id], onDelete: Cascade)
@@ -257,6 +264,13 @@ model StaffMember {
   isCoach             Boolean   @default(false) @map("is_coach")
   coachBio            String?   @map("coach_bio")
   coachPhoto          String?   @map("coach_photo")
+  coachDupr           String?   @map("coach_dupr")
+  coachGender         String?   @map("coach_gender")
+  coachLanguages      String[]  @default([]) @map("coach_languages")
+  coachSpecialties    String[]  @default([]) @map("coach_specialties")
+  coachFocusLevels    String[]  @default([]) @map("coach_focus_levels")
+  coachYearsExperience String?  @map("coach_years_experience")
+  coachGroupSizes     String[]  @default([]) @map("coach_group_sizes")
   createdAt           DateTime  @default(now()) @map("created_at")
 
   pushNotificationsEnabled Boolean @default(false) @map("push_notifications_enabled")
@@ -276,6 +290,9 @@ model StaffMember {
   customPrices          PlayerCustomPrice[]
   authLogs              StaffAuthLog[]
   ownedVenues           Venue[]  @relation("VenueOwner")
+  coachCredits          PlayerCoachCredit[]
+  coachAvailabilities   CoachAvailability[]
+  coachHolidays         CoachHoliday[]
 
   @@map("staff_members")
 }
@@ -527,24 +544,27 @@ model CourtBlock {
 }
 
 model Booking {
-  id           String        @id @default(cuid())
-  courtId      String        @map("court_id")
-  venueId      String        @map("venue_id")
-  playerId     String        @map("player_id")
-  date         DateTime      @db.Date
-  startTime    DateTime      @map("start_time")
-  endTime      DateTime      @map("end_time")
-  status       BookingStatus @default(confirmed)
-  priceInCents Int           @map("price_in_cents")
-  coPlayerIds  String[]      @map("co_player_ids")
-  createdAt    DateTime      @default(now()) @map("created_at")
-  cancelledAt  DateTime?     @map("cancelled_at")
+  id              String        @id @default(cuid())
+  courtId         String        @map("court_id")
+  venueId         String        @map("venue_id")
+  playerId        String        @map("player_id")
+  date            DateTime      @db.Date
+  startTime       DateTime      @map("start_time")
+  endTime         DateTime      @map("end_time")
+  status          BookingStatus @default(confirmed)
+  priceInCents    Int           @map("price_in_cents")
+  coPlayerIds     String[]      @map("co_player_ids")
+  paymentStatus   String?       @map("payment_status")
+  holdExpiresAt   DateTime?     @map("hold_expires_at")
+  paymentProofUrl String?       @map("payment_proof_url")
+  paymentRef      String?       @unique @map("payment_ref")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  cancelledAt     DateTime?     @map("cancelled_at")
 
   court  Court  @relation(fields: [courtId], references: [id])
   venue  Venue  @relation(fields: [venueId], references: [id])
   player Player @relation(fields: [playerId], references: [id])
 
-  @@unique([courtId, date, startTime])
   @@index([venueId, date])
   @@index([playerId])
   @@map("bookings")
@@ -591,6 +611,7 @@ model CoachPackage {
   coach   StaffMember   @relation(fields: [coachId], references: [id])
   venue   Venue         @relation(fields: [venueId], references: [id])
   lessons CoachLesson[]
+  credits PlayerCoachCredit[]
 
   @@index([coachId])
   @@index([venueId])
@@ -615,6 +636,7 @@ model CoachLesson {
   paymentMethod String?           @map("payment_method")
   proofUrl      String?           @map("proof_url")
   paymentNote   String?           @map("payment_note")
+  paymentRef    String?           @unique @map("payment_ref")
   createdAt     DateTime          @default(now()) @map("created_at")
   cancelledAt   DateTime?         @map("cancelled_at")
 
@@ -628,6 +650,33 @@ model CoachLesson {
   @@index([coachId, date])
   @@index([playerId])
   @@map("coach_lessons")
+}
+
+model CoachAvailability {
+  id        String  @id @default(cuid())
+  coachId   String  @map("coach_id")
+  dayOfWeek Int     @map("day_of_week")
+  startTime String  @map("start_time")
+  endTime   String  @map("end_time")
+  enabled   Boolean @default(true)
+
+  coach StaffMember @relation(fields: [coachId], references: [id], onDelete: Cascade)
+
+  @@index([coachId])
+  @@map("coach_availabilities")
+}
+
+model CoachHoliday {
+  id        String   @id @default(cuid())
+  coachId   String   @map("coach_id")
+  startDate DateTime @map("start_date") @db.Date
+  endDate   DateTime @map("end_date") @db.Date
+  note      String?
+
+  coach StaffMember @relation(fields: [coachId], references: [id], onDelete: Cascade)
+
+  @@index([coachId])
+  @@map("coach_holidays")
 }
 
 model FaceAttempt {
@@ -1120,4 +1169,53 @@ model StaffAuthLog {
   @@index([createdAt])
   @@index([fingerprintId])
   @@map("staff_auth_logs")
+}
+
+// ─── Player Booking Portal ─────────────────────────────────────
+
+model PlayerAccount {
+  id                String    @id @default(cuid())
+  playerId          String    @map("player_id")
+  provider          String
+  providerAccountId String    @map("provider_account_id")
+  email             String?
+  name              String?
+  image             String?
+  passwordHash      String?   @map("password_hash")
+  emailVerified     Boolean   @default(false) @map("email_verified")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([playerId])
+  @@map("player_accounts")
+}
+
+model PlayerCoachCredit {
+  id            String    @id @default(cuid())
+  playerId      String    @map("player_id")
+  coachId       String    @map("coach_id")
+  venueId       String    @map("venue_id")
+  packageId     String    @map("package_id")
+  totalSessions Int       @map("total_sessions")
+  usedSessions  Int       @default(0) @map("used_sessions")
+  priceInCents  Int       @map("price_in_cents")
+  paymentRef    String?   @unique @map("payment_ref")
+  paymentStatus String    @default("pending") @map("payment_status")
+  proofUrl      String?   @map("proof_url")
+  confirmedBy   String?   @map("confirmed_by")
+  confirmedAt   DateTime? @map("confirmed_at")
+  expiresAt     DateTime  @map("expires_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  player  Player       @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  coach   StaffMember  @relation(fields: [coachId], references: [id])
+  venue   Venue        @relation(fields: [venueId], references: [id])
+  package CoachPackage @relation(fields: [packageId], references: [id])
+
+  @@index([playerId, coachId])
+  @@index([venueId])
+  @@map("player_coach_credits")
 }

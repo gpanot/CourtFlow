@@ -53,6 +53,7 @@ export async function GET(request: NextRequest) {
       weekLessons,
       unpaidLessons,
       lessonsPaidThisMonth,
+      recentLessons,
     ] = await Promise.all([
       // Today's bookings (confirmed + completed)
       prisma.booking.findMany({
@@ -179,6 +180,18 @@ export async function GET(request: NextRequest) {
         where: { venueId: { in: venueIds }, paymentStatus: "PAID", paidAt: { gte: monthStart, lte: monthEnd } },
         select: { priceInCents: true },
       }),
+      // Recent coaching lessons (latest 8)
+      prisma.coachLesson.findMany({
+        where: { venueId: { in: venueIds } },
+        include: {
+          coach: { select: { name: true } },
+          player: { select: { name: true } },
+          court: { select: { label: true } },
+          venue: { select: { name: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 8,
+      }),
     ]);
 
     const todayBookingRevenue = todayBookings.reduce((s, b) => s + b.priceInCents, 0);
@@ -254,9 +267,27 @@ export async function GET(request: NextRequest) {
         endTime: b.endTime,
         status: b.status,
         priceInCents: b.priceInCents,
+        createdAt: b.createdAt,
+      })),
+      recentLessons: recentLessons.map((l) => ({
+        id: l.id,
+        playerName: l.player.name,
+        coachName: l.coach.name,
+        venueName: l.venue.name,
+        courtLabel: l.court?.label ?? null,
+        date: l.date,
+        startTime: l.startTime,
+        endTime: l.endTime,
+        status: l.status,
+        priceInCents: l.priceInCents,
+        createdAt: l.createdAt,
       })),
     });
   } catch (e) {
-    return error((e as Error).message, 500);
+    const msg = (e as Error).message;
+    if (msg.includes("authorization") || msg.includes("token") || msg.includes("access required")) {
+      return error(msg, 401);
+    }
+    return error(msg, 500);
   }
 }

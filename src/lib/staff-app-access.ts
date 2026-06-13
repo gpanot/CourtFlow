@@ -8,7 +8,7 @@ export function normalizeAppAccess(raw: string[] | undefined | null): StaffAppAc
     .map((s) => String(s).toLowerCase().trim())
     .filter((s): s is StaffAppAccessKind => ALLOWED.has(s as StaffAppAccessKind));
   const dedup = [...new Set(list)];
-  if (dedup.length === 0) return ["courtflow"];
+  if (dedup.length === 0) return ["courtpay"];
   return dedup;
 }
 

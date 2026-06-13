@@ -39,6 +39,10 @@ export async function GET(request: NextRequest) {
 
     return json({ hasVenue, hasStaff, staffAssignedToVenue });
   } catch (e) {
-    return error((e as Error).message, 500);
+    const msg = (e as Error).message;
+    if (msg.includes("authorization") || msg.includes("token") || msg.includes("access required")) {
+      return error(msg, 401);
+    }
+    return error(msg, 500);
   }
 }

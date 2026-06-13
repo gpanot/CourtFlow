@@ -166,38 +166,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     });
   };
 
+  useEffect(() => {
+    if (!token || !isAdminRole(role)) {
+      router.replace("/staff");
+    }
+  }, [token, role, router]);
+
   if (!token || !isAdminRole(role)) {
-    return (
-      <div className="flex min-h-dvh items-center justify-center p-6">
-        <div className="text-center max-w-sm">
-          <h1 className="mb-4 text-2xl font-bold text-purple-500">{t("layout.adminPanelTitle")}</h1>
-          <p className="mb-4 text-neutral-400">{t("layout.pleaseLogin")}</p>
-          <Link href="/staff" className="text-blue-400 hover:underline">
-            {t("layout.goToStaffLogin")}
-          </Link>
-          {/* Debug: show what role is cached — helps diagnose stale-session issues after role promotion */}
-          <div className="mt-6 rounded-lg border border-amber-800/50 bg-amber-950/30 px-4 py-3 text-left text-xs font-mono">
-            <p className="mb-1 font-semibold text-amber-400">🔍 {t("layout.debugSession")}</p>
-            <p className="text-neutral-400">token: <span className="text-white">{token ? `${token.slice(0, 20)}…` : "null"}</span></p>
-            <p className="text-neutral-400">role: <span className="text-white">{role ?? "null"}</span></p>
-            <p className="mt-2 text-amber-300/80">
-              {token && role === "staff"
-                ? `⚠️ ${t("layout.roleRecentlyChanged")}`
-                : t("layout.noValidSession")}
-            </p>
-            {token && role === "staff" && (
-              <button
-                type="button"
-                onClick={clearAuth}
-                className="mt-3 w-full rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-500"
-              >
-                {t("layout.signOutRelogin")}
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   if (onboardingCompleted === false) return null;

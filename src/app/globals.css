@@ -1,5 +1,55 @@
 @import "tailwindcss";
 
+/* ─── CourtMap Player Portal: design tokens (dark default, light override) ─── */
+:root,
+[data-theme="dark"] {
+  --cm-bg: #0a0a0a;
+  --cm-bg-card: #161616;
+  --cm-bg-surface: #111111;
+  --cm-bg-input: #1a1a1a;
+  --cm-border: #2a2a2a;
+  --cm-text: #f0f0f0;
+  --cm-text-sec: #888888;
+  --cm-text-muted: #555555;
+  --cm-accent: #b8f200;
+  --cm-accent-bg: rgba(184, 242, 0, 0.08);
+  --cm-accent-bg-strong: rgba(184, 242, 0, 0.15);
+  --cm-red: #ff4757;
+  --cm-orange: #ffa502;
+  --cm-green: #2ed573;
+  --cm-blue: #3498db;
+  --cm-pill-bg: rgba(20, 20, 20, 0.92);
+  --cm-pill-border: #333333;
+  --cm-sheet-bg: #111111;
+  --cm-overlay: rgba(0, 0, 0, 0.7);
+  --cm-shadow: 0 2px 20px rgba(0, 0, 0, 0.5);
+  --cm-shadow-sm: 0 1px 8px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="light"] {
+  --cm-bg: #f8fafc;
+  --cm-bg-card: #ffffff;
+  --cm-bg-surface: #ffffff;
+  --cm-bg-input: #ffffff;
+  --cm-border: #e2e8f0;
+  --cm-text: #0f172a;
+  --cm-text-sec: #64748b;
+  --cm-text-muted: #64748b;
+  --cm-accent: #22c55e;
+  --cm-accent-bg: #dcfce7;
+  --cm-accent-bg-strong: rgba(22, 163, 74, 0.15);
+  --cm-red: #ef4444;
+  --cm-orange: #ea580c;
+  --cm-green: #22c55e;
+  --cm-blue: #3b82f6;
+  --cm-pill-bg: rgba(255, 255, 255, 0.95);
+  --cm-pill-border: #e2e8f0;
+  --cm-sheet-bg: #ffffff;
+  --cm-overlay: rgba(30, 41, 59, 0.4);
+  --cm-shadow: 0 2px 20px rgba(15, 23, 42, 0.08);
+  --cm-shadow-sm: 0 1px 8px rgba(15, 23, 42, 0.04);
+}
+
 /* Set on the staff shell via useClientConfig().primaryColor (see staff layout / dashboard). */
 @property --client-primary {
   syntax: "<color>";

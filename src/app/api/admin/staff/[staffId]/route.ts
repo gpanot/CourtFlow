@@ -82,7 +82,7 @@ export async function PATCH(
         await tx.staffVenueAssignment.deleteMany({ where: { staffId } });
         for (const venueId of ids) {
           await tx.staffVenueAssignment.create({
-            data: { staffId, venueId, appAccess: ["courtflow"] },
+            data: { staffId, venueId, appAccess: ["courtpay"] },
           });
         }
       });

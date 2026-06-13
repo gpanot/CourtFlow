@@ -87,6 +87,8 @@
     "noBookingsYet": "No bookings yet",
     "player": "Player",
     "court": "Court",
+    "type": "Type",
+    "detail": "Detail",
     "date": "Date",
     "time": "Time",
     "status": "Status",

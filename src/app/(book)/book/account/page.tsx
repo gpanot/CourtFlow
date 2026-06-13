@@ -1,0 +1,152 @@
+"use client";
+
+import { useSession } from "next-auth/react";
+import { signOutToIntro } from "../lib/sign-out-to-intro";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+
+interface Profile {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  gender: string;
+  skillLevel: string;
+  avatar: string | null;
+  upcomingBookings: number;
+  emailVerified: boolean;
+  isCredentialsAccount: boolean;
+  venue: { id: string; name: string; location: string | null } | null;
+  coachCredits: {
+    id: string;
+    totalSessions: number;
+    usedSessions: number;
+    expiresAt: string;
+    coach: { name: string };
+  }[];
+}
+
+export default function AccountPage() {
+  const { status } = useSession();
+  const router = useRouter();
+  const [profile, setProfile] = useState<Profile | null>(null);
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.replace("/book/login?callbackUrl=/book/account");
+    }
+    if (status === "authenticated") {
+      fetch("/api/public/account")
+        .then((r) => r.json())
+        .then(setProfile)
+        .catch(() => {});
+    }
+  }, [status, router]);
+
+  if (status === "loading" || !profile) {
+    return (
+      <div className="px-4 pt-12">
+        <div className="h-6 bg-[var(--cm-bg-card)] rounded w-32 mb-4 animate-pulse" />
+        <div className="h-24 bg-[var(--cm-bg-card)] rounded-xl animate-pulse" />
+      </div>
+    );
+  }
+
+  const totalCredits = profile.coachCredits.reduce(
+    (sum, c) => sum + (c.totalSessions - c.usedSessions),
+    0
+  );
+
+  return (
+    <div className="px-4 pt-12">
+      <h1 className="text-xl font-bold mb-4">My Account</h1>
+
+      <div className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-4">
+        <div className="flex items-center gap-3 mb-3">
+          {profile.avatar ? (
+            <img src={profile.avatar} alt="" className="w-14 h-14 rounded-full object-cover" />
+          ) : (
+            <div className="w-14 h-14 rounded-full bg-[var(--cm-accent-bg)] flex items-center justify-center text-xl">
+              🏓
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold truncate">{profile.name}</p>
+            {profile.email && (
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <p className="text-sm text-[var(--cm-text-sec)] truncate">{profile.email}</p>
+                {profile.isCredentialsAccount && !profile.emailVerified && (
+                  <span className="flex-shrink-0 px-1.5 py-0.5 bg-[var(--cm-orange)]/15 text-[var(--cm-orange)] text-[10px] font-medium rounded">
+                    Not verified
+                  </span>
+                )}
+              </div>
+            )}
+            {profile.phone && <p className="text-sm text-[var(--cm-text-sec)]">{profile.phone}</p>}
+          </div>
+        </div>
+        <div className="flex gap-2 text-xs text-[var(--cm-text-sec)]">
+          <span className="px-2 py-1 bg-[var(--cm-bg-surface)] rounded-lg border border-[var(--cm-border)] capitalize">
+            {profile.gender}
+          </span>
+          <span className="px-2 py-1 bg-[var(--cm-bg-surface)] rounded-lg border border-[var(--cm-border)] capitalize">
+            {profile.skillLevel}
+          </span>
+        </div>
+        <Link
+          href="/book/account/edit"
+          className="block text-center mt-3 text-sm text-[var(--cm-accent)] font-medium"
+        >
+          Edit Profile →
+        </Link>
+      </div>
+
+      <Link
+        href="/book/account/credits"
+        className="flex items-center justify-between bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-3"
+      >
+        <div>
+          <p className="font-medium text-sm">My Credits</p>
+          <p className="text-xs text-[var(--cm-text-sec)]">
+            {totalCredits} session{totalCredits !== 1 ? "s" : ""} remaining
+          </p>
+        </div>
+        <span className="text-[var(--cm-text-muted)]">→</span>
+      </Link>
+
+      <Link
+        href="/book/bookings"
+        className="flex items-center justify-between bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-3"
+      >
+        <div>
+          <p className="font-medium text-sm">My Bookings</p>
+          <p className="text-xs text-[var(--cm-text-sec)]">
+            {profile.upcomingBookings} upcoming
+          </p>
+        </div>
+        <span className="text-[var(--cm-text-muted)]">→</span>
+      </Link>
+
+      <Link
+        href="/book/account/venue"
+        className="flex items-center justify-between bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-3"
+      >
+        <div>
+          <p className="font-medium text-sm">My Venue</p>
+          <p className="text-xs text-[var(--cm-text-sec)]">
+            {profile.venue ? profile.venue.name : "No venue selected"}
+          </p>
+        </div>
+        <span className="text-[var(--cm-text-muted)]">→</span>
+      </Link>
+
+      <button
+        onClick={() => signOutToIntro()}
+        className="w-full mt-4 py-3 bg-[var(--cm-bg-surface)] border border-[var(--cm-border)] text-[var(--cm-text-sec)] rounded-xl text-sm font-medium hover:opacity-80 transition-opacity"
+      >
+        Sign Out
+      </button>
+    </div>
+  );
+}

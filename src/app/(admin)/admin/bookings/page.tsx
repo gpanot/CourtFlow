@@ -60,6 +60,8 @@ interface BookingRecord {
   startTime: string;
   endTime: string;
   status: "confirmed" | "cancelled" | "completed" | "no_show";
+  paymentStatus: string | null;
+  paymentProofUrl: string | null;
   priceInCents: number;
   coPlayerIds: string[];
   cancelledAt: string | null;
@@ -475,6 +477,14 @@ export default function BookingsPage() {
       await api.patch(`/api/staff/bookings/${id}`, { status: "no_show" });
       await fetchBookings();
       await fetchAvailability();
+    } catch (e) { alert((e as Error).message); }
+  };
+
+  const approvePayment = async (id: string) => {
+    if (!confirm("Approve this payment?")) return;
+    try {
+      await api.patch(`/api/admin/bookings/${id}/approve-payment`, {});
+      await fetchBookings();
     } catch (e) { alert((e as Error).message); }
   };
 
@@ -1053,7 +1063,7 @@ export default function BookingsPage() {
         <h3 className="text-sm font-medium uppercase tracking-wider text-neutral-400">
           {t("bookings.bookingsFor")} {new Date(selectedDate + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
         </h3>
-        {bookings.length === 0 ? (
+        {bookings.length === 0 && courtBlocks.length === 0 ? (
           <p className="text-sm text-neutral-500">{t("bookings.noBookingsForDate")}</p>
         ) : (
           <div className="space-y-2">
@@ -1066,25 +1076,73 @@ export default function BookingsPage() {
                 b.status === "completed" && "border-green-800/30 bg-green-900/10",
               )}>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium">{b.player.name}</span>
                     <span className="text-xs text-neutral-500">{b.player.phone}</span>
                     <BookingStatusBadge status={b.status} />
+                    {b.paymentStatus && <PaymentStatusBadge status={b.paymentStatus} />}
                   </div>
                   <div className="flex items-center gap-3 mt-1 text-xs text-neutral-400">
                     <span>{b.court.label}</span>
                     <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{formatTime(b.startTime)} – {formatTime(b.endTime)}</span>
                     <span>{fmtPrice(b.priceInCents)}</span>
                     {b.coPlayerIds.length > 0 && <span>+{b.coPlayerIds.length} co-player{b.coPlayerIds.length > 1 ? "s" : ""}</span>}
+                    {b.paymentProofUrl && b.paymentProofUrl !== "pending_proof" && (
+                      <a href={b.paymentProofUrl} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 underline">View proof</a>
+                    )}
                   </div>
                 </div>
-                {b.status === "confirmed" && (
-                  <div className="flex gap-1 shrink-0">
-                    <button onClick={() => openEditModal(b)} className="rounded-lg px-2 py-1 text-xs text-blue-400 hover:bg-blue-900/30">{t("common.edit")}</button>
-                    <button onClick={() => cancelBooking(b.id)} className="rounded-lg px-2 py-1 text-xs text-red-400 hover:bg-red-900/30">{t("bookings.cancel")}</button>
-                    <button onClick={() => markNoShow(b.id)} className="rounded-lg px-2 py-1 text-xs text-amber-400 hover:bg-amber-900/30">{t("bookings.noShow")}</button>
+                <div className="flex gap-1 shrink-0 flex-wrap justify-end">
+                  {b.paymentStatus === "proof_submitted" && (
+                    <button onClick={() => approvePayment(b.id)} className="rounded-lg px-2 py-1 text-xs font-semibold text-green-400 hover:bg-green-900/30 border border-green-600/30">
+                      ✓ Approve
+                    </button>
+                  )}
+                  {b.status === "confirmed" && (
+                    <>
+                      <button onClick={() => openEditModal(b)} className="rounded-lg px-2 py-1 text-xs text-blue-400 hover:bg-blue-900/30">{t("common.edit")}</button>
+                      <button onClick={() => cancelBooking(b.id)} className="rounded-lg px-2 py-1 text-xs text-red-400 hover:bg-red-900/30">{t("bookings.cancel")}</button>
+                      <button onClick={() => markNoShow(b.id)} className="rounded-lg px-2 py-1 text-xs text-amber-400 hover:bg-amber-900/30">{t("bookings.noShow")}</button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {courtBlocks.map((bl) => (
+              <div key={bl.id} className={cn(
+                "flex items-center gap-3 rounded-xl border p-3",
+                bl.type === "maintenance" && "border-neutral-700 bg-neutral-800/50",
+                bl.type === "private_event" && "border-amber-800/30 bg-amber-900/10",
+                bl.type === "private_competition" && "border-orange-800/30 bg-orange-900/10",
+                bl.type === "open_play" && "border-emerald-800/30 bg-emerald-900/10",
+                bl.type === "competition" && "border-blue-800/30 bg-blue-900/10",
+              )}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    {bl.type === "maintenance" && <Wrench className="h-3.5 w-3.5 text-neutral-400" />}
+                    {bl.type === "private_event" && <Calendar className="h-3.5 w-3.5 text-amber-400" />}
+                    {bl.type === "private_competition" && <Trophy className="h-3.5 w-3.5 text-orange-400" />}
+                    {bl.type === "open_play" && <Users className="h-3.5 w-3.5 text-emerald-400" />}
+                    {bl.type === "competition" && <Trophy className="h-3.5 w-3.5 text-blue-400" />}
+                    <span className="font-medium">{bl.title || BLOCK_LABELS[bl.type]}</span>
+                    <span className="text-[10px] rounded-full px-2 py-0.5 bg-neutral-800 text-neutral-400">
+                      {BLOCK_LABELS[bl.type]}
+                    </span>
                   </div>
-                )}
+                  <div className="flex items-center gap-3 mt-1 text-xs text-neutral-400">
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {formatTime(bl.startTime)} – {formatTime(bl.endTime)}
+                    </span>
+                    <span>
+                      {bl.courtIds.length} {bl.courtIds.length > 1 ? t("bookings.courtsPlural") : t("bookings.court")}
+                    </span>
+                    {bl.note && <span className="italic">{bl.note}</span>}
+                  </div>
+                </div>
+                <button onClick={() => deleteBlock(bl.id)}
+                  className="rounded-lg px-2 py-1 text-xs text-red-400 hover:bg-red-900/30">{t("common.remove")}</button>
               </div>
             ))}
           </div>
@@ -1388,50 +1446,7 @@ export default function BookingsPage() {
         </div>
       )}
 
-      {/* Active Court Blocks for the day */}
-      {courtBlocks.length > 0 && (
-        <section className="space-y-3">
-          <h3 className="text-sm font-medium uppercase tracking-wider text-neutral-400">{t("bookings.courtBlocks")}</h3>
-          <div className="space-y-2">
-            {courtBlocks.map((bl) => (
-              <div key={bl.id} className={cn(
-                "flex items-center gap-3 rounded-xl border p-3",
-                bl.type === "maintenance" && "border-neutral-700 bg-neutral-800/50",
-                bl.type === "private_event" && "border-amber-800/30 bg-amber-900/10",
-                bl.type === "private_competition" && "border-orange-800/30 bg-orange-900/10",
-                bl.type === "open_play" && "border-emerald-800/30 bg-emerald-900/10",
-                bl.type === "competition" && "border-blue-800/30 bg-blue-900/10",
-              )}>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    {bl.type === "maintenance" && <Wrench className="h-3.5 w-3.5 text-neutral-400" />}
-                    {bl.type === "private_event" && <Calendar className="h-3.5 w-3.5 text-amber-400" />}
-                    {bl.type === "private_competition" && <Trophy className="h-3.5 w-3.5 text-orange-400" />}
-                    {bl.type === "open_play" && <Users className="h-3.5 w-3.5 text-emerald-400" />}
-                    {bl.type === "competition" && <Trophy className="h-3.5 w-3.5 text-blue-400" />}
-                    <span className="font-medium">{bl.title || BLOCK_LABELS[bl.type]}</span>
-                    <span className="text-[10px] rounded-full px-2 py-0.5 bg-neutral-800 text-neutral-400">
-                      {BLOCK_LABELS[bl.type]}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3 mt-1 text-xs text-neutral-400">
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      {formatTime(bl.startTime)} – {formatTime(bl.endTime)}
-                    </span>
-                    <span>
-                      {bl.courtIds.length} {bl.courtIds.length > 1 ? t("bookings.courtsPlural") : t("bookings.court")}
-                    </span>
-                    {bl.note && <span className="italic">{bl.note}</span>}
-                  </div>
-                </div>
-                <button onClick={() => deleteBlock(bl.id)}
-                  className="rounded-lg px-2 py-1 text-xs text-red-400 hover:bg-red-900/30">{t("common.remove")}</button>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+      
     </div>
   );
 }
@@ -1446,6 +1461,20 @@ function BookingStatusBadge({ status }: { status: string }) {
       status === "no_show" && "bg-amber-600/20 text-amber-400",
     )}>
       {status === "no_show" ? "No Show" : status}
+    </span>
+  );
+}
+
+function PaymentStatusBadge({ status }: { status: string }) {
+  const map: Record<string, { cls: string; label: string }> = {
+    pending: { cls: "bg-yellow-600/20 text-yellow-400", label: "Payment pending" },
+    proof_submitted: { cls: "bg-orange-600/20 text-orange-400 animate-pulse", label: "Proof submitted" },
+    paid: { cls: "bg-green-600/20 text-green-400", label: "Paid" },
+  };
+  const info = map[status] ?? { cls: "bg-neutral-600/20 text-neutral-400", label: status };
+  return (
+    <span className={cn("inline-block rounded-full px-2 py-0.5 text-[10px] font-medium", info.cls)}>
+      {info.label}
     </span>
   );
 }

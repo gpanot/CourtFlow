@@ -49,6 +49,37 @@ interface RecentBooking {
   endTime: string;
   status: string;
   priceInCents: number;
+  createdAt: string;
+}
+
+interface RecentLesson {
+  id: string;
+  playerName: string;
+  coachName: string;
+  venueName: string;
+  courtLabel: string | null;
+  date: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+  priceInCents: number;
+  createdAt: string;
+}
+
+interface RecentEntry {
+  id: string;
+  kind: "booking" | "lesson";
+  playerName: string;
+  playerAvatar: string;
+  playerPhoto: string | null;
+  detail: string;
+  venueName: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+  priceInCents: number;
+  createdAt: string;
 }
 
 interface DashboardData {
@@ -95,6 +126,7 @@ interface DashboardData {
     unpaidAmount: number;
   };
   recentBookings: RecentBooking[];
+  recentLessons: RecentLesson[];
 }
 
 function fmtPrice(cents: number): string {
@@ -166,6 +198,41 @@ export default function AdminOverview() {
     data.memberships.overdueCount > 0 ||
     data.coaching.unpaidCount > 0 ||
     data.memberships.expiringThisWeek > 0;
+
+  const recentEntries: RecentEntry[] = [
+    ...data.recentBookings.map((b): RecentEntry => ({
+      id: b.id,
+      kind: "booking",
+      playerName: b.playerName,
+      playerAvatar: b.playerAvatar,
+      playerPhoto: b.playerPhoto,
+      detail: b.courtLabel,
+      venueName: b.venueName,
+      date: b.date,
+      startTime: b.startTime,
+      endTime: b.endTime,
+      status: b.status,
+      priceInCents: b.priceInCents,
+      createdAt: b.createdAt,
+    })),
+    ...(data.recentLessons ?? []).map((l): RecentEntry => ({
+      id: l.id,
+      kind: "lesson",
+      playerName: l.playerName,
+      playerAvatar: "🎓",
+      playerPhoto: null,
+      detail: l.coachName + (l.courtLabel ? ` · ${l.courtLabel}` : ""),
+      venueName: l.venueName,
+      date: l.date,
+      startTime: l.startTime,
+      endTime: l.endTime,
+      status: l.status,
+      priceInCents: l.priceInCents,
+      createdAt: l.createdAt,
+    })),
+  ]
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 8);
 
   return (
     <div className="space-y-6">
@@ -284,6 +351,114 @@ export default function AdminOverview() {
           )}
         </div>
       )}
+
+      {/* Recent Bookings */}
+      <section className="rounded-xl border border-neutral-800 bg-neutral-900 overflow-hidden">
+        <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <Clock className="h-4 w-4 text-neutral-400" />
+              {t("overview.recentBookings")}
+            </h3>
+            <button
+              onClick={() => router.push("/admin/bookings")}
+              className="flex items-center gap-1 text-xs text-neutral-500 hover:text-white transition-colors"
+            >
+              {t("overview.viewAll")} <ArrowRight className="h-3 w-3" />
+          </button>
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden md:block">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-neutral-800 text-xs text-neutral-500">
+                <th className="px-4 py-2.5 text-left font-medium">{t("overview.type")}</th>
+                <th className="px-4 py-2.5 text-left font-medium">{t("overview.player")}</th>
+                <th className="px-4 py-2.5 text-left font-medium">{t("overview.detail")}</th>
+                <th className="px-4 py-2.5 text-left font-medium">{t("overview.date")}</th>
+                <th className="px-4 py-2.5 text-left font-medium">{t("overview.time")}</th>
+                <th className="px-4 py-2.5 text-left font-medium">{t("overview.status")}</th>
+                <th className="px-4 py-2.5 text-right font-medium">{t("overview.price")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentEntries.map((entry) => (
+                <tr key={entry.id} className="border-b border-neutral-800/50 last:border-0">
+                  <td className="px-4 py-2.5">
+                    <span className={cn(
+                      "inline-block rounded-full px-2 py-0.5 text-[10px] font-medium",
+                      entry.kind === "lesson" ? "bg-teal-600/20 text-teal-400" : "bg-purple-600/20 text-purple-400",
+                    )}>
+                      {entry.kind === "lesson" ? "Lesson" : "Booking"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <span className="flex items-center gap-2">
+                      <PlayerAvatarImg photo={entry.playerPhoto} avatar={entry.playerAvatar} size="sm" />
+                      <span className="font-medium">{entry.playerName}</span>
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 text-neutral-400">
+                    {entry.detail}
+                    {data.venues.length > 1 && (
+                      <span className="text-neutral-600 ml-1">· {entry.venueName}</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2.5 text-neutral-400">{fmtDate(entry.date)}</td>
+                  <td className="px-4 py-2.5 text-neutral-400">
+                    {fmtTime(entry.startTime)} – {fmtTime(entry.endTime)}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <BookingStatusBadge status={entry.status} />
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-medium">
+                    {fmtPrice(entry.priceInCents)}
+                  </td>
+                </tr>
+              ))}
+              {recentEntries.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-8 text-center text-neutral-500">
+                    {t("overview.noBookings")}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile cards */}
+        <div className="divide-y divide-neutral-800/50 md:hidden">
+          {recentEntries.map((entry) => (
+            <div key={entry.id} className="px-4 py-3">
+              <div className="flex items-center justify-between mb-1">
+                <span className="flex items-center gap-2">
+                  <PlayerAvatarImg photo={entry.playerPhoto} avatar={entry.playerAvatar} size="sm" />
+                  <span className="text-sm font-medium">{entry.playerName}</span>
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className={cn(
+                    "inline-block rounded-full px-2 py-0.5 text-[10px] font-medium",
+                    entry.kind === "lesson" ? "bg-teal-600/20 text-teal-400" : "bg-purple-600/20 text-purple-400",
+                  )}>
+                    {entry.kind === "lesson" ? "Lesson" : "Booking"}
+                  </span>
+                  <BookingStatusBadge status={entry.status} />
+                </div>
+              </div>
+              <div className="flex items-center gap-3 text-xs text-neutral-500">
+                <span>{entry.detail}</span>
+                <span>{fmtDate(entry.date)}</span>
+                <span>{fmtTime(entry.startTime)}</span>
+                <span className="ml-auto font-medium text-neutral-300">{fmtPrice(entry.priceInCents)}</span>
+              </div>
+            </div>
+          ))}
+          {recentEntries.length === 0 && (
+            <p className="px-4 py-8 text-center text-sm text-neutral-500">{t("overview.noBookings")}</p>
+          )}
+        </div>
+      </section>
 
       <div className="grid gap-4 md:grid-cols-2">
         {/* Upcoming Bookings Today */}
@@ -430,97 +605,6 @@ export default function AdminOverview() {
           </div>
         </section>
       </div>
-
-      {/* Recent Bookings */}
-      <section className="rounded-xl border border-neutral-800 bg-neutral-900 overflow-hidden">
-        <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
-          <h3 className="flex items-center gap-2 text-sm font-semibold">
-            <Clock className="h-4 w-4 text-neutral-400" />
-              {t("overview.recentBookings")}
-            </h3>
-            <button
-              onClick={() => router.push("/admin/bookings")}
-              className="flex items-center gap-1 text-xs text-neutral-500 hover:text-white transition-colors"
-            >
-              {t("overview.viewAll")} <ArrowRight className="h-3 w-3" />
-          </button>
-        </div>
-
-        {/* Desktop table */}
-        <div className="hidden md:block">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-neutral-800 text-xs text-neutral-500">
-                <th className="px-4 py-2.5 text-left font-medium">{t("overview.player")}</th>
-                <th className="px-4 py-2.5 text-left font-medium">{t("overview.court")}</th>
-                <th className="px-4 py-2.5 text-left font-medium">{t("overview.date")}</th>
-                <th className="px-4 py-2.5 text-left font-medium">{t("overview.time")}</th>
-                <th className="px-4 py-2.5 text-left font-medium">{t("overview.status")}</th>
-                <th className="px-4 py-2.5 text-right font-medium">{t("overview.price")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.recentBookings.map((b) => (
-                <tr key={b.id} className="border-b border-neutral-800/50 last:border-0">
-                  <td className="px-4 py-2.5">
-                    <span className="flex items-center gap-2">
-                      <PlayerAvatarImg photo={b.playerPhoto} avatar={b.playerAvatar} size="sm" />
-                      <span className="font-medium">{b.playerName}</span>
-                    </span>
-                  </td>
-                  <td className="px-4 py-2.5 text-neutral-400">
-                    {b.courtLabel}
-                    {data.venues.length > 1 && (
-                      <span className="text-neutral-600 ml-1">· {b.venueName}</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2.5 text-neutral-400">{fmtDate(b.date)}</td>
-                  <td className="px-4 py-2.5 text-neutral-400">
-                    {fmtTime(b.startTime)} – {fmtTime(b.endTime)}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <BookingStatusBadge status={b.status} />
-                  </td>
-                  <td className="px-4 py-2.5 text-right font-medium">
-                    {fmtPrice(b.priceInCents)}
-                  </td>
-                </tr>
-              ))}
-              {data.recentBookings.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-neutral-500">
-                    {t("overview.noBookings")}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Mobile cards */}
-        <div className="divide-y divide-neutral-800/50 md:hidden">
-          {data.recentBookings.map((b) => (
-            <div key={b.id} className="px-4 py-3">
-              <div className="flex items-center justify-between mb-1">
-                <span className="flex items-center gap-2">
-                  <PlayerAvatarImg photo={b.playerPhoto} avatar={b.playerAvatar} size="sm" />
-                  <span className="text-sm font-medium">{b.playerName}</span>
-                </span>
-                <BookingStatusBadge status={b.status} />
-              </div>
-              <div className="flex items-center gap-3 text-xs text-neutral-500">
-                <span>{b.courtLabel}</span>
-                <span>{fmtDate(b.date)}</span>
-                <span>{fmtTime(b.startTime)}</span>
-                <span className="ml-auto font-medium text-neutral-300">{fmtPrice(b.priceInCents)}</span>
-              </div>
-            </div>
-          ))}
-          {data.recentBookings.length === 0 && (
-            <p className="px-4 py-8 text-center text-sm text-neutral-500">{t("overview.noBookings")}</p>
-          )}
-        </div>
-      </section>
 
       {/* Quick Links */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">

@@ -94,7 +94,7 @@ export default function StaffPage() {
     setSelectedStaff(s);
     const venueAppAccess: Record<string, StaffAppAccessKind[]> = {};
     for (const v of s.venues) {
-      const a = v.appAccess?.length ? v.appAccess : (["courtflow"] as StaffAppAccessKind[]);
+      const a = v.appAccess?.length ? v.appAccess : (["courtpay"] as StaffAppAccessKind[]);
       venueAppAccess[v.id] = a;
     }
     setForm({
@@ -138,7 +138,7 @@ export default function StaffPage() {
       if (on) {
         delete venueAppAccess[venueId];
       } else {
-        venueAppAccess[venueId] = ["courtflow"];
+        venueAppAccess[venueId] = ["courtpay"];
       }
       return { ...prev, venueIds, venueAppAccess };
     });
@@ -146,10 +146,10 @@ export default function StaffPage() {
 
   const toggleVenueApp = (venueId: string, app: StaffAppAccessKind) => {
     setForm((prev) => {
-      const current = prev.venueAppAccess[venueId] ?? (["courtflow"] as StaffAppAccessKind[]);
+      const current = prev.venueAppAccess[venueId] ?? (["courtpay"] as StaffAppAccessKind[]);
       const has = current.includes(app);
       let next = has ? current.filter((x) => x !== app) : [...current, app];
-      if (next.length === 0) next = ["courtflow"];
+      if (next.length === 0) next = ["courtpay"];
       return {
         ...prev,
         venueAppAccess: { ...prev.venueAppAccess, [venueId]: next },
@@ -169,7 +169,7 @@ export default function StaffPage() {
         role: form.role,
         venueAssignments: form.venueIds.map((venueId) => ({
           venueId,
-          appAccess: form.venueAppAccess[venueId] ?? ["courtflow"],
+          appAccess: form.venueAppAccess[venueId] ?? ["courtpay"],
         })),
         isCoach: form.isCoach,
         coachBio: form.coachBio || null,
@@ -193,7 +193,7 @@ export default function StaffPage() {
         role: form.role,
         venueAssignments: form.venueIds.map((venueId) => ({
           venueId,
-          appAccess: form.venueAppAccess[venueId] ?? ["courtflow"],
+          appAccess: form.venueAppAccess[venueId] ?? ["courtpay"],
         })),
         isCoach: form.isCoach,
         coachBio: form.coachBio || null,
@@ -407,19 +407,23 @@ export default function StaffPage() {
                   <div className="space-y-3">
                     {form.venueIds.map((vid) => {
                       const vname = venues.find((x) => x.id === vid)?.name ?? vid;
-                      const apps = form.venueAppAccess[vid] ?? ["courtflow"];
+                      const apps = form.venueAppAccess[vid] ?? ["courtpay"];
+                      const courtflowDisabled = callerRole !== "superadmin";
                       return (
                         <div key={vid} className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-3">
                           <p className="mb-2 text-xs font-medium text-neutral-300">{t("staff.venueLabel")}: {vname}</p>
                           <div className="flex flex-wrap gap-2">
                             <button
                               type="button"
-                              onClick={() => toggleVenueApp(vid, "courtflow")}
+                              onClick={() => !courtflowDisabled && toggleVenueApp(vid, "courtflow")}
+                              disabled={courtflowDisabled}
                               className={cn(
                                 "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors",
-                                apps.includes("courtflow")
-                                  ? "border-purple-500 bg-purple-600/20 text-purple-300"
-                                  : "border-neutral-700 text-neutral-400 hover:border-neutral-500"
+                                courtflowDisabled
+                                  ? "border-neutral-800 text-neutral-600 cursor-not-allowed opacity-50"
+                                  : apps.includes("courtflow")
+                                    ? "border-purple-500 bg-purple-600/20 text-purple-300"
+                                    : "border-neutral-700 text-neutral-400 hover:border-neutral-500"
                               )}
                             >
                               {apps.includes("courtflow") && <Check className="h-3 w-3" />}

@@ -58,11 +58,11 @@ export function useAdminVenuePicker(opts: UseAdminVenuePickerOptions = {}) {
         const ids = list.map((v) => v.id);
         _setVenueId((prev) => {
           if (prev && !ids.includes(prev)) {
-            storeId("");
+            queueMicrotask(() => storeId(""));
             return "";
           }
           if (!prev && opts.autoSelect && list.length > 0) {
-            storeId(list[0].id);
+            queueMicrotask(() => storeId(list[0].id));
             return list[0].id;
           }
           return prev;

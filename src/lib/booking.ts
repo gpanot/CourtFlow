@@ -188,6 +188,11 @@ export async function getAvailableSlots(
       venueId,
       date: dateOnly,
       status: { in: ["confirmed", "completed"] },
+      OR: [
+        { holdExpiresAt: null },
+        { holdExpiresAt: { gt: new Date() } },
+        { paymentStatus: { not: "pending" } },
+      ],
     },
     select: { courtId: true, startTime: true, endTime: true },
   });

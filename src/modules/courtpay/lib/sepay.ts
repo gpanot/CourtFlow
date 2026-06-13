@@ -62,6 +62,63 @@ async function handleBillingPayment(
   return { matched: true, paymentId: invoice.id };
 }
 
+async function checkVenueAutoPayment(venueId: string): Promise<boolean> {
+  const venue = await prisma.venue.findUnique({
+    where: { id: venueId },
+    select: { settings: true },
+  });
+  const vs = (venue?.settings ?? {}) as Record<string, unknown>;
+  return !!(vs.autoPaymentEnabled && vs.sepayEnabled);
+}
+
+async function handlePortalBookingPayment(
+  payload: SepayWebhookPayload,
+  ref: string
+): Promise<{ matched: boolean; paymentId?: string }> {
+  const booking = await prisma.booking.findFirst({ where: { paymentRef: ref } });
+  if (!booking || booking.paymentStatus !== "pending") return { matched: false };
+  if (payload.transferAmount < booking.priceInCents) return { matched: false };
+  if (!(await checkVenueAutoPayment(booking.venueId))) return { matched: false };
+
+  await prisma.booking.update({
+    where: { id: booking.id },
+    data: { paymentStatus: "paid" },
+  });
+  return { matched: true, paymentId: booking.id };
+}
+
+async function handlePortalLessonPayment(
+  payload: SepayWebhookPayload,
+  ref: string
+): Promise<{ matched: boolean; paymentId?: string }> {
+  const lesson = await prisma.coachLesson.findFirst({ where: { paymentRef: ref } });
+  if (!lesson || lesson.paymentStatus !== "pending") return { matched: false };
+  if (payload.transferAmount < lesson.priceInCents) return { matched: false };
+  if (!(await checkVenueAutoPayment(lesson.venueId))) return { matched: false };
+
+  await prisma.coachLesson.update({
+    where: { id: lesson.id },
+    data: { paymentStatus: "PAID", paidAt: new Date(), paymentMethod: "vietqr" },
+  });
+  return { matched: true, paymentId: lesson.id };
+}
+
+async function handlePortalCreditPayment(
+  payload: SepayWebhookPayload,
+  ref: string
+): Promise<{ matched: boolean; paymentId?: string }> {
+  const credit = await prisma.playerCoachCredit.findFirst({ where: { paymentRef: ref } });
+  if (!credit || credit.paymentStatus !== "pending") return { matched: false };
+  if (payload.transferAmount < credit.priceInCents) return { matched: false };
+  if (!(await checkVenueAutoPayment(credit.venueId))) return { matched: false };
+
+  await prisma.playerCoachCredit.update({
+    where: { id: credit.id },
+    data: { paymentStatus: "paid", confirmedBy: "sepay", confirmedAt: new Date() },
+  });
+  return { matched: true, paymentId: credit.id };
+}
+
 /**
  * Process a SePay webhook payload: match payment, confirm, and activate subscription if applicable.
  * Returns true if a payment was matched and processed.
@@ -84,6 +141,16 @@ export async function processSepayWebhook(
 
   if (ref.startsWith("CF-BILL-")) {
     return handleBillingPayment(payload, ref);
+  }
+
+  if (ref.startsWith("CF-BK-")) {
+    return handlePortalBookingPayment(payload, ref);
+  }
+  if (ref.startsWith("CF-CL-")) {
+    return handlePortalLessonPayment(payload, ref);
+  }
+  if (ref.startsWith("CF-CR-")) {
+    return handlePortalCreditPayment(payload, ref);
   }
 
   const pending = await prisma.pendingPayment.findUnique({

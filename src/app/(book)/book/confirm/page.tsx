@@ -1,0 +1,161 @@
+"use client";
+
+import { useSearchParams, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { useEffect, useState, Suspense, useMemo } from "react";
+import { usePlayerVenue } from "../components/PlayerVenueContext";
+
+function formatPrice(cents: number) {
+  return new Intl.NumberFormat("vi-VN").format(cents) + " VND";
+}
+
+function ConfirmContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const { status } = useSession();
+  const { venueId: playerVenueId } = usePlayerVenue();
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [courtLabel, setCourtLabel] = useState<string | null>(null);
+  const [slotPrices, setSlotPrices] = useState<{ hour: number; price: number }[]>([]);
+
+  const courtId = searchParams.get("courtId") || "";
+  const dateStr = searchParams.get("date") || "";
+  const startTimeStr = searchParams.get("startTime") || "";
+  const slotCount = Math.min(Math.max(parseInt(searchParams.get("slotCount") || "1", 10), 1), 4);
+  const totalPrice = parseInt(searchParams.get("price") || "0", 10);
+
+  const date = new Date(dateStr);
+  const startTime = new Date(startTimeStr);
+
+  const slotTimes = useMemo(() => {
+    const times: { start: Date; end: Date }[] = [];
+    for (let i = 0; i < slotCount; i++) {
+      const s = new Date(startTime);
+      s.setMinutes(s.getMinutes() + 60 * i);
+      const e = new Date(s);
+      e.setMinutes(e.getMinutes() + 60);
+      times.push({ start: s, end: e });
+    }
+    return times;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startTimeStr, slotCount]);
+
+  const overallEnd = slotTimes.length > 0 ? slotTimes[slotTimes.length - 1].end : startTime;
+
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      const returnUrl = `/book/confirm?${searchParams.toString()}`;
+      router.replace(`/book/login?callbackUrl=${encodeURIComponent(returnUrl)}`);
+    }
+  }, [status, router, searchParams]);
+
+  useEffect(() => {
+    const vq = playerVenueId ? `&venueId=${playerVenueId}` : "";
+    fetch(`/api/public/availability?date=${dateStr}${vq}`)
+      .then((r) => r.json())
+      .then((courts: { courtId: string; courtLabel: string; slots: { startTime: string; hour: number; priceInCents: number }[] }[]) => {
+        const c = courts.find((c) => c.courtId === courtId);
+        if (c) {
+          setCourtLabel(c.courtLabel);
+          const prices: { hour: number; price: number }[] = [];
+          for (const st of slotTimes) {
+            const matched = c.slots.find((s) => s.startTime === st.start.toISOString());
+            if (matched) prices.push({ hour: matched.hour, price: matched.priceInCents });
+          }
+          setSlotPrices(prices);
+        }
+      })
+      .catch(() => {});
+  }, [courtId, dateStr, playerVenueId, slotTimes]);
+
+  async function handleConfirm() {
+    setCreating(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/public/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          courtId,
+          date: dateStr,
+          startTime: startTimeStr,
+          slotCount,
+          venueId: playerVenueId || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Booking failed");
+      router.replace(`/book/pay/${data.booking.id}`);
+    } catch (e) {
+      setError((e as Error).message);
+      setCreating(false);
+    }
+  }
+
+  const fmtTime = (d: Date) => d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false });
+
+  return (
+    <div className="px-6 pt-12 pb-8">
+      <button onClick={() => router.back()} className="text-sm text-[var(--cm-text-sec)] mb-6">
+        ← Back
+      </button>
+      <h1 className="text-xl font-bold mb-4">Booking Summary</h1>
+
+      {error && (
+        <div className="mb-4 p-3 bg-[var(--cm-red)]/10 text-[var(--cm-red)] text-sm rounded-xl">{error}</div>
+      )}
+
+      <div className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-4 space-y-2">
+        <Row label="Court" value={courtLabel || "..."} />
+        <Row label="Date" value={date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} />
+        <Row label="Time" value={`${fmtTime(startTime)} – ${fmtTime(overallEnd)}`} />
+        <Row label="Duration" value={`${slotCount}h (${slotCount} slot${slotCount > 1 ? "s" : ""})`} />
+
+        {slotPrices.length > 1 && (
+          <div className="border-t border-[var(--cm-border)] pt-2 mt-2 space-y-1">
+            {slotPrices.map((sp, i) => (
+              <div key={i} className="flex justify-between text-xs text-[var(--cm-text-sec)]">
+                <span>{courtLabel}, {sp.hour.toString().padStart(2, "0")}:00</span>
+                <span>{formatPrice(sp.price)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="border-t border-[var(--cm-border)] pt-2 mt-2">
+          <Row label="Total" value={formatPrice(totalPrice)} bold />
+        </div>
+      </div>
+
+      <p className="text-xs text-[var(--cm-text-sec)] mb-6">
+        Free cancellation up to 24h before start time.
+      </p>
+
+      <button
+        onClick={handleConfirm}
+        disabled={creating}
+        className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm disabled:opacity-40"
+      >
+        {creating ? "Creating booking..." : `Confirm & Pay (${formatPrice(totalPrice)})`}
+      </button>
+    </div>
+  );
+}
+
+function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
+  return (
+    <div className="flex justify-between text-sm">
+      <span className="text-[var(--cm-text-sec)]">{label}</span>
+      <span className={bold ? "font-semibold" : ""}>{value}</span>
+    </div>
+  );
+}
+
+export default function ConfirmPage() {
+  return (
+    <Suspense>
+      <ConfirmContent />
+    </Suspense>
+  );
+}

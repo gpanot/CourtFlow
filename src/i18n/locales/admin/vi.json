@@ -85,6 +85,8 @@
     "noBookingsYet": "Chưa có đặt sân nào",
     "player": "Người chơi",
     "court": "Sân",
+    "type": "Loại",
+    "detail": "Chi tiết",
     "date": "Ngày",
     "time": "Giờ",
     "status": "Trạng thái",

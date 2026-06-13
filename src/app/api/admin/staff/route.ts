@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
       })) ??
       body.venueIds?.map((venueId) => ({
         venueId,
-        appAccess: normalizeAppAccess(["courtflow"]),
+        appAccess: normalizeAppAccess(["courtpay"]),
       })) ??
       [];
 

@@ -14,6 +14,8 @@ import {
   Pencil,
   Trash2,
   X,
+  ChevronLeft,
+  ChevronRight,
   ChevronDown,
   ChevronUp,
   Clock,
@@ -23,8 +25,11 @@ import {
   User,
   Search,
   Check,
+  LayoutGrid,
+  TableProperties,
 } from "lucide-react";
 import { PaymentConfirmModal, type PaymentModalData, type PaymentConfirmResult } from "@/components/admin/PaymentConfirmModal";
+import { CoachProfileEditor } from "@/components/admin/CoachProfileEditor";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +60,13 @@ interface Coach {
   phone: string;
   coachBio: string | null;
   coachPhoto: string | null;
+  coachDupr: string | null;
+  coachGender: string | null;
+  coachLanguages: string[];
+  coachSpecialties: string[];
+  coachFocusLevels: string[];
+  coachYearsExperience: string | null;
+  coachGroupSizes: string[];
   venues: Venue[];
   packages: CoachPackage[];
   lessonCount: number;
@@ -201,6 +213,7 @@ function CoachesTab({ venueId }: { venueId: string }) {
   const { t } = useTranslation("translation", { i18n: adminI18n });
   const [coaches, setCoaches] = useState<Coach[]>([]);
   const [expandedCoachId, setExpandedCoachId] = useState<string | null>(null);
+  const [profileCoach, setProfileCoach] = useState<Coach | null>(null);
   const [pkgModal, setPkgModal] = useState<{ mode: "create" | "edit"; coachId: string; pkg?: CoachPackage } | null>(null);
   const [pkgForm, setPkgForm] = useState({
     name: "",
@@ -328,12 +341,20 @@ function CoachesTab({ venueId }: { venueId: string }) {
               <div className="border-t border-neutral-800 p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="text-sm font-semibold text-neutral-300">{t("coaching.packages")}</h4>
-                  <button
-                    onClick={() => openCreatePkg(coach.id)}
-                    className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-500"
-                  >
-                    <Plus className="h-3 w-3" /> {t("coaching.addPackage")}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setProfileCoach(coach)}
+                      className="flex items-center gap-1.5 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:border-teal-500 hover:text-teal-300 transition-colors"
+                    >
+                      <Pencil className="h-3 w-3" /> Edit Profile
+                    </button>
+                    <button
+                      onClick={() => openCreatePkg(coach.id)}
+                      className="flex items-center gap-1.5 rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-500"
+                    >
+                      <Plus className="h-3 w-3" /> {t("coaching.addPackage")}
+                    </button>
+                  </div>
                 </div>
 
                 {coach.packages.length === 0 && (
@@ -485,6 +506,17 @@ function CoachesTab({ venueId }: { venueId: string }) {
           </div>
         </div>
       )}
+
+      {profileCoach && (
+        <CoachProfileEditor
+          coach={profileCoach}
+          onClose={() => setProfileCoach(null)}
+          onSaved={() => {
+            setProfileCoach(null);
+            fetchCoaches();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -514,6 +546,10 @@ function LessonsTab({ venueId }: { venueId: string }) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [viewMode, setViewMode] = useState<"court" | "time">(() => {
+    if (typeof window === "undefined") return "court";
+    return (localStorage.getItem("coaching-view-mode") as "court" | "time") || "court";
+  });
   const [deleting, setDeleting] = useState(false);
 
   const [availability, setAvailability] = useState<CourtSlotData[]>([]);
@@ -570,9 +606,15 @@ function LessonsTab({ venueId }: { venueId: string }) {
     fetchMeta().catch(console.error);
   }, [fetchMeta]);
 
+  // Always fetch availability for the selected date (for the calendar grid)
   useEffect(() => {
-    if (showBookModal) fetchAvailability(bookDate);
-  }, [showBookModal, bookDate, fetchAvailability]);
+    fetchAvailability(selectedDate);
+  }, [selectedDate, fetchAvailability]);
+
+  // Also re-fetch when booking modal opens with a different date
+  useEffect(() => {
+    if (showBookModal && bookDate !== selectedDate) fetchAvailability(bookDate);
+  }, [showBookModal, bookDate, fetchAvailability, selectedDate]);
 
   // When editing, auto-select the lesson's existing slots once availability loads
   useEffect(() => {
@@ -796,36 +838,277 @@ function LessonsTab({ venueId }: { venueId: string }) {
   const cancelledLessons = lessons.filter((l) => l.status === "cancelled");
 
   const SLOT_H = 40;
+  const ROW_H = 56;
+
+  const shiftDate = (days: number) => {
+    const d = new Date(selectedDate);
+    d.setDate(d.getDate() + days);
+    setSelectedDate(localDateISO(d));
+  };
+
+  const calendarSlots = availability.length > 0 ? availability[0].slots : [];
+  const isToday = selectedDate === localDateISO(new Date());
+  const nowHour = new Date().getHours() + new Date().getMinutes() / 60;
+  const firstHour = calendarSlots.length > 0 ? calendarSlots[0].hour : 6;
+  const currentRowOffset = isToday ? (nowHour - firstHour) * ROW_H : -1;
+
+  const BLOCK_LABELS: Record<string, string> = {
+    maintenance: "Maintenance",
+    private_event: "Private Event",
+    private_competition: "Private Competition",
+    open_play: "Open Play",
+    competition: "Competition",
+  };
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3">
-          <input
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-teal-500 focus:outline-none"
-          />
-          <span className="text-sm text-neutral-400">
-            {t("coaching.lessonCount", { count: activeLessons.length })}
-          </span>
-        </div>
-        <button
-          onClick={openBookModal}
-          className="flex items-center gap-2 rounded-lg bg-teal-600 px-3 py-2 text-sm font-medium text-white hover:bg-teal-500"
-        >
-          <Plus className="h-4 w-4" /> {t("coaching.bookLesson")}
+      {/* Date Navigation — consistent with Bookings page */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <button onClick={() => shiftDate(-1)} className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white">
+          <ChevronLeft className="h-5 w-5" />
         </button>
+        <input
+          type="date"
+          value={selectedDate}
+          onChange={(e) => setSelectedDate(e.target.value)}
+          className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-teal-500 focus:outline-none"
+        />
+        <button onClick={() => shiftDate(1)} className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white">
+          <ChevronRight className="h-5 w-5" />
+        </button>
+        <button
+          onClick={() => setSelectedDate(localDateISO(new Date()))}
+          className="rounded-lg bg-neutral-800 px-3 py-1.5 text-xs text-neutral-400 hover:text-white"
+        >
+          {t("bookings.today")}
+        </button>
+
+        <div className="ml-auto flex items-center gap-2">
+          <div className="flex items-center rounded-lg border border-neutral-700 overflow-hidden">
+            <button
+              onClick={() => { setViewMode("court"); localStorage.setItem("coaching-view-mode", "court"); }}
+              className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors", viewMode === "court" ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400 hover:text-white")}
+              title="Court View"
+            >
+              <LayoutGrid className="h-3.5 w-3.5" /> {t("bookings.courtView")}
+            </button>
+            <button
+              onClick={() => { setViewMode("time"); localStorage.setItem("coaching-view-mode", "time"); }}
+              className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors border-l border-neutral-700", viewMode === "time" ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400 hover:text-white")}
+              title="Time View"
+            >
+              <TableProperties className="h-3.5 w-3.5" /> {t("bookings.timeView")}
+            </button>
+          </div>
+          <button
+            onClick={openBookModal}
+            className="flex items-center gap-2 rounded-lg bg-teal-600 px-3 py-2 text-sm font-medium text-white hover:bg-teal-500"
+          >
+            <Plus className="h-4 w-4" /> {t("coaching.bookLesson")}
+          </button>
+        </div>
       </div>
 
-      {activeLessons.length === 0 && cancelledLessons.length === 0 && (
-        <div className="py-12 text-center">
-          <CalendarDays className="h-10 w-10 text-neutral-600 mx-auto mb-3" />
-          <p className="text-neutral-400">{t("coaching.noLessons")}</p>
+      {/* Calendar Grid */}
+      {availability.length > 0 && calendarSlots.length > 0 && viewMode === "time" ? (
+        <div className="rounded-xl border border-neutral-800 overflow-hidden">
+          <div className="overflow-auto max-h-[75vh]">
+            <table className="w-full border-collapse text-[11px]">
+              <thead>
+                <tr>
+                  <th className="sticky top-0 left-0 z-30 bg-neutral-900/95 backdrop-blur border-b border-r border-neutral-700 px-2 py-2 text-left text-xs font-medium text-neutral-500 min-w-[80px]">Court</th>
+                  {calendarSlots.map((slot) => (
+                    <th key={slot.startTime} className="sticky top-0 z-20 bg-neutral-900/95 backdrop-blur border-b border-l border-neutral-700 px-1 py-2 text-center font-medium text-neutral-500 min-w-[54px] whitespace-nowrap">
+                      {formatSlotTime(slot.startTime)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {availability.map((court) => (
+                  <tr key={court.courtId} className="group">
+                    <td className="sticky left-0 z-10 bg-neutral-900 border-r border-neutral-700 px-2 py-1.5 font-semibold text-xs text-white whitespace-nowrap">
+                      {court.courtLabel}
+                    </td>
+                    {calendarSlots.map((slot, slotIdx) => {
+                      const courtSlot = court.slots[slotIdx];
+                      const lessonInfo = courtSlot?.lesson;
+                      const blockInfo = courtSlot?.block;
+                      const schedInfo = courtSlot?.schedule;
+                      const info = lessonInfo
+                        ? { type: "lesson" as const, label: lessonInfo.coachName, sub: lessonInfo.playerName }
+                        : blockInfo
+                          ? { type: "block" as const, label: blockInfo.title || BLOCK_LABELS[blockInfo.type] || blockInfo.type, sub: blockInfo.type }
+                          : schedInfo
+                            ? { type: "schedule" as const, label: schedInfo.title || BLOCK_LABELS[schedInfo.type], sub: schedInfo.type }
+                            : courtSlot?.available
+                              ? { type: "available" as const, label: "", sub: "" }
+                              : { type: "unavailable" as const, label: "", sub: "" };
+                      const innerCls = cn(
+                        "rounded px-1 py-1 text-[10px] leading-tight truncate max-w-[54px]",
+                        info.type === "lesson" && "bg-teal-600/20 text-teal-300 font-medium",
+                        info.type === "block" && info.sub === "open_play" && "bg-emerald-600/20 text-emerald-300",
+                        info.type === "block" && info.sub === "maintenance" && "bg-neutral-600/20 text-neutral-400",
+                        info.type === "block" && info.sub !== "open_play" && info.sub !== "maintenance" && "bg-amber-600/20 text-amber-300",
+                        info.type === "schedule" && info.sub === "open_play" && "bg-emerald-600/20 text-emerald-300",
+                        info.type === "schedule" && info.sub !== "open_play" && "bg-blue-600/20 text-blue-300",
+                        info.type === "available" && "text-neutral-600",
+                        info.type === "unavailable" && "bg-neutral-800/20 text-neutral-700",
+                      );
+                      return (
+                        <td key={slot.startTime} className="border-l border-b border-neutral-800/40 px-0.5 py-0.5 text-center whitespace-nowrap">
+                          {info.type === "unavailable" ? (
+                            <div className={innerCls}>&ndash;</div>
+                          ) : info.type === "available" ? (
+                            <div className="rounded px-1 py-1 text-[10px] text-neutral-600">&ndash;</div>
+                          ) : (
+                            <div className={innerCls} title={info.label}>{info.label}</div>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      )}
+      ) : availability.length > 0 && calendarSlots.length > 0 ? (
+        <div className="rounded-xl border border-neutral-800 overflow-hidden">
+          <div className="overflow-auto max-h-[70vh]">
+            <div className="relative" style={{ display: "grid", gridTemplateColumns: `64px repeat(${availability.length}, minmax(140px, 1fr))` }}>
+              <div className="sticky top-0 z-20 border-b border-neutral-700 bg-neutral-900/95 backdrop-blur" />
+              {availability.map((court) => (
+                <div key={court.courtId} className="sticky top-0 z-20 border-b border-l border-neutral-700 bg-neutral-900/95 backdrop-blur px-3 py-2.5 text-center">
+                  <span className="text-sm font-semibold text-white">{court.courtLabel}</span>
+                </div>
+              ))}
 
+              {calendarSlots.map((slot, rowIdx) => {
+                const isLastRow = rowIdx === calendarSlots.length - 1;
+                return [
+                  <div key={`time-${slot.startTime}`}
+                    className={cn("relative border-r border-neutral-800 bg-neutral-950 px-2 flex items-start pt-1", !isLastRow && "border-b border-b-neutral-800/50")}
+                    style={{ height: ROW_H }}>
+                    <span className="text-[11px] font-medium text-neutral-500 leading-none">
+                      {formatSlotTime(slot.startTime)}
+                    </span>
+                  </div>,
+                  ...availability.map((court) => {
+                    const courtSlot = court.slots[rowIdx];
+                    const lessonInfo = courtSlot?.lesson;
+                    const isLessonStart = lessonInfo && (rowIdx === 0 || !court.slots[rowIdx - 1]?.lesson || court.slots[rowIdx - 1]?.lesson?.lessonId !== lessonInfo.lessonId);
+                    const isLessonContinuation = lessonInfo && !isLessonStart;
+                    let lessonSpan = 1;
+                    if (isLessonStart && lessonInfo) {
+                      for (let k = rowIdx + 1; k < court.slots.length; k++) {
+                        if (court.slots[k]?.lesson?.lessonId === lessonInfo.lessonId) lessonSpan++;
+                        else break;
+                      }
+                    }
+
+                    const blockInfo = courtSlot?.block;
+                    const isBlockStart = blockInfo && (rowIdx === 0 || !court.slots[rowIdx - 1]?.block || court.slots[rowIdx - 1]?.block?.blockId !== blockInfo.blockId);
+                    const isBlockContinuation = blockInfo && !isBlockStart;
+                    let blockSpan = 1;
+                    if (isBlockStart && blockInfo) {
+                      for (let k = rowIdx + 1; k < court.slots.length; k++) {
+                        if (court.slots[k]?.block?.blockId === blockInfo.blockId) blockSpan++;
+                        else break;
+                      }
+                    }
+
+                    const schedInfo = courtSlot?.schedule;
+                    const isSchedStart = schedInfo && (rowIdx === 0 || !court.slots[rowIdx - 1]?.schedule || court.slots[rowIdx - 1]?.schedule?.entryId !== schedInfo.entryId);
+                    const isSchedContinuation = schedInfo && !isSchedStart;
+                    let schedSpan = 1;
+                    if (isSchedStart && schedInfo) {
+                      for (let k = rowIdx + 1; k < court.slots.length; k++) {
+                        if (court.slots[k]?.schedule?.entryId === schedInfo.entryId) schedSpan++;
+                        else break;
+                      }
+                    }
+
+                    return (
+                      <div key={`${court.courtId}-${slot.startTime}`}
+                        className={cn("relative border-l border-neutral-800/40", !isLastRow && !isLessonContinuation && !isBlockContinuation && !isSchedContinuation && "border-b border-b-neutral-800/30")}
+                        style={{ height: ROW_H }}>
+                        {isLessonStart && lessonInfo ? (
+                          <div
+                            className="group absolute inset-x-1 top-1 rounded-lg border bg-teal-600/20 border-teal-500/30 px-2 py-1.5 overflow-hidden flex flex-col justify-center z-[5]"
+                            style={{ height: ROW_H * lessonSpan - 8 }}
+                          >
+                            <div className="flex items-center gap-1">
+                              <GraduationCap className="h-3 w-3 text-teal-400 shrink-0" />
+                              <p className="text-xs font-semibold text-teal-200 truncate">{lessonInfo.coachName}</p>
+                            </div>
+                            <p className="text-[10px] text-teal-400/70 truncate">
+                              {lessonInfo.playerName} — {lessonInfo.lessonType === "private" ? "Private" : "Group"}
+                            </p>
+                            {lessonSpan > 1 && (
+                              <p className="text-[10px] text-teal-400/50 truncate">{lessonInfo.packageName}</p>
+                            )}
+                          </div>
+                        ) : isLessonContinuation ? null : isBlockStart && blockInfo ? (
+                          <div
+                            className={cn(
+                              "absolute inset-x-1 top-1 rounded-lg border px-2 py-1.5 overflow-hidden flex flex-col justify-center z-[5]",
+                              blockInfo.type === "maintenance" && "bg-neutral-600/20 border-neutral-500/30",
+                              blockInfo.type === "open_play" && "bg-emerald-600/20 border-emerald-500/30",
+                              blockInfo.type === "competition" && "bg-blue-600/20 border-blue-500/30",
+                              blockInfo.type !== "maintenance" && blockInfo.type !== "open_play" && blockInfo.type !== "competition" && "bg-amber-600/20 border-amber-500/30",
+                            )}
+                            style={{ height: ROW_H * blockSpan - 8 }}
+                          >
+                            <p className="text-xs font-semibold text-neutral-300 truncate">{blockInfo.title || BLOCK_LABELS[blockInfo.type] || blockInfo.type}</p>
+                          </div>
+                        ) : isBlockContinuation ? null : isSchedStart && schedInfo ? (
+                          <div
+                            className={cn(
+                              "absolute inset-x-1 top-1 rounded-lg border px-2 py-1.5 overflow-hidden flex flex-col justify-center z-[5]",
+                              schedInfo.type === "open_play" && "bg-emerald-600/20 border-emerald-500/30",
+                              schedInfo.type === "competition" && "bg-blue-600/20 border-blue-500/30",
+                            )}
+                            style={{ height: ROW_H * schedSpan - 8 }}
+                          >
+                            <p className={cn("text-xs font-semibold truncate",
+                              schedInfo.type === "open_play" ? "text-emerald-200" : "text-blue-200"
+                            )}>{schedInfo.title || BLOCK_LABELS[schedInfo.type]}</p>
+                          </div>
+                        ) : isSchedContinuation ? null : courtSlot?.available ? (
+                          <div className="absolute inset-x-1 top-1 bottom-1 rounded-lg border border-dashed border-neutral-800/60" />
+                        ) : (
+                          <div className="absolute inset-x-1 top-1 bottom-1 rounded-lg bg-neutral-800/20" />
+                        )}
+                      </div>
+                    );
+                  }),
+                ];
+              })}
+
+              {isToday && currentRowOffset >= 0 && currentRowOffset <= calendarSlots.length * ROW_H && (
+                <div
+                  className="absolute left-0 right-0 z-10 pointer-events-none border-t-2 border-blue-500"
+                  style={{ top: ROW_H + currentRowOffset }}
+                >
+                  <div className="absolute -left-0 -top-1.5 h-3 w-3 rounded-full bg-blue-500" />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Lessons List — day detail section */}
+      <section className="space-y-3">
+        <h3 className="text-sm font-medium uppercase tracking-wider text-neutral-400">
+          {t("coaching.tabLessons")} {t("bookings.bookingsFor").toLowerCase()} {new Date(selectedDate + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
+        </h3>
+
+      {activeLessons.length === 0 && cancelledLessons.length === 0 && (
+        <p className="text-sm text-neutral-500">{t("coaching.noLessons")}</p>
+      )}
+      {activeLessons.length > 0 && (
       <div className="space-y-2">
         {activeLessons.map((lesson) => (
           <div key={lesson.id} className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
@@ -904,6 +1187,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
           </div>
         ))}
       </div>
+      )}
 
       {cancelledLessons.length > 0 && (
         <div className="space-y-2">
@@ -921,6 +1205,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
           ))}
         </div>
       )}
+      </section>
 
       {/* Book Lesson — Full-screen split panel */}
       {showBookModal && (

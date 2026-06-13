@@ -46,6 +46,7 @@ CREDENTIALS.md
 
 # uploads
 /uploads
+/public/uploads
 
 # dist
 /dist
@@ -54,3 +55,4 @@ CREDENTIALS.md
 *.tsbuildinfo
 next-env.d.ts
 fastapi/__pycache__/
+.env*
