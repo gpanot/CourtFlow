@@ -578,7 +578,7 @@ export default function AdminOverview() {
                           startTime: entry.startTime,
                           endTime: entry.endTime,
                           priceValue: entry.priceValue,
-                          paymentStatus: entry.paymentStatus,
+                          paymentStatus: entry.paymentStatus!,
                           paymentProofUrl: entry.paymentProofUrl,
                           status: entry.status,
                         })}
@@ -639,7 +639,7 @@ export default function AdminOverview() {
                       startTime: entry.startTime,
                       endTime: entry.endTime,
                       priceValue: entry.priceValue,
-                      paymentStatus: entry.paymentStatus,
+                      paymentStatus: entry.paymentStatus!,
                       paymentProofUrl: entry.paymentProofUrl,
                       status: entry.status,
                     })}>
