@@ -1,8 +1,13 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useMemo } from "react";
-import { getPlayerFromToken, getPlayerToken, clearPlayerToken } from "@/lib/player-token";
+import { useMemo, useSyncExternalStore } from "react";
+import {
+  getPlayerFromToken,
+  getPlayerToken,
+  clearPlayerToken,
+  subscribePlayerToken,
+} from "@/lib/player-token";
 
 export type PlayerSessionStatus = "loading" | "authenticated" | "unauthenticated";
 
@@ -22,11 +27,17 @@ export interface UsePlayerSessionResult {
 
 export function usePlayerSession(): UsePlayerSessionResult {
   const { data: oauthSession, status: oauthStatus } = useSession();
+  // Re-render when credentials token is set/cleared (e.g. after email login)
+  const credentialsToken = useSyncExternalStore(
+    subscribePlayerToken,
+    getPlayerToken,
+    () => null
+  );
 
   return useMemo(() => {
     // Check credentials token first (synchronous)
-    const tokenData = getPlayerFromToken();
-    const rawToken = getPlayerToken();
+    const tokenData = credentialsToken ? getPlayerFromToken() : null;
+    const rawToken = credentialsToken;
 
     if (tokenData) {
       return {
@@ -60,7 +71,7 @@ export function usePlayerSession(): UsePlayerSessionResult {
     }
 
     return { session: null, status: "unauthenticated" as const, authHeader: {} as Record<string, string> };
-  }, [oauthSession, oauthStatus]);
+  }, [oauthSession, oauthStatus, credentialsToken]);
 }
 
 /** Sign out from whichever auth path is active */

@@ -7,11 +7,14 @@ import { useEffect, useState, Suspense } from "react";
 import Image from "next/image";
 import { useTranslation } from "react-i18next";
 import { setPlayerToken, getPlayerFromToken } from "@/lib/player-token";
+import { useTheme } from "../components/ThemeProvider";
+import { BookLanguageMenu } from "../components/BookLanguageMenu";
 
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useTranslation();
+  const { resolved } = useTheme();
   const callbackUrl = searchParams.get("callbackUrl") || "/book";
 
   const [tab, setTab] = useState<"signin" | "signup">("signin");
@@ -121,14 +124,28 @@ function LoginContent() {
 
   return (
     <div className="flex flex-col min-h-dvh bg-[var(--cm-bg)]">
-      <div className="flex-shrink-0 flex flex-col items-center px-6 pt-10 pb-0 bg-[var(--cm-bg)]">
-        <div className="w-20 h-20 rounded-2xl overflow-hidden mb-4">
-          <Image src="/images/splash-icon.png" alt="CourtFlow" width={80} height={80} priority />
+      <div className="pointer-events-none fixed inset-x-0 top-[calc(0.75rem+env(safe-area-inset-top))] z-20 flex justify-end px-4">
+        <div className="pointer-events-auto flex w-full max-w-lg justify-end">
+          <BookLanguageMenu large />
         </div>
-        <h1 className="text-xl font-bold mb-1">{t("login.welcome")}</h1>
-        <p className="text-sm text-[var(--cm-text-sec)] mb-6 text-center">
-          {t("login.subtitle")}
-        </p>
+      </div>
+
+      <div className="relative flex-shrink-0 px-6 pt-[calc(2.5rem+env(safe-area-inset-top))] pb-0 bg-[var(--cm-bg)]">
+        <div className="flex flex-col items-center">
+          <div
+            className={`w-20 h-20 rounded-2xl overflow-hidden mb-4 ${
+              resolved === "light"
+                ? "bg-white border border-[var(--cm-border)] shadow-sm"
+                : ""
+            }`}
+          >
+            <Image src="/images/splash-icon.png" alt="CourtFlow" width={80} height={80} priority />
+          </div>
+          <h1 className="text-xl font-bold mb-1">{t("login.welcome")}</h1>
+          <p className="text-sm text-[var(--cm-text-sec)] mb-6 text-center">
+            {t("login.subtitle")}
+          </p>
+        </div>
 
         <div className="flex w-full bg-[var(--cm-bg-surface)] border border-[var(--cm-border)] rounded-xl p-1 mb-0 gap-1">
           <button

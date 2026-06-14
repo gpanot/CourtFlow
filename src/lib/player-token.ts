@@ -1,18 +1,37 @@
 const STORAGE_KEY = "player_token";
+export const PLAYER_TOKEN_CHANGED_EVENT = "player-token-changed";
 
 export function getPlayerToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem(STORAGE_KEY);
 }
 
+function notifyPlayerTokenChanged() {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new Event(PLAYER_TOKEN_CHANGED_EVENT));
+}
+
 export function setPlayerToken(token: string): void {
   if (typeof window === "undefined") return;
   localStorage.setItem(STORAGE_KEY, token);
+  notifyPlayerTokenChanged();
 }
 
 export function clearPlayerToken(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(STORAGE_KEY);
+  notifyPlayerTokenChanged();
+}
+
+export function subscribePlayerToken(onChange: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  const handler = () => onChange();
+  window.addEventListener(PLAYER_TOKEN_CHANGED_EVENT, handler);
+  window.addEventListener("storage", handler);
+  return () => {
+    window.removeEventListener(PLAYER_TOKEN_CHANGED_EVENT, handler);
+    window.removeEventListener("storage", handler);
+  };
 }
 
 /** Decode JWT payload without verifying signature (client-side only). */

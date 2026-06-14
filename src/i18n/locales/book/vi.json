@@ -171,6 +171,7 @@
     "sessionsCompleted": "{{count}} buổi",
     "openPlay": "Chơi tự do",
     "openPlayFull": "Hết chỗ",
+    "openPlayFullCta": "Xin lỗi, đã hết chỗ",
     "openPlaySpotsLeft": "Còn {{count}} chỗ",
     "openPlaySpotsLeft_other": "Còn {{count}} chỗ",
     "openPlayFree": "Miễn phí",

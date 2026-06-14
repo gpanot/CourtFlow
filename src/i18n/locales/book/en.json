@@ -171,6 +171,7 @@
     "sessionsCompleted": "{{count}} sessions",
     "openPlay": "Open Play Sessions",
     "openPlayFull": "Full",
+    "openPlayFullCta": "Sorry, it is full",
     "openPlaySpotsLeft": "{{count}} spot left",
     "openPlaySpotsLeft_other": "{{count}} spots left",
     "openPlayFree": "Free",

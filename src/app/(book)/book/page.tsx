@@ -66,6 +66,24 @@ function sessionDurationHours(startTime: string, endTime: string): number {
   return Math.max(1, Math.round(ms / (1000 * 60 * 60)));
 }
 
+function capacityFillPct(spotsTaken: number, maxPlayers: number): number {
+  if (maxPlayers <= 0) return 0;
+  return Math.min(100, (spotsTaken / maxPlayers) * 100);
+}
+
+function capacityBarColor(pct: number, isFull: boolean): string {
+  if (isFull) return "bg-[var(--cm-red)]";
+  if (pct >= 60) return "bg-[var(--cm-orange)]";
+  if (pct > 0) return "bg-[var(--cm-green)]";
+  return "";
+}
+
+function capacityLabelColor(pct: number, isFull: boolean): string {
+  if (isFull) return "text-[var(--cm-red)]";
+  if (pct >= 60) return "text-[var(--cm-orange)]";
+  return "text-[var(--cm-text-sec)]";
+}
+
 export default function VenueHomePage() {
   const { status } = usePlayerSession();
   const router = useRouter();
@@ -368,6 +386,7 @@ export default function VenueHomePage() {
           <div className="space-y-3">
             {openPlaySessions.map((session) => {
               const isFull = session.spotsLeft === 0;
+              const fillPct = capacityFillPct(session.spotsTaken, session.maxPlayers);
               const hours = sessionDurationHours(session.startTime, session.endTime);
               const priceLabel = session.priceValue > 0 ? formatPrice(session.priceValue) : t("home.openPlayFree");
               return (
@@ -386,20 +405,16 @@ export default function VenueHomePage() {
                     </span>
                   </p>
                   <div className="flex items-center gap-3 mb-4">
-                    <div className="flex-1 h-2 rounded-full bg-[var(--cm-bg-surface)] overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${
-                          isFull ? "bg-[var(--cm-red)]" : "bg-[var(--cm-accent)]"
-                        }`}
-                        style={{
-                          width: `${Math.min(100, (session.spotsTaken / session.maxPlayers) * 100)}%`,
-                        }}
-                      />
+                    <div className="flex-1 h-2.5 rounded-full bg-[var(--cm-border)] overflow-hidden">
+                      {session.spotsTaken > 0 && (
+                        <div
+                          className={`h-full rounded-full transition-all ${capacityBarColor(fillPct, isFull)}`}
+                          style={{ width: `${fillPct}%` }}
+                        />
+                      )}
                     </div>
                     <span
-                      className={`text-xs font-semibold tabular-nums shrink-0 ${
-                        isFull ? "text-[var(--cm-red)]" : "text-[var(--cm-text-sec)]"
-                      }`}
+                      className={`text-xs font-semibold tabular-nums shrink-0 ${capacityLabelColor(fillPct, isFull)}`}
                     >
                       {session.spotsTaken}/{session.maxPlayers}
                     </span>
@@ -408,9 +423,13 @@ export default function VenueHomePage() {
                     type="button"
                     onClick={() => handleOpenPlayJoin(session)}
                     disabled={isFull}
-                    className="w-full py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-[var(--cm-accent)] text-black"
+                    className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors ${
+                      isFull
+                        ? "bg-[var(--cm-bg-surface)] border border-[var(--cm-border)] text-[var(--cm-red)] cursor-not-allowed"
+                        : "bg-[var(--cm-accent)] text-black"
+                    }`}
                   >
-                    {t("home.openPlayJoin")}
+                    {isFull ? t("home.openPlayFullCta") : t("home.openPlayJoin")}
                   </button>
                 </div>
               );

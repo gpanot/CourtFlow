@@ -171,6 +171,7 @@
     "sessionsCompleted": "{{count}} เซสชัน",
     "openPlay": "เซสชันเปิดเล่น",
     "openPlayFull": "เต็มแล้ว",
+    "openPlayFullCta": "ขออภัย เต็มแล้ว",
     "openPlaySpotsLeft": "เหลือ {{count}} ที่นั่ง",
     "openPlaySpotsLeft_other": "เหลือ {{count}} ที่นั่ง",
     "openPlayFree": "ฟรี",

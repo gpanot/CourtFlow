@@ -2,7 +2,7 @@
 export const dynamic = "force-dynamic";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import Image from "next/image";
 import { useTranslation } from "react-i18next";
 
@@ -21,12 +21,6 @@ export default function IntroPage() {
     body: string;
     cta: string;
   }[];
-
-  useEffect(() => {
-    if (typeof window !== "undefined" && localStorage.getItem("intro_seen") === "1") {
-      router.replace("/book/login");
-    }
-  }, [router]);
 
   function goNext() {
     if (slide < SLIDE_IMAGES.length - 1) {
@@ -59,7 +53,7 @@ export default function IntroPage() {
 
   return (
     <div
-      className="min-h-dvh flex flex-col bg-[var(--cm-bg)] text-[var(--cm-text)] select-none overflow-hidden"
+      className="h-dvh flex flex-col bg-[var(--cm-bg)] text-[var(--cm-text)] select-none overflow-hidden"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
@@ -67,7 +61,7 @@ export default function IntroPage() {
         <link key={i} rel="preload" as="image" href={image} />
       ))}
 
-      <div className="relative w-full flex-shrink-0" style={{ height: "55dvh" }}>
+      <div className="relative w-full flex-shrink-0" style={{ height: "51dvh" }}>
         {SLIDE_IMAGES.map((image, i) => (
           <Image
             key={image}
@@ -79,49 +73,52 @@ export default function IntroPage() {
           />
         ))}
         <div
-          className="absolute inset-x-0 bottom-0 h-24 z-10"
+          className="absolute inset-x-0 bottom-0 h-16 z-10"
           style={{ background: "linear-gradient(to top, var(--cm-bg), transparent)" }}
         />
 
         {!isLast && (
           <button
             onClick={skip}
-            className="absolute top-4 right-4 z-20 text-xs font-medium text-white/70 bg-black/30 backdrop-blur-sm px-3 py-1.5 rounded-full"
+            className="absolute top-[calc(1rem+env(safe-area-inset-top))] right-4 z-20 text-xs font-medium text-white/70 bg-black/30 backdrop-blur-sm px-3 py-1.5 rounded-full"
           >
             {t("intro.skip")}
           </button>
         )}
       </div>
 
-      <div className="flex-1 flex flex-col px-7 pt-6 pb-4">
-        <p className="text-xs font-semibold tracking-widest text-[var(--cm-accent)] mb-3">{s.tag}</p>
-        <h1 className="text-[1.75rem] leading-tight font-extrabold mb-4 whitespace-pre-line">
-          {s.title}
-        </h1>
-        <p className="text-sm text-[var(--cm-text-sec)] leading-relaxed">{s.body}</p>
-      </div>
-
-      <div className="px-7 pb-10 pt-4 flex flex-col gap-4 bg-[var(--cm-bg)]">
-        <div className="flex items-center justify-center gap-2">
-          {SLIDE_IMAGES.map((_, i) => (
-            <button
-              key={i}
-              onClick={() => setSlide(i)}
-              className={`rounded-full transition-all duration-300 ${
-                i === slide
-                  ? "w-6 h-2 bg-[var(--cm-accent)]"
-                  : "w-2 h-2 bg-[var(--cm-text-muted)]"
-              }`}
-            />
-          ))}
+      <div className="flex flex-1 min-h-0 flex-col px-7 pt-3">
+        <div className="flex-shrink-0">
+          <p className="text-xs font-semibold tracking-widest text-[var(--cm-accent)] mb-2">{s.tag}</p>
+          <h1 className="text-[1.5rem] leading-tight font-extrabold mb-3 whitespace-pre-line">
+            {s.title}
+          </h1>
+          <p className="text-sm text-[var(--cm-text-sec)] leading-relaxed">{s.body}</p>
         </div>
 
-        <button
-          onClick={goNext}
-          className="w-full py-4 rounded-2xl font-bold text-base bg-[var(--cm-accent)] text-black active:scale-95 transition-transform"
-        >
-          {s.cta}
-        </button>
+        <div className="mt-auto flex-shrink-0 flex flex-col gap-4 pt-[0.7rem] pb-[calc(1rem+env(safe-area-inset-bottom))]">
+          <div className="flex items-center justify-center gap-2">
+            {SLIDE_IMAGES.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setSlide(i)}
+                aria-label={`Slide ${i + 1}`}
+                className={`rounded-full transition-all duration-300 ${
+                  i === slide
+                    ? "w-6 h-2 bg-[var(--cm-accent)]"
+                    : "w-2 h-2 bg-[var(--cm-text-muted)]"
+                }`}
+              />
+            ))}
+          </div>
+
+          <button
+            onClick={goNext}
+            className="w-full py-3.5 rounded-2xl font-bold text-base bg-[var(--cm-accent)] text-black active:scale-95 transition-transform"
+          >
+            {s.cta}
+          </button>
+        </div>
       </div>
     </div>
   );
