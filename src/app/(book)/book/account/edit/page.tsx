@@ -9,12 +9,14 @@ import { signOutToIntro } from "../../lib/sign-out-to-intro";
 import { useTheme } from "../../components/ThemeProvider";
 import { AvatarPhotoCropper } from "@/components/avatar-photo-cropper";
 import { BookScreenTopBar } from "../../components/BookScreenTopBar";
+import { useTranslation } from "react-i18next";
+import { BOOK_LANGUAGES, persistBookLanguage, type BookLanguageCode } from "@/i18n/book-i18n";
 
 const SKILL_LEVELS = ["beginner", "intermediate", "advanced", "pro"] as const;
 const GENDERS = ["male", "female"] as const;
 const THEME_OPTIONS = [
-  { value: "light" as const, label: "Light" },
-  { value: "dark" as const, label: "Dark" },
+  { value: "light" as const, labelKey: "theme.light" },
+  { value: "dark" as const, labelKey: "theme.dark" },
 ] as const;
 
 type ProfileSnapshot = {
@@ -34,6 +36,7 @@ export default function EditProfilePage() {
   const { status } = usePlayerSession();
   const router = useRouter();
   const { mode, resolved, setMode } = useTheme();
+  const { t, i18n } = useTranslation();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [gender, setGender] = useState("");
@@ -50,7 +53,12 @@ export default function EditProfilePage() {
   const [cropFile, setCropFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const activeLang = (i18n.language?.slice(0, 2) ?? "vi") as BookLanguageCode;
   const activeTheme = mode === "system" ? resolved : mode;
+
+  function handleLanguageChange(code: BookLanguageCode) {
+    void persistBookLanguage(code);
+  }
 
   const hasChanges = useMemo(() => {
     if (!initialProfile) return false;
@@ -99,7 +107,7 @@ export default function EditProfilePage() {
       const formData = new FormData();
       formData.append("avatar", blob, "avatar.jpg");
       const res = await portalFetch("/api/public/account/avatar", { method: "POST", body: formData });
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Upload failed"); }
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || t("editProfile.errors.uploadFailed")); }
       const data = await res.json();
       setAvatarUrl(data.avatarPhotoPath);
     } catch (e) {
@@ -111,12 +119,12 @@ export default function EditProfilePage() {
     setDeleteStep("deleting");
     try {
       const res = await portalFetch("/api/public/account", { method: "DELETE" });
-      if (!res.ok) throw new Error("Deletion failed");
+      if (!res.ok) throw new Error(t("editProfile.errors.deletionFailed"));
       setDeleteStep("done");
       setTimeout(() => signOutToIntro(), 1500);
     } catch {
       setDeleteStep("confirm");
-      setError("Account deletion failed. Please try again.");
+      setError(t("editProfile.errors.deleteRetry"));
       setShowDeleteConfirm(false);
     }
   }
@@ -132,7 +140,7 @@ export default function EditProfilePage() {
       });
       if (!res.ok) {
         const d = await res.json();
-        throw new Error(d.error || "Failed to save");
+        throw new Error(d.error || t("editProfile.errors.saveFailed"));
       }
       router.back();
     } catch (e) {
@@ -142,18 +150,18 @@ export default function EditProfilePage() {
   }
 
   if (!loaded) {
-    return <div className="px-4 pt-12 text-[var(--cm-text-muted)]">Loading...</div>;
+    return <div className="px-4 pt-12 text-[var(--cm-text-muted)]">{t("common.loading")}</div>;
   }
 
   return (
     <div className="px-6 pt-4 pb-8">
       <BookScreenTopBar
-        title="Edit Profile"
+        title={t("editProfile.title")}
         onBack={() => router.back()}
         action={
           hasChanges
             ? {
-                label: "Save Changes",
+                label: t("common.saveChanges"),
                 onClick: handleSave,
                 disabled: saving,
                 loading: saving,
@@ -180,7 +188,7 @@ export default function EditProfilePage() {
             </svg>
           </div>
         </button>
-        <p className="text-[10px] text-[var(--cm-text-muted)] mt-1">Tap to change photo</p>
+        <p className="text-[10px] text-[var(--cm-text-muted)] mt-1">{t("editProfile.tapChangePhoto")}</p>
         <input ref={fileRef} type="file" accept="image/*" onChange={handleAvatarFileChange} className="hidden" />
       </div>
 
@@ -188,21 +196,21 @@ export default function EditProfilePage() {
         <div className="mb-4 p-3 bg-[var(--cm-red)]/10 text-[var(--cm-red)] text-sm rounded-xl">{error}</div>
       )}
 
-      <label className="block text-sm font-medium mb-1.5 text-[var(--cm-text)]">Name</label>
+      <label className="block text-sm font-medium mb-1.5 text-[var(--cm-text)]">{t("common.name")}</label>
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
         className="w-full px-4 py-3 bg-[var(--cm-bg-input)] border border-[var(--cm-border)] rounded-xl text-sm mb-4 outline-none focus:border-[var(--cm-accent)] text-[var(--cm-text)]"
       />
 
-      <label className="block text-sm font-medium mb-1.5 text-[var(--cm-text)]">Email</label>
+      <label className="block text-sm font-medium mb-1.5 text-[var(--cm-text)]">{t("editProfile.email")}</label>
       <input
         value={email}
         disabled
         className="w-full px-4 py-3 bg-[var(--cm-bg-surface)] border border-[var(--cm-border)] rounded-xl text-sm mb-4 text-[var(--cm-text-muted)]"
       />
 
-      <label className="block text-sm font-medium mb-1.5 text-[var(--cm-text)]">Phone</label>
+      <label className="block text-sm font-medium mb-1.5 text-[var(--cm-text)]">{t("editProfile.phone")}</label>
       <input
         type="tel"
         value={phone}
@@ -212,7 +220,7 @@ export default function EditProfilePage() {
 
       <div className="rounded-xl border border-[var(--cm-border)] bg-[var(--cm-bg-card)] p-3 mb-4 space-y-3">
         <div>
-          <p className="text-xs font-medium text-[var(--cm-text-sec)] mb-1.5">Gender</p>
+          <p className="text-xs font-medium text-[var(--cm-text-sec)] mb-1.5">{t("editProfile.gender")}</p>
           <div className="flex gap-2">
             {GENDERS.map((g) => (
               <button
@@ -221,14 +229,14 @@ export default function EditProfilePage() {
                 onClick={() => setGender(g)}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${segmentClass(gender === g)}`}
               >
-                {g.charAt(0).toUpperCase() + g.slice(1)}
+                {t(`gender.${g}`)}
               </button>
             ))}
           </div>
         </div>
 
         <div>
-          <p className="text-xs font-medium text-[var(--cm-text-sec)] mb-1.5">Skill Level</p>
+          <p className="text-xs font-medium text-[var(--cm-text-sec)] mb-1.5">{t("editProfile.skillLevel")}</p>
           <div className="grid grid-cols-2 gap-2">
             {SKILL_LEVELS.map((s) => (
               <button
@@ -237,23 +245,39 @@ export default function EditProfilePage() {
                 onClick={() => setSkillLevel(s)}
                 className={`py-1.5 rounded-lg text-xs font-medium border transition-colors ${segmentClass(skillLevel === s)}`}
               >
-                {s.charAt(0).toUpperCase() + s.slice(1)}
+                {t(`skillLevels.${s}`)}
               </button>
             ))}
           </div>
         </div>
 
         <div>
-          <p className="text-xs font-medium text-[var(--cm-text-sec)] mb-1.5">Theme</p>
-          <div className="flex gap-2">
-            {THEME_OPTIONS.map((t) => (
+          <p className="text-xs font-medium text-[var(--cm-text-sec)] mb-1.5">{t("language.label")}</p>
+          <div className="grid grid-cols-3 gap-2">
+            {BOOK_LANGUAGES.map((lang) => (
               <button
-                key={t.value}
+                key={lang.code}
                 type="button"
-                onClick={() => setMode(t.value)}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${segmentClass(activeTheme === t.value)}`}
+                onClick={() => handleLanguageChange(lang.code)}
+                className={`py-1.5 rounded-lg text-xs font-medium border transition-colors ${segmentClass(activeLang === lang.code)}`}
               >
-                {t.label}
+                {lang.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-medium text-[var(--cm-text-sec)] mb-1.5">{t("theme.label")}</p>
+          <div className="flex gap-2">
+            {THEME_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setMode(opt.value)}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${segmentClass(activeTheme === opt.value)}`}
+              >
+                {t(opt.labelKey)}
               </button>
             ))}
           </div>
@@ -265,7 +289,7 @@ export default function EditProfilePage() {
           onClick={() => { setShowDeleteConfirm(true); setDeleteStep("confirm"); }}
           className="w-full py-3 bg-transparent border border-[var(--cm-red)]/30 text-[var(--cm-red)] rounded-xl font-medium text-sm hover:bg-[var(--cm-red)]/10 transition-colors"
         >
-          Delete my account and data
+          {t("editProfile.deleteAccount")}
         </button>
       </div>
 
@@ -286,31 +310,31 @@ export default function EditProfilePage() {
             {deleteStep === "done" ? (
               <div className="text-center py-4">
                 <div className="text-3xl mb-3">✓</div>
-                <p className="font-semibold text-[var(--cm-text)]">Account deleted</p>
-                <p className="text-sm text-[var(--cm-text-sec)] mt-1">Signing you out…</p>
+                <p className="font-semibold text-[var(--cm-text)]">{t("editProfile.deletedTitle")}</p>
+                <p className="text-sm text-[var(--cm-text-sec)] mt-1">{t("editProfile.signingOut")}</p>
               </div>
             ) : (
               <>
-                <h2 className="text-lg font-bold mb-2 text-[var(--cm-red)]">Delete account?</h2>
+                <h2 className="text-lg font-bold mb-2 text-[var(--cm-red)]">{t("editProfile.deleteTitle")}</h2>
                 <p className="text-sm text-[var(--cm-text-sec)] mb-1">
-                  This will permanently remove your account and personal data. Your booking and payment history will be anonymised and retained for financial records.
+                  {t("editProfile.deleteBody")}
                 </p>
                 <p className="text-sm font-medium text-[var(--cm-text)] mb-6">
-                  This action cannot be undone.
+                  {t("editProfile.deleteWarning")}
                 </p>
                 <button
                   onClick={handleDelete}
                   disabled={deleteStep === "deleting"}
                   className="w-full py-3 bg-[var(--cm-red)] text-white rounded-xl font-medium text-sm mb-3 disabled:opacity-50"
                 >
-                  {deleteStep === "deleting" ? "Deleting…" : "Yes, delete my account"}
+                  {deleteStep === "deleting" ? t("editProfile.deleting") : t("editProfile.yesDelete")}
                 </button>
                 <button
                   onClick={() => setShowDeleteConfirm(false)}
                   disabled={deleteStep === "deleting"}
                   className="w-full py-3 bg-[var(--cm-bg-surface)] text-[var(--cm-text-sec)] rounded-xl font-medium text-sm border border-[var(--cm-border)] disabled:opacity-50"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
               </>
             )}

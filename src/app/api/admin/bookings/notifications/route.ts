@@ -14,39 +14,75 @@ export async function GET(request: NextRequest) {
     const since = new Date();
     since.setDate(since.getDate() - 14);
 
-    const bookings = await prisma.booking.findMany({
-      where: {
-        venueId: { in: venueIds },
-        status: { in: ["confirmed", "completed"] },
-        paymentStatus: { in: ["paid", "proof_submitted"] },
-        createdAt: { gte: since },
-      },
-      select: {
-        id: true,
-        venueId: true,
-        date: true,
-        startTime: true,
-        paymentStatus: true,
-        player: { select: { name: true } },
-        court: { select: { label: true } },
-        venue: { select: { name: true } },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 100,
-    });
+    const [bookings, openPlayRegs] = await Promise.all([
+      prisma.booking.findMany({
+        where: {
+          venueId: { in: venueIds },
+          status: { in: ["confirmed", "completed"] },
+          paymentStatus: { in: ["paid", "proof_submitted"] },
+          createdAt: { gte: since },
+        },
+        select: {
+          id: true,
+          venueId: true,
+          date: true,
+          startTime: true,
+          paymentStatus: true,
+          player: { select: { name: true } },
+          court: { select: { label: true } },
+          venue: { select: { name: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+      }),
+      prisma.openPlayRegistration.findMany({
+        where: {
+          venueId: { in: venueIds },
+          status: "confirmed",
+          paymentStatus: { in: ["paid", "proof_submitted"] },
+          createdAt: { gte: since },
+        },
+        select: {
+          id: true,
+          venueId: true,
+          date: true,
+          startTime: true,
+          scheduleEntryId: true,
+          paymentStatus: true,
+          player: { select: { name: true } },
+          venue: { select: { name: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+      }),
+    ]);
 
-    return json(
-      bookings.map((b) => ({
-        id: b.id,
-        venueId: b.venueId,
-        date: b.date,
-        startTime: b.startTime,
-        paymentStatus: b.paymentStatus,
-        playerName: b.player.name,
-        courtLabel: b.court.label,
-        venueName: b.venue.name,
-      }))
-    );
+    const courtNotifications = bookings.map((b) => ({
+      id: b.id,
+      type: "booking" as const,
+      venueId: b.venueId,
+      date: b.date,
+      startTime: b.startTime,
+      paymentStatus: b.paymentStatus,
+      playerName: b.player.name,
+      courtLabel: b.court.label,
+      venueName: b.venue.name,
+    }));
+
+    const openPlayNotifications = openPlayRegs.map((r) => ({
+      id: r.id,
+      type: "open_play" as const,
+      venueId: r.venueId,
+      date: r.date,
+      startTime: r.startTime,
+      paymentStatus: r.paymentStatus,
+      playerName: r.player.name,
+      courtLabel: null,
+      venueName: r.venue.name,
+      scheduleEntryId: r.scheduleEntryId,
+    }));
+
+    return json([...courtNotifications, ...openPlayNotifications]);
   } catch (e) {
     const msg = (e as Error).message;
     if (msg.includes("authorization") || msg.includes("token") || msg.includes("access required")) {

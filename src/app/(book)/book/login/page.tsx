@@ -5,11 +5,13 @@ import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import Image from "next/image";
+import { useTranslation } from "react-i18next";
 import { setPlayerToken, getPlayerFromToken } from "@/lib/player-token";
 
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { t } = useTranslation();
   const callbackUrl = searchParams.get("callbackUrl") || "/book";
 
   const [tab, setTab] = useState<"signin" | "signup">("signin");
@@ -28,18 +30,14 @@ function LoginContent() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const token = getPlayerFromToken();
-    console.log("[login] mount check — token:", token ? `${JSON.stringify(token).slice(0, 60)}...` : "null", "intro_seen:", localStorage.getItem("intro_seen"));
-    // Already logged in via credentials token → redirect
-    if (token) { console.log("[login] already authed → redirect", callbackUrl); router.replace(callbackUrl); return; }
-    // Show intro to new visitors
+    if (token) { router.replace(callbackUrl); return; }
     if (!localStorage.getItem("intro_seen")) {
-      console.log("[login] no intro_seen → redirect /book/intro");
       router.replace("/book/intro");
     }
   }, [router, callbackUrl]);
 
-  function switchTab(t: "signin" | "signup") {
-    setTab(t);
+  function switchTab(nextTab: "signin" | "signup") {
+    setTab(nextTab);
     setError(null);
     setSuccess(null);
   }
@@ -50,16 +48,15 @@ function LoginContent() {
     try {
       await signIn(provider, { callbackUrl });
     } catch {
-      setError("Sign-in failed. Please try again.");
+      setError(t("login.errors.signInFailed"));
       setLoading(null);
     }
   }
 
   async function handleEmailSignIn() {
-    if (!siEmail || !siPassword) { setError("Please enter your email and password."); return; }
+    if (!siEmail || !siPassword) { setError(t("login.errors.emailPasswordRequired")); return; }
     setLoading("email-signin");
     setError(null);
-    console.log("[login] handleEmailSignIn — email:", siEmail);
     try {
       const res = await fetch("/api/public/auth/login", {
         method: "POST",
@@ -67,18 +64,14 @@ function LoginContent() {
         body: JSON.stringify({ email: siEmail, password: siPassword }),
       });
       const data = await res.json();
-      console.log("[login] /auth/login response", res.status, { onboardingComplete: data.onboardingComplete, playerId: data.playerId, error: data.error });
       if (!res.ok) {
-        setError(data.error || "Invalid email or password.");
+        setError(data.error || t("login.errors.invalidCredentials"));
       } else {
         setPlayerToken(data.token);
-        const dest = data.onboardingComplete ? callbackUrl : "/book/onboarding";
-        console.log("[login] sign-in ok → redirect", dest);
-        router.replace(dest);
+        router.replace(data.onboardingComplete ? callbackUrl : "/book/onboarding");
       }
-    } catch (e) {
-      console.error("[login] handleEmailSignIn error", e);
-      setError("Sign-in failed. Please try again.");
+    } catch {
+      setError(t("login.errors.signInFailed"));
     }
     setLoading(null);
   }
@@ -86,16 +79,15 @@ function LoginContent() {
   async function handleSignUp() {
     setError(null);
     if (!suName || !suEmail || !suPassword || !suPassword2) {
-      setError("Please fill in all fields."); return;
+      setError(t("login.errors.fillAllFields")); return;
     }
     if (suPassword !== suPassword2) {
-      setError("Passwords do not match."); return;
+      setError(t("login.errors.passwordMismatch")); return;
     }
     if (suPassword.length < 8) {
-      setError("Password must be at least 8 characters."); return;
+      setError(t("login.errors.passwordTooShort")); return;
     }
     setLoading("signup");
-    console.log("[login] handleSignUp — email:", suEmail);
     try {
       const res = await fetch("/api/public/auth/signup", {
         method: "POST",
@@ -103,29 +95,24 @@ function LoginContent() {
         body: JSON.stringify({ name: suName, email: suEmail, password: suPassword }),
       });
       const data = await res.json();
-      console.log("[login] /auth/signup response", res.status, data);
-      if (!res.ok) { setError(data.error || "Sign-up failed."); setLoading(null); return; }
+      if (!res.ok) { setError(data.error || t("login.errors.signUpFailed")); setLoading(null); return; }
 
-      console.log("[login] signup ok, now auto-login...");
       const loginRes = await fetch("/api/public/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: suEmail, password: suPassword }),
       });
       const loginData = await loginRes.json();
-      console.log("[login] post-signup login response", loginRes.status, { onboardingComplete: loginData.onboardingComplete, error: loginData.error });
       if (!loginRes.ok) {
-        setSuccess("Account created! Please sign in.");
+        setSuccess(t("login.accountCreated"));
         setTab("signin");
         setSiEmail(suEmail);
       } else {
         setPlayerToken(loginData.token);
-        console.log("[login] post-signup → redirect /book/onboarding");
         router.replace("/book/onboarding");
       }
-    } catch (e) {
-      console.error("[login] handleSignUp error", e);
-      setError("Sign-up failed. Please try again.");
+    } catch {
+      setError(t("login.errors.signUpFailedRetry"));
     }
     setLoading(null);
   }
@@ -134,17 +121,15 @@ function LoginContent() {
 
   return (
     <div className="flex flex-col min-h-dvh bg-[var(--cm-bg)]">
-      {/* Fixed header — logo, title, tabs */}
       <div className="flex-shrink-0 flex flex-col items-center px-6 pt-10 pb-0 bg-[var(--cm-bg)]">
         <div className="w-20 h-20 rounded-2xl overflow-hidden mb-4">
           <Image src="/images/splash-icon.png" alt="CourtFlow" width={80} height={80} priority />
         </div>
-        <h1 className="text-xl font-bold mb-1">Welcome</h1>
+        <h1 className="text-xl font-bold mb-1">{t("login.welcome")}</h1>
         <p className="text-sm text-[var(--cm-text-sec)] mb-6 text-center">
-          Book courts and coaching sessions
+          {t("login.subtitle")}
         </p>
 
-        {/* Tab switcher — always visible, never moves */}
         <div className="flex w-full bg-[var(--cm-bg-surface)] border border-[var(--cm-border)] rounded-xl p-1 mb-0 gap-1">
           <button
             onClick={() => switchTab("signin")}
@@ -152,7 +137,7 @@ function LoginContent() {
               tab === "signin" ? "bg-[var(--cm-accent)] text-black" : "text-[var(--cm-text-sec)]"
             }`}
           >
-            Sign In
+            {t("login.signIn")}
           </button>
           <button
             onClick={() => switchTab("signup")}
@@ -160,12 +145,11 @@ function LoginContent() {
               tab === "signup" ? "bg-[var(--cm-accent)] text-black" : "text-[var(--cm-text-sec)]"
             }`}
           >
-            Sign Up
+            {t("login.signUp")}
           </button>
         </div>
       </div>
 
-      {/* Scrollable content below tabs */}
       <div className="flex-1 overflow-y-auto px-6 pt-5 pb-8">
         {error && (
           <div className="w-full mb-4 p-3 bg-[var(--cm-red)]/10 text-[var(--cm-red)] text-sm rounded-xl text-center">
@@ -181,68 +165,68 @@ function LoginContent() {
         {tab === "signin" ? (
           <>
             <div className="w-full space-y-3 mb-4">
-              <input type="email" placeholder="Email" value={siEmail} onChange={(e) => setSiEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleEmailSignIn()} className={inputCls} />
-              <input type="password" placeholder="Password" value={siPassword} onChange={(e) => setSiPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleEmailSignIn()} className={inputCls} />
+              <input type="email" placeholder={t("login.email")} value={siEmail} onChange={(e) => setSiEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleEmailSignIn()} className={inputCls} />
+              <input type="password" placeholder={t("login.password")} value={siPassword} onChange={(e) => setSiPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleEmailSignIn()} className={inputCls} />
             </div>
 
             <button onClick={handleEmailSignIn} disabled={!!loading} className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl text-sm font-medium mb-4 disabled:opacity-40 transition-opacity">
-              {loading === "email-signin" ? <Spinner /> : "Sign In"}
+              {loading === "email-signin" ? <Spinner /> : t("login.signIn")}
             </button>
 
-            <Divider />
+            <Divider label={t("common.or")} />
 
             <button onClick={() => handleOAuth("google")} disabled={!!loading} className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl text-sm font-medium hover:opacity-80 transition-opacity disabled:opacity-60 mb-3">
               {loading === "google" ? <Spinner /> : <GoogleIcon />}
-              Continue with Google
+              {t("login.continueGoogle")}
             </button>
 
             <button onClick={() => handleOAuth("apple")} disabled={!!loading} className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-black text-white rounded-xl text-sm font-medium hover:bg-neutral-800 transition-colors disabled:opacity-60">
               {loading === "apple" ? <Spinner /> : <AppleIcon />}
-              Continue with Apple
+              {t("login.continueApple")}
             </button>
           </>
         ) : (
           <>
             <div className="w-full space-y-3 mb-4">
-              <input type="text" placeholder="Full name" value={suName} onChange={(e) => setSuName(e.target.value)} className={inputCls} />
-              <input type="email" placeholder="Email" value={suEmail} onChange={(e) => setSuEmail(e.target.value)} className={inputCls} />
-              <input type="password" placeholder="Password (min 8 characters)" value={suPassword} onChange={(e) => setSuPassword(e.target.value)} className={inputCls} />
-              <input type="password" placeholder="Confirm password" value={suPassword2} onChange={(e) => setSuPassword2(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSignUp()} className={inputCls} />
+              <input type="text" placeholder={t("login.fullName")} value={suName} onChange={(e) => setSuName(e.target.value)} className={inputCls} />
+              <input type="email" placeholder={t("login.email")} value={suEmail} onChange={(e) => setSuEmail(e.target.value)} className={inputCls} />
+              <input type="password" placeholder={t("login.passwordMin")} value={suPassword} onChange={(e) => setSuPassword(e.target.value)} className={inputCls} />
+              <input type="password" placeholder={t("login.confirmPassword")} value={suPassword2} onChange={(e) => setSuPassword2(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSignUp()} className={inputCls} />
             </div>
 
             <button onClick={handleSignUp} disabled={!!loading} className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl text-sm font-medium mb-4 disabled:opacity-40 transition-opacity">
-              {loading === "signup" ? <Spinner /> : "Create Account"}
+              {loading === "signup" ? <Spinner /> : t("login.createAccount")}
             </button>
 
-            <Divider />
+            <Divider label={t("common.or")} />
 
             <button onClick={() => handleOAuth("google")} disabled={!!loading} className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl text-sm font-medium hover:opacity-80 transition-opacity disabled:opacity-60 mb-3">
               {loading === "google" ? <Spinner /> : <GoogleIcon />}
-              Sign up with Google
+              {t("login.signUpGoogle")}
             </button>
 
             <button onClick={() => handleOAuth("apple")} disabled={!!loading} className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-black text-white rounded-xl text-sm font-medium hover:bg-neutral-800 transition-colors disabled:opacity-60">
               {loading === "apple" ? <Spinner /> : <AppleIcon />}
-              Sign up with Apple
+              {t("login.signUpApple")}
             </button>
           </>
         )}
 
         <p className="text-xs text-[var(--cm-text-muted)] mt-6 text-center">
-          By continuing you agree to our{" "}
-          <span className="underline">Terms of Service</span> &{" "}
-          <span className="underline">Privacy Policy</span>
+          {t("login.termsPrefix")}{" "}
+          <span className="underline">{t("login.termsOfService")}</span> {t("login.and")}{" "}
+          <span className="underline">{t("login.privacyPolicy")}</span>
         </p>
       </div>
     </div>
   );
 }
 
-function Divider() {
+function Divider({ label }: { label: string }) {
   return (
     <div className="flex items-center gap-3 w-full mb-4">
       <div className="flex-1 h-px bg-[var(--cm-border)]" />
-      <span className="text-xs text-[var(--cm-text-muted)]">or</span>
+      <span className="text-xs text-[var(--cm-text-muted)]">{label}</span>
       <div className="flex-1 h-px bg-[var(--cm-border)]" />
     </div>
   );

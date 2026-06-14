@@ -40,6 +40,10 @@ export interface ScheduleEntry {
   courtIds: string[];
   type: "open_play" | "competition";
   title: string;
+  /** open_play only: max total participants per session instance */
+  maxPlayers?: number;
+  /** open_play only: per-player price in whole VND */
+  priceValue?: number;
 }
 
 export interface ScheduleConfig {

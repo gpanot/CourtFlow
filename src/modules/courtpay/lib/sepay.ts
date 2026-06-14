@@ -103,6 +103,22 @@ async function handlePortalLessonPayment(
   return { matched: true, paymentId: lesson.id };
 }
 
+async function handlePortalOpenPlayPayment(
+  payload: SepayWebhookPayload,
+  ref: string
+): Promise<{ matched: boolean; paymentId?: string }> {
+  const reg = await prisma.openPlayRegistration.findFirst({ where: { paymentRef: ref } });
+  if (!reg || reg.paymentStatus !== "pending") return { matched: false };
+  if (payload.transferAmount < reg.priceValue) return { matched: false };
+  if (!(await checkVenueAutoPayment(reg.venueId))) return { matched: false };
+
+  await prisma.openPlayRegistration.update({
+    where: { id: reg.id },
+    data: { paymentStatus: "paid", holdExpiresAt: null },
+  });
+  return { matched: true, paymentId: reg.id };
+}
+
 async function handlePortalCreditPayment(
   payload: SepayWebhookPayload,
   ref: string
@@ -151,6 +167,9 @@ export async function processSepayWebhook(
   }
   if (ref.startsWith("CF-CR-")) {
     return handlePortalCreditPayment(payload, ref);
+  }
+  if (ref.startsWith("CF-OP-")) {
+    return handlePortalOpenPlayPayment(payload, ref);
   }
 
   const pending = await prisma.pendingPayment.findUnique({

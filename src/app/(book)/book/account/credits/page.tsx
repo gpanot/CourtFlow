@@ -5,6 +5,7 @@ import { portalFetch } from "@/lib/portal-fetch";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { usePlayerSession } from "../../components/usePlayerSession";
+import { useTranslation } from "react-i18next";
 
 interface Credit {
   id: string;
@@ -18,6 +19,7 @@ interface Credit {
 export default function CreditsPage() {
   const { status } = usePlayerSession();
   const router = useRouter();
+  const { t } = useTranslation();
   const [credits, setCredits] = useState<Credit[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -34,7 +36,7 @@ export default function CreditsPage() {
   }, [status, router]);
 
   if (!loaded) {
-    return <div className="px-4 pt-12 text-[var(--cm-text-muted)]">Loading...</div>;
+    return <div className="px-4 pt-12 text-[var(--cm-text-muted)]">{t("common.loading")}</div>;
   }
 
   const now = new Date();
@@ -44,12 +46,12 @@ export default function CreditsPage() {
   return (
     <div className="px-4 pt-12 pb-8">
       <button onClick={() => router.back()} className="text-sm text-[var(--cm-text-sec)] mb-4">
-        ← Back
+        ← {t("common.back")}
       </button>
-      <h1 className="text-xl font-bold mb-4">My Credits</h1>
+      <h1 className="text-xl font-bold mb-4">{t("credits.title")}</h1>
 
       {active.length === 0 && expired.length === 0 && (
-        <p className="text-sm text-[var(--cm-text-sec)] text-center py-12">No credits purchased yet.</p>
+        <p className="text-sm text-[var(--cm-text-sec)] text-center py-12">{t("credits.empty")}</p>
       )}
 
       {active.map((c) => {
@@ -59,7 +61,7 @@ export default function CreditsPage() {
           <div key={c.id} className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-3">
             <p className="font-medium text-sm">{c.coach.name}</p>
             <p className="text-xs text-[var(--cm-text-sec)] mt-1">
-              {remaining} of {c.totalSessions} session{c.totalSessions !== 1 ? "s" : ""} remaining
+              {t("credits.remaining", { remaining, total: c.totalSessions })}
             </p>
             <div className="mt-2 h-2 bg-[var(--cm-bg-surface)] rounded-full overflow-hidden">
               <div
@@ -68,7 +70,7 @@ export default function CreditsPage() {
               />
             </div>
             <div className="flex justify-between mt-2 text-xs text-[var(--cm-text-muted)]">
-              <span>Expires: {new Date(c.expiresAt).toLocaleDateString()}</span>
+              <span>{t("common.expires")}: {new Date(c.expiresAt).toLocaleDateString()}</span>
               <span>{pct}%</span>
             </div>
           </div>
@@ -77,12 +79,12 @@ export default function CreditsPage() {
 
       {expired.length > 0 && (
         <>
-          <p className="text-xs font-medium text-[var(--cm-text-muted)] mt-6 mb-2">Expired</p>
+          <p className="text-xs font-medium text-[var(--cm-text-muted)] mt-6 mb-2">{t("common.expired")}</p>
           {expired.map((c) => (
             <div key={c.id} className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-3 opacity-50">
-              <p className="font-medium text-sm">{c.coach.name} (expired)</p>
+              <p className="font-medium text-sm">{t("credits.expiredLabel", { name: c.coach.name })}</p>
               <p className="text-xs text-[var(--cm-text-sec)] mt-1">
-                Expired: {new Date(c.expiresAt).toLocaleDateString()}
+                {t("common.expires")}: {new Date(c.expiresAt).toLocaleDateString()}
               </p>
             </div>
           ))}

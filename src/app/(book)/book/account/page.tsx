@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { portalFetch } from "@/lib/portal-fetch";
 import { getPlayerFromToken } from "@/lib/player-token";
+import { useTranslation } from "react-i18next";
 
 interface Profile {
   id: string;
@@ -33,6 +34,7 @@ interface Profile {
 export default function AccountPage() {
   const { status } = usePlayerSession();
   const router = useRouter();
+  const { t } = useTranslation();
   const [profile, setProfile] = useState<Profile | null>(null);
 
   useEffect(() => {
@@ -64,7 +66,7 @@ export default function AccountPage() {
 
   return (
     <div className="px-4 pt-12">
-      <h1 className="text-xl font-bold mb-4">My Account</h1>
+      <h1 className="text-xl font-bold mb-4">{t("account.title")}</h1>
 
       <div className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-4">
         <div className="flex items-center gap-3 mb-3">
@@ -82,7 +84,7 @@ export default function AccountPage() {
                 <p className="text-sm text-[var(--cm-text-sec)] truncate">{profile.email}</p>
                 {profile.isCredentialsAccount && !profile.emailVerified && (
                   <span className="flex-shrink-0 px-1.5 py-0.5 bg-[var(--cm-orange)]/15 text-[var(--cm-orange)] text-[10px] font-medium rounded">
-                    Not verified
+                    {t("account.notVerified")}
                   </span>
                 )}
               </div>
@@ -92,17 +94,17 @@ export default function AccountPage() {
         </div>
         <div className="flex gap-2 text-xs text-[var(--cm-text-sec)]">
           <span className="px-2 py-1 bg-[var(--cm-bg-surface)] rounded-lg border border-[var(--cm-border)] capitalize">
-            {profile.gender}
+            {t(`gender.${profile.gender}`)}
           </span>
           <span className="px-2 py-1 bg-[var(--cm-bg-surface)] rounded-lg border border-[var(--cm-border)] capitalize">
-            {profile.skillLevel}
+            {t(`skillLevels.${profile.skillLevel}`)}
           </span>
         </div>
         <Link
           href="/book/account/edit"
           className="block text-center mt-3 text-sm text-[var(--cm-accent)] font-medium"
         >
-          Edit Profile →
+          {t("account.editProfile")}
         </Link>
       </div>
 
@@ -111,9 +113,9 @@ export default function AccountPage() {
         className="flex items-center justify-between bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-3"
       >
         <div>
-          <p className="font-medium text-sm">My Credits</p>
+          <p className="font-medium text-sm">{t("account.myCredits")}</p>
           <p className="text-xs text-[var(--cm-text-sec)]">
-            {totalCredits} session{totalCredits !== 1 ? "s" : ""} remaining
+            {t("account.sessionsRemaining", { count: totalCredits })}
           </p>
         </div>
         <span className="text-[var(--cm-text-muted)]">→</span>
@@ -124,9 +126,9 @@ export default function AccountPage() {
         className="flex items-center justify-between bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-3"
       >
         <div>
-          <p className="font-medium text-sm">My Bookings</p>
+          <p className="font-medium text-sm">{t("account.myBookings")}</p>
           <p className="text-xs text-[var(--cm-text-sec)]">
-            {profile.upcomingBookings} upcoming
+            {t("account.upcomingCount", { count: profile.upcomingBookings })}
           </p>
         </div>
         <span className="text-[var(--cm-text-muted)]">→</span>
@@ -137,9 +139,9 @@ export default function AccountPage() {
         className="flex items-center justify-between bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-3"
       >
         <div>
-          <p className="font-medium text-sm">My Venue</p>
+          <p className="font-medium text-sm">{t("account.myVenue")}</p>
           <p className="text-xs text-[var(--cm-text-sec)]">
-            {profile.venue ? profile.venue.name : "No venue selected"}
+            {profile.venue ? profile.venue.name : t("account.noVenueSelected")}
           </p>
         </div>
         <span className="text-[var(--cm-text-muted)]">→</span>
@@ -149,7 +151,7 @@ export default function AccountPage() {
         onClick={() => signOutToIntro()}
         className="w-full mt-4 py-3 bg-[var(--cm-bg-surface)] border border-[var(--cm-border)] text-[var(--cm-text-sec)] rounded-xl text-sm font-medium hover:opacity-80 transition-opacity"
       >
-        Sign Out
+        {t("account.signOut")}
       </button>
     </div>
   );

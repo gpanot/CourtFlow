@@ -13,13 +13,15 @@ const PAID_DISMISS_MS = 5_000;
 
 interface BookingNotification {
   id: string;
+  type: "booking" | "open_play";
   venueId: string;
   playerName: string;
-  courtLabel: string;
+  courtLabel: string | null;
   venueName: string;
   date: string;
   startTime: string;
   paymentStatus: string;
+  scheduleEntryId?: string;
 }
 
 interface ActiveToast {
@@ -30,6 +32,8 @@ interface ActiveToast {
   bookingId: string;
   venueId: string;
   date: string;
+  /** For open play: navigate to approve-payment route */
+  notifType: "booking" | "open_play";
 }
 
 function notifKey(id: string, status: string) {
@@ -64,9 +68,11 @@ export function AdminBookingNotifications() {
   const openBooking = useCallback(
     (toast: ActiveToast) => {
       dismissToast(toast.toastId);
-      router.push(
-        `/admin/bookings?edit=${toast.bookingId}&venueId=${toast.venueId}&date=${toast.date}`
-      );
+      if (toast.notifType === "open_play") {
+        router.push(`/admin/bookings?venueId=${toast.venueId}`);
+      } else {
+        router.push(`/admin/bookings?edit=${toast.bookingId}&venueId=${toast.venueId}&date=${toast.date}`);
+      }
     },
     [dismissToast, router]
   );
@@ -89,9 +95,11 @@ export function AdminBookingNotifications() {
           hour: "2-digit",
           minute: "2-digit",
         });
-        const detail = `${item.playerName} · ${item.courtLabel} · ${time}`;
+        const locationPart = item.type === "open_play" ? "Open Play" : (item.courtLabel ?? "");
+        const detail = `${item.playerName} · ${locationPart} · ${time}`;
 
         const toastId = key;
+        const notifType = item.type ?? "booking";
         const newToast: ActiveToast = {
           toastId,
           variant,
@@ -103,6 +111,7 @@ export function AdminBookingNotifications() {
           bookingId: item.id,
           venueId: item.venueId,
           date: formatBookingDate(item.date),
+          notifType,
         };
 
         if (variant === "paid") {

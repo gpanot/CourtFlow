@@ -266,7 +266,10 @@
     "slotsPlural": "slots",
     "courtView": "Courts",
     "timeView": "Time",
-    "consecutiveSlotsHint": "Select consecutive slots on a single court to book"
+    "consecutiveSlotsHint": "Select consecutive slots on a single court to book",
+    "maxPlayersLabel": "Max players",
+    "maxPlayersShort": "players max",
+    "pricePerPlayerLabel": "Price per player (VND)"
   },
   "memberships": {
     "title": "Memberships",

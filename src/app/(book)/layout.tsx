@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "../globals.css";
 import { BookSessionProvider } from "./book/components/BookSessionProvider";
+import { BookI18nProvider } from "./book/components/BookI18nProvider";
 import { ThemeProvider } from "./book/components/ThemeProvider";
 
 export const dynamic = "force-dynamic";
@@ -22,9 +23,11 @@ export const viewport: Viewport = {
 export default function BookLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="bg-[var(--cm-bg)] text-[var(--cm-text)] antialiased min-h-dvh transition-colors">
-      <BookSessionProvider>
-        <ThemeProvider>{children}</ThemeProvider>
-      </BookSessionProvider>
+      <BookI18nProvider>
+        <BookSessionProvider>
+          <ThemeProvider>{children}</ThemeProvider>
+        </BookSessionProvider>
+      </BookI18nProvider>
     </div>
   );
 }

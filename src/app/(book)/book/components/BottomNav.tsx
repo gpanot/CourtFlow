@@ -2,22 +2,24 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useTranslation } from "react-i18next";
 import { usePlayerSession } from "./usePlayerSession";
 import { useState, useEffect } from "react";
 
 const HIDDEN_PATHS = ["/book/login", "/book/intro", "/book/onboarding"];
 
 const tabs = [
-  { label: "Book", href: "/book", icon: BookIcon, requiresAuth: false },
-  { label: "Coaches", href: "/book/coaches", icon: CoachIcon, requiresAuth: false },
-  { label: "Bookings", href: "/book/bookings", icon: BookingsIcon, requiresAuth: true },
-  { label: "Profile", href: "/book/account", icon: ProfileIcon, requiresAuth: true },
+  { labelKey: "nav.book", href: "/book", icon: BookIcon, requiresAuth: false },
+  { labelKey: "nav.coaches", href: "/book/coaches", icon: CoachIcon, requiresAuth: false },
+  { labelKey: "nav.bookings", href: "/book/bookings", icon: BookingsIcon, requiresAuth: true },
+  { labelKey: "nav.profile", href: "/book/account", icon: ProfileIcon, requiresAuth: true },
 ] as const;
 
 export function BottomNav() {
   const pathname = usePathname();
   const { status } = usePlayerSession();
   const router = useRouter();
+  const { t } = useTranslation();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -57,7 +59,7 @@ export function BottomNav() {
               }`}
             >
               <tab.icon filled={active} />
-              <span className="font-medium">{tab.label}</span>
+              <span className="font-medium">{t(tab.labelKey)}</span>
             </Link>
           );
         })}

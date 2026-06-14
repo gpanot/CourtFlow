@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { portalFetch } from "@/lib/portal-fetch";
 import { usePlayerSession } from "./usePlayerSession";
+import { useTranslation } from "react-i18next";
 import {
   markPaidToastSeen,
   setStoredPaymentStatus,
@@ -22,13 +23,23 @@ interface BookingRow {
 
 interface ActiveToast {
   id: string;
-  bookingId: string;
+  targetId: string;
+  targetPath: string;
   detail: string;
+  messageKey: string;
+}
+
+interface OpenPlayRow {
+  id: string;
+  paymentStatus: string;
+  startTime: string;
+  endTime: string;
 }
 
 export function PlayerPaymentApprovedToasts() {
   const { status } = usePlayerSession();
   const router = useRouter();
+  const { t } = useTranslation();
   const knownStatusRef = useRef<Map<string, string | null>>(new Map());
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const [toasts, setToasts] = useState<ActiveToast[]>([]);
@@ -41,26 +52,17 @@ export function PlayerPaymentApprovedToasts() {
   }, []);
 
   const showPaidToast = useCallback(
-    (booking: BookingRow) => {
-      markPaidToastSeen(booking.id);
-      setStoredPaymentStatus(booking.id, "paid");
+    (targetId: string, targetPath: string, detail: string, messageKey: string) => {
+      markPaidToastSeen(targetId);
+      setStoredPaymentStatus(targetId, "paid");
 
-      const toastId = `paid-${booking.id}`;
-      const time = new Date(booking.startTime).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-
+      const toastId = `paid-${targetId}`;
       const timer = setTimeout(() => dismissToast(toastId), TOAST_MS);
       timersRef.current.set(toastId, timer);
 
       setToasts((prev) => [
-        ...prev,
-        {
-          id: toastId,
-          bookingId: booking.id,
-          detail: `${booking.court.label} · ${time}`,
-        },
+        ...prev.filter((t) => t.id !== toastId),
+        { id: toastId, targetId, targetPath, detail, messageKey },
       ]);
     },
     [dismissToast]
@@ -70,38 +72,42 @@ export function PlayerPaymentApprovedToasts() {
     if (status !== "authenticated") return;
 
     try {
+      // Poll court bookings
       const res = await portalFetch("/api/public/bookings");
-      if (!res.ok) return;
-
-      const bookings = (await res.json()) as BookingRow[];
-
-      for (const booking of bookings) {
-        const prev = knownStatusRef.current.get(booking.id);
-
-        if (
-          shouldNotifyPaymentApproved(
-            booking.id,
-            booking.paymentStatus,
-            prev,
-            booking.startTime
-          )
-        ) {
-          showPaidToast(booking);
+      if (res.ok) {
+        const bookings = (await res.json()) as BookingRow[];
+        for (const booking of bookings) {
+          const prev = knownStatusRef.current.get(booking.id);
+          if (shouldNotifyPaymentApproved(booking.id, booking.paymentStatus, prev, booking.startTime)) {
+            const time = new Date(booking.startTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+            showPaidToast(booking.id, `/book/bookings/${booking.id}`, `${booking.court.label} · ${time}`, "toast.paymentConfirmed");
+          }
+          if (booking.paymentStatus) setStoredPaymentStatus(booking.id, booking.paymentStatus);
+          knownStatusRef.current.set(booking.id, booking.paymentStatus);
         }
-
-        if (booking.paymentStatus) {
-          setStoredPaymentStatus(booking.id, booking.paymentStatus);
-        }
-        knownStatusRef.current.set(booking.id, booking.paymentStatus);
       }
-    } catch {
-      // Ignore transient poll errors
-    }
+    } catch { /* ignore */ }
+
+    try {
+      // Poll open play registrations
+      const opRes = await portalFetch("/api/public/open-play/my");
+      if (opRes.ok) {
+        const regs = (await opRes.json()) as OpenPlayRow[];
+        for (const reg of regs) {
+          const prev = knownStatusRef.current.get(`op-${reg.id}`);
+          if (shouldNotifyPaymentApproved(`op-${reg.id}`, reg.paymentStatus, prev, reg.startTime)) {
+            const time = new Date(reg.startTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+            showPaidToast(`op-${reg.id}`, `/book/open-play/${reg.id}`, time, "toast.openPlayConfirmed");
+          }
+          if (reg.paymentStatus) setStoredPaymentStatus(`op-${reg.id}`, reg.paymentStatus);
+          knownStatusRef.current.set(`op-${reg.id}`, reg.paymentStatus);
+        }
+      }
+    } catch { /* ignore */ }
   }, [status, showPaidToast]);
 
   useEffect(() => {
     if (status !== "authenticated") return;
-
     void poll();
     const interval = setInterval(() => void poll(), POLL_MS);
     return () => clearInterval(interval);
@@ -127,12 +133,12 @@ export function PlayerPaymentApprovedToasts() {
           type="button"
           onClick={() => {
             dismissToast(toast.id);
-            router.push(`/book/bookings/${toast.bookingId}`);
+            router.push(toast.targetPath);
           }}
           className="pointer-events-auto w-full rounded-xl border border-[var(--cm-green)]/50 bg-[var(--cm-green)] px-4 py-3 text-left shadow-xl"
         >
           <p className="text-sm font-semibold text-white leading-snug">
-            Your booking and payment is confirmed. See you at the court.
+            {t(toast.messageKey)}
           </p>
           <p className="mt-1 text-xs text-green-100">{toast.detail}</p>
         </button>

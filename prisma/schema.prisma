@@ -163,6 +163,7 @@ model Venue {
   registeredPlayers    Player[]             @relation("PlayerRegistrationVenue")
   signupDuplicateLogs  SignupDuplicateLog[]
   playerCoachCredits   PlayerCoachCredit[]
+  openPlayRegistrations OpenPlayRegistration[]
 
   @@map("venues")
 }
@@ -211,6 +212,7 @@ model Player {
   stickerJobs           StickerJobQueue[]
   accounts              PlayerAccount[]
   coachCredits          PlayerCoachCredit[]
+  openPlayRegistrations OpenPlayRegistration[]
 
   @@index([registrationVenueId])
   @@map("players")
@@ -1221,4 +1223,31 @@ model PlayerCoachCredit {
   @@index([playerId, coachId])
   @@index([venueId])
   @@map("player_coach_credits")
+}
+
+model OpenPlayRegistration {
+  id               String    @id @default(cuid())
+  venueId          String    @map("venue_id")
+  scheduleEntryId  String    @map("schedule_entry_id")
+  date             DateTime  @db.Date @map("date")
+  startTime        DateTime  @map("start_time")
+  endTime          DateTime  @map("end_time")
+  playerId         String    @map("player_id")
+  priceValue       Int       @map("price_value")
+  paymentStatus    String    @default("pending") @map("payment_status")
+  holdExpiresAt    DateTime? @map("hold_expires_at")
+  paymentProofUrl  String?   @map("payment_proof_url")
+  paymentRef       String?   @unique @map("payment_ref")
+  status           String    @default("confirmed") @map("status")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  cancelledAt      DateTime? @map("cancelled_at")
+
+  venue  Venue  @relation(fields: [venueId], references: [id])
+  player Player @relation(fields: [playerId], references: [id])
+
+  @@unique([scheduleEntryId, date, playerId])
+  @@index([scheduleEntryId, date])
+  @@index([venueId, date])
+  @@index([playerId])
+  @@map("open_play_registrations")
 }

@@ -1710,6 +1710,8 @@ interface ScheduleEntry {
   courtIds: string[];
   type: "open_play" | "competition";
   title: string;
+  maxPlayers?: number;
+  priceValue?: number;
 }
 
 function ScheduleConfigSection({
@@ -1737,9 +1739,19 @@ function ScheduleConfigSection({
   const [saving, setSaving] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState({ daysOfWeek: [] as number[], startHour: 8, endHour: 10, courtIds: [] as string[], type: "open_play" as "open_play" | "competition", title: "" });
+  const [form, setForm] = useState({ daysOfWeek: [] as number[], startHour: 8, endHour: 10, courtIds: [] as string[], type: "open_play" as "open_play" | "competition", title: "", maxPlayers: "", priceValue: "" });
+  const [regCounts, setRegCounts] = useState<Record<string, number>>({});
 
   useEffect(() => { setEntries(parseSchedule()); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [settings]);
+
+  // Fetch today's open play registration counts for capacity display
+  useEffect(() => {
+    const today = new Date();
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    api.get<Record<string, number>>(`/api/admin/open-play/registrations?venueId=${venueId}&date=${dateStr}`)
+      .then(setRegCounts)
+      .catch(() => {});
+  }, [venueId]);
 
   const saveEntries = async (newEntries: ScheduleEntry[]) => {
     setSaving(true);
@@ -1747,16 +1759,26 @@ function ScheduleConfigSection({
     catch (e) { alert((e as Error).message); } finally { setSaving(false); }
   };
 
-  const openAdd = () => { setForm({ daysOfWeek: [], startHour: 8, endHour: 10, courtIds: [], type: "open_play", title: "" }); setEditId(null); setShowAdd(true); };
-  const openEdit = (entry: ScheduleEntry) => { setForm({ daysOfWeek: [...entry.daysOfWeek], startHour: entry.startHour, endHour: entry.endHour, courtIds: [...entry.courtIds], type: entry.type, title: entry.title }); setEditId(entry.id); setShowAdd(true); };
+  const openAdd = () => { setForm({ daysOfWeek: [], startHour: 8, endHour: 10, courtIds: [], type: "open_play", title: "", maxPlayers: "", priceValue: "" }); setEditId(null); setShowAdd(true); };
+  const openEdit = (entry: ScheduleEntry) => { setForm({ daysOfWeek: [...entry.daysOfWeek], startHour: entry.startHour, endHour: entry.endHour, courtIds: [...entry.courtIds], type: entry.type, title: entry.title, maxPlayers: entry.maxPlayers != null ? String(entry.maxPlayers) : "", priceValue: entry.priceValue != null ? String(entry.priceValue) : "" }); setEditId(entry.id); setShowAdd(true); };
   const toggleCourt = (courtId: string) => { setForm((prev) => ({ ...prev, courtIds: prev.courtIds.includes(courtId) ? prev.courtIds.filter((id) => id !== courtId) : [...prev.courtIds, courtId] })); };
   const toggleDay = (day: number) => { setForm((prev) => ({ ...prev, daysOfWeek: prev.daysOfWeek.includes(day) ? prev.daysOfWeek.filter((d) => d !== day) : [...prev.daysOfWeek, day].sort((a, b) => a - b) })); };
 
   const submitEntry = async () => {
     if (!form.courtIds.length || !form.title.trim() || !form.daysOfWeek.length) return;
+    const entryData: Omit<ScheduleEntry, "id"> = {
+      daysOfWeek: form.daysOfWeek,
+      startHour: form.startHour,
+      endHour: form.endHour,
+      courtIds: form.courtIds,
+      type: form.type,
+      title: form.title,
+      ...(form.type === "open_play" && form.maxPlayers ? { maxPlayers: parseInt(form.maxPlayers, 10) } : {}),
+      ...(form.type === "open_play" && form.priceValue ? { priceValue: parseInt(form.priceValue.replace(/[^0-9]/g, ""), 10) } : {}),
+    };
     let updated: ScheduleEntry[];
-    if (editId) { updated = entries.map((e) => (e.id === editId ? { ...form, id: editId } : e)); }
-    else { const id = `sched_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`; updated = [...entries, { ...form, id }]; }
+    if (editId) { updated = entries.map((e) => (e.id === editId ? { ...entryData, id: editId } : e)); }
+    else { const id = `sched_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`; updated = [...entries, { ...entryData, id }]; }
     await saveEntries(updated); setShowAdd(false); setEditId(null);
   };
 
@@ -1791,6 +1813,14 @@ function ScheduleConfigSection({
               <span className="flex items-center gap-1 font-medium">{entry.daysOfWeek.map((d) => DAY_SHORT_SCHED[d]).join(", ")}</span>
               <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{fmtHour(entry.startHour)} – {fmtHour(entry.endHour)}</span>
               <span>{entry.courtIds.length === bookable.length ? t("bookings.allCourts") : `${entry.courtIds.length} ${entry.courtIds.length > 1 ? t("bookings.courtsPlural") : t("bookings.court")}`}</span>
+              {entry.type === "open_play" && entry.maxPlayers != null && (
+                <span className="text-emerald-400/80">
+                  {regCounts[entry.id] != null ? `${regCounts[entry.id]}/${entry.maxPlayers}` : entry.maxPlayers} {t("bookings.maxPlayersShort")}
+                </span>
+              )}
+              {entry.type === "open_play" && entry.priceValue != null && entry.priceValue > 0 && (
+                <span className="text-emerald-400/80">{new Intl.NumberFormat("vi-VN").format(entry.priceValue)} VND</span>
+              )}
             </div>
           </div>
           <button onClick={() => openEdit(entry)} className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-white"><Pencil className="h-3.5 w-3.5" /></button>
@@ -1835,6 +1865,32 @@ function ScheduleConfigSection({
               </select>
             </div>
           </div>
+          {form.type === "open_play" && (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] text-neutral-500">{t("bookings.maxPlayersLabel")}</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={form.maxPlayers}
+                  onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ""); setForm({ ...form, maxPlayers: v }); }}
+                  placeholder="e.g. 16"
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-sm text-white placeholder:text-neutral-600 focus:border-emerald-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-neutral-500">{t("bookings.pricePerPlayerLabel")}</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={form.priceValue}
+                  onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ""); setForm({ ...form, priceValue: v }); }}
+                  placeholder="e.g. 180000"
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-sm text-white placeholder:text-neutral-600 focus:border-emerald-500 focus:outline-none"
+                />
+              </div>
+            </div>
+          )}
           <div>
             <label className="text-[10px] text-neutral-500 mb-1.5 block">{t("bookings.courts")}</label>
             <div className="flex flex-wrap gap-1.5">

@@ -6,6 +6,8 @@ import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import { usePlayerSession } from "../../components/usePlayerSession";
 import { usePlayerVenue } from "../../components/PlayerVenueContext";
+import { useTranslation } from "react-i18next";
+import { useBookFormatters } from "../../lib/useBookFormatters";
 
 interface Package {
   id: string;
@@ -26,10 +28,6 @@ interface CoachProfile {
   availability: { hour: number; available: boolean }[];
 }
 
-function formatPrice(p: number) {
-  return new Intl.NumberFormat("vi-VN").format(p) + " VND";
-}
-
 function formatHour(h: number) {
   return `${h.toString().padStart(2, "0")}:00`;
 }
@@ -38,6 +36,8 @@ export default function CoachProfilePage() {
   const { coachId } = useParams<{ coachId: string }>();
   const router = useRouter();
   const { status } = usePlayerSession();
+  const { t } = useTranslation();
+  const { formatDate, formatPrice } = useBookFormatters();
   const { venueId: playerVenueId } = usePlayerVenue();
   const [coach, setCoach] = useState<CoachProfile | null>(null);
   const [selectedPkg, setSelectedPkg] = useState<Package | null>(null);
@@ -116,7 +116,7 @@ export default function CoachProfilePage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Booking failed");
+      if (!res.ok) throw new Error(data.error || t("coaches.bookingFailed"));
 
       if (data.paidWithCredit) {
         router.push("/book/bookings");
@@ -131,7 +131,7 @@ export default function CoachProfilePage() {
   }
 
   if (!coach) {
-    return <div className="px-4 pt-12 text-[var(--cm-text-muted)]">Loading...</div>;
+    return <div className="px-4 pt-12 text-[var(--cm-text-muted)]">{t("common.loading")}</div>;
   }
 
   const chipCls = (active: boolean) =>
@@ -145,14 +145,14 @@ export default function CoachProfilePage() {
     return (
       <div className="px-6 pt-8 pb-8">
         <button onClick={() => setStep("profile")} className="text-sm text-[var(--cm-text-sec)] mb-4">
-          ← Back
+          ← {t("common.back")}
         </button>
-        <h2 className="text-lg font-bold mb-1">Book with {coach.name}</h2>
+        <h2 className="text-lg font-bold mb-1">{t("coaches.bookWith", { name: coach.name })}</h2>
         <p className="text-sm text-[var(--cm-text-sec)] mb-4">
-          {selectedPkg.name} · {selectedPkg.durationMin} min
+          {selectedPkg.name} · {selectedPkg.durationMin} {t("common.min")}
         </p>
 
-        <label className="block text-sm font-medium mb-2">Select date</label>
+        <label className="block text-sm font-medium mb-2">{t("coaches.selectDate")}</label>
         <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-hide">
           {dates.map((d) => (
             <button
@@ -160,14 +160,14 @@ export default function CoachProfilePage() {
               onClick={() => { setSelectedDate(d); setSelectedHour(null); }}
               className={chipCls(selectedDate?.toDateString() === d.toDateString())}
             >
-              {d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+              {formatDate(d)}
             </button>
           ))}
         </div>
 
-        <label className="block text-sm font-medium mb-2">Available times</label>
+        <label className="block text-sm font-medium mb-2">{t("coaches.availableTimes")}</label>
         {availability.length === 0 ? (
-          <p className="text-sm text-[var(--cm-text-sec)] py-4">Loading availability...</p>
+          <p className="text-sm text-[var(--cm-text-sec)] py-4">{t("coaches.loadingAvailability")}</p>
         ) : (
           <div className="grid grid-cols-3 gap-2 mb-4">
             {availability.map((slot) => (
@@ -192,11 +192,11 @@ export default function CoachProfilePage() {
         {selectedHour !== null && selectedDate && (
           <div className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-3 mb-4 text-sm">
             <p>
-              <strong>Selected:</strong>{" "}
-              {selectedDate.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })},{" "}
+              <strong>{t("common.selected")}:</strong>{" "}
+              {formatDate(selectedDate)},{" "}
               {formatHour(selectedHour)}–{formatHour(selectedHour + Math.ceil(selectedPkg.durationMin / 60))}
             </p>
-            <p className="text-[var(--cm-text-sec)] text-xs mt-1">Court: auto-assigned</p>
+            <p className="text-[var(--cm-text-sec)] text-xs mt-1">{t("coaches.courtAutoAssigned")}</p>
           </div>
         )}
 
@@ -205,7 +205,7 @@ export default function CoachProfilePage() {
           disabled={selectedHour === null}
           className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm disabled:opacity-40"
         >
-          Continue
+          {t("common.continue")}
         </button>
       </div>
     );
@@ -230,7 +230,7 @@ export default function CoachProfilePage() {
     <div className="pb-8">
       <div className="px-4 pt-8">
         <button onClick={() => router.back()} className="text-sm text-[var(--cm-text-sec)] mb-4">
-          ← Back
+          ← {t("common.back")}
         </button>
       </div>
 
@@ -249,28 +249,28 @@ export default function CoachProfilePage() {
         </div>
         {coach.coachBio && (
           <>
-            <h2 className="text-sm font-semibold mb-1">About</h2>
+            <h2 className="text-sm font-semibold mb-1">{t("common.about")}</h2>
             <p className="text-sm text-[var(--cm-text-sec)] mb-4">{coach.coachBio}</p>
           </>
         )}
       </div>
 
       <div className="px-4 mb-6">
-        <h2 className="text-base font-semibold mb-3">Session Packages</h2>
+        <h2 className="text-base font-semibold mb-3">{t("coaches.sessionPackages")}</h2>
         <div className="space-y-3">
           {coach.packages.map((pkg) => (
             <div key={pkg.id} className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 flex justify-between items-center">
               <div>
                 <p className="font-medium text-sm">{pkg.name}</p>
                 <p className="text-xs text-[var(--cm-text-sec)]">
-                  {pkg.durationMin} min · {formatPrice(pkg.priceValue)}
+                  {pkg.durationMin} {t("common.min")} · {formatPrice(pkg.priceValue)}
                 </p>
               </div>
               <button
                 onClick={() => startBooking(pkg)}
                 className="px-4 py-2 bg-[var(--cm-accent)] text-black rounded-lg text-xs font-medium"
               >
-                Book →
+                {t("common.bookArrow")}
               </button>
             </div>
           ))}
@@ -279,7 +279,7 @@ export default function CoachProfilePage() {
 
       {coach.packages.length > 0 && (
         <div className="px-4 mb-6">
-          <h2 className="text-base font-semibold mb-3">Credit Packs</h2>
+          <h2 className="text-base font-semibold mb-3">{t("coaches.creditPacks")}</h2>
           <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
             {[1, 5, 10].map((qty) => {
               const basePkg = coach.packages[0];
@@ -307,9 +307,9 @@ export default function CoachProfilePage() {
                   <p className="text-lg font-bold">{qty}x</p>
                   <p className="text-xs font-medium">{formatPrice(total)}</p>
                   {discount > 0 && (
-                    <p className="text-[10px] text-[var(--cm-green)] font-medium">{discount}% off</p>
+                    <p className="text-[10px] text-[var(--cm-green)] font-medium">{t("coaches.percentOff", { discount })}</p>
                   )}
-                  <p className="text-[10px] text-[var(--cm-accent)] mt-1 font-medium">Buy</p>
+                  <p className="text-[10px] text-[var(--cm-accent)] mt-1 font-medium">{t("common.buy")}</p>
                 </button>
               );
             })}
@@ -339,6 +339,8 @@ function CoachSessionSummary({
   onBack: () => void;
   onConfirm: (payWithCredit?: boolean, creditId?: string) => void;
 }) {
+  const { t } = useTranslation();
+  const { formatDate, formatPrice } = useBookFormatters();
   const [credits, setCredits] = useState<{ id: string; remaining: number }[]>([]);
 
   useEffect(() => {
@@ -365,22 +367,22 @@ function CoachSessionSummary({
   return (
     <div className="px-6 pt-8 pb-8">
       <button onClick={onBack} className="text-sm text-[var(--cm-text-sec)] mb-4">
-        ← Back
+        ← {t("common.back")}
       </button>
-      <h2 className="text-lg font-bold mb-4">Session Summary</h2>
+      <h2 className="text-lg font-bold mb-4">{t("coaches.sessionSummary")}</h2>
 
       {bookingError && (
         <div className="mb-4 p-3 bg-[var(--cm-red)]/10 text-[var(--cm-red)] text-sm rounded-xl">{bookingError}</div>
       )}
 
       <div className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-4 space-y-2 text-sm">
-        <Row label="Coach" value={coach.name} />
-        <Row label="Package" value={pkg.name} />
-        <Row label="Date" value={date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} />
-        <Row label="Time" value={`${formatHour(hour)} – ${formatHour(hour + Math.ceil(pkg.durationMin / 60))}`} />
-        <Row label="Court" value="Auto-assigned" />
+        <Row label={t("common.coach")} value={coach.name} />
+        <Row label={t("common.package")} value={pkg.name} />
+        <Row label={t("common.date")} value={formatDate(date)} />
+        <Row label={t("common.time")} value={`${formatHour(hour)} – ${formatHour(hour + Math.ceil(pkg.durationMin / 60))}`} />
+        <Row label={t("common.court")} value={t("common.autoAssigned")} />
         <div className="border-t border-[var(--cm-border)] pt-2 mt-2">
-          <Row label="Total" value={formatPrice(pkg.priceValue)} bold />
+          <Row label={t("common.total")} value={formatPrice(pkg.priceValue)} bold />
         </div>
       </div>
 
@@ -390,7 +392,7 @@ function CoachSessionSummary({
           disabled={isBooking}
           className="w-full py-3 bg-[var(--cm-green)] text-white rounded-xl font-medium text-sm mb-3 disabled:opacity-40"
         >
-          {isBooking ? "Booking..." : `Pay with Credit (${totalRemaining} left)`}
+          {isBooking ? t("coaches.booking") : t("coaches.payWithCredit", { count: totalRemaining })}
         </button>
       )}
 
@@ -399,7 +401,7 @@ function CoachSessionSummary({
         disabled={isBooking}
         className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm mb-3 disabled:opacity-40"
       >
-        {isBooking ? "Booking..." : `Pay with VietQR (${formatPrice(pkg.priceValue)})`}
+        {isBooking ? t("coaches.booking") : t("coaches.payWithVietqr", { price: formatPrice(pkg.priceValue) })}
       </button>
     </div>
   );

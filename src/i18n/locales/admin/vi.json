@@ -264,7 +264,10 @@
     "slotsPlural": "slot",
     "courtView": "Theo sân",
     "timeView": "Theo giờ",
-    "consecutiveSlotsHint": "Chọn các slot liên tiếp trên một sân để đặt"
+    "consecutiveSlotsHint": "Chọn các slot liên tiếp trên một sân để đặt",
+    "maxPlayersLabel": "Số người tối đa",
+    "maxPlayersShort": "người tối đa",
+    "pricePerPlayerLabel": "Giá mỗi người (VND)"
   },
   "memberships": {
     "title": "Thành viên",

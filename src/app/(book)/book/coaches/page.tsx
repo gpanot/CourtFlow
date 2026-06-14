@@ -3,7 +3,9 @@ export const dynamic = "force-dynamic";
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useTranslation } from "react-i18next";
 import { usePlayerVenue } from "../components/PlayerVenueContext";
+import { useBookFormatters } from "../lib/useBookFormatters";
 
 interface Coach {
   id: string;
@@ -15,12 +17,10 @@ interface Coach {
   packages: { lessonType: string }[];
 }
 
-function formatPrice(p: number) {
-  return new Intl.NumberFormat("vi-VN").format(p) + " VND";
-}
-
 export default function CoachesPage() {
   const { venueId } = usePlayerVenue();
+  const { t } = useTranslation();
+  const { formatPrice } = useBookFormatters();
   const [coaches, setCoaches] = useState<Coach[]>([]);
   const [search, setSearch] = useState("");
   const [loaded, setLoaded] = useState(false);
@@ -39,11 +39,11 @@ export default function CoachesPage() {
 
   return (
     <div className="px-4 pt-8 pb-8">
-      <h1 className="text-xl font-bold mb-4">Our Coaches</h1>
+      <h1 className="text-xl font-bold mb-4">{t("coaches.title")}</h1>
 
       <input
         type="text"
-        placeholder="Search by name..."
+        placeholder={t("coaches.searchPlaceholder")}
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         className="w-full px-4 py-3 bg-[var(--cm-bg-input)] border border-[var(--cm-border)] rounded-xl text-sm mb-4 outline-none focus:border-[var(--cm-accent)] text-[var(--cm-text)]"
@@ -57,7 +57,7 @@ export default function CoachesPage() {
         </div>
       ) : filtered.length === 0 ? (
         <p className="text-sm text-[var(--cm-text-sec)] text-center py-12">
-          {search ? "No coaches match your search." : "No coaches available at this venue."}
+          {search ? t("coaches.noMatch") : t("coaches.noneAvailable")}
         </p>
       ) : (
         <div className="space-y-3">
@@ -80,8 +80,8 @@ export default function CoachesPage() {
                   <p className="text-xs text-[var(--cm-text-sec)] line-clamp-1">{c.coachBio}</p>
                 )}
                 <p className="text-xs text-[var(--cm-text-sec)] mt-0.5">
-                  From {formatPrice(c.startingPrice)}
-                  {c.sessionsCompleted > 0 && ` · ${c.sessionsCompleted} sessions`}
+                  {t("common.from")} {formatPrice(c.startingPrice)}
+                  {c.sessionsCompleted > 0 && ` · ${t("home.sessionsCompleted", { count: c.sessionsCompleted })}`}
                 </p>
               </div>
               <span className="text-[var(--cm-accent)] text-sm font-medium">→</span>

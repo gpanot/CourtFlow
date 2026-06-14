@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslation } from "react-i18next";
+
 interface BookScreenTopBarProps {
   title: string;
   onBack: () => void;
@@ -12,13 +14,14 @@ interface BookScreenTopBarProps {
 }
 
 export function BookScreenTopBar({ title, onBack, action }: BookScreenTopBarProps) {
+  const { t } = useTranslation();
   return (
     <header className="sticky top-0 z-30 -mx-6 px-4 py-3 mb-4 flex items-center gap-2 border-b border-[var(--cm-border)] bg-[var(--cm-bg)]/90 backdrop-blur-md">
       <button
         type="button"
         onClick={onBack}
         className="shrink-0 w-8 text-left text-sm text-[var(--cm-text-sec)]"
-        aria-label="Go back"
+        aria-label={t("common.goBackAria")}
       >
         ←
       </button>
@@ -32,7 +35,7 @@ export function BookScreenTopBar({ title, onBack, action }: BookScreenTopBarProp
           disabled={action.disabled || action.loading}
           className="shrink-0 text-sm font-semibold text-[var(--cm-accent)] disabled:opacity-40 whitespace-nowrap"
         >
-          {action.loading ? "Saving…" : action.label}
+          {action.loading ? t("common.savingEllipsis") : action.label}
         </button>
       ) : null}
     </header>

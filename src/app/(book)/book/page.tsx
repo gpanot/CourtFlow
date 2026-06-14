@@ -5,7 +5,9 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { usePlayerSession } from "./components/usePlayerSession";
 import Link from "next/link";
+import { useTranslation } from "react-i18next";
 import { usePlayerVenue } from "./components/PlayerVenueContext";
+import { useBookFormatters } from "./lib/useBookFormatters";
 
 interface Slot {
   startTime: string;
@@ -19,6 +21,18 @@ interface CourtSlot {
   courtId: string;
   courtLabel: string;
   slots: Slot[];
+}
+
+interface OpenPlaySession {
+  entryId: string;
+  title: string;
+  startTime: string;
+  endTime: string;
+  courtIds: string[];
+  maxPlayers: number;
+  priceValue: number;
+  spotsLeft: number;
+  spotsTaken: number;
 }
 
 interface VenueInfo {
@@ -41,14 +55,6 @@ interface Coach {
 
 const MAX_SLOTS = 4;
 
-function formatDate(d: Date) {
-  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-}
-
-function formatPrice(p: number) {
-  return new Intl.NumberFormat("vi-VN").format(p) + " VND";
-}
-
 function formatHour(h: number) {
   return `${h.toString().padStart(2, "0")}:00`;
 }
@@ -56,10 +62,13 @@ function formatHour(h: number) {
 export default function VenueHomePage() {
   const { status } = usePlayerSession();
   const router = useRouter();
+  const { t } = useTranslation();
+  const { formatDate, formatTime, formatPrice } = useBookFormatters();
   const { venueId: playerVenueId } = usePlayerVenue();
   const [venue, setVenue] = useState<VenueInfo | null>(null);
   const [grid, setGrid] = useState<CourtSlot[]>([]);
   const [coaches, setCoaches] = useState<Coach[]>([]);
+  const [openPlaySessions, setOpenPlaySessions] = useState<OpenPlaySession[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Multi-slot selection: courtId + array of selected slots
@@ -90,11 +99,18 @@ export default function VenueHomePage() {
       const res = await fetch(`/api/public/availability?date=${dateStr}${vq}`);
       const data = await res.json();
       setGrid(Array.isArray(data) ? data : []);
+      // Load open play sessions for the same date
+      const venueQ = playerVenueId ? `&venueId=${playerVenueId}` : "";
+      fetch(`/api/public/open-play?date=${dateStr}${venueQ}`)
+        .then((r) => r.json())
+        .then((d) => setOpenPlaySessions(Array.isArray(d) ? d : []))
+        .catch(() => setOpenPlaySessions([]));
     } catch {
       setGrid([]);
+      setOpenPlaySessions([]);
     }
     setLoading(false);
-  }, [vq]);
+  }, [vq, playerVenueId]);
 
   useEffect(() => {
     const q = playerVenueId ? `?venueId=${playerVenueId}` : "";
@@ -191,14 +207,14 @@ export default function VenueHomePage() {
   return (
     <div>
       <div className="px-4 pt-8 pb-4">
-        <h1 className="text-xl font-bold">{venue?.name ?? "Loading..."}</h1>
+        <h1 className="text-xl font-bold">{venue?.name ?? t("common.loading")}</h1>
         {venue?.location && (
           <p className="text-sm text-[var(--cm-text-sec)] mt-0.5">{venue.location}</p>
         )}
       </div>
 
       <div className="px-4 mb-4">
-        <h2 className="text-base font-semibold mb-2">Book a Court</h2>
+        <h2 className="text-base font-semibold mb-2">{t("home.bookCourt")}</h2>
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           {dates.map((d) => {
             const isActive = d.toDateString() === selectedDate.toDateString();
@@ -224,7 +240,7 @@ export default function VenueHomePage() {
           <div className="h-40 bg-[var(--cm-bg-card)] rounded-xl animate-pulse" />
         ) : grid.length === 0 ? (
           <p className="text-sm text-[var(--cm-text-sec)] text-center py-8">
-            No bookable courts available.
+            {t("home.noCourts")}
           </p>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-[var(--cm-border)]">
@@ -232,7 +248,7 @@ export default function VenueHomePage() {
               <thead>
                 <tr className="bg-[var(--cm-bg-surface)]">
                   <th className="sticky left-0 bg-[var(--cm-bg-surface)] z-10 px-3 py-2 text-left font-medium text-[var(--cm-text-sec)] min-w-[80px]">
-                    Court
+                    {t("common.court")}
                   </th>
                   {grid[0]?.slots.map((s) => (
                     <th key={s.startTime} className="px-2 py-2 text-center font-medium text-[var(--cm-text-sec)] min-w-[48px]">
@@ -274,24 +290,84 @@ export default function VenueHomePage() {
           </div>
         )}
         <div className="flex gap-4 mt-2 text-[10px] text-[var(--cm-text-muted)]">
-          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-[var(--cm-green)]/15" /> Available</span>
-          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-[var(--cm-bg-surface)]" /> Booked</span>
-          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-[var(--cm-accent)]" /> Selected</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-[var(--cm-green)]/15" /> {t("home.available")}</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-[var(--cm-bg-surface)]" /> {t("home.booked")}</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-[var(--cm-accent)]" /> {t("home.selected")}</span>
         </div>
         {hasSelection && (
           <p className="text-xs text-[var(--cm-text-sec)] mt-2">
-            {sortedSelected.length} slot{sortedSelected.length > 1 ? "s" : ""} selected
-            {sortedSelected.length < MAX_SLOTS && " — tap consecutive slots to extend (max 4h)"}
+            {t("home.slotsSelected", { count: sortedSelected.length })}
+            {sortedSelected.length < MAX_SLOTS && t("home.extendHint")}
           </p>
         )}
       </div>
 
+      {openPlaySessions.length > 0 && (
+        <div className="px-4 mb-6">
+          <h2 className="text-base font-semibold mb-2">{t("home.openPlay")}</h2>
+          <div className="space-y-2">
+            {openPlaySessions.map((session) => {
+              const isFull = session.spotsLeft === 0;
+              const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
+              return (
+                <div
+                  key={session.entryId}
+                  className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold">{session.title}</p>
+                      <p className="text-xs text-[var(--cm-text-sec)] mt-0.5">
+                        {formatTime(session.startTime)}
+                        {" – "}
+                        {formatTime(session.endTime)}
+                      </p>
+                      <p className={`text-xs font-medium mt-1 ${isFull ? "text-[var(--cm-red)]" : "text-[var(--cm-green)]"}`}>
+                        {isFull
+                          ? t("home.openPlayFull")
+                          : t("home.openPlaySpotsLeft", { count: session.spotsLeft })}
+                        {" · "}{session.spotsTaken}/{session.maxPlayers}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-2 shrink-0">
+                      <p className="text-sm font-bold text-[var(--cm-accent)]">
+                        {session.priceValue > 0 ? formatPrice(session.priceValue) : t("home.openPlayFree")}
+                      </p>
+                      {!isFull && (
+                        <button
+                          onClick={() => {
+                            if (status !== "authenticated") {
+                              router.push(`/book/login?callbackUrl=/book`);
+                              return;
+                            }
+                            const params = new URLSearchParams({
+                              scheduleEntryId: session.entryId,
+                              date: dateStr,
+                              title: session.title,
+                              price: String(session.priceValue),
+                            });
+                            router.push(`/book/open-play/confirm?${params.toString()}`);
+                          }}
+                          className="text-xs font-medium bg-[var(--cm-accent)] text-black px-3 py-1.5 rounded-lg"
+                        >
+                          {t("home.openPlayBook", { price: session.priceValue > 0 ? formatPrice(session.priceValue) : t("home.openPlayFree") })}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {coaches.length > 0 && (
         <div className="px-4 mb-6">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-base font-semibold">Our Coaches</h2>
+            <h2 className="text-base font-semibold">{t("home.ourCoaches")}</h2>
             <Link href="/book/coaches" className="text-sm text-[var(--cm-accent)] font-medium">
-              See all →
+              {t("common.seeAll")}
             </Link>
           </div>
           <div className="space-y-2">
@@ -311,10 +387,10 @@ export default function VenueHomePage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{c.name}</p>
                   <p className="text-xs text-[var(--cm-text-sec)]">
-                    From {formatPrice(c.startingPrice)}
+                    {t("common.from")} {formatPrice(c.startingPrice)}
                   </p>
                 </div>
-                <span className="text-[var(--cm-accent)] text-sm">Book →</span>
+                <span className="text-[var(--cm-accent)] text-sm">{t("common.bookArrow")}</span>
               </Link>
             ))}
           </div>
@@ -335,7 +411,11 @@ export default function VenueHomePage() {
               onClick={handleBook}
               className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm shadow-[var(--cm-shadow)]"
             >
-              Book {courtLabel} {firstHour}–{lastEnd} — {formatPrice(totalPrice)}
+              {t("home.bookCourtCta", {
+                court: courtLabel,
+                time: `${firstHour}–${lastEnd}`,
+                price: formatPrice(totalPrice),
+              })}
             </button>
           </div>
         </div>

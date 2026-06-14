@@ -7,10 +7,8 @@ import { bankNameFromBin } from "@/lib/vietqr";
 import { usePlayerVenue } from "../../../components/PlayerVenueContext";
 import { usePlayerSession } from "../../../components/usePlayerSession";
 import { portalFetch } from "@/lib/portal-fetch";
-
-function formatPrice(p: number) {
-  return new Intl.NumberFormat("vi-VN").format(p) + " VND";
-}
+import { useTranslation } from "react-i18next";
+import { useBookFormatters } from "../../../lib/useBookFormatters";
 
 interface LessonDetail {
   id: string;
@@ -34,6 +32,8 @@ export default function LessonPaymentPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { status } = usePlayerSession();
+  const { t } = useTranslation();
+  const { formatPrice } = useBookFormatters();
   const { venueId: playerVenueId } = usePlayerVenue();
   const [lesson, setLesson] = useState<LessonDetail | null>(null);
   const [bank, setBank] = useState<BankInfo | null>(null);
@@ -43,6 +43,7 @@ export default function LessonPaymentPage() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const holdExpires = searchParams.get("holdExpires");
+  const stepKeys = ["payment.steps.openBank", "payment.steps.scanQr", "payment.steps.confirmTransfer", "payment.steps.tapPaid"] as const;
 
   useEffect(() => {
     if (status === "unauthenticated") { router.replace("/book/login"); return; }
@@ -91,16 +92,16 @@ export default function LessonPaymentPage() {
     setUploading(false);
   }
 
-  if (!lesson) return <div className="px-4 pt-12 text-[var(--cm-text-muted)]">Loading...</div>;
+  if (!lesson) return <div className="px-4 pt-12 text-[var(--cm-text-muted)]">{t("common.loading")}</div>;
 
   if (holdExpires && lesson.paymentStatus === "pending" && secondsLeft <= 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60dvh] px-6 text-center">
         <div className="text-4xl mb-4">⏱</div>
-        <h2 className="text-lg font-bold mb-2">Payment window expired</h2>
-        <p className="text-sm text-[var(--cm-text-sec)] mb-6">The session is now available for others to book.</p>
+        <h2 className="text-lg font-bold mb-2">{t("payment.expiredTitle")}</h2>
+        <p className="text-sm text-[var(--cm-text-sec)] mb-6">{t("payment.expiredLessonBody")}</p>
         <button onClick={() => router.replace("/book")} className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm">
-          Book Again
+          {t("payment.bookAgain")}
         </button>
       </div>
     );
@@ -112,18 +113,18 @@ export default function LessonPaymentPage() {
         <div className="w-16 h-16 bg-[var(--cm-green)]/15 rounded-full flex items-center justify-center mb-4">
           <span className="text-2xl text-[var(--cm-green)]">✓</span>
         </div>
-        <h2 className="text-lg font-bold mb-2">Verifying payment</h2>
+        <h2 className="text-lg font-bold mb-2">{t("payment.verifyingTitle")}</h2>
         <p className="text-sm text-[var(--cm-text-sec)] mb-2">
           {lesson.coach.name} · {lesson.package.name}
         </p>
         <span className="inline-block px-3 py-1 bg-[var(--cm-orange)]/15 text-[var(--cm-orange)] rounded-full text-xs font-medium mb-6">
-          Awaiting verification
+          {t("payment.awaitingVerification")}
         </span>
         <button onClick={() => router.push("/book/bookings")} className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm mb-3">
-          View My Bookings
+          {t("payment.viewMyBookings")}
         </button>
         <button onClick={() => router.push("/book")} className="w-full py-3 bg-[var(--cm-bg-surface)] border border-[var(--cm-border)] text-[var(--cm-text-sec)] rounded-xl font-medium text-sm">
-          Back to Home
+          {t("payment.backToHome")}
         </button>
       </div>
     );
@@ -137,10 +138,10 @@ export default function LessonPaymentPage() {
   return (
     <div className="px-6 pt-8 pb-8">
       <button onClick={() => router.push("/book/bookings")} className="text-sm text-[var(--cm-text-sec)] mb-4">
-        ← My Bookings
+        {t("payment.myBookings")}
       </button>
 
-      <h2 className="text-lg font-bold mb-1">Pay for Session</h2>
+      <h2 className="text-lg font-bold mb-1">{t("payment.payForSession")}</h2>
       <p className="text-sm text-[var(--cm-text-sec)] mb-4">
         {lesson.coach.name} · {lesson.package.name}
       </p>
@@ -151,7 +152,7 @@ export default function LessonPaymentPage() {
             ? "bg-[var(--cm-red)]/10 text-[var(--cm-red)]"
             : "bg-[var(--cm-orange)]/10 text-[var(--cm-orange)]"
         }`}>
-          Time left to pay: {Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, "0")}
+          {t("payment.timeLeftToPay", { time: `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, "0")}` })}
         </div>
       )}
 
@@ -161,20 +162,19 @@ export default function LessonPaymentPage() {
           <p className="text-lg font-bold">{formatPrice(lesson.priceValue)}</p>
           {bank && (
             <div className="mt-3 text-xs text-[var(--cm-text-sec)] space-y-1 text-left">
-              <p>Bank: {bankNameFromBin(bank.bankName)}</p>
-              <p>Account: {bank.bankAccount}</p>
-              <p>Name: {bank.bankOwnerName}</p>
-              {lesson.paymentRef && <p className="font-mono">Ref: {lesson.paymentRef}</p>}
+              <p>{t("common.bank")}: {bankNameFromBin(bank.bankName)}</p>
+              <p>{t("common.account")}: {bank.bankAccount}</p>
+              <p>{t("common.name")}: {bank.bankOwnerName}</p>
+              {lesson.paymentRef && <p className="font-mono">{t("common.ref")}: {lesson.paymentRef}</p>}
             </div>
           )}
         </div>
       )}
 
       <ol className="text-sm text-[var(--cm-text-sec)] space-y-1 mb-6 list-decimal pl-5">
-        <li>Open your banking app</li>
-        <li>Scan the QR code above</li>
-        <li>Confirm the transfer</li>
-        <li>Tap &ldquo;I have paid&rdquo; below</li>
+        {stepKeys.map((key) => (
+          <li key={key}>{t(key)}</li>
+        ))}
       </ol>
 
       <button
@@ -182,7 +182,7 @@ export default function LessonPaymentPage() {
         disabled={uploading}
         className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm mb-3 disabled:opacity-40"
       >
-        {uploading ? "Submitting..." : "I have paid"}
+        {uploading ? t("payment.submitting") : t("payment.iHavePaidLower")}
       </button>
     </div>
   );

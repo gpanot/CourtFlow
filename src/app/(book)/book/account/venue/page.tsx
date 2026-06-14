@@ -6,6 +6,7 @@ import { usePlayerSession } from "../../components/usePlayerSession";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { usePlayerVenue } from "../../components/PlayerVenueContext";
+import { useTranslation } from "react-i18next";
 
 interface PortalVenue {
   id: string;
@@ -18,6 +19,7 @@ export default function ChangeVenuePage() {
   const { status, session } = usePlayerSession();
   const router = useRouter();
   const { refresh: refreshVenue } = usePlayerVenue();
+  const { t } = useTranslation();
 
   const [venues, setVenues] = useState<PortalVenue[]>([]);
   const [currentVenueId, setCurrentVenueId] = useState<string | null>(null);
@@ -52,7 +54,7 @@ export default function ChangeVenuePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ venueId }),
       });
-      if (!res.ok) throw new Error("Failed to update venue");
+      if (!res.ok) throw new Error(t("venue.updateFailed"));
       const data = await res.json();
       setCurrentVenueId(venueId);
       refreshVenue();
@@ -80,17 +82,17 @@ export default function ChangeVenuePage() {
   return (
     <div className="px-4 pt-12 pb-8">
       <button onClick={() => router.back()} className="text-sm text-[var(--cm-text-sec)] mb-6">
-        ← Back
+        ← {t("common.back")}
       </button>
 
-      <h1 className="text-xl font-bold mb-1">My Venue</h1>
+      <h1 className="text-xl font-bold mb-1">{t("venue.title")}</h1>
       <p className="text-sm text-[var(--cm-text-sec)] mb-6">
-        Select the venue you play at
+        {t("venue.subtitle")}
       </p>
 
       {venues.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-sm text-[var(--cm-text-sec)]">No venues available at the moment.</p>
+          <p className="text-sm text-[var(--cm-text-sec)]">{t("venue.noneAvailable")}</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -120,7 +122,7 @@ export default function ChangeVenuePage() {
                     <p className="font-medium text-[var(--cm-text)] truncate">{v.name}</p>
                     {isCurrent && (
                       <span className="flex-shrink-0 px-1.5 py-0.5 bg-[var(--cm-accent)]/20 text-[var(--cm-accent)] text-[10px] font-medium rounded">
-                        Current
+                        {t("common.current")}
                       </span>
                     )}
                   </div>

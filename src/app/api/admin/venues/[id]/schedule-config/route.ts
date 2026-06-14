@@ -29,6 +29,14 @@ export async function PUT(
       if (entry.startHour >= entry.endHour) return error("startHour must be before endHour", 400);
       if (!entry.courtIds?.length) return error("Each entry must have at least one court", 400);
       if (!["open_play", "competition"].includes(entry.type)) return error("Invalid type", 400);
+      if (entry.type === "open_play") {
+        if (entry.maxPlayers != null && (typeof entry.maxPlayers !== "number" || entry.maxPlayers < 1)) {
+          return error("maxPlayers must be a positive integer", 400);
+        }
+        if (entry.priceValue != null && (typeof entry.priceValue !== "number" || entry.priceValue < 0)) {
+          return error("priceValue must be a non-negative number", 400);
+        }
+      }
     }
 
     const settings = (venue.settings as Record<string, unknown>) || {};

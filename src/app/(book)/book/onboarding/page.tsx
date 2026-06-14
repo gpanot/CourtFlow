@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { getPlayerToken, getPlayerFromToken } from "@/lib/player-token";
 
 const SKILL_LEVELS = ["beginner", "intermediate", "advanced", "pro"] as const;
@@ -19,6 +20,7 @@ interface PortalVenue {
 export default function OnboardingPage() {
   const { data: session, status, update } = useSession();
   const router = useRouter();
+  const { t } = useTranslation();
 
   // Resolve auth header for both credentials and OAuth paths
   const authHeader: Record<string, string> = getPlayerToken()
@@ -130,11 +132,11 @@ export default function OnboardingPage() {
 
   async function handleProfileContinue() {
     if (!phone || phone.trim().length < 8) {
-      setError("Phone number is required (min 8 digits)");
+      setError(t("onboarding.errors.phoneRequired"));
       return;
     }
-    if (!gender) { setError("Please select a gender"); return; }
-    if (!skillLevel) { setError("Please select a skill level"); return; }
+    if (!gender) { setError(t("onboarding.errors.genderRequired")); return; }
+    if (!skillLevel) { setError(t("onboarding.errors.skillRequired")); return; }
     if (!canContinue) {
       console.log("[onboarding] canContinue=false", { phone: phone.length, phoneStatus, gender, skillLevel, saving });
       return;
@@ -183,7 +185,7 @@ export default function OnboardingPage() {
           setStep("profile");
           return;
         }
-        throw new Error(data.error || "Failed to save profile");
+        throw new Error(data.error || t("onboarding.errors.saveFailed"));
       }
       if (!isCredentialsAuth) {
         await update({ playerId: data.playerId });
@@ -220,7 +222,7 @@ export default function OnboardingPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed");
+      if (!res.ok) throw new Error(data.error || t("onboarding.errors.genericFailed"));
       if (!isCredentialsAuth) {
         await update({ playerId: data.playerId });
       }
@@ -233,7 +235,7 @@ export default function OnboardingPage() {
   }
 
   if (status === "loading") {
-    return <div className="flex items-center justify-center min-h-dvh text-[var(--cm-text-muted)]">Loading...</div>;
+    return <div className="flex items-center justify-center min-h-dvh text-[var(--cm-text-muted)]">{t("common.loading")}</div>;
   }
 
   const chipCls = (active: boolean) =>
@@ -247,11 +249,11 @@ export default function OnboardingPage() {
     return (
       <div className="px-6 pt-12 pb-8">
         <button onClick={() => setStep("profile")} className="text-sm text-[var(--cm-text-sec)] mb-6">
-          ← Back
+          ← {t("common.back")}
         </button>
 
-        <h1 className="text-xl font-bold mb-1">Choose your venue</h1>
-        <p className="text-sm text-[var(--cm-text-sec)] mb-6">Select the venue you&apos;ll be playing at</p>
+        <h1 className="text-xl font-bold mb-1">{t("onboarding.chooseVenue")}</h1>
+        <p className="text-sm text-[var(--cm-text-sec)] mb-6">{t("onboarding.chooseVenueSubtitle")}</p>
 
         {error && (
           <div className="mb-4 p-3 bg-[var(--cm-red)]/10 text-[var(--cm-red)] text-sm rounded-xl">{error}</div>
@@ -298,23 +300,23 @@ export default function OnboardingPage() {
   return (
     <div className="px-6 pt-12 pb-8">
       <button onClick={() => router.back()} className="text-sm text-[var(--cm-text-sec)] mb-6">
-        ← Back
+        ← {t("common.back")}
       </button>
 
-      <h1 className="text-xl font-bold mb-1">Complete your profile</h1>
-      <p className="text-sm text-[var(--cm-text-sec)] mb-6">Just a few details to get started</p>
+      <h1 className="text-xl font-bold mb-1">{t("onboarding.completeProfile")}</h1>
+      <p className="text-sm text-[var(--cm-text-sec)] mb-6">{t("onboarding.profileSubtitle")}</p>
 
       {error && (
         <div className="mb-4 p-3 bg-[var(--cm-red)]/10 text-[var(--cm-red)] text-sm rounded-xl">{error}</div>
       )}
 
-      <label className="block text-sm font-medium mb-1.5">Phone number</label>
+      <label className="block text-sm font-medium mb-1.5">{t("onboarding.phoneNumber")}</label>
       <div className="relative mb-1.5">
         <input
           type="tel"
           value={phone}
           onChange={(e) => handlePhoneChange(e.target.value)}
-          placeholder="0901 234 567"
+          placeholder={t("onboarding.phonePlaceholder")}
           className={`w-full px-4 py-3 bg-[var(--cm-bg-input)] border rounded-xl text-sm outline-none transition-colors pr-10 text-[var(--cm-text)] ${
             phoneStatus === "taken"
               ? "border-[var(--cm-red)] focus:border-[var(--cm-red)]"
@@ -336,25 +338,25 @@ export default function OnboardingPage() {
       </div>
       {phoneStatus === "taken" && (
         <p className="text-xs text-[var(--cm-red)] mb-4">
-          This phone number is already registered. You&apos;ll be prompted to link accounts on submit.
+          {t("onboarding.phoneTaken")}
         </p>
       )}
       {phoneStatus !== "taken" && <div className="mb-5" />}
 
-      <label className="block text-sm font-medium mb-2">Gender</label>
+      <label className="block text-sm font-medium mb-2">{t("onboarding.gender")}</label>
       <div className="flex gap-3 mb-5">
         {GENDERS.map((g) => (
           <button key={g} onClick={() => setGender(g)} className={chipCls(gender === g)}>
-            {g.charAt(0).toUpperCase() + g.slice(1)}
+            {t(`gender.${g}`)}
           </button>
         ))}
       </div>
 
-      <label className="block text-sm font-medium mb-2">Skill level</label>
+      <label className="block text-sm font-medium mb-2">{t("onboarding.skillLevel")}</label>
       <div className="grid grid-cols-2 gap-3 mb-8">
         {SKILL_LEVELS.map((s) => (
           <button key={s} onClick={() => setSkillLevel(s)} className={chipCls(skillLevel === s)}>
-            {s.charAt(0).toUpperCase() + s.slice(1)}
+            {t(`skillLevels.${s}`)}
           </button>
         ))}
       </div>
@@ -364,30 +366,29 @@ export default function OnboardingPage() {
         disabled={!canContinue || venuesLoading}
         className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm disabled:opacity-40 transition-opacity"
       >
-        {venuesLoading ? "Loading..." : saving ? "Saving..." : "Continue"}
+        {venuesLoading ? t("common.loading") : saving ? t("common.saving") : t("common.continue")}
       </button>
 
       {linkPrompt && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--cm-overlay)]">
           <div className="w-full max-w-lg bg-[var(--cm-sheet-bg)] border border-[var(--cm-border)] rounded-t-2xl p-6 pb-8">
-            <h2 className="text-lg font-bold mb-2">Account found</h2>
+            <h2 className="text-lg font-bold mb-2">{t("onboarding.accountFound")}</h2>
             <p className="text-sm text-[var(--cm-text-sec)] mb-6">
-              A player account with phone <span className="font-medium">{linkPrompt.phone}</span> already
-              exists. Would you like to link your account to it?
+              {t("onboarding.accountFoundBody", { phone: linkPrompt.phone })}
             </p>
             <button
               onClick={() => handleLink(true)}
               disabled={saving}
               className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm mb-3 disabled:opacity-40"
             >
-              Yes, link accounts
+              {t("onboarding.yesLinkAccounts")}
             </button>
             <button
               onClick={() => handleLink(false)}
               disabled={saving}
               className="w-full py-3 bg-[var(--cm-bg-surface)] text-[var(--cm-text-sec)] border border-[var(--cm-border)] rounded-xl font-medium text-sm disabled:opacity-40"
             >
-              No, create new
+              {t("onboarding.noCreateNew")}
             </button>
           </div>
         </div>
