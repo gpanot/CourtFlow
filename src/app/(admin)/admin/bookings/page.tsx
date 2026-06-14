@@ -1307,6 +1307,62 @@ export default function BookingsPage() {
               </p>
             )}
 
+            {/* Payment proof link */}
+            {editBooking.paymentProofUrl && editBooking.paymentProofUrl !== "pending_proof" && (
+              <a
+                href={editBooking.paymentProofUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 underline"
+              >
+                View payment proof
+              </a>
+            )}
+
+            {/* Status badges */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <BookingStatusBadge status={editBooking.status} />
+              {editBooking.paymentStatus && <PaymentStatusBadge status={editBooking.paymentStatus} />}
+            </div>
+
+            {/* Action dropdown */}
+            <div className="space-y-1.5">
+              <label className="text-xs text-neutral-400">Action</label>
+              <div className="flex gap-2">
+                <select
+                  id="edit-booking-action"
+                  defaultValue=""
+                  className="flex-1 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
+                  onChange={async (e) => {
+                    const val = e.target.value;
+                    if (!val) return;
+                    e.target.value = "";
+                    if (val === "approve_payment") {
+                      await approvePayment(editBooking.id);
+                      closeEditModal();
+                    } else if (val === "cancelled") {
+                      closeEditModal();
+                      await cancelBooking(editBooking.id);
+                    } else if (val === "no_show") {
+                      closeEditModal();
+                      await markNoShow(editBooking.id);
+                    }
+                  }}
+                >
+                  <option value="">— Select an action —</option>
+                  {editBooking.paymentStatus === "proof_submitted" && (
+                    <option value="approve_payment">✓ Approve payment</option>
+                  )}
+                  {editBooking.status === "confirmed" && (
+                    <>
+                      <option value="cancelled">✕ Cancel booking</option>
+                      <option value="no_show">⚠ Mark as no-show</option>
+                    </>
+                  )}
+                </select>
+              </div>
+            </div>
+
             <div className="flex gap-3">
               <button
                 onClick={saveEdit}
@@ -1317,17 +1373,6 @@ export default function BookingsPage() {
                 onClick={closeEditModal}
                 className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
               >{t("common.cancel")}</button>
-            </div>
-
-            <div className="border-t border-neutral-800 pt-3 flex gap-2">
-              <button
-                onClick={() => { closeEditModal(); cancelBooking(editBooking.id); }}
-                className="flex-1 rounded-xl border border-red-800/50 py-2 text-sm text-red-400 hover:bg-red-900/20"
-              >{t("bookings.cancelBooking")}</button>
-              <button
-                onClick={() => { closeEditModal(); markNoShow(editBooking.id); }}
-                className="flex-1 rounded-xl border border-amber-800/50 py-2 text-sm text-amber-400 hover:bg-amber-900/20"
-              >{t("bookings.markNoShow")}</button>
             </div>
           </div>
         </div>

@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
           venue: { select: { name: true } },
         },
         orderBy: { createdAt: "desc" },
-        take: 8,
+        take: 10,
       }),
       // Active memberships
       prisma.membership.count({
@@ -266,6 +266,8 @@ export async function GET(request: NextRequest) {
         startTime: b.startTime,
         endTime: b.endTime,
         status: b.status,
+        paymentStatus: b.paymentStatus,
+        paymentProofUrl: b.paymentProofUrl,
         priceInCents: b.priceInCents,
         createdAt: b.createdAt,
       })),
