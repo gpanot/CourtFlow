@@ -93,11 +93,11 @@ export async function DELETE(
 
       if (courtIds.length > 0) {
         await tx.courtAssignment.deleteMany({ where: { courtId: { in: courtIds } } });
-        await tx.courtBlock.deleteMany({ where: { courtId: { in: courtIds } } });
         await tx.booking.deleteMany({ where: { courtId: { in: courtIds } } });
       }
 
       // Delete all venue-scoped data
+      await tx.courtBlock.deleteMany({ where: { venueId } });
       await tx.openPlayRegistration.deleteMany({ where: { venueId } });
       await tx.coachLesson.deleteMany({ where: { venueId } });
       await tx.coachPackage.deleteMany({ where: { venueId } });
