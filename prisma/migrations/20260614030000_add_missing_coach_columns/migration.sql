@@ -1,5 +1,6 @@
 -- Add missing coach profile columns to staff_members
--- These were added to the Prisma schema but never had a migration generated
+-- These were added to the Prisma schema but never had a migration generated.
+-- IF NOT EXISTS guards make this safe to re-run.
 
 ALTER TABLE "staff_members" ADD COLUMN IF NOT EXISTS "coach_dupr" TEXT;
 ALTER TABLE "staff_members" ADD COLUMN IF NOT EXISTS "coach_gender" TEXT;
