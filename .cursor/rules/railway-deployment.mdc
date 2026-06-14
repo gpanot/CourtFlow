@@ -11,12 +11,25 @@ alwaysApply: true
 - The correct CMD is:
   CMD ["sh", "-c", "npx prisma migrate deploy && mkdir -p /app/uploads/players /app/uploads/players/avatars && node server.js"]
 
-## Prisma Migrations
-- Never run prisma migrate dev in production
-- If a migration fails in Railway, it must be resolved with prisma migrate resolve --rolled-back <migration_name> from inside Railway's network
-- Railway internal URL postgres.railway.internal is NOT reachable from local machine
-- To fix a failed migration from outside Railway, use a temporary API endpoint that runs the resolve command, then delete it immediately after
-- Always make migration SQL idempotent with IF NOT EXISTS on CREATE TABLE and DO $$ BEGIN ... EXCEPTION WHEN duplicate_object THEN NULL; END $$ on CREATE TYPE
+## Prisma Migration Rules — Strict
+
+- **NEVER** use `prisma db push` on any environment — it bypasses the migration system
+- **NEVER** add columns to the Prisma schema without immediately running: `npx prisma migrate dev --name <description>`
+- **NEVER** create a temp API endpoint to run SQL — that is a last resort only when the migration system is broken
+- The correct flow for any schema change is:
+  1. Edit `prisma/schema.prisma`
+  2. Run: `npx prisma migrate dev --name <description>`
+  3. Commit both `schema.prisma` and the new migration folder together
+  4. Push — Railway runs `prisma migrate deploy` automatically on startup
+- If you see schema changes without a corresponding folder in `prisma/migrations/`, that means `prisma db push` was used — always fix this by creating a proper migration immediately
+
+### Production & Troubleshooting
+
+- Never run `prisma migrate dev` in production
+- If a migration fails in Railway, it must be resolved with `prisma migrate resolve --rolled-back <migration_name>` from inside Railway's network
+- Railway internal URL `postgres.railway.internal` is NOT reachable from local machine
+- To fix a failed migration from outside Railway, use a temporary API endpoint that runs the resolve command only as a last resort — then delete it immediately after
+- Always make migration SQL idempotent with `IF NOT EXISTS` on CREATE TABLE and `DO $$ BEGIN ... EXCEPTION WHEN duplicate_object THEN NULL; END $$` on CREATE TYPE
 
 ## Lock File
 - Always run npm install locally after adding any package to package.json
