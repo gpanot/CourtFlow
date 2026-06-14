@@ -6,6 +6,7 @@ import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireManagerOrSuperAdmin } from "@/lib/auth";
 import { getAuthorizedVenueIds } from "@/lib/venue-scope";
 import { enqueueStickerJobIfNeeded } from "@/lib/sticker-queue";
+import bcrypt from "bcryptjs";
 
 export const dynamic = "force-dynamic";
 interface AdminPlayersStatsPayload {
@@ -432,20 +433,44 @@ export async function POST(request: NextRequest) {
       gender: string;
       skillLevel?: string;
       avatar?: string;
+      email?: string;
+      password?: string;
     }>(request);
 
     if (!body.name?.trim()) return error("Name is required", 400);
     if (!body.phone?.trim()) return error("Phone is required", 400);
     if (!body.gender) return error("Gender is required", 400);
 
+    // If email/password provided, validate them before touching the DB
+    const normalizedEmail = body.email?.toLowerCase().trim() ?? null;
+    if (normalizedEmail !== null) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail))
+        return error("Invalid email address", 400);
+      if (!body.password || body.password.length < 8)
+        return error("Password must be at least 8 characters", 400);
+
+      const existingAccount = await prisma.playerAccount.findUnique({
+        where: {
+          provider_providerAccountId: {
+            provider: "credentials",
+            providerAccountId: normalizedEmail,
+          },
+        },
+      });
+      if (existingAccount)
+        return error("An account with this email already exists", 409);
+    }
+
     const rawSkill = ((body.skillLevel as string) || "beginner").toLowerCase();
     const skill: SkillLevel = ["beginner", "intermediate", "advanced", "pro"].includes(rawSkill)
       ? (rawSkill as SkillLevel)
       : "beginner";
+
     const player = await prisma.player.create({
       data: {
         name: body.name.trim(),
         phone: body.phone.trim(),
+        email: normalizedEmail ?? undefined,
         gender: body.gender as never,
         skillLevel: skill,
         avatar: body.avatar || "🏓",
@@ -453,6 +478,22 @@ export async function POST(request: NextRequest) {
         registrationAt: new Date(),
       },
     });
+
+    // Create login account if email + password were supplied
+    if (normalizedEmail && body.password) {
+      const passwordHash = await bcrypt.hash(body.password, 12);
+      await prisma.playerAccount.create({
+        data: {
+          playerId: player.id,
+          provider: "credentials",
+          providerAccountId: normalizedEmail,
+          email: normalizedEmail,
+          name: body.name.trim(),
+          passwordHash,
+          emailVerified: false,
+        },
+      });
+    }
 
     enqueueStickerJobIfNeeded(player.id, player.gender).catch(console.error);
 

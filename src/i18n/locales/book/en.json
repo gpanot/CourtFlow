@@ -84,23 +84,23 @@
     "slides": [
       {
         "imageAlt": "Pickleball court outdoor",
-        "tag": "COURTFLOW",
-        "title": "Find your court.\nNo group chats\nrequired.",
-        "body": "Stop asking around. Every verified court near you — book instantly, confirmed in seconds.",
+        "tag": "ALL IN ONE PLACE",
+        "title": "Your court,\nbooked in seconds.",
+        "body": "Pick your venue, choose your slot, get confirmed instantly. No calls, no waiting, no back and forth.",
         "cta": "Next"
       },
       {
         "imageAlt": "Coach on the court",
-        "tag": "TRUST",
-        "title": "Ratings you can\nactually trust.",
-        "body": "Every review comes from a player who completed at least 3 sessions. No fake stars. No bought reviews. Just honest feedback.",
+        "tag": "COACHING",
+        "title": "The best coaches\nfill up fast.",
+        "body": "See real availability from your venue's coaches. Book a session instantly, get confirmed in seconds.",
         "cta": "Next"
       },
       {
         "imageAlt": "Players on a pickleball court",
-        "tag": "BOOK NOW",
-        "title": "The best coaches\nfill up fast.",
-        "body": "Stop waiting for a reply that might not come. See real availability, book instantly, get confirmed in seconds.",
+        "tag": "OPEN PLAY - COURT",
+        "title": "Never miss\na session again.",
+        "body": "See when open play is on at your venue, join with one tap, and show up ready to play.",
         "cta": "Get started"
       }
     ]

@@ -54,11 +54,51 @@ export async function PATCH(
         return error(`Cannot update a booking with status '${existing.status}'`, 400);
       }
 
+      // Enforce cancellation policy when cancelling
+      if (body.status === "cancelled") {
+        const venue = await prisma.venue.findUnique({
+          where: { id: existing.venueId },
+          select: { settings: true },
+        });
+        const settings = (venue?.settings as Record<string, unknown>) ?? {};
+        const policy = (settings.cancellationPolicy as {
+          freeCancelHours?: number;
+          partialCancelHours?: number;
+          noCancelHours?: number;
+        }) ?? {};
+        const noCancelHours = policy.noCancelHours ?? 4;
+        const partialCancelHours = policy.partialCancelHours ?? 12;
+        const freeCancelHours = policy.freeCancelHours ?? 24;
+
+        // Compute hours until booking start using local time (Asia/Saigon — server TZ)
+        const now = new Date();
+        const hoursUntilStart = (existing.startTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+        if (hoursUntilStart < noCancelHours) {
+          return error(
+            `Cannot cancel — less than ${noCancelHours} hours before start. Cancellation is not allowed.`,
+            400
+          );
+        }
+
+        const partialRefund = hoursUntilStart < partialCancelHours;
+        const freeCancel = hoursUntilStart >= freeCancelHours;
+
+        const booking = await prisma.booking.update({
+          where: { id },
+          data: { status: "cancelled", cancelledAt: new Date() },
+          include: {
+            court: { select: { id: true, label: true } },
+            player: { select: { id: true, name: true, phone: true } },
+          },
+        });
+        return json({ ...booking, partialRefund, freeCancel });
+      }
+
       const booking = await prisma.booking.update({
         where: { id },
         data: {
           status: body.status,
-          ...(body.status === "cancelled" && { cancelledAt: new Date() }),
         },
         include: {
           court: { select: { id: true, label: true } },

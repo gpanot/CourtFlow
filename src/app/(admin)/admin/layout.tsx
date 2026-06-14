@@ -34,6 +34,7 @@ const topNavItems: NavItem[] = [
   { href: "/admin/venues", label: "nav.venues", icon: MapPin },
   { href: "/admin/bookings", label: "nav.bookings", icon: CalendarDays },
   { href: "/admin/memberships", label: "nav.memberships", icon: Crown },
+  { href: "/admin/courtpass-players", label: "nav.courtpassPlayers", icon: UserCircle },
   { href: "/admin/coaching", label: "nav.coaching", icon: GraduationCap },
   { href: "/admin/staff", label: "nav.staff", icon: Users },
   { href: "/admin/venue-analytics", label: "nav.venueAnalytics", icon: PieChart },
@@ -182,7 +183,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="flex min-h-dvh bg-neutral-950 text-white">
       {/* Desktop sidebar */}
-      <aside className="hidden md:block w-56 shrink-0 border-r border-neutral-800 p-4">
+      <aside className="hidden md:flex md:flex-col w-56 shrink-0 border-r border-neutral-800 h-dvh sticky top-0 overflow-y-auto p-4">
         <div className="mb-6">
           <div className="flex items-center justify-between gap-2">
             <h1 className="text-lg font-bold text-purple-500">{role === "manager" ? t("layout.managerPanel") : t("layout.adminPanel")}</h1>

@@ -34,6 +34,7 @@ import {
   GraduationCap,
   LayoutGrid,
   TableProperties,
+  ShieldAlert,
 } from "lucide-react";
 import { CourtsManager } from "@/components/admin/CourtsManager";
 
@@ -189,7 +190,7 @@ export default function BookingsPage() {
   const [editSlotTime, setEditSlotTime] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<"bookings" | "settings">("bookings");
+  const [activeTab, setActiveTab] = useState<"bookings" | "settings" | "cancellation">("bookings");
   const [viewMode, setViewMode] = useState<"court" | "time">(() => {
     if (typeof window === "undefined") return "court";
     return (localStorage.getItem("bookings-view-mode") as "court" | "time") || "court";
@@ -610,6 +611,7 @@ export default function BookingsPage() {
         {([
           { key: "bookings" as const, label: t("bookings.title"), icon: Calendar },
           { key: "settings" as const, label: t("settings.title"), icon: Settings },
+          { key: "cancellation" as const, label: t("cancellation.title"), icon: ShieldAlert },
         ]).map((tab) => (
           <button
             key={tab.key}
@@ -671,6 +673,14 @@ export default function BookingsPage() {
             onRefresh={fetchVenueDetails}
           />
         </div>
+      )}
+
+      {activeTab === "cancellation" && (
+        <CancellationPolicySection
+          venueId={selectedVenueId}
+          settings={venueDetails?.settings}
+          onRefresh={fetchVenueDetails}
+        />
       )}
 
       {activeTab === "bookings" && <>
@@ -1913,6 +1923,119 @@ function ScheduleConfigSection({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── CancellationPolicySection ────────────────────────────────────────────────
+
+function CancellationPolicySection({
+  venueId,
+  settings,
+  onRefresh,
+}: {
+  venueId: string;
+  settings?: Record<string, unknown>;
+  onRefresh: () => void;
+}) {
+  const rawPolicy = (settings?.cancellationPolicy as {
+    freeCancelHours?: number;
+    partialCancelHours?: number;
+    noCancelHours?: number;
+  }) ?? {};
+
+  const [freeCancelHours, setFreeCancelHours] = useState(rawPolicy.freeCancelHours ?? 24);
+  const [partialCancelHours, setPartialCancelHours] = useState(rawPolicy.partialCancelHours ?? 12);
+  const [noCancelHours, setNoCancelHours] = useState(rawPolicy.noCancelHours ?? 4);
+  const [saving, setSaving] = useState(false);
+  const [savedMsg, setSavedMsg] = useState("");
+  const [saveErr, setSaveErr] = useState("");
+
+  async function save() {
+    setSaving(true);
+    setSaveErr("");
+    setSavedMsg("");
+    try {
+      await api.put(`/api/admin/venues/${venueId}/cancellation-config`, { freeCancelHours, partialCancelHours, noCancelHours });
+      setSavedMsg("Saved!");
+      onRefresh();
+    } catch (e) {
+      setSaveErr((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-6 space-y-6">
+      <div>
+        <h3 className="text-sm font-semibold text-white mb-1">Cancellation Policy</h3>
+        <p className="text-xs text-neutral-500">Set time-based cancellation rules for bookings at this venue.</p>
+      </div>
+
+      <div className="rounded-lg border border-neutral-700 bg-neutral-800/50 px-4 py-3 text-xs text-neutral-400">
+        These are the recommended defaults. Adjust to match your venue policy.
+      </div>
+
+      <div className="space-y-5">
+        <div>
+          <label className="block text-xs font-medium text-neutral-300 mb-0.5">Free cancellation window</label>
+          <p className="text-[11px] text-neutral-500 mb-2">Cancel up to X hours before start — full refund, no penalty</p>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={1}
+              value={freeCancelHours}
+              onChange={(e) => setFreeCancelHours(Number(e.target.value))}
+              className="w-24 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none"
+            />
+            <span className="text-xs text-neutral-500">hours before start</span>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-neutral-300 mb-0.5">Partial cancel window</label>
+          <p className="text-[11px] text-neutral-500 mb-2">Cancel between X and Y hours before start — 50% of booking price retained</p>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={1}
+              value={partialCancelHours}
+              onChange={(e) => setPartialCancelHours(Number(e.target.value))}
+              className="w-24 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none"
+            />
+            <span className="text-xs text-neutral-500">hours before start</span>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-neutral-300 mb-0.5">No cancellation window</label>
+          <p className="text-[11px] text-neutral-500 mb-2">Cancel less than X hours before start — not allowed, returns error</p>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={0}
+              value={noCancelHours}
+              onChange={(e) => setNoCancelHours(Number(e.target.value))}
+              className="w-24 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none"
+            />
+            <span className="text-xs text-neutral-500">hours before start</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button
+          onClick={save}
+          disabled={saving}
+          className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-50"
+        >
+          <Save className="h-3.5 w-3.5" />
+          {saving ? "Saving…" : "Save settings"}
+        </button>
+        {savedMsg && <span className="text-xs text-emerald-400">{savedMsg}</span>}
+        {saveErr && <span className="text-xs text-red-400">{saveErr}</span>}
+      </div>
     </div>
   );
 }

@@ -164,6 +164,7 @@ model Venue {
   signupDuplicateLogs  SignupDuplicateLog[]
   playerCoachCredits   PlayerCoachCredit[]
   openPlayRegistrations OpenPlayRegistration[]
+  playerNotes           PlayerNote[]
 
   @@map("venues")
 }
@@ -213,6 +214,7 @@ model Player {
   accounts              PlayerAccount[]
   coachCredits          PlayerCoachCredit[]
   openPlayRegistrations OpenPlayRegistration[]
+  playerNotes           PlayerNote[]
 
   @@index([registrationVenueId])
   @@map("players")
@@ -1250,4 +1252,20 @@ model OpenPlayRegistration {
   @@index([venueId, date])
   @@index([playerId])
   @@map("open_play_registrations")
+}
+
+model PlayerNote {
+  id        String   @id @default(cuid())
+  playerId  String   @map("player_id")
+  venueId   String   @map("venue_id")
+  content   String   @db.Text
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  venue  Venue  @relation(fields: [venueId], references: [id])
+
+  @@unique([playerId, venueId])
+  @@index([venueId])
+  @@map("player_notes")
 }
