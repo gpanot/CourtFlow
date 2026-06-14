@@ -60,13 +60,8 @@ export async function DELETE(
   { params }: { params: Promise<{ venueId: string }> }
 ) {
   try {
-    const auth = requireSuperAdmin(request.headers);
+    requireSuperAdmin(request.headers);
     const { venueId } = await params;
-
-    const owned = await prisma.venue.count({
-      where: { id: venueId, staffAssignments: { some: { staffId: auth.id } } },
-    });
-    if (!owned) return error("You don't own this venue", 403);
 
     const venue = await prisma.venue.findUnique({
       where: { id: venueId },
@@ -98,8 +93,20 @@ export async function DELETE(
 
       if (courtIds.length > 0) {
         await tx.courtAssignment.deleteMany({ where: { courtId: { in: courtIds } } });
+        await tx.courtBlock.deleteMany({ where: { courtId: { in: courtIds } } });
+        await tx.booking.deleteMany({ where: { courtId: { in: courtIds } } });
       }
 
+      // Delete all venue-scoped data
+      await tx.openPlayRegistration.deleteMany({ where: { venueId } });
+      await tx.coachLesson.deleteMany({ where: { venueId } });
+      await tx.coachPackage.deleteMany({ where: { venueId } });
+      await tx.membershipTier.deleteMany({ where: { venueId } });
+      await tx.membership.deleteMany({ where: { venueId } });
+      await tx.billingInvoice.deleteMany({ where: { venueId } });
+      await tx.venueBillingRate.deleteMany({ where: { venueId } });
+      await tx.checkInRecord.deleteMany({ where: { venueId } });
+      await tx.checkInPlayer.deleteMany({ where: { venueId } });
       await tx.court.deleteMany({ where: { venueId } });
       await tx.session.deleteMany({ where: { venueId } });
       await tx.auditLog.deleteMany({ where: { venueId } });
