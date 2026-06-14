@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
       },
       include: {
         player: { select: { id: true, name: true, phone: true, avatar: true } },
-        tier: { select: { id: true, name: true, sessionsIncluded: true, showBadge: true, priceInCents: true } },
+        tier: { select: { id: true, name: true, sessionsIncluded: true, showBadge: true, priceValue: true } },
         payments: {
           orderBy: { periodStart: "desc" },
           take: 1,
@@ -66,11 +66,11 @@ export async function GET(request: NextRequest) {
     const paymentSummary = {
       totalCollected: allPaymentsThisMonth
         .filter((p) => p.status === "PAID")
-        .reduce((sum, p) => sum + p.amountInCents, 0),
+        .reduce((sum, p) => sum + p.amountValue, 0),
       unpaidCount: allPaymentsThisMonth.filter((p) => p.status === "UNPAID").length,
       unpaidAmount: allPaymentsThisMonth
         .filter((p) => p.status === "UNPAID")
-        .reduce((sum, p) => sum + p.amountInCents, 0),
+        .reduce((sum, p) => sum + p.amountValue, 0),
       overdueCount: allPaymentsThisMonth.filter((p) =>
         p.status === "UNPAID" && p.periodEnd < now
       ).length + allPaymentsThisMonth.filter((p) => p.status === "OVERDUE").length,

@@ -12,7 +12,7 @@ interface BookingItem {
   date: string;
   startTime: string;
   endTime: string;
-  priceInCents: number;
+  priceValue: number;
   status: string;
   paymentStatus: string | null;
   court: { label: string };
@@ -23,7 +23,7 @@ interface LessonItem {
   date: string;
   startTime: string;
   endTime: string;
-  priceInCents: number;
+  priceValue: number;
   status: string;
   paymentStatus: string;
   coach: { name: string };
@@ -123,7 +123,7 @@ export default function MyBookingsPage() {
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs font-medium">{formatPrice(b.priceInCents)}</p>
+                      <p className="text-xs font-medium">{formatPrice(b.priceValue)}</p>
                       <PaymentPill status={b.paymentStatus} />
                     </div>
                   </div>
@@ -143,7 +143,7 @@ export default function MyBookingsPage() {
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs font-medium">{formatPrice(b.priceInCents)}</p>
+                      <p className="text-xs font-medium">{formatPrice(b.priceValue)}</p>
                       {b.status === "cancelled" ? (
                         <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-medium bg-[var(--cm-bg-surface)] text-[var(--cm-text-muted)]">Cancelled</span>
                       ) : (
@@ -177,7 +177,7 @@ export default function MyBookingsPage() {
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-xs font-medium">{formatPrice(l.priceInCents)}</p>
+                      <p className="text-xs font-medium">{formatPrice(l.priceValue)}</p>
                       <PaymentPill status={l.paymentStatus} />
                     </div>
                   </div>

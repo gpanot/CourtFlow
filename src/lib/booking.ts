@@ -11,14 +11,14 @@ export interface PricingRule {
   dayOfWeek: number;
   startHour: number;
   endHour: number;
-  priceInCents: number;
+  priceValue: number;
 }
 
 export interface BookingConfig {
   slotDurationMinutes: number;
   bookingStartHour: number;
   bookingEndHour: number;
-  defaultPriceInCents: number;
+  defaultPriceValue: number;
   pricingRules: PricingRule[];
   cancellationHours: number;
 }
@@ -27,7 +27,7 @@ export const DEFAULT_BOOKING_CONFIG: BookingConfig = {
   slotDurationMinutes: 60,
   bookingStartHour: 8,
   bookingEndHour: 22,
-  defaultPriceInCents: 0,
+  defaultPriceValue: 0,
   pricingRules: [],
   cancellationHours: 24,
 };
@@ -75,7 +75,7 @@ export interface TimeSlot {
   startTime: string;
   endTime: string;
   hour: number;
-  priceInCents: number;
+  priceValue: number;
 }
 
 export interface SlotBlockInfo {
@@ -107,12 +107,29 @@ export interface CourtSlot {
 export function getBookingConfig(venueSettings: Record<string, unknown>): BookingConfig {
   const raw = venueSettings?.bookingConfig as Record<string, unknown> | undefined;
   if (!raw) return DEFAULT_BOOKING_CONFIG;
+
+  const pricingRules = Array.isArray(raw.pricingRules)
+    ? (raw.pricingRules as Record<string, unknown>[]).map((rule) => ({
+        dayOfWeek: rule.dayOfWeek as number,
+        startHour: rule.startHour as number,
+        endHour: rule.endHour as number,
+        priceValue:
+          (rule.priceValue as number) ??
+          (rule.priceInCents as number) ??
+          0,
+      }))
+    : DEFAULT_BOOKING_CONFIG.pricingRules;
+
   return {
     slotDurationMinutes: (raw.slotDurationMinutes as number) ?? DEFAULT_BOOKING_CONFIG.slotDurationMinutes,
     bookingStartHour: (raw.bookingStartHour as number) ?? DEFAULT_BOOKING_CONFIG.bookingStartHour,
     bookingEndHour: (raw.bookingEndHour as number) ?? DEFAULT_BOOKING_CONFIG.bookingEndHour,
-    defaultPriceInCents: (raw.defaultPriceInCents as number) ?? (raw.pricePerSlotCents as number) ?? DEFAULT_BOOKING_CONFIG.defaultPriceInCents,
-    pricingRules: (raw.pricingRules as PricingRule[]) ?? DEFAULT_BOOKING_CONFIG.pricingRules,
+    defaultPriceValue:
+      (raw.defaultPriceValue as number) ??
+      (raw.defaultPriceInCents as number) ??
+      (raw.pricePerSlotCents as number) ??
+      DEFAULT_BOOKING_CONFIG.defaultPriceValue,
+    pricingRules,
     cancellationHours: (raw.cancellationHours as number) ?? DEFAULT_BOOKING_CONFIG.cancellationHours,
   };
 }
@@ -125,15 +142,15 @@ export function getMembershipConfig(venueSettings: Record<string, unknown>): Mem
 /**
  * Resolve the price for a slot given the day of week and hour.
  * Matches the first pricing rule whose range covers `hour`.
- * Falls back to defaultPriceInCents if no rule matches.
+ * Falls back to defaultPriceValue if no rule matches.
  */
 export function resolveSlotPrice(config: BookingConfig, dayOfWeek: number, hour: number): number {
   for (const rule of config.pricingRules) {
     if (rule.dayOfWeek === dayOfWeek && hour >= rule.startHour && hour < rule.endHour) {
-      return rule.priceInCents;
+      return rule.priceValue;
     }
   }
-  return config.defaultPriceInCents;
+  return config.defaultPriceValue;
 }
 
 function generateTimeSlots(date: Date, config: BookingConfig): TimeSlot[] {
@@ -150,7 +167,7 @@ function generateTimeSlots(date: Date, config: BookingConfig): TimeSlot[] {
       startTime: start.toISOString(),
       endTime: end.toISOString(),
       hour: Math.floor(hour),
-      priceInCents: resolveSlotPrice(config, dayOfWeek, Math.floor(hour)),
+      priceValue: resolveSlotPrice(config, dayOfWeek, Math.floor(hour)),
     });
   }
   return slots;

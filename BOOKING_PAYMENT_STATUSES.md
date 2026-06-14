@@ -223,7 +223,7 @@ Bank notifies SePay → SePay webhook hits POST /api/webhooks/sepay
 processSepayWebhook() extracts paymentRef "CF-BK-xxxxx"
 handlePortalBookingPayment() checks:
   a. booking exists with paymentStatus "pending"
-  b. transferAmount >= priceInCents
+  b. transferAmount >= priceValue
   c. venue has autoPaymentEnabled + sepayEnabled
        ↓
 paymentStatus: "pending" → "paid"

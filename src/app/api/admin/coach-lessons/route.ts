@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
 
     const durationMs = endTime.getTime() - startTime.getTime();
     const durationMin = durationMs / (60 * 1000);
-    const priceInCents = Math.round((pkg.priceInCents / pkg.durationMin) * durationMin);
+    const priceValue = Math.round((pkg.priceValue / pkg.durationMin) * durationMin);
 
     const lesson = await prisma.coachLesson.create({
       data: {
@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
         date,
         startTime,
         endTime,
-        priceInCents,
+        priceValue,
         note: body.note || null,
       },
       include: {

@@ -17,7 +17,7 @@ export async function PATCH(
 
     const body = await parseBody<{
       status?: "PAID" | "UNPAID";
-      amountInCents?: number;
+      amountValue?: number;
       paymentMethod?: string;
       proofUrl?: string | null;
       paidAt?: string;
@@ -38,7 +38,7 @@ export async function PATCH(
       data.paymentMethod = null;
     }
 
-    if (body.amountInCents !== undefined) data.amountInCents = body.amountInCents;
+    if (body.amountValue !== undefined) data.amountValue = body.amountValue;
     if (body.note !== undefined) data.note = body.note;
     if (body.proofUrl !== undefined) data.proofUrl = body.proofUrl;
 
@@ -49,7 +49,7 @@ export async function PATCH(
         membership: {
           include: {
             player: { select: { id: true, name: true, phone: true } },
-            tier: { select: { id: true, name: true, priceInCents: true } },
+            tier: { select: { id: true, name: true, priceValue: true } },
           },
         },
       },

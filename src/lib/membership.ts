@@ -47,7 +47,7 @@ export async function checkAndResetCycle(membership: Membership): Promise<Member
         membershipId: membership.id,
         periodStart: previousRenewal,
         periodEnd: nextRenewal,
-        amountInCents: updated.tier.priceInCents,
+        amountValue: updated.tier.priceValue,
         status: "UNPAID",
       },
     });

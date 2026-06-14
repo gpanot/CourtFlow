@@ -5,6 +5,30 @@ import { requireStaff } from "@/lib/auth";
 import { getBookingConfig, resolveSlotPrice } from "@/lib/booking";
 
 export const dynamic = "force-dynamic";
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    requireStaff(request.headers);
+    const { id } = await params;
+
+    const booking = await prisma.booking.findUnique({
+      where: { id },
+      include: {
+        court: { select: { id: true, label: true } },
+        player: { select: { id: true, name: true, phone: true, avatar: true } },
+      },
+    });
+    if (!booking) return notFound("Booking not found");
+
+    return json(booking);
+  } catch (e) {
+    return error((e as Error).message, 500);
+  }
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -94,7 +118,7 @@ export async function PATCH(
         date,
         startTime,
         endTime,
-        priceInCents: slotPrice,
+        priceValue: slotPrice,
       },
       include: {
         court: { select: { id: true, label: true } },

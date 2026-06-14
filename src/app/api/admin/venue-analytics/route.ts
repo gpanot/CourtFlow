@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
           startTime: true,
           endTime: true,
           status: true,
-          priceInCents: true,
+          priceValue: true,
         },
       }),
       prisma.membership.findMany({
@@ -62,12 +62,12 @@ export async function GET(request: NextRequest) {
           activatedAt: true,
           sessionsUsed: true,
           createdAt: true,
-          tier: { select: { name: true, sessionsIncluded: true, priceInCents: true } },
+          tier: { select: { name: true, sessionsIncluded: true, priceValue: true } },
         },
       }),
       prisma.membershipTier.findMany({
         where: { venueId, isActive: true },
-        select: { id: true, name: true, priceInCents: true, sessionsIncluded: true },
+        select: { id: true, name: true, priceValue: true, sessionsIncluded: true },
         orderBy: { sortOrder: "asc" },
       }),
       prisma.staffPayment.findMany({
@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
           startTime: true,
           endTime: true,
           status: true,
-          priceInCents: true,
+          priceValue: true,
           paymentStatus: true,
           coach: { select: { name: true } },
           package: { select: { name: true, lessonType: true } },
@@ -155,7 +155,7 @@ export async function GET(request: NextRequest) {
           date: { gte: currentMonthStart, lte: currentMonthEnd },
           status: { in: ["confirmed", "completed"] },
         },
-        select: { date: true, priceInCents: true, startTime: true, endTime: true },
+        select: { date: true, priceValue: true, startTime: true, endTime: true },
       }),
       prisma.booking.findMany({
         where: {
@@ -163,7 +163,7 @@ export async function GET(request: NextRequest) {
           date: { gte: last90Start, lt: currentMonthStart },
           status: { in: ["confirmed", "completed"] },
         },
-        select: { date: true, priceInCents: true, startTime: true, endTime: true },
+        select: { date: true, priceValue: true, startTime: true, endTime: true },
       }),
       prisma.session.findMany({
         where: {
@@ -177,7 +177,7 @@ export async function GET(request: NextRequest) {
           venueId,
           date: { gte: prevMonthStart, lte: prevMonthEnd },
         },
-        select: { status: true, priceInCents: true, startTime: true, endTime: true },
+        select: { status: true, priceValue: true, startTime: true, endTime: true },
       }),
       prisma.coachLesson.findMany({
         where: {
@@ -198,14 +198,14 @@ export async function GET(request: NextRequest) {
     const monthHoursByDay: Record<number, number> = {};
     for (const b of monthBookings) {
       const day = new Date(b.date).getUTCDate();
-      monthRevenueByDay[day] = (monthRevenueByDay[day] || 0) + b.priceInCents;
+      monthRevenueByDay[day] = (monthRevenueByDay[day] || 0) + b.priceValue;
       monthHoursByDay[day] = (monthHoursByDay[day] || 0) +
         (new Date(b.endTime).getTime() - new Date(b.startTime).getTime()) / 3600000;
     }
 
     // 90-day daily averages for projection
     const last90Days = Math.max(1, Math.ceil((currentMonthStart.getTime() - last90Start.getTime()) / 86400000));
-    const totalRevenue90 = last90Bookings.reduce((s, b) => s + b.priceInCents, 0);
+    const totalRevenue90 = last90Bookings.reduce((s, b) => s + b.priceValue, 0);
     let totalHours90 = 0;
     for (const b of last90Bookings) {
       totalHours90 += (new Date(b.endTime).getTime() - new Date(b.startTime).getTime()) / 3600000;
@@ -266,7 +266,7 @@ export async function GET(request: NextRequest) {
 
     const utilizationPct = totalAvailableHours > 0 ? Math.round((totalBookedHours / totalAvailableHours) * 100) : 0;
 
-    const bookingRevenue = confirmedBookings.reduce((s, b) => s + b.priceInCents, 0);
+    const bookingRevenue = confirmedBookings.reduce((s, b) => s + b.priceValue, 0);
 
     // Bookings per day
     const bookingsByDate: Record<string, number> = {};
@@ -315,7 +315,7 @@ export async function GET(request: NextRequest) {
     const revenueByDow: Record<number, number> = { 0: 0, 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
     for (const b of confirmedBookings) {
       const dow = new Date(b.date).getUTCDay();
-      revenueByDow[dow] += b.priceInCents;
+      revenueByDow[dow] += b.priceValue;
     }
 
     // --- OPEN PLAY / COURTPAY SESSION OVERLAP ---
@@ -343,7 +343,7 @@ export async function GET(request: NextRequest) {
     // --- MONTH OVER MONTH COMPARISON ---
     const prevConfirmed = prevMonthBookings.filter((b) => b.status === "confirmed" || b.status === "completed");
     const prevCancelled = prevMonthBookings.filter((b) => b.status === "cancelled");
-    const prevRevenue = prevConfirmed.reduce((s, b) => s + b.priceInCents, 0);
+    const prevRevenue = prevConfirmed.reduce((s, b) => s + b.priceValue, 0);
     let prevBookedHours = 0;
     for (const b of prevConfirmed) {
       prevBookedHours += (new Date(b.endTime).getTime() - new Date(b.startTime).getTime()) / 3600000;
@@ -373,11 +373,11 @@ export async function GET(request: NextRequest) {
     for (const m of activeMembers) {
       if (tierBreakdown[m.tierId]) {
         tierBreakdown[m.tierId].count++;
-        tierBreakdown[m.tierId].revenue += m.tier.priceInCents;
+        tierBreakdown[m.tierId].revenue += m.tier.priceValue;
       }
     }
 
-    const membershipMRR = activeMembers.reduce((s, m) => s + m.tier.priceInCents, 0);
+    const membershipMRR = activeMembers.reduce((s, m) => s + m.tier.priceValue, 0);
 
     // New members in period
     const newMembers = memberships.filter(
@@ -413,7 +413,7 @@ export async function GET(request: NextRequest) {
       totalLessonHours += (new Date(l.endTime).getTime() - new Date(l.startTime).getTime()) / 3600000;
     }
 
-    const lessonRevenue = confirmedLessons.reduce((s, l) => s + l.priceInCents, 0);
+    const lessonRevenue = confirmedLessons.reduce((s, l) => s + l.priceValue, 0);
     const paidLessons = confirmedLessons.filter((l) => l.paymentStatus === "PAID");
     const unpaidLessons = confirmedLessons.filter((l) => l.paymentStatus === "UNPAID");
 
@@ -422,7 +422,7 @@ export async function GET(request: NextRequest) {
       if (!perCoach[l.coachId]) perCoach[l.coachId] = { name: l.coach.name, lessons: 0, hours: 0, revenue: 0 };
       perCoach[l.coachId].lessons++;
       perCoach[l.coachId].hours += (new Date(l.endTime).getTime() - new Date(l.startTime).getTime()) / 3600000;
-      perCoach[l.coachId].revenue += l.priceInCents;
+      perCoach[l.coachId].revenue += l.priceValue;
     }
 
     const lessonTypeBreakdown = { private: 0, group: 0 };
@@ -502,7 +502,7 @@ export async function GET(request: NextRequest) {
           },
           current: {
             bookings: monthBookings.length,
-            revenue: monthBookings.reduce((s, b) => s + b.priceInCents, 0),
+            revenue: monthBookings.reduce((s, b) => s + b.priceValue, 0),
             hours: Math.round(actualMonthHours * 10) / 10,
             utilPct: (() => {
               const curAvail = bookableCourtCount * hoursPerDayPerCourt * todayDate;

@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     const body = await parseBody<{
       venueId: string;
       name: string;
-      priceInCents: number;
+      priceValue: number;
       sessionsIncluded?: number | null;
       showBadge?: boolean;
       perks?: string[];
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
       data: {
         venueId: body.venueId,
         name: body.name,
-        priceInCents: body.priceInCents,
+        priceValue: body.priceValue,
         sessionsIncluded: body.sessionsIncluded ?? null,
         showBadge: body.showBadge ?? false,
         perks: body.perks ?? [],

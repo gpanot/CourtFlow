@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
             slotDurationMinutes: 60,
             bookingStartHour: 8,
             bookingEndHour: 22,
-            defaultPriceInCents: 0,
+            defaultPriceValue: 0,
             pricingRules: [],
             cancellationHours: 24,
           },

@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
         membership: {
           include: {
             player: { select: { id: true, name: true, phone: true } },
-            tier: { select: { id: true, name: true, priceInCents: true } },
+            tier: { select: { id: true, name: true, priceValue: true } },
           },
         },
       },

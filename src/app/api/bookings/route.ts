@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
         startTime,
         endTime,
         status: "confirmed",
-        priceInCents: slotPrice,
+        priceValue: slotPrice,
         coPlayerIds: body.coPlayerIds || [],
       },
       include: {

@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
         startTime,
         endTime,
         status: "confirmed",
-        priceInCents: totalPrice,
+        priceValue: totalPrice,
         coPlayerIds: body.coPlayerIds || [],
       },
       include: {

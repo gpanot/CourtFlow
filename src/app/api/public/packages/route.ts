@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
         venueId,
         packageId,
         totalSessions: quantity,
-        priceInCents: totalPrice,
+        priceValue: totalPrice,
         paymentRef,
         paymentStatus: "pending",
         expiresAt,

@@ -28,7 +28,7 @@ async function main() {
   });
   console.log("Staff:", staff.map((s) => `${s.name} (${s.id}) coach=${s.isCoach} venues=${s.venueAssignments.map((a) => a.venueId)}`));
 
-  const tiers = await prisma.membershipTier.findMany({ where: { venueId }, select: { id: true, name: true, priceInCents: true, sessionsIncluded: true, isActive: true } });
+  const tiers = await prisma.membershipTier.findMany({ where: { venueId }, select: { id: true, name: true, priceValue: true, sessionsIncluded: true, isActive: true } });
   console.log("Membership tiers:", tiers);
 
   const existingBookings = await prisma.booking.count({ where: { venueId } });
@@ -77,7 +77,7 @@ async function main() {
     courtId: string; venueId: string; playerId: string;
     date: Date; startTime: Date; endTime: Date;
     status: "confirmed" | "completed" | "cancelled";
-    priceInCents: number; coPlayerIds: string[];
+    priceValue: number; coPlayerIds: string[];
   }[] = [];
 
   const hoursPerDay = 12; // 6am to 6pm
@@ -130,7 +130,7 @@ async function main() {
           startTime,
           endTime,
           status: isCancelled ? "cancelled" : (isFuture ? "confirmed" : "completed"),
-          priceInCents: price,
+          priceValue: price,
           coPlayerIds: [],
         });
         filled++;
@@ -165,7 +165,7 @@ async function main() {
             name: "1-on-1 Session",
             lessonType: "private",
             durationMin: 60,
-            priceInCents: 50000,
+            priceValue: 50000,
             sessionsIncluded: 1,
             active: true,
           },
@@ -213,7 +213,7 @@ async function main() {
                 startTime,
                 endTime,
                 status: "completed",
-                priceInCents: price,
+                priceValue: price,
                 paymentStatus: isPaid ? "PAID" : "UNPAID",
               },
             });
@@ -233,18 +233,18 @@ async function main() {
   if (activeTiers.length === 0) {
     console.log("No membership tiers exist. Creating defaults...");
     const tierData = [
-      { name: "Silver", priceInCents: 25000000, sessionsIncluded: 8 },
-      { name: "Gold", priceInCents: 40000000, sessionsIncluded: null },
-      { name: "Platinum", priceInCents: 60000000, sessionsIncluded: null },
+      { name: "Silver", priceValue: 25000000, sessionsIncluded: 8 },
+      { name: "Gold", priceValue: 40000000, sessionsIncluded: null },
+      { name: "Platinum", priceValue: 60000000, sessionsIncluded: null },
     ];
     const maxSort = await prisma.membershipTier.aggregate({ where: { venueId }, _max: { sortOrder: true } });
     let sort = (maxSort._max.sortOrder ?? 0) + 1;
     for (const td of tierData) {
       await prisma.membershipTier.create({
-        data: { venueId, name: td.name, priceInCents: td.priceInCents, sessionsIncluded: td.sessionsIncluded, sortOrder: sort++, isActive: true },
+        data: { venueId, name: td.name, priceValue: td.priceValue, sessionsIncluded: td.sessionsIncluded, sortOrder: sort++, isActive: true },
       });
     }
-    activeTiers = await prisma.membershipTier.findMany({ where: { venueId, isActive: true }, select: { id: true, name: true, priceInCents: true, sessionsIncluded: true, isActive: true } });
+    activeTiers = await prisma.membershipTier.findMany({ where: { venueId, isActive: true }, select: { id: true, name: true, priceValue: true, sessionsIncluded: true, isActive: true } });
   }
 
   // Assign ~60% of players a membership

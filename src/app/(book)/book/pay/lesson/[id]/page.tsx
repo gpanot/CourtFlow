@@ -16,7 +16,7 @@ interface LessonDetail {
   id: string;
   paymentStatus: string;
   paymentRef: string | null;
-  priceInCents: number;
+  priceValue: number;
   startTime: string;
   coach: { name: string };
   court: { label: string } | null;
@@ -131,7 +131,7 @@ export default function LessonPaymentPage() {
 
   let qrUrl: string | null = null;
   if (bank && bank.bankName && bank.bankAccount && lesson.paymentRef) {
-    qrUrl = `https://img.vietqr.io/image/${bank.bankName}-${bank.bankAccount}-compact2.png?amount=${lesson.priceInCents}&addInfo=${encodeURIComponent(lesson.paymentRef)}&accountName=${encodeURIComponent(bank.bankOwnerName)}`;
+    qrUrl = `https://img.vietqr.io/image/${bank.bankName}-${bank.bankAccount}-compact2.png?amount=${lesson.priceValue}&addInfo=${encodeURIComponent(lesson.paymentRef)}&accountName=${encodeURIComponent(bank.bankOwnerName)}`;
   }
 
   return (
@@ -158,7 +158,7 @@ export default function LessonPaymentPage() {
       {qrUrl && (
         <div className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-4 text-center">
           <img src={qrUrl} alt="VietQR" className="w-60 h-60 mx-auto mb-3 rounded-lg" />
-          <p className="text-lg font-bold">{formatPrice(lesson.priceInCents)}</p>
+          <p className="text-lg font-bold">{formatPrice(lesson.priceValue)}</p>
           {bank && (
             <div className="mt-3 text-xs text-[var(--cm-text-sec)] space-y-1 text-left">
               <p>Bank: {bankNameFromBin(bank.bankName)}</p>

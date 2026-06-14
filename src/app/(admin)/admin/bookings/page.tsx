@@ -7,6 +7,11 @@ import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
 import {
+  EditBookingModal,
+  BookingStatusBadge,
+  PaymentStatusBadge,
+} from "@/components/admin/EditBookingModal";
+import {
   ChevronLeft,
   ChevronRight,
   Plus,
@@ -62,7 +67,7 @@ interface BookingRecord {
   status: "confirmed" | "cancelled" | "completed" | "no_show";
   paymentStatus: string | null;
   paymentProofUrl: string | null;
-  priceInCents: number;
+  priceValue: number;
   coPlayerIds: string[];
   cancelledAt: string | null;
   court: { id: string; label: string };
@@ -93,7 +98,7 @@ interface SlotInfo {
   startTime: string;
   endTime: string;
   hour: number;
-  priceInCents: number;
+  priceValue: number;
   available: boolean;
   block?: SlotBlockInfo;
   schedule?: SlotScheduleInfo;
@@ -166,7 +171,7 @@ export default function BookingsPage() {
 
   // Create booking state
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [createSlot, setCreateSlot] = useState<{ courtId: string; courtLabel: string; startTime: string; endTime: string; priceInCents: number } | null>(null);
+  const [createSlot, setCreateSlot] = useState<{ courtId: string; courtLabel: string; startTime: string; endTime: string; priceValue: number } | null>(null);
   const [playerSearch, setPlayerSearch] = useState("");
   const [playerResults, setPlayerResults] = useState<PlayerResult[]>([]);
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerResult | null>(null);
@@ -334,7 +339,7 @@ export default function BookingsPage() {
   })();
 
   const selectionTotalPrice = selectionCourtIds.reduce(
-    (sum, cid) => sum + selectedSlots[cid].slots.reduce((s, sl) => s + sl.priceInCents, 0), 0
+    (sum, cid) => sum + selectedSlots[cid].slots.reduce((s, sl) => s + sl.priceValue, 0), 0
   );
 
   const canBookFromSelection = (() => {
@@ -362,7 +367,7 @@ export default function BookingsPage() {
       courtLabel: entry.courtLabel,
       startTime: first.startTime,
       endTime: last.endTime,
-      priceInCents: selectionTotalPrice,
+      priceValue: selectionTotalPrice,
     });
     setNewCourtId(cid);
     setNewSlotTime(first.startTime);
@@ -409,7 +414,7 @@ export default function BookingsPage() {
     const court = availability.find((c) => c.courtId === courtId);
     if (!court) return null;
     const slot = court.slots.find((s) => s.startTime === startTime);
-    return slot?.priceInCents ?? null;
+    return slot?.priceValue ?? null;
   };
 
   const createBooking = async () => {
@@ -729,14 +734,14 @@ export default function BookingsPage() {
         const getSlotLabel = (court: CourtSlotData, slot: SlotInfo, rowIdx: number) => {
           const courtSlot = court.slots[rowIdx];
           const booking = bookingsByCourtAndTime.get(`${court.courtId}_${slot.startTime}`);
-          if (booking) return { type: "booking" as const, label: booking.player.name, sub: fmtPrice(booking.priceInCents) };
+          if (booking) return { type: "booking" as const, label: booking.player.name, sub: fmtPrice(booking.priceValue) };
           const blockInfo = courtSlot?.block;
           if (blockInfo) return { type: "block" as const, label: blockInfo.title || BLOCK_LABELS[blockInfo.type] || blockInfo.type, sub: blockInfo.type };
           const schedInfo = courtSlot?.schedule;
           if (schedInfo) return { type: "schedule" as const, label: schedInfo.title || BLOCK_LABELS[schedInfo.type], sub: schedInfo.type };
           const lessonInfo = courtSlot?.lesson;
           if (lessonInfo) return { type: "lesson" as const, label: lessonInfo.coachName, sub: lessonInfo.playerName };
-          if (courtSlot?.available) return { type: "available" as const, label: fmtPrice(courtSlot.priceInCents), sub: "" };
+          if (courtSlot?.available) return { type: "available" as const, label: fmtPrice(courtSlot.priceValue), sub: "" };
           return { type: "unavailable" as const, label: "", sub: "" };
         };
 
@@ -910,7 +915,7 @@ export default function BookingsPage() {
                                 {formatTime(booking.startTime)} – {formatTime(booking.endTime)}
                               </p>
                               {bookingSlotSpan > 1 && (
-                                <p className="text-[10px] text-purple-400/50">{fmtPrice(booking.priceInCents)}</p>
+                                <p className="text-[10px] text-purple-400/50">{fmtPrice(booking.priceValue)}</p>
                               )}
                               {booking.status === "confirmed" && (
                                 <div className="absolute right-1 top-1 hidden gap-0.5 group-hover:flex">
@@ -1031,7 +1036,7 @@ export default function BookingsPage() {
                                   : "border-dashed border-neutral-800/60 text-neutral-600 hover:border-purple-500/40 hover:bg-purple-600/5 hover:text-purple-400"
                               )}
                             >
-                              <span className="text-[10px]">{fmtPrice(courtSlot.priceInCents)}</span>
+                              <span className="text-[10px]">{fmtPrice(courtSlot.priceValue)}</span>
                             </button>
                           ) : (
                             <div className="absolute inset-x-1 top-1 bottom-1 rounded-lg bg-neutral-800/20" />
@@ -1084,7 +1089,7 @@ export default function BookingsPage() {
                   <div className="flex items-center gap-3 mt-1 text-xs text-neutral-400">
                     <span>{b.court.label}</span>
                     <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{formatTime(b.startTime)} – {formatTime(b.endTime)}</span>
-                    <span>{fmtPrice(b.priceInCents)}</span>
+                    <span>{fmtPrice(b.priceValue)}</span>
                     {b.coPlayerIds.length > 0 && <span>+{b.coPlayerIds.length} co-player{b.coPlayerIds.length > 1 ? "s" : ""}</span>}
                     {b.paymentProofUrl && b.paymentProofUrl !== "pending_proof" && (
                       <a href={b.paymentProofUrl} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 underline">View proof</a>
@@ -1183,7 +1188,7 @@ export default function BookingsPage() {
                   <option value="">{t("bookings.selectTime")}</option>
                   {availableSlotsForCourt(newCourtId).map((s) => (
                     <option key={s.startTime} value={s.startTime}>
-                      {formatTime(s.startTime)} – {formatTime(s.endTime)}  ({fmtPrice(s.priceInCents)})
+                      {formatTime(s.startTime)} – {formatTime(s.endTime)}  ({fmtPrice(s.priceValue)})
                     </option>
                   ))}
                 </select>
@@ -1198,7 +1203,7 @@ export default function BookingsPage() {
                   {formatTime(createSlot.startTime)} – {formatTime(createSlot.endTime)}
                   <span className="ml-1.5 text-neutral-500">({selectionTotalSlots} slots)</span>
                 </p>
-                <p className="font-semibold text-purple-400">{fmtPrice(createSlot.priceInCents)}</p>
+                <p className="font-semibold text-purple-400">{fmtPrice(createSlot.priceValue)}</p>
               </div>
             ) : newCourtId && newSlotTime ? (
               <div className="rounded-lg bg-neutral-800 p-3 text-sm">
@@ -1261,121 +1266,25 @@ export default function BookingsPage() {
 
       {/* Edit Booking Modal */}
       {editBooking && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={closeEditModal}>
-          <div className="w-full max-w-md mx-4 rounded-2xl border border-neutral-700 bg-neutral-900 p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold">{t("bookings.editBooking")}</h3>
-
-            <div className="rounded-lg bg-neutral-800 p-3 text-sm">
-              <p className="font-medium text-purple-300">{editBooking.player.name}</p>
-              <p className="text-xs text-neutral-500">{editBooking.player.phone}</p>
-            </div>
-
-            {/* Court selector */}
-            <div className="space-y-2">
-              <label className="text-xs text-neutral-400">{t("bookings.court")}</label>
-              <select
-                value={editCourtId}
-                onChange={(e) => { setEditCourtId(e.target.value); setEditSlotTime(""); }}
-                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
-              >
-                {availability.map((c) => (
-                  <option key={c.courtId} value={c.courtId}>{c.courtLabel}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Time slot selector */}
-            <div className="space-y-2">
-              <label className="text-xs text-neutral-400">{t("bookings.timeSlot")}</label>
-              <select
-                value={editSlotTime}
-                onChange={(e) => setEditSlotTime(e.target.value)}
-                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
-              >
-                {availableSlotsForCourt(editCourtId, editBooking.startTime).map((s) => (
-                  <option key={s.startTime} value={s.startTime}>
-                    {formatTime(s.startTime)} – {formatTime(s.endTime)}  ({fmtPrice(s.priceInCents)})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Price preview */}
-            {editSlotTime && getSlotPrice(editCourtId, editSlotTime) !== null && (
-              <p className="text-sm text-neutral-400">
-                {t("bookings.newPrice")}: <span className="font-semibold text-purple-400">{fmtPrice(getSlotPrice(editCourtId, editSlotTime)!)}</span>
-              </p>
-            )}
-
-            {/* Payment proof link */}
-            {editBooking.paymentProofUrl && editBooking.paymentProofUrl !== "pending_proof" && (
-              <a
-                href={editBooking.paymentProofUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 underline"
-              >
-                View payment proof
-              </a>
-            )}
-
-            {/* Status badges */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <BookingStatusBadge status={editBooking.status} />
-              {editBooking.paymentStatus && <PaymentStatusBadge status={editBooking.paymentStatus} />}
-            </div>
-
-            {/* Action dropdown */}
-            <div className="space-y-1.5">
-              <label className="text-xs text-neutral-400">Action</label>
-              <div className="flex gap-2">
-                <select
-                  id="edit-booking-action"
-                  defaultValue=""
-                  className="flex-1 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
-                  onChange={async (e) => {
-                    const val = e.target.value;
-                    if (!val) return;
-                    e.target.value = "";
-                    if (val === "approve_payment") {
-                      await approvePayment(editBooking.id);
-                      closeEditModal();
-                    } else if (val === "cancelled") {
-                      closeEditModal();
-                      await cancelBooking(editBooking.id);
-                    } else if (val === "no_show") {
-                      closeEditModal();
-                      await markNoShow(editBooking.id);
-                    }
-                  }}
-                >
-                  <option value="">— Select an action —</option>
-                  {editBooking.paymentStatus === "proof_submitted" && (
-                    <option value="approve_payment">✓ Approve payment</option>
-                  )}
-                  {editBooking.status === "confirmed" && (
-                    <>
-                      <option value="cancelled">✕ Cancel booking</option>
-                      <option value="no_show">⚠ Mark as no-show</option>
-                    </>
-                  )}
-                </select>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={saveEdit}
-                disabled={saving}
-                className="flex-1 rounded-xl bg-purple-600 py-3 font-semibold text-white hover:bg-purple-500 disabled:opacity-40"
-              >{saving ? t("common.saving") : t("common.saveChanges")}</button>
-              <button
-                onClick={closeEditModal}
-                className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
-              >{t("common.cancel")}</button>
-            </div>
-          </div>
-        </div>
+        <EditBookingModal
+          booking={editBooking}
+          availability={availability}
+          editCourtId={editCourtId}
+          editSlotTime={editSlotTime}
+          saving={saving}
+          onCourtChange={(id) => { setEditCourtId(id); setEditSlotTime(""); }}
+          onSlotChange={setEditSlotTime}
+          onSave={saveEdit}
+          onClose={closeEditModal}
+          onApprovePayment={() => { approvePayment(editBooking.id).then(closeEditModal); }}
+          onCancel={() => { closeEditModal(); cancelBooking(editBooking.id); }}
+          onNoShow={() => { closeEditModal(); markNoShow(editBooking.id); }}
+          getSlotPrice={getSlotPrice}
+          availableSlotsForCourt={availableSlotsForCourt}
+          formatTime={formatTime}
+          formatPrice={fmtPrice}
+          t={t}
+        />
       )}
 
       {/* Block Time Modal */}
@@ -1495,41 +1404,13 @@ export default function BookingsPage() {
   );
 }
 
-function BookingStatusBadge({ status }: { status: string }) {
-  return (
-    <span className={cn(
-      "inline-block rounded-full px-2 py-0.5 text-[10px] font-medium capitalize",
-      status === "confirmed" && "bg-green-600/20 text-green-400",
-      status === "cancelled" && "bg-red-600/20 text-red-400",
-      status === "completed" && "bg-blue-600/20 text-blue-400",
-      status === "no_show" && "bg-amber-600/20 text-amber-400",
-    )}>
-      {status === "no_show" ? "No Show" : status}
-    </span>
-  );
-}
-
-function PaymentStatusBadge({ status }: { status: string }) {
-  const map: Record<string, { cls: string; label: string }> = {
-    pending: { cls: "bg-yellow-600/20 text-yellow-400", label: "Payment pending" },
-    proof_submitted: { cls: "bg-orange-600/20 text-orange-400 animate-pulse", label: "Proof submitted" },
-    paid: { cls: "bg-green-600/20 text-green-400", label: "Paid" },
-  };
-  const info = map[status] ?? { cls: "bg-neutral-600/20 text-neutral-400", label: status };
-  return (
-    <span className={cn("inline-block rounded-full px-2 py-0.5 text-[10px] font-medium", info.cls)}>
-      {info.label}
-    </span>
-  );
-}
-
 /* ───────── Booking Config ───────── */
 
 interface PricingRule {
   dayOfWeek: number;
   startHour: number;
   endHour: number;
-  priceInCents: number;
+  priceValue: number;
 }
 
 type PriceGrid = (number | null)[][];
@@ -1539,12 +1420,27 @@ const DAY_LABELS: Record<number, string> = { 0: "Sunday", 1: "Monday", 2: "Tuesd
 
 function parseCfg(settings: VenueSettings) {
   const raw = (settings.bookingConfig as Record<string, unknown>) || {};
+  const pricingRules = Array.isArray(raw.pricingRules)
+    ? (raw.pricingRules as Record<string, unknown>[]).map((rule) => ({
+        dayOfWeek: rule.dayOfWeek as number,
+        startHour: rule.startHour as number,
+        endHour: rule.endHour as number,
+        priceValue:
+          (rule.priceValue as number) ??
+          (rule.priceInCents as number) ??
+          0,
+      }))
+    : [];
   return {
     slotDurationMinutes: (raw.slotDurationMinutes as number) ?? 60,
     bookingStartHour: (raw.bookingStartHour as number) ?? 8,
     bookingEndHour: (raw.bookingEndHour as number) ?? 22,
-    defaultPriceInCents: (raw.defaultPriceInCents as number) ?? (raw.pricePerSlotCents as number) ?? 0,
-    pricingRules: ((raw.pricingRules as PricingRule[]) ?? []),
+    defaultPriceValue:
+      (raw.defaultPriceValue as number) ??
+      (raw.defaultPriceInCents as number) ??
+      (raw.pricePerSlotCents as number) ??
+      0,
+    pricingRules,
     cancellationHours: (raw.cancellationHours as number) ?? 24,
   };
 }
@@ -1553,7 +1449,7 @@ function rulesToGrid(rules: PricingRule[]): PriceGrid {
   const grid: PriceGrid = Array.from({ length: 7 }, () => Array(24).fill(null));
   for (const r of rules) {
     for (let h = r.startHour; h < r.endHour && h < 24; h++) {
-      grid[r.dayOfWeek][h] = r.priceInCents;
+      grid[r.dayOfWeek][h] = r.priceValue;
     }
   }
   return grid;
@@ -1568,7 +1464,7 @@ function gridToRules(grid: PriceGrid, startHour: number, endHour: number): Prici
       if (price === null) { h++; continue; }
       let end = h + 1;
       while (end < endHour && grid[day][end] === price) end++;
-      rules.push({ dayOfWeek: day, startHour: h, endHour: end, priceInCents: price });
+      rules.push({ dayOfWeek: day, startHour: h, endHour: end, priceValue: price });
       h = end;
     }
   }
@@ -1601,12 +1497,12 @@ function BookingConfigSection({
 
   const centsToDollars = (c: number) => c;
   const dollarsToCents = (d: number) => d;
-  const resolve = (cell: number | null) => cell ?? bCfg.defaultPriceInCents;
+  const resolve = (cell: number | null) => cell ?? bCfg.defaultPriceValue;
 
   const updateCell = (day: number, hour: number, cents: number) => {
     setGrid((prev) => {
       const next = prev.map((row) => [...row]);
-      next[day][hour] = cents === bCfg.defaultPriceInCents ? null : cents;
+      next[day][hour] = cents === bCfg.defaultPriceValue ? null : cents;
       return next;
     });
     setDirty(true);
@@ -1625,7 +1521,7 @@ function BookingConfigSection({
   };
 
   const fillDay = (day: number, cents: number) => {
-    const val = cents === bCfg.defaultPriceInCents ? null : cents;
+    const val = cents === bCfg.defaultPriceValue ? null : cents;
     setGrid((prev) => {
       const next = prev.map((row) => [...row]);
       for (let h = bCfg.bookingStartHour; h < bCfg.bookingEndHour; h++) {
@@ -1693,8 +1589,8 @@ function BookingConfigSection({
             </div>
             <div>
               <label className="text-[10px] text-neutral-500">{t("bookings.defaultPrice")}</label>
-              <input type="text" inputMode="numeric" value={centsToDollars(bCfg.defaultPriceInCents).toLocaleString("en-US")}
-                onChange={(e) => { const v = parseInt(e.target.value.replace(/[^0-9]/g, "") || "0", 10); setBCfg({ ...bCfg, defaultPriceInCents: dollarsToCents(v) }); setDirty(true); }} className={inputCls} />
+              <input type="text" inputMode="numeric" value={centsToDollars(bCfg.defaultPriceValue).toLocaleString("en-US")}
+                onChange={(e) => { const v = parseInt(e.target.value.replace(/[^0-9]/g, "") || "0", 10); setBCfg({ ...bCfg, defaultPriceValue: dollarsToCents(v) }); setDirty(true); }} className={inputCls} />
             </div>
           </div>
         </div>
@@ -1738,7 +1634,7 @@ function BookingConfigSection({
                     })}
                     <td className="px-0.5 py-0.5">
                       <div className="flex gap-0.5">
-                        <button onClick={() => { const val = prompt(`Set all ${DAY_LABELS[day]} slots ($):`, String(centsToDollars(bCfg.defaultPriceInCents))); if (val !== null) fillDay(day, dollarsToCents(Math.max(0, parseInt(val.replace(/[^0-9]/g, "") || "0", 10)))); }}
+                        <button onClick={() => { const val = prompt(`Set all ${DAY_LABELS[day]} slots ($):`, String(centsToDollars(bCfg.defaultPriceValue))); if (val !== null) fillDay(day, dollarsToCents(Math.max(0, parseInt(val.replace(/[^0-9]/g, "") || "0", 10)))); }}
                           className="rounded px-1.5 py-1 text-[9px] text-neutral-500 hover:bg-neutral-700 hover:text-neutral-300" title={`Fill all ${DAY_LABELS[day]} slots`}>Fill</button>
                         <button onClick={() => { if (confirm(`Copy ${DAY_LABELS[day]} prices to all days?`)) copyDayToAll(day); }}
                           className="rounded px-1.5 py-1 text-[9px] text-neutral-500 hover:bg-neutral-700 hover:text-neutral-300" title={`Copy ${DAY_LABELS[day]} to all days`}>Copy→All</button>

@@ -77,7 +77,7 @@ async function handlePortalBookingPayment(
 ): Promise<{ matched: boolean; paymentId?: string }> {
   const booking = await prisma.booking.findFirst({ where: { paymentRef: ref } });
   if (!booking || booking.paymentStatus !== "pending") return { matched: false };
-  if (payload.transferAmount < booking.priceInCents) return { matched: false };
+  if (payload.transferAmount < booking.priceValue) return { matched: false };
   if (!(await checkVenueAutoPayment(booking.venueId))) return { matched: false };
 
   await prisma.booking.update({
@@ -93,7 +93,7 @@ async function handlePortalLessonPayment(
 ): Promise<{ matched: boolean; paymentId?: string }> {
   const lesson = await prisma.coachLesson.findFirst({ where: { paymentRef: ref } });
   if (!lesson || lesson.paymentStatus !== "pending") return { matched: false };
-  if (payload.transferAmount < lesson.priceInCents) return { matched: false };
+  if (payload.transferAmount < lesson.priceValue) return { matched: false };
   if (!(await checkVenueAutoPayment(lesson.venueId))) return { matched: false };
 
   await prisma.coachLesson.update({
@@ -109,7 +109,7 @@ async function handlePortalCreditPayment(
 ): Promise<{ matched: boolean; paymentId?: string }> {
   const credit = await prisma.playerCoachCredit.findFirst({ where: { paymentRef: ref } });
   if (!credit || credit.paymentStatus !== "pending") return { matched: false };
-  if (payload.transferAmount < credit.priceInCents) return { matched: false };
+  if (payload.transferAmount < credit.priceValue) return { matched: false };
   if (!(await checkVenueAutoPayment(credit.venueId))) return { matched: false };
 
   await prisma.playerCoachCredit.update({

@@ -53,7 +53,7 @@ export async function PATCH(
         await prisma.membershipPayment.update({
           where: { id: currentPayment.id },
           data: {
-            amountInCents: newTier.priceInCents,
+            amountValue: newTier.priceValue,
             note: `Tier changed from ${existing.tier.name} to ${newTier.name}`,
           },
         });

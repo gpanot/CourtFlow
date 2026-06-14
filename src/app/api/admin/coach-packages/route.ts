@@ -40,12 +40,12 @@ export async function POST(request: NextRequest) {
       description?: string;
       lessonType: "private" | "group";
       durationMin: number;
-      priceInCents: number;
+      priceValue: number;
       sessionsIncluded?: number;
     }>(request);
 
-    if (!body.coachId || !body.venueId || !body.name || !body.lessonType || !body.durationMin || body.priceInCents == null) {
-      return error("coachId, venueId, name, lessonType, durationMin, and priceInCents are required", 400);
+    if (!body.coachId || !body.venueId || !body.name || !body.lessonType || !body.durationMin || body.priceValue == null) {
+      return error("coachId, venueId, name, lessonType, durationMin, and priceValue are required", 400);
     }
 
     const coach = await prisma.staffMember.findUnique({
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
         description: body.description || null,
         lessonType: body.lessonType,
         durationMin: body.durationMin,
-        priceInCents: body.priceInCents,
+        priceValue: body.priceValue,
         sessionsIncluded: body.sessionsIncluded ?? 1,
       },
       include: {

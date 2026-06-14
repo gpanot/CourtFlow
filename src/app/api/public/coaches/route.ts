@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
           select: {
             id: true,
             name: true,
-            priceInCents: true,
+            priceValue: true,
             durationMin: true,
             lessonType: true,
             sessionsIncluded: true,
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
       packages: c.coachPackages,
       sessionsCompleted: c._count.coachLessons,
       startingPrice: c.coachPackages.length > 0
-        ? Math.min(...c.coachPackages.map((p) => p.priceInCents))
+        ? Math.min(...c.coachPackages.map((p) => p.priceValue))
         : 0,
     }));
 

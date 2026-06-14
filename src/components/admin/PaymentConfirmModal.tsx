@@ -8,7 +8,7 @@ import { Upload, Image as ImageIcon, Trash2, Undo2, X } from "lucide-react";
 export interface PaymentModalData {
   entityId: string;
   label: string;
-  amountInCents: number;
+  amountValue: number;
   currentStatus: "UNPAID" | "PAID" | "OVERDUE";
   existingProofUrl: string | null;
   paymentMethod: string | null;
@@ -18,7 +18,7 @@ export interface PaymentModalData {
 
 export interface PaymentConfirmResult {
   status: "PAID" | "UNPAID";
-  amountInCents: number;
+  amountValue: number;
   paymentMethod: string;
   paidAt?: string;
   note?: string;
@@ -52,7 +52,7 @@ async function uploadFile(file: File): Promise<string> {
 
 export function PaymentConfirmModal({ data, accentColor = "green", onConfirm, onRevert, onClose }: Props) {
   const [form, setForm] = useState({
-    amount: String(data.amountInCents / 100),
+    amount: String(data.amountValue),
     method: data.paymentMethod || "cash",
     date: (() => {
       const d = data.paidAt ? new Date(data.paidAt) : new Date();
@@ -101,7 +101,7 @@ export function PaymentConfirmModal({ data, accentColor = "green", onConfirm, on
 
       await onConfirm(data.entityId, {
         status: "PAID",
-        amountInCents: Math.round((Number(form.amount) || 0) * 100),
+        amountValue: Math.round(Number(form.amount.replace(/[^0-9]/g, "")) || 0),
         paymentMethod: form.method,
         paidAt: form.date || undefined,
         note: form.note || undefined,
@@ -157,7 +157,7 @@ export function PaymentConfirmModal({ data, accentColor = "green", onConfirm, on
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-neutral-400">Amount ($)</label>
+              <label className="text-xs text-neutral-400">Amount (VND)</label>
               <input
                 type="text"
                 inputMode="decimal"

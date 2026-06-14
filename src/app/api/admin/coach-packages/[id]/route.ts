@@ -17,7 +17,7 @@ export async function PATCH(
       description?: string | null;
       lessonType?: "private" | "group";
       durationMin?: number;
-      priceInCents?: number;
+      priceValue?: number;
       sessionsIncluded?: number;
       active?: boolean;
       sortOrder?: number;
@@ -33,7 +33,7 @@ export async function PATCH(
         ...(body.description !== undefined && { description: body.description }),
         ...(body.lessonType !== undefined && { lessonType: body.lessonType }),
         ...(body.durationMin !== undefined && { durationMin: body.durationMin }),
-        ...(body.priceInCents !== undefined && { priceInCents: body.priceInCents }),
+        ...(body.priceValue !== undefined && { priceValue: body.priceValue }),
         ...(body.sessionsIncluded !== undefined && { sessionsIncluded: body.sessionsIncluded }),
         ...(body.active !== undefined && { active: body.active }),
         ...(body.sortOrder !== undefined && { sortOrder: body.sortOrder }),

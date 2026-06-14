@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
         bookingEndHour: config.bookingEndHour,
         cancellationHours: config.cancellationHours,
         pricingRules: config.pricingRules,
-        defaultPriceInCents: config.defaultPriceInCents,
+        defaultPriceValue: config.defaultPriceValue,
       },
       bankName: venue.bankName,
       bankAccount: venue.bankAccount,

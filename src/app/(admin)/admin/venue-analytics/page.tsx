@@ -122,8 +122,12 @@ function localISO(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function fmtPrice(cents: number) {
-  return `$${Math.round(cents / 100).toLocaleString("en-US")}`;
+function fmtPrice(value: number) {
+  return new Intl.NumberFormat("vi-VN").format(value);
+}
+
+function fmtUsd(dollars: number) {
+  return `$${dollars.toLocaleString("en-US")}`;
 }
 
 function getRangeDates(key: RangeKey): { from: string; to: string } {
@@ -729,7 +733,7 @@ export default function VenueAnalyticsPage() {
                       </div>
                       <div className="text-right">
                         <p className="text-sm tabular-nums text-neutral-300">{s.hours}h</p>
-                        {s.cost > 0 && <p className="text-[10px] tabular-nums text-neutral-500">{fmtPrice(s.cost * 100)}</p>}
+                        {s.cost > 0 && <p className="text-[10px] tabular-nums text-neutral-500">{fmtUsd(s.cost)}</p>}
                       </div>
                     </div>
                   ))}

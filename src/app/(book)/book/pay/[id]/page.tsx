@@ -16,7 +16,7 @@ interface BookingDetail {
   id: string;
   paymentStatus: string | null;
   paymentRef: string | null;
-  priceInCents: number;
+  priceValue: number;
   holdExpiresAt: string | null;
   court: { label: string } | null;
   startTime: string;
@@ -206,7 +206,7 @@ export default function PaymentPage() {
 
   let qrUrl: string | null = null;
   if (venueInfo && venueInfo.bankName && venueInfo.bankAccount && booking.paymentRef) {
-    qrUrl = `https://img.vietqr.io/image/${venueInfo.bankName}-${venueInfo.bankAccount}-compact2.png?amount=${booking.priceInCents}&addInfo=${encodeURIComponent(booking.paymentRef)}&accountName=${encodeURIComponent(venueInfo.bankOwnerName)}`;
+    qrUrl = `https://img.vietqr.io/image/${venueInfo.bankName}-${venueInfo.bankAccount}-compact2.png?amount=${booking.priceValue}&addInfo=${encodeURIComponent(booking.paymentRef)}&accountName=${encodeURIComponent(venueInfo.bankOwnerName)}`;
   }
 
   const minutes = Math.floor(secondsLeft / 60);
@@ -255,7 +255,7 @@ export default function PaymentPage() {
           {new Date(booking.date).toLocaleDateString("en-US", { year: "numeric", month: "2-digit", day: "2-digit" })} · {booking.court?.label} {fmtTime(booking.startTime)} · {booking.court?.label} {fmtTime(booking.endTime)}
         </p>
         <p className="text-sm font-semibold text-[var(--cm-accent)] mt-1">
-          {formatPrice(booking.priceInCents)}
+          {formatPrice(booking.priceValue)}
         </p>
       </div>
 

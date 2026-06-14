@@ -56,14 +56,14 @@ function ConfirmContent() {
     const vq = playerVenueId ? `&venueId=${playerVenueId}` : "";
     fetch(`/api/public/availability?date=${dateStr}${vq}`)
       .then((r) => r.json())
-      .then((courts: { courtId: string; courtLabel: string; slots: { startTime: string; hour: number; priceInCents: number }[] }[]) => {
+      .then((courts: { courtId: string; courtLabel: string; slots: { startTime: string; hour: number; priceValue: number }[] }[]) => {
         const c = courts.find((c) => c.courtId === courtId);
         if (c) {
           setCourtLabel(c.courtLabel);
           const prices: { hour: number; price: number }[] = [];
           for (const st of slotTimes) {
             const matched = c.slots.find((s) => s.startTime === st.start.toISOString());
-            if (matched) prices.push({ hour: matched.hour, price: matched.priceInCents });
+            if (matched) prices.push({ hour: matched.hour, price: matched.priceValue });
           }
           setSlotPrices(prices);
         }

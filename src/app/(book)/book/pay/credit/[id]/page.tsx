@@ -16,7 +16,7 @@ interface CreditDetail {
   id: string;
   paymentStatus: string;
   paymentRef: string | null;
-  priceInCents: number;
+  priceValue: number;
   totalSessions: number;
   coach: { name: string };
   package: { name: string };
@@ -130,7 +130,7 @@ export default function CreditPaymentPage() {
 
   let qrUrl: string | null = null;
   if (bank && bank.bankName && bank.bankAccount && credit.paymentRef) {
-    qrUrl = `https://img.vietqr.io/image/${bank.bankName}-${bank.bankAccount}-compact2.png?amount=${credit.priceInCents}&addInfo=${encodeURIComponent(credit.paymentRef)}&accountName=${encodeURIComponent(bank.bankOwnerName)}`;
+    qrUrl = `https://img.vietqr.io/image/${bank.bankName}-${bank.bankAccount}-compact2.png?amount=${credit.priceValue}&addInfo=${encodeURIComponent(credit.paymentRef)}&accountName=${encodeURIComponent(bank.bankOwnerName)}`;
   }
 
   return (
@@ -157,7 +157,7 @@ export default function CreditPaymentPage() {
       {qrUrl && (
         <div className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-4 text-center">
           <img src={qrUrl} alt="VietQR" className="w-60 h-60 mx-auto mb-3 rounded-lg" />
-          <p className="text-lg font-bold">{formatPrice(credit.priceInCents)}</p>
+          <p className="text-lg font-bold">{formatPrice(credit.priceValue)}</p>
           {bank && (
             <div className="mt-3 text-xs text-[var(--cm-text-sec)] space-y-1 text-left">
               <p>Bank: {bankNameFromBin(bank.bankName)}</p>

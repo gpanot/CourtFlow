@@ -45,7 +45,7 @@ interface Tier {
   id: string;
   venueId: string;
   name: string;
-  priceInCents: number;
+  priceValue: number;
   sessionsIncluded: number | null;
   showBadge: boolean;
   perks: string[];
@@ -59,7 +59,7 @@ interface PaymentRecord {
   membershipId: string;
   periodStart: string;
   periodEnd: string;
-  amountInCents: number;
+  amountValue: number;
   status: string;
   paidAt: string | null;
   paymentMethod: string | null;
@@ -78,7 +78,7 @@ interface MembershipRecord {
   renewalDate: string;
   sessionsUsed: number;
   player: { id: string; name: string; phone: string; avatar: string };
-  tier: { id: string; name: string; sessionsIncluded: number | null; showBadge: boolean; priceInCents: number };
+  tier: { id: string; name: string; sessionsIncluded: number | null; showBadge: boolean; priceValue: number };
   latestPayment: PaymentRecord | null;
   currentPaymentStatus: string | null;
 }
@@ -192,7 +192,7 @@ export default function MembershipsPage() {
       await api.post("/api/admin/membership-tiers", {
         venueId: selectedVenueId,
         name: tierForm.name.trim(),
-        priceInCents: parseInt(tierForm.price.replace(/[^0-9]/g, "") || "0", 10) * 100,
+        priceValue: parseInt(tierForm.price.replace(/[^0-9]/g, "") || "0", 10),
         sessionsIncluded: tierForm.sessionsIncluded === "" ? null : Number(tierForm.sessionsIncluded),
         showBadge: tierForm.showBadge,
         perks: tierForm.perks,
@@ -207,7 +207,7 @@ export default function MembershipsPage() {
     try {
       await api.patch(`/api/admin/membership-tiers/${id}`, {
         name: editTierForm.name.trim(),
-        priceInCents: parseInt(editTierForm.price.replace(/[^0-9]/g, "") || "0", 10) * 100,
+        priceValue: parseInt(editTierForm.price.replace(/[^0-9]/g, "") || "0", 10),
         sessionsIncluded: editTierForm.sessionsIncluded === "" ? null : Number(editTierForm.sessionsIncluded),
         showBadge: editTierForm.showBadge,
         perks: editTierForm.perks,
@@ -258,7 +258,7 @@ export default function MembershipsPage() {
     setPaymentModalData({
       entityId: p.id,
       label: m.player.name,
-      amountInCents: p.amountInCents,
+      amountValue: p.amountValue,
       currentStatus: (m.currentPaymentStatus === "PAID" ? "PAID" : m.currentPaymentStatus === "OVERDUE" ? "OVERDUE" : "UNPAID") as "PAID" | "UNPAID" | "OVERDUE",
       existingProofUrl: p.proofUrl,
       paymentMethod: p.paymentMethod,
@@ -270,7 +270,7 @@ export default function MembershipsPage() {
   const handleMemberPaymentConfirm = async (entityId: string, result: PaymentConfirmResult) => {
     await api.patch(`/api/admin/membership-payments/${entityId}`, {
       status: result.status,
-      amountInCents: result.amountInCents,
+      amountValue: result.amountValue,
       paymentMethod: result.paymentMethod,
       paidAt: result.paidAt,
       note: result.note,
@@ -350,7 +350,7 @@ export default function MembershipsPage() {
 
   const activeTiers = tiers.filter((t) => t.isActive);
   const allPerks = [...new Set(tiers.flatMap((t) => (t.perks as string[]) || []))];
-  const fmtPrice = (cents: number) => `$${Math.round(cents / 100).toLocaleString("en-US")}`;
+  const fmtPrice = (value: number) => new Intl.NumberFormat("vi-VN").format(value);
   const fmtDate = (d: string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   const selectedVenueSettings = venues.find((v) => v.id === selectedVenueId)?.settings;
 
@@ -479,11 +479,11 @@ export default function MembershipsPage() {
                       {tier.showBadge && <Crown className="h-4 w-4 text-amber-400" />}
                       <h4 className="font-semibold">{tier.name}</h4>
                     </div>
-                    <p className="text-lg font-bold text-purple-400">{fmtPrice(tier.priceInCents)}<span className="text-xs font-normal text-neutral-500">/mo</span></p>
+                    <p className="text-lg font-bold text-purple-400">{fmtPrice(tier.priceValue)}<span className="text-xs font-normal text-neutral-500">/mo</span></p>
                   </div>
                   <div className="flex gap-1">
                     <button
-                      onClick={() => { setEditingTierId(tier.id); setEditTierForm({ name: tier.name, price: Math.round(tier.priceInCents / 100).toLocaleString("en-US"), sessionsIncluded: tier.sessionsIncluded === null ? "" : String(tier.sessionsIncluded), showBadge: tier.showBadge, perks: (tier.perks as string[]) || [] }); }}
+                      onClick={() => { setEditingTierId(tier.id); setEditTierForm({ name: tier.name, price: tier.priceValue.toLocaleString("vi-VN"), sessionsIncluded: tier.sessionsIncluded === null ? "" : String(tier.sessionsIncluded), showBadge: tier.showBadge, perks: (tier.perks as string[]) || [] }); }}
                       className="rounded p-1.5 text-neutral-500 hover:bg-neutral-800 hover:text-white"
                     ><Pencil className="h-3.5 w-3.5" /></button>
                     <button
@@ -586,7 +586,7 @@ export default function MembershipsPage() {
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none">
                   <option value="">{t("memberships.selectTier")}</option>
                   {activeTiers.map((tier) => (
-                    <option key={tier.id} value={tier.id}>{tier.name} — {fmtPrice(tier.priceInCents)}/mo</option>
+                    <option key={tier.id} value={tier.id}>{tier.name} — {fmtPrice(tier.priceValue)}/mo</option>
                   ))}
                 </select>
               </div>
@@ -732,7 +732,7 @@ export default function MembershipsPage() {
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none">
                   {activeTiers.map((tier) => (
                     <option key={tier.id} value={tier.id}>
-                      {tier.name} — {fmtPrice(tier.priceInCents)}/mo
+                      {tier.name} — {fmtPrice(tier.priceValue)}/mo
                       {tier.sessionsIncluded !== null ? ` (${tier.sessionsIncluded} ${t("memberships.sessions")})` : ` (${t("memberships.unlimited")})`}
                     </option>
                   ))}
@@ -740,7 +740,7 @@ export default function MembershipsPage() {
                 {changeTierValue && changeTierValue !== m.tierId && (() => {
                   const newTier = activeTiers.find((tier) => tier.id === changeTierValue);
                   if (!newTier) return null;
-                  const diff = newTier.priceInCents - m.tier.priceInCents;
+                  const diff = newTier.priceValue - m.tier.priceValue;
                   return (
                     <p className={cn("text-xs font-medium", diff > 0 ? "text-amber-400" : diff < 0 ? "text-green-400" : "text-neutral-500")}>
                       {diff > 0 ? `↑ ${t("memberships.upgrade")} (+${fmtPrice(diff)}/mo)` : diff < 0 ? `↓ ${t("memberships.downgrade")} (${fmtPrice(diff)}/mo)` : t("memberships.samePrice")}
@@ -802,7 +802,7 @@ export default function MembershipsPage() {
                         <PaymentBadge status={displayStatus} />
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-bold">{fmtPrice(p.amountInCents)}</span>
+                        <span className="text-sm font-bold">{fmtPrice(p.amountValue)}</span>
                         {p.paymentMethod && (
                           <span className="flex items-center gap-1 text-xs text-neutral-500">
                             <CreditCard className="h-3 w-3" />

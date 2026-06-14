@@ -13,7 +13,7 @@ export async function PATCH(
     const { id } = await params;
     const body = await parseBody<{
       name?: string;
-      priceInCents?: number;
+      priceValue?: number;
       sessionsIncluded?: number | null;
       showBadge?: boolean;
       sortOrder?: number;
@@ -27,7 +27,7 @@ export async function PATCH(
       where: { id },
       data: {
         ...(body.name !== undefined && { name: body.name }),
-        ...(body.priceInCents !== undefined && { priceInCents: body.priceInCents }),
+        ...(body.priceValue !== undefined && { priceValue: body.priceValue }),
         ...(body.sessionsIncluded !== undefined && { sessionsIncluded: body.sessionsIncluded }),
         ...(body.showBadge !== undefined && { showBadge: body.showBadge }),
         ...(body.perks !== undefined && { perks: body.perks }),

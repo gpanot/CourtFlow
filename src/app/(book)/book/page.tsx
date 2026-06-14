@@ -11,7 +11,7 @@ interface Slot {
   startTime: string;
   endTime: string;
   hour: number;
-  priceInCents: number;
+  priceValue: number;
   available: boolean;
 }
 
@@ -27,8 +27,8 @@ interface VenueInfo {
   location: string | null;
   logoUrl: string | null;
   bookingConfig: {
-    pricingRules: { dayOfWeek: number; startHour: number; endHour: number; priceInCents: number }[];
-    defaultPriceInCents: number;
+    pricingRules: { dayOfWeek: number; startHour: number; endHour: number; priceValue: number }[];
+    defaultPriceValue: number;
   };
 }
 
@@ -160,7 +160,7 @@ export default function VenueHomePage() {
   const sortedSelected = [...selectedSlots].sort(
     (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
   );
-  const totalPrice = sortedSelected.reduce((sum, s) => sum + s.priceInCents, 0);
+  const totalPrice = sortedSelected.reduce((sum, s) => sum + s.priceValue, 0);
   const hasSelection = sortedSelected.length > 0 && selectedCourtId;
 
   function handleBook() {

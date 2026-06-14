@@ -11,7 +11,7 @@ interface Package {
   id: string;
   name: string;
   description: string | null;
-  priceInCents: number;
+  priceValue: number;
   durationMin: number;
   lessonType: string;
   sessionsIncluded: number;
@@ -263,7 +263,7 @@ export default function CoachProfilePage() {
               <div>
                 <p className="font-medium text-sm">{pkg.name}</p>
                 <p className="text-xs text-[var(--cm-text-sec)]">
-                  {pkg.durationMin} min · {formatPrice(pkg.priceInCents)}
+                  {pkg.durationMin} min · {formatPrice(pkg.priceValue)}
                 </p>
               </div>
               <button
@@ -284,7 +284,7 @@ export default function CoachProfilePage() {
             {[1, 5, 10].map((qty) => {
               const basePkg = coach.packages[0];
               const discount = qty === 5 ? 10 : qty === 10 ? 20 : 0;
-              const total = Math.round(basePkg.priceInCents * qty * (1 - discount / 100));
+              const total = Math.round(basePkg.priceValue * qty * (1 - discount / 100));
               return (
                 <button
                   key={qty}
@@ -380,7 +380,7 @@ function CoachSessionSummary({
         <Row label="Time" value={`${formatHour(hour)} – ${formatHour(hour + Math.ceil(pkg.durationMin / 60))}`} />
         <Row label="Court" value="Auto-assigned" />
         <div className="border-t border-[var(--cm-border)] pt-2 mt-2">
-          <Row label="Total" value={formatPrice(pkg.priceInCents)} bold />
+          <Row label="Total" value={formatPrice(pkg.priceValue)} bold />
         </div>
       </div>
 
@@ -399,7 +399,7 @@ function CoachSessionSummary({
         disabled={isBooking}
         className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm mb-3 disabled:opacity-40"
       >
-        {isBooking ? "Booking..." : `Pay with VietQR (${formatPrice(pkg.priceInCents)})`}
+        {isBooking ? "Booking..." : `Pay with VietQR (${formatPrice(pkg.priceValue)})`}
       </button>
     </div>
   );

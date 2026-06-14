@@ -32,7 +32,7 @@ export async function GET(
             id: true,
             name: true,
             description: true,
-            priceInCents: true,
+            priceValue: true,
             durationMin: true,
             lessonType: true,
             sessionsIncluded: true,

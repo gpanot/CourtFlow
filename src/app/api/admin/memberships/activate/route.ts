@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
         membershipId: membership.id,
         periodStart: now,
         periodEnd: renewalDate,
-        amountInCents: tier.priceInCents,
+        amountValue: tier.priceValue,
         status: "UNPAID",
       },
     });

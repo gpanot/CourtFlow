@@ -48,7 +48,7 @@ interface CoachPackage {
   description: string | null;
   lessonType: "private" | "group";
   durationMin: number;
-  priceInCents: number;
+  priceValue: number;
   sessionsIncluded: number;
   active: boolean;
   sortOrder: number;
@@ -89,7 +89,7 @@ interface CoachLesson {
   startTime: string;
   endTime: string;
   status: "confirmed" | "completed" | "cancelled" | "no_show";
-  priceInCents: number;
+  priceValue: number;
   note: string | null;
   paymentStatus: string;
   paidAt: string | null;
@@ -111,7 +111,7 @@ interface AvailSlot {
   startTime: string;
   endTime: string;
   hour: number;
-  priceInCents: number;
+  priceValue: number;
   available: boolean;
   block?: { blockId: string; type: string; title: string | null };
   schedule?: { entryId: string; type: string; title: string };
@@ -124,9 +124,9 @@ interface CourtSlotData {
   slots: AvailSlot[];
 }
 
-const centsToDollars = (c: number) => Math.round(c / 100);
-const dollarsToCents = (d: string) => (parseInt(d.replace(/,/g, "") || "0", 10)) * 100;
-const formatPrice = (n: number) => n.toLocaleString("en-US");
+const vndToDisplay = (v: number) => v;
+const displayToVnd = (d: string) => parseInt(d.replace(/,/g, "") || "0", 10);
+const formatPrice = (n: number) => new Intl.NumberFormat("vi-VN").format(n);
 const parseFormattedPrice = (raw: string) => {
   const digits = raw.replace(/[^0-9]/g, "");
   if (!digits) return "";
@@ -247,7 +247,7 @@ function CoachesTab({ venueId }: { venueId: string }) {
       description: pkg.description || "",
       lessonType: pkg.lessonType,
       durationHours: String(pkg.durationMin / 60),
-      priceInDollars: formatPrice(centsToDollars(pkg.priceInCents)),
+      priceInDollars: formatPrice(vndToDisplay(pkg.priceValue)),
       sessionsIncluded: String(pkg.sessionsIncluded),
     });
     setErr("");
@@ -265,7 +265,7 @@ function CoachesTab({ venueId }: { venueId: string }) {
         description: pkgForm.description || null,
         lessonType: pkgForm.lessonType,
         durationMin: (parseInt(pkgForm.durationHours) || 1) * 60,
-        priceInCents: dollarsToCents(pkgForm.priceInDollars),
+        priceValue: displayToVnd(pkgForm.priceInDollars),
         sessionsIncluded: parseInt(pkgForm.sessionsIncluded) || 1,
       };
 
@@ -376,7 +376,7 @@ function CoachesTab({ venueId }: { venueId: string }) {
                         </div>
                         <div className="flex items-center gap-3 mt-1 text-xs text-neutral-500">
                           <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{pkg.durationMin / 60}h</span>
-                          <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />${formatPrice(centsToDollars(pkg.priceInCents))}</span>
+                          <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{formatPrice(vndToDisplay(pkg.priceValue))} VND</span>
                           {pkg.sessionsIncluded > 1 && (
                             <span className="flex items-center gap-1"><Users className="h-3 w-3" />{pkg.sessionsIncluded} sessions</span>
                           )}
@@ -806,7 +806,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
     setPaymentModalData({
       entityId: lesson.id,
       label: `${lesson.coach.name} → ${lesson.player.name}`,
-      amountInCents: lesson.priceInCents,
+      amountValue: lesson.priceValue,
       currentStatus: (lesson.paymentStatus === "PAID" ? "PAID" : "UNPAID") as "PAID" | "UNPAID",
       existingProofUrl: lesson.proofUrl,
       paymentMethod: lesson.paymentMethod,
@@ -818,7 +818,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
   const handlePaymentConfirm = async (entityId: string, result: PaymentConfirmResult) => {
     await api.patch(`/api/admin/coach-lessons/${entityId}`, {
       paymentStatus: result.status,
-      amountInCents: result.amountInCents,
+      amountValue: result.amountValue,
       paymentMethod: result.paymentMethod,
       paidAt: result.paidAt,
       paymentNote: result.note,
@@ -1146,7 +1146,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
                   {lesson.court && (
                     <span className="text-neutral-500">{t("coaching.court")}: {lesson.court.label}</span>
                   )}
-                  <span className="text-neutral-500">${centsToDollars(lesson.priceInCents)}</span>
+                  <span className="text-neutral-500">{formatPrice(vndToDisplay(lesson.priceValue))} VND</span>
                 </div>
                 <p className="text-xs text-neutral-500 mt-1">{lesson.package.name}</p>
                 {lesson.note && <p className="text-xs text-neutral-500 mt-0.5 italic">{lesson.note}</p>}
@@ -1254,7 +1254,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
                         <option value="">{t("coaching.selectPackage")}</option>
                         {coachPackages.map((p) => (
                           <option key={p.id} value={p.id}>
-                            {p.name} — ${formatPrice(centsToDollars(p.priceInCents))} ({p.durationMin / 60}h)
+                            {p.name} — {formatPrice(vndToDisplay(p.priceValue))} VND ({p.durationMin / 60}h)
                           </option>
                         ))}
                       </select>
@@ -1348,7 +1348,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
                     </p>
                     {selectedPkg && (
                       <p className="text-xs text-teal-400 mt-1">
-                        ${formatPrice(centsToDollars(Math.round((selectedPkg.priceInCents / selectedPkg.durationMin) * selectedSlots.length * 60)))}
+                        {formatPrice(vndToDisplay(Math.round((selectedPkg.priceValue / selectedPkg.durationMin) * selectedSlots.length * 60)))} VND
                       </p>
                     )}
                   </div>

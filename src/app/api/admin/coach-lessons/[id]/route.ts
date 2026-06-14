@@ -27,7 +27,7 @@ export async function PATCH(
       paymentMethod?: string;
       proofUrl?: string;
       paymentNote?: string;
-      amountInCents?: number;
+      amountValue?: number;
     }>(request);
 
     const existing = await prisma.coachLesson.findUnique({
@@ -68,7 +68,7 @@ export async function PATCH(
     if (body.paymentMethod !== undefined) data.paymentMethod = body.paymentMethod;
     if (body.proofUrl !== undefined) data.proofUrl = body.proofUrl;
     if (body.paymentNote !== undefined) data.paymentNote = body.paymentNote;
-    if (body.amountInCents !== undefined) data.priceInCents = body.amountInCents;
+    if (body.amountValue !== undefined) data.priceValue = body.amountValue;
 
     if (body.date || body.startTime || body.endTime) {
       const date = body.date ? new Date(body.date) : new Date(existing.date);
@@ -98,13 +98,13 @@ export async function PATCH(
       data.startTime = startTime;
       data.endTime = endTime;
 
-      if (body.amountInCents === undefined) {
+      if (body.amountValue === undefined) {
         const pkg = body.packageId
           ? await prisma.coachPackage.findUnique({ where: { id: body.packageId } })
           : existing.package;
         if (pkg) {
           const durationMin = (endTime.getTime() - startTime.getTime()) / (60 * 1000);
-          data.priceInCents = Math.round((pkg.priceInCents / pkg.durationMin) * durationMin);
+          data.priceValue = Math.round((pkg.priceValue / pkg.durationMin) * durationMin);
         }
       }
     }

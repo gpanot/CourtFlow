@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
           select: {
             id: true,
             name: true,
-            priceInCents: true,
+            priceValue: true,
             sessionsIncluded: true,
             showBadge: true,
           },

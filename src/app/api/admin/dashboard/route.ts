@@ -58,17 +58,17 @@ export async function GET(request: NextRequest) {
       // Today's bookings (confirmed + completed)
       prisma.booking.findMany({
         where: { ...bookingWhere, date: { gte: todayStart, lte: todayEnd }, status: { in: ["confirmed", "completed"] } },
-        select: { priceInCents: true },
+        select: { priceValue: true },
       }),
       // This week's bookings
       prisma.booking.findMany({
         where: { ...bookingWhere, date: { gte: weekStart, lte: weekEnd }, status: { in: ["confirmed", "completed"] } },
-        select: { priceInCents: true },
+        select: { priceValue: true },
       }),
       // This month's bookings
       prisma.booking.findMany({
         where: { ...bookingWhere, date: { gte: monthStart, lte: monthEnd }, status: { in: ["confirmed", "completed"] } },
-        select: { priceInCents: true },
+        select: { priceValue: true },
       }),
       // Upcoming bookings today (after now)
       prisma.booking.findMany({
@@ -115,7 +115,7 @@ export async function GET(request: NextRequest) {
           status: "UNPAID",
           periodEnd: { gte: now },
         },
-        select: { amountInCents: true },
+        select: { amountValue: true },
       }),
       // Overdue membership payments
       prisma.membershipPayment.findMany({
@@ -124,7 +124,7 @@ export async function GET(request: NextRequest) {
           status: "UNPAID",
           periodEnd: { lt: now },
         },
-        select: { amountInCents: true },
+        select: { amountValue: true },
       }),
       // Membership payments collected this month
       prisma.membershipPayment.findMany({
@@ -133,7 +133,7 @@ export async function GET(request: NextRequest) {
           status: "PAID",
           paidAt: { gte: monthStart, lte: monthEnd },
         },
-        select: { amountInCents: true },
+        select: { amountValue: true },
       }),
       // Memberships expiring within 7 days
       prisma.membership.count({
@@ -173,12 +173,12 @@ export async function GET(request: NextRequest) {
       // Unpaid lessons
       prisma.coachLesson.findMany({
         where: { venueId: { in: venueIds }, paymentStatus: "UNPAID", status: { in: ["confirmed", "completed"] } },
-        select: { priceInCents: true },
+        select: { priceValue: true },
       }),
       // Lessons paid this month
       prisma.coachLesson.findMany({
         where: { venueId: { in: venueIds }, paymentStatus: "PAID", paidAt: { gte: monthStart, lte: monthEnd } },
-        select: { priceInCents: true },
+        select: { priceValue: true },
       }),
       // Recent coaching lessons (latest 8)
       prisma.coachLesson.findMany({
@@ -194,11 +194,11 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    const todayBookingRevenue = todayBookings.reduce((s, b) => s + b.priceInCents, 0);
-    const weekBookingRevenue = weekBookings.reduce((s, b) => s + b.priceInCents, 0);
-    const monthBookingRevenue = monthBookings.reduce((s, b) => s + b.priceInCents, 0);
-    const membershipRevenue = membershipsPaidThisMonth.reduce((s, p) => s + p.amountInCents, 0);
-    const coachingRevenue = lessonsPaidThisMonth.reduce((s, l) => s + l.priceInCents, 0);
+    const todayBookingRevenue = todayBookings.reduce((s, b) => s + b.priceValue, 0);
+    const weekBookingRevenue = weekBookings.reduce((s, b) => s + b.priceValue, 0);
+    const monthBookingRevenue = monthBookings.reduce((s, b) => s + b.priceValue, 0);
+    const membershipRevenue = membershipsPaidThisMonth.reduce((s, p) => s + p.amountValue, 0);
+    const coachingRevenue = lessonsPaidThisMonth.reduce((s, l) => s + l.priceValue, 0);
 
     return json({
       revenue: {
@@ -221,7 +221,7 @@ export async function GET(request: NextRequest) {
           venueName: b.venue.name,
           startTime: b.startTime,
           endTime: b.endTime,
-          priceInCents: b.priceInCents,
+          priceValue: b.priceValue,
         })),
         tomorrowCount: tomorrowBookingCount,
         weekCount: weekBookings.length,
@@ -231,9 +231,9 @@ export async function GET(request: NextRequest) {
       memberships: {
         totalActive: activeMemberships,
         unpaidCount: unpaidMemberPayments.length,
-        unpaidAmount: unpaidMemberPayments.reduce((s, p) => s + p.amountInCents, 0),
+        unpaidAmount: unpaidMemberPayments.reduce((s, p) => s + p.amountValue, 0),
         overdueCount: overdueMemberPayments.length,
-        overdueAmount: overdueMemberPayments.reduce((s, p) => s + p.amountInCents, 0),
+        overdueAmount: overdueMemberPayments.reduce((s, p) => s + p.amountValue, 0),
         expiringThisWeek: expiringMemberships,
       },
       venues: venues.map((v) => ({
@@ -253,10 +253,11 @@ export async function GET(request: NextRequest) {
         lessonsToday: todayLessons,
         lessonsThisWeek: weekLessons,
         unpaidCount: unpaidLessons.length,
-        unpaidAmount: unpaidLessons.reduce((s, l) => s + l.priceInCents, 0),
+        unpaidAmount: unpaidLessons.reduce((s, l) => s + l.priceValue, 0),
       },
       recentBookings: recentBookings.map((b) => ({
         id: b.id,
+        venueId: b.venueId,
         playerName: b.player.name,
         playerAvatar: b.player.avatar,
         playerPhoto: b.player.avatarPhotoPath || b.player.facePhotoPath || null,
@@ -268,7 +269,7 @@ export async function GET(request: NextRequest) {
         status: b.status,
         paymentStatus: b.paymentStatus,
         paymentProofUrl: b.paymentProofUrl,
-        priceInCents: b.priceInCents,
+        priceValue: b.priceValue,
         createdAt: b.createdAt,
       })),
       recentLessons: recentLessons.map((l) => ({
@@ -281,7 +282,7 @@ export async function GET(request: NextRequest) {
         startTime: l.startTime,
         endTime: l.endTime,
         status: l.status,
-        priceInCents: l.priceInCents,
+        priceValue: l.priceValue,
         createdAt: l.createdAt,
       })),
     });

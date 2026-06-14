@@ -22,6 +22,11 @@ import {
   Banknote,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { PaymentStatusBadge } from "@/components/admin/EditBookingModal";
+import {
+  EditBookingModalController,
+  type EditBookingTarget,
+} from "@/components/admin/EditBookingModalController";
 
 export const dynamic = "force-dynamic";
 
@@ -34,11 +39,12 @@ interface UpcomingBooking {
   venueName: string;
   startTime: string;
   endTime: string;
-  priceInCents: number;
+  priceValue: number;
 }
 
 interface RecentBooking {
   id: string;
+  venueId: string;
   playerName: string;
   playerAvatar: string;
   playerPhoto: string | null;
@@ -50,7 +56,7 @@ interface RecentBooking {
   status: string;
   paymentStatus: string | null;
   paymentProofUrl: string | null;
-  priceInCents: number;
+  priceValue: number;
   createdAt: string;
 }
 
@@ -64,13 +70,14 @@ interface RecentLesson {
   startTime: string;
   endTime: string;
   status: string;
-  priceInCents: number;
+  priceValue: number;
   createdAt: string;
 }
 
 interface RecentEntry {
   id: string;
   kind: "booking" | "lesson";
+  venueId: string | null;
   playerName: string;
   playerAvatar: string;
   playerPhoto: string | null;
@@ -82,7 +89,7 @@ interface RecentEntry {
   status: string;
   paymentStatus: string | null;
   paymentProofUrl: string | null;
-  priceInCents: number;
+  priceValue: number;
   createdAt: string;
 }
 
@@ -133,9 +140,8 @@ interface DashboardData {
   recentLessons: RecentLesson[];
 }
 
-function fmtPrice(cents: number): string {
-  const d = cents / 100;
-  return `$${d % 1 === 0 ? d.toLocaleString() : d.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+function fmtPrice(amount: number): string {
+  return new Intl.NumberFormat("vi-VN").format(amount);
 }
 
 function fmtTime(iso: string): string {
@@ -161,13 +167,12 @@ function PlayerAvatarImg({ photo, avatar, size = "md" }: { photo: string | null;
   return <span className={textSize}>{avatar || "🏓"}</span>;
 }
 
-interface EditBookingEntry {
-  id: string;
-  playerName: string;
-  playerPhone?: string;
-  status: string;
-  paymentStatus: string | null;
-  paymentProofUrl: string | null;
+function formatBookingDate(iso: string): string {
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 export default function AdminOverview() {
@@ -175,47 +180,19 @@ export default function AdminOverview() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
-  const [editBooking, setEditBooking] = useState<EditBookingEntry | null>(null);
-  const [actionValue, setActionValue] = useState("");
-  const [actionSaving, setActionSaving] = useState(false);
+  const [editTarget, setEditTarget] = useState<EditBookingTarget | null>(null);
 
   const refreshDashboard = () => {
     api.get<DashboardData>("/api/admin/dashboard").then(setData).catch(console.error);
   };
 
-  const openEditFromEntry = (entry: RecentEntry) => {
-    if (entry.kind !== "booking") return;
-    setEditBooking({
+  const openBookingEditor = (entry: RecentEntry) => {
+    if (entry.kind !== "booking" || !entry.venueId) return;
+    setEditTarget({
       id: entry.id,
-      playerName: entry.playerName,
-      status: entry.status,
-      paymentStatus: entry.paymentStatus,
-      paymentProofUrl: entry.paymentProofUrl,
+      venueId: entry.venueId,
+      date: formatBookingDate(entry.date),
     });
-    setActionValue("");
-  };
-
-  const closeEdit = () => {
-    setEditBooking(null);
-    setActionValue("");
-  };
-
-  const applyAction = async () => {
-    if (!editBooking || !actionValue) return;
-    setActionSaving(true);
-    try {
-      if (actionValue === "approve_payment") {
-        await api.patch(`/api/admin/bookings/${editBooking.id}/approve-payment`, {});
-      } else if (actionValue === "cancelled" || actionValue === "no_show") {
-        await api.patch(`/api/staff/bookings/${editBooking.id}`, { status: actionValue });
-      }
-      closeEdit();
-      refreshDashboard();
-    } catch (e) {
-      alert((e as Error).message);
-    } finally {
-      setActionSaving(false);
-    }
   };
 
   useEffect(() => {
@@ -258,6 +235,7 @@ export default function AdminOverview() {
     ...data.recentBookings.map((b): RecentEntry => ({
       id: b.id,
       kind: "booking",
+      venueId: b.venueId,
       playerName: b.playerName,
       playerAvatar: b.playerAvatar,
       playerPhoto: b.playerPhoto,
@@ -269,12 +247,13 @@ export default function AdminOverview() {
       status: b.status,
       paymentStatus: b.paymentStatus ?? null,
       paymentProofUrl: b.paymentProofUrl ?? null,
-      priceInCents: b.priceInCents,
+      priceValue: b.priceValue,
       createdAt: b.createdAt,
     })),
     ...(data.recentLessons ?? []).map((l): RecentEntry => ({
       id: l.id,
       kind: "lesson",
+      venueId: null,
       playerName: l.playerName,
       playerAvatar: "🎓",
       playerPhoto: null,
@@ -286,7 +265,7 @@ export default function AdminOverview() {
       status: l.status,
       paymentStatus: null,
       paymentProofUrl: null,
-      priceInCents: l.priceInCents,
+      priceValue: l.priceValue,
       createdAt: l.createdAt,
     })),
   ]
@@ -474,14 +453,14 @@ export default function AdminOverview() {
                   <td className="px-4 py-2.5">
                     {entry.kind === "booking" && entry.paymentStatus ? (
                       <button
-                        onClick={() => openEditFromEntry(entry)}
+                        onClick={() => openBookingEditor(entry)}
                         title="Click to manage this booking"
                       >
                         <PaymentStatusBadge status={entry.paymentStatus} />
                       </button>
                     ) : entry.kind === "booking" ? (
                       <button
-                        onClick={() => openEditFromEntry(entry)}
+                        onClick={() => openBookingEditor(entry)}
                         className="text-neutral-600 hover:text-neutral-400 text-[10px]"
                         title="Manage booking"
                       >
@@ -490,7 +469,7 @@ export default function AdminOverview() {
                     ) : null}
                   </td>
                   <td className="px-4 py-2.5 text-right font-medium">
-                    {fmtPrice(entry.priceInCents)}
+                    {fmtPrice(entry.priceValue)}
                   </td>
                 </tr>
               ))}
@@ -523,7 +502,7 @@ export default function AdminOverview() {
                   </span>
                   <BookingStatusBadge status={entry.status} />
                   {entry.kind === "booking" && entry.paymentStatus && (
-                    <button onClick={() => openEditFromEntry(entry)}>
+                    <button onClick={() => openBookingEditor(entry)}>
                       <PaymentStatusBadge status={entry.paymentStatus} />
                     </button>
                   )}
@@ -533,7 +512,7 @@ export default function AdminOverview() {
                 <span>{entry.detail}</span>
                 <span>{fmtDate(entry.date)}</span>
                 <span>{fmtTime(entry.startTime)}</span>
-                <span className="ml-auto font-medium text-neutral-300">{fmtPrice(entry.priceInCents)}</span>
+                <span className="ml-auto font-medium text-neutral-300">{fmtPrice(entry.priceValue)}</span>
               </div>
             </div>
           ))}
@@ -579,7 +558,7 @@ export default function AdminOverview() {
                       {fmtTime(b.startTime)}
                     </p>
                     <p className="text-[10px] text-neutral-500">
-                      {fmtPrice(b.priceInCents)}
+                      {fmtPrice(b.priceValue)}
                     </p>
                   </div>
                 </div>
@@ -696,82 +675,11 @@ export default function AdminOverview() {
         <QuickLink label={t("overview.coaching")} icon={GraduationCap} onClick={() => router.push("/admin/coaching")} />
       </div>
 
-      {/* Edit Booking Modal */}
-      {editBooking && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={closeEdit}>
-          <div
-            className="w-full max-w-sm mx-4 rounded-2xl border border-neutral-700 bg-neutral-900 p-6 space-y-5"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="text-base font-bold">Manage Booking</h3>
-                <p className="text-sm text-purple-300 mt-0.5">{editBooking.playerName}</p>
-              </div>
-              <div className="flex flex-col items-end gap-1.5 shrink-0">
-                <BookingStatusBadge status={editBooking.status} />
-                {editBooking.paymentStatus && (
-                  <PaymentStatusBadge status={editBooking.paymentStatus} />
-                )}
-              </div>
-            </div>
-
-            {editBooking.paymentProofUrl && editBooking.paymentProofUrl !== "pending_proof" && (
-              <a
-                href={editBooking.paymentProofUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 underline"
-              >
-                View payment proof
-              </a>
-            )}
-
-            <div className="space-y-2">
-              <label className="text-xs text-neutral-400">Action</label>
-              <select
-                value={actionValue}
-                onChange={(e) => setActionValue(e.target.value)}
-                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-sm text-white focus:border-purple-500 focus:outline-none"
-              >
-                <option value="">— Select an action —</option>
-                {editBooking.paymentStatus === "proof_submitted" && (
-                  <option value="approve_payment">✓ Approve payment</option>
-                )}
-                {editBooking.status === "confirmed" && (
-                  <>
-                    <option value="cancelled">✕ Cancel booking</option>
-                    <option value="no_show">⚠ Mark as no-show</option>
-                  </>
-                )}
-              </select>
-              {!actionValue && (
-                <p className="text-[11px] text-neutral-600">
-                  {editBooking.status !== "confirmed" && editBooking.paymentStatus !== "proof_submitted"
-                    ? "No actions available for this booking."
-                    : "Choose an action from the dropdown above."}
-                </p>
-              )}
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={applyAction}
-                disabled={!actionValue || actionSaving}
-                className="flex-1 rounded-xl bg-purple-600 py-2.5 text-sm font-semibold text-white hover:bg-purple-500 disabled:opacity-40 transition-colors"
-              >
-                {actionSaving ? "Saving…" : "Apply"}
-              </button>
-              <button
-                onClick={closeEdit}
-                className="flex-1 rounded-xl bg-neutral-800 py-2.5 text-sm font-medium text-neutral-300 hover:bg-neutral-700 transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <EditBookingModalController
+        target={editTarget}
+        onClose={() => setEditTarget(null)}
+        onUpdated={refreshDashboard}
+      />
     </div>
   );
 }
@@ -911,20 +819,6 @@ function BookingStatusBadge({ status }: { status: string }) {
       )}
     >
       {status === "no_show" ? "No Show" : status}
-    </span>
-  );
-}
-
-function PaymentStatusBadge({ status }: { status: string }) {
-  const map: Record<string, { cls: string; label: string }> = {
-    pending: { cls: "bg-yellow-600/20 text-yellow-400", label: "Payment pending" },
-    proof_submitted: { cls: "bg-orange-600/20 text-orange-400 animate-pulse", label: "Proof submitted" },
-    paid: { cls: "bg-green-600/20 text-green-400", label: "Paid" },
-  };
-  const info = map[status] ?? { cls: "bg-neutral-600/20 text-neutral-400", label: status };
-  return (
-    <span className={cn("inline-block rounded-full px-2 py-0.5 text-[10px] font-medium", info.cls)}>
-      {info.label}
     </span>
   );
 }
