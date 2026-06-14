@@ -136,6 +136,46 @@ export async function createOpenPlayRegistration(
   const paymentRef = await generatePaymentRef("open-play");
 
   return prisma.$transaction(async (tx) => {
+    // Check if player already has an active registration for this session
+    const existing = await tx.openPlayRegistration.findUnique({
+      where: { scheduleEntryId_date_playerId: { scheduleEntryId, date: dateOnly, playerId } },
+    });
+
+    if (existing) {
+      const isActiveHold =
+        existing.status === "confirmed" &&
+        existing.paymentStatus === "pending" &&
+        existing.holdExpiresAt &&
+        existing.holdExpiresAt > new Date();
+
+      const isPaid =
+        existing.status === "confirmed" &&
+        (existing.paymentStatus === "proof_submitted" || existing.paymentStatus === "paid");
+
+      if (isActiveHold || isPaid) {
+        throw Object.assign(
+          new Error("You are already registered for this session"),
+          { status: 409 }
+        );
+      }
+
+      // Cancelled or expired hold — reuse the record
+      const updated = await tx.openPlayRegistration.update({
+        where: { id: existing.id },
+        data: {
+          status: "confirmed",
+          paymentStatus: "pending",
+          holdExpiresAt,
+          paymentRef,
+          priceValue,
+          startTime,
+          endTime,
+          paymentProofUrl: null,
+        },
+      });
+      return updated;
+    }
+
     // Re-count active spots inside transaction to prevent race conditions
     const spotsTaken = await tx.openPlayRegistration.count({
       where: {

@@ -137,7 +137,10 @@ export async function GET(request: NextRequest) {
           paymentStatus: { not: { in: ["paid", "proof_submitted", "PAID"] } },
         },
       },
-      include: { court: { select: { label: true } } },
+      include: {
+        court: { select: { label: true } },
+        venue: { select: { name: true } },
+      },
       orderBy: { startTime: "desc" },
     });
 

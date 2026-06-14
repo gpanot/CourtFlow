@@ -7,8 +7,12 @@ import { X } from "lucide-react";
 import adminI18n from "@/i18n/admin-i18n";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
+import {
+  ADMIN_DASHBOARD_POLL_MS,
+  dispatchAdminDashboardRefresh,
+} from "@/lib/admin-dashboard-events";
 
-const POLL_MS = 10_000;
+const POLL_MS = ADMIN_DASHBOARD_POLL_MS;
 const PAID_DISMISS_MS = 5_000;
 
 interface BookingNotification {
@@ -81,6 +85,8 @@ export function AdminBookingNotifications() {
     try {
       const items = await api.get<BookingNotification[]>("/api/admin/bookings/notifications");
 
+      let hasNewActivity = false;
+
       for (const item of items) {
         if (item.paymentStatus !== "paid" && item.paymentStatus !== "proof_submitted") continue;
 
@@ -89,6 +95,8 @@ export function AdminBookingNotifications() {
         seenRef.current.add(key);
 
         if (!initializedRef.current) continue;
+
+        hasNewActivity = true;
 
         const variant = item.paymentStatus as "paid" | "proof_submitted";
         const time = new Date(item.startTime).toLocaleTimeString([], {
@@ -120,6 +128,10 @@ export function AdminBookingNotifications() {
         }
 
         setToasts((prev) => [...prev, newToast]);
+      }
+
+      if (hasNewActivity) {
+        dispatchAdminDashboardRefresh();
       }
 
       initializedRef.current = true;

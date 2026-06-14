@@ -363,6 +363,7 @@ export async function GET(request: NextRequest) {
         endTime: r.endTime,
         status: r.status,
         paymentStatus: r.paymentStatus,
+        paymentProofUrl: r.paymentProofUrl ?? null,
         priceValue: r.priceValue,
         createdAt: r.createdAt,
       })),

@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
 
     const registrations = await prisma.openPlayRegistration.findMany({
       where: { playerId },
+      include: { venue: { select: { name: true } } },
       orderBy: { startTime: "desc" },
     });
 

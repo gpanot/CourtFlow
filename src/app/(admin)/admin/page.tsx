@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import adminI18n from "@/i18n/admin-i18n";
 import { useRouter } from "next/navigation";
@@ -29,6 +29,10 @@ import {
   EditBookingModalController,
   type EditBookingTarget,
 } from "@/components/admin/EditBookingModalController";
+import {
+  ADMIN_DASHBOARD_POLL_MS,
+  ADMIN_DASHBOARD_REFRESH_EVENT,
+} from "@/lib/admin-dashboard-events";
 
 export const dynamic = "force-dynamic";
 
@@ -88,6 +92,7 @@ interface RecentOpenPlay {
   endTime: string;
   status: string;
   paymentStatus: string;
+  paymentProofUrl: string | null;
   priceValue: number;
   createdAt: string;
 }
@@ -223,11 +228,24 @@ export default function AdminOverview() {
   const router = useRouter();
   const [editTarget, setEditTarget] = useState<EditBookingTarget | null>(null);
   const [openPlayDetailGroup, setOpenPlayDetailGroup] = useState<OpenPlayTodayGroup | null>(null);
-  const [proofLightboxUrl, setProofLightboxUrl] = useState<string | null>(null);
+  const [openPlayRegModal, setOpenPlayRegModal] = useState<{
+    id: string;
+    playerName: string;
+    playerAvatar: string;
+    playerPhoto: string | null;
+    venueName: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    priceValue: number;
+    paymentStatus: string;
+    paymentProofUrl: string | null;
+    status: string;
+  } | null>(null);
 
-  const refreshDashboard = () => {
+  const refreshDashboard = useCallback(() => {
     api.get<DashboardData>("/api/admin/dashboard").then(setData).catch(console.error);
-  };
+  }, []);
 
   const openBookingEditor = (entry: RecentEntry) => {
     if (entry.kind !== "booking" || !entry.venueId) return;
@@ -246,6 +264,28 @@ export default function AdminOverview() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
+
+  // Live updates: refresh when booking notifications fire, and poll while tab is visible
+  useEffect(() => {
+    const onRefresh = () => refreshDashboard();
+    window.addEventListener(ADMIN_DASHBOARD_REFRESH_EVENT, onRefresh);
+
+    const poll = () => {
+      if (document.visibilityState === "visible") refreshDashboard();
+    };
+    const interval = setInterval(poll, ADMIN_DASHBOARD_POLL_MS);
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") refreshDashboard();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      window.removeEventListener(ADMIN_DASHBOARD_REFRESH_EVENT, onRefresh);
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [refreshDashboard]);
 
   if (loading) {
     return (
@@ -325,7 +365,7 @@ export default function AdminOverview() {
       endTime: r.endTime,
       status: r.status,
       paymentStatus: r.paymentStatus,
-      paymentProofUrl: null,
+      paymentProofUrl: r.paymentProofUrl ?? null,
       priceValue: r.priceValue,
       createdAt: r.createdAt,
     })),
@@ -527,7 +567,25 @@ export default function AdminOverview() {
                         —
                       </button>
                     ) : entry.kind === "openplay" && entry.paymentStatus ? (
-                      <PaymentStatusBadge status={entry.paymentStatus} />
+                      <button
+                        onClick={() => setOpenPlayRegModal({
+                          id: entry.id,
+                          playerName: entry.playerName,
+                          playerAvatar: entry.playerAvatar,
+                          playerPhoto: entry.playerPhoto,
+                          venueName: entry.venueName,
+                          date: entry.date,
+                          startTime: entry.startTime,
+                          endTime: entry.endTime,
+                          priceValue: entry.priceValue,
+                          paymentStatus: entry.paymentStatus,
+                          paymentProofUrl: entry.paymentProofUrl,
+                          status: entry.status,
+                        })}
+                        title="View open play registration"
+                      >
+                        <PaymentStatusBadge status={entry.paymentStatus} />
+                      </button>
                     ) : null}
                   </td>
                   <td className="px-4 py-2.5 text-right font-medium">
@@ -570,6 +628,24 @@ export default function AdminOverview() {
                       <PaymentStatusBadge status={entry.paymentStatus} />
                     </button>
                   )}
+                  {entry.kind === "openplay" && entry.paymentStatus && (
+                    <button onClick={() => setOpenPlayRegModal({
+                      id: entry.id,
+                      playerName: entry.playerName,
+                      playerAvatar: entry.playerAvatar,
+                      playerPhoto: entry.playerPhoto,
+                      venueName: entry.venueName,
+                      date: entry.date,
+                      startTime: entry.startTime,
+                      endTime: entry.endTime,
+                      priceValue: entry.priceValue,
+                      paymentStatus: entry.paymentStatus,
+                      paymentProofUrl: entry.paymentProofUrl,
+                      status: entry.status,
+                    })}>
+                      <PaymentStatusBadge status={entry.paymentStatus} />
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-3 text-xs text-neutral-500">
@@ -586,70 +662,7 @@ export default function AdminOverview() {
         </div>
       </section>
 
-      {/* Open Play Today — always shown when there are sessions defined */}
-      {(data.openPlayToday ?? []).length > 0 && (
-        <section className="rounded-xl border border-neutral-800 bg-neutral-900 overflow-hidden">
-          <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
-            <h3 className="flex items-center gap-2 text-sm font-semibold">
-              <Play className="h-4 w-4 text-emerald-400" />
-              Open Play Today
-            </h3>
-            <span className="text-xs text-neutral-500">
-              {(data.openPlayToday ?? []).length} session{(data.openPlayToday ?? []).length !== 1 ? "s" : ""}
-            </span>
-          </div>
-          <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
-            {(data.openPlayToday ?? []).map((group) => {
-              const total = group.registrations.length;
-              const paid = group.registrations.filter((r) => r.paymentStatus === "paid").length;
-              const verifying = group.registrations.filter((r) => r.paymentStatus === "proof_submitted").length;
-              const pending = group.registrations.filter((r) => r.paymentStatus === "pending").length;
-              const max = group.maxPlayers ?? 0;
-              const fillPct = max > 0 ? Math.min(100, (total / max) * 100) : 0;
-              return (
-                <button
-                  key={group.scheduleEntryId + group.startTime}
-                  onClick={() => setOpenPlayDetailGroup(group)}
-                  className="rounded-xl border border-neutral-800 bg-neutral-800/40 p-4 text-left hover:border-emerald-500/40 hover:bg-neutral-800/70 transition-colors"
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-semibold">
-                      {fmtTime(group.startTime)} – {fmtTime(group.endTime)}
-                    </p>
-                    <span className="flex items-center gap-1 text-sm font-bold text-emerald-400">
-                      <Users className="h-3.5 w-3.5" />
-                      {total}{max > 0 ? `/${max}` : ""}
-                    </span>
-                  </div>
-                  {group.title && <p className="text-xs text-neutral-500 mb-2">{group.title}</p>}
-                  {/* Capacity bar */}
-                  <div className="h-1.5 rounded-full bg-neutral-700 overflow-hidden mb-2">
-                    <div
-                      className={cn(
-                        "h-full transition-all",
-                        fillPct >= 100 ? "bg-red-500" : fillPct >= 75 ? "bg-amber-500" : "bg-emerald-500"
-                      )}
-                      style={{ width: `${fillPct}%` }}
-                    />
-                  </div>
-                  <div className="flex gap-3 text-[10px]">
-                    {total === 0
-                      ? <span className="text-neutral-600">No registrations</span>
-                      : <>
-                          {paid > 0 && <span className="text-emerald-400">{paid} paid</span>}
-                          {verifying > 0 && <span className="text-amber-400">{verifying} verifying</span>}
-                          {pending > 0 && <span className="text-neutral-500">{pending} pending</span>}
-                        </>
-                    }
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {/* Open Play Detail Modal */}
+      {/* Open Play Detail Modal — session player list */}
       {openPlayDetailGroup && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
@@ -680,28 +693,33 @@ export default function AdminOverview() {
               {openPlayDetailGroup.registrations.length === 0 ? (
                 <p className="px-4 py-8 text-center text-sm text-neutral-500">No registrations yet.</p>
               ) : (
-                openPlayDetailGroup.registrations.map((r) => {
-                  const proofUrl = resolveUploadUrl(r.paymentProofUrl);
-                  return (
-                    <div key={r.id} className="flex items-center gap-3 px-4 py-3">
-                      <PlayerAvatarImg photo={r.playerPhoto} avatar={r.playerAvatar} size="sm" />
-                      <span className="flex-1 text-sm font-medium">{r.playerName}</span>
-                      {r.paymentStatus === "proof_submitted" && proofUrl ? (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setProofLightboxUrl(proofUrl);
-                          }}
-                          title="View payment proof"
-                        >
-                          <PaymentStatusBadge status={r.paymentStatus} />
-                        </button>
-                      ) : (
-                        <PaymentStatusBadge status={r.paymentStatus} />
-                      )}
-                    </div>
-                  );
-                })
+                openPlayDetailGroup.registrations.map((r) => (
+                  <div key={r.id} className="flex items-center gap-3 px-4 py-3">
+                    <PlayerAvatarImg photo={r.playerPhoto} avatar={r.playerAvatar} size="sm" />
+                    <span className="flex-1 text-sm font-medium">{r.playerName}</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenPlayRegModal({
+                          id: r.id,
+                          playerName: r.playerName,
+                          playerAvatar: r.playerAvatar,
+                          playerPhoto: r.playerPhoto,
+                          venueName: openPlayDetailGroup.venueName,
+                          date: openPlayDetailGroup.startTime,
+                          startTime: openPlayDetailGroup.startTime,
+                          endTime: openPlayDetailGroup.endTime,
+                          priceValue: openPlayDetailGroup.priceValue,
+                          paymentStatus: r.paymentStatus,
+                          paymentProofUrl: r.paymentProofUrl,
+                          status: r.status,
+                        });
+                      }}
+                    >
+                      <PaymentStatusBadge status={r.paymentStatus} />
+                    </button>
+                  </div>
+                ))
               )}
             </div>
             <div className="border-t border-neutral-800 px-4 py-3 flex items-center justify-between text-xs text-neutral-500">
@@ -715,27 +733,20 @@ export default function AdminOverview() {
         </div>
       )}
 
-      {/* Proof lightbox */}
-      {proofLightboxUrl && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4 cursor-zoom-out"
-          onClick={() => setProofLightboxUrl(null)}
-        >
-          <img
-            src={proofLightboxUrl}
-            alt="Payment proof"
-            className="max-w-full max-h-full rounded-xl object-contain shadow-2xl"
-          />
-          <button
-            type="button"
-            className="absolute top-4 right-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 transition-colors"
-            onClick={() => setProofLightboxUrl(null)}
-          >
-            <XCircle className="h-5 w-5" />
-          </button>
-        </div>
+      {/* Edit Open Play Booking Modal */}
+      {openPlayRegModal && (
+        <EditOpenPlayBookingModal
+          reg={openPlayRegModal}
+          onClose={() => setOpenPlayRegModal(null)}
+          onUpdated={() => {
+            setOpenPlayRegModal(null);
+            setOpenPlayDetailGroup(null);
+            refreshDashboard();
+          }}
+        />
       )}
 
+      {/* Upcoming Today + Open Play Today — side by side */}
       <div className="grid gap-4 md:grid-cols-2">
         {/* Upcoming Bookings Today */}
         <section className="rounded-xl border border-neutral-800 bg-neutral-900 overflow-hidden">
@@ -788,71 +799,140 @@ export default function AdminOverview() {
           )}
         </section>
 
-        {/* Activity Summary */}
+        {/* Open Play Today */}
         <section className="rounded-xl border border-neutral-800 bg-neutral-900 overflow-hidden">
           <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
             <h3 className="flex items-center gap-2 text-sm font-semibold">
-              <TrendingUp className="h-4 w-4 text-blue-400" />
-              {t("overview.weeklySummary")}
+              <Play className="h-4 w-4 text-emerald-400" />
+              Open Play Today
             </h3>
+            <span className="text-xs text-neutral-500">
+              {(data.openPlayToday ?? []).length} session{(data.openPlayToday ?? []).length !== 1 ? "s" : ""}
+            </span>
           </div>
-          <div className="p-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <SummaryItem
-                icon={CalendarDays}
-                label={t("overview.bookings")}
-                value={String(data.bookings.weekCount)}
-                color="text-blue-400"
-              />
-              <SummaryItem
-                icon={DollarSign}
-                label={t("overview.revenue")}
-                value={fmtPrice(data.revenue.weekBookings)}
-                color="text-green-400"
-              />
-              <SummaryItem
-                icon={XCircle}
-                label={t("overview.cancelled")}
-                value={String(data.bookings.cancelledThisWeek)}
-                color="text-red-400"
-              />
-              <SummaryItem
-                icon={UserX}
-                label={t("overview.noShows")}
-                value={String(data.bookings.noShowThisWeek)}
-                color="text-amber-400"
-              />
+          {(data.openPlayToday ?? []).length === 0 ? (
+            <p className="px-4 py-8 text-center text-sm text-neutral-500">No open play sessions today.</p>
+          ) : (
+            <div className="divide-y divide-neutral-800/50">
+              {(data.openPlayToday ?? []).map((group) => {
+                const total = group.registrations.length;
+                const paid = group.registrations.filter((r) => r.paymentStatus === "paid").length;
+                const verifying = group.registrations.filter((r) => r.paymentStatus === "proof_submitted").length;
+                const pending = group.registrations.filter((r) => r.paymentStatus === "pending").length;
+                const max = group.maxPlayers ?? 0;
+                const fillPct = max > 0 ? Math.min(100, (total / max) * 100) : 0;
+                return (
+                  <button
+                    key={group.scheduleEntryId + group.startTime}
+                    onClick={() => setOpenPlayDetailGroup(group)}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-neutral-800/40 transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">
+                        {fmtTime(group.startTime)} – {fmtTime(group.endTime)}
+                      </p>
+                      <p className="text-xs text-neutral-500 truncate">
+                        {group.title || "Open Play"}
+                        {data.venues.length > 1 && ` · ${group.venueName}`}
+                      </p>
+                      {/* Capacity bar */}
+                      <div className="h-1 rounded-full bg-neutral-700 overflow-hidden mt-1.5 w-full">
+                        <div
+                          className={cn(
+                            "h-full transition-all",
+                            fillPct >= 100 ? "bg-red-500" : fillPct >= 75 ? "bg-amber-500" : "bg-emerald-500"
+                          )}
+                          style={{ width: `${fillPct}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <span className="flex items-center gap-1 text-sm font-bold text-emerald-400 justify-end">
+                        <Users className="h-3.5 w-3.5" />
+                        {total}{max > 0 ? `/${max}` : ""}
+                      </span>
+                      <div className="flex gap-2 text-[10px] justify-end mt-0.5">
+                        {total === 0
+                          ? <span className="text-neutral-600">Empty</span>
+                          : <>
+                              {paid > 0 && <span className="text-emerald-400">{paid} paid</span>}
+                              {verifying > 0 && <span className="text-amber-400">{verifying} verif.</span>}
+                              {pending > 0 && <span className="text-neutral-500">{pending} pend.</span>}
+                            </>
+                        }
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
+          )}
+        </section>
+      </div>
 
-            {(data.coaching.lessonsToday > 0 || data.coaching.lessonsThisWeek > 0) && (
-              <div className="border-t border-neutral-800 pt-3">
-                <p className="text-xs text-neutral-500 mb-2">{t("overview.coaching")}</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <SummaryItem
-                    icon={GraduationCap}
-                    label={t("overview.today")}
-                    value={String(data.coaching.lessonsToday)}
-                    color="text-teal-400"
-                  />
-                  <SummaryItem
-                    icon={GraduationCap}
-                    label={t("overview.thisWeek")}
-                    value={String(data.coaching.lessonsThisWeek)}
-                    color="text-teal-400"
-                  />
-                </div>
-              </div>
-            )}
+      {/* Weekly Summary — full width */}
+      <section className="rounded-xl border border-neutral-800 bg-neutral-900 overflow-hidden">
+        <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <TrendingUp className="h-4 w-4 text-blue-400" />
+            {t("overview.weeklySummary")}
+          </h3>
+        </div>
+        <div className="p-4 space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <SummaryItem
+              icon={CalendarDays}
+              label={t("overview.bookings")}
+              value={String(data.bookings.weekCount)}
+              color="text-blue-400"
+            />
+            <SummaryItem
+              icon={DollarSign}
+              label={t("overview.revenue")}
+              value={fmtPrice(data.revenue.weekBookings)}
+              color="text-green-400"
+            />
+            <SummaryItem
+              icon={XCircle}
+              label={t("overview.cancelled")}
+              value={String(data.bookings.cancelledThisWeek)}
+              color="text-red-400"
+            />
+            <SummaryItem
+              icon={UserX}
+              label={t("overview.noShows")}
+              value={String(data.bookings.noShowThisWeek)}
+              color="text-amber-400"
+            />
+          </div>
 
-            {/* Venue info */}
+          {(data.coaching.lessonsToday > 0 || data.coaching.lessonsThisWeek > 0) && (
             <div className="border-t border-neutral-800 pt-3">
+              <p className="text-xs text-neutral-500 mb-2">{t("overview.coaching")}</p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <SummaryItem
+                  icon={GraduationCap}
+                  label={t("overview.today")}
+                  value={String(data.coaching.lessonsToday)}
+                  color="text-teal-400"
+                />
+                <SummaryItem
+                  icon={GraduationCap}
+                  label={t("overview.thisWeek")}
+                  value={String(data.coaching.lessonsThisWeek)}
+                  color="text-teal-400"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Venue info + Staff */}
+          <div className="border-t border-neutral-800 pt-3 grid sm:grid-cols-2 gap-4">
+            <div>
               <p className="text-xs text-neutral-500 mb-2">{t("overview.venues")}</p>
               <div className="space-y-1.5">
                 {data.venues.map((v) => (
-                  <div
-                    key={v.id}
-                    className="flex items-center justify-between text-sm"
-                  >
+                  <div key={v.id} className="flex items-center justify-between text-sm">
                     <span className="flex items-center gap-1.5">
                       <MapPin className="h-3 w-3 text-neutral-500" />
                       <span className="text-neutral-300">{v.name}</span>
@@ -864,23 +944,20 @@ export default function AdminOverview() {
                 ))}
               </div>
             </div>
-
             {data.staff.totalCount > 0 && (
-              <div className="border-t border-neutral-800 pt-3">
+              <div>
+                <p className="text-xs text-neutral-500 mb-2">{t("overview.staff")}</p>
                 <div className="flex items-center justify-between text-sm">
                   <span className="flex items-center gap-1.5">
                     <Users className="h-3 w-3 text-neutral-500" />
-                    <span className="text-neutral-300">{t("overview.staff")}</span>
-                  </span>
-                  <span className="text-xs text-neutral-500">
-                    {t("overview.staffMembers", { count: data.staff.totalCount })}
+                    <span className="text-neutral-300">{t("overview.staffMembers", { count: data.staff.totalCount })}</span>
                   </span>
                 </div>
               </div>
             )}
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
 
       {/* Quick Links */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -1034,5 +1111,213 @@ function BookingStatusBadge({ status }: { status: string }) {
     >
       {status === "no_show" ? "No Show" : status}
     </span>
+  );
+}
+
+function EditOpenPlayBookingModal({
+  reg,
+  onClose,
+  onUpdated,
+}: {
+  reg: {
+    id: string;
+    playerName: string;
+    playerAvatar: string;
+    playerPhoto: string | null;
+    venueName: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    priceValue: number;
+    paymentStatus: string;
+    paymentProofUrl: string | null;
+    status: string;
+  };
+  onClose: () => void;
+  onUpdated: () => void;
+}) {
+  const [showProof, setShowProof] = useState(false);
+  const [selectedAction, setSelectedAction] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const proofUrl = resolveUploadUrl(reg.paymentProofUrl);
+
+  const paymentStatusLabel: Record<string, { label: string; color: string }> = {
+    pending: { label: "Pending", color: "text-neutral-400" },
+    proof_submitted: { label: "Proof submitted", color: "text-amber-400" },
+    paid: { label: "Paid", color: "text-emerald-400" },
+    refunded: { label: "Refunded", color: "text-blue-400" },
+  };
+  const ps = paymentStatusLabel[reg.paymentStatus] ?? { label: reg.paymentStatus, color: "text-neutral-400" };
+
+  async function handleSave() {
+    if (!selectedAction) return;
+    setSaving(true);
+    setErrorMsg(null);
+    try {
+      await api.patch(`/api/admin/open-play/${reg.id}`, { action: selectedAction });
+      onUpdated();
+    } catch (e) {
+      setErrorMsg((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const isCancelled = reg.status === "cancelled";
+  const isNoShow = reg.status === "no_show";
+  const isActive = !isCancelled && !isNoShow;
+
+  return (
+    <>
+      <div
+        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-4"
+        onClick={onClose}
+      >
+        <div
+          className="w-full max-w-lg rounded-2xl border border-neutral-700 bg-neutral-900 overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-neutral-800 px-5 py-4">
+            <div>
+              <h3 className="text-base font-semibold text-white">Edit Open Play Booking</h3>
+              <p className="text-xs text-neutral-500 mt-0.5">{reg.venueName}</p>
+            </div>
+            <button
+              onClick={onClose}
+              className="rounded-full bg-neutral-800 p-1.5 text-neutral-400 hover:bg-neutral-700 transition-colors"
+            >
+              <XCircle className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Player */}
+          <div className="flex items-center gap-3 px-5 py-4 border-b border-neutral-800">
+            <PlayerAvatarImg photo={reg.playerPhoto} avatar={reg.playerAvatar} />
+            <div>
+              <p className="font-medium text-white">{reg.playerName}</p>
+              <p className="text-xs text-neutral-500 capitalize">
+                {reg.status === "no_show" ? "No show" : reg.status}
+              </p>
+            </div>
+          </div>
+
+          {/* Details grid */}
+          <div className="px-5 py-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-neutral-800/50 px-3 py-2.5">
+                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">Date</p>
+                <p className="text-sm font-medium text-white">{fmtDate(reg.date)}</p>
+              </div>
+              <div className="rounded-xl bg-neutral-800/50 px-3 py-2.5">
+                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">Time</p>
+                <p className="text-sm font-medium text-white">
+                  {fmtTime(reg.startTime)} – {fmtTime(reg.endTime)}
+                </p>
+              </div>
+              <div className="rounded-xl bg-neutral-800/50 px-3 py-2.5">
+                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">Price</p>
+                <p className="text-sm font-medium text-white">{fmtPrice(reg.priceValue)}</p>
+              </div>
+              <div className="rounded-xl bg-neutral-800/50 px-3 py-2.5">
+                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">Payment</p>
+                <p className={cn("text-sm font-medium", ps.color)}>{ps.label}</p>
+              </div>
+            </div>
+
+            {/* Payment proof */}
+            {proofUrl && (
+              <div className="rounded-xl border border-neutral-700 overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-800 bg-neutral-800/40">
+                  <p className="text-xs font-medium text-neutral-300">Payment Proof</p>
+                  <button
+                    onClick={() => setShowProof(true)}
+                    className="text-[10px] text-amber-400 hover:text-amber-300 transition-colors"
+                  >
+                    View full size
+                  </button>
+                </div>
+                <button
+                  onClick={() => setShowProof(true)}
+                  className="w-full bg-neutral-800/20 hover:bg-neutral-800/40 transition-colors"
+                >
+                  <img
+                    src={proofUrl}
+                    alt="Payment proof"
+                    className="w-full max-h-48 object-contain"
+                  />
+                </button>
+              </div>
+            )}
+
+            {/* Action dropdown */}
+            <div className="space-y-1.5">
+              <label className="text-xs text-neutral-400">Action</label>
+              <select
+                value={selectedAction}
+                disabled={saving || !isActive}
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none disabled:opacity-50"
+                onChange={(e) => setSelectedAction(e.target.value)}
+              >
+                <option value="">— Select an action —</option>
+                {reg.paymentStatus === "proof_submitted" && (
+                  <option value="approve_payment">✓ Approve payment</option>
+                )}
+                {isActive && (
+                  <>
+                    <option value="cancel">✕ Cancel registration</option>
+                    <option value="no_show">⚠ Mark as no-show</option>
+                  </>
+                )}
+              </select>
+            </div>
+
+            {errorMsg && (
+              <p className="text-xs text-red-400 rounded-lg bg-red-500/10 px-3 py-2">{errorMsg}</p>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="border-t border-neutral-800 px-5 py-3 flex gap-3">
+            <button
+              onClick={handleSave}
+              disabled={saving || !selectedAction}
+              className="flex-1 rounded-xl bg-purple-600 py-2.5 text-sm font-semibold text-white hover:bg-purple-500 transition-colors disabled:opacity-40"
+            >
+              {saving ? "Saving…" : "Save Changes"}
+            </button>
+            <button
+              onClick={onClose}
+              disabled={saving}
+              className="flex-1 rounded-xl bg-neutral-800 py-2.5 text-sm font-medium text-neutral-300 hover:bg-neutral-700 transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Full-size proof lightbox */}
+      {showProof && proofUrl && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4 cursor-zoom-out"
+          onClick={() => setShowProof(false)}
+        >
+          <img
+            src={proofUrl}
+            alt="Payment proof"
+            className="max-w-full max-h-full rounded-xl object-contain shadow-2xl"
+          />
+          <button
+            type="button"
+            className="absolute top-4 right-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 transition-colors"
+            onClick={() => setShowProof(false)}
+          >
+            <XCircle className="h-5 w-5" />
+          </button>
+        </div>
+      )}
+    </>
   );
 }
