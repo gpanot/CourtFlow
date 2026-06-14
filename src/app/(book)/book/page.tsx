@@ -322,9 +322,9 @@ export default function VenueHomePage() {
       )}
 
       {hasSelection && (
-        <div className="fixed bottom-20 left-0 right-0 z-40 max-w-lg mx-auto">
+        <div className="fixed bottom-0 left-0 right-0 z-40 max-w-lg mx-auto pointer-events-none">
           <div
-            className="px-4 pt-3 pb-4"
+            className="pointer-events-auto px-4 pt-3 pb-[calc(0.75rem+3.625rem+env(safe-area-inset-bottom))]"
             style={{
               background: "rgba(255,255,255,0.7)",
               backdropFilter: "blur(12px)",

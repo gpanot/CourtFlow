@@ -133,6 +133,9 @@ model Venue {
   bankAccount        String?   @map("bank_account")
   bankOwnerName      String?   @map("bank_owner_name")
   contactPhone       String?   @map("contact_phone")
+  contactWhatsApp    String?   @map("contact_whatsapp")
+  contactZalo        String?   @map("contact_zalo")
+  contactLine        String?   @map("contact_line")
   createdAt          DateTime  @default(now()) @map("created_at")
 
   billingStatus String @default("active") @map("billing_status")

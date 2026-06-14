@@ -33,6 +33,9 @@ interface Venue {
   active: boolean;
   portalEnabled: boolean;
   contactPhone: string | null;
+  contactWhatsApp: string | null;
+  contactZalo: string | null;
+  contactLine: string | null;
   logoUrl: string | null;
   tvText: string | null;
   settings: VenueSettings;
@@ -174,6 +177,9 @@ function VenueCard({
   const [editName, setEditName] = useState(venue.name);
   const [editLocation, setEditLocation] = useState(venue.location || "");
   const [editContactPhone, setEditContactPhone] = useState(venue.contactPhone || "");
+  const [editContactWhatsApp, setEditContactWhatsApp] = useState(venue.contactWhatsApp || "");
+  const [editContactZalo, setEditContactZalo] = useState(venue.contactZalo || "");
+  const [editContactLine, setEditContactLine] = useState(venue.contactLine || "");
   const [saving, setSaving] = useState(false);
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
   const [deleting, setDeleting] = useState(false);
@@ -186,6 +192,9 @@ function VenueCard({
         name: editName.trim(),
         location: editLocation.trim() || null,
         contactPhone: editContactPhone.trim() || null,
+        contactWhatsApp: editContactWhatsApp.trim() || null,
+        contactZalo: editContactZalo.trim() || null,
+        contactLine: editContactLine.trim() || null,
       });
       setEditing(false);
       await onRefresh();
@@ -201,6 +210,9 @@ function VenueCard({
     setEditName(venue.name);
     setEditLocation(venue.location || "");
     setEditContactPhone(venue.contactPhone || "");
+    setEditContactWhatsApp(venue.contactWhatsApp || "");
+    setEditContactZalo(venue.contactZalo || "");
+    setEditContactLine(venue.contactLine || "");
   };
 
   const handleDelete = async () => {
@@ -250,7 +262,40 @@ function VenueCard({
                 type="tel"
                 value={editContactPhone}
                 onChange={(e) => setEditContactPhone(e.target.value)}
-                placeholder="Contact Phone (e.g. +84 123 456 789)"
+                placeholder="Phone (e.g. +66 99 619 2666)"
+                className="w-full rounded-lg border border-neutral-600 bg-neutral-800 px-3 py-1.5 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveVenue();
+                  if (e.key === "Escape") cancelEdit();
+                }}
+              />
+              <input
+                type="tel"
+                value={editContactWhatsApp}
+                onChange={(e) => setEditContactWhatsApp(e.target.value)}
+                placeholder="WhatsApp (e.g. +66 99 619 2666)"
+                className="w-full rounded-lg border border-neutral-600 bg-neutral-800 px-3 py-1.5 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveVenue();
+                  if (e.key === "Escape") cancelEdit();
+                }}
+              />
+              <input
+                type="text"
+                value={editContactZalo}
+                onChange={(e) => setEditContactZalo(e.target.value)}
+                placeholder="Zalo (VN) — phone number"
+                className="w-full rounded-lg border border-neutral-600 bg-neutral-800 px-3 py-1.5 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveVenue();
+                  if (e.key === "Escape") cancelEdit();
+                }}
+              />
+              <input
+                type="text"
+                value={editContactLine}
+                onChange={(e) => setEditContactLine(e.target.value)}
+                placeholder="Line (TH) — ID or @username"
                 className="w-full rounded-lg border border-neutral-600 bg-neutral-800 px-3 py-1.5 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") saveVenue();
@@ -305,10 +350,13 @@ function VenueCard({
                     <MapPin className="h-3 w-3 shrink-0" /> {venue.location}
                   </p>
                 )}
-                {venue.contactPhone && (
-                  <p className="flex items-center gap-1 text-xs text-neutral-400 md:text-sm">
-                    📞 {venue.contactPhone}
-                  </p>
+                {(venue.contactPhone || venue.contactWhatsApp || venue.contactZalo || venue.contactLine) && (
+                  <div className="mt-1 space-y-0.5 text-xs text-neutral-400 md:text-sm">
+                    {venue.contactPhone && <p>📞 {venue.contactPhone}</p>}
+                    {venue.contactWhatsApp && <p>💬 WhatsApp: {venue.contactWhatsApp}</p>}
+                    {venue.contactZalo && <p>🔵 Zalo: {venue.contactZalo}</p>}
+                    {venue.contactLine && <p>🟢 Line: {venue.contactLine}</p>}
+                  </div>
                 )}
                 <div className="mt-1.5 flex items-center gap-3 text-xs text-neutral-500">
                   <span>{venue.courts.length} {t("venues.courts")}</span>

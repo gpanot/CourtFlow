@@ -15,6 +15,19 @@ interface VenueContact {
   name: string;
   location: string | null;
   contactPhone: string | null;
+  contactWhatsApp: string | null;
+  contactZalo: string | null;
+  contactLine: string | null;
+}
+
+function digitsOnly(value: string) {
+  return value.replace(/[^0-9]/g, "");
+}
+
+function lineLink(value: string) {
+  if (value.startsWith("http")) return value;
+  if (value.startsWith("@")) return `https://line.me/R/ti/p/${value}`;
+  return `https://line.me/ti/p/~${value.replace(/^~/, "")}`;
 }
 
 const STEP_LABELS = ["Requested", "Verifying", "Paid"] as const;
@@ -79,7 +92,14 @@ export default function BookingDetailPage() {
       portalFetch(`/api/public/venue${vq}`)
         .then((r) => r.json())
         .then((v) =>
-          setVenueContact({ name: v.name, location: v.location, contactPhone: v.contactPhone })
+          setVenueContact({
+            name: v.name,
+            location: v.location,
+            contactPhone: v.contactPhone,
+            contactWhatsApp: v.contactWhatsApp,
+            contactZalo: v.contactZalo,
+            contactLine: v.contactLine,
+          })
         )
         .catch(() => {});
     }
@@ -123,9 +143,20 @@ export default function BookingDetailPage() {
   const helpMessage = venueContact
     ? `Hi, I have a booking (ref: ${String(booking.paymentRef || id).slice(0, 20)}) at ${venueContact.name}. Could you help me with it?`
     : "";
-  const whatsappLink = venueContact?.contactPhone
-    ? `https://wa.me/${venueContact.contactPhone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(helpMessage)}`
+  const whatsappNumber = venueContact?.contactWhatsApp || venueContact?.contactPhone;
+  const whatsappLink = whatsappNumber
+    ? `https://wa.me/${digitsOnly(whatsappNumber)}?text=${encodeURIComponent(helpMessage)}`
     : null;
+  const zaloLink = venueContact?.contactZalo
+    ? `https://zalo.me/${digitsOnly(venueContact.contactZalo)}`
+    : null;
+  const lineLinkUrl = venueContact?.contactLine ? lineLink(venueContact.contactLine) : null;
+  const hasAnyContact = !!(
+    venueContact?.contactPhone ||
+    venueContact?.contactWhatsApp ||
+    venueContact?.contactZalo ||
+    venueContact?.contactLine
+  );
 
   return (
     <div className="px-6 pt-6 pb-8">
@@ -156,18 +187,17 @@ export default function BookingDetailPage() {
           value={isCancelled ? "—" : paymentInfo.label}
           valueClass={isCancelled ? "" : paymentInfo.color}
         />
+        {paymentRef && !isCancelled ? (
+          <Row label="Payment ref" value={paymentRef} valueClass="font-mono text-xs" />
+        ) : null}
       </div>
 
-      {paymentRef ? (
-        <p className="text-xs text-[var(--cm-text-muted)] mb-4 font-mono">
-          Payment ref: {paymentRef}
-        </p>
-      ) : null}
-
       {isVerifying ? (
-        <p className="text-xs text-[var(--cm-text-muted)] mb-4 text-center">
-          Our staff is verifying your payment — give us a moment 🙏
-        </p>
+        <div className="mb-4 rounded-xl border border-[var(--cm-orange)]/40 bg-[var(--cm-orange)]/10 px-4 py-3">
+          <p className="text-sm font-semibold text-[var(--cm-orange)] text-center leading-snug">
+            Our staff is verifying your payment — give us a moment 🙏
+          </p>
+        </div>
       ) : null}
 
       {/* Payment proof image if submitted */}
@@ -226,34 +256,56 @@ export default function BookingDetailPage() {
           <h3 className="text-sm font-semibold mb-2">Venue Contact</h3>
           <p className="text-sm font-medium">{venueContact.name}</p>
           {venueContact.location && (
-            <p className="text-xs text-[var(--cm-text-sec)]">{venueContact.location}</p>
+            <p className="text-xs text-[var(--cm-text-sec)] mb-2">{venueContact.location}</p>
           )}
-          {venueContact.contactPhone && (
-            <a
-              href={`tel:${venueContact.contactPhone}`}
-              className="inline-flex items-center gap-1.5 mt-2 text-sm text-[var(--cm-accent)] font-medium"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-              </svg>
-              {venueContact.contactPhone}
-            </a>
-          )}
-          {whatsappLink && (
-            <a
-              href={whatsappLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 mt-2 ml-4 text-sm text-[var(--cm-green)] font-medium"
-            >
-              WhatsApp
-            </a>
-          )}
+          <div className="flex flex-wrap gap-x-4 gap-y-2 mt-1">
+            {venueContact.contactPhone && (
+              <a
+                href={`tel:${venueContact.contactPhone}`}
+                className="inline-flex items-center gap-1.5 text-sm text-[var(--cm-accent)] font-medium"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                </svg>
+                {venueContact.contactPhone}
+              </a>
+            )}
+            {whatsappLink && (
+              <a
+                href={whatsappLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm text-[var(--cm-green)] font-medium"
+              >
+                WhatsApp
+              </a>
+            )}
+            {zaloLink && (
+              <a
+                href={zaloLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm text-[#0068FF] font-medium"
+              >
+                Zalo
+              </a>
+            )}
+            {lineLinkUrl && (
+              <a
+                href={lineLinkUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm text-[#06C755] font-medium"
+              >
+                Line
+              </a>
+            )}
+          </div>
         </div>
       )}
 
       {/* Help message */}
-      {!isCancelled && paymentStatus !== "paid" && venueContact?.contactPhone && (
+      {!isCancelled && paymentStatus !== "paid" && hasAnyContact && (
         <p className="text-xs text-[var(--cm-text-sec)] mb-4 text-center">
           Need help? Contact the venue directly.
         </p>

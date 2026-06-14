@@ -23,6 +23,9 @@ export async function GET(request: NextRequest) {
         bankAccount: true,
         bankOwnerName: true,
         contactPhone: true,
+        contactWhatsApp: true,
+        contactZalo: true,
+        contactLine: true,
       },
     });
 
@@ -36,6 +39,9 @@ export async function GET(request: NextRequest) {
       location: venue.location,
       logoUrl: venue.logoUrl,
       contactPhone: venue.contactPhone,
+      contactWhatsApp: venue.contactWhatsApp,
+      contactZalo: venue.contactZalo,
+      contactLine: venue.contactLine,
       bookingConfig: {
         slotDurationMinutes: config.slotDurationMinutes,
         bookingStartHour: config.bookingStartHour,
