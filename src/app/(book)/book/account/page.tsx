@@ -9,6 +9,7 @@ import Link from "next/link";
 import { portalFetch } from "@/lib/portal-fetch";
 import { getPlayerFromToken } from "@/lib/player-token";
 import { useTranslation } from "react-i18next";
+import { BookTabTopBar } from "../components/BookTabTopBar";
 
 interface Profile {
   id: string;
@@ -52,9 +53,12 @@ export default function AccountPage() {
 
   if ((!getPlayerFromToken() && status === "loading") || !profile) {
     return (
-      <div className="px-4 pt-12">
-        <div className="h-6 bg-[var(--cm-bg-card)] rounded w-32 mb-4 animate-pulse" />
-        <div className="h-24 bg-[var(--cm-bg-card)] rounded-xl animate-pulse" />
+      <div>
+        <BookTabTopBar title={t("account.title")} />
+        <div className="px-4">
+          <div className="h-6 bg-[var(--cm-bg-card)] rounded w-32 mb-4 animate-pulse" />
+          <div className="h-24 bg-[var(--cm-bg-card)] rounded-xl animate-pulse" />
+        </div>
       </div>
     );
   }
@@ -65,9 +69,10 @@ export default function AccountPage() {
   );
 
   return (
-    <div className="px-4 pt-12">
-      <h1 className="text-xl font-bold mb-4">{t("account.title")}</h1>
+    <div>
+      <BookTabTopBar title={t("account.title")} />
 
+      <div className="px-4 pb-8">
       <div className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-4">
         <div className="flex items-center gap-3 mb-3">
           {profile.avatar ? (
@@ -153,6 +158,7 @@ export default function AccountPage() {
       >
         {t("account.signOut")}
       </button>
+      </div>
     </div>
   );
 }

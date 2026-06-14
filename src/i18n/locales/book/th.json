@@ -186,7 +186,7 @@
     "durationHours": "{{count}} ชม."
   },
   "coaches": {
-    "title": "โค้ชของเรา",
+    "title": "จองโค้ชของเรา",
     "searchPlaceholder": "ค้นหาตามชื่อ...",
     "noMatch": "ไม่พบโค้ชที่ตรงกับการค้นหา",
     "noneAvailable": "ยังไม่มีโค้ชที่สถานที่นี้",

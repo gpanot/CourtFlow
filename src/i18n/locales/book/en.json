@@ -186,7 +186,7 @@
     "durationHours": "{{count}}h"
   },
   "coaches": {
-    "title": "Our Coaches",
+    "title": "Book Our Coaches",
     "searchPlaceholder": "Search by name...",
     "noMatch": "No coaches match your search.",
     "noneAvailable": "No coaches available at this venue.",

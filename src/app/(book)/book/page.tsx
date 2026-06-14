@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { usePlayerVenue } from "./components/PlayerVenueContext";
 import { useBookFormatters } from "./lib/useBookFormatters";
+import { BookTabTopBar } from "./components/BookTabTopBar";
 
 interface Slot {
   startTime: string;
@@ -263,11 +264,9 @@ export default function VenueHomePage() {
 
   return (
     <div>
-      <div className="px-4 pt-8 pb-4">
-        <h1 className="text-xl font-bold">{venue?.name ?? t("common.loading")}</h1>
-      </div>
+      <BookTabTopBar title={venue?.name ?? t("common.loading")} />
 
-      <div className="px-4 mb-4">
+      <div className="px-4 pb-4">
         <h2 className="text-base font-semibold mb-3">{t("home.whatToBook")}</h2>
         <div className="grid grid-cols-2 gap-2 mb-4">
           {(["court", "open_play"] as const).map((type) => {

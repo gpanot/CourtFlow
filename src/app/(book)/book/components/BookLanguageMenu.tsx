@@ -45,8 +45,10 @@ export function BookLanguageMenu({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`rounded-xl border border-[var(--cm-border)] bg-[var(--cm-bg-card)] leading-none shadow-sm transition-colors hover:border-[var(--cm-accent)]/40 ${
-          large ? "px-[0.9375rem] py-[0.5625rem] text-[1.6875rem]" : "px-2.5 py-1.5 text-lg"
+        className={`leading-none transition-colors ${
+          large
+            ? "rounded-lg border border-[var(--cm-border)] bg-[var(--cm-bg)] px-3 py-[0.45rem] text-[1.35rem] hover:bg-[var(--cm-bg-surface)]"
+            : "rounded-xl border border-[var(--cm-border)] bg-[var(--cm-bg-card)] px-2.5 py-1.5 text-lg shadow-sm hover:border-[var(--cm-accent)]/40"
         }`}
         aria-label={t("language.label")}
         aria-expanded={open}
@@ -58,7 +60,7 @@ export function BookLanguageMenu({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full z-50 mt-2 min-w-[9.5rem] overflow-hidden rounded-xl border border-[var(--cm-border)] bg-[var(--cm-bg-card)] py-1 shadow-[var(--cm-shadow)]"
+          className="absolute right-0 top-full z-50 mt-2 min-w-[9.5rem] overflow-hidden rounded-lg border border-[var(--cm-border)] bg-[var(--cm-bg-card)] py-1"
         >
           {BOOK_LANGUAGES.map((lang) => (
             <button

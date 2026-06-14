@@ -186,7 +186,7 @@
     "durationHours": "{{count}} giờ"
   },
   "coaches": {
-    "title": "Huấn luyện viên",
+    "title": "Đặt huấn luyện viên",
     "searchPlaceholder": "Tìm theo tên...",
     "noMatch": "Không có HLV phù hợp.",
     "noneAvailable": "Chưa có HLV tại địa điểm này.",

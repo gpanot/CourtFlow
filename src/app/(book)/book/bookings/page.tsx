@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { useBookFormatters } from "../lib/useBookFormatters";
+import { BookTabTopBar } from "../components/BookTabTopBar";
 
 interface BookingItem {
   id: string;
@@ -92,7 +93,12 @@ export default function MyBookingsPage() {
   }, [status, router]);
 
   if (!loaded) {
-    return <div className="px-4 pt-12 text-[var(--cm-text-muted)]">{t("common.loading")}</div>;
+    return (
+      <div>
+        <BookTabTopBar title={t("bookings.title")} />
+        <div className="px-4 text-[var(--cm-text-muted)]">{t("common.loading")}</div>
+      </div>
+    );
   }
 
   const now = new Date();
@@ -104,9 +110,10 @@ export default function MyBookingsPage() {
   const pastOP = openPlayRegs.filter((r) => new Date(r.startTime) < now || r.status === "cancelled");
 
   return (
-    <div className="px-4 pt-12 pb-8">
-      <h1 className="text-xl font-bold mb-4">{t("bookings.title")}</h1>
+    <div>
+      <BookTabTopBar title={t("bookings.title")} />
 
+      <div className="px-4 pb-8">
       <div className="flex gap-2 mb-4 overflow-x-auto pb-1 scrollbar-hide">
         {(["courts", "sessions", "openplay"] as const).map((tabKey) => (
           <button
@@ -274,6 +281,7 @@ export default function MyBookingsPage() {
           )}
         </>
       )}
+      </div>
     </div>
   );
 }

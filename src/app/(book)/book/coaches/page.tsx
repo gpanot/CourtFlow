@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { usePlayerVenue } from "../components/PlayerVenueContext";
 import { useBookFormatters } from "../lib/useBookFormatters";
+import { BookTabTopBar } from "../components/BookTabTopBar";
 
 interface Coach {
   id: string;
@@ -38,9 +39,10 @@ export default function CoachesPage() {
   );
 
   return (
-    <div className="px-4 pt-8 pb-8">
-      <h1 className="text-xl font-bold mb-4">{t("coaches.title")}</h1>
+    <div>
+      <BookTabTopBar title={t("coaches.title")} />
 
+      <div className="px-4 pb-8">
       <input
         type="text"
         placeholder={t("coaches.searchPlaceholder")}
@@ -89,6 +91,7 @@ export default function CoachesPage() {
           ))}
         </div>
       )}
+      </div>
     </div>
   );
 }
