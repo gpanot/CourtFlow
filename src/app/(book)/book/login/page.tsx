@@ -27,10 +27,13 @@ function LoginContent() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const token = getPlayerFromToken();
+    console.log("[login] mount check — token:", token ? `${JSON.stringify(token).slice(0, 60)}...` : "null", "intro_seen:", localStorage.getItem("intro_seen"));
     // Already logged in via credentials token → redirect
-    if (getPlayerFromToken()) { router.replace(callbackUrl); return; }
+    if (token) { console.log("[login] already authed → redirect", callbackUrl); router.replace(callbackUrl); return; }
     // Show intro to new visitors
     if (!localStorage.getItem("intro_seen")) {
+      console.log("[login] no intro_seen → redirect /book/intro");
       router.replace("/book/intro");
     }
   }, [router, callbackUrl]);
@@ -56,6 +59,7 @@ function LoginContent() {
     if (!siEmail || !siPassword) { setError("Please enter your email and password."); return; }
     setLoading("email-signin");
     setError(null);
+    console.log("[login] handleEmailSignIn — email:", siEmail);
     try {
       const res = await fetch("/api/public/auth/login", {
         method: "POST",
@@ -63,13 +67,17 @@ function LoginContent() {
         body: JSON.stringify({ email: siEmail, password: siPassword }),
       });
       const data = await res.json();
+      console.log("[login] /auth/login response", res.status, { onboardingComplete: data.onboardingComplete, playerId: data.playerId, error: data.error });
       if (!res.ok) {
         setError(data.error || "Invalid email or password.");
       } else {
         setPlayerToken(data.token);
-        router.replace(data.onboardingComplete ? callbackUrl : "/book/onboarding");
+        const dest = data.onboardingComplete ? callbackUrl : "/book/onboarding";
+        console.log("[login] sign-in ok → redirect", dest);
+        router.replace(dest);
       }
-    } catch {
+    } catch (e) {
+      console.error("[login] handleEmailSignIn error", e);
       setError("Sign-in failed. Please try again.");
     }
     setLoading(null);
@@ -87,6 +95,7 @@ function LoginContent() {
       setError("Password must be at least 8 characters."); return;
     }
     setLoading("signup");
+    console.log("[login] handleSignUp — email:", suEmail);
     try {
       const res = await fetch("/api/public/auth/signup", {
         method: "POST",
@@ -94,23 +103,28 @@ function LoginContent() {
         body: JSON.stringify({ name: suName, email: suEmail, password: suPassword }),
       });
       const data = await res.json();
+      console.log("[login] /auth/signup response", res.status, data);
       if (!res.ok) { setError(data.error || "Sign-up failed."); setLoading(null); return; }
 
+      console.log("[login] signup ok, now auto-login...");
       const loginRes = await fetch("/api/public/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: suEmail, password: suPassword }),
       });
       const loginData = await loginRes.json();
+      console.log("[login] post-signup login response", loginRes.status, { onboardingComplete: loginData.onboardingComplete, error: loginData.error });
       if (!loginRes.ok) {
         setSuccess("Account created! Please sign in.");
         setTab("signin");
         setSiEmail(suEmail);
       } else {
         setPlayerToken(loginData.token);
+        console.log("[login] post-signup → redirect /book/onboarding");
         router.replace("/book/onboarding");
       }
-    } catch {
+    } catch (e) {
+      console.error("[login] handleSignUp error", e);
       setError("Sign-up failed. Please try again.");
     }
     setLoading(null);
@@ -119,101 +133,107 @@ function LoginContent() {
   const inputCls = "w-full px-4 py-3 bg-[var(--cm-bg-input)] border border-[var(--cm-border)] rounded-xl text-sm outline-none focus:border-[var(--cm-accent)] transition-colors text-[var(--cm-text)]";
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-dvh px-6 pb-8">
-      <div className="w-20 h-20 rounded-2xl overflow-hidden mb-4">
-        <Image src="/images/splash-icon.png" alt="CourtFlow" width={80} height={80} priority />
-      </div>
-      <h1 className="text-xl font-bold mb-1">Welcome</h1>
-      <p className="text-sm text-[var(--cm-text-sec)] mb-6 text-center">
-        Book courts and coaching sessions
-      </p>
-
-      {/* Tab switcher */}
-      <div className="flex w-full bg-[var(--cm-bg-surface)] border border-[var(--cm-border)] rounded-xl p-1 mb-6 gap-1">
-        <button
-          onClick={() => switchTab("signin")}
-          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-            tab === "signin" ? "bg-[var(--cm-accent)] text-black" : "text-[var(--cm-text-sec)]"
-          }`}
-        >
-          Sign In
-        </button>
-        <button
-          onClick={() => switchTab("signup")}
-          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-            tab === "signup" ? "bg-[var(--cm-accent)] text-black" : "text-[var(--cm-text-sec)]"
-          }`}
-        >
-          Sign Up
-        </button>
-      </div>
-
-      {error && (
-        <div className="w-full mb-4 p-3 bg-[var(--cm-red)]/10 text-[var(--cm-red)] text-sm rounded-xl text-center">
-          {error}
+    <div className="flex flex-col min-h-dvh bg-[var(--cm-bg)]">
+      {/* Fixed header — logo, title, tabs */}
+      <div className="flex-shrink-0 flex flex-col items-center px-6 pt-10 pb-0 bg-[var(--cm-bg)]">
+        <div className="w-20 h-20 rounded-2xl overflow-hidden mb-4">
+          <Image src="/images/splash-icon.png" alt="CourtFlow" width={80} height={80} priority />
         </div>
-      )}
-      {success && (
-        <div className="w-full mb-4 p-3 bg-[var(--cm-green)]/10 text-[var(--cm-green)] text-sm rounded-xl text-center">
-          {success}
+        <h1 className="text-xl font-bold mb-1">Welcome</h1>
+        <p className="text-sm text-[var(--cm-text-sec)] mb-6 text-center">
+          Book courts and coaching sessions
+        </p>
+
+        {/* Tab switcher — always visible, never moves */}
+        <div className="flex w-full bg-[var(--cm-bg-surface)] border border-[var(--cm-border)] rounded-xl p-1 mb-0 gap-1">
+          <button
+            onClick={() => switchTab("signin")}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+              tab === "signin" ? "bg-[var(--cm-accent)] text-black" : "text-[var(--cm-text-sec)]"
+            }`}
+          >
+            Sign In
+          </button>
+          <button
+            onClick={() => switchTab("signup")}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+              tab === "signup" ? "bg-[var(--cm-accent)] text-black" : "text-[var(--cm-text-sec)]"
+            }`}
+          >
+            Sign Up
+          </button>
         </div>
-      )}
+      </div>
 
-      {tab === "signin" ? (
-        <>
-          <div className="w-full space-y-3 mb-4">
-            <input type="email" placeholder="Email" value={siEmail} onChange={(e) => setSiEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleEmailSignIn()} className={inputCls} />
-            <input type="password" placeholder="Password" value={siPassword} onChange={(e) => setSiPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleEmailSignIn()} className={inputCls} />
+      {/* Scrollable content below tabs */}
+      <div className="flex-1 overflow-y-auto px-6 pt-5 pb-8">
+        {error && (
+          <div className="w-full mb-4 p-3 bg-[var(--cm-red)]/10 text-[var(--cm-red)] text-sm rounded-xl text-center">
+            {error}
           </div>
-
-          <button onClick={handleEmailSignIn} disabled={!!loading} className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl text-sm font-medium mb-4 disabled:opacity-40 transition-opacity">
-            {loading === "email-signin" ? <Spinner /> : "Sign In"}
-          </button>
-
-          <Divider />
-
-          <button onClick={() => handleOAuth("google")} disabled={!!loading} className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl text-sm font-medium hover:opacity-80 transition-opacity disabled:opacity-60 mb-3">
-            {loading === "google" ? <Spinner /> : <GoogleIcon />}
-            Continue with Google
-          </button>
-
-          <button onClick={() => handleOAuth("apple")} disabled={!!loading} className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-black text-white rounded-xl text-sm font-medium hover:bg-neutral-800 transition-colors disabled:opacity-60">
-            {loading === "apple" ? <Spinner /> : <AppleIcon />}
-            Continue with Apple
-          </button>
-        </>
-      ) : (
-        <>
-          <div className="w-full space-y-3 mb-4">
-            <input type="text" placeholder="Full name" value={suName} onChange={(e) => setSuName(e.target.value)} className={inputCls} />
-            <input type="email" placeholder="Email" value={suEmail} onChange={(e) => setSuEmail(e.target.value)} className={inputCls} />
-            <input type="password" placeholder="Password (min 8 characters)" value={suPassword} onChange={(e) => setSuPassword(e.target.value)} className={inputCls} />
-            <input type="password" placeholder="Confirm password" value={suPassword2} onChange={(e) => setSuPassword2(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSignUp()} className={inputCls} />
+        )}
+        {success && (
+          <div className="w-full mb-4 p-3 bg-[var(--cm-green)]/10 text-[var(--cm-green)] text-sm rounded-xl text-center">
+            {success}
           </div>
+        )}
 
-          <button onClick={handleSignUp} disabled={!!loading} className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl text-sm font-medium mb-4 disabled:opacity-40 transition-opacity">
-            {loading === "signup" ? <Spinner /> : "Create Account"}
-          </button>
+        {tab === "signin" ? (
+          <>
+            <div className="w-full space-y-3 mb-4">
+              <input type="email" placeholder="Email" value={siEmail} onChange={(e) => setSiEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleEmailSignIn()} className={inputCls} />
+              <input type="password" placeholder="Password" value={siPassword} onChange={(e) => setSiPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleEmailSignIn()} className={inputCls} />
+            </div>
 
-          <Divider />
+            <button onClick={handleEmailSignIn} disabled={!!loading} className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl text-sm font-medium mb-4 disabled:opacity-40 transition-opacity">
+              {loading === "email-signin" ? <Spinner /> : "Sign In"}
+            </button>
 
-          <button onClick={() => handleOAuth("google")} disabled={!!loading} className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl text-sm font-medium hover:opacity-80 transition-opacity disabled:opacity-60 mb-3">
-            {loading === "google" ? <Spinner /> : <GoogleIcon />}
-            Sign up with Google
-          </button>
+            <Divider />
 
-          <button onClick={() => handleOAuth("apple")} disabled={!!loading} className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-black text-white rounded-xl text-sm font-medium hover:bg-neutral-800 transition-colors disabled:opacity-60">
-            {loading === "apple" ? <Spinner /> : <AppleIcon />}
-            Sign up with Apple
-          </button>
-        </>
-      )}
+            <button onClick={() => handleOAuth("google")} disabled={!!loading} className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl text-sm font-medium hover:opacity-80 transition-opacity disabled:opacity-60 mb-3">
+              {loading === "google" ? <Spinner /> : <GoogleIcon />}
+              Continue with Google
+            </button>
 
-      <p className="text-xs text-[var(--cm-text-muted)] mt-6 text-center">
-        By continuing you agree to our{" "}
-        <span className="underline">Terms of Service</span> &{" "}
-        <span className="underline">Privacy Policy</span>
-      </p>
+            <button onClick={() => handleOAuth("apple")} disabled={!!loading} className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-black text-white rounded-xl text-sm font-medium hover:bg-neutral-800 transition-colors disabled:opacity-60">
+              {loading === "apple" ? <Spinner /> : <AppleIcon />}
+              Continue with Apple
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="w-full space-y-3 mb-4">
+              <input type="text" placeholder="Full name" value={suName} onChange={(e) => setSuName(e.target.value)} className={inputCls} />
+              <input type="email" placeholder="Email" value={suEmail} onChange={(e) => setSuEmail(e.target.value)} className={inputCls} />
+              <input type="password" placeholder="Password (min 8 characters)" value={suPassword} onChange={(e) => setSuPassword(e.target.value)} className={inputCls} />
+              <input type="password" placeholder="Confirm password" value={suPassword2} onChange={(e) => setSuPassword2(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSignUp()} className={inputCls} />
+            </div>
+
+            <button onClick={handleSignUp} disabled={!!loading} className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl text-sm font-medium mb-4 disabled:opacity-40 transition-opacity">
+              {loading === "signup" ? <Spinner /> : "Create Account"}
+            </button>
+
+            <Divider />
+
+            <button onClick={() => handleOAuth("google")} disabled={!!loading} className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl text-sm font-medium hover:opacity-80 transition-opacity disabled:opacity-60 mb-3">
+              {loading === "google" ? <Spinner /> : <GoogleIcon />}
+              Sign up with Google
+            </button>
+
+            <button onClick={() => handleOAuth("apple")} disabled={!!loading} className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-black text-white rounded-xl text-sm font-medium hover:bg-neutral-800 transition-colors disabled:opacity-60">
+              {loading === "apple" ? <Spinner /> : <AppleIcon />}
+              Sign up with Apple
+            </button>
+          </>
+        )}
+
+        <p className="text-xs text-[var(--cm-text-muted)] mt-6 text-center">
+          By continuing you agree to our{" "}
+          <span className="underline">Terms of Service</span> &{" "}
+          <span className="underline">Privacy Policy</span>
+        </p>
+      </div>
     </div>
   );
 }

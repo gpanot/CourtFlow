@@ -1,3 +1,5 @@
+#June 13,2026
+
 # Booking & Payment Statuses
 
 Reference for court bookings and coach+court sessions in CourtFlow. Both entity types use **two separate fields**: reservation status (`status`) and payment status (`paymentStatus`).

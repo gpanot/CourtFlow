@@ -12,6 +12,8 @@ export async function POST(request: NextRequest) {
       password?: string;
     };
 
+    console.log("[signup API] received — email:", email, "name:", name, "DATABASE_URL set:", !!process.env.DATABASE_URL);
+
     if (!name || name.trim().length < 2)
       return error("Name must be at least 2 characters", 400);
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
@@ -21,6 +23,7 @@ export async function POST(request: NextRequest) {
 
     const normalizedEmail = email.toLowerCase().trim();
 
+    console.log("[signup API] checking existing account for:", normalizedEmail);
     const existing = await prisma.playerAccount.findUnique({
       where: {
         provider_providerAccountId: {
@@ -29,10 +32,11 @@ export async function POST(request: NextRequest) {
         },
       },
     });
-    if (existing) return error("An account with this email already exists", 409);
+    if (existing) { console.log("[signup API] account already exists"); return error("An account with this email already exists", 409); }
 
     const passwordHash = await bcrypt.hash(password, 12);
 
+    console.log("[signup API] creating player...");
     const player = await prisma.player.create({
       data: {
         name: name.trim(),
@@ -42,6 +46,7 @@ export async function POST(request: NextRequest) {
         skillLevel: "beginner",
       },
     });
+    console.log("[signup API] player created:", player.id);
 
     await prisma.playerAccount.create({
       data: {
@@ -54,9 +59,11 @@ export async function POST(request: NextRequest) {
         emailVerified: false,
       },
     });
+    console.log("[signup API] account created, done");
 
     return json({ playerId: player.id }, 201);
   } catch (e) {
+    console.error("[signup API] error:", (e as Error).message, (e as Error).stack?.slice(0, 300));
     return error((e as Error).message, 500);
   }
 }

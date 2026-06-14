@@ -46,9 +46,11 @@ export default function OnboardingPage() {
 
   // Redirect if not authenticated at all
   useEffect(() => {
+    console.log("[onboarding] auth check — isCredentialsAuth:", isCredentialsAuth, "status:", status, "onboardingComplete:", session?.onboardingComplete);
     if (isCredentialsAuth) return; // credentials user is always "authenticated"
-    if (status === "unauthenticated") router.replace("/book/login");
+    if (status === "unauthenticated") { console.log("[onboarding] unauthenticated → /book/login"); router.replace("/book/login"); }
     if (status === "authenticated" && session?.onboardingComplete) {
+      console.log("[onboarding] already complete → /book");
       router.replace("/book");
     }
   }, [status, session, router, isCredentialsAuth]);
@@ -56,34 +58,47 @@ export default function OnboardingPage() {
   // If the player already has a real phone but no venue, skip to venue step
   useEffect(() => {
     const ready = isCredentialsAuth || status === "authenticated";
+    console.log("[onboarding] profile-check effect — ready:", ready, "initialCheckDone:", initialCheckDone);
     if (!ready || initialCheckDone) return;
     setInitialCheckDone(true);
+    console.log("[onboarding] fetching /api/public/account...");
     fetch("/api/public/account", { headers: authHeader })
       .then((r) => r.json())
       .then((profile) => {
+        console.log("[onboarding] profile:", { phone: profile.phone, gender: profile.gender, skillLevel: profile.skillLevel, venue: profile.venue });
         const hasRealPhone = profile.phone && !profile.phone.startsWith("oauth_") && !profile.phone.startsWith("email_");
+        console.log("[onboarding] hasRealPhone:", hasRealPhone, "hasVenue:", !!profile.venue);
         if (hasRealPhone && !profile.venue) {
+          const profileGender = profile.gender || "";
+          const profileSkillLevel = profile.skillLevel || "";
+          console.log("[onboarding] has real phone, no venue — pre-filling gender:", profileGender, "skillLevel:", profileSkillLevel);
           setPhone(profile.phone);
-          setGender(profile.gender || "");
-          setSkillLevel(profile.skillLevel || "");
+          setGender(profileGender);
+          setSkillLevel(profileSkillLevel);
           setVenuesLoading(true);
           fetch("/api/public/venues")
             .then((r) => r.json())
             .then((data: PortalVenue[]) => {
+              console.log("[onboarding] venues count:", data.length);
               if (data.length === 0) {
-                submitOnboarding(null, profile.phone);
+                console.log("[onboarding] 0 venues → submitOnboarding(null, ...)");
+                submitOnboarding(null, profile.phone, profileGender, profileSkillLevel);
               } else if (data.length === 1) {
-                submitOnboarding(data[0].id, profile.phone);
+                console.log("[onboarding] 1 venue → submitOnboarding auto");
+                submitOnboarding(data[0].id, profile.phone, profileGender, profileSkillLevel);
               } else {
+                console.log("[onboarding] multiple venues → show picker");
                 setVenues(data);
                 setStep("venue");
                 setVenuesLoading(false);
               }
             })
-            .catch(() => setVenuesLoading(false));
+            .catch((e) => { console.error("[onboarding] venues fetch error", e); setVenuesLoading(false); });
+        } else {
+          console.log("[onboarding] no auto-submit: hasRealPhone=", hasRealPhone, "venue=", profile.venue);
         }
       })
-      .catch(() => {});
+      .catch((e) => { console.error("[onboarding] /account fetch error", e); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, initialCheckDone, isCredentialsAuth]);
 
@@ -143,20 +158,23 @@ export default function OnboardingPage() {
     }
   }
 
-  async function submitOnboarding(venueId: string | null, overridePhone?: string) {
+  async function submitOnboarding(venueId: string | null, overridePhone?: string, overrideGender?: string, overrideSkillLevel?: string) {
     const phoneToSend = (overridePhone || phone).trim();
+    const genderToSend = overrideGender ?? gender;
+    const skillLevelToSend = overrideSkillLevel ?? skillLevel;
+    const authHdr = getPlayerToken() ? { Authorization: `Bearer ${getPlayerToken()}` } : {};
     setSaving(true);
     setError(null);
-    const payload = { phone: phoneToSend, gender, skillLevel, venueId };
-    console.log("[onboarding] submitOnboarding payload:", payload);
+    const payload = { phone: phoneToSend, gender: genderToSend, skillLevel: skillLevelToSend, venueId };
+    console.log("[onboarding] submitOnboarding — payload:", payload, "authHeader keys:", Object.keys(authHdr));
     try {
       const res = await fetch("/api/public/account/onboarding", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeader },
+        headers: { "Content-Type": "application/json", ...authHdr },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      console.log("[onboarding] API response:", res.status, data);
+      console.log("[onboarding] onboarding API response:", res.status, data);
       if (!res.ok) {
         if (data.existingPlayerId) {
           setLinkPrompt({ existingPlayerId: data.existingPlayerId, phone: phoneToSend });
@@ -170,8 +188,10 @@ export default function OnboardingPage() {
       if (!isCredentialsAuth) {
         await update({ playerId: data.playerId });
       }
+      console.log("[onboarding] success → /book");
       router.replace("/book");
     } catch (e) {
+      console.error("[onboarding] submitOnboarding error", e);
       setError((e as Error).message);
       setSaving(false);
       setVenuesLoading(false);

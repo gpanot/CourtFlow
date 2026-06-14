@@ -78,18 +78,26 @@ export default function IntroPage() {
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
+      {/* Preload next slides to avoid lag on slow connections */}
+      {SLIDES.map((sl, i) => i !== slide && (
+        <link key={i} rel="preload" as="image" href={sl.image} />
+      ))}
+
       {/* Image — top ~55% */}
       <div className="relative w-full flex-shrink-0" style={{ height: "55dvh" }}>
-        <Image
-          src={s.image}
-          alt={s.imageAlt}
-          fill
-          className="object-cover"
-          priority
-        />
+        {SLIDES.map((sl, i) => (
+          <Image
+            key={sl.image}
+            src={sl.image}
+            alt={sl.imageAlt}
+            fill
+            className={`object-cover transition-opacity duration-300 ${i === slide ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+            priority={i === 0}
+          />
+        ))}
         {/* Gradient fade to bg at bottom */}
         <div
-          className="absolute inset-x-0 bottom-0 h-24"
+          className="absolute inset-x-0 bottom-0 h-24 z-10"
           style={{ background: "linear-gradient(to top, var(--cm-bg), transparent)" }}
         />
 
@@ -97,15 +105,15 @@ export default function IntroPage() {
         {!isLast && (
           <button
             onClick={skip}
-            className="absolute top-4 right-4 z-10 text-xs font-medium text-white/70 bg-black/30 backdrop-blur-sm px-3 py-1.5 rounded-full"
+            className="absolute top-4 right-4 z-20 text-xs font-medium text-white/70 bg-black/30 backdrop-blur-sm px-3 py-1.5 rounded-full"
           >
             Skip
           </button>
         )}
       </div>
 
-      {/* Content — bottom ~45% */}
-      <div className="flex-1 flex flex-col px-7 pt-6 pb-8">
+      {/* Content — scrollable middle section with pb to clear fixed button */}
+      <div className="flex-1 flex flex-col px-7 pt-6 pb-4">
         {/* Tag */}
         <p className="text-xs font-semibold tracking-widest text-[var(--cm-accent)] mb-3">{s.tag}</p>
 
@@ -115,33 +123,33 @@ export default function IntroPage() {
         </h1>
 
         {/* Body */}
-        <p className="text-sm text-[var(--cm-text-sec)] leading-relaxed flex-1">{s.body}</p>
+        <p className="text-sm text-[var(--cm-text-sec)] leading-relaxed">{s.body}</p>
+      </div>
 
-        {/* Dots + CTA */}
-        <div className="mt-6 flex flex-col gap-5">
-          {/* Dot pagination */}
-          <div className="flex items-center justify-center gap-2">
-            {SLIDES.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setSlide(i)}
-                className={`rounded-full transition-all duration-300 ${
-                  i === slide
-                    ? "w-6 h-2 bg-[var(--cm-accent)]"
-                    : "w-2 h-2 bg-[var(--cm-text-muted)]"
-                }`}
-              />
-            ))}
-          </div>
-
-          {/* CTA */}
-          <button
-            onClick={goNext}
-            className="w-full py-4 rounded-2xl font-bold text-base bg-[var(--cm-accent)] text-black active:scale-95 transition-transform"
-          >
-            {s.cta}
-          </button>
+      {/* Fixed bottom — dots + CTA, always at same position */}
+      <div className="px-7 pb-10 pt-4 flex flex-col gap-4 bg-[var(--cm-bg)]">
+        {/* Dot pagination */}
+        <div className="flex items-center justify-center gap-2">
+          {SLIDES.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setSlide(i)}
+              className={`rounded-full transition-all duration-300 ${
+                i === slide
+                  ? "w-6 h-2 bg-[var(--cm-accent)]"
+                  : "w-2 h-2 bg-[var(--cm-text-muted)]"
+              }`}
+            />
+          ))}
         </div>
+
+        {/* CTA */}
+        <button
+          onClick={goNext}
+          className="w-full py-4 rounded-2xl font-bold text-base bg-[var(--cm-accent)] text-black active:scale-95 transition-transform"
+        >
+          {s.cta}
+        </button>
       </div>
     </div>
   );
