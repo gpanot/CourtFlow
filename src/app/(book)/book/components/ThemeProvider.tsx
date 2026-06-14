@@ -12,8 +12,8 @@ interface ThemeCtx {
 }
 
 const ThemeContext = createContext<ThemeCtx>({
-  mode: "dark",
-  resolved: "dark",
+  mode: "light",
+  resolved: "light",
   setMode: () => {},
 });
 
@@ -33,13 +33,13 @@ function resolve(mode: ThemeMode): ResolvedTheme {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [mode, setModeState] = useState<ThemeMode>("dark");
-  const [resolved, setResolved] = useState<ResolvedTheme>("dark");
+  const [mode, setModeState] = useState<ThemeMode>("light");
+  const [resolved, setResolved] = useState<ResolvedTheme>("light");
 
   // Read persisted preference on mount
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY) as ThemeMode | null;
-    const m = stored && ["light", "dark", "system"].includes(stored) ? stored : "dark";
+    const m = stored && ["light", "dark", "system"].includes(stored) ? stored : "light";
     setModeState(m);
     setResolved(resolve(m));
   }, []);

@@ -17,7 +17,7 @@ function LoginContent() {
   const { resolved } = useTheme();
   const callbackUrl = searchParams.get("callbackUrl") || "/book";
 
-  const [tab, setTab] = useState<"signin" | "signup">("signin");
+  const [tab, setTab] = useState<"signin" | "signup">("signup");
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -149,20 +149,20 @@ function LoginContent() {
 
         <div className="flex w-full bg-[var(--cm-bg-surface)] border border-[var(--cm-border)] rounded-xl p-1 mb-0 gap-1">
           <button
-            onClick={() => switchTab("signin")}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-              tab === "signin" ? "bg-[var(--cm-accent)] text-black" : "text-[var(--cm-text-sec)]"
-            }`}
-          >
-            {t("login.signIn")}
-          </button>
-          <button
             onClick={() => switchTab("signup")}
             className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
               tab === "signup" ? "bg-[var(--cm-accent)] text-black" : "text-[var(--cm-text-sec)]"
             }`}
           >
             {t("login.signUp")}
+          </button>
+          <button
+            onClick={() => switchTab("signin")}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+              tab === "signin" ? "bg-[var(--cm-accent)] text-black" : "text-[var(--cm-text-sec)]"
+            }`}
+          >
+            {t("login.signIn")}
           </button>
         </div>
       </div>
