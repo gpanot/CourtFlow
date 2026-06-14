@@ -7,6 +7,7 @@ import { bankNameFromBin } from "@/lib/vietqr";
 import { usePlayerVenue } from "../../components/PlayerVenueContext";
 import { usePlayerSession } from "../../components/usePlayerSession";
 import { portalFetch } from "@/lib/portal-fetch";
+import { setStoredPaymentStatus } from "@/lib/player-paid-toast";
 
 function formatPrice(p: number) {
   return new Intl.NumberFormat("vi-VN").format(p) + " VND";
@@ -137,14 +138,20 @@ export default function PaymentPage() {
           method: "POST",
           body: formData,
         });
-        if (res.ok) setProofSubmitted(true);
+        if (res.ok) {
+          setProofSubmitted(true);
+          setStoredPaymentStatus(id, "proof_submitted");
+        }
       } else {
         const res = await portalFetch(`/api/public/bookings/${id}/proof`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ proofUrl: "pending_proof" }),
         });
-        if (res.ok) setProofSubmitted(true);
+        if (res.ok) {
+          setProofSubmitted(true);
+          setStoredPaymentStatus(id, "proof_submitted");
+        }
       }
     } catch { /* ignore */ }
     setUploading(false);
