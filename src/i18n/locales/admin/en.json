@@ -153,6 +153,9 @@
   "bookings": {
     "title": "Bookings",
     "newBooking": "New Booking",
+    "notifPaidTitle": "New booking — payment confirmed",
+    "notifProofTitle": "New booking — payment proof submitted",
+    "notifViewBooking": "Tap to review",
     "allVenues": "All venues",
     "allStatuses": "All statuses",
     "allCourts": "All courts",

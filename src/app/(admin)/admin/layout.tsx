@@ -10,6 +10,7 @@ import { applyThemeMode, getStoredThemeMode, setStoredThemeMode, type ThemeMode 
 import { LayoutDashboard, MapPin, Users, UserCircle, BarChart3, Monitor, Banknote, Crown, CalendarDays, GraduationCap, LogOut, Menu, X, CreditCard, Receipt, ScanFace, Sun, Moon, ChevronLeft, ChevronDown, ChevronRight, ShoppingBag, AlertTriangle, PieChart, ShieldAlert, Wallet, Settings } from "lucide-react";
 import { SetupWizardBanner } from "@/components/setup-wizard-banner";
 import { AiChatWidget } from "@/components/admin/AiChatWidget";
+import { AdminBookingNotifications } from "@/components/admin/AdminBookingNotifications";
 import { useTranslation } from "react-i18next";
 import adminI18n from "@/i18n/admin-i18n";
 
@@ -433,6 +434,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </nav>
 
       <AiChatWidget />
+      <AdminBookingNotifications />
     </div>
   );
 }

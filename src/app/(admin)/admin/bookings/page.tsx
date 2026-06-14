@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import adminI18n from "@/i18n/admin-i18n";
+import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
@@ -156,6 +157,9 @@ const BLOCK_LABELS: Record<string, string> = {
 
 export default function BookingsPage() {
   const { t } = useTranslation("translation", { i18n: adminI18n });
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const deepLinkHandled = useRef(false);
   const {
     venueId: selectedVenueId,
     setVenueId: setSelectedVenueId,
@@ -447,6 +451,41 @@ export default function BookingsPage() {
   const closeEditModal = () => {
     setEditBooking(null);
   };
+
+  useEffect(() => {
+    if (deepLinkHandled.current) return;
+    const editId = searchParams.get("edit");
+    const venueId = searchParams.get("venueId");
+    const date = searchParams.get("date");
+    if (!editId || !venueId || !date) return;
+
+    if (venueId !== selectedVenueId) {
+      setSelectedVenueId(venueId);
+      return;
+    }
+    if (date !== selectedDate) {
+      setSelectedDate(date);
+      return;
+    }
+
+    let cancelled = false;
+    void api
+      .get<BookingRecord>(`/api/staff/bookings/${editId}`)
+      .then((booking) => {
+        if (cancelled || deepLinkHandled.current) return;
+        deepLinkHandled.current = true;
+        setActiveTab("bookings");
+        setEditBooking(booking);
+        setEditCourtId(booking.courtId);
+        setEditSlotTime(booking.startTime);
+        router.replace("/admin/bookings", { scroll: false });
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, selectedVenueId, selectedDate, setSelectedVenueId, router]);
 
   const saveEdit = async () => {
     if (!editBooking) return;

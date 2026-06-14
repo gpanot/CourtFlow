@@ -195,6 +195,14 @@ export default function BookingDetailPage() {
         ) : null}
       </div>
 
+      {paymentStatus === "paid" && !isCancelled ? (
+        <div className="mb-4 rounded-xl border border-[var(--cm-green)]/40 bg-[var(--cm-green)]/10 px-4 py-3">
+          <p className="text-sm font-semibold text-[var(--cm-green)] text-center leading-snug">
+            Your booking and payment is confirmed. See you at the court.
+          </p>
+        </div>
+      ) : null}
+
       {isVerifying ? (
         <div className="mb-4 rounded-xl border border-[var(--cm-orange)]/40 bg-[var(--cm-orange)]/10 px-4 py-3">
           <p className="text-sm font-semibold text-[var(--cm-orange)] text-center leading-snug">

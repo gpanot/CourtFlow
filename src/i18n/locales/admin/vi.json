@@ -151,6 +151,9 @@
   "bookings": {
     "title": "Đặt sân",
     "newBooking": "Đặt sân mới",
+    "notifPaidTitle": "Đặt sân mới — thanh toán đã xác nhận",
+    "notifProofTitle": "Đặt sân mới — đã gửi chứng từ thanh toán",
+    "notifViewBooking": "Nhấn để xem",
     "allVenues": "Tất cả địa điểm",
     "allStatuses": "Tất cả trạng thái",
     "allCourts": "Tất cả sân",
