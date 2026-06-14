@@ -174,7 +174,15 @@
     "openPlaySpotsLeft": "เหลือ {{count}} ที่นั่ง",
     "openPlaySpotsLeft_other": "เหลือ {{count}} ที่นั่ง",
     "openPlayFree": "ฟรี",
-    "openPlayBook": "เข้าร่วม — {{price}}"
+    "openPlayBook": "เข้าร่วม — {{price}}",
+    "whatToBook": "คุณต้องการจองอะไร?",
+    "bookingTypeCourt": "สนาม",
+    "bookingTypeOpenPlay": "เปิดเล่น",
+    "selectDate": "เลือกวันที่",
+    "openPlayPlayersJoined": "{{joined}}/{{max}} คนเข้าร่วมแล้ว",
+    "openPlayJoin": "เข้าร่วม",
+    "noOpenPlay": "ไม่มีเซสชันเปิดเล่นในวันนี้",
+    "durationHours": "{{count}} ชม."
   },
   "coaches": {
     "title": "โค้ชของเรา",

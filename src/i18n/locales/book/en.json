@@ -174,7 +174,15 @@
     "openPlaySpotsLeft": "{{count}} spot left",
     "openPlaySpotsLeft_other": "{{count}} spots left",
     "openPlayFree": "Free",
-    "openPlayBook": "Join — {{price}}"
+    "openPlayBook": "Join — {{price}}",
+    "whatToBook": "What would you like to book?",
+    "bookingTypeCourt": "Court",
+    "bookingTypeOpenPlay": "Open Play",
+    "selectDate": "Select a date",
+    "openPlayPlayersJoined": "{{joined}}/{{max}} players joined",
+    "openPlayJoin": "Join",
+    "noOpenPlay": "No open play sessions on this date.",
+    "durationHours": "{{count}}h"
   },
   "coaches": {
     "title": "Our Coaches",

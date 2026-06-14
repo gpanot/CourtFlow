@@ -174,7 +174,15 @@
     "openPlaySpotsLeft": "Còn {{count}} chỗ",
     "openPlaySpotsLeft_other": "Còn {{count}} chỗ",
     "openPlayFree": "Miễn phí",
-    "openPlayBook": "Tham gia — {{price}}"
+    "openPlayBook": "Tham gia — {{price}}",
+    "whatToBook": "Bạn muốn đặt gì?",
+    "bookingTypeCourt": "Sân",
+    "bookingTypeOpenPlay": "Chơi tự do",
+    "selectDate": "Chọn ngày",
+    "openPlayPlayersJoined": "{{joined}}/{{max}} người đã tham gia",
+    "openPlayJoin": "Tham gia",
+    "noOpenPlay": "Không có buổi chơi tự do vào ngày này.",
+    "durationHours": "{{count}} giờ"
   },
   "coaches": {
     "title": "Huấn luyện viên",

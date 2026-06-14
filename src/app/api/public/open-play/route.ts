@@ -15,7 +15,12 @@ export async function GET(request: NextRequest) {
     const dateStr = searchParams.get("date");
     const venueId = searchParams.get("venueId") || getPortalVenueId();
 
-    const date = dateStr ? new Date(dateStr) : new Date();
+    const date = dateStr
+      ? (() => {
+          const [y, m, d] = dateStr.split("-").map(Number);
+          return new Date(y, m - 1, d);
+        })()
+      : new Date();
     date.setHours(0, 0, 0, 0);
 
     const sessions = await resolveOpenPlaySessions(venueId, date);

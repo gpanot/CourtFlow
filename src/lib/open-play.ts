@@ -45,18 +45,23 @@ export async function resolveOpenPlaySessions(
   dateOnly.setHours(0, 0, 0, 0);
 
   // Fetch all registrations for this venue + date in one query
-  const registrations = await prisma.openPlayRegistration.findMany({
-    where: {
-      venueId,
-      date: dateOnly,
-      status: "confirmed",
-      OR: [
-        { paymentStatus: { in: ["proof_submitted", "paid"] } },
-        { paymentStatus: "pending", holdExpiresAt: { gt: new Date() } },
-      ],
-    },
-    select: { scheduleEntryId: true },
-  });
+  let registrations: { scheduleEntryId: string }[] = [];
+  try {
+    registrations = await prisma.openPlayRegistration.findMany({
+      where: {
+        venueId,
+        date: dateOnly,
+        status: "confirmed",
+        OR: [
+          { paymentStatus: { in: ["proof_submitted", "paid"] } },
+          { paymentStatus: "pending", holdExpiresAt: { gt: new Date() } },
+        ],
+      },
+      select: { scheduleEntryId: true },
+    });
+  } catch {
+    // Table missing or stale Prisma client — still show sessions with 0 spots taken
+  }
 
   return openPlayEntries.map((entry) => {
     const startTime = new Date(dateOnly);

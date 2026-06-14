@@ -55,8 +55,15 @@ interface Coach {
 
 const MAX_SLOTS = 4;
 
+type BookingType = "court" | "open_play";
+
 function formatHour(h: number) {
   return `${h.toString().padStart(2, "0")}:00`;
+}
+
+function sessionDurationHours(startTime: string, endTime: string): number {
+  const ms = new Date(endTime).getTime() - new Date(startTime).getTime();
+  return Math.max(1, Math.round(ms / (1000 * 60 * 60)));
 }
 
 export default function VenueHomePage() {
@@ -70,6 +77,7 @@ export default function VenueHomePage() {
   const [coaches, setCoaches] = useState<Coach[]>([]);
   const [openPlaySessions, setOpenPlaySessions] = useState<OpenPlaySession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [bookingType, setBookingType] = useState<BookingType>("court");
 
   // Multi-slot selection: courtId + array of selected slots
   const [selectedCourtId, setSelectedCourtId] = useState<string | null>(null);
@@ -102,8 +110,15 @@ export default function VenueHomePage() {
       // Load open play sessions for the same date
       const venueQ = playerVenueId ? `&venueId=${playerVenueId}` : "";
       fetch(`/api/public/open-play?date=${dateStr}${venueQ}`)
-        .then((r) => r.json())
-        .then((d) => setOpenPlaySessions(Array.isArray(d) ? d : []))
+        .then(async (r) => {
+          const d = await r.json();
+          const sessions = r.ok && Array.isArray(d) ? d : [];
+          sessions.sort(
+            (a: OpenPlaySession, b: OpenPlaySession) =>
+              new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+          );
+          setOpenPlaySessions(sessions);
+        })
         .catch(() => setOpenPlaySessions([]));
     } catch {
       setGrid([]);
@@ -196,6 +211,30 @@ export default function VenueHomePage() {
     router.push(`/book/confirm?${params.toString()}`);
   }
 
+  function handleOpenPlayJoin(session: OpenPlaySession) {
+    if (session.spotsLeft === 0) return;
+    if (status !== "authenticated") {
+      router.push(`/book/login?callbackUrl=/book`);
+      return;
+    }
+    const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
+    const params = new URLSearchParams({
+      scheduleEntryId: session.entryId,
+      date: dateStr,
+      title: session.title,
+      price: String(session.priceValue),
+    });
+    router.push(`/book/open-play/confirm?${params.toString()}`);
+  }
+
+  function selectBookingType(type: BookingType) {
+    setBookingType(type);
+    if (type === "open_play") {
+      setSelectedCourtId(null);
+      setSelectedSlots([]);
+    }
+  }
+
   const courtLabel = hasSelection
     ? grid.find((c) => c.courtId === selectedCourtId)?.courtLabel ?? ""
     : "";
@@ -208,13 +247,31 @@ export default function VenueHomePage() {
     <div>
       <div className="px-4 pt-8 pb-4">
         <h1 className="text-xl font-bold">{venue?.name ?? t("common.loading")}</h1>
-        {venue?.location && (
-          <p className="text-sm text-[var(--cm-text-sec)] mt-0.5">{venue.location}</p>
-        )}
       </div>
 
       <div className="px-4 mb-4">
-        <h2 className="text-base font-semibold mb-2">{t("home.bookCourt")}</h2>
+        <h2 className="text-base font-semibold mb-3">{t("home.whatToBook")}</h2>
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          {(["court", "open_play"] as const).map((type) => {
+            const active = bookingType === type;
+            return (
+              <button
+                key={type}
+                type="button"
+                onClick={() => selectBookingType(type)}
+                className={`rounded-xl border px-3 py-3 text-sm font-semibold transition-colors ${
+                  active
+                    ? "bg-[var(--cm-accent)] text-black border-[var(--cm-accent)]"
+                    : "bg-[var(--cm-bg-card)] text-[var(--cm-text-sec)] border-[var(--cm-border)] hover:border-[var(--cm-accent)]/40"
+                }`}
+              >
+                {type === "court" ? t("home.bookingTypeCourt") : t("home.bookingTypeOpenPlay")}
+              </button>
+            );
+          })}
+        </div>
+
+        <h3 className="text-sm font-medium text-[var(--cm-text-sec)] mb-2">{t("home.selectDate")}</h3>
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           {dates.map((d) => {
             const isActive = d.toDateString() === selectedDate.toDateString();
@@ -238,129 +295,129 @@ export default function VenueHomePage() {
       <div className="px-4 mb-6">
         {loading ? (
           <div className="h-40 bg-[var(--cm-bg-card)] rounded-xl animate-pulse" />
-        ) : grid.length === 0 ? (
+        ) : bookingType === "court" ? (
+          grid.length === 0 ? (
+            <p className="text-sm text-[var(--cm-text-sec)] text-center py-8">
+              {t("home.noCourts")}
+            </p>
+          ) : (
+            <>
+              <div className="overflow-x-auto rounded-xl border border-[var(--cm-border)]">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="bg-[var(--cm-bg-surface)]">
+                      <th className="sticky left-0 bg-[var(--cm-bg-surface)] z-10 px-3 py-2 text-left font-medium text-[var(--cm-text-sec)] min-w-[80px]">
+                        {t("common.court")}
+                      </th>
+                      {grid[0]?.slots.map((s) => (
+                        <th key={s.startTime} className="px-2 py-2 text-center font-medium text-[var(--cm-text-sec)] min-w-[48px]">
+                          {formatHour(s.hour)}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {grid.map((court) => (
+                      <tr key={court.courtId} className="border-t border-[var(--cm-border)]">
+                        <td className="sticky left-0 bg-[var(--cm-bg)] z-10 px-3 py-2 font-medium">
+                          {court.courtLabel}
+                        </td>
+                        {court.slots.map((slot) => {
+                          const isSel = isSlotSelected(court.courtId, slot);
+                          return (
+                            <td key={slot.startTime} className="px-1 py-1 text-center">
+                              <button
+                                onClick={() => toggleSlot(court.courtId, slot)}
+                                disabled={!slot.available}
+                                className={`w-10 h-8 rounded-lg text-[10px] font-medium transition-colors ${
+                                  isSel
+                                    ? "bg-[var(--cm-accent)] text-black"
+                                    : slot.available
+                                    ? "bg-[var(--cm-green)]/15 text-[var(--cm-green)] hover:bg-[var(--cm-green)]/25"
+                                    : "bg-[var(--cm-bg-surface)] text-[var(--cm-text-muted)] cursor-not-allowed"
+                                }`}
+                              >
+                                {slot.available ? formatHour(slot.hour) : "—"}
+                              </button>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex gap-4 mt-2 text-[10px] text-[var(--cm-text-muted)]">
+                <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-[var(--cm-green)]/15" /> {t("home.available")}</span>
+                <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-[var(--cm-bg-surface)]" /> {t("home.booked")}</span>
+                <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-[var(--cm-accent)]" /> {t("home.selected")}</span>
+              </div>
+              {hasSelection && (
+                <p className="text-xs text-[var(--cm-text-sec)] mt-2">
+                  {t("home.slotsSelected", { count: sortedSelected.length })}
+                  {sortedSelected.length < MAX_SLOTS && t("home.extendHint")}
+                </p>
+              )}
+            </>
+          )
+        ) : openPlaySessions.length === 0 ? (
           <p className="text-sm text-[var(--cm-text-sec)] text-center py-8">
-            {t("home.noCourts")}
+            {t("home.noOpenPlay")}
           </p>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-[var(--cm-border)]">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-[var(--cm-bg-surface)]">
-                  <th className="sticky left-0 bg-[var(--cm-bg-surface)] z-10 px-3 py-2 text-left font-medium text-[var(--cm-text-sec)] min-w-[80px]">
-                    {t("common.court")}
-                  </th>
-                  {grid[0]?.slots.map((s) => (
-                    <th key={s.startTime} className="px-2 py-2 text-center font-medium text-[var(--cm-text-sec)] min-w-[48px]">
-                      {formatHour(s.hour)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {grid.map((court) => (
-                  <tr key={court.courtId} className="border-t border-[var(--cm-border)]">
-                    <td className="sticky left-0 bg-[var(--cm-bg)] z-10 px-3 py-2 font-medium">
-                      {court.courtLabel}
-                    </td>
-                    {court.slots.map((slot) => {
-                      const isSel = isSlotSelected(court.courtId, slot);
-                      return (
-                        <td key={slot.startTime} className="px-1 py-1 text-center">
-                          <button
-                            onClick={() => toggleSlot(court.courtId, slot)}
-                            disabled={!slot.available}
-                            className={`w-10 h-8 rounded-lg text-[10px] font-medium transition-colors ${
-                              isSel
-                                ? "bg-[var(--cm-accent)] text-black"
-                                : slot.available
-                                ? "bg-[var(--cm-green)]/15 text-[var(--cm-green)] hover:bg-[var(--cm-green)]/25"
-                                : "bg-[var(--cm-bg-surface)] text-[var(--cm-text-muted)] cursor-not-allowed"
-                            }`}
-                          >
-                            {slot.available ? formatHour(slot.hour) : "—"}
-                          </button>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        <div className="flex gap-4 mt-2 text-[10px] text-[var(--cm-text-muted)]">
-          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-[var(--cm-green)]/15" /> {t("home.available")}</span>
-          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-[var(--cm-bg-surface)]" /> {t("home.booked")}</span>
-          <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-[var(--cm-accent)]" /> {t("home.selected")}</span>
-        </div>
-        {hasSelection && (
-          <p className="text-xs text-[var(--cm-text-sec)] mt-2">
-            {t("home.slotsSelected", { count: sortedSelected.length })}
-            {sortedSelected.length < MAX_SLOTS && t("home.extendHint")}
-          </p>
-        )}
-      </div>
-
-      {openPlaySessions.length > 0 && (
-        <div className="px-4 mb-6">
-          <h2 className="text-base font-semibold mb-2">{t("home.openPlay")}</h2>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {openPlaySessions.map((session) => {
               const isFull = session.spotsLeft === 0;
-              const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
+              const hours = sessionDurationHours(session.startTime, session.endTime);
+              const priceLabel = session.priceValue > 0 ? formatPrice(session.priceValue) : t("home.openPlayFree");
               return (
                 <div
                   key={session.entryId}
-                  className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-3"
+                  className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold">{session.title}</p>
-                      <p className="text-xs text-[var(--cm-text-sec)] mt-0.5">
-                        {formatTime(session.startTime)}
-                        {" – "}
-                        {formatTime(session.endTime)}
-                      </p>
-                      <p className={`text-xs font-medium mt-1 ${isFull ? "text-[var(--cm-red)]" : "text-[var(--cm-green)]"}`}>
-                        {isFull
-                          ? t("home.openPlayFull")
-                          : t("home.openPlaySpotsLeft", { count: session.spotsLeft })}
-                        {" · "}{session.spotsTaken}/{session.maxPlayers}
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-end gap-2 shrink-0">
-                      <p className="text-sm font-bold text-[var(--cm-accent)]">
-                        {session.priceValue > 0 ? formatPrice(session.priceValue) : t("home.openPlayFree")}
-                      </p>
-                      {!isFull && (
-                        <button
-                          onClick={() => {
-                            if (status !== "authenticated") {
-                              router.push(`/book/login?callbackUrl=/book`);
-                              return;
-                            }
-                            const params = new URLSearchParams({
-                              scheduleEntryId: session.entryId,
-                              date: dateStr,
-                              title: session.title,
-                              price: String(session.priceValue),
-                            });
-                            router.push(`/book/open-play/confirm?${params.toString()}`);
-                          }}
-                          className="text-xs font-medium bg-[var(--cm-accent)] text-black px-3 py-1.5 rounded-lg"
-                        >
-                          {t("home.openPlayBook", { price: session.priceValue > 0 ? formatPrice(session.priceValue) : t("home.openPlayFree") })}
-                        </button>
-                      )}
-                    </div>
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <p className="text-sm font-semibold leading-snug">{session.title}</p>
+                    <p className="text-sm font-bold text-[var(--cm-accent)] shrink-0">{priceLabel}</p>
                   </div>
+                  <p className="text-sm text-[var(--cm-text-sec)] mb-1">
+                    {formatTime(session.startTime)} – {formatTime(session.endTime)}{" "}
+                    <span className="text-[var(--cm-text-muted)]">
+                      ({t("home.durationHours", { count: hours })})
+                    </span>
+                  </p>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="flex-1 h-2 rounded-full bg-[var(--cm-bg-surface)] overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          isFull ? "bg-[var(--cm-red)]" : "bg-[var(--cm-accent)]"
+                        }`}
+                        style={{
+                          width: `${Math.min(100, (session.spotsTaken / session.maxPlayers) * 100)}%`,
+                        }}
+                      />
+                    </div>
+                    <span
+                      className={`text-xs font-semibold tabular-nums shrink-0 ${
+                        isFull ? "text-[var(--cm-red)]" : "text-[var(--cm-text-sec)]"
+                      }`}
+                    >
+                      {session.spotsTaken}/{session.maxPlayers}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenPlayJoin(session)}
+                    disabled={isFull}
+                    className="w-full py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-[var(--cm-accent)] text-black"
+                  >
+                    {t("home.openPlayJoin")}
+                  </button>
                 </div>
               );
             })}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {coaches.length > 0 && (
         <div className="px-4 mb-6">
@@ -397,7 +454,7 @@ export default function VenueHomePage() {
         </div>
       )}
 
-      {hasSelection && (
+      {hasSelection && bookingType === "court" && (
         <div className="fixed bottom-0 left-0 right-0 z-40 max-w-lg mx-auto pointer-events-none">
           <div
             className="pointer-events-auto px-4 pt-3 pb-[calc(0.75rem+3.625rem+env(safe-area-inset-bottom))]"
