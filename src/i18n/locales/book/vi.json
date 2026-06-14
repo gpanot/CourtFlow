@@ -251,7 +251,7 @@
     "verifyingBanner": "Nhân viên đang xác minh thanh toán — vui lòng đợi một chút 🙏",
     "paymentProof": "Chứng từ thanh toán",
     "venueContact": "Liên hệ địa điểm",
-    "needHelp": "Cần trợ giúp? Liên hệ trực tiếp địa điểm.",
+    "needHelp": "Cần trợ giúp hoặc hủy? Liên hệ trực tiếp địa điểm.",
     "completePayment": "Hoàn tất thanh toán",
     "cancelBooking": "Hủy đặt sân",
     "freeCancelUntil": "Hủy miễn phí trước {{hours}}h so với giờ bắt đầu.",

@@ -251,7 +251,7 @@
     "verifyingBanner": "Our staff is verifying your payment — give us a moment 🙏",
     "paymentProof": "Payment proof",
     "venueContact": "Venue Contact",
-    "needHelp": "Need help? Contact the venue directly.",
+    "needHelp": "Need help or cancel? Contact the venue directly.",
     "completePayment": "Complete Payment",
     "cancelBooking": "Cancel Booking",
     "freeCancelUntil": "Free cancellation until {{hours}}h before start time.",

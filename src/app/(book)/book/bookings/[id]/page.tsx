@@ -345,12 +345,6 @@ export default function BookingDetailPage() {
         </>
       )}
 
-      {!isCancelled && cancellation && !cancellation.canCancel && (
-        <p className="text-xs text-[var(--cm-text-sec)] mt-2">
-          {t("bookingDetail.cancelWindowPassed")}
-        </p>
-      )}
-
       {showConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--cm-overlay)] px-6">
           <div className="bg-[var(--cm-sheet-bg)] border border-[var(--cm-border)] rounded-2xl p-6 w-full max-w-sm">
