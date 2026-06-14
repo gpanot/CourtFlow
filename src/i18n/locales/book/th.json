@@ -27,6 +27,7 @@
     "slot_other": "ช่วงเวลา",
     "upcoming": "ที่จะมาถึง",
     "past": "ที่ผ่านมา",
+    "all": "ทั้งหมด",
     "current": "ปัจจุบัน",
     "expires": "หมดอายุ",
     "expired": "หมดอายุแล้ว",
@@ -226,8 +227,12 @@
   "bookings": {
     "title": "การจองของฉัน",
     "courtBookings": "จองสนาม",
+    "tabCourt": "สนาม",
+    "tabCoach": "โค้ช",
+    "tabOpenPlay": "Open Play",
     "coachSessions": "เซสชันโค้ช",
     "emptyCourts": "ยังไม่มีการจอง จองสนามเพื่อเริ่มต้น!",
+    "emptyFilter": "ไม่มีรายการ",
     "emptySessions": "ยังไม่มีเซสชันโค้ช จองเซสชันเพื่อเริ่มต้น!",
     "cancelled": "ยกเลิกแล้ว",
     "status": {

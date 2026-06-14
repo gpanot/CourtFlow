@@ -20,8 +20,10 @@ import {
   XCircle,
   UserX,
   Banknote,
+  Play,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { resolveUploadUrl } from "@/lib/resolve-upload-url";
 import { PaymentStatusBadge } from "@/components/admin/EditBookingModal";
 import {
   EditBookingModalController,
@@ -74,9 +76,46 @@ interface RecentLesson {
   createdAt: string;
 }
 
+interface RecentOpenPlay {
+  id: string;
+  venueId: string;
+  playerName: string;
+  playerAvatar: string;
+  playerPhoto: string | null;
+  venueName: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+  paymentStatus: string;
+  priceValue: number;
+  createdAt: string;
+}
+
+interface OpenPlayTodayRegistration {
+  id: string;
+  playerName: string;
+  playerAvatar: string;
+  playerPhoto: string | null;
+  paymentStatus: string;
+  paymentProofUrl: string | null;
+  status: string;
+}
+
+interface OpenPlayTodayGroup {
+  scheduleEntryId: string;
+  title: string;
+  startTime: string;
+  endTime: string;
+  venueName: string;
+  priceValue: number;
+  maxPlayers: number;
+  registrations: OpenPlayTodayRegistration[];
+}
+
 interface RecentEntry {
   id: string;
-  kind: "booking" | "lesson";
+  kind: "booking" | "lesson" | "openplay";
   venueId: string | null;
   playerName: string;
   playerAvatar: string;
@@ -138,6 +177,8 @@ interface DashboardData {
   };
   recentBookings: RecentBooking[];
   recentLessons: RecentLesson[];
+  recentOpenPlay?: RecentOpenPlay[];
+  openPlayToday?: OpenPlayTodayGroup[];
 }
 
 function fmtPrice(amount: number): string {
@@ -181,6 +222,8 @@ export default function AdminOverview() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const [editTarget, setEditTarget] = useState<EditBookingTarget | null>(null);
+  const [openPlayDetailGroup, setOpenPlayDetailGroup] = useState<OpenPlayTodayGroup | null>(null);
+  const [proofLightboxUrl, setProofLightboxUrl] = useState<string | null>(null);
 
   const refreshDashboard = () => {
     api.get<DashboardData>("/api/admin/dashboard").then(setData).catch(console.error);
@@ -268,9 +311,27 @@ export default function AdminOverview() {
       priceValue: l.priceValue,
       createdAt: l.createdAt,
     })),
+    ...(data.recentOpenPlay ?? []).map((r): RecentEntry => ({
+      id: r.id,
+      kind: "openplay",
+      venueId: r.venueId,
+      playerName: r.playerName,
+      playerAvatar: r.playerAvatar,
+      playerPhoto: r.playerPhoto,
+      detail: "Open Play",
+      venueName: r.venueName,
+      date: r.date,
+      startTime: r.startTime,
+      endTime: r.endTime,
+      status: r.status,
+      paymentStatus: r.paymentStatus,
+      paymentProofUrl: null,
+      priceValue: r.priceValue,
+      createdAt: r.createdAt,
+    })),
   ]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 10);
+    .slice(0, 12);
 
   return (
     <div className="space-y-6">
@@ -426,9 +487,11 @@ export default function AdminOverview() {
                   <td className="px-4 py-2.5">
                     <span className={cn(
                       "inline-block rounded-full px-2 py-0.5 text-[10px] font-medium",
-                      entry.kind === "lesson" ? "bg-teal-600/20 text-teal-400" : "bg-purple-600/20 text-purple-400",
+                      entry.kind === "lesson" ? "bg-teal-600/20 text-teal-400" :
+                      entry.kind === "openplay" ? "bg-emerald-600/20 text-emerald-400" :
+                      "bg-purple-600/20 text-purple-400",
                     )}>
-                      {entry.kind === "lesson" ? "Lesson" : "Booking"}
+                      {entry.kind === "lesson" ? "Lesson" : entry.kind === "openplay" ? "Open Play" : "Booking"}
                     </span>
                   </td>
                   <td className="px-4 py-2.5">
@@ -452,10 +515,7 @@ export default function AdminOverview() {
                   </td>
                   <td className="px-4 py-2.5">
                     {entry.kind === "booking" && entry.paymentStatus ? (
-                      <button
-                        onClick={() => openBookingEditor(entry)}
-                        title="Click to manage this booking"
-                      >
+                      <button onClick={() => openBookingEditor(entry)} title="Click to manage this booking">
                         <PaymentStatusBadge status={entry.paymentStatus} />
                       </button>
                     ) : entry.kind === "booking" ? (
@@ -466,6 +526,8 @@ export default function AdminOverview() {
                       >
                         —
                       </button>
+                    ) : entry.kind === "openplay" && entry.paymentStatus ? (
+                      <PaymentStatusBadge status={entry.paymentStatus} />
                     ) : null}
                   </td>
                   <td className="px-4 py-2.5 text-right font-medium">
@@ -496,9 +558,11 @@ export default function AdminOverview() {
                 <div className="flex items-center gap-1.5 flex-wrap justify-end">
                   <span className={cn(
                     "inline-block rounded-full px-2 py-0.5 text-[10px] font-medium",
-                    entry.kind === "lesson" ? "bg-teal-600/20 text-teal-400" : "bg-purple-600/20 text-purple-400",
+                    entry.kind === "lesson" ? "bg-teal-600/20 text-teal-400" :
+                    entry.kind === "openplay" ? "bg-emerald-600/20 text-emerald-400" :
+                    "bg-purple-600/20 text-purple-400",
                   )}>
-                    {entry.kind === "lesson" ? "Lesson" : "Booking"}
+                    {entry.kind === "lesson" ? "Lesson" : entry.kind === "openplay" ? "Open Play" : "Booking"}
                   </span>
                   <BookingStatusBadge status={entry.status} />
                   {entry.kind === "booking" && entry.paymentStatus && (
@@ -521,6 +585,156 @@ export default function AdminOverview() {
           )}
         </div>
       </section>
+
+      {/* Open Play Today — always shown when there are sessions defined */}
+      {(data.openPlayToday ?? []).length > 0 && (
+        <section className="rounded-xl border border-neutral-800 bg-neutral-900 overflow-hidden">
+          <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
+            <h3 className="flex items-center gap-2 text-sm font-semibold">
+              <Play className="h-4 w-4 text-emerald-400" />
+              Open Play Today
+            </h3>
+            <span className="text-xs text-neutral-500">
+              {(data.openPlayToday ?? []).length} session{(data.openPlayToday ?? []).length !== 1 ? "s" : ""}
+            </span>
+          </div>
+          <div className="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
+            {(data.openPlayToday ?? []).map((group) => {
+              const total = group.registrations.length;
+              const paid = group.registrations.filter((r) => r.paymentStatus === "paid").length;
+              const verifying = group.registrations.filter((r) => r.paymentStatus === "proof_submitted").length;
+              const pending = group.registrations.filter((r) => r.paymentStatus === "pending").length;
+              const max = group.maxPlayers ?? 0;
+              const fillPct = max > 0 ? Math.min(100, (total / max) * 100) : 0;
+              return (
+                <button
+                  key={group.scheduleEntryId + group.startTime}
+                  onClick={() => setOpenPlayDetailGroup(group)}
+                  className="rounded-xl border border-neutral-800 bg-neutral-800/40 p-4 text-left hover:border-emerald-500/40 hover:bg-neutral-800/70 transition-colors"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-sm font-semibold">
+                      {fmtTime(group.startTime)} – {fmtTime(group.endTime)}
+                    </p>
+                    <span className="flex items-center gap-1 text-sm font-bold text-emerald-400">
+                      <Users className="h-3.5 w-3.5" />
+                      {total}{max > 0 ? `/${max}` : ""}
+                    </span>
+                  </div>
+                  {group.title && <p className="text-xs text-neutral-500 mb-2">{group.title}</p>}
+                  {/* Capacity bar */}
+                  <div className="h-1.5 rounded-full bg-neutral-700 overflow-hidden mb-2">
+                    <div
+                      className={cn(
+                        "h-full transition-all",
+                        fillPct >= 100 ? "bg-red-500" : fillPct >= 75 ? "bg-amber-500" : "bg-emerald-500"
+                      )}
+                      style={{ width: `${fillPct}%` }}
+                    />
+                  </div>
+                  <div className="flex gap-3 text-[10px]">
+                    {total === 0
+                      ? <span className="text-neutral-600">No registrations</span>
+                      : <>
+                          {paid > 0 && <span className="text-emerald-400">{paid} paid</span>}
+                          {verifying > 0 && <span className="text-amber-400">{verifying} verifying</span>}
+                          {pending > 0 && <span className="text-neutral-500">{pending} pending</span>}
+                        </>
+                    }
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Open Play Detail Modal */}
+      {openPlayDetailGroup && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setOpenPlayDetailGroup(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
+              <div>
+                <p className="font-semibold">
+                  {fmtTime(openPlayDetailGroup.startTime)} – {fmtTime(openPlayDetailGroup.endTime)}
+                </p>
+                <p className="text-xs text-neutral-500">
+                  {openPlayDetailGroup.venueName}
+                  {openPlayDetailGroup.title ? ` · ${openPlayDetailGroup.title}` : " · Open Play"}
+                </p>
+              </div>
+              <button
+                onClick={() => setOpenPlayDetailGroup(null)}
+                className="rounded-full bg-neutral-800 p-1.5 text-neutral-400 hover:bg-neutral-700"
+              >
+                <XCircle className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto divide-y divide-neutral-800/60">
+              {openPlayDetailGroup.registrations.length === 0 ? (
+                <p className="px-4 py-8 text-center text-sm text-neutral-500">No registrations yet.</p>
+              ) : (
+                openPlayDetailGroup.registrations.map((r) => {
+                  const proofUrl = resolveUploadUrl(r.paymentProofUrl);
+                  return (
+                    <div key={r.id} className="flex items-center gap-3 px-4 py-3">
+                      <PlayerAvatarImg photo={r.playerPhoto} avatar={r.playerAvatar} size="sm" />
+                      <span className="flex-1 text-sm font-medium">{r.playerName}</span>
+                      {r.paymentStatus === "proof_submitted" && proofUrl ? (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setProofLightboxUrl(proofUrl);
+                          }}
+                          title="View payment proof"
+                        >
+                          <PaymentStatusBadge status={r.paymentStatus} />
+                        </button>
+                      ) : (
+                        <PaymentStatusBadge status={r.paymentStatus} />
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            <div className="border-t border-neutral-800 px-4 py-3 flex items-center justify-between text-xs text-neutral-500">
+              <span>
+                {openPlayDetailGroup.registrations.length}
+                {openPlayDetailGroup.maxPlayers > 0 && `/${openPlayDetailGroup.maxPlayers}`} players
+              </span>
+              <span>{fmtPrice(openPlayDetailGroup.priceValue)} each</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Proof lightbox */}
+      {proofLightboxUrl && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4 cursor-zoom-out"
+          onClick={() => setProofLightboxUrl(null)}
+        >
+          <img
+            src={proofLightboxUrl}
+            alt="Payment proof"
+            className="max-w-full max-h-full rounded-xl object-contain shadow-2xl"
+          />
+          <button
+            type="button"
+            className="absolute top-4 right-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 transition-colors"
+            onClick={() => setProofLightboxUrl(null)}
+          >
+            <XCircle className="h-5 w-5" />
+          </button>
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         {/* Upcoming Bookings Today */}

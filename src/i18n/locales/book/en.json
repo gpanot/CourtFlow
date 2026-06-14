@@ -27,6 +27,7 @@
     "slot_other": "slots",
     "upcoming": "Upcoming",
     "past": "Past",
+    "all": "All",
     "current": "Current",
     "expires": "Expires",
     "expired": "Expired",
@@ -226,8 +227,12 @@
   "bookings": {
     "title": "My Bookings",
     "courtBookings": "Court Bookings",
+    "tabCourt": "Court",
+    "tabCoach": "Coach",
+    "tabOpenPlay": "Open Play",
     "coachSessions": "Coach Sessions",
     "emptyCourts": "No bookings yet. Book a court to get started!",
+    "emptyFilter": "Nothing here.",
     "emptySessions": "No coach sessions yet. Book a session to get started!",
     "cancelled": "Cancelled",
     "status": {

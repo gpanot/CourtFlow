@@ -97,14 +97,6 @@ export default function AccountPage() {
             {profile.phone && <p className="text-sm text-[var(--cm-text-sec)]">{profile.phone}</p>}
           </div>
         </div>
-        <div className="flex gap-2 text-xs text-[var(--cm-text-sec)]">
-          <span className="px-2 py-1 bg-[var(--cm-bg-surface)] rounded-lg border border-[var(--cm-border)] capitalize">
-            {t(`gender.${profile.gender}`)}
-          </span>
-          <span className="px-2 py-1 bg-[var(--cm-bg-surface)] rounded-lg border border-[var(--cm-border)] capitalize">
-            {t(`skillLevels.${profile.skillLevel}`)}
-          </span>
-        </div>
         <Link
           href="/book/account/edit"
           className="block text-center mt-3 text-sm text-[var(--cm-accent)] font-medium"

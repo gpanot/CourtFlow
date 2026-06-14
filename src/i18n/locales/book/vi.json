@@ -27,6 +27,7 @@
     "slot_other": "khung giờ",
     "upcoming": "Sắp tới",
     "past": "Đã qua",
+    "all": "Tất cả",
     "current": "Hiện tại",
     "expires": "Hết hạn",
     "expired": "Đã hết hạn",
@@ -226,8 +227,12 @@
   "bookings": {
     "title": "Lịch đặt của tôi",
     "courtBookings": "Đặt sân",
+    "tabCourt": "Sân",
+    "tabCoach": "HLV",
+    "tabOpenPlay": "Open Play",
     "coachSessions": "Buổi HLV",
     "emptyCourts": "Chưa có lịch đặt. Hãy đặt sân để bắt đầu!",
+    "emptyFilter": "Không có mục nào.",
     "emptySessions": "Chưa có buổi HLV. Hãy đặt buổi học để bắt đầu!",
     "cancelled": "Đã hủy",
     "status": {

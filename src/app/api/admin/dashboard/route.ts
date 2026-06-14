@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
 import { requireManagerOrSuperAdmin } from "@/lib/auth";
 import { getAuthorizedVenueIds } from "@/lib/venue-scope";
+import { resolveOpenPlaySessions } from "@/lib/open-play";
 
 export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
@@ -54,6 +55,8 @@ export async function GET(request: NextRequest) {
       unpaidLessons,
       lessonsPaidThisMonth,
       recentLessons,
+      todayOpenPlay,
+      recentOpenPlay,
     ] = await Promise.all([
       // Today's bookings (confirmed + completed)
       prisma.booking.findMany({
@@ -192,6 +195,28 @@ export async function GET(request: NextRequest) {
         orderBy: { createdAt: "desc" },
         take: 8,
       }),
+      // Today's open play registrations (all statuses) — for the "Open Play Today" section
+      prisma.openPlayRegistration.findMany({
+        where: {
+          venueId: { in: venueIds },
+          date: { gte: todayStart, lte: todayEnd },
+        },
+        include: {
+          player: { select: { name: true, avatar: true, avatarPhotoPath: true, facePhotoPath: true } },
+          venue: { select: { name: true } },
+        },
+        orderBy: { startTime: "asc" },
+      }),
+      // Recent open play registrations (latest 8)
+      prisma.openPlayRegistration.findMany({
+        where: { venueId: { in: venueIds } },
+        include: {
+          player: { select: { name: true, avatar: true, avatarPhotoPath: true, facePhotoPath: true } },
+          venue: { select: { name: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 8,
+      }),
     ]);
 
     const todayBookingRevenue = todayBookings.reduce((s, b) => s + b.priceValue, 0);
@@ -284,6 +309,62 @@ export async function GET(request: NextRequest) {
         status: l.status,
         priceValue: l.priceValue,
         createdAt: l.createdAt,
+      })),
+      // Build "Open Play Today" from schedule slots (includes empty sessions)
+      openPlayToday: await (async () => {
+        // For each venue, get schedule-defined sessions for today
+        const venueNames = Object.fromEntries(venues.map((v) => [v.id, v.name]));
+        const allSessions = (
+          await Promise.all(
+            venueIds.map((vid) => resolveOpenPlaySessions(vid, now).catch(() => []))
+          )
+        ).flat();
+
+        // Build a lookup of registrations by scheduleEntryId
+        const regsByEntryId = new Map<string, typeof todayOpenPlay>();
+        for (const r of todayOpenPlay) {
+          if (!regsByEntryId.has(r.scheduleEntryId)) regsByEntryId.set(r.scheduleEntryId, []);
+          regsByEntryId.get(r.scheduleEntryId)!.push(r);
+        }
+
+        return allSessions.map((session) => {
+          const regs = regsByEntryId.get(session.entryId) ?? [];
+          const venueId = todayOpenPlay.find((r) => r.scheduleEntryId === session.entryId)?.venueId
+            ?? venueIds[0];
+          return {
+            scheduleEntryId: session.entryId,
+            title: session.title,
+            startTime: session.startTime.toISOString(),
+            endTime: session.endTime.toISOString(),
+            venueName: venueNames[venueId] ?? "",
+            priceValue: session.priceValue,
+            maxPlayers: session.maxPlayers,
+            registrations: regs.map((r) => ({
+              id: r.id,
+              playerName: r.player.name,
+              playerAvatar: r.player.avatar,
+              playerPhoto: r.player.avatarPhotoPath || r.player.facePhotoPath || null,
+              paymentStatus: r.paymentStatus,
+              paymentProofUrl: r.paymentProofUrl ?? null,
+              status: r.status,
+            })),
+          };
+        });
+      })(),
+      recentOpenPlay: recentOpenPlay.map((r) => ({
+        id: r.id,
+        venueId: r.venueId,
+        playerName: r.player.name,
+        playerAvatar: r.player.avatar,
+        playerPhoto: r.player.avatarPhotoPath || r.player.facePhotoPath || null,
+        venueName: r.venue.name,
+        date: r.date,
+        startTime: r.startTime,
+        endTime: r.endTime,
+        status: r.status,
+        paymentStatus: r.paymentStatus,
+        priceValue: r.priceValue,
+        createdAt: r.createdAt,
       })),
     });
   } catch (e) {
