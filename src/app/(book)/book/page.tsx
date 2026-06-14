@@ -322,13 +322,22 @@ export default function VenueHomePage() {
       )}
 
       {hasSelection && (
-        <div className="fixed bottom-20 left-0 right-0 z-40 px-4 max-w-lg mx-auto">
-          <button
-            onClick={handleBook}
-            className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm shadow-[var(--cm-shadow)]"
+        <div className="fixed bottom-20 left-0 right-0 z-40 max-w-lg mx-auto">
+          <div
+            className="px-4 pt-3 pb-4"
+            style={{
+              background: "rgba(255,255,255,0.7)",
+              backdropFilter: "blur(12px)",
+              WebkitBackdropFilter: "blur(12px)",
+            }}
           >
-            Book {courtLabel} {firstHour}–{lastEnd} — {formatPrice(totalPrice)}
-          </button>
+            <button
+              onClick={handleBook}
+              className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm shadow-[var(--cm-shadow)]"
+            >
+              Book {courtLabel} {firstHour}–{lastEnd} — {formatPrice(totalPrice)}
+            </button>
+          </div>
         </div>
       )}
     </div>

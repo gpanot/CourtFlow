@@ -162,15 +162,15 @@ export default function OnboardingPage() {
     const phoneToSend = (overridePhone || phone).trim();
     const genderToSend = overrideGender ?? gender;
     const skillLevelToSend = overrideSkillLevel ?? skillLevel;
-    const authHdr = getPlayerToken() ? { Authorization: `Bearer ${getPlayerToken()}` } : {};
+    const authHdr = getPlayerToken() ? { Authorization: `Bearer ${getPlayerToken()}` } : undefined;
     setSaving(true);
     setError(null);
     const payload = { phone: phoneToSend, gender: genderToSend, skillLevel: skillLevelToSend, venueId };
-    console.log("[onboarding] submitOnboarding — payload:", payload, "authHeader keys:", Object.keys(authHdr));
+    console.log("[onboarding] submitOnboarding — payload:", payload, "authHeader keys:", Object.keys(authHdr ?? {}));
     try {
       const res = await fetch("/api/public/account/onboarding", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHdr },
+        headers: { "Content-Type": "application/json", ...(authHdr ?? {}) },
         body: JSON.stringify(payload),
       });
       const data = await res.json();

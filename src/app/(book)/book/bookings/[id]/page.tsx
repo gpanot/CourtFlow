@@ -67,6 +67,7 @@ export default function BookingDetailPage() {
   const [venueContact, setVenueContact] = useState<VenueContact | null>(null);
   const [cancelling, setCancelling] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [proofFullscreen, setProofFullscreen] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/book/login");
@@ -106,6 +107,11 @@ export default function BookingDetailPage() {
   const court = booking.court as { label: string };
   const isCancelled = booking.status === "cancelled";
   const paymentStatus = booking.paymentStatus as string | null;
+  const isVerifying: boolean = paymentStatus === "proof_submitted";
+  const paymentRef = booking.paymentRef as string | null | undefined;
+  const paymentProofUrl = booking.paymentProofUrl as string | null | undefined;
+  const priceInCents = booking.priceInCents as number;
+  const bookingDate = booking.date as string;
 
   const paymentStatusMap: Record<string, { color: string; label: string }> = {
     pending: { color: "text-[var(--cm-orange)]", label: "Pending payment" },
@@ -137,14 +143,14 @@ export default function BookingDetailPage() {
         <Row label="Court" value={court.label} />
         <Row
           label="Date"
-          value={new Date(booking.date as string).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+          value={new Date(bookingDate).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
         />
         <Row
           label="Time"
           value={`${startTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })} – ${endTime.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })}`}
         />
-        <Row label="Price" value={formatPrice(booking.priceInCents as number)} />
-        <Row label="Status" value={isCancelled ? "Cancelled" : "Confirmed"} />
+        <Row label="Price" value={formatPrice(priceInCents)} />
+        {isCancelled && <Row label="Status" value="Cancelled" />}
         <Row
           label="Payment"
           value={isCancelled ? "—" : paymentInfo.label}
@@ -152,21 +158,65 @@ export default function BookingDetailPage() {
         />
       </div>
 
-      {booking.paymentRef ? (
+      {paymentRef ? (
         <p className="text-xs text-[var(--cm-text-muted)] mb-4 font-mono">
-          Payment ref: {String(booking.paymentRef)}
+          Payment ref: {paymentRef}
+        </p>
+      ) : null}
+
+      {isVerifying ? (
+        <p className="text-xs text-[var(--cm-text-muted)] mb-4 text-center">
+          Our staff is verifying your payment — give us a moment 🙏
         </p>
       ) : null}
 
       {/* Payment proof image if submitted */}
-      {booking.paymentProofUrl && (booking.paymentProofUrl as string) !== "pending_proof" ? (
+      {paymentProofUrl && paymentProofUrl !== "pending_proof" ? (
         <div className="mb-4">
           <p className="text-xs text-[var(--cm-text-sec)] mb-1">Payment proof</p>
+          <button
+            onClick={() => setProofFullscreen(true)}
+            className="block w-full max-w-xs rounded-xl border border-[var(--cm-border)] overflow-hidden"
+          >
+            <img
+              src={paymentProofUrl}
+              alt="Payment proof"
+              className="w-full object-cover"
+              onError={(e) => {
+                const t = e.currentTarget;
+                t.style.display = "none";
+                const parent = t.parentElement;
+                if (parent && !parent.querySelector(".proof-error")) {
+                  const el = document.createElement("div");
+                  el.className = "proof-error";
+                  el.style.cssText = "padding:24px 16px;text-align:center;font-size:12px;color:var(--cm-text-muted)";
+                  el.textContent = "Image could not be loaded";
+                  parent.appendChild(el);
+                }
+              }}
+            />
+          </button>
+          <p className="text-[10px] text-[var(--cm-text-muted)] mt-1">Tap to view full size</p>
+        </div>
+      ) : null}
+
+      {/* Fullscreen proof lightbox */}
+      {proofFullscreen && paymentProofUrl ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
+          onClick={() => setProofFullscreen(false)}
+        >
           <img
-            src={booking.paymentProofUrl as string}
+            src={paymentProofUrl}
             alt="Payment proof"
-            className="w-full max-w-xs rounded-xl border border-[var(--cm-border)]"
+            className="max-w-full max-h-full object-contain p-4"
           />
+          <button
+            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-white/20 text-white text-lg"
+            onClick={() => setProofFullscreen(false)}
+          >
+            ✕
+          </button>
         </div>
       ) : null}
 
