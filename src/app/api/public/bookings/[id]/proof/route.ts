@@ -5,7 +5,7 @@ import { requirePortalAuth } from "@/lib/portal-auth";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 
-const UPLOAD_DIR = path.join(process.cwd(), "public", "uploads", "proofs");
+const UPLOAD_DIR = path.join(process.cwd(), "uploads", "proofs");
 
 export async function POST(
   request: NextRequest,

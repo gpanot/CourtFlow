@@ -3,30 +3,44 @@ export const dynamic = "force-dynamic";
 import { portalFetch } from "@/lib/portal-fetch";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { usePlayerSession } from "../../components/usePlayerSession";
 import { signOutToIntro } from "../../lib/sign-out-to-intro";
 import { useTheme } from "../../components/ThemeProvider";
 import { AvatarPhotoCropper } from "@/components/avatar-photo-cropper";
+import { BookScreenTopBar } from "../../components/BookScreenTopBar";
 
 const SKILL_LEVELS = ["beginner", "intermediate", "advanced", "pro"] as const;
 const GENDERS = ["male", "female"] as const;
 const THEME_OPTIONS = [
-  { value: "dark" as const, label: "Dark" },
   { value: "light" as const, label: "Light" },
-  { value: "system" as const, label: "System" },
-];
+  { value: "dark" as const, label: "Dark" },
+] as const;
+
+type ProfileSnapshot = {
+  name: string;
+  phone: string;
+  gender: string;
+  skillLevel: string;
+};
+
+function segmentClass(selected: boolean) {
+  return selected
+    ? "bg-[var(--cm-accent)] text-black border-[var(--cm-accent)]"
+    : "bg-[var(--cm-bg-input)] text-[var(--cm-text-sec)] border-[var(--cm-border)]";
+}
 
 export default function EditProfilePage() {
   const { status } = usePlayerSession();
   const router = useRouter();
-  const { mode, setMode } = useTheme();
+  const { mode, resolved, setMode } = useTheme();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [gender, setGender] = useState("");
   const [skillLevel, setSkillLevel] = useState("");
   const [email, setEmail] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [initialProfile, setInitialProfile] = useState<ProfileSnapshot | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -36,16 +50,35 @@ export default function EditProfilePage() {
   const [cropFile, setCropFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  const activeTheme = mode === "system" ? resolved : mode;
+
+  const hasChanges = useMemo(() => {
+    if (!initialProfile) return false;
+    return (
+      name !== initialProfile.name ||
+      phone !== initialProfile.phone ||
+      gender !== initialProfile.gender ||
+      skillLevel !== initialProfile.skillLevel
+    );
+  }, [initialProfile, name, phone, gender, skillLevel]);
+
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/book/login");
     if (status === "authenticated") {
       portalFetch("/api/public/account")
         .then((r) => r.json())
         .then((p) => {
-          setName(p.name ?? "");
-          setPhone(p.phone ?? "");
-          setGender(p.gender ?? "");
-          setSkillLevel(p.skillLevel ?? "");
+          const snapshot: ProfileSnapshot = {
+            name: p.name ?? "",
+            phone: p.phone ?? "",
+            gender: p.gender ?? "",
+            skillLevel: p.skillLevel ?? "",
+          };
+          setName(snapshot.name);
+          setPhone(snapshot.phone);
+          setGender(snapshot.gender);
+          setSkillLevel(snapshot.skillLevel);
+          setInitialProfile(snapshot);
           setEmail(p.email ?? "");
           setAvatarUrl(p.avatar ?? null);
           setLoaded(true);
@@ -113,31 +146,41 @@ export default function EditProfilePage() {
   }
 
   return (
-    <div className="px-6 pt-12 pb-8">
-      <button onClick={() => router.back()} className="text-sm text-[var(--cm-text-sec)] mb-6">
-        ← Back
-      </button>
-      <h1 className="text-xl font-bold mb-4 text-[var(--cm-text)]">Edit Profile</h1>
+    <div className="px-6 pt-4 pb-8">
+      <BookScreenTopBar
+        title="Edit Profile"
+        onBack={() => router.back()}
+        action={
+          hasChanges
+            ? {
+                label: "Save Changes",
+                onClick: handleSave,
+                disabled: saving,
+                loading: saving,
+              }
+            : undefined
+        }
+      />
 
       {/* Avatar */}
-      <div className="flex flex-col items-center mb-6">
+      <div className="flex flex-col items-center mb-5">
         <button
           onClick={() => fileRef.current?.click()}
-          className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-[var(--cm-border)] hover:border-[var(--cm-accent)] transition-colors"
+          className="relative w-16 h-16 rounded-full overflow-hidden border-2 border-[var(--cm-border)] hover:border-[var(--cm-accent)] transition-colors"
         >
           {avatarUrl ? (
             <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
           ) : (
-            <div className="w-full h-full bg-[var(--cm-accent-bg)] flex items-center justify-center text-2xl">🏓</div>
+            <div className="w-full h-full bg-[var(--cm-accent-bg)] flex items-center justify-center text-xl">🏓</div>
           )}
           <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
               <circle cx="12" cy="13" r="4" />
             </svg>
           </div>
         </button>
-        <p className="text-xs text-[var(--cm-text-muted)] mt-1.5">Tap to change photo</p>
+        <p className="text-[10px] text-[var(--cm-text-muted)] mt-1">Tap to change photo</p>
         <input ref={fileRef} type="file" accept="image/*" onChange={handleAvatarFileChange} className="hidden" />
       </div>
 
@@ -149,14 +192,14 @@ export default function EditProfilePage() {
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
-        className="w-full px-4 py-3 bg-[var(--cm-bg-input)] border border-[var(--cm-border)] rounded-xl text-sm mb-5 outline-none focus:border-[var(--cm-accent)] text-[var(--cm-text)]"
+        className="w-full px-4 py-3 bg-[var(--cm-bg-input)] border border-[var(--cm-border)] rounded-xl text-sm mb-4 outline-none focus:border-[var(--cm-accent)] text-[var(--cm-text)]"
       />
 
       <label className="block text-sm font-medium mb-1.5 text-[var(--cm-text)]">Email</label>
       <input
         value={email}
         disabled
-        className="w-full px-4 py-3 bg-[var(--cm-bg-surface)] border border-[var(--cm-border)] rounded-xl text-sm mb-5 text-[var(--cm-text-muted)]"
+        className="w-full px-4 py-3 bg-[var(--cm-bg-surface)] border border-[var(--cm-border)] rounded-xl text-sm mb-4 text-[var(--cm-text-muted)]"
       />
 
       <label className="block text-sm font-medium mb-1.5 text-[var(--cm-text)]">Phone</label>
@@ -164,70 +207,60 @@ export default function EditProfilePage() {
         type="tel"
         value={phone}
         onChange={(e) => setPhone(e.target.value)}
-        className="w-full px-4 py-3 bg-[var(--cm-bg-input)] border border-[var(--cm-border)] rounded-xl text-sm mb-5 outline-none focus:border-[var(--cm-accent)] text-[var(--cm-text)]"
+        className="w-full px-4 py-3 bg-[var(--cm-bg-input)] border border-[var(--cm-border)] rounded-xl text-sm mb-4 outline-none focus:border-[var(--cm-accent)] text-[var(--cm-text)]"
       />
 
-      <label className="block text-sm font-medium mb-2 text-[var(--cm-text)]">Gender</label>
-      <div className="flex gap-3 mb-5">
-        {GENDERS.map((g) => (
-          <button
-            key={g}
-            onClick={() => setGender(g)}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-colors ${
-              gender === g
-                ? "bg-[var(--cm-accent)] text-black border-[var(--cm-accent)]"
-                : "bg-[var(--cm-bg-input)] text-[var(--cm-text-sec)] border-[var(--cm-border)]"
-            }`}
-          >
-            {g.charAt(0).toUpperCase() + g.slice(1)}
-          </button>
-        ))}
+      <div className="rounded-xl border border-[var(--cm-border)] bg-[var(--cm-bg-card)] p-3 mb-4 space-y-3">
+        <div>
+          <p className="text-xs font-medium text-[var(--cm-text-sec)] mb-1.5">Gender</p>
+          <div className="flex gap-2">
+            {GENDERS.map((g) => (
+              <button
+                key={g}
+                type="button"
+                onClick={() => setGender(g)}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${segmentClass(gender === g)}`}
+              >
+                {g.charAt(0).toUpperCase() + g.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-medium text-[var(--cm-text-sec)] mb-1.5">Skill Level</p>
+          <div className="grid grid-cols-2 gap-2">
+            {SKILL_LEVELS.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setSkillLevel(s)}
+                className={`py-1.5 rounded-lg text-xs font-medium border transition-colors ${segmentClass(skillLevel === s)}`}
+              >
+                {s.charAt(0).toUpperCase() + s.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-medium text-[var(--cm-text-sec)] mb-1.5">Theme</p>
+          <div className="flex gap-2">
+            {THEME_OPTIONS.map((t) => (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => setMode(t.value)}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${segmentClass(activeTheme === t.value)}`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
-      <label className="block text-sm font-medium mb-2 text-[var(--cm-text)]">Skill Level</label>
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        {SKILL_LEVELS.map((s) => (
-          <button
-            key={s}
-            onClick={() => setSkillLevel(s)}
-            className={`py-2.5 rounded-xl text-sm font-medium border transition-colors ${
-              skillLevel === s
-                ? "bg-[var(--cm-accent)] text-black border-[var(--cm-accent)]"
-                : "bg-[var(--cm-bg-input)] text-[var(--cm-text-sec)] border-[var(--cm-border)]"
-            }`}
-          >
-            {s.charAt(0).toUpperCase() + s.slice(1)}
-          </button>
-        ))}
-      </div>
-
-      {/* Theme */}
-      <label className="block text-sm font-medium mb-2 text-[var(--cm-text)]">Theme</label>
-      <div className="flex gap-3 mb-8">
-        {THEME_OPTIONS.map((t) => (
-          <button
-            key={t.value}
-            onClick={() => setMode(t.value)}
-            className={`flex-1 py-2.5 rounded-xl text-sm font-medium border transition-colors ${
-              mode === t.value
-                ? "bg-[var(--cm-accent)] text-black border-[var(--cm-accent)]"
-                : "bg-[var(--cm-bg-input)] text-[var(--cm-text-sec)] border-[var(--cm-border)]"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      <button
-        onClick={handleSave}
-        disabled={saving}
-        className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm disabled:opacity-40"
-      >
-        {saving ? "Saving..." : "Save Changes"}
-      </button>
-
-      <div className="mt-10 pt-6 border-t border-[var(--cm-border)]">
+      <div className="mt-8 pt-6 border-t border-[var(--cm-border)]">
         <button
           onClick={() => { setShowDeleteConfirm(true); setDeleteStep("confirm"); }}
           className="w-full py-3 bg-transparent border border-[var(--cm-red)]/30 text-[var(--cm-red)] rounded-xl font-medium text-sm hover:bg-[var(--cm-red)]/10 transition-colors"
