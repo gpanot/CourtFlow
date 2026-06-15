@@ -76,6 +76,8 @@ interface RecentLesson {
   startTime: string;
   endTime: string;
   status: string;
+  paymentStatus: string;
+  proofUrl: string | null;
   priceValue: number;
   createdAt: string;
 }
@@ -346,8 +348,8 @@ export default function AdminOverview() {
       startTime: l.startTime,
       endTime: l.endTime,
       status: l.status,
-      paymentStatus: null,
-      paymentProofUrl: null,
+      paymentStatus: l.paymentStatus ?? null,
+      paymentProofUrl: l.proofUrl ?? null,
       priceValue: l.priceValue,
       createdAt: l.createdAt,
     })),
@@ -565,6 +567,13 @@ export default function AdminOverview() {
                         title="Manage booking"
                       >
                         —
+                      </button>
+                    ) : entry.kind === "lesson" && entry.paymentStatus ? (
+                      <button
+                        onClick={() => router.push(`/admin/coaching`)}
+                        title="View in coaching panel"
+                      >
+                        <PaymentStatusBadge status={entry.paymentStatus} />
                       </button>
                     ) : entry.kind === "openplay" && entry.paymentStatus ? (
                       <button

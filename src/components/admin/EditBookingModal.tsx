@@ -228,12 +228,13 @@ export function BookingStatusBadge({ status }: { status: string }) {
 }
 
 export function PaymentStatusBadge({ status }: { status: string }) {
+  const normalized = status === "PAID" ? "paid" : status === "UNPAID" ? "pending" : status;
   const map: Record<string, { cls: string; label: string }> = {
     pending: { cls: "bg-yellow-600/20 text-yellow-400", label: "Payment pending" },
     proof_submitted: { cls: "bg-orange-600/20 text-orange-400 animate-pulse", label: "Proof submitted" },
     paid: { cls: "bg-green-600/20 text-green-400", label: "Paid" },
   };
-  const info = map[status] ?? { cls: "bg-neutral-600/20 text-neutral-400", label: status };
+  const info = map[normalized] ?? { cls: "bg-neutral-600/20 text-neutral-400", label: status };
   return (
     <span className={cn("inline-block rounded-full px-2 py-0.5 text-[10px] font-medium", info.cls)}>
       {info.label}

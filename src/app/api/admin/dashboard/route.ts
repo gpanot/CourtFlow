@@ -175,12 +175,12 @@ export async function GET(request: NextRequest) {
       }),
       // Unpaid lessons
       prisma.coachLesson.findMany({
-        where: { venueId: { in: venueIds }, paymentStatus: "UNPAID", status: { in: ["confirmed", "completed"] } },
+        where: { venueId: { in: venueIds }, paymentStatus: { in: ["UNPAID", "pending", "proof_submitted"] }, status: { in: ["confirmed", "completed"] } },
         select: { priceValue: true },
       }),
       // Lessons paid this month
       prisma.coachLesson.findMany({
-        where: { venueId: { in: venueIds }, paymentStatus: "PAID", paidAt: { gte: monthStart, lte: monthEnd } },
+        where: { venueId: { in: venueIds }, paymentStatus: { in: ["PAID", "paid"] }, paidAt: { gte: monthStart, lte: monthEnd } },
         select: { priceValue: true },
       }),
       // Recent coaching lessons (latest 8)
@@ -307,6 +307,8 @@ export async function GET(request: NextRequest) {
         startTime: l.startTime,
         endTime: l.endTime,
         status: l.status,
+        paymentStatus: l.paymentStatus,
+        proofUrl: l.proofUrl ?? null,
         priceValue: l.priceValue,
         createdAt: l.createdAt,
       })),
