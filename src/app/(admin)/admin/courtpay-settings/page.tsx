@@ -465,13 +465,37 @@ function AutoPaymentSettings({
 
         <div>
           <label className="mb-0.5 block text-[11px] text-neutral-500">{t("courtpaySettings.accountOwnerName")}</label>
-            <input
-              type="text"
-              value={bankOwnerName}
-              onChange={(e) => setBankOwnerName(e.target.value)}
-              placeholder={t("courtpaySettings.accountNamePlaceholder")}
+          <input
+            type="text"
+            value={bankOwnerName}
+            onChange={(e) => setBankOwnerName(e.target.value)}
+            placeholder={t("courtpaySettings.accountNamePlaceholder")}
             className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none"
           />
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="mb-0.5 block text-[11px] text-neutral-500">{t("courtpaySettings.phoneNumber")}</label>
+            <input
+              type="tel"
+              inputMode="tel"
+              value={autoApprovalPhone}
+              onChange={(e) => setAutoApprovalPhone(e.target.value)}
+              placeholder="0912 345 678"
+              className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="mb-0.5 block text-[11px] text-neutral-500">{t("courtpaySettings.cccdId")}</label>
+            <input
+              type="text"
+              value={autoApprovalCCCD}
+              onChange={(e) => setAutoApprovalCCCD(e.target.value)}
+              placeholder="012 345 678 901"
+              className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none"
+            />
+          </div>
         </div>
 
         {/* QR Preview */}
@@ -582,45 +606,6 @@ function AutoPaymentSettings({
               </p>
             )}
           </div>
-
-          {/* Sepay Identity — only when Sepay is selected */}
-          {sepayEnabled && (
-            <div className="rounded-xl border border-fuchsia-900/30 bg-fuchsia-950/10 p-4 md:p-5 space-y-4">
-              <div className="flex items-center gap-2">
-                <Zap className="h-4 w-4 text-fuchsia-400" />
-                <div>
-                  <p className="text-sm font-semibold text-white">{t("courtpaySettings.sepayIdentity")}</p>
-                  <p className="text-[11px] text-neutral-500 mt-0.5">
-                    {t("courtpaySettings.sepayIdentityDesc")}
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="mb-0.5 block text-[11px] text-neutral-500">{t("courtpaySettings.phoneNumber")}</label>
-                  <input
-                    type="tel"
-                    inputMode="tel"
-                    value={autoApprovalPhone}
-                    onChange={(e) => setAutoApprovalPhone(e.target.value)}
-                    placeholder="0912 345 678"
-                    className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm text-white placeholder:text-neutral-600 focus:border-fuchsia-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="mb-0.5 block text-[11px] text-neutral-500">{t("courtpaySettings.cccdId")}</label>
-                  <input
-                    type="text"
-                    value={autoApprovalCCCD}
-                    onChange={(e) => setAutoApprovalCCCD(e.target.value)}
-                    placeholder="012 345 678 901"
-                    className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm text-white placeholder:text-neutral-600 focus:border-fuchsia-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
 
           <div className="rounded-xl border border-cyan-900/30 bg-cyan-950/10 p-4 md:p-5 space-y-4">
             <div className="flex items-center justify-between gap-3">
