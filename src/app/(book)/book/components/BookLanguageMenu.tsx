@@ -24,7 +24,7 @@ export function BookLanguageMenu({
   const { i18n, t } = useTranslation();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const activeLang = (i18n.language?.slice(0, 2) ?? "vi") as BookLanguageCode;
+  const activeLang = (i18n.language?.slice(0, 2) ?? "en") as BookLanguageCode;
 
   useEffect(() => {
     if (!open) return;
@@ -54,7 +54,7 @@ export function BookLanguageMenu({
         aria-expanded={open}
       >
         <span aria-hidden className="block select-none">
-          {FLAGS[activeLang] ?? FLAGS.vi}
+          {FLAGS[activeLang] ?? FLAGS.en}
         </span>
       </button>
       {open && (

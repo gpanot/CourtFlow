@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import Image from "next/image";
 import { useTranslation } from "react-i18next";
+import { BookLanguageMenu } from "@/app/(book)/book/components/BookLanguageMenu";
 
 const SLIDE_IMAGES = ["/images/intro1.png", "/images/intro2_avatar.jpeg", "/images/intro3.jpeg"] as const;
 
@@ -76,6 +77,10 @@ export default function IntroPage() {
           className="absolute inset-x-0 bottom-0 h-16 z-10"
           style={{ background: "linear-gradient(to top, var(--cm-bg), transparent)" }}
         />
+
+        <div className="absolute top-[calc(1rem+env(safe-area-inset-top))] left-4 z-20">
+          <BookLanguageMenu />
+        </div>
 
         {!isLast && (
           <button

@@ -17,20 +17,20 @@ export type BookLanguageCode = (typeof BOOK_LANGUAGES)[number]["code"];
 const SUPPORTED = new Set<string>(BOOK_LANGUAGES.map((l) => l.code));
 
 function normalizeLang(code: string | null | undefined): BookLanguageCode {
-  const base = code?.slice(0, 2) ?? "vi";
-  return (SUPPORTED.has(base) ? base : "vi") as BookLanguageCode;
+  const base = code?.slice(0, 2) ?? "en";
+  return (SUPPORTED.has(base) ? base : "en") as BookLanguageCode;
 }
 
 if (!i18n.isInitialized) {
-  // Always start with vi so SSR and the first client paint match (localStorage is applied after mount).
+  // Always start with en so SSR and the first client paint match (localStorage is applied after mount).
   i18n.use(initReactI18next).init({
     resources: {
       en: { translation: en },
       vi: { translation: vi },
       th: { translation: th },
     },
-    lng: "vi",
-    fallbackLng: "vi",
+    lng: "en",
+    fallbackLng: "en",
     supportedLngs: ["en", "vi", "th"],
     interpolation: { escapeValue: false },
     react: { useSuspense: false },
