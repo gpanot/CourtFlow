@@ -34,7 +34,7 @@ interface LessonItem {
   priceValue: number;
   status: string;
   paymentStatus: string;
-  coach: { name: string };
+  coach: { name: string; coachPhoto?: string | null };
   package: { name: string };
   venue?: { name: string };
 }
@@ -81,6 +81,7 @@ function NextUpHeroCard({
   title,
   subtitle,
   venueName,
+  avatarUrl,
   startTime,
   endTime,
   date,
@@ -95,6 +96,7 @@ function NextUpHeroCard({
   title: string;
   subtitle: string;
   venueName: string;
+  avatarUrl?: string | null;
   startTime: string;
   endTime: string;
   date: string;
@@ -127,10 +129,19 @@ function NextUpHeroCard({
             {formatTime(startTime)} – {formatTime(endTime)}
           </p>
 
-          <p className="text-base font-semibold text-[var(--cm-text)] mt-0.5">{title}</p>
-
-          {subtitle && (
-            <p className="text-xs text-[var(--cm-text-sec)] mt-0.5">{subtitle}</p>
+          {avatarUrl ? (
+            <div className="flex items-center gap-2.5 mt-1">
+              <img src={avatarUrl} alt={title} className="h-9 w-9 rounded-full object-cover shrink-0 border border-[var(--cm-border)]" />
+              <div>
+                <p className="text-base font-semibold text-[var(--cm-text)] leading-tight">{title}</p>
+                {subtitle && <p className="text-xs text-[var(--cm-text-sec)]">{subtitle}</p>}
+              </div>
+            </div>
+          ) : (
+            <>
+              <p className="text-base font-semibold text-[var(--cm-text)] mt-0.5">{title}</p>
+              {subtitle && <p className="text-xs text-[var(--cm-text-sec)] mt-0.5">{subtitle}</p>}
+            </>
           )}
 
           {venueName && (
@@ -164,6 +175,7 @@ function NextUpHeroCard({
 function BookingRow({
   href,
   icon,
+  avatarUrl,
   title,
   subtitle,
   venueName,
@@ -174,6 +186,7 @@ function BookingRow({
 }: {
   href: string;
   icon?: React.ReactNode;
+  avatarUrl?: string | null;
   title: string;
   subtitle: string;
   venueName: string;
@@ -187,10 +200,14 @@ function BookingRow({
       href={href}
       className={`flex items-center gap-3 bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl px-3 py-3 mb-2 transition-opacity ${dimmed ? "opacity-55" : ""}`}
     >
-      {/* Icon */}
-      <div className="h-9 w-9 rounded-xl bg-[var(--cm-accent)]/10 flex items-center justify-center shrink-0 text-[var(--cm-accent)]">
-        {icon ?? <span className="text-base">🏓</span>}
-      </div>
+      {/* Avatar or icon */}
+      {avatarUrl ? (
+        <img src={avatarUrl} alt="" className="h-9 w-9 rounded-full object-cover shrink-0 border border-[var(--cm-border)]" aria-hidden />
+      ) : (
+        <div className="h-9 w-9 rounded-xl bg-[var(--cm-accent)]/10 flex items-center justify-center shrink-0 text-[var(--cm-accent)]">
+          {icon ?? <span className="text-base">🏓</span>}
+        </div>
+      )}
 
       {/* Content */}
       <div className="flex-1 min-w-0">
@@ -454,6 +471,7 @@ export default function MyBookingsPage() {
                     title={nextUpLesson.coach.name}
                     subtitle={nextUpLesson.package.name}
                     venueName={nextUpLesson.venue?.name ?? ""}
+                    avatarUrl={nextUpLesson.coach.coachPhoto}
                     startTime={nextUpLesson.startTime}
                     endTime={nextUpLesson.endTime}
                     date={nextUpLesson.date}
@@ -472,7 +490,7 @@ export default function MyBookingsPage() {
                       <BookingRow
                         key={l.id}
                         href={`/book/coach-sessions/${l.id}`}
-                        icon={<span className="text-base">🎓</span>}
+                        avatarUrl={l.coach.coachPhoto}
                         title={`${formatDate(l.date)} · ${formatTime(l.startTime)} – ${formatTime(l.endTime)}`}
                         subtitle={`${l.coach.name} · ${l.package.name}`}
                         venueName={l.venue?.name ?? ""}
@@ -496,7 +514,7 @@ export default function MyBookingsPage() {
                 <BookingRow
                   key={l.id}
                   href={`/book/coach-sessions/${l.id}`}
-                  icon={<span className="text-base">🎓</span>}
+                  avatarUrl={l.coach.coachPhoto}
                   title={`${formatDate(l.date)} · ${formatTime(l.startTime)} – ${formatTime(l.endTime)}`}
                   subtitle={`${l.coach.name} · ${l.package.name}`}
                   venueName={l.venue?.name ?? ""}

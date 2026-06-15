@@ -189,7 +189,7 @@ export async function GET(request: NextRequest) {
     const lessons = await prisma.coachLesson.findMany({
       where: { playerId },
       include: {
-        coach: { select: { name: true } },
+        coach: { select: { name: true, coachPhoto: true } },
         package: { select: { name: true } },
         court: { select: { label: true } },
       },
