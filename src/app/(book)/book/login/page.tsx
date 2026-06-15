@@ -1,7 +1,6 @@
 "use client";
 export const dynamic = "force-dynamic";
 
-import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import Image from "next/image";
@@ -36,7 +35,10 @@ function LoginContent() {
     if (!localStorage.getItem("intro_seen")) {
       router.replace("/book/intro");
     }
-  }, [router, callbackUrl]);
+    // Surface any OAuth error passed as a query param
+    const oauthError = searchParams.get("error");
+    if (oauthError) setError(oauthError);
+  }, [router, callbackUrl, searchParams]);
 
   function switchTab(nextTab: "signin" | "signup") {
     setTab(nextTab);
@@ -44,15 +46,11 @@ function LoginContent() {
     setSuccess(null);
   }
 
-  async function handleOAuth(provider: "google" | "apple") {
+  function handleOAuth(provider: "google" | "apple") {
     setLoading(provider);
-    setError(null);
-    try {
-      await signIn(provider, { redirectTo: "/book/onboarding" });
-    } catch {
-      setError(t("login.errors.signInFailed"));
-      setLoading(null);
-    }
+    // Navigate to the raw OAuth initiation route — sets a state cookie and
+    // redirects straight to the provider. No next-auth involved.
+    window.location.href = `/api/auth/oauth/${provider}`;
   }
 
   async function handleEmailSignIn() {
@@ -257,7 +255,7 @@ function GoogleIcon() {
 
 function AppleIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="white">
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor">
       <path d="M14.94 9.03c-.02-2.06 1.68-3.05 1.76-3.1-1-1.4-2.5-1.58-3-1.6-1.3-.13-2.5.75-3.15.75s-1.66-.74-2.73-.72A4.04 4.04 0 004.4 6.45c-1.44 2.5-.37 6.2 1.04 8.23.68 1 1.5 2.12 2.58 2.08 1.03-.04 1.42-.67 2.67-.67 1.25 0 1.6.67 2.68.65 1.12-.02 1.82-.98 2.5-2 .78-1.15 1.1-2.26 1.12-2.32-.02 0-2.15-.82-2.18-3.27zM12.53 3.3c.57-.7.96-1.66.85-2.63-.82.03-1.82.55-2.41 1.24-.53.62-.99 1.6-.87 2.54.92.07 1.86-.47 2.43-1.15z" />
     </svg>
   );

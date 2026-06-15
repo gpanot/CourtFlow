@@ -35,7 +35,7 @@ export function subscribePlayerToken(onChange: () => void): () => void {
 }
 
 /** Decode JWT payload without verifying signature (client-side only). */
-function decodeJwtPayload(token: string): Record<string, unknown> | null {
+export function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {
     const base64 = token.split(".")[1];
     const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
@@ -52,12 +52,12 @@ export interface PlayerTokenData {
   exp: number;
 }
 
+/** Read credentials (email/password) token from localStorage. */
 export function getPlayerFromToken(): PlayerTokenData | null {
   const token = getPlayerToken();
   if (!token) return null;
   const payload = decodeJwtPayload(token) as PlayerTokenData | null;
   if (!payload || payload.type !== "player_credentials") return null;
-  // Check expiry
   if (payload.exp && payload.exp * 1000 < Date.now()) {
     clearPlayerToken();
     return null;

@@ -1,11 +1,10 @@
 "use client";
 export const dynamic = "force-dynamic";
 
-import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { getPlayerToken, getPlayerFromToken } from "@/lib/player-token";
+import { usePlayerSession } from "../components/usePlayerSession";
 import { signOutToIntro } from "@/app/(book)/book/lib/sign-out-to-intro";
 
 const SKILL_LEVELS = ["beginner", "intermediate", "advanced", "pro"] as const;
@@ -19,14 +18,9 @@ interface PortalVenue {
 }
 
 export default function OnboardingPage() {
-  const { data: session, status, update } = useSession();
+  const { session, status, authHeader, refresh } = usePlayerSession();
   const router = useRouter();
   const { t } = useTranslation();
-
-  const authHeader: Record<string, string> = getPlayerToken()
-    ? { Authorization: `Bearer ${getPlayerToken()}` }
-    : {};
-  const isCredentialsAuth = !!getPlayerFromToken();
 
   const [step, setStep] = useState<"profile" | "venue">("profile");
   const [phone, setPhone] = useState("");
@@ -46,9 +40,8 @@ export default function OnboardingPage() {
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
   const [initialCheckDone, setInitialCheckDone] = useState(false);
 
-  // Auth gate: wait for session to fully resolve before any navigation decision
+  // Auth gate: wait for session to resolve before any navigation decision
   useEffect(() => {
-    if (isCredentialsAuth) return;
     if (status === "loading") return;
     if (status === "unauthenticated") {
       router.replace("/book/login");
@@ -57,17 +50,19 @@ export default function OnboardingPage() {
     if (status === "authenticated" && session?.onboardingComplete) {
       router.replace("/book");
     }
-  }, [status, session, router, isCredentialsAuth]);
+  }, [status, session, router]);
 
-  // If the player already has a real phone but no venue, skip to venue step
+  // Pre-fill if player already has a real phone but no venue
   useEffect(() => {
-    const ready = isCredentialsAuth || status === "authenticated";
-    if (!ready || initialCheckDone) return;
+    if (status !== "authenticated" || initialCheckDone) return;
     setInitialCheckDone(true);
-    fetch("/api/public/account", { headers: authHeader })
+    fetch("/api/public/account", { headers: authHeader, credentials: "include" })
       .then((r) => r.json())
       .then((profile) => {
-        const hasRealPhone = profile.phone && !profile.phone.startsWith("oauth_") && !profile.phone.startsWith("email_");
+        const hasRealPhone =
+          profile.phone &&
+          !profile.phone.startsWith("oauth_") &&
+          !profile.phone.startsWith("email_");
         if (hasRealPhone && !profile.venue) {
           const profileGender = profile.gender || "";
           const profileSkillLevel = profile.skillLevel || "";
@@ -93,7 +88,7 @@ export default function OnboardingPage() {
       })
       .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, initialCheckDone, isCredentialsAuth]);
+  }, [status, initialCheckDone]);
 
   const checkPhone = useCallback(async (value: string) => {
     const normalized = value.replace(/\s+/g, "");
@@ -119,12 +114,17 @@ export default function OnboardingPage() {
     }
   }
 
-  const canContinue = phone.length >= 8 && phoneStatus !== "taken" && phoneStatus !== "checking" && gender && skillLevel && !saving;
+  const canContinue =
+    phone.length >= 8 &&
+    phoneStatus !== "taken" &&
+    phoneStatus !== "checking" &&
+    !!gender &&
+    !!skillLevel &&
+    !saving;
 
   async function handleProfileContinue() {
     if (!phone || phone.trim().length < 8) {
-      setError(t("onboarding.errors.phoneRequired"));
-      return;
+      setError(t("onboarding.errors.phoneRequired")); return;
     }
     if (!gender) { setError(t("onboarding.errors.genderRequired")); return; }
     if (!skillLevel) { setError(t("onboarding.errors.skillRequired")); return; }
@@ -148,18 +148,26 @@ export default function OnboardingPage() {
     }
   }
 
-  async function submitOnboarding(venueId: string | null, overridePhone?: string, overrideGender?: string, overrideSkillLevel?: string) {
+  async function submitOnboarding(
+    venueId: string | null,
+    overridePhone?: string,
+    overrideGender?: string,
+    overrideSkillLevel?: string
+  ) {
     const phoneToSend = (overridePhone || phone).trim();
-    const genderToSend = overrideGender ?? gender;
-    const skillLevelToSend = overrideSkillLevel ?? skillLevel;
-    const authHdr = getPlayerToken() ? { Authorization: `Bearer ${getPlayerToken()}` } : undefined;
+    const payload = {
+      phone: phoneToSend,
+      gender: overrideGender ?? gender,
+      skillLevel: overrideSkillLevel ?? skillLevel,
+      venueId,
+    };
     setSaving(true);
     setError(null);
-    const payload = { phone: phoneToSend, gender: genderToSend, skillLevel: skillLevelToSend, venueId };
     try {
       const res = await fetch("/api/public/account/onboarding", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...(authHdr ?? {}) },
+        headers: { "Content-Type": "application/json", ...authHeader },
+        credentials: "include",
         body: JSON.stringify(payload),
       });
       const data = await res.json();
@@ -173,9 +181,7 @@ export default function OnboardingPage() {
         }
         throw new Error(data.error || t("onboarding.errors.saveFailed"));
       }
-      if (!isCredentialsAuth) {
-        await update({ playerId: data.playerId });
-      }
+      refresh();
       router.replace("/book");
     } catch (e) {
       setError((e as Error).message);
@@ -197,6 +203,7 @@ export default function OnboardingPage() {
       const res = await fetch("/api/public/account/relink", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeader },
+        credentials: "include",
         body: JSON.stringify({
           existingPlayerId: linkPrompt.existingPlayerId,
           link,
@@ -207,10 +214,8 @@ export default function OnboardingPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || t("onboarding.errors.genericFailed"));
-      if (!isCredentialsAuth) {
-        await update({ playerId: data.playerId });
-      }
       setLinkPrompt(null);
+      refresh();
       router.replace("/book");
     } catch (e) {
       setError((e as Error).message);
@@ -218,8 +223,12 @@ export default function OnboardingPage() {
     }
   }
 
-  if (status === "loading" && !isCredentialsAuth) {
-    return <div className="flex items-center justify-center min-h-dvh text-[var(--cm-text-muted)]">{t("common.loading")}</div>;
+  if (status === "loading") {
+    return (
+      <div className="flex items-center justify-center min-h-dvh text-[var(--cm-text-muted)]">
+        {t("common.loading")}
+      </div>
+    );
   }
 
   const chipCls = (active: boolean) =>
@@ -235,14 +244,11 @@ export default function OnboardingPage() {
         <button onClick={() => setStep("profile")} className="text-sm text-[var(--cm-text-sec)] mb-6">
           ← {t("common.back")}
         </button>
-
         <h1 className="text-xl font-bold mb-1">{t("onboarding.chooseVenue")}</h1>
         <p className="text-sm text-[var(--cm-text-sec)] mb-6">{t("onboarding.chooseVenueSubtitle")}</p>
-
         {error && (
           <div className="mb-4 p-3 bg-[var(--cm-red)]/10 text-[var(--cm-red)] text-sm rounded-xl">{error}</div>
         )}
-
         <div className="space-y-3">
           {venues.map((v) => (
             <button
@@ -286,10 +292,8 @@ export default function OnboardingPage() {
       <button onClick={() => void signOutToIntro()} className="text-sm text-[var(--cm-text-sec)] mb-6">
         ← {t("account.signOut")}
       </button>
-
       <h1 className="text-xl font-bold mb-1">{t("onboarding.completeProfile")}</h1>
       <p className="text-sm text-[var(--cm-text-sec)] mb-6">{t("onboarding.profileSubtitle")}</p>
-
       {error && (
         <div className="mb-4 p-3 bg-[var(--cm-red)]/10 text-[var(--cm-red)] text-sm rounded-xl">{error}</div>
       )}
@@ -321,9 +325,7 @@ export default function OnboardingPage() {
         </div>
       </div>
       {phoneStatus === "taken" && (
-        <p className="text-xs text-[var(--cm-red)] mb-4">
-          {t("onboarding.phoneTaken")}
-        </p>
+        <p className="text-xs text-[var(--cm-red)] mb-4">{t("onboarding.phoneTaken")}</p>
       )}
       {phoneStatus !== "taken" && <div className="mb-5" />}
 

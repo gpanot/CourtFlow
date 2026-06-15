@@ -1,7 +1,6 @@
 "use client";
 
-import { useSession } from "next-auth/react";
-import { useMemo, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import {
   getPlayerFromToken,
   getPlayerToken,
@@ -14,64 +13,101 @@ export type PlayerSessionStatus = "loading" | "authenticated" | "unauthenticated
 export interface PlayerSession {
   playerId: string | null;
   onboardingComplete: boolean;
-  isCredentials: boolean; // true = email/password token, false = OAuth session
-  token: string | null;   // Bearer token for API calls (null for OAuth)
+  isCredentials: boolean;
+  token: string | null;
 }
 
 export interface UsePlayerSessionResult {
   session: PlayerSession | null;
   status: PlayerSessionStatus;
-  /** Authorization header value to pass to API fetch calls */
   authHeader: Record<string, string>;
+  refresh: () => void;
 }
 
+interface ServerSession {
+  playerId: string;
+  email: string | null;
+  provider: string;
+  onboardingComplete: boolean;
+}
+
+/**
+ * Unified player session hook — no more next-auth dependency.
+ *
+ * Priority:
+ *   1. Credentials token in localStorage (synchronous, instant)
+ *   2. player_token httpOnly cookie via GET /api/auth/player/session
+ */
 export function usePlayerSession(): UsePlayerSessionResult {
-  const { data: oauthSession, status: oauthStatus } = useSession();
-  // Re-render when credentials token is set/cleared (e.g. after email login)
-  const credentialsToken = useSyncExternalStore(
+  // Re-render when localStorage token changes
+  const credentialsRawToken = useSyncExternalStore(
     subscribePlayerToken,
     getPlayerToken,
     () => null
   );
 
-  return useMemo(() => {
-    // Check credentials token first (synchronous)
-    const tokenData = credentialsToken ? getPlayerFromToken() : null;
-    const rawToken = credentialsToken;
+  const [serverSession, setServerSession] = useState<ServerSession | null | "loading">("loading");
+  const [fetchTick, setFetchTick] = useState(0);
 
-    if (tokenData) {
-      return {
-        session: {
-          playerId: tokenData.playerId,
-          onboardingComplete: false, // will be refreshed from API
-          isCredentials: true,
-          token: rawToken,
-        },
-        status: "authenticated" as PlayerSessionStatus,
-        authHeader: { Authorization: `Bearer ${rawToken}` },
-      };
+  useEffect(() => {
+    // If we have a credentials token, no need to hit the server
+    if (credentialsRawToken && getPlayerFromToken()) {
+      setServerSession(null);
+      return;
     }
+    let cancelled = false;
+    setServerSession("loading");
+    fetch("/api/auth/player/session", { credentials: "include" })
+      .then((r) => r.json())
+      .then((data: ServerSession | null) => {
+        if (!cancelled) setServerSession(data);
+      })
+      .catch(() => {
+        if (!cancelled) setServerSession(null);
+      });
+    return () => { cancelled = true; };
+  }, [credentialsRawToken, fetchTick]);
 
-    // Fall back to OAuth session
-    if (oauthStatus === "loading") {
-      return { session: null, status: "loading" as const, authHeader: {} as Record<string, string> };
-    }
+  function refresh() {
+    setFetchTick((t) => t + 1);
+  }
 
-    if (oauthSession?.playerId) {
-      return {
-        session: {
-          playerId: oauthSession.playerId,
-          onboardingComplete: oauthSession.onboardingComplete ?? false,
-          isCredentials: false,
-          token: null,
-        },
-        status: "authenticated" as const,
-        authHeader: {} as Record<string, string>,
-      };
-    }
+  // Path 1: credentials token (synchronous)
+  const tokenData = credentialsRawToken ? getPlayerFromToken() : null;
+  if (tokenData) {
+    return {
+      session: {
+        playerId: tokenData.playerId,
+        onboardingComplete: false, // refreshed from /api/public/account
+        isCredentials: true,
+        token: credentialsRawToken,
+      },
+      status: "authenticated",
+      authHeader: { Authorization: `Bearer ${credentialsRawToken}` },
+      refresh,
+    };
+  }
 
-    return { session: null, status: "unauthenticated" as const, authHeader: {} as Record<string, string> };
-  }, [oauthSession, oauthStatus, credentialsToken]);
+  // Path 2: OAuth cookie session
+  if (serverSession === "loading") {
+    return { session: null, status: "loading", authHeader: {}, refresh };
+  }
+
+  if (serverSession?.playerId) {
+    return {
+      session: {
+        playerId: serverSession.playerId,
+        onboardingComplete: serverSession.onboardingComplete,
+        isCredentials: false,
+        token: null,
+      },
+      status: "authenticated",
+      authHeader: {},
+      refresh,
+    };
+  }
+
+  return { session: null, status: "unauthenticated", authHeader: {}, refresh };
 }
 
 /** Sign out from whichever auth path is active */
