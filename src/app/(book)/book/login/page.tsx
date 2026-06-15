@@ -1,7 +1,6 @@
 "use client";
 export const dynamic = "force-dynamic";
 
-import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import Image from "next/image";
@@ -44,19 +43,14 @@ function LoginContent() {
     setSuccess(null);
   }
 
-  async function handleOAuth(provider: "google" | "apple") {
+  function handleOAuth(provider: "google" | "apple") {
     setLoading(provider);
     setError(null);
-    try {
-      // NextAuth v5 uses redirectTo; always go to /book/onboarding so the
-      // onboarding guard picks up whether the user is new or returning.
-      // Apple form_post may drop the cookie, so the redirect callback in
-      // player-auth.ts also enforces /book/* as a safety net.
-      await signIn(provider, { redirectTo: "/book/onboarding" });
-    } catch {
-      setError(t("login.errors.signInFailed"));
-      setLoading(null);
-    }
+    // Navigate directly to the NextAuth provider endpoint with callbackUrl as a
+    // query param. This avoids the next-auth/react signIn() client helper which
+    // stores redirectTo in a cookie — Apple's form_post response can lose that
+    // cookie on cross-domain redirects. The query param survives the full flow.
+    window.location.href = `/api/auth/signin/${provider}?callbackUrl=${encodeURIComponent("/book/onboarding")}`;
   }
 
   async function handleEmailSignIn() {

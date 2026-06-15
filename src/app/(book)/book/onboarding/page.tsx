@@ -23,7 +23,6 @@ export default function OnboardingPage() {
   const router = useRouter();
   const { t } = useTranslation();
 
-  // Resolve auth header for both credentials and OAuth paths
   const authHeader: Record<string, string> = getPlayerToken()
     ? { Authorization: `Bearer ${getPlayerToken()}` }
     : {};
@@ -47,14 +46,15 @@ export default function OnboardingPage() {
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
   const [initialCheckDone, setInitialCheckDone] = useState(false);
 
-  // Redirect if not authenticated at all — wait for session to resolve first
+  // Auth gate: wait for session to fully resolve before any navigation decision
   useEffect(() => {
-    console.log("[onboarding] auth check — isCredentialsAuth:", isCredentialsAuth, "status:", status, "onboardingComplete:", session?.onboardingComplete);
     if (isCredentialsAuth) return;
-    if (status === "loading") return; // session still resolving after OAuth redirect
-    if (status === "unauthenticated") { console.log("[onboarding] unauthenticated → /book/login"); router.replace("/book/login"); }
+    if (status === "loading") return;
+    if (status === "unauthenticated") {
+      router.replace("/book/login");
+      return;
+    }
     if (status === "authenticated" && session?.onboardingComplete) {
-      console.log("[onboarding] already complete → /book");
       router.replace("/book");
     }
   }, [status, session, router, isCredentialsAuth]);
@@ -62,20 +62,15 @@ export default function OnboardingPage() {
   // If the player already has a real phone but no venue, skip to venue step
   useEffect(() => {
     const ready = isCredentialsAuth || status === "authenticated";
-    console.log("[onboarding] profile-check effect — ready:", ready, "initialCheckDone:", initialCheckDone);
     if (!ready || initialCheckDone) return;
     setInitialCheckDone(true);
-    console.log("[onboarding] fetching /api/public/account...");
     fetch("/api/public/account", { headers: authHeader })
       .then((r) => r.json())
       .then((profile) => {
-        console.log("[onboarding] profile:", { phone: profile.phone, gender: profile.gender, skillLevel: profile.skillLevel, venue: profile.venue });
         const hasRealPhone = profile.phone && !profile.phone.startsWith("oauth_") && !profile.phone.startsWith("email_");
-        console.log("[onboarding] hasRealPhone:", hasRealPhone, "hasVenue:", !!profile.venue);
         if (hasRealPhone && !profile.venue) {
           const profileGender = profile.gender || "";
           const profileSkillLevel = profile.skillLevel || "";
-          console.log("[onboarding] has real phone, no venue — pre-filling gender:", profileGender, "skillLevel:", profileSkillLevel);
           setPhone(profile.phone);
           setGender(profileGender);
           setSkillLevel(profileSkillLevel);
@@ -83,26 +78,20 @@ export default function OnboardingPage() {
           fetch("/api/public/venues")
             .then((r) => r.json())
             .then((data: PortalVenue[]) => {
-              console.log("[onboarding] venues count:", data.length);
               if (data.length === 0) {
-                console.log("[onboarding] 0 venues → submitOnboarding(null, ...)");
                 submitOnboarding(null, profile.phone, profileGender, profileSkillLevel);
               } else if (data.length === 1) {
-                console.log("[onboarding] 1 venue → submitOnboarding auto");
                 submitOnboarding(data[0].id, profile.phone, profileGender, profileSkillLevel);
               } else {
-                console.log("[onboarding] multiple venues → show picker");
                 setVenues(data);
                 setStep("venue");
                 setVenuesLoading(false);
               }
             })
-            .catch((e) => { console.error("[onboarding] venues fetch error", e); setVenuesLoading(false); });
-        } else {
-          console.log("[onboarding] no auto-submit: hasRealPhone=", hasRealPhone, "venue=", profile.venue);
+            .catch(() => setVenuesLoading(false));
         }
       })
-      .catch((e) => { console.error("[onboarding] /account fetch error", e); });
+      .catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, initialCheckDone, isCredentialsAuth]);
 
@@ -139,10 +128,7 @@ export default function OnboardingPage() {
     }
     if (!gender) { setError(t("onboarding.errors.genderRequired")); return; }
     if (!skillLevel) { setError(t("onboarding.errors.skillRequired")); return; }
-    if (!canContinue) {
-      console.log("[onboarding] canContinue=false", { phone: phone.length, phoneStatus, gender, skillLevel, saving });
-      return;
-    }
+    if (!canContinue) return;
     setError(null);
     setVenuesLoading(true);
     try {
@@ -170,7 +156,6 @@ export default function OnboardingPage() {
     setSaving(true);
     setError(null);
     const payload = { phone: phoneToSend, gender: genderToSend, skillLevel: skillLevelToSend, venueId };
-    console.log("[onboarding] submitOnboarding — payload:", payload, "authHeader keys:", Object.keys(authHdr ?? {}));
     try {
       const res = await fetch("/api/public/account/onboarding", {
         method: "POST",
@@ -178,7 +163,6 @@ export default function OnboardingPage() {
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      console.log("[onboarding] onboarding API response:", res.status, data);
       if (!res.ok) {
         if (data.existingPlayerId) {
           setLinkPrompt({ existingPlayerId: data.existingPlayerId, phone: phoneToSend });
@@ -192,10 +176,8 @@ export default function OnboardingPage() {
       if (!isCredentialsAuth) {
         await update({ playerId: data.playerId });
       }
-      console.log("[onboarding] success → /book");
       router.replace("/book");
     } catch (e) {
-      console.error("[onboarding] submitOnboarding error", e);
       setError((e as Error).message);
       setSaving(false);
       setVenuesLoading(false);
@@ -236,7 +218,7 @@ export default function OnboardingPage() {
     }
   }
 
-  if (status === "loading") {
+  if (status === "loading" && !isCredentialsAuth) {
     return <div className="flex items-center justify-center min-h-dvh text-[var(--cm-text-muted)]">{t("common.loading")}</div>;
   }
 

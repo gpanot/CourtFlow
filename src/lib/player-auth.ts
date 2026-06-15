@@ -3,13 +3,11 @@ import Google from "next-auth/providers/google";
 import Apple from "next-auth/providers/apple";
 import { prisma } from "@/lib/db";
 
-/** A phone is a real user-provided phone only if it doesn't carry a provider placeholder prefix. */
 function isRealPhone(phone: string | null | undefined): boolean {
   if (!phone) return false;
   return !phone.startsWith("oauth_") && !phone.startsWith("email_");
 }
 
-/** Onboarding is complete when the player has a real phone AND a venue assigned. */
 function isOnboardingComplete(phone: string | null | undefined, registrationVenueId: string | null | undefined): boolean {
   return isRealPhone(phone) && !!registrationVenueId;
 }
@@ -51,85 +49,70 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   callbacks: {
     async redirect({ url, baseUrl }) {
-      console.log("[NextAuth redirect]", { url, baseUrl });
-      const target = `${baseUrl}/book/onboarding`;
-      // After Apple/Google OAuth, always land in the /book/* space.
-      if (url === baseUrl || url === `${baseUrl}/`) {
-        console.log("[NextAuth redirect] root → onboarding");
-        return target;
-      }
-      if (url.startsWith("/book") || url.startsWith(`${baseUrl}/book`)) {
-        const resolved = url.startsWith("/") ? `${baseUrl}${url}` : url;
-        console.log("[NextAuth redirect] book path →", resolved);
-        return resolved;
-      }
-      if (url.startsWith("/staff") || url.startsWith(`${baseUrl}/staff`) ||
-          url.startsWith("/admin") || url.startsWith(`${baseUrl}/admin`)) {
-        console.log("[NextAuth redirect] blocked staff/admin → onboarding");
-        return target;
-      }
-      if (url.startsWith("/")) {
-        console.log("[NextAuth redirect] relative →", `${baseUrl}${url}`);
-        return `${baseUrl}${url}`;
-      }
-      if (url.startsWith(baseUrl)) {
-        console.log("[NextAuth redirect] absolute →", url);
-        return url;
-      }
-      console.log("[NextAuth redirect] fallback → onboarding");
-      return target;
+      // OAuth callbacks (Apple/Google) always land here.
+      // Force every post-OAuth redirect into /book/onboarding — the onboarding
+      // page itself decides whether to show the form or skip to /book.
+      const onboarding = `${baseUrl}/book/onboarding`;
+
+      // Already targeting a /book/* path — allow it
+      if (url.startsWith(`${baseUrl}/book`)) return url;
+      if (url.startsWith("/book")) return `${baseUrl}${url}`;
+
+      // Everything else (root, staff, admin, external) → onboarding
+      return onboarding;
     },
 
     async signIn({ account, profile }) {
-      console.log("[NextAuth signIn]", { provider: account?.provider, providerAccountId: account?.providerAccountId, email: profile?.email });
       if (!account?.providerAccountId) return false;
 
       const provider = account.provider;
       const providerAccountId = account.providerAccountId;
 
-      const existing = await prisma.playerAccount.findUnique({
-        where: {
-          provider_providerAccountId: { provider, providerAccountId },
-        },
-      });
+      try {
+        const existing = await prisma.playerAccount.findUnique({
+          where: { provider_providerAccountId: { provider, providerAccountId } },
+        });
 
-      if (existing) return true;
+        if (existing) return true;
 
-      const name =
-        profile?.name ??
-        (profile?.given_name && profile?.family_name
-          ? `${profile.given_name} ${profile.family_name}`
-          : null) ??
-        "Player";
-      // Apple may provide a private relay address (user@privaterelay.appleid.com) or omit email on repeat logins — both are OK
-      const email = profile?.email ?? null;
-      const image =
-        (profile?.picture as string | undefined) ??
-        (profile?.image as string | undefined) ??
-        null;
+        const name =
+          profile?.name ??
+          (profile?.given_name && profile?.family_name
+            ? `${profile.given_name} ${profile.family_name}`
+            : null) ??
+          "Player";
+        const email = profile?.email ?? null;
+        const image =
+          (profile?.picture as string | undefined) ??
+          (profile?.image as string | undefined) ??
+          null;
 
-      const player = await prisma.player.create({
-        data: {
-          name,
-          email,
-          phone: `oauth_${provider}_${providerAccountId}`,
-          gender: "male",
-          skillLevel: "beginner",
-        },
-      });
+        const player = await prisma.player.create({
+          data: {
+            name,
+            email,
+            phone: `oauth_${provider}_${providerAccountId}`,
+            gender: "male",
+            skillLevel: "beginner",
+          },
+        });
 
-      await prisma.playerAccount.create({
-        data: {
-          playerId: player.id,
-          provider,
-          providerAccountId,
-          email,
-          name,
-          image,
-        },
-      });
+        await prisma.playerAccount.create({
+          data: {
+            playerId: player.id,
+            provider,
+            providerAccountId,
+            email,
+            name,
+            image,
+          },
+        });
 
-      return true;
+        return true;
+      } catch (err) {
+        console.error("[NextAuth signIn] failed to create player:", err);
+        return false;
+      }
     },
 
     async jwt({ token, account, trigger, session: updateData }) {
