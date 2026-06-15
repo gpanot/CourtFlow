@@ -1264,7 +1264,7 @@ export default function CourtPassPlayersPage() {
               <div className="flex flex-col items-center gap-2 p-4 text-center">
                 <AlertCircle className="h-8 w-8 text-red-400" />
                 <p className="text-xs text-neutral-500">{listError}</p>
-                <button onClick={fetchList} className="flex items-center gap-1 text-xs text-purple-400 hover:text-purple-300">
+                <button onClick={() => void fetchList()} className="flex items-center gap-1 text-xs text-purple-400 hover:text-purple-300">
                   <RefreshCw className="h-3 w-3" /> Retry
                 </button>
               </div>
