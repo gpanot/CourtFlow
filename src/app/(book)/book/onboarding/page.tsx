@@ -47,10 +47,11 @@ export default function OnboardingPage() {
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
   const [initialCheckDone, setInitialCheckDone] = useState(false);
 
-  // Redirect if not authenticated at all
+  // Redirect if not authenticated at all — wait for session to resolve first
   useEffect(() => {
     console.log("[onboarding] auth check — isCredentialsAuth:", isCredentialsAuth, "status:", status, "onboardingComplete:", session?.onboardingComplete);
-    if (isCredentialsAuth) return; // credentials user is always "authenticated"
+    if (isCredentialsAuth) return;
+    if (status === "loading") return; // session still resolving after OAuth redirect
     if (status === "unauthenticated") { console.log("[onboarding] unauthenticated → /book/login"); router.replace("/book/login"); }
     if (status === "authenticated" && session?.onboardingComplete) {
       console.log("[onboarding] already complete → /book");
