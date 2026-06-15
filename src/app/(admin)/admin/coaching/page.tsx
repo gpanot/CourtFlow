@@ -817,7 +817,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
       entityId: lesson.id,
       label: `${lesson.coach.name} → ${lesson.player.name}`,
       amountValue: lesson.priceValue,
-      currentStatus: (lesson.paymentStatus === "PAID" ? "PAID" : "UNPAID") as "PAID" | "UNPAID",
+      currentStatus: (lesson.paymentStatus === "PAID" || lesson.paymentStatus === "paid" ? "PAID" : "UNPAID") as "PAID" | "UNPAID",
       existingProofUrl: lesson.proofUrl,
       paymentMethod: lesson.paymentMethod,
       paidAt: lesson.paidAt,
@@ -1174,7 +1174,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
 
                 {/* Payment row */}
                 <div className="flex items-center gap-2 mt-2 pt-2 border-t border-neutral-800">
-                  {lesson.paymentStatus === "PAID" ? (
+                  {lesson.paymentStatus === "PAID" || lesson.paymentStatus === "paid" ? (
                     <button
                       onClick={() => openPaymentModal(lesson)}
                       className="flex items-center gap-1.5 rounded-lg bg-green-600/15 px-2.5 py-1 text-xs font-medium text-green-400 hover:bg-green-600/25 transition-colors"
@@ -1185,6 +1185,13 @@ function LessonsTab({ venueId }: { venueId: string }) {
                           <CreditCard className="h-2.5 w-2.5" />{lesson.paymentMethod === "bank_transfer" ? "Bank" : lesson.paymentMethod}
                         </span>
                       )}
+                    </button>
+                  ) : lesson.paymentStatus === "proof_submitted" ? (
+                    <button
+                      onClick={() => openPaymentModal(lesson)}
+                      className="flex items-center gap-1.5 rounded-lg bg-orange-600/15 px-2.5 py-1 text-xs font-medium text-orange-400 hover:bg-orange-600/25 transition-colors"
+                    >
+                      <DollarSign className="h-3 w-3" /> Verifying proof
                     </button>
                   ) : (
                     <button

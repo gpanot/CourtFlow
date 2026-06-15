@@ -205,7 +205,8 @@
     "booking": "Booking...",
     "bookingFailed": "Booking failed",
     "selectUpTo4Slots": "Select up to 4 slots",
-    "slots": "Slots"
+    "slots": "Slots",
+    "sessionDetail": "Session Detail"
   },
   "buyCredits": {
     "title": "Buy Credit Pack",

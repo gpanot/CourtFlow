@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
         startTime,
         endTime,
         priceValue: totalPrice,
-        paymentStatus: "pending",
+        paymentStatus: "pending", // lowercase like court bookings; admin marks as PAID/UNPAID after verification
         paymentRef,
       },
     });
@@ -192,6 +192,7 @@ export async function GET(request: NextRequest) {
         coach: { select: { name: true, coachPhoto: true } },
         package: { select: { name: true } },
         court: { select: { label: true } },
+        venue: { select: { name: true } },
       },
       orderBy: { startTime: "desc" },
     });

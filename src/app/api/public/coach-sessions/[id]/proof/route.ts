@@ -16,7 +16,7 @@ export async function POST(
     const { id } = await params;
 
     const lesson = await prisma.coachLesson.findFirst({
-      where: { id, playerId, paymentStatus: "pending" },
+      where: { id, playerId, paymentStatus: { in: ["pending", "UNPAID"] } },
     });
     if (!lesson) return error("Session not found or not pending payment", 404);
 
