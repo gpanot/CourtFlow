@@ -1399,6 +1399,7 @@ function EditLessonPaymentModal({
   onUpdated: () => void;
 }) {
   const [showProof, setShowProof] = useState(false);
+  const [selectedAction, setSelectedAction] = useState("");
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const proofUrl = resolveUploadUrl(lesson.paymentProofUrl);
@@ -1415,14 +1416,17 @@ function EditLessonPaymentModal({
   };
   const ps = paymentStatusLabel[normalised] ?? { label: lesson.paymentStatus, color: "text-neutral-400" };
 
-  const canApprove = normalised === "proof_submitted";
   const isPaid = normalised === "paid";
+  const isActive = lesson.status !== "cancelled";
 
-  async function handleApprove() {
+  async function handleSave() {
+    if (!selectedAction) return;
     setSaving(true);
     setErrorMsg(null);
     try {
-      await api.patch(`/api/admin/coach-lessons/${lesson.id}/approve-payment`);
+      if (selectedAction === "approve_payment") {
+        await api.patch(`/api/admin/coach-lessons/${lesson.id}/approve-payment`, {});
+      }
       onUpdated();
     } catch (e) {
       setErrorMsg((e as Error).message);
@@ -1520,6 +1524,24 @@ function EditLessonPaymentModal({
               </div>
             )}
 
+            {/* Action dropdown */}
+            {isActive && !isPaid && (
+              <div className="space-y-1.5">
+                <label className="text-xs text-neutral-400">Action</label>
+                <select
+                  value={selectedAction}
+                  disabled={saving}
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none disabled:opacity-50"
+                  onChange={(e) => setSelectedAction(e.target.value)}
+                >
+                  <option value="">— Select an action —</option>
+                  {normalised === "proof_submitted" && (
+                    <option value="approve_payment">✓ Approve payment</option>
+                  )}
+                </select>
+              </div>
+            )}
+
             {errorMsg && (
               <p className="text-xs text-red-400 rounded-lg bg-red-500/10 px-3 py-2">{errorMsg}</p>
             )}
@@ -1527,21 +1549,16 @@ function EditLessonPaymentModal({
 
           {/* Footer */}
           <div className="border-t border-neutral-800 px-5 py-3 flex gap-3">
-            {canApprove && (
-              <button
-                onClick={handleApprove}
-                disabled={saving}
-                className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 transition-colors disabled:opacity-40"
-              >
-                {saving ? "Approving…" : "✓ Approve Payment"}
-              </button>
-            )}
+            <button
+              onClick={handleSave}
+              disabled={saving || !selectedAction}
+              className="flex-1 rounded-xl bg-purple-600 py-2.5 text-sm font-semibold text-white hover:bg-purple-500 transition-colors disabled:opacity-40"
+            >
+              {saving ? "Saving…" : "Save Changes"}
+            </button>
             <button
               onClick={onClose}
-              className={cn(
-                "rounded-xl border border-neutral-700 px-4 py-2.5 text-sm text-neutral-400 hover:bg-neutral-800 transition-colors",
-                !canApprove && "flex-1"
-              )}
+              className="rounded-xl border border-neutral-700 px-4 py-2.5 text-sm text-neutral-400 hover:bg-neutral-800 transition-colors"
             >
               Close
             </button>
