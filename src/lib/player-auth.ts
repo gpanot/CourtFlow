@@ -51,8 +51,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   callbacks: {
     async redirect({ url, baseUrl }) {
-      // NextAuth v5 may fall back to site root when redirectTo is missing
+      // After Apple/Google OAuth, always land in the /book/* space.
+      // Apple uses form_post so the callback-url cookie may be lost; fall
+      // back to /book/onboarding which the onboarding guard then resolves.
       if (url === baseUrl || url === `${baseUrl}/`) {
+        return `${baseUrl}/book/onboarding`;
+      }
+      // Allow any relative /book/* or explicit /book/* absolute URL
+      if (url.startsWith("/book") || url.startsWith(`${baseUrl}/book`)) return url.startsWith("/") ? `${baseUrl}${url}` : url;
+      // Block redirect to staff/admin URLs after player OAuth
+      if (url.startsWith("/staff") || url.startsWith(`${baseUrl}/staff`) ||
+          url.startsWith("/admin") || url.startsWith(`${baseUrl}/admin`)) {
         return `${baseUrl}/book/onboarding`;
       }
       if (url.startsWith("/")) return `${baseUrl}${url}`;

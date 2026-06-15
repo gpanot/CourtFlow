@@ -48,9 +48,11 @@ function LoginContent() {
     setLoading(provider);
     setError(null);
     try {
-      // NextAuth v5 uses redirectTo (callbackUrl is ignored and falls back to site root)
-      const redirectTo = tab === "signup" ? "/book/onboarding" : callbackUrl;
-      await signIn(provider, { redirectTo });
+      // NextAuth v5 uses redirectTo; always go to /book/onboarding so the
+      // onboarding guard picks up whether the user is new or returning.
+      // Apple form_post may drop the cookie, so the redirect callback in
+      // player-auth.ts also enforces /book/* as a safety net.
+      await signIn(provider, { redirectTo: "/book/onboarding" });
     } catch {
       setError(t("login.errors.signInFailed"));
       setLoading(null);
