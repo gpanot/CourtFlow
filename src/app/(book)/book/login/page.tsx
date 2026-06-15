@@ -28,7 +28,6 @@ function LoginContent() {
   const [suName, setSuName] = useState("");
   const [suEmail, setSuEmail] = useState("");
   const [suPassword, setSuPassword] = useState("");
-  const [suPassword2, setSuPassword2] = useState("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -81,11 +80,8 @@ function LoginContent() {
 
   async function handleSignUp() {
     setError(null);
-    if (!suName || !suEmail || !suPassword || !suPassword2) {
+    if (!suName || !suEmail || !suPassword) {
       setError(t("login.errors.fillAllFields")); return;
-    }
-    if (suPassword !== suPassword2) {
-      setError(t("login.errors.passwordMismatch")); return;
     }
     if (suPassword.length < 8) {
       setError(t("login.errors.passwordTooShort")); return;
@@ -207,8 +203,7 @@ function LoginContent() {
             <div className="w-full space-y-3 mb-4">
               <input type="text" placeholder={t("login.fullName")} value={suName} onChange={(e) => setSuName(e.target.value)} className={inputCls} />
               <input type="email" placeholder={t("login.email")} value={suEmail} onChange={(e) => setSuEmail(e.target.value)} className={inputCls} />
-              <input type="password" placeholder={t("login.passwordMin")} value={suPassword} onChange={(e) => setSuPassword(e.target.value)} className={inputCls} />
-              <input type="password" placeholder={t("login.confirmPassword")} value={suPassword2} onChange={(e) => setSuPassword2(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleSignUp()} className={inputCls} />
+              <input type="password" placeholder={t("login.passwordMin")} value={suPassword} onChange={(e) => setSuPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void handleSignUp()} className={inputCls} />
             </div>
 
             <button onClick={handleSignUp} disabled={!!loading} className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl text-sm font-medium mb-4 disabled:opacity-40 transition-opacity">

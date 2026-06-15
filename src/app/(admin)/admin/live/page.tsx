@@ -23,6 +23,7 @@ interface VenueState {
 interface VenueMeta {
   id: string;
   name: string;
+  timezone?: string;
   hasActiveSession?: boolean;
   settings?: { tvLocale?: string; [key: string]: unknown } | null;
 }
@@ -69,6 +70,7 @@ export default function LiveSessionsPage() {
               enriched.push({
                 id: v.id,
                 name: v.name,
+                timezone: v.timezone,
                 settings: v.settings,
                 hasActiveSession: !!data.session,
               });
@@ -76,6 +78,7 @@ export default function LiveSessionsPage() {
               enriched.push({
                 id: v.id,
                 name: v.name,
+                timezone: v.timezone,
                 settings: v.settings,
                 hasActiveSession: false,
               });
@@ -246,7 +249,13 @@ export default function LiveSessionsPage() {
             </span>
           )}
           <span className="hidden tabular-nums text-sm text-neutral-500 sm:inline">
-            {clock.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            {clock.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+              ...(selectedVenueId && venues.find((v) => v.id === selectedVenueId)?.timezone
+                ? { timeZone: venues.find((v) => v.id === selectedVenueId)!.timezone }
+                : {}),
+            })}
           </span>
           {connected ? (
             <Wifi className="h-4 w-4 text-green-500" />

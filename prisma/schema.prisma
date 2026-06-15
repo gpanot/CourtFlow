@@ -139,6 +139,7 @@ model Venue {
   createdAt          DateTime  @default(now()) @map("created_at")
 
   billingStatus String @default("active") @map("billing_status")
+  timezone      String @default("Asia/Ho_Chi_Minh") @map("timezone")
 
   ownerId String? @map("owner_id")
   owner   StaffMember? @relation("VenueOwner", fields: [ownerId], references: [id], onDelete: SetNull)

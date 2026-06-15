@@ -54,6 +54,7 @@ interface VenueCourt {
 interface Venue {
   id: string;
   name: string;
+  timezone?: string;
   settings?: VenueSettings;
   courts?: VenueCourt[];
 }
@@ -132,16 +133,47 @@ interface PlayerResult {
   phone: string;
 }
 
-function formatDate(d: Date): string {
+/** Return YYYY-MM-DD for a Date, interpreted in the given IANA timezone. */
+function formatDate(d: Date, tz?: string): string {
+  if (tz) {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(d);
+    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
+    return `${get("year")}-${get("month")}-${get("day")}`;
+  }
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 
-function formatTime(iso: string): string {
+/** Return HH:MM for an ISO string, displayed in the given IANA timezone. */
+function formatTime(iso: string, tz?: string): string {
   const d = new Date(iso);
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    ...(tz ? { timeZone: tz } : {}),
+  });
+}
+
+/** Return the decimal hour-of-day (e.g. 14.5 = 14:30) in a given IANA timezone. */
+function nowHourInTz(tz?: string): number {
+  const now = new Date();
+  if (!tz) return now.getHours() + now.getMinutes() / 60;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(now);
+  const h = parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
+  const min = parseInt(parts.find((p) => p.type === "minute")?.value ?? "0", 10);
+  return h + min / 60;
 }
 
 function fmtPrice(cents: number): string {
@@ -167,6 +199,7 @@ export default function BookingsPage() {
     venues: venueOptions,
   } = useAdminVenuePicker({ autoSelect: true });
   const [venues, setVenues] = useState<Venue[]>([]);
+  const [venueTimezone, setVenueTimezone] = useState<string | undefined>(undefined);
   const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
   const [bookings, setBookings] = useState<BookingRecord[]>([]);
   const [availability, setAvailability] = useState<CourtSlotData[]>([]);
@@ -251,7 +284,18 @@ export default function BookingsPage() {
     try {
       const data = await api.get<Venue[]>("/api/admin/venues");
       const v = data.find((x) => x.id === selectedVenueId);
-      if (v) setVenueDetails(v);
+      if (v) {
+        setVenueDetails(v);
+        const tz = v.timezone || "Asia/Ho_Chi_Minh";
+        setVenueTimezone(tz);
+        // Re-anchor "today" to venue timezone now that we know it
+        setSelectedDate((prev) => {
+          const todayInTz = formatDate(new Date(), tz);
+          // Only reset to today if it was previously set to browser-local today
+          const browserToday = formatDate(new Date());
+          return prev === browserToday ? todayInTz : prev;
+        });
+      }
     } catch (e) { console.error(e); }
   }, [selectedVenueId]);
 
@@ -279,7 +323,7 @@ export default function BookingsPage() {
   const shiftDate = (days: number) => {
     const d = new Date(selectedDate);
     d.setDate(d.getDate() + days);
-    setSelectedDate(formatDate(d));
+    setSelectedDate(formatDate(d, venueTimezone));
   };
 
   const allSlotTimes = availability.length > 0 ? availability[0].slots : [];
@@ -699,7 +743,7 @@ export default function BookingsPage() {
           <ChevronRight className="h-5 w-5" />
         </button>
         <button
-          onClick={() => setSelectedDate(formatDate(new Date()))}
+          onClick={() => setSelectedDate(formatDate(new Date(), venueTimezone))}
           className="rounded-lg bg-neutral-800 px-3 py-1.5 text-xs text-neutral-400 hover:text-white"
         >
           {t("bookings.today")}
@@ -716,7 +760,7 @@ export default function BookingsPage() {
                 {" "}— {selectionTotalSlots} {selectionTotalSlots > 1 ? t("bookings.slotsPlural") : t("bookings.slot")}
               </p>
               <p className="text-[10px] text-neutral-400">
-                {formatTime(selectionTimeRange.first.startTime)} – {formatTime(selectionTimeRange.last.endTime)}
+                {formatTime(selectionTimeRange.first.startTime, venueTimezone)} – {formatTime(selectionTimeRange.last.endTime, venueTimezone)}
                 {canBookFromSelection && (
                   <span className="ml-1.5 font-medium text-purple-400">{fmtPrice(selectionTotalPrice)}</span>
                 )}
@@ -803,7 +847,7 @@ export default function BookingsPage() {
                     <th className="sticky top-0 left-0 z-30 bg-neutral-900/95 backdrop-blur border-b border-r border-neutral-700 px-2 py-2 text-left text-xs font-medium text-neutral-500 min-w-[80px]">Court</th>
                     {slots.map((slot) => (
                       <th key={slot.startTime} className="sticky top-0 z-20 bg-neutral-900/95 backdrop-blur border-b border-l border-neutral-700 px-1 py-2 text-center font-medium text-neutral-500 min-w-[54px] whitespace-nowrap">
-                        {formatTime(slot.startTime)}
+                        {formatTime(slot.startTime, venueTimezone)}
                       </th>
                     ))}
                   </tr>
@@ -875,8 +919,8 @@ export default function BookingsPage() {
         const ROW_H = 56;
         const courts = availability;
         const slots = allSlotTimes;
-        const nowHour = new Date().getHours() + new Date().getMinutes() / 60;
-        const isToday = selectedDate === formatDate(new Date());
+        const nowHour = nowHourInTz(venueTimezone);
+        const isToday = selectedDate === formatDate(new Date(), venueTimezone);
         const firstHour = slots.length > 0 ? slots[0].hour : 6;
         const currentRowOffset = isToday ? (nowHour - firstHour) * ROW_H : -1;
 
@@ -900,7 +944,7 @@ export default function BookingsPage() {
                       className={cn("relative border-r border-neutral-800 bg-neutral-950 px-2 flex items-start pt-1", !isLastRow && "border-b border-b-neutral-800/50")}
                       style={{ height: ROW_H }}>
                       <span className="text-[11px] font-medium text-neutral-500 leading-none">
-                        {formatTime(slot.startTime)}
+                        {formatTime(slot.startTime, venueTimezone)}
                       </span>
                     </div>,
                     ...courts.map((court) => {
@@ -961,7 +1005,7 @@ export default function BookingsPage() {
                             >
                               <p className="text-xs font-semibold text-purple-200 truncate">{booking.player.name}</p>
                               <p className="text-[10px] text-purple-400/70">
-                                {formatTime(booking.startTime)} – {formatTime(booking.endTime)}
+                                {formatTime(booking.startTime, venueTimezone)} – {formatTime(booking.endTime, venueTimezone)}
                               </p>
                               {bookingSlotSpan > 1 && (
                                 <p className="text-[10px] text-purple-400/50">{fmtPrice(booking.priceValue)}</p>
@@ -1137,7 +1181,7 @@ export default function BookingsPage() {
                   </div>
                   <div className="flex items-center gap-3 mt-1 text-xs text-neutral-400">
                     <span>{b.court.label}</span>
-                    <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{formatTime(b.startTime)} – {formatTime(b.endTime)}</span>
+                    <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{formatTime(b.startTime, venueTimezone)} – {formatTime(b.endTime, venueTimezone)}</span>
                     <span>{fmtPrice(b.priceValue)}</span>
                     {b.coPlayerIds.length > 0 && <span>+{b.coPlayerIds.length} co-player{b.coPlayerIds.length > 1 ? "s" : ""}</span>}
                     {b.paymentProofUrl && b.paymentProofUrl !== "pending_proof" && (
@@ -1186,7 +1230,7 @@ export default function BookingsPage() {
                   <div className="flex items-center gap-3 mt-1 text-xs text-neutral-400">
                     <span className="flex items-center gap-1">
                       <Clock className="h-3 w-3" />
-                      {formatTime(bl.startTime)} – {formatTime(bl.endTime)}
+                      {formatTime(bl.startTime, venueTimezone)} – {formatTime(bl.endTime, venueTimezone)}
                     </span>
                     <span>
                       {bl.courtIds.length} {bl.courtIds.length > 1 ? t("bookings.courtsPlural") : t("bookings.court")}
@@ -1237,7 +1281,7 @@ export default function BookingsPage() {
                   <option value="">{t("bookings.selectTime")}</option>
                   {availableSlotsForCourt(newCourtId).map((s) => (
                     <option key={s.startTime} value={s.startTime}>
-                      {formatTime(s.startTime)} – {formatTime(s.endTime)}  ({fmtPrice(s.priceValue)})
+                      {formatTime(s.startTime, venueTimezone)} – {formatTime(s.endTime, venueTimezone)}  ({fmtPrice(s.priceValue)})
                     </option>
                   ))}
                 </select>
@@ -1249,7 +1293,7 @@ export default function BookingsPage() {
               <div className="rounded-lg bg-neutral-800 p-3 text-sm space-y-1">
                 <p className="font-medium">{createSlot.courtLabel}</p>
                 <p className="text-neutral-400">
-                  {formatTime(createSlot.startTime)} – {formatTime(createSlot.endTime)}
+                  {formatTime(createSlot.startTime, venueTimezone)} – {formatTime(createSlot.endTime, venueTimezone)}
                   <span className="ml-1.5 text-neutral-500">({selectionTotalSlots} slots)</span>
                 </p>
                 <p className="font-semibold text-purple-400">{fmtPrice(createSlot.priceValue)}</p>
@@ -1257,7 +1301,7 @@ export default function BookingsPage() {
             ) : newCourtId && newSlotTime ? (
               <div className="rounded-lg bg-neutral-800 p-3 text-sm">
                 <p className="font-medium">{availability.find((c) => c.courtId === newCourtId)?.courtLabel}</p>
-                <p className="text-neutral-400">{formatTime(newSlotTime)}</p>
+                <p className="text-neutral-400">{formatTime(newSlotTime, venueTimezone)}</p>
                 {getSlotPrice(newCourtId, newSlotTime) !== null && (
                   <p className="mt-1 font-semibold text-purple-400">{fmtPrice(getSlotPrice(newCourtId, newSlotTime)!)}</p>
                 )}
@@ -1404,7 +1448,7 @@ export default function BookingsPage() {
                     className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none">
                     <option value="">{t("bookings.select")}</option>
                     {allSlotTimes.map((s) => (
-                      <option key={s.startTime} value={String(s.hour)}>{formatTime(s.startTime)}</option>
+                      <option key={s.startTime} value={String(s.hour)}>{formatTime(s.startTime, venueTimezone)}</option>
                     ))}
                   </select>
                 </div>
@@ -1414,7 +1458,7 @@ export default function BookingsPage() {
                     className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none">
                     <option value="">{t("bookings.select")}</option>
                     {allSlotTimes.filter((s) => !blockForm.startHour || s.hour > parseInt(blockForm.startHour)).map((s) => (
-                      <option key={s.endTime} value={String(s.hour + 1)}>{formatTime(s.endTime)}</option>
+                      <option key={s.endTime} value={String(s.hour + 1)}>{formatTime(s.endTime, venueTimezone)}</option>
                     ))}
                   </select>
                 </div>

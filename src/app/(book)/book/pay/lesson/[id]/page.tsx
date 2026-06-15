@@ -2,7 +2,7 @@
 export const dynamic = "force-dynamic";
 
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { bankNameFromBin } from "@/lib/vietqr";
 import { usePlayerVenue } from "../../../components/PlayerVenueContext";
 import { usePlayerSession } from "../../../components/usePlayerSession";
@@ -21,10 +21,11 @@ interface LessonDetail {
   package: { name: string };
 }
 
-interface BankInfo {
+interface VenuePayInfo {
   bankName: string;
   bankAccount: string;
   bankOwnerName: string;
+  autoPayment: boolean;
 }
 
 export default function LessonPaymentPage() {
@@ -35,34 +36,50 @@ export default function LessonPaymentPage() {
   const { t } = useTranslation();
   const { formatPrice } = useBookFormatters();
   const { venueId: playerVenueId } = usePlayerVenue();
+
   const [lesson, setLesson] = useState<LessonDetail | null>(null);
-  const [bank, setBank] = useState<BankInfo | null>(null);
+  const [venueInfo, setVenueInfo] = useState<VenuePayInfo | null>(null);
   const [uploading, setUploading] = useState(false);
   const [proofSubmitted, setProofSubmitted] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(0);
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [proofPreview, setProofPreview] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const holdExpires = searchParams.get("holdExpires");
-  const stepKeys = ["payment.steps.openBank", "payment.steps.scanQr", "payment.steps.confirmTransfer", "payment.steps.tapPaid"] as const;
+
+  const loadLesson = useCallback(async () => {
+    const res = await portalFetch(`/api/public/coach-sessions/${id}`);
+    const data = await res.json();
+    setLesson(data);
+    if (data.paymentStatus === "PAID") router.replace("/book/bookings");
+    if (data.paymentStatus === "proof_submitted") setProofSubmitted(true);
+  }, [id, router]);
 
   useEffect(() => {
     if (status === "unauthenticated") { router.replace("/book/login"); return; }
     if (status !== "authenticated") return;
 
-    portalFetch(`/api/public/coach-sessions/${id}`)
-      .then((r) => r.json())
-      .then((data) => {
-        setLesson(data);
-        if (data.paymentStatus === "PAID") router.replace("/book/bookings");
-        if (data.paymentStatus === "proof_submitted") setProofSubmitted(true);
-      });
+    loadLesson().catch(() => {});
 
     const vq = playerVenueId ? `?venueId=${playerVenueId}` : "";
-    portalFetch(`/api/public/venue${vq}`)
+    fetch(`/api/public/venue${vq}`)
       .then((r) => r.json())
-      .then((v) => setBank({ bankName: v.bankName || "", bankAccount: v.bankAccount || "", bankOwnerName: v.bankOwnerName || "" }));
-  }, [status, id, router, playerVenueId]);
+      .then((v) => {
+        const s = v.settings ?? {};
+        setVenueInfo({
+          bankName: v.bankName || "",
+          bankAccount: v.bankAccount || "",
+          bankOwnerName: v.bankOwnerName || "",
+          autoPayment: !!(s.autoPaymentEnabled && s.sepayEnabled),
+        });
+      })
+      .catch(() => {});
+  }, [status, id, router, playerVenueId, loadLesson]);
 
+  // Hold expiry timer
   useEffect(() => {
     if (!holdExpires || proofSubmitted) return;
     const expiresAt = new Date(holdExpires).getTime();
@@ -79,17 +96,59 @@ export default function LessonPaymentPage() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [holdExpires, id, proofSubmitted]);
 
+  // Auto-payment polling
+  useEffect(() => {
+    if (!venueInfo?.autoPayment || !lesson || lesson.paymentStatus !== "pending") return;
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await portalFetch(`/api/public/coach-sessions/${id}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.paymentStatus === "PAID") {
+          if (pollRef.current) clearInterval(pollRef.current);
+          router.replace("/book/bookings");
+        }
+      } catch { /* ignore */ }
+    }, 5000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [venueInfo?.autoPayment, lesson?.paymentStatus, id, router, lesson]);
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setProofFile(file);
+    const reader = new FileReader();
+    reader.onload = () => setProofPreview(reader.result as string);
+    reader.readAsDataURL(file);
+  }
+
   async function handleProofSubmit() {
+    if (!proofFile && !venueInfo?.autoPayment) return;
     setUploading(true);
     try {
-      const res = await portalFetch(`/api/public/coach-sessions/${id}/proof`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ proofUrl: "pending_proof" }),
-      });
-      if (res.ok) setProofSubmitted(true);
+      if (proofFile) {
+        const formData = new FormData();
+        formData.append("proof", proofFile);
+        const res = await portalFetch(`/api/public/coach-sessions/${id}/proof`, {
+          method: "POST",
+          body: formData,
+        });
+        if (res.ok) setProofSubmitted(true);
+      } else {
+        const res = await portalFetch(`/api/public/coach-sessions/${id}/proof`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ proofUrl: "pending_proof" }),
+        });
+        if (res.ok) setProofSubmitted(true);
+      }
     } catch { /* ignore */ }
     setUploading(false);
+  }
+
+  async function handleCancel() {
+    await portalFetch(`/api/public/coach-sessions/${id}`, { method: "DELETE" }).catch(() => {});
+    router.replace("/book");
   }
 
   if (!lesson) return <div className="px-4 pt-12 text-[var(--cm-text-muted)]">{t("common.loading")}</div>;
@@ -130,21 +189,31 @@ export default function LessonPaymentPage() {
     );
   }
 
+  const isAutoPayment = venueInfo?.autoPayment;
+
   let qrUrl: string | null = null;
-  if (bank && bank.bankName && bank.bankAccount && lesson.paymentRef) {
-    qrUrl = `https://img.vietqr.io/image/${bank.bankName}-${bank.bankAccount}-compact2.png?amount=${lesson.priceValue}&addInfo=${encodeURIComponent(lesson.paymentRef)}&accountName=${encodeURIComponent(bank.bankOwnerName)}`;
+  if (venueInfo?.bankName && venueInfo.bankAccount && lesson.paymentRef) {
+    qrUrl = `https://img.vietqr.io/image/${venueInfo.bankName}-${venueInfo.bankAccount}-compact2.png?amount=${lesson.priceValue}&addInfo=${encodeURIComponent(lesson.paymentRef)}&accountName=${encodeURIComponent(venueInfo.bankOwnerName)}`;
   }
 
-  return (
-    <div className="px-6 pt-8 pb-8">
-      <button onClick={() => router.push("/book/bookings")} className="text-sm text-[var(--cm-text-sec)] mb-4">
-        {t("payment.myBookings")}
-      </button>
+  const minutes = Math.floor(secondsLeft / 60);
+  const secs = secondsLeft % 60;
 
-      <h2 className="text-lg font-bold mb-1">{t("payment.payForSession")}</h2>
-      <p className="text-sm text-[var(--cm-text-sec)] mb-4">
-        {lesson.coach.name} · {lesson.package.name}
-      </p>
+  return (
+    <div className="px-6 pt-4 pb-8">
+      <div className="flex items-center justify-between mb-4">
+        <button onClick={handleCancel} className="text-sm text-[var(--cm-accent)] font-medium">{t("common.cancel")}</button>
+        <h2 className="text-sm font-semibold">{t("payment.requestSentHeader")}</h2>
+        <div className="w-12" />
+      </div>
+
+      <div className="flex flex-col items-center mb-4">
+        <div className="w-14 h-14 bg-[var(--cm-green)]/15 rounded-full flex items-center justify-center mb-2">
+          <span className="text-xl text-[var(--cm-green)]">✓</span>
+        </div>
+        <h2 className="text-lg font-bold">{t("payment.requestSentTitle")}</h2>
+        <p className="text-sm text-[var(--cm-text-sec)]">{t("payment.payToConfirm")}</p>
+      </div>
 
       {holdExpires && secondsLeft > 0 && (
         <div className={`text-center py-2 px-4 rounded-xl mb-4 text-sm font-medium ${
@@ -152,37 +221,96 @@ export default function LessonPaymentPage() {
             ? "bg-[var(--cm-red)]/10 text-[var(--cm-red)]"
             : "bg-[var(--cm-orange)]/10 text-[var(--cm-orange)]"
         }`}>
-          {t("payment.timeLeftToPay", { time: `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, "0")}` })}
+          {t("payment.timeLeftToPay", { time: `${minutes}:${String(secs).padStart(2, "0")}` })}
         </div>
       )}
 
-      {qrUrl && (
-        <div className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-4 text-center">
-          <img src={qrUrl} alt="VietQR" className="w-60 h-60 mx-auto mb-3 rounded-lg" />
-          <p className="text-lg font-bold">{formatPrice(lesson.priceValue)}</p>
-          {bank && (
-            <div className="mt-3 text-xs text-[var(--cm-text-sec)] space-y-1 text-left">
-              <p>{t("common.bank")}: {bankNameFromBin(bank.bankName)}</p>
-              <p>{t("common.account")}: {bank.bankAccount}</p>
-              <p>{t("common.name")}: {bank.bankOwnerName}</p>
-              {lesson.paymentRef && <p className="font-mono">{t("common.ref")}: {lesson.paymentRef}</p>}
+      {/* Lesson summary card */}
+      <div className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-4">
+        {lesson.paymentRef && (
+          <p className="text-sm font-bold text-[var(--cm-accent)] mb-1">{lesson.paymentRef}</p>
+        )}
+        <p className="text-sm font-medium">{lesson.coach.name}</p>
+        <p className="text-xs text-[var(--cm-text-sec)]">{lesson.package.name}{lesson.court ? ` · ${lesson.court.label}` : ""}</p>
+        <p className="text-sm font-semibold text-[var(--cm-accent)] mt-1">{formatPrice(lesson.priceValue)}</p>
+      </div>
+
+      {/* QR + upload / auto-payment */}
+      <div className="mb-4">
+        <p className="text-sm font-medium mb-3">{t("payment.payViaVietqr")}</p>
+        <div className="flex gap-3">
+          {qrUrl && (
+            <div className="bg-white rounded-xl p-2 shrink-0">
+              <img src={qrUrl} alt="VietQR" className="w-36 h-36 rounded" />
+              <a href={qrUrl} download className="block text-center text-xs text-[var(--cm-accent)] font-medium mt-1">
+                {t("common.downloadQr")}
+              </a>
+            </div>
+          )}
+
+          {!isAutoPayment && (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex-1 border-2 border-dashed border-[var(--cm-border)] rounded-xl flex flex-col items-center justify-center p-3 hover:border-[var(--cm-accent)]/50 transition-colors min-h-[144px]"
+            >
+              {proofPreview ? (
+                <img src={proofPreview} alt="Proof" className="w-full h-full object-contain rounded-lg max-h-[128px]" />
+              ) : (
+                <>
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--cm-text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <path d="m21 15-5-5L5 21" />
+                  </svg>
+                  <p className="text-xs text-[var(--cm-text-muted)] mt-2 text-center whitespace-pre-line">{t("payment.tapUploadProof")}</p>
+                </>
+              )}
+            </button>
+          )}
+
+          {isAutoPayment && (
+            <div className="flex-1 border border-[var(--cm-border)] rounded-xl flex flex-col items-center justify-center p-3 min-h-[144px]">
+              <svg className="animate-spin h-6 w-6 text-[var(--cm-accent)] mb-2" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              <p className="text-xs text-[var(--cm-text-sec)] text-center">{t("payment.waitingAutoConfirm")}</p>
+              <p className="text-[10px] text-[var(--cm-text-muted)] mt-1">{t("payment.autoConfirmHint")}</p>
             </div>
           )}
         </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFileChange}
+          className="hidden"
+        />
+      </div>
+
+      {/* Bank info */}
+      {venueInfo && venueInfo.bankName && (
+        <div className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-4">
+          <p className="text-xs text-[var(--cm-text-sec)]">{bankNameFromBin(venueInfo.bankName)}</p>
+          <p className="text-base font-bold text-[var(--cm-accent)]">{venueInfo.bankAccount}</p>
+          <p className="text-xs">{venueInfo.bankOwnerName}</p>
+        </div>
       )}
 
-      <ol className="text-sm text-[var(--cm-text-sec)] space-y-1 mb-6 list-decimal pl-5">
-        {stepKeys.map((key) => (
-          <li key={key}>{t(key)}</li>
-        ))}
-      </ol>
+      {/* Upload hint */}
+      {!isAutoPayment && !proofFile && (
+        <p className="text-xs text-[var(--cm-text-sec)] text-center mb-4">
+          {t("payment.uploadHint")}
+        </p>
+      )}
 
+      {/* Submit button */}
       <button
         onClick={handleProofSubmit}
-        disabled={uploading}
-        className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm mb-3 disabled:opacity-40"
+        disabled={uploading || (!isAutoPayment && !proofFile)}
+        className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-semibold text-sm mb-3 disabled:opacity-40 uppercase tracking-wide"
       >
-        {uploading ? t("payment.submitting") : t("payment.iHavePaidLower")}
+        {uploading ? t("payment.submitting") : t("payment.iHavePaid")}
       </button>
     </div>
   );

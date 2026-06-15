@@ -523,9 +523,9 @@ function CoachesTab({ venueId }: { venueId: string }) {
 
 /* ─── Tab 2: Lessons ─── */
 
-function formatSlotTime(iso: string): string {
+function formatSlotTime(iso: string, tz?: string): string {
   const d = new Date(iso);
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", ...(tz ? { timeZone: tz } : {}) });
 }
 
 function localDateISO(d: Date): string {
@@ -537,6 +537,7 @@ function localDateISO(d: Date): string {
 
 function LessonsTab({ venueId }: { venueId: string }) {
   const { t } = useTranslation("translation", { i18n: adminI18n });
+  const [venueTimezone, setVenueTimezone] = useState<string | undefined>(undefined);
   const [selectedDate, setSelectedDate] = useState(() => localDateISO(new Date()));
   const [lessons, setLessons] = useState<CoachLesson[]>([]);
   const [coaches, setCoaches] = useState<Coach[]>([]);
@@ -567,6 +568,15 @@ function LessonsTab({ venueId }: { venueId: string }) {
 
   type SelectedSlot = { courtId: string; courtLabel: string; startTime: string; endTime: string; hour: number };
   const [selectedSlots, setSelectedSlots] = useState<SelectedSlot[]>([]);
+
+  useEffect(() => {
+    api.get<{ id: string; timezone?: string }[]>("/api/admin/venues")
+      .then((list) => {
+        const v = list.find((x) => x.id === venueId);
+        if (v?.timezone) setVenueTimezone(v.timezone);
+      })
+      .catch(() => {});
+  }, [venueId]);
 
   const fetchLessons = useCallback(async () => {
     const l = await api.get<CoachLesson[]>(
@@ -797,7 +807,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
 
   const fmtTime = (iso: string) => {
     const d = new Date(iso);
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", ...(venueTimezone ? { timeZone: venueTimezone } : {}) });
   };
 
   const [paymentModalData, setPaymentModalData] = useState<PaymentModalData | null>(null);
@@ -847,10 +857,21 @@ function LessonsTab({ venueId }: { venueId: string }) {
   };
 
   const calendarSlots = availability.length > 0 ? availability[0].slots : [];
-  const isToday = selectedDate === localDateISO(new Date());
-  const nowHour = new Date().getHours() + new Date().getMinutes() / 60;
+  const todayInTz = venueTimezone
+    ? new Intl.DateTimeFormat("en-CA", { timeZone: venueTimezone, year: "numeric", month: "2-digit", day: "2-digit" })
+        .format(new Date())
+    : localDateISO(new Date());
+  const isToday = selectedDate === todayInTz;
+  const nowHourInVenueTz = (() => {
+    const now = new Date();
+    if (!venueTimezone) return now.getHours() + now.getMinutes() / 60;
+    const parts = new Intl.DateTimeFormat("en-US", { timeZone: venueTimezone, hour: "numeric", minute: "2-digit", hour12: false }).formatToParts(now);
+    const h = parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
+    const min = parseInt(parts.find((p) => p.type === "minute")?.value ?? "0", 10);
+    return h + min / 60;
+  })();
   const firstHour = calendarSlots.length > 0 ? calendarSlots[0].hour : 6;
-  const currentRowOffset = isToday ? (nowHour - firstHour) * ROW_H : -1;
+  const currentRowOffset = isToday ? (nowHourInVenueTz - firstHour) * ROW_H : -1;
 
   const BLOCK_LABELS: Record<string, string> = {
     maintenance: "Maintenance",
@@ -919,7 +940,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
                   <th className="sticky top-0 left-0 z-30 bg-neutral-900/95 backdrop-blur border-b border-r border-neutral-700 px-2 py-2 text-left text-xs font-medium text-neutral-500 min-w-[80px]">Court</th>
                   {calendarSlots.map((slot) => (
                     <th key={slot.startTime} className="sticky top-0 z-20 bg-neutral-900/95 backdrop-blur border-b border-l border-neutral-700 px-1 py-2 text-center font-medium text-neutral-500 min-w-[54px] whitespace-nowrap">
-                      {formatSlotTime(slot.startTime)}
+                      {formatSlotTime(slot.startTime, venueTimezone)}
                     </th>
                   ))}
                 </tr>
@@ -991,7 +1012,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
                     className={cn("relative border-r border-neutral-800 bg-neutral-950 px-2 flex items-start pt-1", !isLastRow && "border-b border-b-neutral-800/50")}
                     style={{ height: ROW_H }}>
                     <span className="text-[11px] font-medium text-neutral-500 leading-none">
-                      {formatSlotTime(slot.startTime)}
+                      {formatSlotTime(slot.startTime, venueTimezone)}
                     </span>
                   </div>,
                   ...availability.map((court) => {
@@ -1343,7 +1364,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
                     </p>
                     <p className="text-sm font-semibold">{selectedSlots[0].courtLabel}</p>
                     <p className="text-xs text-neutral-400">
-                      {formatSlotTime(selectedSlots[0].startTime)} – {formatSlotTime(selectedSlots[selectedSlots.length - 1].endTime)}
+                      {formatSlotTime(selectedSlots[0].startTime, venueTimezone)} – {formatSlotTime(selectedSlots[selectedSlots.length - 1].endTime, venueTimezone)}
                       {" · "}{selectedSlots.length}h
                     </p>
                     {selectedPkg && (
@@ -1448,7 +1469,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
                         <div key={`t-${slot.startTime}`}
                           className={cn("border-r border-neutral-800 px-1.5 flex items-start pt-1 bg-neutral-950", !isLast && "border-b border-b-neutral-800/50")}
                           style={{ height: SLOT_H }}>
-                          <span className="text-[10px] font-medium text-neutral-500">{formatSlotTime(slot.startTime)}</span>
+                          <span className="text-[10px] font-medium text-neutral-500">{formatSlotTime(slot.startTime, venueTimezone)}</span>
                         </div>,
                         ...availability.map((court) => {
                           const cs = court.slots[rowIdx];
