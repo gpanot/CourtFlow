@@ -450,10 +450,15 @@ export async function getCurrentWeekUsage(venueId: string) {
   if (rates.billingModel === "monthly") {
     const { monthStart, monthEnd } = getMonthBounds();
     const now = new Date();
+    // Use calendar-day arithmetic (floor to midnight) to avoid the 23:59:59 tail
+    // inflating the day count by 1 (e.g. 29.9999 days → Math.round → 30 → +1 = 31).
+    const floorMs = (d: Date) =>
+      new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const msPerDay = 1000 * 60 * 60 * 24;
     const daysElapsed =
-      Math.floor((now.getTime() - monthStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      Math.floor((floorMs(now) - floorMs(monthStart)) / msPerDay) + 1;
     const totalDaysInMonth =
-      Math.round((monthEnd.getTime() - monthStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      Math.round((floorMs(monthEnd) - floorMs(monthStart)) / msPerDay) + 1;
     const estimatedTotal = Math.round((rates.monthlyRate * daysElapsed) / totalDaysInMonth);
 
     return {

@@ -244,6 +244,8 @@ export async function getAvailableSlots(
   const timeSlots = generateTimeSlots(dateOnly, config);
   const dayOfWeek = dateOnly.getDay();
   const daySchedule = schedule.entries.filter((e) => e.daysOfWeek.includes(dayOfWeek));
+  const now = new Date();
+  const isToday = dateOnly.toDateString() === now.toDateString();
 
   return courts.map((court) => ({
     courtId: court.id,
@@ -251,6 +253,9 @@ export async function getAvailableSlots(
     slots: timeSlots.map((slot) => {
       const slotStart = new Date(slot.startTime).getTime();
       const slotEnd = new Date(slot.endTime).getTime();
+
+      // Block past slots for today
+      const isPast = isToday && slotStart <= now.getTime();
 
       const isBooked = existingBookings.some(
         (b) => b.courtId === court.id && slotStart >= b.startTime.getTime() && slotStart < b.endTime.getTime()
@@ -279,7 +284,7 @@ export async function getAvailableSlots(
 
       return {
         ...slot,
-        available: !isBooked && !matchingBlock && !matchingSchedule && !matchingLesson,
+        available: !isPast && !isBooked && !matchingBlock && !matchingSchedule && !matchingLesson,
         ...(matchingBlock
           ? { block: { blockId: matchingBlock.id, type: matchingBlock.type, title: matchingBlock.title } }
           : {}),

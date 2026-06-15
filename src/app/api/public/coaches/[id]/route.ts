@@ -65,6 +65,9 @@ export async function GET(
         select: { startTime: true, endTime: true },
       });
 
+      const now = new Date();
+      const isToday = date.toDateString() === now.toDateString();
+
       availability = [];
       for (let h = config.bookingStartHour; h < config.bookingEndHour; h++) {
         const slotStart = new Date(date);
@@ -72,11 +75,14 @@ export async function GET(
         const slotEnd = new Date(slotStart);
         slotEnd.setMinutes(slotEnd.getMinutes() + 60);
 
+        // Block past slots on today
+        const isPast = isToday && slotStart <= now;
+
         const hasConflict = existingLessons.some(
           (l) => slotStart.getTime() < l.endTime.getTime() && slotEnd.getTime() > l.startTime.getTime()
         );
 
-        availability.push({ hour: h, available: !hasConflict });
+        availability.push({ hour: h, available: !hasConflict && !isPast });
       }
     }
 
