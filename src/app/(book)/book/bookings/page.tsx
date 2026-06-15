@@ -75,75 +75,80 @@ function PaymentPill({ status }: { status: string | null }) {
   );
 }
 
-/** Hero card for the very next upcoming booking */
-function NextUpCard({
-  booking,
+/** Generic hero card for the very next upcoming item (courts, sessions, open play) */
+function NextUpHeroCard({
+  href,
+  title,
+  subtitle,
+  venueName,
+  startTime,
+  endTime,
+  date,
+  price,
+  paymentStatus,
   formatDate,
   formatTime,
   formatPrice,
   t,
 }: {
-  booking: BookingItem;
+  href: string;
+  title: string;
+  subtitle: string;
+  venueName: string;
+  startTime: string;
+  endTime: string;
+  date: string;
+  price: number;
+  paymentStatus: string | null;
   formatDate: (s: string) => string;
   formatTime: (s: string) => string;
   formatPrice: (n: number) => string;
   t: (k: string) => string;
 }) {
-  const durationMs = new Date(booking.endTime).getTime() - new Date(booking.startTime).getTime();
+  const durationMs = new Date(endTime).getTime() - new Date(startTime).getTime();
   const durationHours = durationMs / 3600000;
 
   return (
-    <Link href={`/book/bookings/${booking.id}`}>
-      <div
-        className="relative rounded-2xl overflow-hidden mb-5"
-        style={{ minHeight: 160 }}
-      >
-        {/* Background image */}
-        <img
-          src={CARD_BG}
-          alt=""
-          className="absolute inset-0 w-full h-full object-cover"
-          aria-hidden
-        />
-        {/* Gradient overlay — left side readable */}
+    <Link href={href}>
+      <div className="relative rounded-2xl overflow-hidden mb-5" style={{ minHeight: 160 }}>
+        <img src={CARD_BG} alt="" className="absolute inset-0 w-full h-full object-cover" aria-hidden />
         <div className="absolute inset-0 bg-gradient-to-r from-white/95 via-white/70 to-transparent" />
 
         <div className="relative z-10 p-5 flex flex-col justify-between" style={{ minHeight: 160 }}>
-          {/* Tag */}
           <span className="inline-block self-start text-[10px] font-bold uppercase tracking-widest text-[var(--cm-accent)] border border-[var(--cm-accent)]/40 rounded-full px-2.5 py-0.5 mb-3">
             {t("bookings.nextUp")}
           </span>
 
-          {/* Date */}
           <p className="text-xs text-[var(--cm-text-sec)] mb-0.5">
-            {t("bookings.today")} · {formatDate(booking.date)}
+            {t("bookings.today")} · {formatDate(date)}
           </p>
 
-          {/* Time */}
           <p className="text-lg font-bold text-[var(--cm-text)] leading-tight">
-            {formatTime(booking.startTime)} – {formatTime(booking.endTime)}
+            {formatTime(startTime)} – {formatTime(endTime)}
           </p>
 
-          {/* Court */}
-          <p className="text-base font-semibold text-[var(--cm-text)] mt-0.5">{booking.court.label}</p>
+          <p className="text-base font-semibold text-[var(--cm-text)] mt-0.5">{title}</p>
 
-          {/* Venue */}
-          <p className="flex items-center gap-1 text-xs text-[var(--cm-text-sec)] mt-0.5">
-            <MapPin className="h-3 w-3 shrink-0" />
-            {booking.venue.name}
-          </p>
+          {subtitle && (
+            <p className="text-xs text-[var(--cm-text-sec)] mt-0.5">{subtitle}</p>
+          )}
 
-          {/* Duration */}
+          {venueName && (
+            <p className="flex items-center gap-1 text-xs text-[var(--cm-text-sec)] mt-0.5">
+              <MapPin className="h-3 w-3 shrink-0" />
+              {venueName}
+            </p>
+          )}
+
           <p className="flex items-center gap-1 text-xs text-[var(--cm-text-sec)] mt-1">
             <Clock className="h-3 w-3 shrink-0" />
             {durationHours % 1 === 0 ? `${durationHours}h` : `${durationHours.toFixed(1)}h`}
           </p>
 
-          {/* Price + CTA */}
           <div className="flex items-center justify-between mt-4">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-bold text-[var(--cm-text)]">{formatPrice(booking.priceValue)}</span>
-              <PaymentPill status={booking.paymentStatus} />
+              <span className="text-sm font-bold text-[var(--cm-text)]">{formatPrice(price)}</span>
+              <PaymentPill status={paymentStatus} />
             </div>
             <span className="flex items-center gap-1 bg-[var(--cm-accent)] text-black text-xs font-semibold px-3 py-1.5 rounded-full">
               {t("bookings.viewBooking")} <ArrowRight className="h-3 w-3" />
@@ -287,9 +292,15 @@ export default function MyBookingsPage() {
   const visibleLessons = timeFilter === "upcoming" ? upcomingLessons : pastLessons;
   const visibleOP = timeFilter === "upcoming" ? upcomingOP : pastOP;
 
-  // For upcoming courts: first item → hero card, rest → collapsible list
-  const nextUp = timeFilter === "upcoming" && tab === "courts" ? upcomingBookings[0] : null;
-  const restUpcoming = timeFilter === "upcoming" && tab === "courts" ? upcomingBookings.slice(1) : [];
+  // For upcoming: first item → hero card, rest → collapsible list (all three tabs)
+  const nextUpCourt = timeFilter === "upcoming" && tab === "courts" ? upcomingBookings[0] : null;
+  const restUpcomingCourts = timeFilter === "upcoming" && tab === "courts" ? upcomingBookings.slice(1) : [];
+
+  const nextUpLesson = timeFilter === "upcoming" && tab === "sessions" ? upcomingLessons[0] : null;
+  const restUpcomingLessons = timeFilter === "upcoming" && tab === "sessions" ? upcomingLessons.slice(1) : [];
+
+  const nextUpOP = timeFilter === "upcoming" && tab === "openplay" ? upcomingOP[0] : null;
+  const restUpcomingOP = timeFilter === "upcoming" && tab === "openplay" ? upcomingOP.slice(1) : [];
 
   return (
     <div>
@@ -366,25 +377,27 @@ export default function MyBookingsPage() {
               </p>
             ) : timeFilter === "upcoming" ? (
               <>
-                {/* Next Up hero card */}
-                {nextUp && (
-                  <>
-                    <p className="text-sm font-semibold text-[var(--cm-text)] mb-3">{t("bookings.nextUp")}</p>
-                    <NextUpCard
-                      booking={nextUp}
-                      formatDate={formatDate}
-                      formatTime={formatTime}
-                      formatPrice={formatPrice}
-                      t={t}
-                    />
-                  </>
+                {nextUpCourt && (
+                  <NextUpHeroCard
+                    href={`/book/bookings/${nextUpCourt.id}`}
+                    title={nextUpCourt.court.label}
+                    subtitle=""
+                    venueName={nextUpCourt.venue.name}
+                    startTime={nextUpCourt.startTime}
+                    endTime={nextUpCourt.endTime}
+                    date={nextUpCourt.date}
+                    price={nextUpCourt.priceValue}
+                    paymentStatus={nextUpCourt.paymentStatus}
+                    formatDate={formatDate}
+                    formatTime={formatTime}
+                    formatPrice={formatPrice}
+                    t={t}
+                  />
                 )}
-
-                {/* Remaining upcoming */}
-                {restUpcoming.length > 0 && (
+                {restUpcomingCourts.length > 0 && (
                   <>
                     <p className="text-sm font-semibold text-[var(--cm-text)] mb-3">{t("bookings.upcoming")}</p>
-                    {(showAllCourts ? restUpcoming : restUpcoming.slice(0, INITIAL_VISIBLE)).map((b) => (
+                    {(showAllCourts ? restUpcomingCourts : restUpcomingCourts.slice(0, INITIAL_VISIBLE)).map((b) => (
                       <BookingRow
                         key={b.id}
                         href={`/book/bookings/${b.id}`}
@@ -398,14 +411,9 @@ export default function MyBookingsPage() {
                         formatPrice={formatPrice}
                       />
                     ))}
-                    {restUpcoming.length > INITIAL_VISIBLE && (
-                      <button
-                        onClick={() => setShowAllCourts((v) => !v)}
-                        className="flex items-center gap-1 text-sm font-medium text-[var(--cm-accent)] py-2 mx-auto"
-                      >
-                        {showAllCourts
-                          ? t("bookings.showLess")
-                          : t("bookings.viewAllBookings", { count: restUpcoming.length - INITIAL_VISIBLE })}
+                    {restUpcomingCourts.length > INITIAL_VISIBLE && (
+                      <button onClick={() => setShowAllCourts((v) => !v)} className="flex items-center gap-1 text-sm font-medium text-[var(--cm-accent)] py-2 mx-auto">
+                        {showAllCourts ? t("bookings.showLess") : t("bookings.viewAllBookings", { count: restUpcomingCourts.length - INITIAL_VISIBLE })}
                         <ChevronRight className={`h-4 w-4 transition-transform ${showAllCourts ? "rotate-90" : ""}`} />
                       </button>
                     )}
@@ -413,7 +421,6 @@ export default function MyBookingsPage() {
                 )}
               </>
             ) : (
-              /* Past tab — plain list, no hero */
               visibleBookings.map((b) => (
                 <BookingRow
                   key={b.id}
@@ -439,34 +446,66 @@ export default function MyBookingsPage() {
               <p className="text-sm text-[var(--cm-text-sec)] text-center py-12">
                 {timeFilter === "upcoming" ? t("bookings.emptySessions") : t("bookings.emptyFilter")}
               </p>
-            ) : (
+            ) : timeFilter === "upcoming" ? (
               <>
-                {(showAllSessions ? visibleLessons : visibleLessons.slice(0, INITIAL_VISIBLE + 1)).map((l) => (
-                  <BookingRow
-                    key={l.id}
-                    href={`/book/coach-sessions/${l.id}`}
-                    icon={<span className="text-base">🎓</span>}
-                    title={`${formatDate(l.date)} · ${formatTime(l.startTime)} – ${formatTime(l.endTime)}`}
-                    subtitle={`${l.coach.name} · ${l.package.name}`}
-                    venueName={l.venue?.name ?? ""}
-                    price={l.priceValue}
-                    paymentStatus={l.paymentStatus}
-                    dimmed={false}
+                {nextUpLesson && (
+                  <NextUpHeroCard
+                    href={`/book/coach-sessions/${nextUpLesson.id}`}
+                    title={nextUpLesson.coach.name}
+                    subtitle={nextUpLesson.package.name}
+                    venueName={nextUpLesson.venue?.name ?? ""}
+                    startTime={nextUpLesson.startTime}
+                    endTime={nextUpLesson.endTime}
+                    date={nextUpLesson.date}
+                    price={nextUpLesson.priceValue}
+                    paymentStatus={nextUpLesson.paymentStatus}
+                    formatDate={formatDate}
+                    formatTime={formatTime}
                     formatPrice={formatPrice}
+                    t={t}
                   />
-                ))}
-                {visibleLessons.length > INITIAL_VISIBLE + 1 && (
-                  <button
-                    onClick={() => setShowAllSessions((v) => !v)}
-                    className="flex items-center gap-1 text-sm font-medium text-[var(--cm-accent)] py-2 mx-auto"
-                  >
-                    {showAllSessions
-                      ? t("bookings.showLess")
-                      : t("bookings.viewAllBookings", { count: visibleLessons.length - INITIAL_VISIBLE - 1 })}
-                    <ChevronRight className={`h-4 w-4 transition-transform ${showAllSessions ? "rotate-90" : ""}`} />
-                  </button>
+                )}
+                {restUpcomingLessons.length > 0 && (
+                  <>
+                    <p className="text-sm font-semibold text-[var(--cm-text)] mb-3">{t("bookings.upcoming")}</p>
+                    {(showAllSessions ? restUpcomingLessons : restUpcomingLessons.slice(0, INITIAL_VISIBLE)).map((l) => (
+                      <BookingRow
+                        key={l.id}
+                        href={`/book/coach-sessions/${l.id}`}
+                        icon={<span className="text-base">🎓</span>}
+                        title={`${formatDate(l.date)} · ${formatTime(l.startTime)} – ${formatTime(l.endTime)}`}
+                        subtitle={`${l.coach.name} · ${l.package.name}`}
+                        venueName={l.venue?.name ?? ""}
+                        price={l.priceValue}
+                        paymentStatus={l.paymentStatus}
+                        dimmed={false}
+                        formatPrice={formatPrice}
+                      />
+                    ))}
+                    {restUpcomingLessons.length > INITIAL_VISIBLE && (
+                      <button onClick={() => setShowAllSessions((v) => !v)} className="flex items-center gap-1 text-sm font-medium text-[var(--cm-accent)] py-2 mx-auto">
+                        {showAllSessions ? t("bookings.showLess") : t("bookings.viewAllBookings", { count: restUpcomingLessons.length - INITIAL_VISIBLE })}
+                        <ChevronRight className={`h-4 w-4 transition-transform ${showAllSessions ? "rotate-90" : ""}`} />
+                      </button>
+                    )}
+                  </>
                 )}
               </>
+            ) : (
+              visibleLessons.map((l) => (
+                <BookingRow
+                  key={l.id}
+                  href={`/book/coach-sessions/${l.id}`}
+                  icon={<span className="text-base">🎓</span>}
+                  title={`${formatDate(l.date)} · ${formatTime(l.startTime)} – ${formatTime(l.endTime)}`}
+                  subtitle={`${l.coach.name} · ${l.package.name}`}
+                  venueName={l.venue?.name ?? ""}
+                  price={l.priceValue}
+                  paymentStatus={l.paymentStatus}
+                  dimmed={false}
+                  formatPrice={formatPrice}
+                />
+              ))
             )}
           </>
         )}
@@ -478,34 +517,66 @@ export default function MyBookingsPage() {
               <p className="text-sm text-[var(--cm-text-sec)] text-center py-12">
                 {timeFilter === "upcoming" ? t("openPlay.myOpenPlay") : t("bookings.emptyFilter")}
               </p>
-            ) : (
+            ) : timeFilter === "upcoming" ? (
               <>
-                {(showAllOP ? visibleOP : visibleOP.slice(0, INITIAL_VISIBLE + 1)).map((r) => (
-                  <BookingRow
-                    key={r.id}
-                    href={`/book/open-play/${r.id}`}
-                    icon={<span className="text-base">🏸</span>}
-                    title={`${formatDate(r.date)} · ${formatTime(r.startTime)} – ${formatTime(r.endTime)}`}
-                    subtitle={t("openPlay.myOpenPlay")}
-                    venueName={r.venue?.name ?? ""}
-                    price={r.priceValue}
-                    paymentStatus={r.paymentStatus}
-                    dimmed={false}
+                {nextUpOP && (
+                  <NextUpHeroCard
+                    href={`/book/open-play/${nextUpOP.id}`}
+                    title={t("home.bookingTypeOpenPlay")}
+                    subtitle={nextUpOP.venue?.name ?? ""}
+                    venueName=""
+                    startTime={nextUpOP.startTime}
+                    endTime={nextUpOP.endTime}
+                    date={nextUpOP.date}
+                    price={nextUpOP.priceValue}
+                    paymentStatus={nextUpOP.paymentStatus}
+                    formatDate={formatDate}
+                    formatTime={formatTime}
                     formatPrice={formatPrice}
+                    t={t}
                   />
-                ))}
-                {visibleOP.length > INITIAL_VISIBLE + 1 && (
-                  <button
-                    onClick={() => setShowAllOP((v) => !v)}
-                    className="flex items-center gap-1 text-sm font-medium text-[var(--cm-accent)] py-2 mx-auto"
-                  >
-                    {showAllOP
-                      ? t("bookings.showLess")
-                      : t("bookings.viewAllBookings", { count: visibleOP.length - INITIAL_VISIBLE - 1 })}
-                    <ChevronRight className={`h-4 w-4 transition-transform ${showAllOP ? "rotate-90" : ""}`} />
-                  </button>
+                )}
+                {restUpcomingOP.length > 0 && (
+                  <>
+                    <p className="text-sm font-semibold text-[var(--cm-text)] mb-3">{t("bookings.upcoming")}</p>
+                    {(showAllOP ? restUpcomingOP : restUpcomingOP.slice(0, INITIAL_VISIBLE)).map((r) => (
+                      <BookingRow
+                        key={r.id}
+                        href={`/book/open-play/${r.id}`}
+                        icon={<span className="text-base">🏸</span>}
+                        title={`${formatDate(r.date)} · ${formatTime(r.startTime)} – ${formatTime(r.endTime)}`}
+                        subtitle={t("home.bookingTypeOpenPlay")}
+                        venueName={r.venue?.name ?? ""}
+                        price={r.priceValue}
+                        paymentStatus={r.paymentStatus}
+                        dimmed={false}
+                        formatPrice={formatPrice}
+                      />
+                    ))}
+                    {restUpcomingOP.length > INITIAL_VISIBLE && (
+                      <button onClick={() => setShowAllOP((v) => !v)} className="flex items-center gap-1 text-sm font-medium text-[var(--cm-accent)] py-2 mx-auto">
+                        {showAllOP ? t("bookings.showLess") : t("bookings.viewAllBookings", { count: restUpcomingOP.length - INITIAL_VISIBLE })}
+                        <ChevronRight className={`h-4 w-4 transition-transform ${showAllOP ? "rotate-90" : ""}`} />
+                      </button>
+                    )}
+                  </>
                 )}
               </>
+            ) : (
+              visibleOP.map((r) => (
+                <BookingRow
+                  key={r.id}
+                  href={`/book/open-play/${r.id}`}
+                  icon={<span className="text-base">🏸</span>}
+                  title={`${formatDate(r.date)} · ${formatTime(r.startTime)} – ${formatTime(r.endTime)}`}
+                  subtitle={t("home.bookingTypeOpenPlay")}
+                  venueName={r.venue?.name ?? ""}
+                  price={r.priceValue}
+                  paymentStatus={r.paymentStatus}
+                  dimmed={false}
+                  formatPrice={formatPrice}
+                />
+              ))
             )}
           </>
         )}
