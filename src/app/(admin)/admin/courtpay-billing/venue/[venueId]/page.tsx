@@ -1040,21 +1040,6 @@ export default function VenueBillingDetailPage() {
               </div>
             )}
 
-          {/* Backfill toolbar */}
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => void runBackfill()}
-              disabled={backfilling}
-              className="flex items-center gap-1.5 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-400 hover:text-white hover:border-neutral-500 disabled:opacity-50"
-            >
-              {backfilling ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-              {backfilling ? "Generating…" : "Backfill missing weeks"}
-            </button>
-            {backfillResult && (
-              <span className="text-xs text-green-400">{backfillResult}</span>
-            )}
-          </div>
-
         <div className="rounded-xl border border-neutral-800 bg-neutral-900 overflow-hidden">
           {weekRows.length === 0 ? (
             <p className="py-8 text-center text-sm text-neutral-500">No invoices yet.</p>
