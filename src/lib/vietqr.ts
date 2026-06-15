@@ -42,6 +42,7 @@ export const VIETQR_BANKS: BankOption[] = [
   { bin: "970405", name: "Agribank" },
   { bin: "970409", name: "Bac A Bank" },
   { bin: "970418", name: "BIDV" },
+  { bin: "970454", name: "BV Bank" },
   { bin: "970431", name: "Eximbank" },
   { bin: "970437", name: "HDBank" },
   { bin: "970449", name: "LienVietPostBank" },
