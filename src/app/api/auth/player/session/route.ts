@@ -13,6 +13,7 @@ import { prisma } from "@/lib/db";
 
 export async function GET(req: NextRequest) {
   const cookie = req.cookies.get("player_token")?.value;
+  console.log("[player/session] cookie present:", !!cookie, "length:", cookie?.length ?? 0);
   if (!cookie) return NextResponse.json(null);
 
   // Try credentials token first

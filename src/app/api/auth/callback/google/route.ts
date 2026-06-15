@@ -79,6 +79,8 @@ export async function GET(req: NextRequest) {
     image: profile.picture ?? null,
   });
 
+  console.log("[OAuth Google] playerId:", playerId, "email:", profile.email, "sub:", profile.sub);
+
   const token = signOAuthToken({
     playerId,
     email: profile.email ?? null,
@@ -87,8 +89,9 @@ export async function GET(req: NextRequest) {
 
   const res = NextResponse.redirect(`${base}/book/onboarding`);
   const isSecure = base.startsWith("https");
-  setOAuthCookie(res.headers, token, isSecure);
+  setOAuthCookie(res, token, isSecure);
   // Clear state cookie
   res.cookies.set("oauth_state_google", "", { maxAge: 0, path: "/" });
+  console.log("[OAuth Google] redirecting to /book/onboarding, cookie set, isSecure:", isSecure);
   return res;
 }

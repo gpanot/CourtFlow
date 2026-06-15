@@ -87,11 +87,14 @@ export async function POST(req: NextRequest) {
     image: null,
   });
 
+  console.log("[OAuth Apple] playerId:", playerId, "sub:", sub, "email:", email);
+
   const token = signOAuthToken({ playerId, email, provider: "apple" });
 
   const res = NextResponse.redirect(`${base}/book/onboarding`);
   const isSecure = base.startsWith("https");
-  setOAuthCookie(res.headers, token, isSecure);
+  setOAuthCookie(res, token, isSecure);
   res.cookies.set("oauth_state_apple", "", { maxAge: 0, path: "/" });
+  console.log("[OAuth Apple] redirecting to /book/onboarding, cookie set, isSecure:", isSecure);
   return res;
 }

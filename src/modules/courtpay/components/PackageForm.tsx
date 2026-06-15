@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Loader2, Star } from "lucide-react";
+import { X, Loader2, Star, Eye, EyeOff } from "lucide-react";
 
 interface PackageFormData {
   name: string;
@@ -11,6 +11,7 @@ interface PackageFormData {
   perks: string;
   isBestChoice?: boolean;
   discountPct?: number | null;
+  showInCheckIn?: boolean;
 }
 
 interface PackageFormProps {
@@ -29,6 +30,7 @@ export function PackageForm({ initial, onSubmit, onClose, title }: PackageFormPr
   const [durationDays, setDurationDays] = useState(String(initial?.durationDays || 30));
   const [price, setPrice] = useState(String(initial?.price || ""));
   const [isBestChoice, setIsBestChoice] = useState(initial?.isBestChoice ?? false);
+  const [showInCheckIn, setShowInCheckIn] = useState(initial?.showInCheckIn !== false);
   const [discountPct, setDiscountPct] = useState(
     initial?.discountPct != null ? String(initial.discountPct) : ""
   );
@@ -51,6 +53,7 @@ export function PackageForm({ initial, onSubmit, onClose, title }: PackageFormPr
       setDurationDays(String(initial.durationDays || 30));
       setPrice(String(initial.price ?? ""));
       setIsBestChoice(initial.isBestChoice ?? false);
+      setShowInCheckIn(initial.showInCheckIn !== false);
       setDiscountPct(initial.discountPct != null ? String(initial.discountPct) : "");
       const perksArr = (initial.perks || "").split(/[\n,]/).map((p) => p.trim()).filter(Boolean);
       setPerk1(perksArr[0] ?? "");
@@ -79,6 +82,7 @@ export function PackageForm({ initial, onSubmit, onClose, title }: PackageFormPr
         perks,
         isBestChoice,
         discountPct: discountNum != null && discountNum > 0 && discountNum <= 99 ? discountNum : null,
+        showInCheckIn,
       });
     } catch (e) {
       setError((e as Error).message);
@@ -125,6 +129,25 @@ export function PackageForm({ initial, onSubmit, onClose, title }: PackageFormPr
               Most Popular
             </button>
           </div>
+
+          {/* Visibility toggle */}
+          <button
+            type="button"
+            onClick={() => setShowInCheckIn((v) => !v)}
+            className={`w-full flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
+              showInCheckIn
+                ? "border-green-700/50 bg-green-600/10 text-green-400 hover:bg-green-600/20"
+                : "border-red-700/50 bg-red-600/10 text-red-400 hover:bg-red-600/20"
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              {showInCheckIn ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+              Show during check-in
+            </span>
+            <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${showInCheckIn ? "bg-green-600/20" : "bg-red-600/20"}`}>
+              {showInCheckIn ? "Active" : "Hidden"}
+            </span>
+          </button>
 
           {/* Sessions */}
           <div>

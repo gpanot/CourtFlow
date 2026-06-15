@@ -30,6 +30,9 @@ interface PackageData {
   price: number;
   perks: string | null;
   isActive: boolean;
+  showInCheckIn?: boolean;
+  isBestChoice?: boolean;
+  discountPct?: number | null;
   venue?: { id: string; name: string };
   _count: { subscriptions: number };
 }
@@ -172,6 +175,9 @@ export default function AdminCourtPayPage() {
     durationDays: number;
     price: number;
     perks: string;
+    isBestChoice?: boolean;
+    discountPct?: number | null;
+    showInCheckIn?: boolean;
   }) => {
     if (!selectedVenueId) {
       throw new Error("Select a venue first");
@@ -191,6 +197,9 @@ export default function AdminCourtPayPage() {
     durationDays: number;
     price: number;
     perks: string;
+    isBestChoice?: boolean;
+    discountPct?: number | null;
+    showInCheckIn?: boolean;
   }) => {
     if (!editingPkg) return;
     await api.put(`/api/courtpay/staff/packages/${editingPkg.id}`, data);
@@ -491,6 +500,9 @@ export default function AdminCourtPayPage() {
             durationDays: editingPkg.durationDays,
             price: editingPkg.price,
             perks: editingPkg.perks || "",
+            showInCheckIn: editingPkg.showInCheckIn,
+            isBestChoice: editingPkg.isBestChoice,
+            discountPct: editingPkg.discountPct,
           }}
           onSubmit={handleEditPackage}
           onClose={() => setEditingPkg(null)}

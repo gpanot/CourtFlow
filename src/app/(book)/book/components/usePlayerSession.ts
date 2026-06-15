@@ -57,7 +57,7 @@ export function usePlayerSession(): UsePlayerSessionResult {
     }
     let cancelled = false;
     setServerSession("loading");
-    fetch("/api/auth/player/session", { credentials: "include" })
+    fetch("/api/auth/player/session", { credentials: "include", cache: "no-store" })
       .then((r) => r.json())
       .then((data: ServerSession | null) => {
         if (!cancelled) setServerSession(data);

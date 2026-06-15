@@ -45,24 +45,19 @@ export function verifyOAuthToken(token: string): PlayerOAuthTokenPayload | null 
   }
 }
 
-/** Set the player_token httpOnly cookie on a Response's headers. */
+/** Set the player_token httpOnly cookie using NextResponse.cookies API. */
 export function setOAuthCookie(
-  headers: Headers,
+  res: import("next/server").NextResponse,
   token: string,
   secure: boolean = true
 ) {
-  const maxAge = 30 * 24 * 60 * 60; // 30 days in seconds
-  const cookieValue = [
-    `player_token=${token}`,
-    `Path=/`,
-    `HttpOnly`,
-    `SameSite=Lax`,
-    `Max-Age=${maxAge}`,
-    secure ? "Secure" : "",
-  ]
-    .filter(Boolean)
-    .join("; ");
-  headers.append("Set-Cookie", cookieValue);
+  res.cookies.set("player_token", token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure,
+    maxAge: 30 * 24 * 60 * 60,
+    path: "/",
+  });
 }
 
 export interface OAuthProfile {
