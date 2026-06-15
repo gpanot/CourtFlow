@@ -51,25 +51,37 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   callbacks: {
     async redirect({ url, baseUrl }) {
+      console.log("[NextAuth redirect]", { url, baseUrl });
+      const target = `${baseUrl}/book/onboarding`;
       // After Apple/Google OAuth, always land in the /book/* space.
-      // Apple uses form_post so the callback-url cookie may be lost; fall
-      // back to /book/onboarding which the onboarding guard then resolves.
       if (url === baseUrl || url === `${baseUrl}/`) {
-        return `${baseUrl}/book/onboarding`;
+        console.log("[NextAuth redirect] root → onboarding");
+        return target;
       }
-      // Allow any relative /book/* or explicit /book/* absolute URL
-      if (url.startsWith("/book") || url.startsWith(`${baseUrl}/book`)) return url.startsWith("/") ? `${baseUrl}${url}` : url;
-      // Block redirect to staff/admin URLs after player OAuth
+      if (url.startsWith("/book") || url.startsWith(`${baseUrl}/book`)) {
+        const resolved = url.startsWith("/") ? `${baseUrl}${url}` : url;
+        console.log("[NextAuth redirect] book path →", resolved);
+        return resolved;
+      }
       if (url.startsWith("/staff") || url.startsWith(`${baseUrl}/staff`) ||
           url.startsWith("/admin") || url.startsWith(`${baseUrl}/admin`)) {
-        return `${baseUrl}/book/onboarding`;
+        console.log("[NextAuth redirect] blocked staff/admin → onboarding");
+        return target;
       }
-      if (url.startsWith("/")) return `${baseUrl}${url}`;
-      if (url.startsWith(baseUrl)) return url;
-      return `${baseUrl}/book/onboarding`;
+      if (url.startsWith("/")) {
+        console.log("[NextAuth redirect] relative →", `${baseUrl}${url}`);
+        return `${baseUrl}${url}`;
+      }
+      if (url.startsWith(baseUrl)) {
+        console.log("[NextAuth redirect] absolute →", url);
+        return url;
+      }
+      console.log("[NextAuth redirect] fallback → onboarding");
+      return target;
     },
 
     async signIn({ account, profile }) {
+      console.log("[NextAuth signIn]", { provider: account?.provider, providerAccountId: account?.providerAccountId, email: profile?.email });
       if (!account?.providerAccountId) return false;
 
       const provider = account.provider;
