@@ -203,7 +203,9 @@
     "payWithCredit": "Pay with Credit ({{count}} left)",
     "payWithVietqr": "Pay with VietQR ({{price}})",
     "booking": "Booking...",
-    "bookingFailed": "Booking failed"
+    "bookingFailed": "Booking failed",
+    "selectUpTo4Slots": "Select up to 4 slots",
+    "slots": "Slots"
   },
   "buyCredits": {
     "title": "Buy Credit Pack",

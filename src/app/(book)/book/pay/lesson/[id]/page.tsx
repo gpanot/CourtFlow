@@ -3,7 +3,6 @@ export const dynamic = "force-dynamic";
 
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useRef, useCallback } from "react";
-import { bankNameFromBin } from "@/lib/vietqr";
 import { usePlayerVenue } from "../../../components/PlayerVenueContext";
 import { usePlayerSession } from "../../../components/usePlayerSession";
 import { portalFetch } from "@/lib/portal-fetch";
@@ -242,9 +241,26 @@ export default function LessonPaymentPage() {
           {qrUrl && (
             <div className="bg-white rounded-xl p-2 shrink-0">
               <img src={qrUrl} alt="VietQR" className="w-36 h-36 rounded" />
-              <a href={qrUrl} download className="block text-center text-xs text-[var(--cm-accent)] font-medium mt-1">
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const res = await fetch(qrUrl);
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = "vietqr.png";
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  } catch {
+                    window.open(qrUrl, "_blank");
+                  }
+                }}
+                className="block w-full text-center text-xs text-[var(--cm-accent)] font-medium mt-1"
+              >
                 {t("common.downloadQr")}
-              </a>
+              </button>
             </div>
           )}
 
@@ -288,14 +304,6 @@ export default function LessonPaymentPage() {
         />
       </div>
 
-      {/* Bank info */}
-      {venueInfo && venueInfo.bankName && (
-        <div className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-4">
-          <p className="text-xs text-[var(--cm-text-sec)]">{bankNameFromBin(venueInfo.bankName)}</p>
-          <p className="text-base font-bold text-[var(--cm-accent)]">{venueInfo.bankAccount}</p>
-          <p className="text-xs">{venueInfo.bankOwnerName}</p>
-        </div>
-      )}
 
       {/* Upload hint */}
       {!isAutoPayment && !proofFile && (

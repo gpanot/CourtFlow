@@ -20,6 +20,7 @@ export async function POST(request: NextRequest) {
       packageId,
       date: dateStr,
       startTime: startTimeStr,
+      slotCount,
       payWithCredit,
       creditId,
       venueId: bodyVenueId,
@@ -28,6 +29,7 @@ export async function POST(request: NextRequest) {
       packageId: string;
       date: string;
       startTime: string;
+      slotCount?: number;
       payWithCredit?: boolean;
       creditId?: string;
       venueId?: string;
@@ -49,7 +51,9 @@ export async function POST(request: NextRequest) {
     date.setHours(0, 0, 0, 0);
     const startTime = new Date(startTimeStr);
     const endTime = new Date(startTime);
-    endTime.setMinutes(endTime.getMinutes() + pkg.durationMin);
+    const slots = Math.max(1, Math.min(4, slotCount ?? 1));
+    endTime.setMinutes(endTime.getMinutes() + pkg.durationMin * slots);
+    const totalPrice = pkg.priceValue * slots;
 
     const conflict = await prisma.coachLesson.findFirst({
       where: {
@@ -119,7 +123,7 @@ export async function POST(request: NextRequest) {
           date,
           startTime,
           endTime,
-          priceValue: pkg.priceValue,
+          priceValue: totalPrice,
           paymentStatus: "PAID",
           paidAt: new Date(),
           paymentMethod: "credit",
@@ -140,7 +144,7 @@ export async function POST(request: NextRequest) {
         date,
         startTime,
         endTime,
-        priceValue: pkg.priceValue,
+        priceValue: totalPrice,
         paymentStatus: "pending",
         paymentRef,
       },
@@ -152,7 +156,7 @@ export async function POST(request: NextRequest) {
       bankBin: venue.bankName || "",
       accountNumber: venue.bankAccount || "",
       accountName: venue.bankOwnerName || "",
-      amount: pkg.priceValue,
+      amount: totalPrice,
       description: paymentRef,
     });
 
@@ -163,7 +167,7 @@ export async function POST(request: NextRequest) {
           paymentRef,
           holdExpiresAt: holdExpiresAt.toISOString(),
           qrUrl,
-          amount: pkg.priceValue,
+          amount: totalPrice,
           bankName: venue.bankName,
           bankAccount: venue.bankAccount,
           bankOwnerName: venue.bankOwnerName,

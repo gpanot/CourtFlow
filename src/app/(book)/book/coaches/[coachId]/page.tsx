@@ -42,11 +42,12 @@ export default function CoachProfilePage() {
   const [coach, setCoach] = useState<CoachProfile | null>(null);
   const [selectedPkg, setSelectedPkg] = useState<Package | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [selectedHour, setSelectedHour] = useState<number | null>(null);
+  const [selectedHours, setSelectedHours] = useState<number[]>([]);
   const [availability, setAvailability] = useState<{ hour: number; available: boolean }[]>([]);
   const [booking, setBooking] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [step, setStep] = useState<"profile" | "booking" | "summary">("profile");
+  const MAX_COACH_SLOTS = 4;
 
   const dates = Array.from({ length: 7 }, (_, i) => {
     const d = new Date();
@@ -77,6 +78,24 @@ export default function CoachProfilePage() {
     if (selectedDate) loadAvailability(selectedDate);
   }, [selectedDate, loadAvailability]);
 
+  function toggleHour(hour: number) {
+    setSelectedHours((prev) => {
+      if (prev.includes(hour)) {
+        // Deselecting: remove this hour and everything after it (keep consecutive from start)
+        const idx = prev.indexOf(hour);
+        return prev.slice(0, idx);
+      }
+      // Adding: only allow consecutive
+      const sorted = [...prev, hour].sort((a, b) => a - b);
+      // Check all consecutive
+      for (let i = 1; i < sorted.length; i++) {
+        if (sorted[i] !== sorted[i - 1] + 1) return prev; // not consecutive, ignore
+      }
+      if (sorted.length > MAX_COACH_SLOTS) return prev;
+      return sorted;
+    });
+  }
+
   function startBooking(pkg: Package) {
     if (status !== "authenticated") {
       router.push(`/book/login?callbackUrl=/book/coaches/${coachId}`);
@@ -84,22 +103,23 @@ export default function CoachProfilePage() {
     }
     setSelectedPkg(pkg);
     setSelectedDate(dates[0]);
-    setSelectedHour(null);
+    setSelectedHours([]);
     setStep("booking");
   }
 
   function goToSummary() {
-    if (!selectedHour || !selectedDate || !selectedPkg) return;
+    if (selectedHours.length === 0 || !selectedDate || !selectedPkg) return;
     setStep("summary");
   }
 
   async function confirmBooking(payWithCredit?: boolean, creditId?: string) {
-    if (!selectedPkg || !selectedDate || selectedHour === null) return;
+    if (!selectedPkg || !selectedDate || selectedHours.length === 0) return;
     setBooking(true);
     setBookingError(null);
 
+    const startHour = Math.min(...selectedHours);
     const startTime = new Date(selectedDate);
-    startTime.setHours(selectedHour, 0, 0, 0);
+    startTime.setHours(startHour, 0, 0, 0);
 
     try {
       const res = await portalFetch("/api/public/coach-sessions", {
@@ -110,6 +130,7 @@ export default function CoachProfilePage() {
           packageId: selectedPkg.id,
           date: selectedDate.toISOString(),
           startTime: startTime.toISOString(),
+          slotCount: selectedHours.length,
           payWithCredit,
           creditId,
           venueId: playerVenueId || undefined,
@@ -142,6 +163,11 @@ export default function CoachProfilePage() {
     }`;
 
   if (step === "booking" && selectedPkg) {
+    const slotDurationH = Math.ceil(selectedPkg.durationMin / 60);
+    const startHour = selectedHours.length > 0 ? Math.min(...selectedHours) : null;
+    const endHour = selectedHours.length > 0 ? Math.max(...selectedHours) + slotDurationH : null;
+    const totalSlotPrice = selectedPkg.priceValue * selectedHours.length;
+
     return (
       <div className="px-6 pt-8 pb-8">
         <button onClick={() => setStep("profile")} className="text-sm text-[var(--cm-text-sec)] mb-4">
@@ -157,7 +183,7 @@ export default function CoachProfilePage() {
           {dates.map((d) => (
             <button
               key={d.toISOString()}
-              onClick={() => { setSelectedDate(d); setSelectedHour(null); }}
+              onClick={() => { setSelectedDate(d); setSelectedHours([]); }}
               className={chipCls(selectedDate?.toDateString() === d.toDateString())}
             >
               {formatDate(d)}
@@ -165,44 +191,69 @@ export default function CoachProfilePage() {
           ))}
         </div>
 
-        <label className="block text-sm font-medium mb-2">{t("coaches.availableTimes")}</label>
+        <div className="flex items-center justify-between mb-2">
+          <label className="text-sm font-medium">{t("coaches.availableTimes")}</label>
+          <span className="text-xs text-[var(--cm-text-muted)]">
+            {selectedHours.length > 0
+              ? `${selectedHours.length}/${MAX_COACH_SLOTS} ${t("common.selected")}`
+              : t("coaches.selectUpTo4Slots")}
+          </span>
+        </div>
         {availability.length === 0 ? (
           <p className="text-sm text-[var(--cm-text-sec)] py-4">{t("coaches.loadingAvailability")}</p>
         ) : (
           <div className="grid grid-cols-3 gap-2 mb-4">
-            {availability.map((slot) => (
-              <button
-                key={slot.hour}
-                disabled={!slot.available}
-                onClick={() => setSelectedHour(slot.hour)}
-                className={`py-2.5 rounded-xl text-sm font-medium border transition-colors ${
-                  selectedHour === slot.hour
-                    ? "bg-[var(--cm-accent)] text-black border-[var(--cm-accent)]"
-                    : slot.available
-                    ? "bg-[var(--cm-bg-card)] text-[var(--cm-text-sec)] border-[var(--cm-border)]"
-                    : "bg-[var(--cm-bg-surface)] text-[var(--cm-text-muted)] border-transparent cursor-not-allowed"
-                }`}
-              >
-                {formatHour(slot.hour)}
-              </button>
-            ))}
+            {availability.map((slot) => {
+              const isSel = selectedHours.includes(slot.hour);
+              // Disable if not available, or if adding would break consecutiveness
+              const wouldBeConsecutive = (() => {
+                if (isSel) return true; // deselecting is always ok
+                if (selectedHours.length === 0) return true;
+                const sorted = [...selectedHours, slot.hour].sort((a, b) => a - b);
+                for (let i = 1; i < sorted.length; i++) {
+                  if (sorted[i] !== sorted[i - 1] + 1) return false;
+                }
+                return true;
+              })();
+              const atMax = !isSel && selectedHours.length >= MAX_COACH_SLOTS;
+              const disabled = !slot.available || atMax || (!isSel && !wouldBeConsecutive);
+              return (
+                <button
+                  key={slot.hour}
+                  disabled={disabled}
+                  onClick={() => toggleHour(slot.hour)}
+                  className={`py-2.5 rounded-xl text-sm font-medium border transition-colors ${
+                    isSel
+                      ? "bg-[var(--cm-accent)] text-black border-[var(--cm-accent)]"
+                      : disabled
+                      ? "bg-[var(--cm-bg-surface)] text-[var(--cm-text-muted)] border-transparent cursor-not-allowed"
+                      : "bg-[var(--cm-bg-card)] text-[var(--cm-text-sec)] border-[var(--cm-border)]"
+                  }`}
+                >
+                  {formatHour(slot.hour)}
+                </button>
+              );
+            })}
           </div>
         )}
 
-        {selectedHour !== null && selectedDate && (
+        {selectedHours.length > 0 && selectedDate && startHour !== null && endHour !== null && (
           <div className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-3 mb-4 text-sm">
-            <p>
-              <strong>{t("common.selected")}:</strong>{" "}
-              {formatDate(selectedDate)},{" "}
-              {formatHour(selectedHour)}–{formatHour(selectedHour + Math.ceil(selectedPkg.durationMin / 60))}
+            <p className="font-medium">
+              {formatDate(selectedDate)} · {formatHour(startHour)}–{formatHour(endHour)}
             </p>
-            <p className="text-[var(--cm-text-sec)] text-xs mt-1">{t("coaches.courtAutoAssigned")}</p>
+            <p className="text-[var(--cm-text-sec)] text-xs mt-0.5">{t("coaches.courtAutoAssigned")}</p>
+            {selectedHours.length > 1 && (
+              <p className="text-[var(--cm-accent)] text-xs font-medium mt-0.5">
+                {formatPrice(totalSlotPrice)} ({selectedHours.length} × {formatPrice(selectedPkg.priceValue)})
+              </p>
+            )}
           </div>
         )}
 
         <button
           onClick={goToSummary}
-          disabled={selectedHour === null}
+          disabled={selectedHours.length === 0}
           className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm disabled:opacity-40"
         >
           {t("common.continue")}
@@ -211,13 +262,13 @@ export default function CoachProfilePage() {
     );
   }
 
-  if (step === "summary" && selectedPkg && selectedDate && selectedHour !== null) {
+  if (step === "summary" && selectedPkg && selectedDate && selectedHours.length > 0) {
     return (
       <CoachSessionSummary
         coach={coach}
         pkg={selectedPkg}
         date={selectedDate}
-        hour={selectedHour}
+        hours={selectedHours}
         booking={booking}
         bookingError={bookingError}
         onBack={() => setStep("booking")}
@@ -324,7 +375,7 @@ function CoachSessionSummary({
   coach,
   pkg,
   date,
-  hour,
+  hours,
   booking: isBooking,
   bookingError,
   onBack,
@@ -333,7 +384,7 @@ function CoachSessionSummary({
   coach: CoachProfile;
   pkg: Package;
   date: Date;
-  hour: number;
+  hours: number[];
   booking: boolean;
   bookingError: string | null;
   onBack: () => void;
@@ -341,6 +392,11 @@ function CoachSessionSummary({
 }) {
   const { t } = useTranslation();
   const { formatDate, formatPrice } = useBookFormatters();
+  const sortedHours = [...hours].sort((a, b) => a - b);
+  const startHour = sortedHours[0];
+  const slotDurationH = Math.ceil(pkg.durationMin / 60);
+  const endHour = sortedHours[sortedHours.length - 1] + slotDurationH;
+  const totalPrice = pkg.priceValue * hours.length;
   const [credits, setCredits] = useState<{ id: string; remaining: number }[]>([]);
 
   useEffect(() => {
@@ -379,10 +435,13 @@ function CoachSessionSummary({
         <Row label={t("common.coach")} value={coach.name} />
         <Row label={t("common.package")} value={pkg.name} />
         <Row label={t("common.date")} value={formatDate(date)} />
-        <Row label={t("common.time")} value={`${formatHour(hour)} – ${formatHour(hour + Math.ceil(pkg.durationMin / 60))}`} />
+        <Row label={t("common.time")} value={`${formatHour(startHour)} – ${formatHour(endHour)}`} />
+        {hours.length > 1 && (
+          <Row label={t("coaches.slots")} value={`${hours.length} × ${formatPrice(pkg.priceValue)}`} />
+        )}
         <Row label={t("common.court")} value={t("common.autoAssigned")} />
         <div className="border-t border-[var(--cm-border)] pt-2 mt-2">
-          <Row label={t("common.total")} value={formatPrice(pkg.priceValue)} bold />
+          <Row label={t("common.total")} value={formatPrice(totalPrice)} bold />
         </div>
       </div>
 
@@ -401,7 +460,7 @@ function CoachSessionSummary({
         disabled={isBooking}
         className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm mb-3 disabled:opacity-40"
       >
-        {isBooking ? t("coaches.booking") : t("coaches.payWithVietqr", { price: formatPrice(pkg.priceValue) })}
+        {isBooking ? t("coaches.booking") : t("coaches.payWithVietqr", { price: formatPrice(totalPrice) })}
       </button>
     </div>
   );

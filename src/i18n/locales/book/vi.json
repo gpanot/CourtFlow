@@ -203,7 +203,9 @@
     "payWithCredit": "Thanh toán bằng credit (còn {{count}})",
     "payWithVietqr": "Thanh toán VietQR ({{price}})",
     "booking": "Đang đặt...",
-    "bookingFailed": "Đặt thất bại"
+    "bookingFailed": "Đặt thất bại",
+    "selectUpTo4Slots": "Chọn tối đa 4 slot",
+    "slots": "Slot"
   },
   "buyCredits": {
     "title": "Mua gói credit",
