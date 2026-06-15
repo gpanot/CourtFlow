@@ -188,7 +188,7 @@ export async function GET(request: NextRequest) {
         where: { venueId: { in: venueIds } },
         include: {
           coach: { select: { name: true } },
-          player: { select: { name: true } },
+          player: { select: { name: true, avatar: true, avatarPhotoPath: true, facePhotoPath: true } },
           court: { select: { label: true } },
           venue: { select: { name: true } },
         },
@@ -299,7 +299,10 @@ export async function GET(request: NextRequest) {
       })),
       recentLessons: recentLessons.map((l) => ({
         id: l.id,
+        venueId: l.venueId,
         playerName: l.player.name,
+        playerAvatar: l.player.avatar,
+        playerPhoto: l.player.avatarPhotoPath || l.player.facePhotoPath || null,
         coachName: l.coach.name,
         venueName: l.venue.name,
         courtLabel: l.court?.label ?? null,

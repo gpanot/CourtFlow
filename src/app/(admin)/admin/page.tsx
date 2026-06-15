@@ -18,6 +18,7 @@ import {
   ArrowRight,
   CalendarCheck,
   XCircle,
+  CheckCircle,
   UserX,
   Banknote,
   Play,
@@ -68,7 +69,10 @@ interface RecentBooking {
 
 interface RecentLesson {
   id: string;
+  venueId: string;
   playerName: string;
+  playerAvatar: string;
+  playerPhoto: string | null;
   coachName: string;
   venueName: string;
   courtLabel: string | null;
@@ -244,6 +248,21 @@ export default function AdminOverview() {
     paymentProofUrl: string | null;
     status: string;
   } | null>(null);
+  const [lessonModal, setLessonModal] = useState<{
+    id: string;
+    playerName: string;
+    playerAvatar: string;
+    playerPhoto: string | null;
+    coachName: string;
+    venueName: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    priceValue: number;
+    paymentStatus: string;
+    paymentProofUrl: string | null;
+    status: string;
+  } | null>(null);
 
   const refreshDashboard = useCallback(() => {
     api.get<DashboardData>("/api/admin/dashboard").then(setData).catch(console.error);
@@ -338,10 +357,10 @@ export default function AdminOverview() {
     ...(data.recentLessons ?? []).map((l): RecentEntry => ({
       id: l.id,
       kind: "lesson",
-      venueId: null,
+      venueId: l.venueId,
       playerName: l.playerName,
-      playerAvatar: "🎓",
-      playerPhoto: null,
+      playerAvatar: l.playerAvatar,
+      playerPhoto: l.playerPhoto,
       detail: l.coachName + (l.courtLabel ? ` · ${l.courtLabel}` : ""),
       venueName: l.venueName,
       date: l.date,
@@ -570,8 +589,22 @@ export default function AdminOverview() {
                       </button>
                     ) : entry.kind === "lesson" && entry.paymentStatus ? (
                       <button
-                        onClick={() => router.push(`/admin/coaching`)}
-                        title="View in coaching panel"
+                        onClick={() => setLessonModal({
+                          id: entry.id,
+                          playerName: entry.playerName,
+                          playerAvatar: entry.playerAvatar,
+                          playerPhoto: entry.playerPhoto,
+                          coachName: entry.detail,
+                          venueName: entry.venueName,
+                          date: entry.date,
+                          startTime: entry.startTime,
+                          endTime: entry.endTime,
+                          priceValue: entry.priceValue,
+                          paymentStatus: entry.paymentStatus!,
+                          paymentProofUrl: entry.paymentProofUrl,
+                          status: entry.status,
+                        })}
+                        title="Manage lesson payment"
                       >
                         <PaymentStatusBadge status={entry.paymentStatus} />
                       </button>
@@ -750,6 +783,17 @@ export default function AdminOverview() {
           onUpdated={() => {
             setOpenPlayRegModal(null);
             setOpenPlayDetailGroup(null);
+            refreshDashboard();
+          }}
+        />
+      )}
+
+      {lessonModal && (
+        <EditLessonPaymentModal
+          lesson={lessonModal}
+          onClose={() => setLessonModal(null)}
+          onUpdated={() => {
+            setLessonModal(null);
             refreshDashboard();
           }}
         />
@@ -1302,6 +1346,204 @@ function EditOpenPlayBookingModal({
               className="flex-1 rounded-xl bg-neutral-800 py-2.5 text-sm font-medium text-neutral-300 hover:bg-neutral-700 transition-colors disabled:opacity-50"
             >
               Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Full-size proof lightbox */}
+      {showProof && proofUrl && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4 cursor-zoom-out"
+          onClick={() => setShowProof(false)}
+        >
+          <img
+            src={proofUrl}
+            alt="Payment proof"
+            className="max-w-full max-h-full rounded-xl object-contain shadow-2xl"
+          />
+          <button
+            type="button"
+            className="absolute top-4 right-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 transition-colors"
+            onClick={() => setShowProof(false)}
+          >
+            <XCircle className="h-5 w-5" />
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+
+function EditLessonPaymentModal({
+  lesson,
+  onClose,
+  onUpdated,
+}: {
+  lesson: {
+    id: string;
+    playerName: string;
+    playerAvatar: string;
+    playerPhoto: string | null;
+    coachName: string;
+    venueName: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    priceValue: number;
+    paymentStatus: string;
+    paymentProofUrl: string | null;
+    status: string;
+  };
+  onClose: () => void;
+  onUpdated: () => void;
+}) {
+  const [showProof, setShowProof] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const proofUrl = resolveUploadUrl(lesson.paymentProofUrl);
+
+  const normalised =
+    lesson.paymentStatus === "PAID" ? "paid"
+    : lesson.paymentStatus === "UNPAID" ? "pending"
+    : lesson.paymentStatus;
+
+  const paymentStatusLabel: Record<string, { label: string; color: string }> = {
+    pending: { label: "Pending", color: "text-neutral-400" },
+    proof_submitted: { label: "Proof submitted", color: "text-amber-400" },
+    paid: { label: "Paid", color: "text-emerald-400" },
+  };
+  const ps = paymentStatusLabel[normalised] ?? { label: lesson.paymentStatus, color: "text-neutral-400" };
+
+  const canApprove = normalised === "proof_submitted";
+  const isPaid = normalised === "paid";
+
+  async function handleApprove() {
+    setSaving(true);
+    setErrorMsg(null);
+    try {
+      await api.patch(`/api/admin/coach-lessons/${lesson.id}/approve-payment`);
+      onUpdated();
+    } catch (e) {
+      setErrorMsg((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <div
+        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-4"
+        onClick={onClose}
+      >
+        <div
+          className="w-full max-w-lg rounded-2xl border border-neutral-700 bg-neutral-900 overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-neutral-800 px-5 py-4">
+            <div>
+              <h3 className="text-base font-semibold text-white">Coach Lesson Payment</h3>
+              <p className="text-xs text-neutral-500 mt-0.5">{lesson.venueName}</p>
+            </div>
+            <button
+              onClick={onClose}
+              className="rounded-full bg-neutral-800 p-1.5 text-neutral-400 hover:bg-neutral-700 transition-colors"
+            >
+              <XCircle className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Player */}
+          <div className="flex items-center gap-3 px-5 py-4 border-b border-neutral-800">
+            <PlayerAvatarImg photo={lesson.playerPhoto} avatar={lesson.playerAvatar} />
+            <div>
+              <p className="font-medium text-white">{lesson.playerName}</p>
+              <p className="text-xs text-neutral-500">{lesson.coachName}</p>
+            </div>
+          </div>
+
+          {/* Details grid */}
+          <div className="px-5 py-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-neutral-800/50 px-3 py-2.5">
+                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">Date</p>
+                <p className="text-sm font-medium text-white">{fmtDate(lesson.date)}</p>
+              </div>
+              <div className="rounded-xl bg-neutral-800/50 px-3 py-2.5">
+                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">Time</p>
+                <p className="text-sm font-medium text-white">
+                  {fmtTime(lesson.startTime)} – {fmtTime(lesson.endTime)}
+                </p>
+              </div>
+              <div className="rounded-xl bg-neutral-800/50 px-3 py-2.5">
+                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">Price</p>
+                <p className="text-sm font-medium text-white">{fmtPrice(lesson.priceValue)}</p>
+              </div>
+              <div className="rounded-xl bg-neutral-800/50 px-3 py-2.5">
+                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">Payment</p>
+                <p className={cn("text-sm font-medium", ps.color)}>{ps.label}</p>
+              </div>
+            </div>
+
+            {/* Payment proof image */}
+            {proofUrl && (
+              <div className="rounded-xl border border-neutral-700 overflow-hidden">
+                <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-800 bg-neutral-800/40">
+                  <p className="text-xs font-medium text-neutral-300">Payment Proof</p>
+                  <button
+                    onClick={() => setShowProof(true)}
+                    className="text-[10px] text-amber-400 hover:text-amber-300 transition-colors"
+                  >
+                    View full size
+                  </button>
+                </div>
+                <button
+                  onClick={() => setShowProof(true)}
+                  className="w-full bg-neutral-800/20 hover:bg-neutral-800/40 transition-colors"
+                >
+                  <img
+                    src={proofUrl}
+                    alt="Payment proof"
+                    className="w-full max-h-48 object-contain"
+                  />
+                </button>
+              </div>
+            )}
+
+            {/* Paid banner */}
+            {isPaid && (
+              <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-3 py-2.5">
+                <CheckCircle className="h-4 w-4 text-emerald-400 shrink-0" />
+                <p className="text-sm text-emerald-400 font-medium">Payment confirmed</p>
+              </div>
+            )}
+
+            {errorMsg && (
+              <p className="text-xs text-red-400 rounded-lg bg-red-500/10 px-3 py-2">{errorMsg}</p>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="border-t border-neutral-800 px-5 py-3 flex gap-3">
+            {canApprove && (
+              <button
+                onClick={handleApprove}
+                disabled={saving}
+                className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 transition-colors disabled:opacity-40"
+              >
+                {saving ? "Approving…" : "✓ Approve Payment"}
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className={cn(
+                "rounded-xl border border-neutral-700 px-4 py-2.5 text-sm text-neutral-400 hover:bg-neutral-800 transition-colors",
+                !canApprove && "flex-1"
+              )}
+            >
+              Close
             </button>
           </div>
         </div>
