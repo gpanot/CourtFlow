@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useSessionStore } from "@/stores/session-store";
+import { useSessionStore, useHasHydrated } from "@/stores/session-store";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
@@ -104,6 +104,7 @@ const isAdminRole = (r: string | null): r is "superadmin" | "manager" =>
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { token, role, onboardingCompleted, clearAuth, staffPhone, staffName } = useSessionStore();
+  const hydrated = useHasHydrated();
   const pathname = usePathname();
   const router = useRouter();
   const { t } = useTranslation("translation", { i18n: adminI18n });
@@ -169,12 +170,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   };
 
   useEffect(() => {
+    if (!hydrated) return;
     if (!token || !isAdminRole(role)) {
       router.replace("/staff");
     }
-  }, [token, role, router]);
+  }, [hydrated, token, role, router]);
 
-  if (!token || !isAdminRole(role)) {
+  if (!hydrated || !token || !isAdminRole(role)) {
     return null;
   }
 

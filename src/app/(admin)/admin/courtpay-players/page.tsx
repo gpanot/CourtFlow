@@ -21,6 +21,9 @@ import {
   Calendar,
   CheckSquare,
   MapPin,
+  PlusCircle,
+  Star,
+  Infinity,
 } from "lucide-react";
 import { PlayerAvatarThumb } from "@/components/player-avatar-thumb";
 
@@ -90,6 +93,18 @@ interface CheckInRow {
   id: string;
   checkedInAt: string;
   source: string;
+}
+
+interface PackageOption {
+  id: string;
+  name: string;
+  sessions: number | null;
+  durationDays: number;
+  price: number;
+  isActive: boolean;
+  isBestChoice?: boolean;
+  discountPct?: number | null;
+  venue?: { id: string; name: string };
 }
 
 interface PlayerDetail {
@@ -200,6 +215,10 @@ export default function CourtPayPlayersPage() {
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState("");
 
+  const [showAssign, setShowAssign] = useState(false);
+  const [assignPackages, setAssignPackages] = useState<PackageOption[]>([]);
+  const [assignLoading, setAssignLoading] = useState(false);
+
   const searchRef = useRef<HTMLInputElement>(null);
 
   const fetchPlayers = useCallback(async () => {
@@ -283,6 +302,38 @@ export default function CourtPayPlayersPage() {
       setSaving(false);
     }
   }, [detailPlayer, editName, editPhone, editGender, editSkill]);
+
+  const openAssign = useCallback(async () => {
+    setAssignLoading(true);
+    setShowAssign(true);
+    try {
+      const params = new URLSearchParams({ includeInactive: "true" });
+      if (venueId) params.set("venueId", venueId);
+      const data = await api.get<{ packages: PackageOption[] }>(
+        `/api/courtpay/admin/packages?${params}`
+      );
+      setAssignPackages(data.packages);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setAssignLoading(false);
+    }
+  }, [venueId]);
+
+  const handleAssign = useCallback(async (packageId: string) => {
+    if (!detailPlayer) return;
+    await api.post(
+      `/api/courtpay/admin/players/${detailPlayer.id}/assign-subscription`,
+      { packageId, source: detailPlayer.source }
+    );
+    setShowAssign(false);
+    // Re-fetch player detail to reflect the new subscription
+    const res = await api.get<{ player: PlayerDetail }>(
+      `/api/courtpay/staff/boss/player?playerId=${detailPlayer.id}&source=${detailPlayer.source}`
+    );
+    setDetailPlayer(res.player);
+    await fetchPlayers();
+  }, [detailPlayer, fetchPlayers]);
 
   // ── Derived list ─────────────────────────────────────────────────────────
   const stats = data?.stats;
@@ -500,9 +551,21 @@ export default function CourtPayPlayersPage() {
           player={detailPlayer}
           onClose={() => setDetailPlayer(null)}
           onEdit={() => openEdit(detailPlayer)}
+          onAssign={openAssign}
           fmtDate={fmtDate}
           fmtDateTime={fmtDateTime}
           capitalize={capitalize}
+        />
+      )}
+
+      {/* Assign subscription modal */}
+      {showAssign && detailPlayer && (
+        <AssignSubscriptionModal
+          playerName={detailPlayer.name}
+          packages={assignPackages}
+          loading={assignLoading}
+          onAssign={(pkgId) => void handleAssign(pkgId)}
+          onClose={() => setShowAssign(false)}
         />
       )}
 
@@ -533,6 +596,7 @@ function PlayerDetailDrawer({
   player,
   onClose,
   onEdit,
+  onAssign,
   fmtDate,
   fmtDateTime,
   capitalize,
@@ -540,6 +604,7 @@ function PlayerDetailDrawer({
   player: PlayerDetail;
   onClose: () => void;
   onEdit: () => void;
+  onAssign: () => void;
   fmtDate: (d: string) => string;
   fmtDateTime: (d: string) => string;
   capitalize: (s: string | null | undefined) => string;
@@ -689,7 +754,17 @@ function PlayerDetailDrawer({
             </div>
           ) : (
             <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
-              <p className="text-xs font-medium text-neutral-400 mb-1">{t("courtpayPlayers.subscription")}</p>
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs font-medium text-neutral-400">{t("courtpayPlayers.subscription")}</p>
+                <button
+                  type="button"
+                  onClick={onAssign}
+                  className="flex items-center gap-1.5 rounded-lg bg-purple-600/20 border border-purple-500/30 px-2.5 py-1 text-xs font-medium text-purple-300 hover:bg-purple-600/30 transition-colors"
+                >
+                  <PlusCircle className="h-3.5 w-3.5" />
+                  Assign
+                </button>
+              </div>
               <p className="text-sm text-neutral-500">{t("courtpayPlayers.noActiveSubscription")}</p>
             </div>
           )}
@@ -871,6 +946,135 @@ function EditPlayerModal({
           >
             {t("common.cancel")}
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Assign Subscription Modal ────────────────────────────────────────────────
+
+function formatVND(amount: number) {
+  return new Intl.NumberFormat("vi-VN").format(amount);
+}
+
+function AssignSubscriptionModal({
+  playerName,
+  packages,
+  loading,
+  onAssign,
+  onClose,
+}: {
+  playerName: string;
+  packages: PackageOption[];
+  loading: boolean;
+  onAssign: (packageId: string) => void;
+  onClose: () => void;
+}) {
+  const [assigning, setAssigning] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  const handlePick = async (pkgId: string) => {
+    setError("");
+    setAssigning(pkgId);
+    try {
+      onAssign(pkgId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to assign");
+      setAssigning(null);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/60" />
+      <div
+        className="relative w-full max-w-md rounded-t-2xl border border-neutral-700 bg-neutral-950 pb-safe sm:rounded-2xl flex flex-col max-h-[85dvh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-neutral-800 shrink-0">
+          <div>
+            <h3 className="text-base font-bold text-white">Assign Subscription</h3>
+            <p className="text-xs text-neutral-500 mt-0.5 truncate max-w-[260px]">{playerName}</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-white">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {/* Package list */}
+        <div className="overflow-y-auto flex-1 p-4 space-y-2.5">
+          {loading ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="h-6 w-6 animate-spin text-neutral-500" />
+            </div>
+          ) : packages.length === 0 ? (
+            <p className="py-10 text-center text-sm text-neutral-500">No packages found for this venue.</p>
+          ) : (
+            packages.map((pkg) => (
+              <button
+                key={pkg.id}
+                type="button"
+                disabled={assigning !== null}
+                onClick={() => void handlePick(pkg.id)}
+                className={cn(
+                  "w-full text-left rounded-xl border p-3.5 transition-all",
+                  !pkg.isActive
+                    ? "border-neutral-800 bg-neutral-900/50 opacity-60"
+                    : "border-neutral-700 bg-neutral-900 hover:border-purple-500/50 hover:bg-purple-500/5",
+                  assigning === pkg.id && "opacity-60"
+                )}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+                      <span className="text-sm font-semibold text-white">{pkg.name}</span>
+                      {pkg.isBestChoice && (
+                        <span className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full bg-fuchsia-500/15 border border-fuchsia-500/30 text-fuchsia-300 font-semibold">
+                          <Star className="h-2.5 w-2.5 fill-fuchsia-300" />
+                          Popular
+                        </span>
+                      )}
+                      {!pkg.isActive && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-700 text-neutral-400">Inactive</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-neutral-400">
+                      {pkg.sessions === null ? (
+                        <span className="flex items-center gap-1"><Infinity className="h-3 w-3" /> Unlimited</span>
+                      ) : (
+                        <span>{pkg.sessions} sessions</span>
+                      )}
+                      <span>·</span>
+                      <span>{pkg.durationDays} days</span>
+                      {pkg.venue && (
+                        <>
+                          <span>·</span>
+                          <span className="text-neutral-500">{pkg.venue.name}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm font-bold text-purple-400">
+                      {pkg.price === 0 ? "Free" : `${formatVND(pkg.price)} ₫`}
+                    </p>
+                    {pkg.discountPct != null && pkg.discountPct > 0 && (
+                      <span className="text-[10px] text-emerald-400">−{pkg.discountPct}%</span>
+                    )}
+                  </div>
+                </div>
+                {assigning === pkg.id && (
+                  <div className="mt-2 flex items-center gap-1.5 text-xs text-purple-300">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Assigning…
+                  </div>
+                )}
+              </button>
+            ))
+          )}
+          {error && <p className="text-xs text-red-400 text-center">{error}</p>}
         </div>
       </div>
     </div>

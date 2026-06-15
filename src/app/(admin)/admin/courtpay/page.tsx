@@ -231,13 +231,6 @@ export default function AdminCourtPayPage() {
     }
   };
 
-  const handleManageSubscriber = async (id: string, status: string) => {
-    if (!confirm(`Set subscription status to ${status}?`)) return;
-    await api.patch(`/api/courtpay/admin/subscribers/${id}`, { status });
-    await fetchSubscribers();
-    await fetchOverview();
-  };
-
   return (
     <div>
       {/* Header */}
@@ -385,21 +378,9 @@ export default function AdminCourtPayPage() {
             search={search}
             onSearchChange={setSearch}
             showVenue
-            onSelect={(id) => {
-              const sub = subscribers.find((s) => s.id === id);
-              if (!sub) return;
-              const action = prompt(
-                `${sub.playerName} — ${sub.packageName}\nStatus: ${sub.status}\n\nType an action: cancel, expire, activate`
-              );
-              if (action && ["cancel", "expire", "active"].includes(action.toLowerCase())) {
-                const mapped =
-                  action.toLowerCase() === "cancel"
-                    ? "cancelled"
-                    : action.toLowerCase() === "expire"
-                      ? "expired"
-                      : "active";
-                handleManageSubscriber(id, mapped);
-              }
+            onRefresh={async () => {
+              await fetchSubscribers();
+              await fetchOverview();
             }}
           />
         </div>
