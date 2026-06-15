@@ -205,8 +205,7 @@
     "booking": "Đang đặt...",
     "bookingFailed": "Đặt thất bại",
     "selectUpTo4Slots": "Chọn tối đa 4 slot",
-    "slots": "Slot",
-    "sessionDetail": "Chi tiết buổi học"
+    "slots": "Slot"
   },
   "buyCredits": {
     "title": "Mua gói credit",
