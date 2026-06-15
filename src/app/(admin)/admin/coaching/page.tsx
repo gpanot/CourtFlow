@@ -27,6 +27,8 @@ import {
   Check,
   LayoutGrid,
   TableProperties,
+  Loader2,
+  ZoomIn,
 } from "lucide-react";
 import { PaymentConfirmModal, type PaymentModalData, type PaymentConfirmResult } from "@/components/admin/PaymentConfirmModal";
 import { CoachProfileEditor } from "@/components/admin/CoachProfileEditor";
@@ -812,6 +814,8 @@ function LessonsTab({ venueId }: { venueId: string }) {
 
   const [paymentModalData, setPaymentModalData] = useState<PaymentModalData | null>(null);
 
+  const [approvingLessonId, setApprovingLessonId] = useState<string | null>(null);
+
   const openPaymentModal = (lesson: CoachLesson) => {
     setPaymentModalData({
       entityId: lesson.id,
@@ -823,6 +827,16 @@ function LessonsTab({ venueId }: { venueId: string }) {
       paidAt: lesson.paidAt,
       note: lesson.paymentNote,
     });
+  };
+
+  const handleApprovePayment = async (lessonId: string) => {
+    setApprovingLessonId(lessonId);
+    try {
+      await api.patch(`/api/admin/coach-lessons/${lessonId}/approve-payment`, {});
+      await fetchLessons();
+    } finally {
+      setApprovingLessonId(null);
+    }
   };
 
   const handlePaymentConfirm = async (entityId: string, result: PaymentConfirmResult) => {
@@ -839,7 +853,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
   };
 
   const handlePaymentRevert = async (entityId: string) => {
-    await api.patch(`/api/admin/coach-lessons/${entityId}`, { paymentStatus: "UNPAID" });
+    await api.patch(`/api/admin/coach-lessons/${entityId}`, { paymentStatus: "pending" });
     setPaymentModalData(null);
     await fetchLessons();
   };
@@ -1173,8 +1187,8 @@ function LessonsTab({ venueId }: { venueId: string }) {
                 {lesson.note && <p className="text-xs text-neutral-500 mt-0.5 italic">{lesson.note}</p>}
 
                 {/* Payment row */}
-                <div className="flex items-center gap-2 mt-2 pt-2 border-t border-neutral-800">
-                  {lesson.paymentStatus === "PAID" || lesson.paymentStatus === "paid" ? (
+                <div className="flex items-center gap-2 mt-2 pt-2 border-t border-neutral-800 flex-wrap">
+                  {(lesson.paymentStatus === "PAID" || lesson.paymentStatus === "paid") ? (
                     <button
                       onClick={() => openPaymentModal(lesson)}
                       className="flex items-center gap-1.5 rounded-lg bg-green-600/15 px-2.5 py-1 text-xs font-medium text-green-400 hover:bg-green-600/25 transition-colors"
@@ -1187,12 +1201,29 @@ function LessonsTab({ venueId }: { venueId: string }) {
                       )}
                     </button>
                   ) : lesson.paymentStatus === "proof_submitted" ? (
-                    <button
-                      onClick={() => openPaymentModal(lesson)}
-                      className="flex items-center gap-1.5 rounded-lg bg-orange-600/15 px-2.5 py-1 text-xs font-medium text-orange-400 hover:bg-orange-600/25 transition-colors"
-                    >
-                      <DollarSign className="h-3 w-3" /> Verifying proof
-                    </button>
+                    <>
+                      {lesson.proofUrl && (
+                        <a
+                          href={lesson.proofUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 rounded-lg bg-neutral-800 px-2 py-1 text-xs text-neutral-300 hover:bg-neutral-700 transition-colors"
+                          title="View payment proof"
+                        >
+                          <ZoomIn className="h-3 w-3" /> Proof
+                        </a>
+                      )}
+                      <button
+                        onClick={() => handleApprovePayment(lesson.id)}
+                        disabled={approvingLessonId === lesson.id}
+                        className="flex items-center gap-1.5 rounded-lg bg-orange-600/15 px-2.5 py-1 text-xs font-medium text-orange-400 hover:bg-orange-600/25 disabled:opacity-50 transition-colors"
+                      >
+                        {approvingLessonId === lesson.id
+                          ? <Loader2 className="h-3 w-3 animate-spin" />
+                          : <Check className="h-3 w-3" />}
+                        Approve payment
+                      </button>
+                    </>
                   ) : (
                     <button
                       onClick={() => openPaymentModal(lesson)}

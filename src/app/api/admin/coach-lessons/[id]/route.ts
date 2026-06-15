@@ -22,7 +22,7 @@ export async function PATCH(
       endTime?: string;
       status?: "confirmed" | "completed" | "cancelled" | "no_show";
       note?: string | null;
-      paymentStatus?: "UNPAID" | "PAID";
+      paymentStatus?: "UNPAID" | "PAID" | "pending" | "paid" | "proof_submitted";
       paidAt?: string;
       paymentMethod?: string;
       proofUrl?: string;
@@ -53,11 +53,15 @@ export async function PATCH(
     if (body.courtId !== undefined) data.courtId = body.courtId;
 
     if (body.paymentStatus !== undefined) {
-      data.paymentStatus = body.paymentStatus;
-      if (body.paymentStatus === "PAID" && !body.paidAt) {
+      // Normalise legacy uppercase statuses to lowercase
+      const normalised = body.paymentStatus === "PAID" ? "paid"
+        : body.paymentStatus === "UNPAID" ? "pending"
+        : body.paymentStatus;
+      data.paymentStatus = normalised;
+      if (normalised === "paid" && !body.paidAt) {
         data.paidAt = new Date();
       }
-      if (body.paymentStatus === "UNPAID") {
+      if (normalised === "pending") {
         data.paidAt = null;
         data.paymentMethod = null;
         data.proofUrl = null;

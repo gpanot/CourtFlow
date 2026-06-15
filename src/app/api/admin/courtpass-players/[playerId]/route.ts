@@ -172,7 +172,7 @@ export async function GET(
         .reduce((sum, p) => sum + p.amountValue, 0);
 
       const unpaidBookingsAmount = bookingPayments
-        .filter((b) => b.paymentStatus !== "PAID")
+        .filter((b) => b.paymentStatus !== "PAID" && b.paymentStatus !== "paid")
         .reduce((sum, b) => sum + b.priceValue, 0);
 
       const pendingBalance = overdueAmount + unpaidBookingsAmount;

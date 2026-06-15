@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
           startTime,
           endTime,
           priceValue: totalPrice,
-          paymentStatus: "PAID",
+          paymentStatus: "paid",
           paidAt: new Date(),
           paymentMethod: "credit",
         },
@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
         startTime,
         endTime,
         priceValue: totalPrice,
-        paymentStatus: "pending", // lowercase like court bookings; admin marks as PAID/UNPAID after verification
+        paymentStatus: "pending",
         paymentRef,
       },
     });
@@ -192,7 +192,6 @@ export async function GET(request: NextRequest) {
         coach: { select: { name: true, coachPhoto: true } },
         package: { select: { name: true } },
         court: { select: { label: true } },
-        venue: { select: { name: true } },
       },
       orderBy: { startTime: "desc" },
     });

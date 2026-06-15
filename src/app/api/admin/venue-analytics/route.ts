@@ -414,8 +414,8 @@ export async function GET(request: NextRequest) {
     }
 
     const lessonRevenue = confirmedLessons.reduce((s, l) => s + l.priceValue, 0);
-    const paidLessons = confirmedLessons.filter((l) => l.paymentStatus === "PAID");
-    const unpaidLessons = confirmedLessons.filter((l) => l.paymentStatus === "UNPAID");
+    const paidLessons = confirmedLessons.filter((l) => l.paymentStatus === "paid" || l.paymentStatus === "PAID");
+    const unpaidLessons = confirmedLessons.filter((l) => l.paymentStatus === "pending" || l.paymentStatus === "UNPAID");
 
     const perCoach: Record<string, { name: string; lessons: number; hours: number; revenue: number }> = {};
     for (const l of confirmedLessons) {

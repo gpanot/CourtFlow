@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     const since = new Date();
     since.setDate(since.getDate() - 14);
 
-    const [bookings, openPlayRegs] = await Promise.all([
+    const [bookings, openPlayRegs, coachLessons] = await Promise.all([
       prisma.booking.findMany({
         where: {
           venueId: { in: venueIds },
@@ -55,6 +55,26 @@ export async function GET(request: NextRequest) {
         orderBy: { createdAt: "desc" },
         take: 50,
       }),
+      prisma.coachLesson.findMany({
+        where: {
+          venueId: { in: venueIds },
+          status: { in: ["confirmed", "completed"] },
+          paymentStatus: { in: ["paid", "proof_submitted"] },
+          createdAt: { gte: since },
+        },
+        select: {
+          id: true,
+          venueId: true,
+          date: true,
+          startTime: true,
+          paymentStatus: true,
+          player: { select: { name: true } },
+          coach: { select: { name: true } },
+          venue: { select: { name: true } },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+      }),
     ]);
 
     const courtNotifications = bookings.map((b) => ({
@@ -82,7 +102,19 @@ export async function GET(request: NextRequest) {
       scheduleEntryId: r.scheduleEntryId,
     }));
 
-    return json([...courtNotifications, ...openPlayNotifications]);
+    const coachNotifications = coachLessons.map((l) => ({
+      id: l.id,
+      type: "coach_lesson" as const,
+      venueId: l.venueId,
+      date: l.date,
+      startTime: l.startTime,
+      paymentStatus: l.paymentStatus,
+      playerName: l.player.name,
+      courtLabel: l.coach.name,
+      venueName: l.venue.name,
+    }));
+
+    return json([...courtNotifications, ...openPlayNotifications, ...coachNotifications]);
   } catch (e) {
     const msg = (e as Error).message;
     if (msg.includes("authorization") || msg.includes("token") || msg.includes("access required")) {
