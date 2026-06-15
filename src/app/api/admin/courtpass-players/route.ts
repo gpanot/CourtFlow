@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
               OR: [
                 { name: { contains: search, mode: "insensitive" as const } },
                 { phone: { contains: search } },
+                { email: { contains: search, mode: "insensitive" as const } },
               ],
             },
           ],
@@ -63,6 +64,7 @@ export async function GET(request: NextRequest) {
           id: true,
           name: true,
           phone: true,
+          email: true,
           avatar: true,
           facePhotoPath: true,
           avatarPhotoPath: true,
@@ -176,6 +178,7 @@ export async function GET(request: NextRequest) {
       source: "courtpass" | "courtpay";
       name: string;
       phone: string;
+      email: string | null;
       avatar?: string;
       facePhotoPath: string | null;
       avatarPhotoPath: string | null;
@@ -194,6 +197,7 @@ export async function GET(request: NextRequest) {
         source: "courtpass",
         name: p.name,
         phone: p.phone,
+        email: p.email ?? null,
         avatar: p.avatar,
         facePhotoPath: p.facePhotoPath,
         avatarPhotoPath: p.avatarPhotoPath,
@@ -213,6 +217,7 @@ export async function GET(request: NextRequest) {
         source: "courtpay",
         name: cp.name,
         phone: cp.phone,
+        email: null,
         facePhotoPath: null,
         avatarPhotoPath: null,
         membershipName: null,

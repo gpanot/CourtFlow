@@ -64,6 +64,7 @@ export async function GET(
         gender: true,
         skillLevel: true,
         email: true,
+        reclubUserId: true,
       },
     });
 
@@ -218,6 +219,7 @@ export async function GET(
           gender: player.gender,
           skillLevel: player.skillLevel,
           email: player.email,
+          reclubUserId: player.reclubUserId ?? null,
         },
         stats: {
           totalVisits,

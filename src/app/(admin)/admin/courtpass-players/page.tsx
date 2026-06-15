@@ -7,6 +7,7 @@ import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
 import { PlayerAvatarThumb } from "@/components/player-avatar-thumb";
+import { useSessionStore } from "@/stores/session-store";
 import {
   Search,
   UserPlus,
@@ -42,6 +43,7 @@ interface PlayerListItem {
   source: "courtpass" | "courtpay";
   name: string;
   phone: string;
+  email: string | null;
   avatar?: string;
   facePhotoPath: string | null;
   avatarPhotoPath: string | null;
@@ -146,6 +148,7 @@ interface PlayerDetail {
     gender: string | null;
     skillLevel: string | null;
     email: string | null;
+    reclubUserId: number | null;
   };
   stats: {
     totalVisits: number;
@@ -936,11 +939,132 @@ function AddPlayerModal({
   );
 }
 
+// ─── Edit Player Modal ────────────────────────────────────────────────────────
+
+function EditPlayerModal({
+  player,
+  onSuccess,
+  onClose,
+}: {
+  player: PlayerDetail["player"];
+  onSuccess: () => void;
+  onClose: () => void;
+}) {
+  const [form, setForm] = useState({
+    name: player.name,
+    phone: player.phone,
+    email: player.email ?? "",
+    newPassword: "",
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  const update = (field: string, value: string) =>
+    setForm((f) => ({ ...f, [field]: value }));
+
+  async function submit() {
+    if (!form.name.trim() || form.name.trim().length < 2) { setErr("Name must be at least 2 characters"); return; }
+    if (!form.phone.trim() || form.phone.trim().length < 6) { setErr("Phone number is required"); return; }
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) { setErr("Invalid email address"); return; }
+    if (form.newPassword && form.newPassword.length < 8) { setErr("Password must be at least 8 characters"); return; }
+
+    setSaving(true);
+    setErr("");
+    try {
+      await api.patch(`/api/admin/courtpass-players/${player.id}/edit`, {
+        name: form.name.trim(),
+        phone: form.phone.trim(),
+        email: form.email.trim() || null,
+        ...(form.newPassword ? { newPassword: form.newPassword } : {}),
+      });
+      onSuccess();
+      onClose();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const inputCls = "w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none";
+
+  return (
+    <Modal open onClose={onClose} title="Edit Player Profile">
+      <div className="space-y-4">
+        <div>
+          <label className="mb-1 block text-xs font-medium text-neutral-300">Full name <span className="text-red-400">*</span></label>
+          <input type="text" value={form.name} onChange={(e) => update("name", e.target.value)} className={inputCls} />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-neutral-300">Phone number <span className="text-red-400">*</span></label>
+          <input type="tel" value={form.phone} onChange={(e) => update("phone", e.target.value)} className={inputCls} />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-neutral-300">Email</label>
+          <input type="email" value={form.email} onChange={(e) => update("email", e.target.value)} placeholder="Leave empty to remove" className={inputCls} />
+          <p className="mt-1 text-[11px] text-neutral-500">Used to log in to the player portal</p>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-xs font-medium text-neutral-300">Reset password</label>
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              value={form.newPassword}
+              onChange={(e) => update("newPassword", e.target.value)}
+              placeholder="Leave empty to keep current"
+              className={cn(inputCls, "pr-9")}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300"
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+          <p className="mt-1 text-[11px] text-neutral-500">Min. 8 characters — only applies to email/password accounts</p>
+        </div>
+
+        {player.reclubUserId !== null && (
+          <div className="rounded-lg border border-neutral-700/50 bg-neutral-800/30 px-3 py-2.5">
+            <p className="text-[11px] text-neutral-500 mb-0.5">Reclub ID</p>
+            <p className="text-sm font-mono text-neutral-300">{player.reclubUserId}</p>
+          </div>
+        )}
+
+        {err && (
+          <p className="rounded-lg border border-red-800/50 bg-red-900/20 px-3 py-2 text-xs text-red-300">{err}</p>
+        )}
+
+        <div className="flex gap-2 pt-1">
+          <button
+            onClick={submit}
+            disabled={saving}
+            className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-purple-600 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-50"
+          >
+            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+            {saving ? "Saving…" : "Save changes"}
+          </button>
+          <button onClick={onClose} className="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-400 hover:text-white hover:bg-neutral-800">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function CourtPassPlayersPage() {
   const { t } = useTranslation("translation", { i18n: adminI18n });
   const { venueId, setVenueId, venues } = useAdminVenuePicker({ autoSelect: true });
+  const { role } = useSessionStore();
+  const canEditPlayer = role === "manager" || role === "superadmin";
 
   // ── List state ──
   const [players, setPlayers] = useState<PlayerListItem[]>([]);
@@ -968,6 +1092,7 @@ export default function CourtPassPlayersPage() {
   const [showNewBooking, setShowNewBooking] = useState(false);
   const [showMembership, setShowMembership] = useState(false);
   const [showAddPlayer, setShowAddPlayer] = useState(false);
+  const [showEditPlayer, setShowEditPlayer] = useState(false);
 
   const searchRef = useRef<HTMLInputElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1168,6 +1293,12 @@ export default function CourtPassPlayersPage() {
                         <Phone className="h-2.5 w-2.5 text-neutral-600" />
                         <span className="text-xs text-neutral-500 truncate">{player.phone}</span>
                       </div>
+                      {player.email && (
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <Mail className="h-2.5 w-2.5 text-neutral-600" />
+                          <span className="text-[10px] text-neutral-600 truncate">{player.email}</span>
+                        </div>
+                      )}
                       {player.membershipName && (
                         <span className="text-[10px] text-emerald-400 truncate block">{player.membershipName}</span>
                       )}
@@ -1239,9 +1370,15 @@ export default function CourtPassPlayersPage() {
                       <h2 className="text-lg font-bold text-white">{detail.player.name}</h2>
                       <SourceBadge source={detail.source} />
                     </div>
-                    <div className="flex items-center gap-3 mt-0.5 text-xs text-neutral-400">
-                      <span className="flex items-center gap-1"><Phone className="h-3 w-3" /> {detail.player.phone}</span>
-                      {detail.player.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" /> {detail.player.email}</span>}
+                    <div className="flex flex-col gap-0.5 mt-0.5">
+                      <span className="flex items-center gap-1 text-xs text-neutral-400">
+                        <Phone className="h-3 w-3" /> {detail.player.phone}
+                      </span>
+                      {detail.player.email && (
+                        <span className="flex items-center gap-1 text-xs text-neutral-400">
+                          <Mail className="h-3 w-3" /> {detail.player.email}
+                        </span>
+                      )}
                     </div>
                     {detail.stats.pendingBalance > 0 && (
                       <div className="mt-1.5 flex items-center gap-1.5 rounded-full bg-red-900/30 border border-red-800/40 px-2.5 py-0.5 w-fit">
@@ -1251,6 +1388,14 @@ export default function CourtPassPlayersPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
+                    {canEditPlayer && detail.source === "courtpass" && (
+                      <button
+                        onClick={() => setShowEditPlayer(true)}
+                        className="flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:text-white hover:bg-neutral-700"
+                      >
+                        <Pencil className="h-3.5 w-3.5" /> Edit
+                      </button>
+                    )}
                     {detail.source === "courtpass" && (
                       <>
                         <button
@@ -1571,6 +1716,16 @@ export default function CourtPassPlayersPage() {
             selectPlayer(playerId);
           }}
           onClose={() => setShowAddPlayer(false)}
+        />
+      )}
+      {detail && showEditPlayer && (
+        <EditPlayerModal
+          player={detail.player}
+          onSuccess={() => {
+            void fetchList(true);
+            if (selectedId) void fetchDetail(selectedId);
+          }}
+          onClose={() => setShowEditPlayer(false)}
         />
       )}
     </div>

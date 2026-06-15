@@ -2,6 +2,14 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  outputFileTracingExcludes: {
+    "*": [
+      "mobile/android/**",
+      "mobile/ios/**",
+      "mobile/.gradle/**",
+      "mobile/android/app/build/**",
+    ],
+  },
   logging: {
     fetches: {
       fullUrl: true,
