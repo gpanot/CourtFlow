@@ -16,7 +16,7 @@ export async function GET(
     const lesson = await prisma.coachLesson.findFirst({
       where: { id, playerId },
       include: {
-        coach: { select: { name: true } },
+        coach: { select: { name: true, coachPhoto: true } },
         court: { select: { label: true } },
         package: { select: { name: true } },
       },

@@ -20,9 +20,10 @@ interface LessonDetail {
   paymentStatus: string;
   paymentRef: string | null;
   proofUrl: string | null;
-  coach: { name: string; coachPhoto: string | null };
-  package: { name: string };
+  coach: { name: string; coachPhoto?: string | null };
   court: { label: string } | null;
+  package: { name: string };
+  venue?: { name: string } | null;
 }
 
 interface VenueContact {
@@ -44,17 +45,13 @@ function lineLink(value: string) {
   return `https://line.me/ti/p/~${value.replace(/^~/, "")}`;
 }
 
-/** Normalize coach lesson payment status to lowercase for consistent stepper logic */
-function normalizeStatus(s: string): string {
-  if (s === "PAID") return "paid";
-  if (s === "UNPAID") return "pending";
-  return s; // pending, proof_submitted, paid
+function isPaid(status: string) {
+  return status === "paid" || status === "PAID";
 }
 
 function stepIndex(paymentStatus: string): number {
-  const s = normalizeStatus(paymentStatus);
-  if (s === "paid") return 2;
-  if (s === "proof_submitted") return 1;
+  if (isPaid(paymentStatus)) return 2;
+  if (paymentStatus === "proof_submitted") return 1;
   return 0;
 }
 
@@ -83,25 +80,20 @@ function ProgressStepper({ paymentStatus }: { paymentStatus: string }) {
               >
                 {done ? "✓" : i + 1}
               </div>
-              <span className={`text-[10px] mt-1 ${done ? "text-[var(--cm-green)] font-medium" : "text-[var(--cm-text-muted)]"}`}>
+              <span
+                className={`text-[10px] mt-1 ${done ? "text-[var(--cm-green)] font-medium" : "text-[var(--cm-text-muted)]"}`}
+              >
                 {t(key)}
               </span>
             </div>
             {!isLast && (
-              <div className={`flex-1 h-0.5 mx-1 mt-[-14px] ${i < current ? "bg-[var(--cm-green)]" : "bg-[var(--cm-border)]"}`} />
+              <div
+                className={`flex-1 h-0.5 mx-1 mt-[-14px] ${i < current ? "bg-[var(--cm-green)]" : "bg-[var(--cm-border)]"}`}
+              />
             )}
           </div>
         );
       })}
-    </div>
-  );
-}
-
-function Row({ label, value, valueClass }: { label: string; value: string; valueClass?: string }) {
-  return (
-    <div className="flex justify-between text-sm">
-      <span className="text-[var(--cm-text-sec)]">{label}</span>
-      <span className={valueClass || ""}>{value}</span>
     </div>
   );
 }
@@ -116,8 +108,6 @@ export default function CoachSessionDetailPage() {
 
   const [lesson, setLesson] = useState<LessonDetail | null>(null);
   const [venueContact, setVenueContact] = useState<VenueContact | null>(null);
-  const [cancelling, setCancelling] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
   const [proofFullscreen, setProofFullscreen] = useState(false);
 
   useEffect(() => {
@@ -126,7 +116,7 @@ export default function CoachSessionDetailPage() {
 
     portalFetch(`/api/public/coach-sessions/${id}`)
       .then((r) => r.json())
-      .then(setLesson)
+      .then((data: LessonDetail) => setLesson(data))
       .catch(() => {});
 
     const vq = playerVenueId ? `?venueId=${playerVenueId}` : "";
@@ -145,35 +135,27 @@ export default function CoachSessionDetailPage() {
       .catch(() => {});
   }, [status, id, router, playerVenueId]);
 
-  async function handleCancel() {
-    setCancelling(true);
-    const res = await portalFetch(`/api/public/coach-sessions/${id}`, { method: "DELETE" });
-    if (res.ok) {
-      router.replace("/book/bookings");
-    } else {
-      const data = await res.json();
-      alert(data.error || t("bookingDetail.cancelFailed"));
-      setCancelling(false);
-    }
-  }
-
   if (!lesson) {
     return <div className="px-4 pt-12 text-[var(--cm-text-muted)]">{t("common.loading")}</div>;
   }
 
-  const normalized = normalizeStatus(lesson.paymentStatus);
   const isCancelled = lesson.status === "cancelled";
-  const isVerifying = normalized === "proof_submitted";
-  const isPaid = normalized === "paid";
-  const isPending = normalized === "pending";
+  const paymentStatus = lesson.paymentStatus;
+  const isVerifying = paymentStatus === "proof_submitted";
+  const paid = isPaid(paymentStatus);
   const proofUrl = resolveUploadUrl(lesson.proofUrl);
 
   const paymentStatusMap: Record<string, { color: string; labelKey: string }> = {
-    pending: { color: "text-[var(--cm-orange)]", labelKey: "bookings.status.pending_payment" },
+    pending: { color: "text-[var(--cm-orange)]", labelKey: "bookings.status.pending" },
     proof_submitted: { color: "text-[var(--cm-orange)]", labelKey: "bookings.status.proof_submitted" },
     paid: { color: "text-[var(--cm-green)]", labelKey: "bookings.status.paid" },
+    PAID: { color: "text-[var(--cm-green)]", labelKey: "bookings.status.paid" },
+    UNPAID: { color: "text-[var(--cm-orange)]", labelKey: "bookings.status.pending" },
   };
-  const paymentInfo = paymentStatusMap[normalized] || { color: "text-[var(--cm-green)]", labelKey: "bookings.status.confirmed" };
+  const paymentInfo = paymentStatusMap[paymentStatus] ?? {
+    color: "text-[var(--cm-green)]",
+    labelKey: "bookings.status.confirmed",
+  };
 
   const helpMessage = venueContact
     ? t("bookingDetail.helpMessage", {
@@ -201,28 +183,40 @@ export default function CoachSessionDetailPage() {
         ← {t("common.back")}
       </button>
 
-      <h1 className="text-xl font-bold mb-4">{t("coaches.sessionDetail")}</h1>
+      <h1 className="text-xl font-bold mb-4">{t("bookingDetail.title")}</h1>
 
-      {!isCancelled && <ProgressStepper paymentStatus={lesson.paymentStatus} />}
+      {/* Progress Stepper */}
+      {!isCancelled && <ProgressStepper paymentStatus={paymentStatus} />}
 
-      {/* Coach info */}
-      <div className="flex items-center gap-3 mb-4">
-        {lesson.coach.coachPhoto ? (
-          <img src={lesson.coach.coachPhoto} alt={lesson.coach.name} className="h-12 w-12 rounded-full object-cover border border-[var(--cm-border)]" />
-        ) : (
-          <div className="h-12 w-12 rounded-full bg-[var(--cm-accent)]/10 flex items-center justify-center text-xl">🎓</div>
-        )}
-        <div>
-          <p className="font-semibold text-[var(--cm-text)]">{lesson.coach.name}</p>
-          <p className="text-xs text-[var(--cm-text-sec)]">{lesson.package.name}</p>
+      {/* Coach avatar + name */}
+      {lesson.coach.coachPhoto && (
+        <div className="flex items-center gap-3 mb-4">
+          <img
+            src={lesson.coach.coachPhoto}
+            alt={lesson.coach.name}
+            className="w-12 h-12 rounded-full object-cover border border-[var(--cm-border)] shrink-0"
+          />
+          <div>
+            <p className="text-sm font-semibold">{lesson.coach.name}</p>
+            <p className="text-xs text-[var(--cm-text-sec)]">{lesson.package.name}</p>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Booking details card */}
+      {/* Lesson details card */}
       <div className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-4 space-y-2">
-        <Row label={t("common.date")} value={formatDate(lesson.date)} />
-        <Row label={t("common.time")} value={`${formatTime(lesson.startTime)} – ${formatTime(lesson.endTime)}`} />
+        {!lesson.coach.coachPhoto && (
+          <>
+            <Row label={t("coaching.coach")} value={lesson.coach.name} />
+            <Row label="Package" value={lesson.package.name} />
+          </>
+        )}
         {lesson.court && <Row label={t("common.court")} value={lesson.court.label} />}
+        <Row label={t("common.date")} value={formatDate(lesson.date)} />
+        <Row
+          label={t("common.time")}
+          value={`${formatTime(lesson.startTime)} – ${formatTime(lesson.endTime)}`}
+        />
         <Row label={t("common.price")} value={formatPrice(lesson.priceValue)} />
         {isCancelled && <Row label={t("common.status")} value={t("bookings.cancelled")} />}
         <Row
@@ -235,8 +229,8 @@ export default function CoachSessionDetailPage() {
         )}
       </div>
 
-      {/* Paid banner */}
-      {isPaid && !isCancelled && (
+      {/* Confirmed banner */}
+      {paid && !isCancelled && (
         <div className="mb-4 rounded-xl border border-[var(--cm-green)]/40 bg-[var(--cm-green)]/10 px-4 py-3">
           <p className="text-sm font-semibold text-[var(--cm-green)] text-center leading-snug">
             {t("bookingDetail.confirmedBanner")}
@@ -245,7 +239,7 @@ export default function CoachSessionDetailPage() {
       )}
 
       {/* Verifying banner */}
-      {isVerifying && !isCancelled && (
+      {isVerifying && (
         <div className="mb-4 rounded-xl border border-[var(--cm-orange)]/40 bg-[var(--cm-orange)]/10 px-4 py-3">
           <p className="text-sm font-semibold text-[var(--cm-orange)] text-center leading-snug">
             {t("bookingDetail.verifyingBanner")}
@@ -253,16 +247,7 @@ export default function CoachSessionDetailPage() {
         </div>
       )}
 
-      {/* Cancelled banner */}
-      {isCancelled && (
-        <div className="mb-4 rounded-xl border border-[var(--cm-red)]/40 bg-[var(--cm-red)]/10 px-4 py-3">
-          <p className="text-sm font-semibold text-[var(--cm-red)] text-center">
-            {t("bookings.cancelled")}
-          </p>
-        </div>
-      )}
-
-      {/* Payment proof */}
+      {/* Payment proof image */}
       {proofUrl && (
         <div className="mb-4">
           <p className="text-xs text-[var(--cm-text-sec)] mb-1">{t("bookingDetail.paymentProof")}</p>
@@ -281,7 +266,8 @@ export default function CoachSessionDetailPage() {
                 if (parent && !parent.querySelector(".proof-error")) {
                   const el = document.createElement("div");
                   el.className = "proof-error";
-                  el.style.cssText = "padding:24px 16px;text-align:center;font-size:12px;color:var(--cm-text-muted)";
+                  el.style.cssText =
+                    "padding:24px 16px;text-align:center;font-size:12px;color:var(--cm-text-muted)";
                   el.textContent = t("common.imageLoadError");
                   parent.appendChild(el);
                 }
@@ -292,7 +278,7 @@ export default function CoachSessionDetailPage() {
         </div>
       )}
 
-      {/* Fullscreen lightbox */}
+      {/* Fullscreen proof lightbox */}
       {proofFullscreen && proofUrl && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/90"
@@ -330,20 +316,32 @@ export default function CoachSessionDetailPage() {
           {hasMessagingContact && (
             <div className="flex flex-wrap gap-2 mt-3">
               {whatsappLink && (
-                <a href={whatsappLink} target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center rounded-full border border-[#25D366]/40 bg-[#25D366]/10 px-3 py-1.5 text-xs font-semibold text-[#25D366]">
+                <a
+                  href={whatsappLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center rounded-full border border-[#25D366]/40 bg-[#25D366]/10 px-3 py-1.5 text-xs font-semibold text-[#25D366]"
+                >
                   WhatsApp
                 </a>
               )}
               {zaloLink && (
-                <a href={zaloLink} target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center rounded-full border border-[#0068FF]/40 bg-[#0068FF]/10 px-3 py-1.5 text-xs font-semibold text-[#0068FF]">
+                <a
+                  href={zaloLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center rounded-full border border-[#0068FF]/40 bg-[#0068FF]/10 px-3 py-1.5 text-xs font-semibold text-[#0068FF]"
+                >
                   Zalo
                 </a>
               )}
               {lineLinkUrl && (
-                <a href={lineLinkUrl} target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center rounded-full border border-[#06C755]/40 bg-[#06C755]/10 px-3 py-1.5 text-xs font-semibold text-[#06C755]">
+                <a
+                  href={lineLinkUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center rounded-full border border-[#06C755]/40 bg-[#06C755]/10 px-3 py-1.5 text-xs font-semibold text-[#06C755]"
+                >
                   Line
                 </a>
               )}
@@ -352,15 +350,15 @@ export default function CoachSessionDetailPage() {
         </div>
       )}
 
-      {/* Help hint */}
-      {!isCancelled && !isPaid && hasAnyContact && (
+      {/* Help message */}
+      {!isCancelled && !paid && hasAnyContact && (
         <p className="text-xs text-[var(--cm-text-sec)] mb-4 text-center">
           {t("bookingDetail.needHelp")}
         </p>
       )}
 
-      {/* Complete Payment CTA */}
-      {!isCancelled && isPending && (
+      {/* CTA — go to payment page if still pending */}
+      {!isCancelled && paymentStatus === "pending" && (
         <button
           onClick={() => router.push(`/book/pay/lesson/${id}`)}
           className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm mb-3"
@@ -368,40 +366,23 @@ export default function CoachSessionDetailPage() {
           {t("bookingDetail.completePayment")}
         </button>
       )}
+    </div>
+  );
+}
 
-      {/* Cancel */}
-      {!isCancelled && isPending && (
-        <button
-          onClick={() => setShowConfirm(true)}
-          className="w-full py-3 border border-[var(--cm-red)]/30 text-[var(--cm-red)] rounded-xl font-medium text-sm"
-        >
-          {t("bookingDetail.cancelBooking")}
-        </button>
-      )}
-
-      {showConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--cm-overlay)] px-6">
-          <div className="bg-[var(--cm-sheet-bg)] border border-[var(--cm-border)] rounded-2xl p-6 w-full max-w-sm">
-            <h3 className="font-bold mb-2">{t("bookingDetail.cancelConfirmTitle")}</h3>
-            <p className="text-sm text-[var(--cm-text-sec)] mb-4">{t("bookingDetail.cancelConfirmBody")}</p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowConfirm(false)}
-                className="flex-1 py-2.5 bg-[var(--cm-bg-surface)] border border-[var(--cm-border)] rounded-xl text-sm font-medium"
-              >
-                {t("common.keep")}
-              </button>
-              <button
-                onClick={handleCancel}
-                disabled={cancelling}
-                className="flex-1 py-2.5 bg-[var(--cm-red)] text-white rounded-xl text-sm font-medium disabled:opacity-40"
-              >
-                {cancelling ? t("bookingDetail.cancelling") : t("common.cancel")}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+function Row({
+  label,
+  value,
+  valueClass,
+}: {
+  label: string;
+  value: string;
+  valueClass?: string;
+}) {
+  return (
+    <div className="flex justify-between text-sm">
+      <span className="text-[var(--cm-text-sec)]">{label}</span>
+      <span className={valueClass ?? ""}>{value}</span>
     </div>
   );
 }
