@@ -87,12 +87,14 @@ export default function VenuesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold md:text-2xl">{t("venues.title")}</h2>
-        <button
-          onClick={() => setShowCreate(!showCreate)}
-          className="flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-500 md:px-4"
-        >
-          <Plus className="h-4 w-4" /> {t("venues.addVenue")}
-        </button>
+        {role === "superadmin" && (
+          <button
+            onClick={() => setShowCreate(!showCreate)}
+            className="flex items-center gap-2 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-500 md:px-4"
+          >
+            <Plus className="h-4 w-4" /> {t("venues.addVenue")}
+          </button>
+        )}
       </div>
 
       {showCreate && (

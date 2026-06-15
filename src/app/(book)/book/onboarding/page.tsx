@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { getPlayerToken, getPlayerFromToken } from "@/lib/player-token";
+import { signOutToIntro } from "@/app/(book)/book/lib/sign-out-to-intro";
 
 const SKILL_LEVELS = ["beginner", "intermediate", "advanced", "pro"] as const;
 const GENDERS = ["male", "female"] as const;
@@ -299,8 +300,8 @@ export default function OnboardingPage() {
 
   return (
     <div className="px-6 pt-12 pb-8">
-      <button onClick={() => router.back()} className="text-sm text-[var(--cm-text-sec)] mb-6">
-        ← {t("common.back")}
+      <button onClick={() => void signOutToIntro()} className="text-sm text-[var(--cm-text-sec)] mb-6">
+        ← {t("account.signOut")}
       </button>
 
       <h1 className="text-xl font-bold mb-1">{t("onboarding.completeProfile")}</h1>

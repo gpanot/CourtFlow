@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
-import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { requireManagerOrSuperAdmin, requireSuperAdmin } from "@/lib/auth";
 import { getAuthorizedVenueIds } from "@/lib/venue-scope";
 
 export const dynamic = "force-dynamic";
@@ -37,14 +37,14 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const auth = requireManagerOrSuperAdmin(request.headers);
+    const auth = requireSuperAdmin(request.headers);
     const body = await parseBody<{ name: string; location?: string }>(request);
 
     const venue = await prisma.venue.create({
       data: {
         name: body.name,
         location: body.location || null,
-        ownerId: auth.role === "manager" ? auth.id : null,
+        ownerId: null,
         staffAssignments: {
           create: [{ staffId: auth.id, appAccess: ["courtflow"] }],
         },
