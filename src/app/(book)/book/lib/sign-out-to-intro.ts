@@ -15,5 +15,5 @@ export function signOutToIntro() {
     return Promise.resolve();
   }
   // OAuth: use NextAuth signOut
-  return signOut({ callbackUrl: "/book/intro" });
+  return signOut({ redirectTo: "/book/intro" });
 }

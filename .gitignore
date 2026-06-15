@@ -37,6 +37,8 @@ yarn-error.log*
 
 # credentials
 CREDENTIALS.md
+*.p8
+AuthKey_*.p8
 
 # keep example
 !.env.example

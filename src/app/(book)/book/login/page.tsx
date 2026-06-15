@@ -48,7 +48,9 @@ function LoginContent() {
     setLoading(provider);
     setError(null);
     try {
-      await signIn(provider, { callbackUrl });
+      // NextAuth v5 uses redirectTo (callbackUrl is ignored and falls back to site root)
+      const redirectTo = tab === "signup" ? "/book/onboarding" : callbackUrl;
+      await signIn(provider, { redirectTo });
     } catch {
       setError(t("login.errors.signInFailed"));
       setLoading(null);

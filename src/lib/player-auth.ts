@@ -50,6 +50,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     signIn: "/book/login",
   },
   callbacks: {
+    async redirect({ url, baseUrl }) {
+      // NextAuth v5 may fall back to site root when redirectTo is missing
+      if (url === baseUrl || url === `${baseUrl}/`) {
+        return `${baseUrl}/book/onboarding`;
+      }
+      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      if (url.startsWith(baseUrl)) return url;
+      return `${baseUrl}/book/onboarding`;
+    },
+
     async signIn({ account, profile }) {
       if (!account?.providerAccountId) return false;
 
@@ -70,8 +80,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           ? `${profile.given_name} ${profile.family_name}`
           : null) ??
         "Player";
+      // Apple may provide a private relay address (user@privaterelay.appleid.com) or omit email on repeat logins — both are OK
       const email = profile?.email ?? null;
-      const image = (profile?.picture as string) ?? null;
+      const image =
+        (profile?.picture as string | undefined) ??
+        (profile?.image as string | undefined) ??
+        null;
 
       const player = await prisma.player.create({
         data: {
