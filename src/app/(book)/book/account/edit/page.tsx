@@ -11,6 +11,15 @@ import { AvatarPhotoCropper } from "@/components/avatar-photo-cropper";
 import { BookScreenTopBar } from "../../components/BookScreenTopBar";
 import { useTranslation } from "react-i18next";
 import { BOOK_LANGUAGES, persistBookLanguage, type BookLanguageCode } from "@/i18n/book-i18n";
+import { usePlayerVenue } from "../../components/PlayerVenueContext";
+import {
+  FaceCheckInWidget,
+  FaceCheckInResultCard,
+  FaceCheckInNotFoundCard,
+  type FaceCheckInResult,
+} from "@/components/courtpay/FaceCheckInWidget";
+import { FaceRegisterWidget } from "@/components/courtpay/FaceRegisterWidget";
+import { ScanFace, UserCheck } from "lucide-react";
 
 const SKILL_LEVELS = ["beginner", "intermediate", "advanced", "pro"] as const;
 const GENDERS = ["male", "female"] as const;
@@ -37,6 +46,7 @@ export default function EditProfilePage() {
   const router = useRouter();
   const { mode, resolved, setMode } = useTheme();
   const { t, i18n } = useTranslation();
+  const { venueId } = usePlayerVenue();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [gender, setGender] = useState("");
@@ -49,6 +59,11 @@ export default function EditProfilePage() {
   const [loaded, setLoaded] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteStep, setDeleteStep] = useState<"confirm" | "deleting" | "done">("confirm");
+
+  // Face modals
+  const [faceModal, setFaceModal] = useState<"verify" | "register" | null>(null);
+  const [faceCheckInResult, setFaceCheckInResult] = useState<FaceCheckInResult | null>(null);
+  const [faceRegisterCapture, setFaceRegisterCapture] = useState<string | null>(null);
 
   const [cropFile, setCropFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -284,6 +299,31 @@ export default function EditProfilePage() {
         </div>
       </div>
 
+      {/* Face Check-in section */}
+      {venueId ? (
+        <div className="rounded-xl border border-[var(--cm-border)] bg-[var(--cm-bg-card)] p-3 mb-4 space-y-2">
+          <p className="text-xs font-medium text-[var(--cm-text-sec)]">{t("editProfile.faceSection")}</p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => { setFaceCheckInResult(null); setFaceModal("verify"); }}
+              className="flex flex-1 items-center justify-center gap-2 py-2 rounded-lg border border-[var(--cm-border)] bg-[var(--cm-bg-input)] text-xs font-medium text-[var(--cm-text)] hover:border-[var(--cm-accent)] transition-colors"
+            >
+              <ScanFace className="h-4 w-4" />
+              {t("editProfile.verifyFace")}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setFaceRegisterCapture(null); setFaceModal("register"); }}
+              className="flex flex-1 items-center justify-center gap-2 py-2 rounded-lg border border-[var(--cm-border)] bg-[var(--cm-bg-input)] text-xs font-medium text-[var(--cm-text)] hover:border-[var(--cm-accent)] transition-colors"
+            >
+              <UserCheck className="h-4 w-4" />
+              {t("editProfile.registerFace")}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <div className="mt-8 pt-6 border-t border-[var(--cm-border)]">
         <button
           onClick={() => { setShowDeleteConfirm(true); setDeleteStep("confirm"); }}
@@ -302,6 +342,133 @@ export default function EditProfilePage() {
           maxFileBytes={500 * 1024}
         />
       )}
+
+      {/* Face Verify Modal */}
+      {faceModal === "verify" && venueId ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--cm-overlay)] p-4"
+          onClick={() => setFaceModal(null)}
+        >
+          <div
+            className="w-full max-w-lg bg-[var(--cm-sheet-bg)] rounded-2xl p-5 pb-8 border border-[var(--cm-border)] space-y-4 max-h-[90dvh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-[var(--cm-text)]">{t("editProfile.faceVerifyTitle")}</h2>
+              <button
+                type="button"
+                onClick={() => setFaceModal(null)}
+                className="text-xs text-[var(--cm-text-muted)] hover:text-[var(--cm-text)]"
+              >
+                {t("editProfile.close")}
+              </button>
+            </div>
+
+            {faceCheckInResult ? (
+              faceCheckInResult.resultType === "matched" ? (
+                <FaceCheckInResultCard
+                  player={faceCheckInResult.player ?? null}
+                  label={t("editProfile.faceVerifySuccess")}
+                  onClose={() => setFaceCheckInResult(null)}
+                />
+              ) : (
+                <FaceCheckInNotFoundCard
+                  label={t("editProfile.faceVerifyNotFound")}
+                  hint={
+                    faceCheckInResult.resultType === "no_face" || faceCheckInResult.resultType === "multi_face"
+                      ? t("editProfile.faceVerifyNoFace")
+                      : t("editProfile.faceVerifyNotFoundHint")
+                  }
+                  onClose={() => setFaceCheckInResult(null)}
+                />
+              )
+            ) : (
+              <FaceCheckInWidget
+                venueId={venueId}
+                onResult={(result) => setFaceCheckInResult(result)}
+                labels={{
+                  title: t("editProfile.faceVerifyTitle"),
+                  hint: t("editProfile.faceVerifyHint"),
+                  noFace: t("editProfile.faceVerifyNoFace"),
+                  notRecognized: t("editProfile.faceVerifyNotFound"),
+                }}
+              />
+            )}
+
+            <button
+              type="button"
+              onClick={() => setFaceModal(null)}
+              className="w-full py-3 bg-[var(--cm-bg-surface)] text-[var(--cm-text-sec)] rounded-xl font-medium text-sm border border-[var(--cm-border)]"
+            >
+              {t("editProfile.close")}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Face Register Modal */}
+      {faceModal === "register" ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--cm-overlay)] p-4"
+          onClick={() => setFaceModal(null)}
+        >
+          <div
+            className="w-full max-w-lg bg-[var(--cm-sheet-bg)] rounded-2xl p-5 pb-8 border border-[var(--cm-border)] space-y-4 max-h-[90dvh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-[var(--cm-text)]">{t("editProfile.faceRegisterTitle")}</h2>
+              <button
+                type="button"
+                onClick={() => setFaceModal(null)}
+                className="text-xs text-[var(--cm-text-muted)] hover:text-[var(--cm-text)]"
+              >
+                {t("editProfile.close")}
+              </button>
+            </div>
+
+            {faceRegisterCapture ? (
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-emerald-400">{t("editProfile.faceRegisterCaptured")}</p>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`data:image/jpeg;base64,${faceRegisterCapture}`}
+                  alt=""
+                  className="mx-auto aspect-square w-full max-h-64 rounded-xl border border-neutral-700 object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={() => setFaceRegisterCapture(null)}
+                  className="w-full py-2.5 rounded-xl border border-[var(--cm-border)] text-sm text-[var(--cm-text-sec)]"
+                >
+                  {t("editProfile.faceRegisterRetake")}
+                </button>
+              </div>
+            ) : (
+              <FaceRegisterWidget
+                onCapture={(b64) => setFaceRegisterCapture(b64)}
+                labels={{
+                  title: t("editProfile.faceRegisterTitle"),
+                  hint: t("editProfile.faceRegisterHint"),
+                  retake: t("editProfile.faceRegisterRetake"),
+                  checking: t("editProfile.faceRegisterChecking"),
+                  faceReady: t("editProfile.faceRegisterReady"),
+                  noFaceDetected: t("editProfile.faceRegisterNoFace"),
+                  useThisPhoto: t("editProfile.faceRegisterUsePhoto"),
+                }}
+              />
+            )}
+
+            <button
+              type="button"
+              onClick={() => setFaceModal(null)}
+              className="w-full py-3 bg-[var(--cm-bg-surface)] text-[var(--cm-text-sec)] rounded-xl font-medium text-sm border border-[var(--cm-border)]"
+            >
+              {t("editProfile.close")}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {/* Delete confirmation modal */}
       {showDeleteConfirm && (
