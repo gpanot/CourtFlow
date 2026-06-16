@@ -117,14 +117,17 @@ export function KioskModeGate({ venueId, allowedModes: allowedModesProp, childre
 
   useEffect(() => {
     const saved = localStorage.getItem(storageKey);
+    console.log("[KioskModeGate] init — storageKey:", storageKey, "saved:", saved, "allowedModes:", allowedModes);
     if (
       (saved === "entrance" || saved === "tv" || saved === "courtpay") &&
       allowedModes.includes(saved)
     ) {
+      console.log("[KioskModeGate] restoring saved mode:", saved);
       setMode(saved);
       setPhase("select");
     } else {
       if (saved) {
+        console.log("[KioskModeGate] clearing invalid saved mode:", saved);
         localStorage.removeItem(storageKey);
       }
       setMode(null);
@@ -134,22 +137,27 @@ export function KioskModeGate({ venueId, allowedModes: allowedModesProp, childre
 
   const selectMode = useCallback(
     async (m: KioskMode) => {
+      console.log("[KioskModeGate] selectMode:", m, "venueId:", venueId);
       try {
         const res = await fetch(`/api/courts/state?venueId=${venueId}`, { cache: "no-store" });
         const data = (await res.json()) as { session: { status?: string } | null };
+        console.log("[KioskModeGate] session check:", data.session);
         const hasOpenSession =
           !!data.session &&
           data.session.status !== "closed" &&
           data.session.status !== "ended";
         if (!hasOpenSession) {
+          console.warn("[KioskModeGate] no open session → blocking mode select");
           window.alert("Staff need to open a session first");
           return;
         }
-      } catch {
+      } catch (err) {
+        console.error("[KioskModeGate] session check error:", err);
         window.alert("Staff need to open a session first");
         return;
       }
 
+      console.log("[KioskModeGate] mode confirmed → phase=locked");
       localStorage.setItem(storageKey, m);
       setMode(m);
       setPhase("locked");

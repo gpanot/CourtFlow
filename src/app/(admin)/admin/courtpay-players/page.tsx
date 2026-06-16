@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import adminI18n from "@/i18n/admin-i18n";
 import { api } from "@/lib/api-client";
@@ -726,9 +727,12 @@ function PlayerDetailDrawer({
             </div>
           )}
 
-          {/* Active subscription */}
+          {/* Active subscription — clicking navigates to CourtPay > Subscribers pre-filtered by phone */}
           {activeSub ? (
-            <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-3">
+            <Link
+              href={`/admin/courtpay?tab=subscribers&search=${encodeURIComponent(player.phone)}`}
+              className="block rounded-xl border border-green-500/20 bg-green-500/5 p-3 transition-colors hover:border-green-500/40 hover:bg-green-500/10"
+            >
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-medium text-green-300">{t("courtpayPlayers.activeSubscription")}</p>
                 <span className="rounded-full bg-green-600/20 px-2 py-0.5 text-[11px] font-medium text-green-400">{t("courtpayPlayers.active")}</span>
@@ -751,7 +755,8 @@ function PlayerDetailDrawer({
                   </p>
                 </>
               )}
-            </div>
+              <p className="mt-2 text-[11px] text-green-400/70">View subscription →</p>
+            </Link>
           ) : (
             <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3">
               <div className="flex items-center justify-between mb-1">

@@ -146,6 +146,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (token && isAdminRole(role) && onboardingCompleted === false) {
+      router.prefetch("/onboarding");
       router.replace("/onboarding");
     }
   }, [token, role, onboardingCompleted, router]);
@@ -172,12 +173,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     if (!hydrated) return;
     if (!token || !isAdminRole(role)) {
+      router.prefetch("/staff");
       router.replace("/staff");
     }
   }, [hydrated, token, role, router]);
 
-  if (!hydrated || !token || !isAdminRole(role)) {
-    return null;
+  if (!hydrated) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-neutral-950">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-700 border-t-neutral-400" />
+      </div>
+    );
+  }
+
+  if (!token || !isAdminRole(role)) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-neutral-950">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-700 border-t-neutral-400" />
+      </div>
+    );
   }
 
   if (onboardingCompleted === false) return null;

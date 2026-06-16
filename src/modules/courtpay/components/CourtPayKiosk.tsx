@@ -176,6 +176,7 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
 
   /* ─── Helpers ──────────────────────────────────── */
   const goTo = useCallback((s: KioskStep) => {
+    console.log(`[CourtPayKiosk] step: ${stepRef.current} → ${s}`);
     stepRef.current = s;
     setStep(s);
   }, []);
@@ -408,6 +409,7 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
 
   /* ─── Begin face scan (returning path) ──────── */
   const beginFaceScan = useCallback(() => {
+    console.log("[CourtPayKiosk] beginFaceScan — protocol:", window.location.protocol, "mediaDevices:", !!navigator.mediaDevices?.getUserMedia);
     if (stepRef.current === "scanning") return;
     clearTimers();
     setCameraError(null);
@@ -833,6 +835,7 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
 
   const onCameraError = useCallback(
     (msg: string) => {
+      console.error("[CourtPayKiosk] camera error:", msg, "| step:", stepRef.current, "| protocol:", window.location.protocol, "| isSecureContext:", window.isSecureContext, "| mediaDevices:", !!navigator.mediaDevices?.getUserMedia);
       setCameraError(msg);
       if (stepRef.current === "scanning" || stepRef.current === "reg_face_capture") {
         cameraRef.current?.stopCamera();

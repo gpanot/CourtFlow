@@ -31,11 +31,20 @@ export function TvQueueVenueGate({ children }: { children: (venueId: string) => 
 
   useEffect(() => {
     if (!hydrated) return;
+    console.log("[TvQueueVenueGate] checking", { venueId, token: !!token, staffId: !!staffId, role });
     if (!venueId.trim()) {
+      console.warn("[TvQueueVenueGate] no venueId → redirect /staff");
       router.replace("/staff");
       return;
     }
-    if (!token || !staffId || (role !== "staff" && role !== "superadmin")) {
+    if (!token || !staffId) {
+      console.warn("[TvQueueVenueGate] no session → redirect /staff");
+      router.replace("/staff");
+      return;
+    }
+    // Allow staff, manager, and superadmin to use tablet mode
+    if (role !== "staff" && role !== "manager" && role !== "superadmin") {
+      console.warn("[TvQueueVenueGate] role not allowed:", role, "→ redirect /staff");
       router.replace("/staff");
       return;
     }
@@ -45,13 +54,16 @@ export function TvQueueVenueGate({ children }: { children: (venueId: string) => 
         const me = await api.get<{ venues: { id: string }[] }>("/api/auth/staff-me");
         if (cancelled) return;
         const allowed = me.venues.some((v) => v.id === venueId);
+        console.log("[TvQueueVenueGate] staff-me venues:", me.venues.map((v) => v.id), "allowed:", allowed);
         if (!allowed) {
+          console.warn("[TvQueueVenueGate] venue not in staff list → redirect /staff");
           router.replace("/staff");
           return;
         }
         setGate("ready");
-      } catch {
+      } catch (err) {
         if (cancelled) return;
+        console.error("[TvQueueVenueGate] staff-me error → redirect /staff", err);
         router.replace("/staff");
       }
     })();

@@ -30,17 +30,23 @@ function parseDateParam(input: string | null): Date | null {
 }
 
 function collectSessionIds(
-  payments: Awaited<ReturnType<typeof fetchCourtPayPayments>>
+  payments: Awaited<ReturnType<typeof fetchCourtPayPayments>>,
+  sessionCandidates?: SessionCandidate[]
 ): Set<string> {
   const ids = new Set<string>();
   for (const p of payments) {
+    if (sessionCandidates) {
+      const resolved = resolvePaymentSession(p, sessionCandidates);
+      if (resolved) { ids.add(resolved.id); continue; }
+    }
     if (p.sessionId) ids.add(p.sessionId);
   }
   return ids;
 }
 
 function groupByMonth(
-  payments: Awaited<ReturnType<typeof fetchCourtPayPayments>>
+  payments: Awaited<ReturnType<typeof fetchCourtPayPayments>>,
+  sessionCandidates?: SessionCandidate[]
 ) {
   const buckets = new Map<
     string,
@@ -54,13 +60,18 @@ function groupByMonth(
     }
     const b = buckets.get(key)!;
     b.payments.push(p);
+    if (sessionCandidates) {
+      const resolved = resolvePaymentSession(p, sessionCandidates);
+      if (resolved) { b.sessionIds.add(resolved.id); continue; }
+    }
     if (p.sessionId) b.sessionIds.add(p.sessionId);
   }
   return buckets;
 }
 
 function groupByWeek(
-  payments: Awaited<ReturnType<typeof fetchCourtPayPayments>>
+  payments: Awaited<ReturnType<typeof fetchCourtPayPayments>>,
+  sessionCandidates?: SessionCandidate[]
 ) {
   const buckets = new Map<
     string,
@@ -85,6 +96,10 @@ function groupByWeek(
     }
     const b = buckets.get(key)!;
     b.payments.push(p);
+    if (sessionCandidates) {
+      const resolved = resolvePaymentSession(p, sessionCandidates);
+      if (resolved) { b.sessionIds.add(resolved.id); continue; }
+    }
     if (p.sessionId) b.sessionIds.add(p.sessionId);
   }
   return buckets;
@@ -304,7 +319,7 @@ export async function GET(req: Request) {
       const rawSessions = await prisma.session.findMany({
         where: {
           venueId,
-          status: "closed",
+          status: { in: ["closed", "open"] },
           openedAt: { gte: from, lte: to },
         },
         orderBy: { openedAt: "desc" },
@@ -436,8 +451,8 @@ export async function GET(req: Request) {
         })
       );
 
-      // Only include sessions that actually had revenue (exclude empty test/admin sessions)
-      const nonEmptySessions = sessionRows.filter((s) => s.totalRevenue > 0);
+      // Include any session that had at least one confirmed payment (even at 0 VND, e.g. free pass)
+      const nonEmptySessions = sessionRows.filter((s) => s.totalPayments > 0);
 
       return NextResponse.json({ level: "sessions-export", venue, sessions: nonEmptySessions });
     }
@@ -564,15 +579,26 @@ export async function GET(req: Request) {
         );
       }
 
-      const payments = await fetchCourtPayPayments({
-        venueId,
-        from: range.start,
-        to: range.end,
-      });
+      const [payments, sessionCandidates] = await Promise.all([
+        fetchCourtPayPayments({ venueId, from: range.start, to: range.end }),
+        prisma.session.findMany({
+          where: {
+            venueId,
+            openedAt: { lte: range.end },
+            OR: [{ closedAt: null }, { closedAt: { gte: range.start } }],
+          },
+          select: {
+            id: true, date: true, openedAt: true, closedAt: true,
+            status: true, type: true, title: true,
+            staff: { select: { name: true } },
+          },
+          orderBy: { openedAt: "asc" },
+        }),
+      ]);
 
       const rosterPlayerCount = await getVenueRosterPlayerCount(venueId);
 
-      const weekBuckets = groupByWeek(payments);
+      const weekBuckets = groupByWeek(payments, sessionCandidates);
       const weeks = [...weekBuckets.entries()]
         .map(([, b]) => {
           const kpis = computeKpis(b.payments, b.sessionIds, rosterPlayerCount);
@@ -588,7 +614,7 @@ export async function GET(req: Request) {
             new Date(b.weekStart).getTime() - new Date(a.weekStart).getTime()
         );
 
-      const kpis = computeKpis(payments, collectSessionIds(payments), rosterPlayerCount);
+      const kpis = computeKpis(payments, collectSessionIds(payments, sessionCandidates), rosterPlayerCount);
 
       return NextResponse.json({
         level: "month",
@@ -607,9 +633,24 @@ export async function GET(req: Request) {
     from.setDate(1);
     from.setHours(0, 0, 0, 0);
 
-    const payments = await fetchCourtPayPayments({ venueId, from, to });
+    const [payments, sessionCandidates] = await Promise.all([
+      fetchCourtPayPayments({ venueId, from, to }),
+      prisma.session.findMany({
+        where: {
+          venueId,
+          openedAt: { lte: to },
+          OR: [{ closedAt: null }, { closedAt: { gte: from } }],
+        },
+        select: {
+          id: true, date: true, openedAt: true, closedAt: true,
+          status: true, type: true, title: true,
+          staff: { select: { name: true } },
+        },
+        orderBy: { openedAt: "asc" },
+      }),
+    ]);
     const rosterPlayerCount = await getVenueRosterPlayerCount(venueId);
-    const monthBuckets = groupByMonth(payments);
+    const monthBuckets = groupByMonth(payments, sessionCandidates);
     const months = [...monthBuckets.entries()]
       .map(([key, b]) => {
         const kpis = computeKpis(b.payments, b.sessionIds, rosterPlayerCount);
@@ -622,7 +663,7 @@ export async function GET(req: Request) {
       })
       .sort((a, b) => b.month.localeCompare(a.month));
 
-    const kpis = computeKpis(payments, collectSessionIds(payments), rosterPlayerCount);
+    const kpis = computeKpis(payments, collectSessionIds(payments, sessionCandidates), rosterPlayerCount);
 
     return NextResponse.json({
       level: "venue",

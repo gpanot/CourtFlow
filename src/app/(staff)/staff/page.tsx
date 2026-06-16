@@ -30,6 +30,7 @@ import {
   type ThemeMode,
 } from "@/lib/theme-mode";
 import { APP_VERSION_CODE, APP_BUILD_DATE } from "@/lib/app-version";
+import { useHasHydrated } from "@/stores/session-store";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,7 @@ function venueHasCourtFlowAccess(v: StaffVenue): boolean {
 export default function StaffPage() {
   const { t } = useTranslation();
   const { token, staffId, staffName, venueId, role, onboardingCompleted, setAuth, clearAuth } = useSessionStore();
+  const hydrated = useHasHydrated();
   const setStaffClientId = useSetStaffClientId();
   const { isAndroid, installed, canPrompt, promptInstall } = usePwaInstall();
   const [phone, setPhone] = useState("");
@@ -87,7 +89,11 @@ export default function StaffPage() {
   const [pendingVenues, setPendingVenues] = useState<StaffVenue[] | null>(null);
   const [pendingTabletVenues, setPendingTabletVenues] = useState<StaffVenue[] | null>(null);
   const [pendingAppPickVenue, setPendingAppPickVenue] = useState<StaffVenue | null>(null);
-  const [showRoleChoice, setShowRoleChoice] = useState(false);
+  const [showRoleChoice, setShowRoleChoice] = useState(() => {
+    // Initialize synchronously so authenticated users never see a login-form flash.
+    const s = useSessionStore.getState();
+    return !!(s.token && s.staffId && !s.venueId);
+  });
   const [showOtherApps, setShowOtherApps] = useState(false);
   const [showStickerKiosk, setShowStickerKiosk] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
@@ -336,6 +342,7 @@ export default function StaffPage() {
     (id: string) => {
       setShowRoleChoice(false);
       setPersistedTabletVenueId(id);
+      router.prefetch(`/tv-queue/${id}`);
       router.push(`/tv-queue/${id}`);
     },
     [router]
@@ -361,6 +368,14 @@ export default function StaffPage() {
     setPendingTabletVenues(withCp);
     setShowRoleChoice(false);
   }, [loginVenues, venueId, staffMeStatus, navigateToTablet]);
+
+  if (!hydrated) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-neutral-950">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-700 border-t-neutral-400" />
+      </div>
+    );
+  }
 
   if (token && staffId && venueId && !showRoleChoice && !showOtherApps) {
     if (pendingAppPickVenue) {
@@ -538,7 +553,9 @@ export default function StaffPage() {
                     freshLoginChoiceRef.current = false;
                     setShowRoleChoice(false);
                     setShowOtherApps(false);
-                    router.replace(onboardingCompleted ? "/admin" : "/onboarding");
+                    const dest = onboardingCompleted ? "/admin" : "/onboarding";
+                    router.prefetch(dest);
+                    router.replace(dest);
                   }}
                   className="group flex w-full items-center gap-4 rounded-2xl border border-purple-500/20 bg-purple-500/5 p-4 text-left transition-all hover:border-purple-500/40 hover:bg-purple-500/10"
                 >
@@ -734,6 +751,7 @@ export default function StaffPage() {
 
       if (data.staff.role === "superadmin" || data.staff.role === "manager") {
         if (!data.staff.onboardingCompleted) {
+          router.prefetch("/onboarding");
           router.replace("/onboarding");
           return;
         }

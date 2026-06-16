@@ -8,7 +8,10 @@
 export async function acquireBrowserCameraStream(
   facingMode: "user" | "environment"
 ): Promise<MediaStream> {
-  if (!navigator.mediaDevices?.getUserMedia) {
+  const hasMediaDevices = !!navigator.mediaDevices?.getUserMedia;
+  console.log("[browser-camera] acquireStream — facingMode:", facingMode, "| isSecureContext:", window.isSecureContext, "| protocol:", window.location.protocol, "| hostname:", window.location.hostname, "| hasMediaDevices:", hasMediaDevices);
+  if (!hasMediaDevices) {
+    console.error("[browser-camera] navigator.mediaDevices.getUserMedia is not available — likely non-HTTPS and not localhost");
     throw new Error("Camera API not available in this browser.");
   }
   const g = (c: MediaStreamConstraints) => navigator.mediaDevices.getUserMedia(c);
@@ -23,10 +26,12 @@ export async function acquireBrowserCameraStream(
       },
       audio: false,
     });
-  } catch {
+  } catch (err1) {
+    console.warn("[browser-camera] ideal constraints failed:", err1, "— retrying with basic facingMode");
     try {
       return await g({ video: { facingMode }, audio: false });
-    } catch {
+    } catch (err2) {
+      console.warn("[browser-camera] basic facingMode failed:", err2, "— retrying with video:true");
       return await g({ video: true, audio: false });
     }
   }

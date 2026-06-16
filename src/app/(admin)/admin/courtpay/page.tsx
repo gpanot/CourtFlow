@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { useTranslation } from "react-i18next";
@@ -93,8 +94,12 @@ const paymentStatusColors: Record<string, string> = {
 
 export default function AdminCourtPayPage() {
   const { t } = useTranslation("translation", { i18n: adminI18n });
+  const searchParams = useSearchParams();
   const { venueId: selectedVenueId, setVenueId: setSelectedVenueId, venues } = useAdminVenuePicker();
-  const [tab, setTab] = useState<Tab>("packages");
+  const [tab, setTab] = useState<Tab>(() => {
+    const p = searchParams.get("tab");
+    return (p === "subscribers" || p === "payments") ? p : "packages";
+  });
   const [overview, setOverview] = useState<Overview | null>(null);
   const [packages, setPackages] = useState<PackageData[]>([]);
   const [subscribers, setSubscribers] = useState<SubscriberData[]>([]);
@@ -105,7 +110,7 @@ export default function AdminCourtPayPage() {
     pendingCount: number;
   } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => searchParams.get("search") ?? "");
   const [showForm, setShowForm] = useState(false);
   const [editingPkg, setEditingPkg] = useState<PackageData | null>(null);
 

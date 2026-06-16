@@ -25,6 +25,7 @@ export default function TvQueuePage() {
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
 
   useEffect(() => {
+    console.log("[TvQueuePage] mounted — url:", window.location.href, "| protocol:", window.location.protocol, "| isSecureContext:", window.isSecureContext);
     try {
       const stored = localStorage.getItem(TV_TABLET_LOCALE_STORAGE_KEY);
       void tvI18n.changeLanguage(resolveTvLocale(stored));

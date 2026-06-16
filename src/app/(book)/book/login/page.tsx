@@ -4,8 +4,9 @@ export const dynamic = "force-dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, Suspense } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { useTranslation } from "react-i18next";
-import { setPlayerToken, getPlayerFromToken } from "@/lib/player-token";
+import { getPlayerFromToken } from "@/lib/player-token";
 import { useTheme } from "../components/ThemeProvider";
 import { BookLanguageMenu } from "../components/BookLanguageMenu";
 
@@ -16,17 +17,8 @@ function LoginContent() {
   const { resolved } = useTheme();
   const callbackUrl = searchParams.get("callbackUrl") || "/book";
 
-  const [tab, setTab] = useState<"signin" | "signup">("signup");
-  const [loading, setLoading] = useState<string | null>(null);
+  const [loading, setLoading] = useState<"google" | "apple" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-
-  const [siEmail, setSiEmail] = useState("");
-  const [siPassword, setSiPassword] = useState("");
-
-  const [suName, setSuName] = useState("");
-  const [suEmail, setSuEmail] = useState("");
-  const [suPassword, setSuPassword] = useState("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -35,99 +27,34 @@ function LoginContent() {
     if (!localStorage.getItem("intro_seen")) {
       router.replace("/book/intro");
     }
-    // Surface any OAuth error passed as a query param
     const oauthError = searchParams.get("error");
     if (oauthError) setError(oauthError);
   }, [router, callbackUrl, searchParams]);
 
-  function switchTab(nextTab: "signin" | "signup") {
-    setTab(nextTab);
-    setError(null);
-    setSuccess(null);
-  }
-
   function handleOAuth(provider: "google" | "apple") {
     setLoading(provider);
-    // Navigate to the raw OAuth initiation route — sets a state cookie and
-    // redirects straight to the provider. No next-auth involved.
     window.location.href = `/api/auth/oauth/${provider}`;
   }
 
-  async function handleEmailSignIn() {
-    if (!siEmail || !siPassword) { setError(t("login.errors.emailPasswordRequired")); return; }
-    setLoading("email-signin");
-    setError(null);
-    try {
-      const res = await fetch("/api/public/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: siEmail, password: siPassword }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || t("login.errors.invalidCredentials"));
-      } else {
-        setPlayerToken(data.token);
-        router.replace(data.onboardingComplete ? callbackUrl : "/book/onboarding");
-      }
-    } catch {
-      setError(t("login.errors.signInFailed"));
-    }
-    setLoading(null);
-  }
-
-  async function handleSignUp() {
-    setError(null);
-    if (!suName || !suEmail || !suPassword) {
-      setError(t("login.errors.fillAllFields")); return;
-    }
-    if (suPassword.length < 8) {
-      setError(t("login.errors.passwordTooShort")); return;
-    }
-    setLoading("signup");
-    try {
-      const res = await fetch("/api/public/auth/signup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: suName, email: suEmail, password: suPassword }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error || t("login.errors.signUpFailed")); setLoading(null); return; }
-
-      const loginRes = await fetch("/api/public/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: suEmail, password: suPassword }),
-      });
-      const loginData = await loginRes.json();
-      if (!loginRes.ok) {
-        setSuccess(t("login.accountCreated"));
-        setTab("signin");
-        setSiEmail(suEmail);
-      } else {
-        setPlayerToken(loginData.token);
-        router.replace("/book/onboarding");
-      }
-    } catch {
-      setError(t("login.errors.signUpFailedRetry"));
-    }
-    setLoading(null);
-  }
-
-  const inputCls = "w-full px-4 py-3 bg-[var(--cm-bg-input)] border border-[var(--cm-border)] rounded-xl text-sm outline-none focus:border-[var(--cm-accent)] transition-colors text-[var(--cm-text)]";
+  // Build the email page URL preserving callbackUrl
+  const emailHref = callbackUrl !== "/book"
+    ? `/book/login/email?callbackUrl=${encodeURIComponent(callbackUrl)}`
+    : "/book/login/email";
 
   return (
     <div className="flex flex-col min-h-dvh bg-[var(--cm-bg)]">
+      {/* Language picker */}
       <div className="pointer-events-none fixed inset-x-0 top-[calc(0.75rem+env(safe-area-inset-top))] z-20 flex justify-end px-4">
         <div className="pointer-events-auto flex w-full max-w-lg justify-end">
           <BookLanguageMenu large />
         </div>
       </div>
 
-      <div className="relative flex-shrink-0 px-6 pt-[calc(2.5rem+env(safe-area-inset-top))] pb-0 bg-[var(--cm-bg)]">
-        <div className="flex flex-col items-center">
+      <div className="flex flex-1 flex-col items-center justify-center px-6 pt-[calc(3rem+env(safe-area-inset-top))] pb-[calc(2rem+env(safe-area-inset-bottom))]">
+        {/* Logo + heading */}
+        <div className="flex flex-col items-center mb-10">
           <div
-            className={`w-20 h-20 rounded-2xl overflow-hidden mb-4 ${
+            className={`w-20 h-20 rounded-2xl overflow-hidden mb-5 ${
               resolved === "light"
                 ? "bg-white border border-[var(--cm-border)] shadow-sm"
                 : ""
@@ -135,109 +62,61 @@ function LoginContent() {
           >
             <Image src="/images/splash-icon.png" alt="CourtFlow" width={80} height={80} priority />
           </div>
-          <h1 className="text-xl font-bold mb-1">{t("login.welcome")}</h1>
-          <p className="text-sm text-[var(--cm-text-sec)] mb-6 text-center">
-            {t("login.subtitle")}
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight mb-1">{t("login.welcome")}</h1>
+          <p className="text-sm text-[var(--cm-text-sec)] text-center">{t("login.subtitle")}</p>
         </div>
 
-        <div className="flex w-full bg-[var(--cm-bg-surface)] border border-[var(--cm-border)] rounded-xl p-1 mb-0 gap-1">
-          <button
-            onClick={() => switchTab("signup")}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-              tab === "signup" ? "bg-[var(--cm-accent)] text-black" : "text-[var(--cm-text-sec)]"
-            }`}
-          >
-            {t("login.signUp")}
-          </button>
-          <button
-            onClick={() => switchTab("signin")}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
-              tab === "signin" ? "bg-[var(--cm-accent)] text-black" : "text-[var(--cm-text-sec)]"
-            }`}
-          >
-            {t("login.signIn")}
-          </button>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto px-6 pt-5 pb-8">
+        {/* Error banner */}
         {error && (
-          <div className="w-full mb-4 p-3 bg-[var(--cm-red)]/10 text-[var(--cm-red)] text-sm rounded-xl text-center">
+          <div className="w-full max-w-sm mb-5 p-3 bg-[var(--cm-red)]/10 text-[var(--cm-red)] text-sm rounded-xl text-center">
             {error}
           </div>
         )}
-        {success && (
-          <div className="w-full mb-4 p-3 bg-[var(--cm-green)]/10 text-[var(--cm-green)] text-sm rounded-xl text-center">
-            {success}
+
+        {/* OAuth buttons */}
+        <div className="w-full max-w-sm space-y-3">
+          <button
+            onClick={() => handleOAuth("apple")}
+            disabled={!!loading}
+            className="w-full flex items-center justify-center gap-3 px-4 py-3.5 bg-black text-white rounded-2xl text-sm font-semibold hover:bg-neutral-800 transition-colors disabled:opacity-60"
+          >
+            {loading === "apple" ? <Spinner /> : <AppleIcon />}
+            {t("login.continueApple")}
+          </button>
+
+          <button
+            onClick={() => handleOAuth("google")}
+            disabled={!!loading}
+            className="w-full flex items-center justify-center gap-3 px-4 py-3.5 bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-2xl text-sm font-semibold hover:opacity-80 transition-opacity disabled:opacity-60"
+          >
+            {loading === "google" ? <Spinner /> : <GoogleIcon />}
+            {t("login.continueGoogle")}
+          </button>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 py-1">
+            <div className="flex-1 h-px bg-[var(--cm-border)]" />
+            <span className="text-xs text-[var(--cm-text-muted)]">or</span>
+            <div className="flex-1 h-px bg-[var(--cm-border)]" />
           </div>
-        )}
 
-        {tab === "signin" ? (
-          <>
-            <div className="w-full space-y-3 mb-4">
-              <input type="email" placeholder={t("login.email")} value={siEmail} onChange={(e) => setSiEmail(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleEmailSignIn()} className={inputCls} />
-              <input type="password" placeholder={t("login.password")} value={siPassword} onChange={(e) => setSiPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleEmailSignIn()} className={inputCls} />
-            </div>
+          {/* Email option */}
+          <Link
+            href={emailHref}
+            className="w-full flex items-center justify-center py-2 text-sm font-medium text-[var(--cm-accent)] hover:opacity-80 transition-opacity"
+          >
+            {t("login.useEmailInstead")}
+          </Link>
+        </div>
 
-            <button onClick={handleEmailSignIn} disabled={!!loading} className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl text-sm font-medium mb-4 disabled:opacity-40 transition-opacity">
-              {loading === "email-signin" ? <Spinner /> : t("login.signIn")}
-            </button>
-
-            <Divider label={t("common.or")} />
-
-            <button onClick={() => handleOAuth("google")} disabled={!!loading} className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl text-sm font-medium hover:opacity-80 transition-opacity disabled:opacity-60 mb-3">
-              {loading === "google" ? <Spinner /> : <GoogleIcon />}
-              {t("login.continueGoogle")}
-            </button>
-
-            <button onClick={() => handleOAuth("apple")} disabled={!!loading} className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-black text-white rounded-xl text-sm font-medium hover:bg-neutral-800 transition-colors disabled:opacity-60">
-              {loading === "apple" ? <Spinner /> : <AppleIcon />}
-              {t("login.continueApple")}
-            </button>
-          </>
-        ) : (
-          <>
-            <div className="w-full space-y-3 mb-4">
-              <input type="text" placeholder={t("login.fullName")} value={suName} onChange={(e) => setSuName(e.target.value)} className={inputCls} />
-              <input type="email" placeholder={t("login.email")} value={suEmail} onChange={(e) => setSuEmail(e.target.value)} className={inputCls} />
-              <input type="password" placeholder={t("login.passwordMin")} value={suPassword} onChange={(e) => setSuPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void handleSignUp()} className={inputCls} />
-            </div>
-
-            <button onClick={handleSignUp} disabled={!!loading} className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl text-sm font-medium mb-4 disabled:opacity-40 transition-opacity">
-              {loading === "signup" ? <Spinner /> : t("login.createAccount")}
-            </button>
-
-            <Divider label={t("common.or")} />
-
-            <button onClick={() => handleOAuth("google")} disabled={!!loading} className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl text-sm font-medium hover:opacity-80 transition-opacity disabled:opacity-60 mb-3">
-              {loading === "google" ? <Spinner /> : <GoogleIcon />}
-              {t("login.signUpGoogle")}
-            </button>
-
-            <button onClick={() => handleOAuth("apple")} disabled={!!loading} className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-black text-white rounded-xl text-sm font-medium hover:bg-neutral-800 transition-colors disabled:opacity-60">
-              {loading === "apple" ? <Spinner /> : <AppleIcon />}
-              {t("login.signUpApple")}
-            </button>
-          </>
-        )}
-
-        <p className="text-xs text-[var(--cm-text-muted)] mt-6 text-center">
+        {/* Terms */}
+        <p className="text-xs text-[var(--cm-text-muted)] mt-8 text-center max-w-xs">
           {t("login.termsPrefix")}{" "}
-          <span className="underline">{t("login.termsOfService")}</span> {t("login.and")}{" "}
+          <span className="underline">{t("login.termsOfService")}</span>{" "}
+          {t("login.and")}{" "}
           <span className="underline">{t("login.privacyPolicy")}</span>
         </p>
       </div>
-    </div>
-  );
-}
-
-function Divider({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-3 w-full mb-4">
-      <div className="flex-1 h-px bg-[var(--cm-border)]" />
-      <span className="text-xs text-[var(--cm-text-muted)]">{label}</span>
-      <div className="flex-1 h-px bg-[var(--cm-border)]" />
     </div>
   );
 }
