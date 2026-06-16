@@ -13,9 +13,14 @@ export async function PUT(
     const body = await req.json();
 
     const billingModel = body.billingModel;
-    if (billingModel !== undefined && billingModel !== "per_payment" && billingModel !== "monthly") {
+    if (
+      billingModel !== undefined &&
+      billingModel !== "per_payment" &&
+      billingModel !== "monthly" &&
+      billingModel !== "manual"
+    ) {
       return NextResponse.json(
-        { error: "billingModel must be 'per_payment' or 'monthly'" },
+        { error: "billingModel must be 'per_payment', 'monthly', or 'manual'" },
         { status: 400 }
       );
     }

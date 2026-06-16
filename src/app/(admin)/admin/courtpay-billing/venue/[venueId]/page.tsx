@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback, type Dispatch, type SetStateAction } from "react";
+import React, { useEffect, useState, useCallback, useRef, type Dispatch, type SetStateAction } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
@@ -20,6 +20,11 @@ import {
   ChevronDown,
   ChevronRight,
   Smartphone,
+  Plus,
+  FileText,
+  Upload,
+  X,
+  ExternalLink,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -31,11 +36,25 @@ interface RatesData {
   isFreeBase: boolean;
   isFreeSubAddon: boolean;
   isFreeSepayAddon: boolean;
-  billingModel: "per_payment" | "monthly";
+  billingModel: "per_payment" | "monthly" | "manual";
   monthlyRate: number;
   monthlyPeriodStart: string | null;
   monthlyEndDate: string | null;
   monthlyStatus: string;
+}
+
+interface ManualInvoice {
+  id: string;
+  venueId: string;
+  amount: number;
+  dueDate: string;
+  status: "pending" | "paid" | "overdue";
+  pdfUrl: string | null;
+  paidAt: string | null;
+  paidMethod: string | null;
+  paidRef: string | null;
+  notes: string | null;
+  createdAt: string;
 }
 
 interface InvoiceRow {
@@ -315,7 +334,7 @@ function BillingWeekSessionBuckets({
   );
 }
 
-type TabId = "rates" | "weeks" | "paid";
+type TabId = "rates" | "weeks" | "paid" | "invoices";
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -354,7 +373,38 @@ export default function VenueBillingDetailPage() {
   const [editingSubAmount, setEditingSubAmount] = useState(false);
   const [newSubAmount, setNewSubAmount] = useState(0);
 
+  // Manual invoices
+  const [manualInvoices, setManualInvoices] = useState<ManualInvoice[]>([]);
+  const [manualLoading, setManualLoading] = useState(false);
+  const [newInvoiceDrawer, setNewInvoiceDrawer] = useState(false);
+  const [newInvAmount, setNewInvAmount] = useState(0);
+  const [newInvDueDate, setNewInvDueDate] = useState("");
+  const [newInvNotes, setNewInvNotes] = useState("");
+  const [newInvPdfUrl, setNewInvPdfUrl] = useState("");
+  const [newInvPdfUploading, setNewInvPdfUploading] = useState(false);
+  const [newInvSaving, setNewInvSaving] = useState(false);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+
+  // Mark-paid for manual invoices
+  const [manualPayModal, setManualPayModal] = useState<ManualInvoice | null>(null);
+  const [manualPayMethod, setManualPayMethod] = useState("manual");
+  const [manualPayRef, setManualPayRef] = useState("");
+  const [manualPayNotes, setManualPayNotes] = useState("");
+  const [manualMarkingPaid, setManualMarkingPaid] = useState<string | null>(null);
+  const [manualMarkingUnpaid, setManualMarkingUnpaid] = useState<string | null>(null);
+
   // ── Fetch ─────────────────────────────────────────────────────────────────
+  const fetchManualInvoices = useCallback(async () => {
+    setManualLoading(true);
+    try {
+      const data = await api.get<ManualInvoice[]>(`/api/admin/billing/venue/${venueId}/manual-invoices`);
+      setManualInvoices(data);
+    } catch (e) {
+      console.error(e);
+    }
+    setManualLoading(false);
+  }, [venueId]);
+
   const fetchDetail = useCallback(async () => {
     setLoading(true);
     try {
@@ -364,26 +414,26 @@ export default function VenueBillingDetailPage() {
       ]);
       setDetail(d);
       setConfig(c);
-      setRatesForm(
-        d.rates ?? {
+      const rates = d.rates ?? {
           baseRatePerCheckin: c.defaultBaseRate ?? 5000,
           subscriptionAddon: c.defaultSubAddon ?? 1000,
           sepayAddon: c.defaultSepayAddon ?? 1000,
           isFreeBase: false,
           isFreeSubAddon: false,
           isFreeSepayAddon: false,
-          billingModel: "per_payment",
+          billingModel: "per_payment" as const,
           monthlyRate: 0,
           monthlyPeriodStart: null,
           monthlyEndDate: null,
           monthlyStatus: "inactive",
-        }
-      );
+        };
+        setRatesForm(rates);
+        void fetchManualInvoices();
     } catch (e) {
       console.error(e);
     }
     setLoading(false);
-  }, [venueId]);
+  }, [venueId, fetchManualInvoices]);
 
   useEffect(() => {
     void fetchDetail();
@@ -548,6 +598,85 @@ export default function VenueBillingDetailPage() {
     setMarkingUnpaid(null);
   };
 
+  // ── Manual invoice actions ──────────────────────────────────────────────
+
+  const uploadPdf = async (file: File) => {
+    setNewInvPdfUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const result = await api.upload<{ url: string }>(
+        `/api/admin/billing/venue/${venueId}/manual-invoices/upload-pdf`,
+        fd
+      );
+      if (result.url) setNewInvPdfUrl(result.url);
+    } catch (e) {
+      console.error(e);
+    }
+    setNewInvPdfUploading(false);
+  };
+
+  const createManualInvoice = async () => {
+    if (!newInvAmount || newInvAmount <= 0 || !newInvDueDate) return;
+    setNewInvSaving(true);
+    try {
+      await api.post(`/api/admin/billing/venue/${venueId}/manual-invoices`, {
+        amount: newInvAmount,
+        dueDate: newInvDueDate,
+        notes: newInvNotes.trim() || undefined,
+        pdfUrl: newInvPdfUrl.trim() || undefined,
+      });
+      setNewInvoiceDrawer(false);
+      setNewInvAmount(0);
+      setNewInvDueDate("");
+      setNewInvNotes("");
+      setNewInvPdfUrl("");
+      await fetchManualInvoices();
+    } catch (e) {
+      console.error(e);
+    }
+    setNewInvSaving(false);
+  };
+
+  const openManualPayModal = (inv: ManualInvoice) => {
+    setManualPayModal(inv);
+    setManualPayMethod("manual");
+    setManualPayRef("");
+    setManualPayNotes(inv.notes ?? "");
+  };
+
+  const submitManualMarkPaid = async () => {
+    if (!manualPayModal) return;
+    setManualMarkingPaid(manualPayModal.id);
+    try {
+      await api.patch(`/api/admin/billing/venue/${venueId}/manual-invoices/${manualPayModal.id}`, {
+        action: "mark-paid",
+        paidMethod: manualPayMethod,
+        paidRef: manualPayRef.trim() || undefined,
+        notes: manualPayNotes.trim() || undefined,
+      });
+      setManualPayModal(null);
+      await fetchManualInvoices();
+    } catch (e) {
+      console.error(e);
+    }
+    setManualMarkingPaid(null);
+  };
+
+  const manualMarkUnpaid = async (invoiceId: string) => {
+    if (!confirm("Revert this invoice to unpaid?")) return;
+    setManualMarkingUnpaid(invoiceId);
+    try {
+      await api.patch(`/api/admin/billing/venue/${venueId}/manual-invoices/${invoiceId}`, {
+        action: "mark-unpaid",
+      });
+      await fetchManualInvoices();
+    } catch (e) {
+      console.error(e);
+    }
+    setManualMarkingUnpaid(null);
+  };
+
   // ─────────────────────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -588,6 +717,11 @@ export default function VenueBillingDetailPage() {
   const totalPaid = paidInvoices.reduce((s, i) => s + i.totalAmount, 0);
   const totalOutstanding = pendingInvoices.reduce((s, i) => s + i.totalAmount, 0);
 
+  const manualPending = manualInvoices.filter((i) => i.status === "pending" || i.status === "overdue");
+  const manualPaid = manualInvoices.filter((i) => i.status === "paid");
+  const manualTotalPaid = manualPaid.reduce((s, i) => s + i.amount, 0);
+  const manualTotalOutstanding = manualPending.reduce((s, i) => s + i.amount, 0);
+
   return (
     <div className="max-w-4xl mx-auto">
       {/* Back button + title */}
@@ -613,18 +747,18 @@ export default function VenueBillingDetailPage() {
         </span>
       </div>
 
-      {/* Summary strip */}
+      {/* Summary strip — combines auto-generated + manual invoices */}
       <div className="grid grid-cols-3 gap-3 mb-6">
         <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
           <p className="text-xs text-neutral-500 mb-1">Total invoiced</p>
           <p className="text-xl font-bold text-purple-400">
-            {formatVND(totalPaid + totalOutstanding)} VND
+            {formatVND(totalPaid + totalOutstanding + manualTotalPaid + manualTotalOutstanding)} VND
           </p>
         </div>
         <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
           <p className="text-xs text-neutral-500 mb-1">Paid</p>
           <p className="text-xl font-bold text-green-400">
-            {formatVND(totalPaid)} VND
+            {formatVND(totalPaid + manualTotalPaid)} VND
           </p>
         </div>
         <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
@@ -632,10 +766,10 @@ export default function VenueBillingDetailPage() {
           <p
             className={cn(
               "text-xl font-bold",
-              totalOutstanding > 0 ? "text-amber-400" : "text-neutral-400"
+              (totalOutstanding + manualTotalOutstanding) > 0 ? "text-amber-400" : "text-neutral-400"
             )}
           >
-            {formatVND(totalOutstanding)} VND
+            {formatVND(totalOutstanding + manualTotalOutstanding)} VND
           </p>
         </div>
       </div>
@@ -652,6 +786,7 @@ export default function VenueBillingDetailPage() {
                 : `Weeks (${weekRows.length})`,
             },
             { id: "paid" as const, label: `Paid (${paidInvoices.length})` },
+            { id: "invoices" as const, label: `Manual (${manualInvoices.length})` },
           ] as const
         ).map(({ id, label }) => (
           <button
@@ -691,6 +826,7 @@ export default function VenueBillingDetailPage() {
                 [
                   { value: "per_payment" as const, label: "Per payment", desc: "Weekly invoice based on CourtPay transactions" },
                   { value: "monthly" as const, label: "Monthly flat rate", desc: "Single monthly invoice at a fixed price" },
+                  { value: "manual" as const, label: "Manual", desc: "Manually create invoices — no automatic billing" },
                 ] as const
               ).map(({ value, label, desc }) => (
                 <label
@@ -1456,6 +1592,335 @@ export default function VenueBillingDetailPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Invoices tab (manual billing model) ──────────────────────── */}
+      {tab === "invoices" && (
+        <div className="space-y-4">
+          {/* Header row */}
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-neutral-400">
+              Manual invoices — created regardless of billing model.
+            </p>
+            <button
+              onClick={() => setNewInvoiceDrawer(true)}
+              className="flex items-center gap-2 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500"
+            >
+              <Plus className="h-4 w-4" />
+              New Invoice
+            </button>
+          </div>
+
+          {manualLoading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-neutral-600" />
+            </div>
+          ) : manualInvoices.length === 0 ? (
+            <div className="rounded-xl border border-neutral-800 bg-neutral-900 py-12 text-center">
+              <FileText className="h-8 w-8 text-neutral-700 mx-auto mb-3" />
+              <p className="text-sm text-neutral-500">No invoices yet.</p>
+              <p className="text-xs text-neutral-600 mt-1">Click &ldquo;New Invoice&rdquo; to create one.</p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-neutral-800 bg-neutral-900 overflow-hidden">
+              <div className="divide-y divide-neutral-800">
+                {manualInvoices.map((inv) => {
+                  const isPaid = inv.status === "paid";
+                  const isOverdue = inv.status === "overdue";
+                  return (
+                    <div key={inv.id} className="px-5 py-3.5 flex items-center justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-semibold">{formatVND(inv.amount)} VND</p>
+                          <span
+                            className={cn(
+                              "text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5",
+                              isPaid
+                                ? "bg-green-900/30 text-green-400"
+                                : isOverdue
+                                ? "bg-amber-900/30 text-amber-400"
+                                : "bg-yellow-900/20 text-yellow-400"
+                            )}
+                          >
+                            {isPaid ? "Paid" : isOverdue ? "Overdue" : "Pending"}
+                          </span>
+                          {inv.pdfUrl && (
+                            <a
+                              href={inv.pdfUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-1 text-[10px] text-purple-400 hover:text-purple-300"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                              PDF
+                            </a>
+                          )}
+                        </div>
+                        <p className="text-xs text-neutral-500 mt-0.5">
+                          Due {fmtDate(inv.dueDate)}
+                          {isPaid && inv.paidAt && (
+                            <span className="text-green-400 ml-2">
+                              · Paid {fmtDate(inv.paidAt)}
+                              {inv.paidMethod && ` (${inv.paidMethod})`}
+                              {inv.paidRef && ` — ref: ${inv.paidRef}`}
+                            </span>
+                          )}
+                        </p>
+                        {inv.notes && (
+                          <p className="text-xs text-neutral-600 mt-0.5 italic">&ldquo;{inv.notes}&rdquo;</p>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {isPaid ? (
+                          <button
+                            onClick={() => void manualMarkUnpaid(inv.id)}
+                            disabled={manualMarkingUnpaid === inv.id}
+                            className="text-[10px] text-neutral-500 hover:text-red-400 underline"
+                          >
+                            {manualMarkingUnpaid === inv.id ? "…" : "undo"}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => openManualPayModal(inv)}
+                            disabled={manualMarkingPaid === inv.id}
+                            className={cn(
+                              "text-xs px-3 py-1.5 rounded-lg font-medium",
+                              isOverdue
+                                ? "bg-amber-900/30 text-amber-400 hover:bg-amber-900/50"
+                                : "bg-yellow-900/20 text-yellow-400 hover:bg-yellow-900/40"
+                            )}
+                          >
+                            {manualMarkingPaid === inv.id ? (
+                              <Loader2 className="h-3 w-3 animate-spin inline" />
+                            ) : (
+                              "Mark paid"
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── New Invoice Drawer ─────────────────────────────────────── */}
+      {newInvoiceDrawer && (
+        <div
+          className="fixed inset-0 z-50 flex justify-end bg-black/50"
+          onClick={() => setNewInvoiceDrawer(false)}
+        >
+          <div
+            className="h-full w-full max-w-md bg-neutral-900 border-l border-neutral-800 overflow-y-auto p-6 space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold">New Invoice</h3>
+              <button
+                onClick={() => setNewInvoiceDrawer(false)}
+                className="rounded-lg p-1.5 hover:bg-neutral-800 text-neutral-500 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Amount */}
+            <div className="space-y-1">
+              <label className="text-xs text-neutral-500 block font-medium">Amount (VND) *</label>
+              <AmountInput
+                value={newInvAmount}
+                onChange={setNewInvAmount}
+                placeholder="e.g. 1,000,000"
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white"
+              />
+            </div>
+
+            {/* Due date */}
+            <div className="space-y-1">
+              <label className="text-xs text-neutral-500 block font-medium">Due date *</label>
+              <input
+                type="date"
+                value={newInvDueDate}
+                onChange={(e) => setNewInvDueDate(e.target.value)}
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white"
+              />
+            </div>
+
+            {/* Notes */}
+            <div className="space-y-1">
+              <label className="text-xs text-neutral-500 block font-medium">Notes (optional)</label>
+              <textarea
+                value={newInvNotes}
+                onChange={(e) => setNewInvNotes(e.target.value)}
+                rows={3}
+                placeholder="e.g. Q2 CourtFlow fee"
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white resize-none"
+              />
+            </div>
+
+            {/* PDF upload */}
+            <div className="space-y-2">
+              <label className="text-xs text-neutral-500 block font-medium">Invoice PDF (optional)</label>
+              {newInvPdfUrl ? (
+                <div className="flex items-center gap-3 rounded-lg border border-neutral-700 bg-neutral-800/60 px-3 py-2">
+                  <FileText className="h-4 w-4 text-purple-400 shrink-0" />
+                  <a
+                    href={newInvPdfUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-purple-400 hover:text-purple-300 truncate flex-1"
+                  >
+                    {newInvPdfUrl.split("/").pop()}
+                  </a>
+                  <button
+                    onClick={() => setNewInvPdfUrl("")}
+                    className="text-neutral-500 hover:text-red-400"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => pdfInputRef.current?.click()}
+                  disabled={newInvPdfUploading}
+                  className="flex items-center gap-2 w-full rounded-lg border border-dashed border-neutral-700 bg-neutral-800/40 px-4 py-3 text-sm text-neutral-500 hover:border-neutral-500 hover:text-neutral-300 disabled:opacity-50"
+                >
+                  {newInvPdfUploading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Upload className="h-4 w-4" />
+                  )}
+                  {newInvPdfUploading ? "Uploading…" : "Upload PDF or image"}
+                </button>
+              )}
+              <input
+                ref={pdfInputRef}
+                type="file"
+                accept="application/pdf,image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void uploadPdf(file);
+                  e.target.value = "";
+                }}
+              />
+            </div>
+
+            {/* Footer */}
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setNewInvoiceDrawer(false)}
+                className="flex-1 rounded-lg border border-neutral-700 py-2.5 text-sm text-neutral-400 hover:text-white hover:border-neutral-600"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void createManualInvoice()}
+                disabled={newInvSaving || !newInvAmount || !newInvDueDate}
+                className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-purple-600 py-2.5 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-50"
+              >
+                {newInvSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4" />
+                )}
+                Create invoice
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Manual Mark-paid modal ─────────────────────────────────── */}
+      {manualPayModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+          onClick={() => setManualPayModal(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold">Mark invoice as paid</h3>
+            <p className="text-sm text-neutral-400">
+              Invoice: <span className="text-white font-semibold">{formatVND(manualPayModal.amount)} VND</span>
+              {manualPayModal.notes && (
+                <span className="ml-2 text-neutral-600 italic">&ldquo;{manualPayModal.notes}&rdquo;</span>
+              )}
+            </p>
+
+            {/* Payment method */}
+            <div>
+              <label className="text-xs text-neutral-500 mb-1 block">Payment method</label>
+              <div className="flex gap-2">
+                {(["manual", "bank_transfer", "cash", "payos", "sepay"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setManualPayMethod(m)}
+                    className={cn(
+                      "flex-1 rounded-lg py-2 text-xs font-medium border transition-colors",
+                      manualPayMethod === m
+                        ? "border-purple-500 bg-purple-900/30 text-white"
+                        : "border-neutral-700 text-neutral-400 hover:border-neutral-600"
+                    )}
+                  >
+                    {m === "bank_transfer" ? "Bank" : m === "payos" ? "PayOS" : m === "sepay" ? "SePay" : m.charAt(0).toUpperCase() + m.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Reference */}
+            <div>
+              <label className="text-xs text-neutral-500 mb-1 block">Payment reference (optional)</label>
+              <input
+                type="text"
+                value={manualPayRef}
+                onChange={(e) => setManualPayRef(e.target.value)}
+                placeholder="e.g. Bank transfer ref #12345"
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white"
+              />
+            </div>
+
+            {/* Notes */}
+            <div>
+              <label className="text-xs text-neutral-500 mb-1 block">Notes (optional)</label>
+              <textarea
+                value={manualPayNotes}
+                onChange={(e) => setManualPayNotes(e.target.value)}
+                rows={2}
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white resize-none"
+              />
+            </div>
+
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setManualPayModal(null)}
+                className="flex-1 rounded-lg border border-neutral-700 py-2 text-sm text-neutral-400 hover:text-white hover:border-neutral-600"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void submitManualMarkPaid()}
+                disabled={!!manualMarkingPaid}
+                className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-purple-600 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-50"
+              >
+                {manualMarkingPaid ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
+                Mark paid
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

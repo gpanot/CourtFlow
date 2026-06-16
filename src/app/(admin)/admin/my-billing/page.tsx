@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api-client";
-import { Loader2, Receipt, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
+import { Loader2, Receipt, CheckCircle2, Clock, AlertTriangle, FileText, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useTranslation } from "react-i18next";
 import adminI18n from "@/i18n/admin-i18n";
@@ -16,7 +16,7 @@ interface VenueRate {
   isFreeBase: boolean;
   isFreeSubAddon: boolean;
   isFreeSepayAddon: boolean;
-  billingModel?: "per_payment" | "monthly";
+  billingModel?: "per_payment" | "monthly" | "manual";
   monthlyRate?: number;
   monthlyPeriodStart?: string | null;
   monthlyEndDate?: string | null;
@@ -32,6 +32,7 @@ interface VenueInfo {
 
 interface InvoiceRow {
   id: string;
+  kind: "auto" | "manual";
   venueId: string;
   venueName: string;
   weekStartDate: string;
@@ -42,6 +43,10 @@ interface InvoiceRow {
   status: string;
   paidAt: string | null;
   createdAt: string;
+  dueDate: string | null;
+  pdfUrl: string | null;
+  notes: string | null;
+  invoiceType: string | null;
 }
 
 function formatVND(amount: number): string {
@@ -138,6 +143,8 @@ export default function MyBillingPage() {
                           <p>Expires: {formatDate(v.rate.monthlyEndDate)}</p>
                         )}
                       </>
+                    ) : v.rate.billingModel === "manual" ? (
+                      <p className="font-medium text-purple-400">Manual invoicing</p>
                     ) : (
                       <>
                         <p>{t("myBilling.baseRate")}: {v.rate.isFreeBase ? t("myBilling.free") : formatVND(v.rate.baseRatePerCheckin)} {t("myBilling.perCheckin")}</p>
@@ -170,20 +177,38 @@ export default function MyBillingPage() {
                       <th className="py-2 pr-4 font-medium text-right">{t("myBilling.checkIns")}</th>
                       <th className="py-2 pr-4 font-medium text-right">{t("myBilling.amount")}</th>
                       <th className="py-2 pr-4 font-medium">{t("myBilling.status")}</th>
-                      <th className="py-2 font-medium">{t("myBilling.paidAt")}</th>
+                      <th className="py-2 pr-4 font-medium">{t("myBilling.paidAt")}</th>
+                      <th className="py-2 font-medium">PDF</th>
                     </tr>
                   </thead>
                   <tbody>
                     {invoices.map((inv) => {
                       const cfg = statusConfig[inv.status] ?? statusConfig.pending;
                       const Icon = cfg.icon;
+                      const isManual = inv.kind === "manual";
                       return (
                         <tr key={inv.id} className="border-b border-neutral-800/50 hover:bg-neutral-800/30">
-                          <td className="py-2 pr-4 truncate max-w-[140px]">{inv.venueName}</td>
-                          <td className="py-2 pr-4 whitespace-nowrap text-neutral-400">
-                            {formatDate(inv.weekStartDate)} - {formatDate(inv.weekEndDate)}
+                          <td className="py-2 pr-4 max-w-[180px]">
+                            <span className="flex items-center gap-1.5">
+                              {isManual && (
+                                <FileText className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                              )}
+                              <span className="truncate">{inv.venueName}</span>
+                            </span>
+                            {isManual && inv.notes && (
+                              <p className="text-[11px] text-neutral-500 italic mt-0.5 truncate" title={inv.notes}>
+                                {inv.notes}
+                              </p>
+                            )}
                           </td>
-                          <td className="py-2 pr-4 text-right">{inv.totalCheckins}</td>
+                          <td className="py-2 pr-4 whitespace-nowrap text-neutral-400">
+                            {isManual
+                              ? `Due ${formatDate(inv.dueDate!)}`
+                              : `${formatDate(inv.weekStartDate)} – ${formatDate(inv.weekEndDate)}`}
+                          </td>
+                          <td className="py-2 pr-4 text-right text-neutral-500">
+                            {isManual ? "—" : inv.totalCheckins}
+                          </td>
                           <td className="py-2 pr-4 text-right font-mono">{formatVND(inv.totalAmount)}</td>
                           <td className="py-2 pr-4">
                             <span className={cn("flex items-center gap-1", cfg.className)}>
@@ -191,8 +216,23 @@ export default function MyBillingPage() {
                               {cfg.label}
                             </span>
                           </td>
-                          <td className="py-2 text-neutral-400">
-                            {inv.paidAt ? formatDate(inv.paidAt) : "-"}
+                          <td className="py-2 pr-4 text-neutral-400">
+                            {inv.paidAt ? formatDate(inv.paidAt) : "—"}
+                          </td>
+                          <td className="py-2">
+                            {inv.pdfUrl ? (
+                              <a
+                                href={inv.pdfUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-purple-400 hover:text-purple-300 text-xs font-medium"
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" />
+                                Download
+                              </a>
+                            ) : (
+                              <span className="text-neutral-700 text-xs">—</span>
+                            )}
                           </td>
                         </tr>
                       );
