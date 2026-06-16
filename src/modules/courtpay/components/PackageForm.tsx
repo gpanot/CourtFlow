@@ -20,6 +20,10 @@ interface PackageFormProps {
   onSubmit: (data: PackageFormData) => Promise<void>;
   onClose: () => void;
   title?: string;
+  /** Current number of visible (showInCheckIn) packages for this venue. */
+  visibleCount?: number;
+  /** Maximum allowed visible packages. Default 3. */
+  maxVisible?: number;
 }
 
 function formatPriceDisplay(digits: string): string {
@@ -33,7 +37,7 @@ function parsePriceDigits(value: string): string {
   return value.replace(/\D/g, "");
 }
 
-export function PackageForm({ initial, onSubmit, onClose, title }: PackageFormProps) {
+export function PackageForm({ initial, onSubmit, onClose, title, visibleCount = 0, maxVisible = 3 }: PackageFormProps) {
   const [name, setName] = useState(initial?.name || "");
   const [sessions, setSessions] = useState<string>(
     initial?.sessions === null || initial?.sessions === undefined ? "" : String(initial.sessions)
@@ -147,23 +151,38 @@ export function PackageForm({ initial, onSubmit, onClose, title }: PackageFormPr
           </div>
 
           {/* Visibility toggle */}
-          <button
-            type="button"
-            onClick={() => setShowInCheckIn((v) => !v)}
-            className={`w-full flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
-              showInCheckIn
-                ? "border-green-700/50 bg-green-600/10 text-green-400 hover:bg-green-600/20"
-                : "border-red-700/50 bg-red-600/10 text-red-400 hover:bg-red-600/20"
-            }`}
-          >
-            <span className="flex items-center gap-2">
-              {showInCheckIn ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-              Show during check-in
-            </span>
-            <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${showInCheckIn ? "bg-green-600/20" : "bg-red-600/20"}`}>
-              {showInCheckIn ? "Active" : "Hidden"}
-            </span>
-          </button>
+          {(() => {
+            const atLimit = !showInCheckIn && visibleCount >= maxVisible;
+            return (
+              <>
+                <button
+                  type="button"
+                  disabled={atLimit}
+                  onClick={() => !atLimit && setShowInCheckIn((v) => !v)}
+                  className={`w-full flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors ${
+                    atLimit
+                      ? "cursor-not-allowed border-neutral-700 bg-neutral-800/50 text-neutral-500 opacity-60"
+                      : showInCheckIn
+                      ? "border-green-700/50 bg-green-600/10 text-green-400 hover:bg-green-600/20"
+                      : "border-red-700/50 bg-red-600/10 text-red-400 hover:bg-red-600/20"
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    {showInCheckIn ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                    Show during check-in
+                  </span>
+                  <span className={`text-xs font-semibold rounded-full px-2 py-0.5 ${showInCheckIn ? "bg-green-600/20" : "bg-red-600/20"}`}>
+                    {showInCheckIn ? "Active" : "Hidden"}
+                  </span>
+                </button>
+                {atLimit && (
+                  <p className="text-xs text-amber-400">
+                    Limit reached ({maxVisible}/{maxVisible} visible). Hide another package to make this one visible.
+                  </p>
+                )}
+              </>
+            );
+          })()}
 
           {/* Sessions */}
           <div>

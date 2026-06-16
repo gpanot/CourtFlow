@@ -223,6 +223,21 @@ export default function AdminCourtPayPage() {
     await fetchOverview();
   };
 
+  const MAX_VISIBLE_PACKAGES = 3;
+  const visibleCount = packages.filter((p) => p.isActive && p.showInCheckIn).length;
+
+  const handleToggleVisibility = async (id: string) => {
+    const pkg = packages.find((p) => p.id === id);
+    if (!pkg) return;
+    const willBeVisible = !pkg.showInCheckIn;
+    if (willBeVisible && visibleCount >= MAX_VISIBLE_PACKAGES) {
+      alert(`You can only have ${MAX_VISIBLE_PACKAGES} visible packages at a time. Hide another package first.`);
+      return;
+    }
+    await api.put(`/api/courtpay/staff/packages/${id}`, { showInCheckIn: willBeVisible });
+    await fetchPackages();
+  };
+
   const handleCreateDefaults = async () => {
     if (!selectedVenueId) {
       alert("Select a venue first");
@@ -361,17 +376,40 @@ export default function AdminCourtPayPage() {
                 : t("courtpay.noPackagesYet")}
             </div>
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {packages.map((pkg) => (
-                <PackageCard
-                  key={pkg.id}
-                  pkg={pkg}
-                  venueName={pkg.venue?.name}
-                  onEdit={() => setEditingPkg(pkg)}
-                  onDelete={handleDeletePackage}
-                />
-              ))}
-            </div>
+            <>
+              <div className="mb-3 flex items-center gap-2">
+                <div className="flex gap-1">
+                  {[1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className={cn(
+                        "h-2 w-8 rounded-full transition-colors",
+                        i <= visibleCount ? "bg-green-500" : "bg-neutral-700"
+                      )}
+                    />
+                  ))}
+                </div>
+                <span className={cn(
+                  "text-xs font-medium",
+                  visibleCount >= MAX_VISIBLE_PACKAGES ? "text-amber-400" : "text-neutral-400"
+                )}>
+                  {visibleCount}/{MAX_VISIBLE_PACKAGES} visible in app
+                  {visibleCount >= MAX_VISIBLE_PACKAGES && " — limit reached"}
+                </span>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {packages.map((pkg) => (
+                  <PackageCard
+                    key={pkg.id}
+                    pkg={pkg}
+                    venueName={pkg.venue?.name}
+                    onEdit={() => setEditingPkg(pkg)}
+                    onDelete={handleDeletePackage}
+                    onToggleVisibility={handleToggleVisibility}
+                  />
+                ))}
+              </div>
+            </>
           )}
         </div>
       ) : tab === "subscribers" ? (
@@ -477,6 +515,8 @@ export default function AdminCourtPayPage() {
           title="Create Package"
           onSubmit={handleCreatePackage}
           onClose={() => setShowForm(false)}
+          visibleCount={visibleCount}
+          maxVisible={MAX_VISIBLE_PACKAGES}
         />
       )}
 
@@ -496,6 +536,8 @@ export default function AdminCourtPayPage() {
           }}
           onSubmit={handleEditPackage}
           onClose={() => setEditingPkg(null)}
+          visibleCount={editingPkg.showInCheckIn ? visibleCount - 1 : visibleCount}
+          maxVisible={MAX_VISIBLE_PACKAGES}
         />
       )}
     </div>
