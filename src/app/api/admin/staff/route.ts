@@ -44,6 +44,7 @@ export async function GET(request: NextRequest) {
         id: s.id,
         name: s.name,
         phone: s.phone,
+        email: s.email ?? null,
         role: s.role,
         isCoach: s.isCoach,
         coachBio: s.coachBio,
@@ -65,6 +66,7 @@ export async function POST(request: NextRequest) {
       phone: string;
       password: string;
       role: "staff" | "manager" | "superadmin";
+      email?: string | null;
       venueIds?: string[];
       venueAssignments?: { venueId: string; appAccess: string[] }[];
       isCoach?: boolean;
@@ -106,9 +108,6 @@ export async function POST(request: NextRequest) {
       [];
 
     const createdRole = body.role || "staff";
-    // Staff and managers are created by an admin — they don't go through onboarding
-    // (only superadmins who self-sign-up need to create their first venue)
-    const onboardingCompleted = createdRole !== "superadmin";
 
     const staff = await prisma.staffMember.create({
       data: {
@@ -116,7 +115,8 @@ export async function POST(request: NextRequest) {
         phone: body.phone,
         passwordHash: hashPassword(body.password),
         role: createdRole,
-        onboardingCompleted,
+        onboardingCompleted: true,
+        ...(body.email ? { email: body.email } : {}),
         ...(body.isCoach !== undefined && { isCoach: body.isCoach }),
         ...(body.coachBio !== undefined && { coachBio: body.coachBio }),
         ...(assignmentCreates.length > 0

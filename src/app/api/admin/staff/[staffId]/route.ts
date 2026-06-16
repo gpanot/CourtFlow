@@ -15,6 +15,7 @@ export async function PATCH(
     const { staffId } = await params;
     const body = await parseBody<{
       name?: string;
+      email?: string | null;
       role?: "staff" | "manager" | "superadmin";
       venueIds?: string[];
       venueAssignments?: { venueId: string; appAccess: string[] }[];
@@ -56,12 +57,11 @@ export async function PATCH(
       where: { id: staffId },
       data: {
         ...(body.name !== undefined && { name: body.name }),
+        ...(body.email !== undefined && { email: body.email || null }),
         ...(body.role !== undefined && { role: body.role }),
         ...(body.isCoach !== undefined && { isCoach: body.isCoach }),
         ...(body.coachBio !== undefined && { coachBio: body.coachBio }),
         ...(body.coachPhoto !== undefined && { coachPhoto: body.coachPhoto }),
-        // Auto-complete onboarding when promoting to manager/superadmin so they
-        // land on /admin directly instead of being sent to the onboarding flow.
         ...(promotedToAdmin && { onboardingCompleted: true }),
       },
     });
@@ -101,6 +101,7 @@ export async function PATCH(
       id: staff.id,
       name: staff.name,
       phone: staff.phone,
+      email: staff.email ?? null,
       role: staff.role,
       isCoach: staff.isCoach,
       coachBio: staff.coachBio,

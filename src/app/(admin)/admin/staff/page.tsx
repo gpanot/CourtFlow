@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/api-client";
 import { useSessionStore } from "@/stores/session-store";
 import { cn } from "@/lib/cn";
-import { Plus, Shield, User, Pencil, Trash2, KeyRound, X, Check, GraduationCap } from "lucide-react";
+import { Plus, Shield, User, Pencil, Trash2, KeyRound, X, Check, GraduationCap, Mail } from "lucide-react";
 import type { StaffAppAccessKind } from "@/lib/staff-app-access";
 import { useTranslation } from "react-i18next";
 import adminI18n from "@/i18n/admin-i18n";
@@ -21,6 +21,7 @@ interface Staff {
   id: string;
   name: string;
   phone: string;
+  email: string | null;
   role: string;
   isCoach: boolean;
   coachBio: string | null;
@@ -42,6 +43,7 @@ export default function StaffPage() {
   const [form, setForm] = useState<{
     name: string;
     phone: string;
+    email: string;
     password: string;
     role: "staff" | "manager" | "superadmin";
     venueIds: string[];
@@ -51,6 +53,7 @@ export default function StaffPage() {
   }>({
     name: "",
     phone: "",
+    email: "",
     password: "",
     role: "staff",
     venueIds: [],
@@ -79,6 +82,7 @@ export default function StaffPage() {
     setForm({
       name: "",
       phone: "",
+      email: "",
       password: "",
       role: "staff",
       venueIds: [],
@@ -100,6 +104,7 @@ export default function StaffPage() {
     setForm({
       name: s.name,
       phone: s.phone,
+      email: s.email || "",
       password: "",
       role: s.role as "staff" | "manager" | "superadmin",
       venueIds: s.venues.map((v) => v.id),
@@ -159,12 +164,14 @@ export default function StaffPage() {
 
   const handleCreate = async () => {
     if (!form.name || !form.phone || !form.password) { setErr("Name, phone, and password are required"); return; }
+    if ((form.role === "manager" || form.isCoach) && !form.email.trim()) { setErr("Email is required for managers and coaches"); return; }
     setSaving(true);
     setErr("");
     try {
       await api.post("/api/admin/staff", {
         name: form.name,
         phone: form.phone,
+        email: form.email.trim() || null,
         password: form.password,
         role: form.role,
         venueAssignments: form.venueIds.map((venueId) => ({
@@ -185,11 +192,13 @@ export default function StaffPage() {
 
   const handleEdit = async () => {
     if (!selectedStaff || !form.name) { setErr("Name is required"); return; }
+    if ((form.role === "manager" || form.isCoach) && !form.email.trim()) { setErr("Email is required for managers and coaches"); return; }
     setSaving(true);
     setErr("");
     try {
       await api.patch(`/api/admin/staff/${selectedStaff.id}`, {
         name: form.name,
+        email: form.email.trim() || null,
         role: form.role,
         venueAssignments: form.venueIds.map((venueId) => ({
           venueId,
@@ -271,7 +280,15 @@ export default function StaffPage() {
                     </span>
                   )}
                 </div>
-                <p className="text-sm text-neutral-500 mb-2">{s.phone}</p>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mb-2">
+                  <p className="text-sm text-neutral-500">{s.phone}</p>
+                  {s.email && (
+                    <p className="flex items-center gap-1 text-sm text-neutral-500">
+                      <Mail className="h-3 w-3 shrink-0" />
+                      {s.email}
+                    </p>
+                  )}
+                </div>
                 <div className="flex flex-wrap gap-1">
                   {s.venues.length === 0 && (
                     <span className="rounded bg-neutral-800 px-2 py-0.5 text-xs text-neutral-500">{t("staff.noVenue")}</span>
@@ -372,6 +389,25 @@ export default function StaffPage() {
                   {callerRole === "superadmin" && <option value="superadmin">{t("staff.roleSuperAdmin")}</option>}
                 </select>
                 <p className="mt-1 text-[10px] text-neutral-600">build: 2026-06-09 · roles: staff, manager, superadmin</p>
+              </div>
+
+              <div>
+                <label className="mb-1.5 flex items-center gap-1 text-sm text-neutral-400">
+                  <Mail className="h-3.5 w-3.5" />
+                  Email
+                  {(form.role === "manager" || form.isCoach) ? (
+                    <span className="text-red-400">*</span>
+                  ) : (
+                    <span className="text-neutral-600 text-xs">(optional)</span>
+                  )}
+                </label>
+                <input
+                  type="email"
+                  placeholder="staff@example.com"
+                  value={form.email}
+                  onChange={(e) => setForm({ ...form, email: e.target.value })}
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
+                />
               </div>
 
               <div>
