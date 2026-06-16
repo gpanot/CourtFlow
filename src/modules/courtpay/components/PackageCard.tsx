@@ -96,17 +96,6 @@ export function PackageCard({
                 Free Pass
               </span>
             )}
-            {pkg.showInCheckIn !== false ? (
-              <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 font-semibold whitespace-nowrap">
-                <Eye className="h-2.5 w-2.5" />
-                Visible
-              </span>
-            ) : (
-              <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-700/50 border border-neutral-600 text-neutral-400 font-semibold whitespace-nowrap">
-                <EyeOff className="h-2.5 w-2.5" />
-                Hidden
-              </span>
-            )}
             {!pkg.isActive && (
               <span className="text-[10px] px-1.5 py-0.5 rounded bg-neutral-700 text-neutral-400">
                 Inactive

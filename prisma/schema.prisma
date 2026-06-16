@@ -170,6 +170,23 @@ model Venue {
   @@map("venues")
 }
 
+/// Unified identity record that can link a web-portal Player and/or a CourtPay CheckInPlayer to the same real person.
+model PlayerIdentity {
+  id         String    @id @default(cuid())
+  name       String
+  email      String?   @unique
+  phone      String?
+  skillLevel String?   @map("skill_level")
+  gender     String?
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  players        Player[]
+  checkInPlayers CheckInPlayer[]
+
+  @@map("player_identities")
+}
+
 model Player {
   id                    String         @id @default(cuid())
   name                  String
@@ -193,7 +210,9 @@ model Player {
   registrationAt        DateTime?      @map("registration_at")
   registrationVenueId   String?        @map("registration_venue_id")
   reclubUserId          Int?           @map("reclub_user_id")
+  playerIdentityId      String?        @map("player_identity_id")
 
+  playerIdentity      PlayerIdentity?  @relation(fields: [playerIdentityId], references: [id], onDelete: SetNull)
   queueEntries        QueueEntry[]
   playerRankings      PlayerRanking[]
   pushSubscriptions   PushSubscription[]
@@ -218,6 +237,7 @@ model Player {
   playerNotes           PlayerNote[]
 
   @@index([registrationVenueId])
+  @@index([playerIdentityId])
   @@map("players")
 }
 
@@ -778,14 +798,16 @@ model KioskDevice {
 // ─── CourtPay Module ─────────────────────────────────────────
 
 model CheckInPlayer {
-  id         String   @id @default(cuid())
-  venueId    String   @map("venue_id")
-  name       String
-  phone      String
-  gender     String?
-  skillLevel String?  @map("skill_level")
-  createdAt  DateTime @default(now()) @map("created_at")
+  id               String   @id @default(cuid())
+  venueId          String   @map("venue_id")
+  name             String
+  phone            String
+  gender           String?
+  skillLevel       String?  @map("skill_level")
+  createdAt        DateTime @default(now()) @map("created_at")
+  playerIdentityId String?  @map("player_identity_id")
 
+  playerIdentity PlayerIdentity?      @relation(fields: [playerIdentityId], references: [id], onDelete: SetNull)
   venue         Venue                @relation(fields: [venueId], references: [id])
   subscriptions PlayerSubscription[]
   payments      PendingPayment[]
@@ -793,6 +815,7 @@ model CheckInPlayer {
 
   @@unique([phone, venueId])
   @@index([venueId])
+  @@index([playerIdentityId])
   @@map("check_in_players")
 }
 
