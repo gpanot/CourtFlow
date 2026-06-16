@@ -808,6 +808,7 @@ model SubscriptionPackage {
   showInCheckIn   Boolean  @default(true) @map("show_in_check_in")
   discountPct     Int?     @map("discount_pct")
   isBestChoice    Boolean  @default(false) @map("is_best_choice")
+  isFreePass      Boolean  @default(false) @map("is_free_pass")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 

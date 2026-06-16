@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Pencil, Trash2, Infinity, Star, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Pencil, Trash2, Infinity, Star, Eye, EyeOff, Loader2, Gift } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 interface PackageCardProps {
@@ -16,6 +16,7 @@ interface PackageCardProps {
     showInCheckIn?: boolean;
     isBestChoice?: boolean;
     discountPct?: number | null;
+    isFreePass?: boolean;
     _count?: { subscriptions: number };
   };
   venueName?: string;
@@ -58,7 +59,7 @@ export function PackageCard({
     }
   };
 
-  const isHidden = onToggleVisibility && pkg.showInCheckIn === false;
+  const isHidden = pkg.showInCheckIn === false;
 
   return (
     <div
@@ -74,14 +75,6 @@ export function PackageCard({
         !pkg.isActive && "opacity-50"
       )}
     >
-      {/* Hidden badge — top-right, high contrast on both light and dark */}
-      {isHidden && (
-        <div className="pointer-events-none absolute right-2 top-2 flex items-center gap-1 rounded-full border border-red-500/60 bg-neutral-900 px-2 py-0.5 text-[10px] font-bold text-red-400 dark:bg-neutral-900">
-          <EyeOff className="h-3 w-3" />
-          Hidden
-        </div>
-      )}
-
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
@@ -92,12 +85,23 @@ export function PackageCard({
                 Most Popular
               </span>
             )}
-            {pkg.discountPct != null && pkg.discountPct > 0 && (
+            {pkg.discountPct != null && pkg.discountPct > 0 && !pkg.isFreePass && (
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-semibold whitespace-nowrap">
                 Save {pkg.discountPct}%
               </span>
             )}
-            {isHidden && (
+            {pkg.isFreePass && (
+              <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-semibold whitespace-nowrap">
+                <Gift className="h-2.5 w-2.5" />
+                Free Pass
+              </span>
+            )}
+            {pkg.showInCheckIn !== false ? (
+              <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 font-semibold whitespace-nowrap">
+                <Eye className="h-2.5 w-2.5" />
+                Visible
+              </span>
+            ) : (
               <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-700/50 border border-neutral-600 text-neutral-400 font-semibold whitespace-nowrap">
                 <EyeOff className="h-2.5 w-2.5" />
                 Hidden
@@ -176,8 +180,8 @@ export function PackageCard({
       </div>
 
       <div className="mt-3 flex items-baseline gap-1">
-        <span className="text-lg font-bold text-purple-400">
-          {pkg.price === 0 ? "Set price" : `${formatVND(pkg.price)} VND`}
+        <span className={`text-lg font-bold ${pkg.isFreePass ? "text-emerald-400" : "text-purple-400"}`}>
+          {pkg.isFreePass ? "Free" : pkg.price === 0 ? "Set price" : `${formatVND(pkg.price)} VND`}
         </span>
       </div>
 

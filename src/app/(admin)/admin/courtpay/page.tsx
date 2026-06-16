@@ -33,6 +33,7 @@ interface PackageData {
   showInCheckIn?: boolean;
   isBestChoice?: boolean;
   discountPct?: number | null;
+  isFreePass?: boolean;
   venue?: { id: string; name: string };
   _count: { subscriptions: number };
 }
@@ -178,6 +179,7 @@ export default function AdminCourtPayPage() {
     isBestChoice?: boolean;
     discountPct?: number | null;
     showInCheckIn?: boolean;
+    isFreePass?: boolean;
   }) => {
     if (!selectedVenueId) {
       throw new Error("Select a venue first");
@@ -200,6 +202,7 @@ export default function AdminCourtPayPage() {
     isBestChoice?: boolean;
     discountPct?: number | null;
     showInCheckIn?: boolean;
+    isFreePass?: boolean;
   }) => {
     if (!editingPkg) return;
     await api.put(`/api/courtpay/staff/packages/${editingPkg.id}`, data);
@@ -484,6 +487,7 @@ export default function AdminCourtPayPage() {
             showInCheckIn: editingPkg.showInCheckIn,
             isBestChoice: editingPkg.isBestChoice,
             discountPct: editingPkg.discountPct,
+            isFreePass: editingPkg.isFreePass,
           }}
           onSubmit={handleEditPackage}
           onClose={() => setEditingPkg(null)}

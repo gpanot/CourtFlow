@@ -12,6 +12,7 @@ interface PackageFormData {
   isBestChoice?: boolean;
   discountPct?: number | null;
   showInCheckIn?: boolean;
+  isFreePass?: boolean;
 }
 
 interface PackageFormProps {
@@ -19,6 +20,17 @@ interface PackageFormProps {
   onSubmit: (data: PackageFormData) => Promise<void>;
   onClose: () => void;
   title?: string;
+}
+
+function formatPriceDisplay(digits: string): string {
+  if (!digits) return "";
+  const n = Number(digits);
+  if (Number.isNaN(n)) return "";
+  return new Intl.NumberFormat("en-US").format(n);
+}
+
+function parsePriceDigits(value: string): string {
+  return value.replace(/\D/g, "");
 }
 
 export function PackageForm({ initial, onSubmit, onClose, title }: PackageFormProps) {
@@ -30,7 +42,7 @@ export function PackageForm({ initial, onSubmit, onClose, title }: PackageFormPr
   const [durationDays, setDurationDays] = useState(String(initial?.durationDays || 30));
   const [price, setPrice] = useState(String(initial?.price || ""));
   const [isBestChoice, setIsBestChoice] = useState(initial?.isBestChoice ?? false);
-  const [showInCheckIn, setShowInCheckIn] = useState(initial?.showInCheckIn !== false);
+  const [showInCheckIn, setShowInCheckIn] = useState(initial?.showInCheckIn ?? false);
   const [discountPct, setDiscountPct] = useState(
     initial?.discountPct != null ? String(initial.discountPct) : ""
   );
@@ -41,6 +53,8 @@ export function PackageForm({ initial, onSubmit, onClose, title }: PackageFormPr
   const [perk2, setPerk2] = useState(initialPerks[1] ?? "");
   const [perk3, setPerk3] = useState(initialPerks[2] ?? "");
   const [perk4, setPerk4] = useState(initialPerks[3] ?? "");
+
+  const [isFreePass, setIsFreePass] = useState(initial?.isFreePass ?? false);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -53,8 +67,9 @@ export function PackageForm({ initial, onSubmit, onClose, title }: PackageFormPr
       setDurationDays(String(initial.durationDays || 30));
       setPrice(String(initial.price ?? ""));
       setIsBestChoice(initial.isBestChoice ?? false);
-      setShowInCheckIn(initial.showInCheckIn !== false);
+      setShowInCheckIn(initial.showInCheckIn ?? false);
       setDiscountPct(initial.discountPct != null ? String(initial.discountPct) : "");
+      setIsFreePass(initial.isFreePass ?? false);
       const perksArr = (initial.perks || "").split(/[\n,]/).map((p) => p.trim()).filter(Boolean);
       setPerk1(perksArr[0] ?? "");
       setPerk2(perksArr[1] ?? "");
@@ -78,11 +93,12 @@ export function PackageForm({ initial, onSubmit, onClose, title }: PackageFormPr
         name: name.trim(),
         sessions: unlimited ? null : Number(sessions),
         durationDays: Number(durationDays),
-        price: Number(price) || 0,
+        price: isFreePass ? 0 : (Number(parsePriceDigits(price)) || 0),
         perks,
         isBestChoice,
-        discountPct: discountNum != null && discountNum > 0 && discountNum <= 99 ? discountNum : null,
+        discountPct: isFreePass ? null : (discountNum != null && discountNum > 0 && discountNum <= 99 ? discountNum : null),
         showInCheckIn,
+        isFreePass,
       });
     } catch (e) {
       setError((e as Error).message);
@@ -189,31 +205,61 @@ export function PackageForm({ initial, onSubmit, onClose, title }: PackageFormPr
             <p className="mt-1 text-xs text-neutral-500">Days from activation</p>
           </div>
 
-          {/* Price + Discount */}
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-neutral-300 mb-1">Price (VND)</label>
+          {/* Price + Discount + Free Pass — single row */}
+          <div className="flex items-end gap-3">
+            <div className="min-w-0 flex-1">
+              <label className="mb-1 block text-sm font-medium text-neutral-300">Price (VND)</label>
               <input
-                type="number"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                min={0}
-                className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-white focus:border-purple-500 focus:outline-none"
-                placeholder="900000"
+                type="text"
+                inputMode="numeric"
+                value={isFreePass ? "0" : formatPriceDisplay(price)}
+                onChange={(e) => setPrice(parsePriceDigits(e.target.value))}
+                disabled={isFreePass}
+                className={`w-full rounded-lg border px-3 py-2 text-white focus:border-purple-500 focus:outline-none transition-colors ${
+                  isFreePass
+                    ? "cursor-not-allowed border-neutral-800 bg-neutral-800 text-neutral-500"
+                    : "border-neutral-700 bg-neutral-900"
+                }`}
+                placeholder="900,000"
               />
             </div>
-            <div className="w-24">
-              <label className="block text-sm font-medium text-neutral-300 mb-1">Discount (%)</label>
+            <div className="w-20 shrink-0">
+              <label className="mb-1 block text-sm font-medium text-neutral-300">Discount (%)</label>
               <input
-                type="number"
-                value={discountPct}
+                type="text"
+                inputMode="numeric"
+                value={isFreePass ? "" : discountPct}
                 onChange={(e) => setDiscountPct(e.target.value.replace(/[^0-9]/g, "").slice(0, 2))}
-                min={0}
-                max={99}
-                className="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-white focus:border-purple-500 focus:outline-none"
+                disabled={isFreePass}
+                className={`w-full rounded-lg border px-3 py-2 text-white focus:border-purple-500 focus:outline-none transition-colors ${
+                  isFreePass
+                    ? "cursor-not-allowed border-neutral-800 bg-neutral-800 text-neutral-500"
+                    : "border-neutral-700 bg-neutral-900"
+                }`}
                 placeholder="0"
               />
             </div>
+            <label
+              className={`flex shrink-0 cursor-pointer select-none items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                isFreePass
+                  ? "border-emerald-700/50 bg-emerald-600/10 text-emerald-400"
+                  : "border-neutral-700 bg-neutral-900 text-neutral-400 hover:border-neutral-600 hover:text-neutral-300"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={isFreePass}
+                onChange={(e) => {
+                  setIsFreePass(e.target.checked);
+                  if (e.target.checked) {
+                    setPrice("0");
+                    setDiscountPct("");
+                  }
+                }}
+                className="rounded border-neutral-600 bg-neutral-800 text-emerald-500 focus:ring-emerald-500"
+              />
+              <span className="whitespace-nowrap">Free Pass</span>
+            </label>
           </div>
 
           {/* Perks — 4 individual fields */}

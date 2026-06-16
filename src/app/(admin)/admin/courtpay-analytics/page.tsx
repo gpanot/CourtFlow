@@ -181,7 +181,8 @@ const SESSION_CSV_HEADERS = [
   "Total payments",
   "QR count",
   "Cash count",
-  "Subs count",
+  "Sub count (Paid subs)",
+  "Subs (Free pass)",
   "Reclub (Expected)",
   "Total players",
 ];
@@ -198,6 +199,7 @@ interface SessionExportRow {
   qrCount: number;
   cashCount: number;
   subsCount: number;
+  freePassCount: number;
   reclubExpected: number | string;
   totalPlayers: number;
 }
@@ -215,6 +217,7 @@ function sessionRowsToCsv(rows: SessionExportRow[]): string[][] {
     String(s.qrCount),
     String(s.cashCount),
     String(s.subsCount),
+    String(s.freePassCount),
     String(s.reclubExpected),
     String(s.totalPlayers),
   ]);
@@ -227,7 +230,8 @@ function sessionTotalsRow(rows: SessionExportRow[]): string[] {
   const totalQr = rows.reduce((s, r) => s + r.qrCount, 0);
   const totalCash = rows.reduce((s, r) => s + r.cashCount, 0);
   const totalSubs = rows.reduce((s, r) => s + r.subsCount, 0);
-  // Columns: Date, Start, End, Duration, Staff, Initial price, Revenue, Payments, QR, Cash, Subs, Reclub, Players
+  const totalFreePass = rows.reduce((s, r) => s + r.freePassCount, 0);
+  // Columns: Date, Start, End, Duration, Staff, Initial price, Revenue, Payments, QR, Cash, Paid Subs, Free Pass, Reclub, Players
   return [
     "TOTAL",   // 0  Date
     "",        // 1  Session start time
@@ -235,13 +239,14 @@ function sessionTotalsRow(rows: SessionExportRow[]): string[] {
     "",        // 3  Duration
     "",        // 4  Staff name
     "",        // 5  Initial price
-    String(totalRevenue),   // 6  Total revenue
-    String(totalPayments),  // 7  Total payments
-    String(totalQr),        // 8  QR count
-    String(totalCash),      // 9  Cash count
-    String(totalSubs),      // 10 Subs count
-    "",        // 11 Reclub (Expected)
-    "",        // 12 Total players
+    String(totalRevenue),    // 6  Total revenue
+    String(totalPayments),   // 7  Total payments
+    String(totalQr),         // 8  QR count
+    String(totalCash),       // 9  Cash count
+    String(totalSubs),       // 10 Sub count (Paid subs)
+    String(totalFreePass),   // 11 Subs (Free pass)
+    "",        // 12 Reclub (Expected)
+    "",        // 13 Total players
   ];
 }
 

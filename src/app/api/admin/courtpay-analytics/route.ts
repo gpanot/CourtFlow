@@ -353,7 +353,32 @@ export async function GET(req: Request) {
             select: { amount: true, paymentMethod: true, type: true, partyCount: true, status: true, checkInPlayerId: true },
           });
 
-          let qr = 0, cash = 0, sub = 0, paymentPeopleTotal = 0;
+          // Collect player IDs that paid via subscription to batch-check free pass status
+          const subPlayerIds = payments
+            .filter((p) => p.status === "confirmed" && classifyPmt(p) === "sub" && p.checkInPlayerId)
+            .map((p) => p.checkInPlayerId as string);
+
+          const freePassPlayerIds = new Set<string>();
+          if (subPlayerIds.length > 0) {
+            const activeSubs = await prisma.playerSubscription.findMany({
+              where: {
+                playerId: { in: subPlayerIds },
+                venueId,
+                status: "active",
+              },
+              select: {
+                playerId: true,
+                package: { select: { isFreePass: true } },
+              },
+            });
+            for (const sub of activeSubs) {
+              if (sub.package.isFreePass) {
+                freePassPlayerIds.add(sub.playerId);
+              }
+            }
+          }
+
+          let qr = 0, cash = 0, sub = 0, freePass = 0, paymentPeopleTotal = 0;
           const confirmedPayments = payments.filter((p) => p.status === "confirmed");
           for (const p of payments) {
             const party = typeof p.partyCount === "number" && p.partyCount > 0 ? p.partyCount : 1;
@@ -362,7 +387,13 @@ export async function GET(req: Request) {
             const b = classifyPmt(p);
             if (b === "qr") qr += 1;
             else if (b === "cash") cash += 1;
-            else sub += 1;
+            else {
+              if (p.checkInPlayerId && freePassPlayerIds.has(p.checkInPlayerId)) {
+                freePass += 1;
+              } else {
+                sub += 1;
+              }
+            }
           }
 
           const playerCount = paymentPeopleTotal > 0 ? paymentPeopleTotal : s._count.queueEntries;
@@ -398,6 +429,7 @@ export async function GET(req: Request) {
             qrCount: qr,
             cashCount: cash,
             subsCount: sub,
+            freePassCount: freePass,
             reclubExpected: reclubExpected ?? "",
             totalPlayers: playerCount,
           };
