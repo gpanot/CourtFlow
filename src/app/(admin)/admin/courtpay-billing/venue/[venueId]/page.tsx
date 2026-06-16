@@ -73,6 +73,7 @@ interface InvoiceRow {
   confirmedBy: string | null;
   paidAmount: number | null;
   comment: string | null;
+  createdAt: string;
 }
 
 interface VenueDetail {
@@ -1290,6 +1291,7 @@ export default function VenueBillingDetailPage() {
                             {inv.paymentRef && (
                               <span className="ml-2 font-mono text-neutral-600">{inv.paymentRef}</span>
                             )}
+                            <span className="ml-2 text-neutral-600">· Issued {fmtShort(inv.createdAt)}</span>
                           </p>
                         </div>
                       </div>
@@ -1510,6 +1512,7 @@ export default function VenueBillingDetailPage() {
                         {inv.comment && (
                           <span className="ml-2 text-neutral-600 italic">&ldquo;{inv.comment}&rdquo;</span>
                         )}
+                        <span className="ml-2 text-neutral-600">· Issued {fmtShort(inv.createdAt)}</span>
                       </p>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
@@ -1559,6 +1562,7 @@ export default function VenueBillingDetailPage() {
                       </p>
                       <p className="text-xs text-neutral-500 mt-0.5">
                         {inv.invoiceType === "monthly" ? "Flat rate" : `${inv.totalCheckins} players (check-in)`}
+                        <span className="ml-2 text-neutral-600">· Issued {fmtShort(inv.createdAt)}</span>
                       </p>
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
@@ -1659,7 +1663,7 @@ export default function VenueBillingDetailPage() {
                           )}
                         </div>
                         <p className="text-xs text-neutral-500 mt-0.5">
-                          Due {fmtDate(inv.dueDate)}
+                          Issued {fmtShort(inv.createdAt)} · Due {fmtDate(inv.dueDate)}
                           {isPaid && inv.paidAt && (
                             <span className="text-green-400 ml-2">
                               · Paid {fmtDate(inv.paidAt)}

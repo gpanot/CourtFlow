@@ -178,6 +178,7 @@ export default function MyBillingPage() {
                       <th className="py-2 pr-4 font-medium text-right">{t("myBilling.amount")}</th>
                       <th className="py-2 pr-4 font-medium">{t("myBilling.status")}</th>
                       <th className="py-2 pr-4 font-medium">{t("myBilling.paidAt")}</th>
+                      <th className="py-2 pr-4 font-medium">Issued</th>
                       <th className="py-2 font-medium">PDF</th>
                     </tr>
                   </thead>
@@ -218,6 +219,9 @@ export default function MyBillingPage() {
                           </td>
                           <td className="py-2 pr-4 text-neutral-400">
                             {inv.paidAt ? formatDate(inv.paidAt) : "—"}
+                          </td>
+                          <td className="py-2 pr-4 text-neutral-400">
+                            {formatDate(inv.createdAt)}
                           </td>
                           <td className="py-2">
                             {inv.pdfUrl ? (

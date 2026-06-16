@@ -52,6 +52,7 @@ export async function GET(
           confirmedBy: true,
           paidAmount: true,
           comment: true,
+          createdAt: true,
         },
       }),
       getCurrentWeekUsage(venueId).catch(() => null),
