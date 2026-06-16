@@ -54,8 +54,8 @@ interface VenueOverview {
   billingStatus: string;
   thisWeekEstimate: number;
   thisWeekPayments: number;
-  latestInvoiceStatus: string | null;
   outstandingAmount: number;
+  paidAmount: number;
 }
 
 interface OverviewData {
@@ -354,45 +354,59 @@ export default function CourtPayBillingPage() {
           <div className="px-6 py-4 border-b border-neutral-800">
             <h3 className="text-base font-semibold">{t("courtpayBilling.allVenuesTitle")}</h3>
           </div>
+          {/* Column header */}
+          <div className="hidden sm:grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-6 px-6 py-2 border-b border-neutral-800/60">
+            <span className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Venue</span>
+            <span className="text-xs font-medium text-neutral-500 uppercase tracking-wide text-right w-32">This week (not invoiced)</span>
+            <span className="text-xs font-medium text-yellow-600 uppercase tracking-wide text-right w-28">Outstanding</span>
+            <span className="text-xs font-medium text-purple-500 uppercase tracking-wide text-right w-28">Paid</span>
+            <span className="w-4" />
+          </div>
           <div className="divide-y divide-neutral-800">
             {overview.venues.map((v) => (
               <button
                 key={v.id}
                 onClick={() => router.push(`/admin/courtpay-billing/venue/${v.id}`)}
-                className="w-full flex items-center justify-between px-6 py-3 text-left hover:bg-neutral-800/50 transition-colors"
+                className="w-full grid grid-cols-[1fr_auto] sm:grid-cols-[1fr_auto_auto_auto_auto] items-center gap-6 px-6 py-3 text-left hover:bg-neutral-800/50 transition-colors"
               >
-                <div className="flex-1 min-w-0">
+                <div className="min-w-0">
                   <p className="font-medium text-sm">{v.name}</p>
                   <p className="text-xs text-neutral-500 mt-0.5">
                     {v.thisWeekPayments} {t("courtpayBilling.paymentsThisWeek")}
                   </p>
                 </div>
-                <div className="flex items-center gap-4">
-                  <span className="text-sm font-medium text-purple-400">
-                    {formatVND(v.thisWeekEstimate)}đ
-                  </span>
-                  <span
-                    className={cn(
-                      "text-xs px-2 py-0.5 rounded-full",
-                      v.latestInvoiceStatus === "overdue"
-                        ? "bg-amber-900/30 text-amber-400"
-                        : v.latestInvoiceStatus === "pending"
-                          ? "bg-yellow-900/20 text-yellow-400"
-                          : v.latestInvoiceStatus === "paid"
-                            ? "bg-green-900/20 text-green-400"
-                            : "bg-neutral-800 text-neutral-500"
-                    )}
-                  >
-                    {v.latestInvoiceStatus
-                      ? v.latestInvoiceStatus === "paid"
-                        ? t("courtpayBilling.paidCheck")
-                        : v.latestInvoiceStatus === "overdue"
-                          ? t("courtpayBilling.overdueWarn")
-                          : t("courtpayBilling.pending")
-                      : "—"}
-                  </span>
-                  <ChevronRight className="h-4 w-4 text-neutral-500" />
+                <span className="text-sm font-medium text-neutral-400 text-right w-24 hidden sm:block">
+                  {v.thisWeekEstimate > 0 ? `${formatVND(v.thisWeekEstimate)}đ` : "—"}
+                </span>
+                <span className={cn(
+                  "text-sm font-semibold text-right w-28 hidden sm:block",
+                  v.outstandingAmount > 0 ? "text-yellow-400" : "text-neutral-600"
+                )}>
+                  {v.outstandingAmount > 0 ? `${formatVND(v.outstandingAmount)} ₫` : "—"}
+                </span>
+                <span className={cn(
+                  "text-sm font-semibold text-right w-28 hidden sm:block",
+                  v.paidAmount > 0 ? "text-purple-400" : "text-neutral-600"
+                )}>
+                  {v.paidAmount > 0 ? `${formatVND(v.paidAmount)} ₫` : "—"}
+                </span>
+                {/* Mobile: show pending inline */}
+                <div className="flex items-center gap-2 sm:hidden">
+                  {v.outstandingAmount > 0 && (
+                    <span className="text-xs text-yellow-400 font-semibold">
+                      {formatVND(v.outstandingAmount)}đ
+                    </span>
+                  )}
+                  {v.paidAmount > 0 && (
+                    <span className="text-xs text-purple-400 font-semibold">
+                      {formatVND(v.paidAmount)}đ
+                    </span>
+                  )}
+                  {v.outstandingAmount === 0 && v.paidAmount === 0 && (
+                    <span className="text-xs text-neutral-600">—</span>
+                  )}
                 </div>
+                <ChevronRight className="h-4 w-4 text-neutral-500" />
               </button>
             ))}
           </div>

@@ -16,22 +16,37 @@ export async function GET(req: Request) {
 
     const venueData = await Promise.all(
       venues.map(async (venue) => {
-        const [usage, latestInvoice] = await Promise.all([
-          getCurrentWeekUsage(venue.id).catch(() => null),
-          prisma.billingInvoice.findFirst({
-            where: { venueId: venue.id },
-            orderBy: { weekStartDate: "desc" },
-            select: { status: true, totalAmount: true },
-          }),
-        ]);
+        const [
+          usage,
+          autoOutstanding, manualOutstanding,
+          autoPaid, manualPaid,
+        ] = await Promise.all([
+            getCurrentWeekUsage(venue.id).catch(() => null),
+            prisma.billingInvoice.aggregate({
+              where: { venueId: venue.id, status: { in: ["pending", "overdue"] } },
+              _sum: { totalAmount: true },
+            }),
+            prisma.manualBillingInvoice.aggregate({
+              where: { venueId: venue.id, status: { in: ["pending", "overdue"] } },
+              _sum: { amount: true },
+            }),
+            prisma.billingInvoice.aggregate({
+              where: { venueId: venue.id, status: "paid" },
+              _sum: { paidAmount: true, totalAmount: true },
+            }),
+            prisma.manualBillingInvoice.aggregate({
+              where: { venueId: venue.id, status: "paid" },
+              _sum: { amount: true },
+            }),
+          ]);
 
-        const outstanding = await prisma.billingInvoice.aggregate({
-          where: {
-            venueId: venue.id,
-            status: { in: ["pending", "overdue"] },
-          },
-          _sum: { totalAmount: true },
-        });
+        const outstandingAmount =
+          (autoOutstanding._sum.totalAmount ?? 0) +
+          (manualOutstanding._sum.amount ?? 0);
+
+        const paidAmount =
+          (autoPaid._sum.paidAmount ?? autoPaid._sum.totalAmount ?? 0) +
+          (manualPaid._sum.amount ?? 0);
 
         return {
           id: venue.id,
@@ -39,19 +54,14 @@ export async function GET(req: Request) {
           billingStatus: venue.billingStatus,
           thisWeekEstimate: usage?.estimatedTotal ?? 0,
           thisWeekPayments: usage?.totalPayments ?? usage?.totalCheckins ?? 0,
-          latestInvoiceStatus: latestInvoice?.status ?? null,
-          outstandingAmount: outstanding._sum.totalAmount ?? 0,
+          outstandingAmount,
+          paidAmount,
         };
       })
     );
 
-    const totalThisWeek = venueData.reduce(
-      (sum, v) => sum + v.thisWeekEstimate,
-      0
-    );
-    const overdueCount = venueData.filter(
-      (v) => v.latestInvoiceStatus === "overdue"
-    ).length;
+    const totalThisWeek = venueData.reduce((sum, v) => sum + v.thisWeekEstimate, 0);
+    const overdueCount = venueData.filter((v) => v.outstandingAmount > 0).length;
 
     return NextResponse.json({
       venues: venueData,
