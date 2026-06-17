@@ -27,7 +27,10 @@ function ConfirmContent() {
   const slotCount = Math.min(Math.max(parseInt(searchParams.get("slotCount") || "1", 10), 1), 4);
   const totalPrice = parseInt(searchParams.get("price") || "0", 10);
 
-  const date = new Date(dateStr);
+  // Parse YYYY-MM-DD as local midnight (T00:00:00 without Z → local time, not UTC)
+  const date = dateStr.match(/^\d{4}-\d{2}-\d{2}$/)
+    ? new Date(dateStr + "T00:00:00")
+    : new Date(dateStr);
   const startTime = new Date(startTimeStr);
 
   const slotTimes = useMemo(() => {

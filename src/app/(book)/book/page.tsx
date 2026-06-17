@@ -220,9 +220,10 @@ export default function VenueHomePage() {
       return;
     }
     const first = sortedSelected[0];
+    const localDate = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
     const params = new URLSearchParams({
       courtId: selectedCourtId!,
-      date: selectedDate.toISOString(),
+      date: localDate,
       startTime: first.startTime,
       slotCount: String(sortedSelected.length),
       price: String(totalPrice),

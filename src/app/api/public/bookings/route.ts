@@ -37,17 +37,20 @@ export async function POST(request: NextRequest) {
     });
     const config = getBookingConfig(venue.settings as Record<string, unknown>);
 
-    const date = new Date(dateStr);
-    date.setHours(0, 0, 0, 0);
+    // "YYYY-MM-DD" → UTC midnight (e.g. 2026-06-17T00:00:00.000Z).
+    // PG DATE column stores "2026-06-17" from UTC midnight — no setHours() needed.
+    const date = new Date(dateStr.split("T")[0]);
     const startTime = new Date(startTimeStr);
     const endTime = new Date(startTime);
     endTime.setMinutes(endTime.getMinutes() + config.slotDurationMinutes * slotCount);
 
+    // Day-of-week from startTime (a real local timestamp from the availability API)
+    const localDayOfWeek = startTime.getDay();
     let totalPrice = 0;
     for (let i = 0; i < slotCount; i++) {
       const slotStart = new Date(startTime);
       slotStart.setMinutes(slotStart.getMinutes() + config.slotDurationMinutes * i);
-      totalPrice += resolveSlotPrice(config, date.getDay(), slotStart.getHours());
+      totalPrice += resolveSlotPrice(config, localDayOfWeek, slotStart.getHours());
     }
 
     const paymentRef = await generatePaymentRef("booking");

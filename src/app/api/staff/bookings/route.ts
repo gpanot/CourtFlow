@@ -13,8 +13,7 @@ export async function GET(request: NextRequest) {
     if (!venueId) return error("venueId is required");
     if (!dateStr) return error("date is required");
 
-    const date = new Date(dateStr);
-    date.setHours(0, 0, 0, 0);
+    const date = new Date(dateStr.split("T")[0]);
 
     const bookings = await prisma.booking.findMany({
       where: { venueId, date },
@@ -56,8 +55,7 @@ export async function POST(request: NextRequest) {
     const config = getBookingConfig(venue.settings as Record<string, unknown>);
 
     const slots = Math.max(1, Math.min(body.slotCount || 1, 12));
-    const date = new Date(body.date);
-    date.setHours(0, 0, 0, 0);
+    const date = new Date(body.date.split("T")[0]);
     const startTime = new Date(body.startTime);
     const endTime = new Date(startTime);
     endTime.setMinutes(endTime.getMinutes() + config.slotDurationMinutes * slots);

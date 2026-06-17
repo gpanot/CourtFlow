@@ -131,8 +131,7 @@ export async function PATCH(
     });
     const config = getBookingConfig(venue.settings as Record<string, unknown>);
 
-    const date = dateStr ? new Date(dateStr) : existing.date;
-    if (dateStr) date.setHours(0, 0, 0, 0);
+    const date = dateStr ? new Date(dateStr.split("T")[0]) : existing.date;
 
     const startTime = startTimeStr ? new Date(startTimeStr) : existing.startTime;
     const endTime = new Date(startTime);

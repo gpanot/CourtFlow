@@ -27,8 +27,7 @@ export async function POST(request: NextRequest) {
     });
     const config = getBookingConfig(venue.settings as Record<string, unknown>);
 
-    const date = new Date(body.date);
-    date.setHours(0, 0, 0, 0);
+    const date = new Date(body.date.split("T")[0]);
     const startTime = new Date(body.startTime);
     const endTime = new Date(startTime);
     endTime.setMinutes(endTime.getMinutes() + config.slotDurationMinutes);

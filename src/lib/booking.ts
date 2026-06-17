@@ -199,10 +199,13 @@ export async function getAvailableSlots(
     orderBy: { label: "asc" },
   });
 
+  // Normalise to UTC midnight — matches what PG stores in the DATE column
   const dateOnly = new Date(date);
-  dateOnly.setHours(0, 0, 0, 0);
+  dateOnly.setUTCHours(0, 0, 0, 0);
   const nextDay = new Date(dateOnly);
-  nextDay.setDate(nextDay.getDate() + 1);
+  nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+  // Note: dateOnly.getDay() / getHours() below use LOCAL methods intentionally for
+  // day-of-week and slot-time logic — they read local time from the UTC-midnight base.
 
   const existingBookings = await prisma.booking.findMany({
     where: {

@@ -9,8 +9,10 @@ export async function GET(request: NextRequest) {
   try {
     const venueId = resolveVenueId(request);
     const dateParam = request.nextUrl.searchParams.get("date");
-    const date = dateParam ? new Date(dateParam) : new Date();
-    date.setHours(0, 0, 0, 0);
+    // "YYYY-MM-DD" → UTC midnight to match what PG stores in the DATE column
+    const date = dateParam
+      ? new Date(dateParam.split("T")[0])
+      : (() => { const d = new Date(); d.setUTCHours(0, 0, 0, 0); return d; })();
 
     const slots = await getAvailableSlots(venueId, date);
 
