@@ -1,19 +1,33 @@
 "use client";
 export const dynamic = "force-dynamic";
 
-import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useRef, useState, useEffect, Suspense } from "react";
 import Image from "next/image";
 import { useTranslation } from "react-i18next";
 import { BookLanguageMenu } from "@/app/(book)/book/components/BookLanguageMenu";
+import { useTheme, type ThemePalette } from "../components/ThemeProvider";
+
+const VALID_PALETTES: ThemePalette[] = ["green", "terracotta", "sage"];
 
 const SLIDE_IMAGES = ["/images/intro1.png", "/images/intro2_avatar.jpeg", "/images/intro3.jpeg"] as const;
 
-export default function IntroPage() {
+function IntroContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { t } = useTranslation();
+  const { setPalette } = useTheme();
   const [slide, setSlide] = useState(0);
   const touchStartX = useRef<number | null>(null);
+
+  // Apply palette from URL on first render — persists to localStorage via ThemeProvider.
+  useEffect(() => {
+    const p = searchParams.get("palette") as ThemePalette | null;
+    if (p && VALID_PALETTES.includes(p)) {
+      setPalette(p);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const slides = t("intro.slides", { returnObjects: true }) as {
     imageAlt: string;
@@ -126,5 +140,13 @@ export default function IntroPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function IntroPage() {
+  return (
+    <Suspense>
+      <IntroContent />
+    </Suspense>
   );
 }

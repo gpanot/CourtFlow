@@ -7,14 +7,16 @@ import Image from "next/image";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { getPlayerFromToken } from "@/lib/player-token";
-import { useTheme } from "../components/ThemeProvider";
+import { useTheme, type ThemePalette } from "../components/ThemeProvider";
 import { BookLanguageMenu } from "../components/BookLanguageMenu";
+
+const VALID_PALETTES: ThemePalette[] = ["green", "terracotta", "sage"];
 
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useTranslation();
-  const { resolved } = useTheme();
+  const { resolved, setPalette } = useTheme();
   const callbackUrl = searchParams.get("callbackUrl") || "/book";
 
   const [loading, setLoading] = useState<"google" | "apple" | null>(null);
@@ -22,14 +24,21 @@ function LoginContent() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    // Apply palette from URL param before any redirect — persists to localStorage.
+    const p = searchParams.get("palette") as ThemePalette | null;
+    if (p && VALID_PALETTES.includes(p)) setPalette(p);
+
     const token = getPlayerFromToken();
     if (token) { router.replace(callbackUrl); return; }
     if (!localStorage.getItem("intro_seen")) {
-      router.replace("/book/intro");
+      // Preserve palette param when bouncing to intro.
+      const dest = p ? `/book/intro?palette=${p}` : "/book/intro";
+      router.replace(dest);
     }
     const oauthError = searchParams.get("error");
     if (oauthError) setError(oauthError);
-  }, [router, callbackUrl, searchParams]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function handleOAuth(provider: "google" | "apple") {
     setLoading(provider);
