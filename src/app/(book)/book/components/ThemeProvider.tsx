@@ -97,10 +97,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(STORAGE_KEY, m);
   }, []);
 
-  const setPalette = useCallback((p: ThemePalette) => {
-    setPaletteState(p);
-    localStorage.setItem(PALETTE_KEY, p);
-  }, []);
+  const setPalette = useCallback(
+    (p: ThemePalette) => {
+      setPaletteState(p);
+      localStorage.setItem(PALETTE_KEY, p);
+      // Apply immediately to the DOM — don't wait for the effect cycle.
+      applyPalette(p, resolve(mode));
+    },
+    [mode]
+  );
 
   return (
     <ThemeContext.Provider value={{ mode, resolved, setMode, palette, setPalette }}>

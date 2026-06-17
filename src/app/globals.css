@@ -56,27 +56,27 @@
    and adjusts for dark vs light theme automatically.
    ─────────────────────────────────────────────────────────────────────────── */
 
-/* Terracotta — #C4714A */
-[data-palette="terracotta"],
-[data-theme="dark"][data-palette="terracotta"] {
+/* Terracotta — #C4714A
+   Using html[data-palette] (element + attr, specificity 0,1,1) beats
+   :root (0,0,1) and [data-theme] (0,1,0) so no cascade issues. */
+html[data-palette="terracotta"] {
   --cm-accent: #C4714A;
   --cm-accent-bg: rgba(196, 113, 74, 0.08);
   --cm-accent-bg-strong: rgba(196, 113, 74, 0.18);
 }
-[data-theme="light"][data-palette="terracotta"] {
+html[data-palette="terracotta"][data-theme="light"] {
   --cm-accent: #b05a35;
   --cm-accent-bg: #fde8dc;
   --cm-accent-bg-strong: rgba(176, 90, 53, 0.15);
 }
 
 /* Sage — #5A7A57 */
-[data-palette="sage"],
-[data-theme="dark"][data-palette="sage"] {
+html[data-palette="sage"] {
   --cm-accent: #7aaa76;
   --cm-accent-bg: rgba(90, 122, 87, 0.10);
   --cm-accent-bg-strong: rgba(90, 122, 87, 0.20);
 }
-[data-theme="light"][data-palette="sage"] {
+html[data-palette="sage"][data-theme="light"] {
   --cm-accent: #5A7A57;
   --cm-accent-bg: #e4ede3;
   --cm-accent-bg-strong: rgba(90, 122, 87, 0.15);
