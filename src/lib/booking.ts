@@ -1,5 +1,6 @@
 import { prisma } from "./db";
 import type { Booking } from "@prisma/client";
+import { toZonedTime, fromZonedTime } from "date-fns-tz";
 
 export const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
 
@@ -157,21 +158,32 @@ export function resolveSlotPrice(config: BookingConfig, dayOfWeek: number, hour:
   return config.defaultPriceValue;
 }
 
-function generateTimeSlots(date: Date, config: BookingConfig): TimeSlot[] {
-  const dayOfWeek = date.getDay();
+/**
+ * Generate time slots for a given UTC-midnight date using the venue's local timezone.
+ * All hour arithmetic is done in venue-local time so the server's process TZ is irrelevant.
+ */
+function generateTimeSlots(utcMidnight: Date, config: BookingConfig, venueTimezone: string): TimeSlot[] {
+  // Convert the UTC midnight to the venue's local representation
+  const zonedDate = toZonedTime(utcMidnight, venueTimezone);
+  const dayOfWeek = zonedDate.getDay();
   const slots: TimeSlot[] = [];
-  for (let hour = config.bookingStartHour; hour < config.bookingEndHour; hour += config.slotDurationMinutes / 60) {
-    const start = new Date(date);
-    start.setHours(Math.floor(hour), (hour % 1) * 60, 0, 0);
 
-    const end = new Date(start);
-    end.setMinutes(end.getMinutes() + config.slotDurationMinutes);
+  for (let hour = config.bookingStartHour; hour < config.bookingEndHour; hour += config.slotDurationMinutes / 60) {
+    const floorHour = Math.floor(hour);
+    const minutes = Math.round((hour % 1) * 60);
+
+    // Build a local-time wall-clock date in the venue's timezone, then convert to UTC
+    const zonedStart = toZonedTime(utcMidnight, venueTimezone);
+    zonedStart.setHours(floorHour, minutes, 0, 0);
+    const start = fromZonedTime(zonedStart, venueTimezone);
+
+    const end = new Date(start.getTime() + config.slotDurationMinutes * 60 * 1000);
 
     slots.push({
       startTime: start.toISOString(),
       endTime: end.toISOString(),
-      hour: Math.floor(hour),
-      priceValue: resolveSlotPrice(config, dayOfWeek, Math.floor(hour)),
+      hour: floorHour,
+      priceValue: resolveSlotPrice(config, dayOfWeek, floorHour),
     });
   }
   return slots;
@@ -180,6 +192,7 @@ function generateTimeSlots(date: Date, config: BookingConfig): TimeSlot[] {
 /**
  * Get available booking slots for a venue on a given date.
  * Returns a matrix of courts x time slots with availability and price.
+ * All time calculations use the venue's stored timezone — server process TZ is irrelevant.
  */
 export async function getAvailableSlots(
   venueId: string,
@@ -187,9 +200,10 @@ export async function getAvailableSlots(
 ): Promise<CourtSlot[]> {
   const venue = await prisma.venue.findUniqueOrThrow({
     where: { id: venueId },
-    select: { settings: true },
+    select: { settings: true, timezone: true },
   });
 
+  const venueTimezone = venue.timezone ?? "Asia/Ho_Chi_Minh";
   const vs = venue.settings as Record<string, unknown>;
   const config = getBookingConfig(vs);
   const schedule = getScheduleConfig(vs);
@@ -204,8 +218,6 @@ export async function getAvailableSlots(
   dateOnly.setUTCHours(0, 0, 0, 0);
   const nextDay = new Date(dateOnly);
   nextDay.setUTCDate(nextDay.getUTCDate() + 1);
-  // Note: dateOnly.getDay() / getHours() below use LOCAL methods intentionally for
-  // day-of-week and slot-time logic — they read local time from the UTC-midnight base.
 
   const existingBookings = await prisma.booking.findMany({
     where: {
@@ -244,11 +256,22 @@ export async function getAvailableSlots(
     },
   });
 
-  const timeSlots = generateTimeSlots(dateOnly, config);
-  const dayOfWeek = dateOnly.getDay();
+  // Generate slots using the venue's timezone — completely process-TZ-independent
+  const timeSlots = generateTimeSlots(dateOnly, config, venueTimezone);
+
+  // Day-of-week in venue local time
+  const zonedDate = toZonedTime(dateOnly, venueTimezone);
+  const dayOfWeek = zonedDate.getDay();
   const daySchedule = schedule.entries.filter((e) => e.daysOfWeek.includes(dayOfWeek));
+
+  // isPast: compare absolute timestamps — no timezone needed
   const now = new Date();
-  const isToday = dateOnly.toDateString() === now.toDateString();
+  // isToday: compare date in venue's local timezone
+  const zonedNow = toZonedTime(now, venueTimezone);
+  const isToday =
+    zonedDate.getFullYear() === zonedNow.getFullYear() &&
+    zonedDate.getMonth() === zonedNow.getMonth() &&
+    zonedDate.getDate() === zonedNow.getDate();
 
   return courts.map((court) => ({
     courtId: court.id,

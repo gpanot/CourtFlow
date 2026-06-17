@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody, notFound } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { getBookingConfig, resolveSlotPrice } from "@/lib/booking";
+import { toZonedTime } from "date-fns-tz";
 
 export const dynamic = "force-dynamic";
 
@@ -127,15 +128,15 @@ export async function PATCH(
 
     const venue = await prisma.venue.findUniqueOrThrow({
       where: { id: existing.venueId },
-      select: { settings: true },
+      select: { settings: true, timezone: true },
     });
+    const venueTimezone = venue.timezone ?? "Asia/Ho_Chi_Minh";
     const config = getBookingConfig(venue.settings as Record<string, unknown>);
 
     const date = dateStr ? new Date(dateStr.split("T")[0]) : existing.date;
 
     const startTime = startTimeStr ? new Date(startTimeStr) : existing.startTime;
-    const endTime = new Date(startTime);
-    endTime.setMinutes(endTime.getMinutes() + config.slotDurationMinutes);
+    const endTime = new Date(startTime.getTime() + config.slotDurationMinutes * 60 * 1000);
 
     const conflict = await prisma.booking.findFirst({
       where: {
@@ -148,7 +149,8 @@ export async function PATCH(
     });
     if (conflict) return error("That slot is already booked", 409);
 
-    const slotPrice = resolveSlotPrice(config, date.getDay(), startTime.getHours());
+    const zonedStart = toZonedTime(startTime, venueTimezone);
+    const slotPrice = resolveSlotPrice(config, zonedStart.getDay(), zonedStart.getHours());
 
     const booking = await prisma.booking.update({
       where: { id },

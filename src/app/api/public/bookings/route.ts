@@ -5,6 +5,7 @@ import { requirePortalAuth } from "@/lib/portal-auth";
 import { getPortalVenueId } from "@/lib/venue-config";
 
 import { getBookingConfig, resolveSlotPrice } from "@/lib/booking";
+import { toZonedTime } from "date-fns-tz";
 import { generatePaymentRef } from "@/modules/courtpay/lib/payment-reference";
 import { buildVietQRUrl } from "@/lib/vietqr";
 
@@ -33,24 +34,24 @@ export async function POST(request: NextRequest) {
 
     const venue = await prisma.venue.findUniqueOrThrow({
       where: { id: venueId },
-      select: { settings: true, bankName: true, bankAccount: true, bankOwnerName: true },
+      select: { settings: true, bankName: true, bankAccount: true, bankOwnerName: true, timezone: true },
     });
+    const venueTimezone = venue.timezone ?? "Asia/Ho_Chi_Minh";
     const config = getBookingConfig(venue.settings as Record<string, unknown>);
 
-    // "YYYY-MM-DD" → UTC midnight (e.g. 2026-06-17T00:00:00.000Z).
-    // PG DATE column stores "2026-06-17" from UTC midnight — no setHours() needed.
+    // "YYYY-MM-DD" → UTC midnight. PG DATE stores "2026-06-17" correctly from this.
     const date = new Date(dateStr.split("T")[0]);
     const startTime = new Date(startTimeStr);
-    const endTime = new Date(startTime);
-    endTime.setMinutes(endTime.getMinutes() + config.slotDurationMinutes * slotCount);
+    const endTime = new Date(startTime.getTime() + config.slotDurationMinutes * slotCount * 60 * 1000);
 
-    // Day-of-week from startTime (a real local timestamp from the availability API)
-    const localDayOfWeek = startTime.getDay();
+    // Use venue-local day-of-week and hour for pricing — independent of server TZ
+    const zonedStart = toZonedTime(startTime, venueTimezone);
+    const localDayOfWeek = zonedStart.getDay();
     let totalPrice = 0;
     for (let i = 0; i < slotCount; i++) {
-      const slotStart = new Date(startTime);
-      slotStart.setMinutes(slotStart.getMinutes() + config.slotDurationMinutes * i);
-      totalPrice += resolveSlotPrice(config, localDayOfWeek, slotStart.getHours());
+      const slotStart = new Date(startTime.getTime() + config.slotDurationMinutes * i * 60 * 1000);
+      const zonedSlotStart = toZonedTime(slotStart, venueTimezone);
+      totalPrice += resolveSlotPrice(config, localDayOfWeek, zonedSlotStart.getHours());
     }
 
     const paymentRef = await generatePaymentRef("booking");

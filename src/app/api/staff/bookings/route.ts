@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { getBookingConfig, resolveSlotPrice } from "@/lib/booking";
+import { toZonedTime } from "date-fns-tz";
 
 export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
@@ -50,20 +51,23 @@ export async function POST(request: NextRequest) {
 
     const venue = await prisma.venue.findUniqueOrThrow({
       where: { id: body.venueId },
-      select: { settings: true },
+      select: { settings: true, timezone: true },
     });
+    const venueTimezone = venue.timezone ?? "Asia/Ho_Chi_Minh";
     const config = getBookingConfig(venue.settings as Record<string, unknown>);
 
     const slots = Math.max(1, Math.min(body.slotCount || 1, 12));
     const date = new Date(body.date.split("T")[0]);
     const startTime = new Date(body.startTime);
-    const endTime = new Date(startTime);
-    endTime.setMinutes(endTime.getMinutes() + config.slotDurationMinutes * slots);
+    const endTime = new Date(startTime.getTime() + config.slotDurationMinutes * slots * 60 * 1000);
 
+    const zonedStart = toZonedTime(startTime, venueTimezone);
+    const localDayOfWeek = zonedStart.getDay();
     let totalPrice = 0;
     for (let i = 0; i < slots; i++) {
-      const slotHour = startTime.getHours() + i;
-      totalPrice += resolveSlotPrice(config, date.getDay(), slotHour);
+      const slotStart = new Date(startTime.getTime() + config.slotDurationMinutes * i * 60 * 1000);
+      const zonedSlot = toZonedTime(slotStart, venueTimezone);
+      totalPrice += resolveSlotPrice(config, localDayOfWeek, zonedSlot.getHours());
     }
 
     const booking = await prisma.booking.create({
