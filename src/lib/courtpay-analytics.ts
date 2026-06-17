@@ -247,6 +247,7 @@ export interface AggregateKpis {
   cancelledCount: number;
   subscriptionRevenue: number;
   avgRevenuePerSession: number;
+  partyCount: number;
 }
 
 export interface SessionCandidate {
@@ -329,6 +330,11 @@ export function computeKpis(
   const uniquePlayers = new Set(
     payments.map((p) => p.checkInPlayerId).filter(Boolean)
   ).size;
+  // Sum partyCount from confirmed payments only (cancelled = 0 contribution)
+  const partyCount = confirmed.reduce(
+    (sum, p) => sum + (typeof p.partyCount === "number" && p.partyCount > 0 ? p.partyCount : 1),
+    0
+  );
   return {
     totalRevenue,
     totalPayments: payments.length,
@@ -338,5 +344,6 @@ export function computeKpis(
     subscriptionRevenue,
     avgRevenuePerSession:
       sessionCount > 0 ? Math.round(totalRevenue / sessionCount) : 0,
+    partyCount,
   };
 }

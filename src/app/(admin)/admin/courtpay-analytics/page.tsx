@@ -45,6 +45,7 @@ interface Kpis {
   cancelledCount: number;
   subscriptionRevenue: number;
   avgRevenuePerSession: number;
+  partyCount: number;
 }
 
 interface MonthRow extends Kpis {
@@ -70,6 +71,7 @@ interface SessionRow {
   paymentCount: number;
   revenue: number;
   playerCount: number;
+  partyCount: number;
   cancelledCount: number;
 }
 
@@ -1030,6 +1032,7 @@ export default function CourtPayAnalyticsPage() {
             openedOnDevice: null,
             paymentCount: 0,
             playerCount: 0,
+            partyCount: 0,
             revenue: 0,
             cancelledCount: 0,
           },
@@ -1373,7 +1376,7 @@ export default function CourtPayAnalyticsPage() {
                 exportingSelected={exportingSelected}
               />
               <DataTable
-                headers={[t("courtpayAnalytics.month"), t("courtpayAnalytics.sessions"), t("courtpayAnalytics.payments"), t("courtpayAnalytics.totalPlayers"), t("courtpayAnalytics.revenue"), t("courtpayAnalytics.avgPerSession"), t("courtpayAnalytics.cancelled")]}
+                headers={[t("courtpayAnalytics.month"), t("courtpayAnalytics.sessions"), t("courtpayAnalytics.payments"), t("courtpayAnalytics.totalPlayers"), t("courtpayAnalytics.party"), t("courtpayAnalytics.revenue"), t("courtpayAnalytics.avgPerSession"), t("courtpayAnalytics.cancelled")]}
                 rows={months.map((m) => ({
                   key: m.month,
                   cells: [
@@ -1381,6 +1384,7 @@ export default function CourtPayAnalyticsPage() {
                     String(m.sessionCount),
                     String(m.totalPayments),
                     String(m.uniquePlayers),
+                    String(m.partyCount),
                     <span key="rev" className="text-purple-400 font-medium">{formatVND(m.totalRevenue)} VND</span>,
                     formatVND(m.avgRevenuePerSession),
                     String(m.cancelledCount),
@@ -1410,7 +1414,7 @@ export default function CourtPayAnalyticsPage() {
                 exportingSelected={exportingSelected}
               />
               <DataTable
-                headers={[t("courtpayAnalytics.week"), t("courtpayAnalytics.sessions"), t("courtpayAnalytics.payments"), t("courtpayAnalytics.totalPlayers"), t("courtpayAnalytics.revenue"), t("courtpayAnalytics.avgPerSession"), t("courtpayAnalytics.cancelled")]}
+                headers={[t("courtpayAnalytics.week"), t("courtpayAnalytics.sessions"), t("courtpayAnalytics.payments"), t("courtpayAnalytics.totalPlayers"), t("courtpayAnalytics.party"), t("courtpayAnalytics.revenue"), t("courtpayAnalytics.avgPerSession"), t("courtpayAnalytics.cancelled")]}
                 rows={weeks.map((w) => ({
                   key: w.weekStart,
                   cells: [
@@ -1418,6 +1422,7 @@ export default function CourtPayAnalyticsPage() {
                     String(w.sessionCount),
                     String(w.totalPayments),
                     String(w.uniquePlayers),
+                    String(w.partyCount),
                     <span key="rev" className="text-purple-400 font-medium">{formatVND(w.totalRevenue)} VND</span>,
                     formatVND(w.avgRevenuePerSession),
                     String(w.cancelledCount),
@@ -1547,7 +1552,7 @@ export default function CourtPayAnalyticsPage() {
               </div>
 
               <DataTable
-                headers={[t("courtpayAnalytics.date"), t("courtpayAnalytics.session"), t("courtpayAnalytics.host"), t("courtpayAnalytics.payments"), t("courtpayAnalytics.revenue"), t("players.colPlayer"), t("courtpayAnalytics.cancelled"), t("courtpayAnalytics.status"), ""]}
+                headers={[t("courtpayAnalytics.date"), t("courtpayAnalytics.session"), t("courtpayAnalytics.host"), t("courtpayAnalytics.payments"), t("courtpayAnalytics.revenue"), t("courtpayAnalytics.totalPlayers"), t("courtpayAnalytics.party"), t("courtpayAnalytics.cancelled"), t("courtpayAnalytics.status"), ""]}
                 rows={sessions.map((s) => ({
                   key: s.id,
                   cells: [
@@ -1560,6 +1565,7 @@ export default function CourtPayAnalyticsPage() {
                     String(s.paymentCount),
                     <span key="rev" className="text-purple-400 font-medium">{formatVND(s.revenue)} VND</span>,
                     String(s.playerCount),
+                    String(s.partyCount),
                     s.cancelledCount > 0
                       ? <span key="cancel" className="text-red-400 font-medium">{s.cancelledCount}</span>
                       : <span key="cancel" className="text-neutral-500">0</span>,

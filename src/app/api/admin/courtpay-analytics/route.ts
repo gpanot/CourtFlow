@@ -544,6 +544,7 @@ export async function GET(req: Request) {
             paymentCount: s.payments.length,
             revenue: confirmed.reduce((sum, p) => sum + p.amount, 0),
             playerCount: playerIds.size,
+            partyCount: confirmed.reduce((sum, p) => sum + (typeof p.partyCount === "number" && p.partyCount > 0 ? p.partyCount : 1), 0),
             cancelledCount: s.payments.filter((p) => p.status === "cancelled").length,
           };
         })
@@ -553,10 +554,11 @@ export async function GET(req: Request) {
         );
 
       const kpis = computeKpis(payments, collectSessionIds(payments));
-      // Players KPI = sum of per-session player counts (matches the Player column in the table)
+      // Players and Party KPIs = sum of per-session counts (matches the table columns)
       const weekKpis = {
         ...kpis,
         uniquePlayers: sessions.reduce((sum, s) => sum + s.playerCount, 0),
+        partyCount: sessions.reduce((sum, s) => sum + s.partyCount, 0),
       };
 
       return NextResponse.json({
@@ -602,20 +604,30 @@ export async function GET(req: Request) {
         .map(([, b]) => {
           const kpis = computeKpis(b.payments, b.sessionIds);
           // Per-week Players = sum of distinct players per session in that week
+          // Per-week Party = sum of partyCount of confirmed payments per session
           const sessionPlayerCounts = new Map<string, Set<string>>();
+          const sessionPartyCounts = new Map<string, number>();
           for (const p of b.payments) {
             const resolved = resolvePaymentSession(p, sessionCandidates);
-            if (!resolved || !p.checkInPlayerId) continue;
-            if (!sessionPlayerCounts.has(resolved.id)) sessionPlayerCounts.set(resolved.id, new Set());
-            sessionPlayerCounts.get(resolved.id)!.add(p.checkInPlayerId);
+            if (!resolved) continue;
+            if (p.checkInPlayerId) {
+              if (!sessionPlayerCounts.has(resolved.id)) sessionPlayerCounts.set(resolved.id, new Set());
+              sessionPlayerCounts.get(resolved.id)!.add(p.checkInPlayerId);
+            }
+            if (p.status === "confirmed") {
+              const party = typeof p.partyCount === "number" && p.partyCount > 0 ? p.partyCount : 1;
+              sessionPartyCounts.set(resolved.id, (sessionPartyCounts.get(resolved.id) ?? 0) + party);
+            }
           }
           const weekPlayerSum = [...sessionPlayerCounts.values()].reduce((sum, set) => sum + set.size, 0);
+          const weekPartySum = [...sessionPartyCounts.values()].reduce((sum, n) => sum + n, 0);
           return {
             weekStart: b.weekStart.toISOString(),
             weekEnd: b.weekEnd.toISOString(),
             weekLabel: `${b.weekStart.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} – ${b.weekEnd.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`,
             ...kpis,
             uniquePlayers: weekPlayerSum,
+            partyCount: weekPartySum,
           };
         })
         .sort(
@@ -624,10 +636,11 @@ export async function GET(req: Request) {
         );
 
       const kpis = computeKpis(payments, collectSessionIds(payments, sessionCandidates));
-      // Players KPI = sum of per-week player counts (matches the Players column in the table)
+      // Players and Party KPIs = sum of per-week counts (matches the table columns)
       const monthKpis = {
         ...kpis,
         uniquePlayers: weeks.reduce((sum, w) => sum + w.uniquePlayers, 0),
+        partyCount: weeks.reduce((sum, w) => sum + w.partyCount, 0),
       };
 
       return NextResponse.json({
@@ -668,28 +681,38 @@ export async function GET(req: Request) {
       .map(([key, b]) => {
         const kpis = computeKpis(b.payments, b.sessionIds);
         // Per-month Players = sum of distinct players per session in that month
+        // Per-month Party = sum of partyCount of confirmed payments per session
         const sessionPlayerCounts = new Map<string, Set<string>>();
+        const sessionPartyCounts = new Map<string, number>();
         for (const p of b.payments) {
           const resolved = resolvePaymentSession(p, sessionCandidates);
-          if (!resolved || !p.checkInPlayerId) continue;
-          if (!sessionPlayerCounts.has(resolved.id)) sessionPlayerCounts.set(resolved.id, new Set());
-          sessionPlayerCounts.get(resolved.id)!.add(p.checkInPlayerId);
+          if (!resolved) continue;
+          if (p.checkInPlayerId) {
+            if (!sessionPlayerCounts.has(resolved.id)) sessionPlayerCounts.set(resolved.id, new Set());
+            sessionPlayerCounts.get(resolved.id)!.add(p.checkInPlayerId);
+          }
+          if (p.status === "confirmed") {
+            const party = typeof p.partyCount === "number" && p.partyCount > 0 ? p.partyCount : 1;
+            sessionPartyCounts.set(resolved.id, (sessionPartyCounts.get(resolved.id) ?? 0) + party);
+          }
         }
         const monthPlayerSum = [...sessionPlayerCounts.values()].reduce((sum, set) => sum + set.size, 0);
+        const monthPartySum = [...sessionPartyCounts.values()].reduce((sum, n) => sum + n, 0);
         const [y, m] = key.split("-").map(Number);
         const label = new Date(y, m - 1, 1).toLocaleDateString("en-GB", {
           month: "long",
           year: "numeric",
         });
-        return { month: key, monthLabel: label, ...kpis, uniquePlayers: monthPlayerSum };
+        return { month: key, monthLabel: label, ...kpis, uniquePlayers: monthPlayerSum, partyCount: monthPartySum };
       })
       .sort((a, b) => b.month.localeCompare(a.month));
 
     const kpis = computeKpis(payments, collectSessionIds(payments, sessionCandidates));
-    // Players KPI = sum of per-month player counts (matches the Players column in the table)
+    // Players and Party KPIs = sum of per-month counts (matches the table columns)
     const venueKpis = {
       ...kpis,
       uniquePlayers: months.reduce((sum, m) => sum + m.uniquePlayers, 0),
+      partyCount: months.reduce((sum, m) => sum + m.partyCount, 0),
     };
 
     return NextResponse.json({
