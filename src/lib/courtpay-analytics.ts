@@ -312,8 +312,7 @@ export async function getVenueRosterPlayerCount(venueId: string): Promise<number
 
 export function computeKpis(
   payments: CourtPayPaymentRow[],
-  sessionIds: Set<string>,
-  rosterPlayerCount?: number
+  sessionIds: Set<string>
 ): AggregateKpis {
   const confirmed = payments.filter((p) => p.status === "confirmed");
   const totalRevenue = confirmed.reduce((s, p) => s + p.amount, 0);
@@ -326,10 +325,14 @@ export function computeKpis(
     )
     .reduce((s, p) => s + p.amount, 0);
   const sessionCount = sessionIds.size;
+  // Count distinct players from all payments (confirmed + cancelled) in this scope
+  const uniquePlayers = new Set(
+    payments.map((p) => p.checkInPlayerId).filter(Boolean)
+  ).size;
   return {
     totalRevenue,
     totalPayments: payments.length,
-    uniquePlayers: rosterPlayerCount ?? new Set(payments.map((p) => p.checkInPlayerId).filter(Boolean)).size,
+    uniquePlayers,
     sessionCount,
     cancelledCount: payments.filter((p) => p.status === "cancelled").length,
     subscriptionRevenue,

@@ -5,7 +5,6 @@ import { getAuthorizedVenueIds } from "@/lib/venue-scope";
 import {
   computeKpis,
   fetchCourtPayPayments,
-  getVenueRosterPlayerCount,
   getWeekEndLocal,
   getWeekStartLocal,
   monthKey,
@@ -199,8 +198,7 @@ export async function GET(req: Request) {
       const rows = await enrichPayments(session.venueId, sessionPayments, [
         sessionCandidate,
       ]);
-      const rosterPlayerCount = await getVenueRosterPlayerCount(session.venueId);
-      const kpis = computeKpis(sessionPayments, new Set([sessionId]), rosterPlayerCount);
+      const kpis = computeKpis(sessionPayments, new Set([sessionId]));
 
       const snap = session.reclubSnapshot as {
         players?: Array<{
@@ -469,8 +467,6 @@ export async function GET(req: Request) {
       }
       we.setHours(23, 59, 59, 999);
 
-      const rosterPlayerCount = await getVenueRosterPlayerCount(venueId);
-
       const [payments, sessionCandidates] = await Promise.all([
         fetchCourtPayPayments({ venueId, from: ws, to: we }),
         prisma.session.findMany({
@@ -556,7 +552,12 @@ export async function GET(req: Request) {
             new Date(b.openedAt).getTime() - new Date(a.openedAt).getTime()
         );
 
-      const kpis = computeKpis(payments, collectSessionIds(payments), rosterPlayerCount);
+      const kpis = computeKpis(payments, collectSessionIds(payments));
+      // Players KPI = sum of per-session player counts (matches the Player column in the table)
+      const weekKpis = {
+        ...kpis,
+        uniquePlayers: sessions.reduce((sum, s) => sum + s.playerCount, 0),
+      };
 
       return NextResponse.json({
         level: "week",
@@ -564,7 +565,7 @@ export async function GET(req: Request) {
         weekStart: ws.toISOString(),
         weekEnd: we.toISOString(),
         month: month ?? monthKey(ws),
-        kpis,
+        kpis: weekKpis,
         sessions,
       });
     }
@@ -596,17 +597,25 @@ export async function GET(req: Request) {
         }),
       ]);
 
-      const rosterPlayerCount = await getVenueRosterPlayerCount(venueId);
-
       const weekBuckets = groupByWeek(payments, sessionCandidates);
       const weeks = [...weekBuckets.entries()]
         .map(([, b]) => {
-          const kpis = computeKpis(b.payments, b.sessionIds, rosterPlayerCount);
+          const kpis = computeKpis(b.payments, b.sessionIds);
+          // Per-week Players = sum of distinct players per session in that week
+          const sessionPlayerCounts = new Map<string, Set<string>>();
+          for (const p of b.payments) {
+            const resolved = resolvePaymentSession(p, sessionCandidates);
+            if (!resolved || !p.checkInPlayerId) continue;
+            if (!sessionPlayerCounts.has(resolved.id)) sessionPlayerCounts.set(resolved.id, new Set());
+            sessionPlayerCounts.get(resolved.id)!.add(p.checkInPlayerId);
+          }
+          const weekPlayerSum = [...sessionPlayerCounts.values()].reduce((sum, set) => sum + set.size, 0);
           return {
             weekStart: b.weekStart.toISOString(),
             weekEnd: b.weekEnd.toISOString(),
             weekLabel: `${b.weekStart.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} – ${b.weekEnd.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}`,
             ...kpis,
+            uniquePlayers: weekPlayerSum,
           };
         })
         .sort(
@@ -614,13 +623,18 @@ export async function GET(req: Request) {
             new Date(b.weekStart).getTime() - new Date(a.weekStart).getTime()
         );
 
-      const kpis = computeKpis(payments, collectSessionIds(payments, sessionCandidates), rosterPlayerCount);
+      const kpis = computeKpis(payments, collectSessionIds(payments, sessionCandidates));
+      // Players KPI = sum of per-week player counts (matches the Players column in the table)
+      const monthKpis = {
+        ...kpis,
+        uniquePlayers: weeks.reduce((sum, w) => sum + w.uniquePlayers, 0),
+      };
 
       return NextResponse.json({
         level: "month",
         venue,
         month,
-        kpis,
+        kpis: monthKpis,
         weeks,
       });
     }
@@ -649,26 +663,39 @@ export async function GET(req: Request) {
         orderBy: { openedAt: "asc" },
       }),
     ]);
-    const rosterPlayerCount = await getVenueRosterPlayerCount(venueId);
     const monthBuckets = groupByMonth(payments, sessionCandidates);
     const months = [...monthBuckets.entries()]
       .map(([key, b]) => {
-        const kpis = computeKpis(b.payments, b.sessionIds, rosterPlayerCount);
+        const kpis = computeKpis(b.payments, b.sessionIds);
+        // Per-month Players = sum of distinct players per session in that month
+        const sessionPlayerCounts = new Map<string, Set<string>>();
+        for (const p of b.payments) {
+          const resolved = resolvePaymentSession(p, sessionCandidates);
+          if (!resolved || !p.checkInPlayerId) continue;
+          if (!sessionPlayerCounts.has(resolved.id)) sessionPlayerCounts.set(resolved.id, new Set());
+          sessionPlayerCounts.get(resolved.id)!.add(p.checkInPlayerId);
+        }
+        const monthPlayerSum = [...sessionPlayerCounts.values()].reduce((sum, set) => sum + set.size, 0);
         const [y, m] = key.split("-").map(Number);
         const label = new Date(y, m - 1, 1).toLocaleDateString("en-GB", {
           month: "long",
           year: "numeric",
         });
-        return { month: key, monthLabel: label, ...kpis };
+        return { month: key, monthLabel: label, ...kpis, uniquePlayers: monthPlayerSum };
       })
       .sort((a, b) => b.month.localeCompare(a.month));
 
-    const kpis = computeKpis(payments, collectSessionIds(payments, sessionCandidates), rosterPlayerCount);
+    const kpis = computeKpis(payments, collectSessionIds(payments, sessionCandidates));
+    // Players KPI = sum of per-month player counts (matches the Players column in the table)
+    const venueKpis = {
+      ...kpis,
+      uniquePlayers: months.reduce((sum, m) => sum + m.uniquePlayers, 0),
+    };
 
     return NextResponse.json({
       level: "venue",
       venue,
-      kpis,
+      kpis: venueKpis,
       months,
     });
   } catch (err: unknown) {
