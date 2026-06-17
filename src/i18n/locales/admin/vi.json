@@ -1131,7 +1131,7 @@
     "tooltipSessions": "Số phiên trong kỳ này.",
     "tooltipRevenue": "Tổng các thanh toán đã xác nhận. Thanh toán đã huỷ tính là 0.",
     "tooltipPlayers": "Tổng người chơi riêng biệt mỗi phiên. Một người chơi có thể thanh toán cho 1, 2, 3 hoặc 4 người.",
-    "tooltipParty": "Tổng số người trong các thanh toán đã xác nhận (bao gồm người chơi nhóm). Đây là tổng số người thực tế tại phiên.",
+    "tooltipParty": "Tổng số người trong tất cả các thanh toán (đã xác nhận + đã hủy). Bao gồm người chơi nhóm. Đây là tổng số người thực tế tại phiên.",
     "tooltipCancelled": "Số thanh toán có trạng thái đã huỷ trong kỳ này.",
     "tooltipAvgPaidParty": "Doanh thu ÷ (Tổng nhóm − Đã huỷ). Doanh thu trung bình mỗi suất nhóm đã trả.",
     "subRevenue": "Doanh thu gói",

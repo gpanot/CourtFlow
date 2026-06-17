@@ -544,7 +544,7 @@ export async function GET(req: Request) {
             paymentCount: s.payments.length,
             revenue: confirmed.reduce((sum, p) => sum + p.amount, 0),
             playerCount: playerIds.size,
-            partyCount: confirmed.reduce((sum, p) => sum + (typeof p.partyCount === "number" && p.partyCount > 0 ? p.partyCount : 1), 0),
+            partyCount: s.payments.reduce((sum, p) => sum + (typeof p.partyCount === "number" && p.partyCount > 0 ? p.partyCount : 1), 0),
             cancelledCount: s.payments.filter((p) => p.status === "cancelled").length,
           };
         })
@@ -604,7 +604,7 @@ export async function GET(req: Request) {
         .map(([, b]) => {
           const kpis = computeKpis(b.payments, b.sessionIds);
           // Per-week Players = sum of distinct players per session in that week
-          // Per-week Party = sum of partyCount of confirmed payments per session
+          // Per-week Party = sum of partyCount from ALL payments per session (confirmed + cancelled)
           const sessionPlayerCounts = new Map<string, Set<string>>();
           const sessionPartyCounts = new Map<string, number>();
           for (const p of b.payments) {
@@ -614,10 +614,8 @@ export async function GET(req: Request) {
               if (!sessionPlayerCounts.has(resolved.id)) sessionPlayerCounts.set(resolved.id, new Set());
               sessionPlayerCounts.get(resolved.id)!.add(p.checkInPlayerId);
             }
-            if (p.status === "confirmed") {
-              const party = typeof p.partyCount === "number" && p.partyCount > 0 ? p.partyCount : 1;
-              sessionPartyCounts.set(resolved.id, (sessionPartyCounts.get(resolved.id) ?? 0) + party);
-            }
+            const party = typeof p.partyCount === "number" && p.partyCount > 0 ? p.partyCount : 1;
+            sessionPartyCounts.set(resolved.id, (sessionPartyCounts.get(resolved.id) ?? 0) + party);
           }
           const weekPlayerSum = [...sessionPlayerCounts.values()].reduce((sum, set) => sum + set.size, 0);
           const weekPartySum = [...sessionPartyCounts.values()].reduce((sum, n) => sum + n, 0);
@@ -681,7 +679,7 @@ export async function GET(req: Request) {
       .map(([key, b]) => {
         const kpis = computeKpis(b.payments, b.sessionIds);
         // Per-month Players = sum of distinct players per session in that month
-        // Per-month Party = sum of partyCount of confirmed payments per session
+        // Per-month Party = sum of partyCount from ALL payments per session (confirmed + cancelled)
         const sessionPlayerCounts = new Map<string, Set<string>>();
         const sessionPartyCounts = new Map<string, number>();
         for (const p of b.payments) {
@@ -691,10 +689,8 @@ export async function GET(req: Request) {
             if (!sessionPlayerCounts.has(resolved.id)) sessionPlayerCounts.set(resolved.id, new Set());
             sessionPlayerCounts.get(resolved.id)!.add(p.checkInPlayerId);
           }
-          if (p.status === "confirmed") {
-            const party = typeof p.partyCount === "number" && p.partyCount > 0 ? p.partyCount : 1;
-            sessionPartyCounts.set(resolved.id, (sessionPartyCounts.get(resolved.id) ?? 0) + party);
-          }
+          const party = typeof p.partyCount === "number" && p.partyCount > 0 ? p.partyCount : 1;
+          sessionPartyCounts.set(resolved.id, (sessionPartyCounts.get(resolved.id) ?? 0) + party);
         }
         const monthPlayerSum = [...sessionPlayerCounts.values()].reduce((sum, set) => sum + set.size, 0);
         const monthPartySum = [...sessionPartyCounts.values()].reduce((sum, n) => sum + n, 0);

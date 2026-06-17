@@ -330,8 +330,8 @@ export function computeKpis(
   const uniquePlayers = new Set(
     payments.map((p) => p.checkInPlayerId).filter(Boolean)
   ).size;
-  // Sum partyCount from confirmed payments only (cancelled = 0 contribution)
-  const partyCount = confirmed.reduce(
+  // Sum partyCount from ALL payments (confirmed + cancelled) — every person counts
+  const partyCount = payments.reduce(
     (sum, p) => sum + (typeof p.partyCount === "number" && p.partyCount > 0 ? p.partyCount : 1),
     0
   );

@@ -1396,7 +1396,7 @@ export default function CourtPayAnalyticsPage() {
                 exportingSelected={exportingSelected}
               />
               <DataTable
-                headers={[t("courtpayAnalytics.month"), t("courtpayAnalytics.sessions"), t("courtpayAnalytics.payments"), t("courtpayAnalytics.totalPlayers"), t("courtpayAnalytics.party"), t("courtpayAnalytics.revenue"), t("courtpayAnalytics.avgPerSession"), t("courtpayAnalytics.cancelled")]}
+                headers={[t("courtpayAnalytics.month"), t("courtpayAnalytics.sessions"), t("courtpayAnalytics.payments"), `${t("courtpayAnalytics.totalPlayers")} (${months.reduce((s, m) => s + m.uniquePlayers, 0)})`, `${t("courtpayAnalytics.party")} (${months.reduce((s, m) => s + m.partyCount, 0)})`, t("courtpayAnalytics.revenue"), t("courtpayAnalytics.avgPerSession"), t("courtpayAnalytics.cancelled")]}
                 rows={months.map((m) => ({
                   key: m.month,
                   cells: [
@@ -1434,7 +1434,7 @@ export default function CourtPayAnalyticsPage() {
                 exportingSelected={exportingSelected}
               />
               <DataTable
-                headers={[t("courtpayAnalytics.week"), t("courtpayAnalytics.sessions"), t("courtpayAnalytics.payments"), t("courtpayAnalytics.totalPlayers"), t("courtpayAnalytics.party"), t("courtpayAnalytics.revenue"), t("courtpayAnalytics.avgPerSession"), t("courtpayAnalytics.cancelled")]}
+                headers={[t("courtpayAnalytics.week"), t("courtpayAnalytics.sessions"), t("courtpayAnalytics.payments"), `${t("courtpayAnalytics.totalPlayers")} (${weeks.reduce((s, w) => s + w.uniquePlayers, 0)})`, `${t("courtpayAnalytics.party")} (${weeks.reduce((s, w) => s + w.partyCount, 0)})`, t("courtpayAnalytics.revenue"), t("courtpayAnalytics.avgPerSession"), t("courtpayAnalytics.cancelled")]}
                 rows={weeks.map((w) => ({
                   key: w.weekStart,
                   cells: [
@@ -1572,7 +1572,7 @@ export default function CourtPayAnalyticsPage() {
               </div>
 
               <DataTable
-                headers={[t("courtpayAnalytics.date"), t("courtpayAnalytics.session"), t("courtpayAnalytics.host"), t("courtpayAnalytics.payments"), t("courtpayAnalytics.revenue"), t("courtpayAnalytics.totalPlayers"), t("courtpayAnalytics.party"), t("courtpayAnalytics.cancelled"), t("courtpayAnalytics.status"), ""]}
+                headers={[t("courtpayAnalytics.date"), t("courtpayAnalytics.session"), t("courtpayAnalytics.host"), t("courtpayAnalytics.payments"), t("courtpayAnalytics.revenue"), `${t("courtpayAnalytics.totalPlayers")} (${sessions.reduce((s, r) => s + r.playerCount, 0)})`, `${t("courtpayAnalytics.party")} (${sessions.reduce((s, r) => s + r.partyCount, 0)})`, t("courtpayAnalytics.cancelled"), t("courtpayAnalytics.status"), ""]}
                 rows={sessions.map((s) => ({
                   key: s.id,
                   cells: [
@@ -1690,13 +1690,13 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
               />
               <DataTable
                 headers={[
-                  t("players.colPlayer"),
+                  `${t("players.colPlayer")} (${payments.length})`,
                   t("players.colPhone"),
                   t("courtpayAnalytics.skill"),
                   t("courtpayAnalytics.reclubName"),
                   t("courtpayAnalytics.frequency"),
                   t("kioskShop.amount"),
-                  t("courtpayAnalytics.party"),
+                  `${t("courtpayAnalytics.party")} (${payments.reduce((s, p) => s + p.partyCount, 0)})`,
                   t("courtpayAnalytics.method"),
                   t("courtpayAnalytics.status"),
                   t("courtpayAnalytics.confirmed"),
