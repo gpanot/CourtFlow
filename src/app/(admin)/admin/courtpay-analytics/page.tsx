@@ -6,7 +6,6 @@ import adminI18n from "@/i18n/admin-i18n";
 import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import {
-  BarChart3,
   ChevronRight,
   Check,
   Download,
@@ -275,26 +274,12 @@ function StatCard({
 
 function KpiGrid({ kpis }: { kpis: Kpis }) {
   const { t } = useTranslation("translation", { i18n: adminI18n });
+  const totalPaidPlayers = Math.max(0, kpis.uniquePlayers - kpis.cancelledCount);
+  const avgPerPaidPlayer = totalPaidPlayers > 0
+    ? Math.round(kpis.totalRevenue / totalPaidPlayers)
+    : 0;
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
-      <StatCard
-        icon={DollarSign}
-        label={t("courtpayAnalytics.revenueConfirmed")}
-        value={`${formatVND(kpis.totalRevenue)}`}
-        color="text-purple-400"
-      />
-      <StatCard
-        icon={BarChart3}
-        label={t("courtpayAnalytics.payments")}
-        value={String(kpis.totalPayments)}
-        color="text-blue-400"
-      />
-      <StatCard
-        icon={Users}
-        label={t("courtpayAnalytics.totalPlayers")}
-        value={String(kpis.uniquePlayers)}
-        color="text-emerald-400"
-      />
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
       <StatCard
         icon={Calendar}
         label={t("courtpayAnalytics.sessions")}
@@ -302,10 +287,16 @@ function KpiGrid({ kpis }: { kpis: Kpis }) {
         color="text-amber-400"
       />
       <StatCard
-        icon={TrendingUp}
-        label={t("courtpayAnalytics.avgPerSession")}
-        value={`${formatVND(kpis.avgRevenuePerSession)}`}
-        color="text-cyan-400"
+        icon={DollarSign}
+        label={t("courtpayAnalytics.revenueConfirmed")}
+        value={`${formatVND(kpis.totalRevenue)}`}
+        color="text-purple-400"
+      />
+      <StatCard
+        icon={Users}
+        label={t("courtpayAnalytics.totalPlayers")}
+        value={String(kpis.uniquePlayers)}
+        color="text-emerald-400"
       />
       <StatCard
         icon={XCircle}
@@ -317,6 +308,13 @@ function KpiGrid({ kpis }: { kpis: Kpis }) {
             : undefined
         }
         color="text-red-400"
+      />
+      <StatCard
+        icon={TrendingUp}
+        label={t("courtpayAnalytics.avgPerPaidPlayer")}
+        value={`${formatVND(avgPerPaidPlayer)}`}
+        sub={totalPaidPlayers > 0 ? `${totalPaidPlayers} paid players` : undefined}
+        color="text-cyan-400"
       />
     </div>
   );
@@ -1375,13 +1373,14 @@ export default function CourtPayAnalyticsPage() {
                 exportingSelected={exportingSelected}
               />
               <DataTable
-                headers={[t("courtpayAnalytics.month"), t("courtpayAnalytics.sessions"), t("courtpayAnalytics.payments"), t("courtpayAnalytics.revenue"), t("courtpayAnalytics.avgPerSession"), t("courtpayAnalytics.cancelled")]}
+                headers={[t("courtpayAnalytics.month"), t("courtpayAnalytics.sessions"), t("courtpayAnalytics.payments"), t("courtpayAnalytics.totalPlayers"), t("courtpayAnalytics.revenue"), t("courtpayAnalytics.avgPerSession"), t("courtpayAnalytics.cancelled")]}
                 rows={months.map((m) => ({
                   key: m.month,
                   cells: [
                     m.monthLabel,
                     String(m.sessionCount),
                     String(m.totalPayments),
+                    String(m.uniquePlayers),
                     <span key="rev" className="text-purple-400 font-medium">{formatVND(m.totalRevenue)} VND</span>,
                     formatVND(m.avgRevenuePerSession),
                     String(m.cancelledCount),
@@ -1411,13 +1410,14 @@ export default function CourtPayAnalyticsPage() {
                 exportingSelected={exportingSelected}
               />
               <DataTable
-                headers={[t("courtpayAnalytics.week"), t("courtpayAnalytics.sessions"), t("courtpayAnalytics.payments"), t("courtpayAnalytics.revenue"), t("courtpayAnalytics.avgPerSession"), t("courtpayAnalytics.cancelled")]}
+                headers={[t("courtpayAnalytics.week"), t("courtpayAnalytics.sessions"), t("courtpayAnalytics.payments"), t("courtpayAnalytics.totalPlayers"), t("courtpayAnalytics.revenue"), t("courtpayAnalytics.avgPerSession"), t("courtpayAnalytics.cancelled")]}
                 rows={weeks.map((w) => ({
                   key: w.weekStart,
                   cells: [
                     w.weekLabel,
                     String(w.sessionCount),
                     String(w.totalPayments),
+                    String(w.uniquePlayers),
                     <span key="rev" className="text-purple-400 font-medium">{formatVND(w.totalRevenue)} VND</span>,
                     formatVND(w.avgRevenuePerSession),
                     String(w.cancelledCount),
@@ -1622,7 +1622,7 @@ export default function CourtPayAnalyticsPage() {
                     <p className="text-xs text-fuchsia-400">
                       Reclub: {sessionMeta.reclubEventName ?? sessionMeta.reclubReferenceCode}
                     </p>
-                    {sessionMeta.reclubSnapshot && sessionMeta.reclubSnapshot.length > 0 && (
+                    {process.env.NODE_ENV === "development" && sessionMeta.reclubSnapshot && sessionMeta.reclubSnapshot.length > 0 && (
                       <button
                         type="button"
                         onClick={() => {

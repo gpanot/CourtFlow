@@ -1124,6 +1124,7 @@
     "revenueConfirmed": "Doanh thu (đã xác nhận)",
     "totalPlayers": "Tổng người chơi",
     "avgPerSession": "TB / phiên",
+    "avgPerPaidPlayer": "TB / người chơi trả phí",
     "cancelled": "Đã huỷ",
     "subRevenue": "Doanh thu gói",
     "date": "Ngày",

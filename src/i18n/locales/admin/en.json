@@ -1132,6 +1132,7 @@
     "revenueConfirmed": "Revenue (confirmed)",
     "totalPlayers": "Total players",
     "avgPerSession": "Avg / session",
+    "avgPerPaidPlayer": "Avg / paid player",
     "cancelled": "Cancelled",
     "subRevenue": "Sub revenue",
     "date": "Date",
