@@ -11,6 +11,7 @@ import {
   Download,
   Loader2,
   Users,
+  Users2,
   DollarSign,
   Calendar,
   TrendingUp,
@@ -257,66 +258,85 @@ function StatCard({
   value,
   sub,
   color,
+  tooltip,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string;
   sub?: string;
   color: string;
+  tooltip?: string;
 }) {
   return (
-    <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-3 md:p-4">
+    <div className="relative rounded-xl border border-neutral-800 bg-neutral-900 p-3 md:p-4">
       <Icon className={cn("mb-1.5 h-4 w-4 md:h-5 md:w-5", color)} />
       <p className="text-lg font-bold tabular-nums md:text-2xl">{value}</p>
       <p className="text-[11px] text-neutral-400 md:text-xs">{label}</p>
       {sub && <p className="mt-0.5 text-[10px] text-neutral-500">{sub}</p>}
+      {tooltip && (
+        <div className="group absolute right-2 top-2">
+          <div className="flex h-4 w-4 cursor-default items-center justify-center rounded-full border border-neutral-700 text-[10px] font-semibold text-neutral-500 hover:border-neutral-500 hover:text-neutral-300 transition-colors">
+            ?
+          </div>
+          <div className="pointer-events-none absolute right-0 top-5 z-20 w-52 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-[11px] leading-relaxed text-neutral-300 opacity-0 shadow-xl transition-opacity group-hover:opacity-100">
+            {tooltip}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 function KpiGrid({ kpis }: { kpis: Kpis }) {
   const { t } = useTranslation("translation", { i18n: adminI18n });
-  const totalPaidPlayers = Math.max(0, kpis.uniquePlayers - kpis.cancelledCount);
-  const avgPerPaidPlayer = totalPaidPlayers > 0
-    ? Math.round(kpis.totalRevenue / totalPaidPlayers)
+  const totalPaidParty = Math.max(0, kpis.partyCount - kpis.cancelledCount);
+  const avgPerPaidParty = totalPaidParty > 0
+    ? Math.round(kpis.totalRevenue / totalPaidParty)
     : 0;
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-5">
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
       <StatCard
         icon={Calendar}
         label={t("courtpayAnalytics.sessions")}
         value={String(kpis.sessionCount)}
         color="text-amber-400"
+        tooltip={t("courtpayAnalytics.tooltipSessions")}
       />
       <StatCard
         icon={DollarSign}
         label={t("courtpayAnalytics.revenueConfirmed")}
         value={`${formatVND(kpis.totalRevenue)}`}
         color="text-purple-400"
+        tooltip={t("courtpayAnalytics.tooltipRevenue")}
       />
       <StatCard
         icon={Users}
         label={t("courtpayAnalytics.totalPlayers")}
         value={String(kpis.uniquePlayers)}
         color="text-emerald-400"
+        tooltip={t("courtpayAnalytics.tooltipPlayers")}
+      />
+      <StatCard
+        icon={Users2}
+        label={t("courtpayAnalytics.totalParty")}
+        value={String(kpis.partyCount)}
+        color="text-teal-400"
+        tooltip={t("courtpayAnalytics.tooltipParty")}
       />
       <StatCard
         icon={XCircle}
         label={t("courtpayAnalytics.cancelled")}
         value={String(kpis.cancelledCount)}
-        sub={
-          kpis.subscriptionRevenue > 0
-            ? `${t("courtpayAnalytics.subRevenue")}: ${formatVND(kpis.subscriptionRevenue)}`
-            : undefined
-        }
         color="text-red-400"
+        tooltip={t("courtpayAnalytics.tooltipCancelled")}
       />
       <StatCard
         icon={TrendingUp}
-        label={t("courtpayAnalytics.avgPerPaidPlayer")}
-        value={`${formatVND(avgPerPaidPlayer)}`}
-        sub={totalPaidPlayers > 0 ? `${totalPaidPlayers} paid players` : undefined}
+        label={t("courtpayAnalytics.avgPerPaidParty")}
+        value={`${formatVND(avgPerPaidParty)}`}
+        sub={totalPaidParty > 0 ? `${totalPaidParty} paid parties` : undefined}
         color="text-cyan-400"
+        tooltip={t("courtpayAnalytics.tooltipAvgPaidParty")}
       />
     </div>
   );
