@@ -58,6 +58,7 @@ export default function EditProfilePage() {
   const [gender, setGender] = useState("");
   const [skillLevel, setSkillLevel] = useState("");
   const [email, setEmail] = useState("");
+  const [venueTimezone, setVenueTimezone] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [initialProfile, setInitialProfile] = useState<ProfileSnapshot | null>(null);
   const [saving, setSaving] = useState(false);
@@ -109,6 +110,7 @@ export default function EditProfilePage() {
           setSkillLevel(snapshot.skillLevel);
           setInitialProfile(snapshot);
           setEmail(p.email ?? "");
+          setVenueTimezone(p.venue?.timezone ?? null);
           setAvatarUrl(p.avatar ?? null);
           setLoaded(true);
         });
@@ -230,6 +232,17 @@ export default function EditProfilePage() {
         disabled
         className="w-full px-4 py-3 bg-[var(--cm-bg-surface)] border border-[var(--cm-border)] rounded-xl text-sm mb-4 text-[var(--cm-text-muted)]"
       />
+
+      {venueTimezone && (
+        <>
+          <label className="block text-sm font-medium mb-1.5 text-[var(--cm-text)]">{t("editProfile.venueTimezone")}</label>
+          <input
+            value={venueTimezone}
+            disabled
+            className="w-full px-4 py-3 bg-[var(--cm-bg-surface)] border border-[var(--cm-border)] rounded-xl text-sm mb-4 text-[var(--cm-text-muted)]"
+          />
+        </>
+      )}
 
       <label className="block text-sm font-medium mb-1.5 text-[var(--cm-text)]">{t("editProfile.phone")}</label>
       <input

@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
         avatarPhotoPath: true,
         facePhotoPath: true,
         registrationVenueId: true,
-        registrationVenue: { select: { id: true, name: true, location: true } },
+        registrationVenue: { select: { id: true, name: true, location: true, timezone: true } },
         accounts: {
           select: { provider: true, image: true, email: true, emailVerified: true },
           take: 1,
