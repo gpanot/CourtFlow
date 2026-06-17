@@ -141,7 +141,7 @@ function paymentRowsToCsv(rows: PaymentDetailRow[]): string[][] {
     p.playerSkillLevel ?? "",
     p.reclubName ?? "",
     String(p.checkInFrequency),
-    String(p.amount),
+    String(p.status === "cancelled" ? 0 : p.amount),
     String(p.partyCount),
     p.paymentMethod,
     p.status,
@@ -1547,7 +1547,7 @@ export default function CourtPayAnalyticsPage() {
               </div>
 
               <DataTable
-                headers={[t("courtpayAnalytics.date"), t("courtpayAnalytics.session"), t("courtpayAnalytics.host"), t("courtpayAnalytics.payments"), t("courtpayAnalytics.revenue"), t("players.colPlayer"), t("courtpayAnalytics.status"), ""]}
+                headers={[t("courtpayAnalytics.date"), t("courtpayAnalytics.session"), t("courtpayAnalytics.host"), t("courtpayAnalytics.payments"), t("courtpayAnalytics.revenue"), t("players.colPlayer"), t("courtpayAnalytics.cancelled"), t("courtpayAnalytics.status"), ""]}
                 rows={sessions.map((s) => ({
                   key: s.id,
                   cells: [
@@ -1560,6 +1560,9 @@ export default function CourtPayAnalyticsPage() {
                     String(s.paymentCount),
                     <span key="rev" className="text-purple-400 font-medium">{formatVND(s.revenue)} VND</span>,
                     String(s.playerCount),
+                    s.cancelledCount > 0
+                      ? <span key="cancel" className="text-red-400 font-medium">{s.cancelledCount}</span>
+                      : <span key="cancel" className="text-neutral-500">0</span>,
                     <span key="st" className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium capitalize", s.status === "open" ? "bg-green-900/30 text-green-400" : "bg-neutral-800 text-neutral-400")}>{s.status}</span>,
                     (!sessionsSelectMode && !sessionsDeleteMode)
                       ? <button
@@ -1718,8 +1721,8 @@ ${snap.map((p, i) => `<tr><td>${i + 1}</td><td>${p.reclubUserId}</td><td><img sr
                     >
                       {p.checkInFrequency}×
                     </span>,
-                    <span key="amt" className="text-purple-400 font-medium">
-                      {formatVND(p.amount)} VND
+                    <span key="amt" className={p.status === "cancelled" ? "text-neutral-500 line-through" : "text-purple-400 font-medium"}>
+                      {formatVND(p.status === "cancelled" ? 0 : p.amount)} VND
                     </span>,
                     String(p.partyCount),
                     p.paymentMethod,
