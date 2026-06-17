@@ -8,8 +8,8 @@ const BASE_MANIFEST = {
   description: "Pickleball Court Management System",
   scope: "/",
   display: "standalone" as const,
-  background_color: "#0a0a0a",
-  theme_color: "#16a34a",
+  background_color: "#ffffff",
+  theme_color: "#ffffff",
   orientation: "portrait" as const,
   icons: [
     { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },

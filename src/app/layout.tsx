@@ -7,7 +7,8 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    statusBarStyle: "black-translucent",
+    // "default" = white/system status bar on iOS Safari PWA (matches white theme-color).
+    statusBarStyle: "default",
     title: "CourtFlow",
   },
   icons: {
@@ -27,7 +28,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#0a0a0a",
+  themeColor: "#ffffff",
   // Lets env(safe-area-inset-*) apply in installed PWAs (Android gesture/3-button nav, iOS home indicator).
   viewportFit: "cover",
 };

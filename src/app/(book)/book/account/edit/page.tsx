@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useRef, useMemo } from "react";
 import { usePlayerSession } from "../../components/usePlayerSession";
 import { signOutToIntro } from "../../lib/sign-out-to-intro";
-import { useTheme } from "../../components/ThemeProvider";
+import { useTheme, type ThemePalette } from "../../components/ThemeProvider";
 import { AvatarPhotoCropper } from "@/components/avatar-photo-cropper";
 import { BookScreenTopBar } from "../../components/BookScreenTopBar";
 import { useTranslation } from "react-i18next";
@@ -28,6 +28,12 @@ const THEME_OPTIONS = [
   { value: "dark" as const, labelKey: "theme.dark" },
 ] as const;
 
+const PALETTE_OPTIONS: { value: ThemePalette; labelKey: string; color: string }[] = [
+  { value: "green",      labelKey: "editProfile.paletteGreen",      color: "#22c55e" },
+  { value: "terracotta", labelKey: "editProfile.paletteTerracotta",  color: "#C4714A" },
+  { value: "sage",       labelKey: "editProfile.paletteSage",        color: "#5A7A57" },
+];
+
 type ProfileSnapshot = {
   name: string;
   phone: string;
@@ -44,7 +50,7 @@ function segmentClass(selected: boolean) {
 export default function EditProfilePage() {
   const { status } = usePlayerSession();
   const router = useRouter();
-  const { mode, resolved, setMode } = useTheme();
+  const { mode, resolved, setMode, palette, setPalette } = useTheme();
   const { t, i18n } = useTranslation();
   const { venueId } = usePlayerVenue();
   const [name, setName] = useState("");
@@ -295,6 +301,33 @@ export default function EditProfilePage() {
                 {t(opt.labelKey)}
               </button>
             ))}
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-medium text-[var(--cm-text-sec)] mb-2">{t("editProfile.colorPalette")}</p>
+          <div className="flex gap-2">
+            {PALETTE_OPTIONS.map((opt) => {
+              const active = palette === opt.value;
+              return (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setPalette(opt.value)}
+                  className={`flex flex-1 items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                    active
+                      ? "border-[var(--cm-accent)] bg-[var(--cm-accent-bg)] text-[var(--cm-text)]"
+                      : "border-[var(--cm-border)] bg-[var(--cm-bg-input)] text-[var(--cm-text-sec)]"
+                  }`}
+                >
+                  <span
+                    className="inline-block h-3 w-3 rounded-full shrink-0 ring-1 ring-black/10"
+                    style={{ backgroundColor: opt.color }}
+                  />
+                  {t(opt.labelKey)}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>

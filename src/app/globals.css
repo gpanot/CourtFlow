@@ -50,6 +50,38 @@
   --cm-shadow-sm: 0 1px 8px rgba(15, 23, 42, 0.04);
 }
 
+/* ── Player portal colour palettes ──────────────────────────────────────────
+   Applied via data-palette="<name>" on the book shell wrapper.
+   Each palette overrides only --cm-accent / --cm-accent-bg / --cm-accent-bg-strong
+   and adjusts for dark vs light theme automatically.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/* Terracotta — #C4714A */
+[data-palette="terracotta"],
+[data-theme="dark"][data-palette="terracotta"] {
+  --cm-accent: #C4714A;
+  --cm-accent-bg: rgba(196, 113, 74, 0.08);
+  --cm-accent-bg-strong: rgba(196, 113, 74, 0.18);
+}
+[data-theme="light"][data-palette="terracotta"] {
+  --cm-accent: #b05a35;
+  --cm-accent-bg: #fde8dc;
+  --cm-accent-bg-strong: rgba(176, 90, 53, 0.15);
+}
+
+/* Sage — #5A7A57 */
+[data-palette="sage"],
+[data-theme="dark"][data-palette="sage"] {
+  --cm-accent: #7aaa76;
+  --cm-accent-bg: rgba(90, 122, 87, 0.10);
+  --cm-accent-bg-strong: rgba(90, 122, 87, 0.20);
+}
+[data-theme="light"][data-palette="sage"] {
+  --cm-accent: #5A7A57;
+  --cm-accent-bg: #e4ede3;
+  --cm-accent-bg-strong: rgba(90, 122, 87, 0.15);
+}
+
 /* Set on the staff shell via useClientConfig().primaryColor (see staff layout / dashboard). */
 @property --client-primary {
   syntax: "<color>";

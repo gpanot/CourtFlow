@@ -16,7 +16,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#0a0a0a",
+  // White address bar on Android Chrome and Safari — keeps the UI feeling light.
+  themeColor: "#ffffff",
   viewportFit: "cover",
 };
 
