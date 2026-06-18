@@ -6,6 +6,8 @@ export interface OpenPlaySessionPlayer {
   name: string;
   initials: string;
   avatarColor: string;
+  avatarPhotoPath: string | null;
+  facePhotoPath: string | null;
   skillLevel: string | null;
   checkInCount: number;
 }
@@ -56,7 +58,13 @@ export async function resolveOpenPlaySessions(
   // Fetch all registrations for this venue + date in one query, including player info
   let registrations: {
     scheduleEntryId: string;
-    player: { name: string; skillLevel: string | null; queueEntries: { id: string }[] } | null;
+    player: {
+      name: string;
+      skillLevel: string | null;
+      avatarPhotoPath: string | null;
+      facePhotoPath: string | null;
+      queueEntries: { id: string }[];
+    } | null;
   }[] = [];
   try {
     registrations = await prisma.openPlayRegistration.findMany({
@@ -75,6 +83,8 @@ export async function resolveOpenPlaySessions(
           select: {
             name: true,
             skillLevel: true,
+            avatarPhotoPath: true,
+            facePhotoPath: true,
             queueEntries: { select: { id: true }, take: 1 },
           },
         },
@@ -118,6 +128,8 @@ export async function resolveOpenPlaySessions(
         name: r.player!.name,
         initials: initials(r.player!.name),
         avatarColor: avatarColor(r.player!.name),
+        avatarPhotoPath: r.player!.avatarPhotoPath ?? null,
+        facePhotoPath: r.player!.facePhotoPath ?? null,
         skillLevel: r.player!.skillLevel ?? null,
         checkInCount: r.player!.queueEntries.length,
       }));

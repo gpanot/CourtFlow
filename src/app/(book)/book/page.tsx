@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { usePlayerVenue } from "./components/PlayerVenueContext";
 import { useBookFormatters } from "./lib/useBookFormatters";
 import { BookTabTopBar } from "./components/BookTabTopBar";
+import { resolveUploadUrl } from "@/lib/resolve-upload-url";
 
 interface Slot {
   startTime: string;
@@ -28,6 +29,8 @@ interface OpenPlaySessionPlayer {
   name: string;
   initials: string;
   avatarColor: string;
+  avatarPhotoPath: string | null;
+  facePhotoPath: string | null;
   skillLevel: string | null;
   checkInCount: number;
 }
@@ -435,16 +438,27 @@ export default function VenueHomePage() {
                   {session.players.length > 0 && (
                     <div className="flex items-center gap-2 mb-4">
                       <div className="flex -space-x-2">
-                        {session.players.slice(0, 5).map((p, i) => (
-                          <div
-                            key={i}
-                            title={p.name}
-                            className="w-8 h-8 rounded-full border-2 border-[var(--cm-bg-card)] flex items-center justify-center text-[10px] font-bold text-black shrink-0"
-                            style={{ backgroundColor: p.avatarColor }}
-                          >
-                            {p.initials}
-                          </div>
-                        ))}
+                        {session.players.slice(0, 5).map((p, i) => {
+                          const photoUrl = resolveUploadUrl(p.avatarPhotoPath) ?? resolveUploadUrl(p.facePhotoPath);
+                          return photoUrl ? (
+                            <img
+                              key={i}
+                              src={photoUrl}
+                              alt={p.name}
+                              title={p.name}
+                              className="w-8 h-8 rounded-full border-2 border-[var(--cm-bg-card)] object-cover shrink-0"
+                            />
+                          ) : (
+                            <div
+                              key={i}
+                              title={p.name}
+                              className="w-8 h-8 rounded-full border-2 border-[var(--cm-bg-card)] flex items-center justify-center text-[10px] font-bold text-black shrink-0"
+                              style={{ backgroundColor: p.avatarColor }}
+                            >
+                              {p.initials}
+                            </div>
+                          );
+                        })}
                       </div>
                       <button
                         type="button"
@@ -510,24 +524,28 @@ export default function VenueHomePage() {
         </div>
       )}
 
-      {/* Open Play Players Modal */}
+      {/* Open Play Players Modal — z-[60] sits above BottomNav (z-50) */}
       {openPlayModal && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50"
+          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/50"
           onClick={() => setOpenPlayModal(null)}
         >
+          {/* Sheet — positioned above the bottom nav bar */}
           <div
-            className="w-full max-w-lg bg-[var(--cm-sheet-bg)] rounded-t-2xl overflow-hidden"
-            style={{ maxHeight: "85dvh" }}
+            className="w-full max-w-lg bg-[var(--cm-sheet-bg)] rounded-t-2xl overflow-hidden flex flex-col"
+            style={{
+              maxHeight: "75dvh",
+              marginBottom: "calc(3.5rem + env(safe-area-inset-bottom, 0px))",
+            }}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Handle */}
-            <div className="flex justify-center pt-3 pb-1">
+            <div className="flex justify-center pt-3 pb-1 shrink-0">
               <div className="w-10 h-1 rounded-full bg-[var(--cm-border)]" />
             </div>
 
             {/* Header */}
-            <div className="px-5 pb-3 border-b border-[var(--cm-border)]">
+            <div className="px-5 pb-3 border-b border-[var(--cm-border)] shrink-0">
               <p className="font-bold text-base text-[var(--cm-text)]">
                 {t("home.sessionTitle", { title: openPlayModal.title })}
               </p>
@@ -536,48 +554,59 @@ export default function VenueHomePage() {
               </p>
             </div>
 
-            {/* Player list */}
-            <div className="overflow-y-auto" style={{ maxHeight: "calc(85dvh - 100px)" }}>
+            {/* Player list — scrollable */}
+            <div className="overflow-y-auto flex-1">
               {openPlayModal.players.length === 0 ? (
                 <p className="text-sm text-[var(--cm-text-muted)] text-center py-8">
                   {t("home.noPlayersYet")}
                 </p>
               ) : (
-                openPlayModal.players.map((p, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-3 px-5 py-3 border-b border-[var(--cm-border)] last:border-0"
-                  >
+                openPlayModal.players.map((p, i) => {
+                  const photoUrl = resolveUploadUrl(p.avatarPhotoPath) ?? resolveUploadUrl(p.facePhotoPath);
+                  return (
                     <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold text-black shrink-0"
-                      style={{ backgroundColor: p.avatarColor }}
+                      key={i}
+                      className="flex items-center gap-3 px-5 py-3 border-b border-[var(--cm-border)] last:border-0"
                     >
-                      {p.initials}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-[var(--cm-text)] truncate">{p.name}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        {p.skillLevel && (
-                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
-                            p.skillLevel === "pro" ? "bg-red-500/15 text-red-500" :
-                            p.skillLevel === "advanced" ? "bg-amber-500/15 text-amber-600" :
-                            p.skillLevel === "intermediate" ? "bg-blue-500/15 text-blue-500" :
-                            "bg-green-500/15 text-green-600"
-                          }`}>
-                            {p.skillLevel.charAt(0).toUpperCase() + p.skillLevel.slice(1)}
+                      {photoUrl ? (
+                        <img
+                          src={photoUrl}
+                          alt={p.name}
+                          className="w-10 h-10 rounded-full object-cover shrink-0"
+                        />
+                      ) : (
+                        <div
+                          className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold text-black shrink-0"
+                          style={{ backgroundColor: p.avatarColor }}
+                        >
+                          {p.initials}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-[var(--cm-text)] truncate">{p.name}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {p.skillLevel && (
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                              p.skillLevel === "pro" ? "bg-red-500/15 text-red-500" :
+                              p.skillLevel === "advanced" ? "bg-amber-500/15 text-amber-600" :
+                              p.skillLevel === "intermediate" ? "bg-blue-500/15 text-blue-500" :
+                              "bg-green-500/15 text-green-600"
+                            }`}>
+                              {p.skillLevel.charAt(0).toUpperCase() + p.skillLevel.slice(1)}
+                            </span>
+                          )}
+                          <span className="text-xs text-[var(--cm-text-muted)]">
+                            {p.checkInCount > 0
+                              ? t("home.sessionCount", { count: p.checkInCount })
+                              : t("home.newPlayer")}
                           </span>
-                        )}
-                        <span className="text-xs text-[var(--cm-text-muted)]">
-                          {p.checkInCount > 0
-                            ? t("home.sessionCount", { count: p.checkInCount })
-                            : t("home.newPlayer")}
-                        </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
-              <div style={{ height: "env(safe-area-inset-bottom, 16px)" }} />
+              <div className="h-4" />
             </div>
           </div>
         </div>
