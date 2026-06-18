@@ -2,7 +2,7 @@
 export const dynamic = "force-dynamic";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { usePlayerSession } from "../components/usePlayerSession";
 import { signOutToIntro } from "@/app/(book)/book/lib/sign-out-to-intro";
@@ -17,16 +17,16 @@ interface PortalVenue {
   logoUrl: string | null;
 }
 
-export default function OnboardingPage() {
+function OnboardingContent() {
   const { session, status, authHeader, refresh } = usePlayerSession();
   const router = useRouter();
   const { t } = useTranslation();
 
-  const [step, setStep] = useState<"profile" | "venue">("profile");
   const [phone, setPhone] = useState("");
   const [gender, setGender] = useState<string>("");
   const [skillLevel, setSkillLevel] = useState<string>("");
   const [saving, setSaving] = useState(false);
+  const [venuesLoading, setVenuesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [phoneStatus, setPhoneStatus] = useState<"idle" | "checking" | "taken" | "ok">("idle");
   const [linkPrompt, setLinkPrompt] = useState<{
@@ -34,25 +34,19 @@ export default function OnboardingPage() {
     phone: string;
   } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const [venues, setVenues] = useState<PortalVenue[]>([]);
-  const [venuesLoading, setVenuesLoading] = useState(false);
-  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
   const [initialCheckDone, setInitialCheckDone] = useState(false);
 
-  // Auth gate: wait for session to resolve before any navigation decision
+  // Auth gate
   useEffect(() => {
     if (status === "loading") return;
     if (status === "unauthenticated") {
       router.replace("/book/login");
-      return;
     }
-    if (status === "authenticated" && session?.onboardingComplete) {
-      router.replace("/book");
-    }
-  }, [status, session, router]);
+    // No redirect when onboardingComplete — user may arrive here via back-navigation
+  }, [status, router]);
 
-  // Pre-fill if player already has a real phone but no venue
+  // Pre-fill profile fields if the player already has a real phone (e.g. resuming after interruption)
+  // Also handle the legacy case: real phone but no venue — fast-forward to venue step
   useEffect(() => {
     if (status !== "authenticated" || initialCheckDone) return;
     setInitialCheckDone(true);
@@ -63,27 +57,29 @@ export default function OnboardingPage() {
           profile.phone &&
           !profile.phone.startsWith("oauth_") &&
           !profile.phone.startsWith("email_");
-        if (hasRealPhone && !profile.venue) {
-          const profileGender = profile.gender || "";
-          const profileSkillLevel = profile.skillLevel || "";
+        if (hasRealPhone) {
           setPhone(profile.phone);
-          setGender(profileGender);
-          setSkillLevel(profileSkillLevel);
-          setVenuesLoading(true);
-          fetch("/api/public/venues")
-            .then((r) => r.json())
-            .then((data: PortalVenue[]) => {
-              if (data.length === 0) {
-                submitOnboarding(null, profile.phone, profileGender, profileSkillLevel);
-              } else if (data.length === 1) {
-                submitOnboarding(data[0].id, profile.phone, profileGender, profileSkillLevel);
-              } else {
-                setVenues(data);
-                setStep("venue");
+          setGender(profile.gender || "");
+          setSkillLevel(profile.skillLevel || "");
+
+          if (!profile.venue) {
+            // Phone saved but no venue yet — skip to venue step
+            setVenuesLoading(true);
+            fetch("/api/public/venues")
+              .then((r) => r.json())
+              .then((data: PortalVenue[]) => {
+                if (data.length === 0) {
+                  // No venues available — complete without one
+                  saveVenueAndNavigate(null, profile.phone, profile.gender || "", profile.skillLevel || "");
+                } else if (data.length === 1) {
+                  saveVenueAndNavigate(data[0].id, profile.phone, profile.gender || "", profile.skillLevel || "");
+                } else {
+                  router.replace("/book/onboarding/venue");
+                }
                 setVenuesLoading(false);
-              }
-            })
-            .catch(() => setVenuesLoading(false));
+              })
+              .catch(() => setVenuesLoading(false));
+          }
         }
       })
       .catch(() => {});
@@ -130,37 +126,63 @@ export default function OnboardingPage() {
     if (!skillLevel) { setError(t("onboarding.errors.skillRequired")); return; }
     if (!canContinue) return;
     setError(null);
+    setSaving(true);
+
+    // Immediately save phone/gender/skillLevel (no venue yet — account is created now)
+    const phoneToSend = phone.trim();
+    try {
+      const res = await fetch("/api/public/account/onboarding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeader },
+        credentials: "include",
+        body: JSON.stringify({ phone: phoneToSend, gender, skillLevel, venueId: null }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.existingPlayerId) {
+          setLinkPrompt({ existingPlayerId: data.existingPlayerId, phone: phoneToSend });
+          setSaving(false);
+          return;
+        }
+        throw new Error(data.error || t("onboarding.errors.saveFailed"));
+      }
+    } catch (e) {
+      setError((e as Error).message);
+      setSaving(false);
+      return;
+    }
+    setSaving(false);
+
+    // Now load venues and decide where to go
     setVenuesLoading(true);
     try {
       const res = await fetch("/api/public/venues");
       const data: PortalVenue[] = await res.json();
       if (data.length === 0) {
-        await submitOnboarding(null);
+        // No venues — complete without one
+        refresh();
+        router.push("/book/bookings");
       } else if (data.length === 1) {
-        await submitOnboarding(data[0].id);
+        // Single venue — auto-select and navigate
+        await saveVenueAndNavigate(data[0].id, phoneToSend, gender, skillLevel);
       } else {
-        setVenues(data);
-        setStep("venue");
-        setVenuesLoading(false);
+        // Multiple venues — go to dedicated venue selection page (separate route = reliable back button)
+        router.push("/book/onboarding/venue");
       }
     } catch {
-      await submitOnboarding(null);
+      refresh();
+      router.push("/book/bookings");
+    } finally {
+      setVenuesLoading(false);
     }
   }
 
-  async function submitOnboarding(
+  async function saveVenueAndNavigate(
     venueId: string | null,
-    overridePhone?: string,
-    overrideGender?: string,
-    overrideSkillLevel?: string
+    overridePhone: string,
+    overrideGender: string,
+    overrideSkillLevel: string
   ) {
-    const phoneToSend = (overridePhone || phone).trim();
-    const payload = {
-      phone: phoneToSend,
-      gender: overrideGender ?? gender,
-      skillLevel: overrideSkillLevel ?? skillLevel,
-      venueId,
-    };
     setSaving(true);
     setError(null);
     try {
@@ -168,31 +190,22 @@ export default function OnboardingPage() {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeader },
         credentials: "include",
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          phone: overridePhone.trim(),
+          gender: overrideGender,
+          skillLevel: overrideSkillLevel,
+          venueId,
+        }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        if (data.existingPlayerId) {
-          setLinkPrompt({ existingPlayerId: data.existingPlayerId, phone: phoneToSend });
-          setSaving(false);
-          setVenuesLoading(false);
-          setStep("profile");
-          return;
-        }
-        throw new Error(data.error || t("onboarding.errors.saveFailed"));
-      }
+      if (!res.ok) throw new Error(data.error || t("onboarding.errors.saveFailed"));
       refresh();
-      router.replace("/book");
+      router.push("/book/bookings");
     } catch (e) {
       setError((e as Error).message);
       setSaving(false);
       setVenuesLoading(false);
     }
-  }
-
-  async function handleVenueSelect(venueId: string) {
-    setSelectedVenueId(venueId);
-    await submitOnboarding(venueId, phone);
   }
 
   async function handleLink(link: boolean) {
@@ -216,7 +229,7 @@ export default function OnboardingPage() {
       if (!res.ok) throw new Error(data.error || t("onboarding.errors.genericFailed"));
       setLinkPrompt(null);
       refresh();
-      router.replace("/book");
+      router.push("/book/bookings");
     } catch (e) {
       setError((e as Error).message);
       setSaving(false);
@@ -237,55 +250,6 @@ export default function OnboardingPage() {
         ? "bg-[var(--cm-accent)] text-black border-[var(--cm-accent)]"
         : "bg-[var(--cm-bg-input)] text-[var(--cm-text-sec)] border-[var(--cm-border)]"
     }`;
-
-  if (step === "venue") {
-    return (
-      <div className="px-6 pt-12 pb-8">
-        <button onClick={() => setStep("profile")} className="text-sm text-[var(--cm-text-sec)] mb-6">
-          ← {t("common.back")}
-        </button>
-        <h1 className="text-xl font-bold mb-1">{t("onboarding.chooseVenue")}</h1>
-        <p className="text-sm text-[var(--cm-text-sec)] mb-6">{t("onboarding.chooseVenueSubtitle")}</p>
-        {error && (
-          <div className="mb-4 p-3 bg-[var(--cm-red)]/10 text-[var(--cm-red)] text-sm rounded-xl">{error}</div>
-        )}
-        <div className="space-y-3">
-          {venues.map((v) => (
-            <button
-              key={v.id}
-              onClick={() => handleVenueSelect(v.id)}
-              disabled={saving}
-              className={`w-full flex items-center gap-3 p-4 rounded-xl border transition-colors text-left disabled:opacity-50 ${
-                selectedVenueId === v.id
-                  ? "border-[var(--cm-accent)] bg-[var(--cm-accent)]/10"
-                  : "border-[var(--cm-border)] bg-[var(--cm-bg-card)] hover:border-[var(--cm-accent)]/50"
-              }`}
-            >
-              {v.logoUrl ? (
-                <img src={v.logoUrl} alt="" className="w-12 h-12 rounded-xl object-cover shrink-0" />
-              ) : (
-                <div className="w-12 h-12 rounded-xl bg-[var(--cm-accent-bg)] flex items-center justify-center shrink-0">
-                  <span className="text-lg">🏟</span>
-                </div>
-              )}
-              <div className="min-w-0 flex-1">
-                <p className="font-medium text-[var(--cm-text)] truncate">{v.name}</p>
-                {v.location && (
-                  <p className="text-xs text-[var(--cm-text-sec)] truncate mt-0.5">📍 {v.location}</p>
-                )}
-              </div>
-              {saving && selectedVenueId === v.id && (
-                <svg className="animate-spin h-5 w-5 text-[var(--cm-accent)] shrink-0" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="px-6 pt-12 pb-8">
@@ -380,5 +344,13 @@ export default function OnboardingPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function OnboardingPage() {
+  return (
+    <Suspense>
+      <OnboardingContent />
+    </Suspense>
   );
 }

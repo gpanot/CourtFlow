@@ -92,18 +92,18 @@ function IntroContent() {
           style={{ background: "linear-gradient(to top, var(--cm-bg), transparent)" }}
         />
 
-        <div className="absolute top-[calc(1rem+env(safe-area-inset-top))] left-4 z-20">
-          <BookLanguageMenu />
-        </div>
-
         {!isLast && (
           <button
             onClick={skip}
-            className="absolute top-[calc(1rem+env(safe-area-inset-top))] right-4 z-20 text-xs font-medium text-white/70 bg-black/30 backdrop-blur-sm px-3 py-1.5 rounded-full"
+            className="absolute top-[calc(1rem+env(safe-area-inset-top))] left-4 z-20 text-xs font-medium text-white/70 bg-black/30 backdrop-blur-sm px-3 py-1.5 rounded-full"
           >
             {t("intro.skip")}
           </button>
         )}
+
+        <div className="absolute top-[calc(1rem+env(safe-area-inset-top))] right-4 z-20">
+          <BookLanguageMenu />
+        </div>
       </div>
 
       <div className="flex flex-1 min-h-0 flex-col px-7 pt-3">

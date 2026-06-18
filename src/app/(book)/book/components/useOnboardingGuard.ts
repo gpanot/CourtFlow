@@ -4,7 +4,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { usePlayerSession } from "./usePlayerSession";
 
-const UNGUARDED_PATHS = ["/book/login", "/book/login/email", "/book/onboarding", "/book/intro"];
+const UNGUARDED_PATHS = ["/book/login", "/book/login/email", "/book/onboarding", "/book/onboarding/venue", "/book/intro"];
 
 export function useOnboardingGuard() {
   const { session, status } = usePlayerSession();
