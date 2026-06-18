@@ -57,6 +57,12 @@ function OnboardingContent() {
           profile.phone &&
           !profile.phone.startsWith("oauth_") &&
           !profile.phone.startsWith("email_");
+        if (hasRealPhone && profile.venue) {
+          // Fully onboarded — skip onboarding entirely
+          router.replace("/book/bookings");
+          return;
+        }
+
         if (hasRealPhone) {
           setPhone(profile.phone);
           setGender(profile.gender || "");
