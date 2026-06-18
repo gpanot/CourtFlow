@@ -2,6 +2,14 @@ import { prisma } from "./db";
 import { getScheduleConfig } from "./booking";
 import { generatePaymentRef } from "@/modules/courtpay/lib/payment-reference";
 
+export interface OpenPlaySessionPlayer {
+  name: string;
+  initials: string;
+  avatarColor: string;
+  skillLevel: string | null;
+  checkInCount: number;
+}
+
 export interface OpenPlaySession {
   entryId: string;
   title: string;
@@ -12,6 +20,7 @@ export interface OpenPlaySession {
   priceValue: number;
   spotsLeft: number;
   spotsTaken: number;
+  players: OpenPlaySessionPlayer[];
 }
 
 /**
@@ -44,8 +53,11 @@ export async function resolveOpenPlaySessions(
   const dateOnly = new Date(date);
   dateOnly.setHours(0, 0, 0, 0);
 
-  // Fetch all registrations for this venue + date in one query
-  let registrations: { scheduleEntryId: string }[] = [];
+  // Fetch all registrations for this venue + date in one query, including player info
+  let registrations: {
+    scheduleEntryId: string;
+    player: { name: string; skillLevel: string | null; queueEntries: { id: string }[] } | null;
+  }[] = [];
   try {
     registrations = await prisma.openPlayRegistration.findMany({
       where: {
@@ -57,10 +69,36 @@ export async function resolveOpenPlaySessions(
           { paymentStatus: "pending", holdExpiresAt: { gt: new Date() } },
         ],
       },
-      select: { scheduleEntryId: true },
+      select: {
+        scheduleEntryId: true,
+        player: {
+          select: {
+            name: true,
+            skillLevel: true,
+            queueEntries: { select: { id: true }, take: 1 },
+          },
+        },
+      },
+      orderBy: { createdAt: "asc" },
     });
   } catch {
     // Table missing or stale Prisma client — still show sessions with 0 spots taken
+  }
+
+  // Deterministic avatar colours (same palette as mobile RN app)
+  const AVATAR_COLORS = [
+    "#F28B82", "#FFB74D", "#FFD54F", "#A5D6A7",
+    "#80CBC4", "#90CAF9", "#CE93D8", "#FFAB91",
+  ];
+  function avatarColor(name: string): string {
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    return AVATAR_COLORS[h % AVATAR_COLORS.length];
+  }
+  function initials(name: string): string {
+    const parts = name.trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return name.slice(0, 2).toUpperCase();
   }
 
   return openPlayEntries.map((entry) => {
@@ -69,11 +107,20 @@ export async function resolveOpenPlaySessions(
     const endTime = new Date(dateOnly);
     endTime.setHours(entry.endHour, 0, 0, 0);
 
-    const spotsTaken = registrations.filter(
-      (r) => r.scheduleEntryId === entry.id
-    ).length;
+    const entryRegs = registrations.filter((r) => r.scheduleEntryId === entry.id);
+    const spotsTaken = entryRegs.length;
     const maxPlayers = entry.maxPlayers!;
     const spotsLeft = Math.max(0, maxPlayers - spotsTaken);
+
+    const players: OpenPlaySessionPlayer[] = entryRegs
+      .filter((r) => r.player)
+      .map((r) => ({
+        name: r.player!.name,
+        initials: initials(r.player!.name),
+        avatarColor: avatarColor(r.player!.name),
+        skillLevel: r.player!.skillLevel ?? null,
+        checkInCount: r.player!.queueEntries.length,
+      }));
 
     return {
       entryId: entry.id,
@@ -85,6 +132,7 @@ export async function resolveOpenPlaySessions(
       priceValue: entry.priceValue ?? 0,
       spotsLeft,
       spotsTaken,
+      players,
     };
   });
 }

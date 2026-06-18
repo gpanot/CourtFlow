@@ -186,7 +186,13 @@
     "openPlayPlayersJoined": "{{joined}}/{{max}} người đã tham gia",
     "openPlayJoin": "Tham gia",
     "noOpenPlay": "Không có buổi chơi tự do vào ngày này.",
-    "durationHours": "{{count}} giờ"
+    "durationHours": "{{count}} giờ",
+    "seeAllPlayers": "Xem tất cả {{count}} người chơi",
+    "sessionTitle": "Buổi {{title}}",
+    "playersRegistered": "người đã đăng ký",
+    "noPlayersYet": "Chưa có người đăng ký.",
+    "sessionCount": "{{count}} buổi",
+    "newPlayer": "Người mới"
   },
   "coaches": {
     "title": "Đặt huấn luyện viên",

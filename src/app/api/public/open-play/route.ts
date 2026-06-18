@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
       ...s,
       startTime: s.startTime.toISOString(),
       endTime: s.endTime.toISOString(),
+      players: s.players,
     })));
   } catch (e) {
     return error((e as Error).message, 500);

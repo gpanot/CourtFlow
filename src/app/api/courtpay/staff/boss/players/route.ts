@@ -58,6 +58,8 @@ export async function GET(req: Request) {
           facePhotoPath: true,
           avatarPhotoPath: true,
           createdAt: true,
+          reclubUserId: true,
+          playerIdentityId: true,
           queueEntries: {
             where: { session: { venueId } },
             orderBy: { joinedAt: "asc" },
@@ -77,6 +79,7 @@ export async function GET(req: Request) {
           gender: true,
           skillLevel: true,
           createdAt: true,
+          playerIdentityId: true,
           checkIns: {
             orderBy: { checkedInAt: "asc" },
             select: { checkedInAt: true },
@@ -119,7 +122,7 @@ export async function GET(req: Request) {
       courtPayPhones.length > 0
         ? await prisma.player.findMany({
             where: { phone: { in: courtPayPhones } },
-            select: { id: true, phone: true, facePhotoPath: true, avatarPhotoPath: true },
+            select: { id: true, phone: true, facePhotoPath: true, avatarPhotoPath: true, reclubUserId: true },
           })
         : [];
     const faceByPhone = new Map(
@@ -129,6 +132,7 @@ export async function GET(req: Request) {
           id: p.id,
           facePhotoPath: p.facePhotoPath ?? null,
           avatarPhotoPath: p.avatarPhotoPath ?? null,
+          reclubUserId: p.reclubUserId ?? null,
         },
       ])
     );
@@ -156,6 +160,8 @@ export async function GET(req: Request) {
           facePhotoPath: p.facePhotoPath ?? null,
           avatarPhotoPath: p.avatarPhotoPath ?? null,
           linkedPlayerId: p.id,
+          reclubUserId: p.reclubUserId ?? null,
+          playerIdentityId: p.playerIdentityId ?? null,
           checkInCount: dates.length,
           avgReturnDays: avgReturn,
           lastSeenAt,
@@ -181,6 +187,8 @@ export async function GET(req: Request) {
           facePhotoPath: linked?.facePhotoPath ?? null,
           avatarPhotoPath: linked?.avatarPhotoPath ?? null,
           linkedPlayerId: linked?.id ?? null,
+          reclubUserId: linked?.reclubUserId ?? null,
+          playerIdentityId: p.playerIdentityId ?? null,
           checkInCount: p._count.checkIns,
           avgReturnDays: avgReturn,
           lastSeenAt,

@@ -186,7 +186,13 @@
     "openPlayPlayersJoined": "{{joined}}/{{max}} players joined",
     "openPlayJoin": "Join",
     "noOpenPlay": "No open play sessions on this date.",
-    "durationHours": "{{count}}h"
+    "durationHours": "{{count}}h",
+    "seeAllPlayers": "See all {{count}} players",
+    "sessionTitle": "{{title}} session",
+    "playersRegistered": "players registered",
+    "noPlayersYet": "No players registered yet.",
+    "sessionCount": "{{count}} sessions",
+    "newPlayer": "New player"
   },
   "coaches": {
     "title": "Book Our Coaches",

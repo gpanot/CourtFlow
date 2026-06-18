@@ -25,6 +25,7 @@ import {
   PlusCircle,
   Star,
   Infinity,
+  Download,
 } from "lucide-react";
 import { PlayerAvatarThumb } from "@/components/player-avatar-thumb";
 
@@ -44,6 +45,8 @@ interface PlayerRow {
   facePhotoPath: string | null;
   avatarPhotoPath: string | null;
   linkedPlayerId?: string | null;
+  reclubUserId?: number | null;
+  playerIdentityId?: string | null;
   checkInCount: number;
   avgReturnDays: number | null;
   lastSeenAt: string | null;
@@ -235,6 +238,38 @@ export default function CourtPayPlayersPage() {
     }
   }, [venueId]);
 
+  const exportCsv = useCallback(() => {
+    const players = data?.players ?? [];
+    const headers = [
+      "Name", "Phone", "Gender", "Skill Level", "Source",
+      "Subscription", "Reclub ID", "Player Identity ID",
+      "Visits", "Joined", "Venue",
+    ];
+    const rows = players.map((p) => [
+      p.name,
+      p.phone,
+      p.gender ?? "",
+      p.skillLevel ?? "",
+      p.source,
+      p.hasSubscription ? "Yes" : "No",
+      p.reclubUserId != null ? String(p.reclubUserId) : "",
+      p.playerIdentityId ?? "",
+      String(p.checkInCount),
+      p.registeredAt ? new Date(p.registeredAt).toLocaleDateString() : "",
+      p.venueName,
+    ]);
+    const csv = [headers, ...rows]
+      .map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `players-${venueId ?? "all"}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [data, venueId]);
+
   useEffect(() => {
     void fetchPlayers();
   }, [fetchPlayers]);
@@ -380,7 +415,18 @@ export default function CourtPayPlayersPage() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-xl font-bold md:text-2xl">{t("courtpayPlayers.title")}</h2>
-        <AdminVenuePicker venueId={venueId} venues={venues} onChange={setVenueId} />
+        <div className="flex items-center gap-2">
+          {data && data.players.length > 0 && (
+            <button
+              onClick={exportCsv}
+              className="flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-xs font-medium text-neutral-300 hover:bg-neutral-700 hover:text-white transition-colors"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Export CSV
+            </button>
+          )}
+          <AdminVenuePicker venueId={venueId} venues={venues} onChange={setVenueId} />
+        </div>
       </div>
 
       {!venueId ? (
@@ -497,6 +543,9 @@ export default function CourtPayPlayersPage() {
                       </span>
                       {p.hasSubscription && (
                         <span className="rounded-full bg-green-600/20 px-1.5 py-0.5 text-[10px] font-medium text-green-400">Sub</span>
+                      )}
+                      {p.reclubUserId && (
+                        <span className="rounded-full bg-indigo-600/20 px-1.5 py-0.5 text-[10px] font-medium text-indigo-400">Reclub</span>
                       )}
                     </div>
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-neutral-500">
@@ -712,8 +761,9 @@ function PlayerDetailDrawer({
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={player.reclubAvatarUrl} alt="Reclub avatar" className="h-10 w-10 rounded-full object-cover" />
                 )}
-                <div>
+                <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-white">{player.reclubName ?? `User #${player.reclubUserId}`}</p>
+                  <p className="text-xs text-indigo-300/70 tabular-nums">Reclub ID: {player.reclubUserId}</p>
                   <a
                     href={`https://reclub.vn/vi/users/${player.reclubUserId}`}
                     target="_blank"

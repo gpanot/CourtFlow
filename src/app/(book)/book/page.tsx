@@ -24,6 +24,14 @@ interface CourtSlot {
   slots: Slot[];
 }
 
+interface OpenPlaySessionPlayer {
+  name: string;
+  initials: string;
+  avatarColor: string;
+  skillLevel: string | null;
+  checkInCount: number;
+}
+
 interface OpenPlaySession {
   entryId: string;
   title: string;
@@ -34,6 +42,7 @@ interface OpenPlaySession {
   priceValue: number;
   spotsLeft: number;
   spotsTaken: number;
+  players: OpenPlaySessionPlayer[];
 }
 
 interface VenueInfo {
@@ -101,6 +110,8 @@ export default function VenueHomePage() {
   // Multi-slot selection: courtId + array of selected slots
   const [selectedCourtId, setSelectedCourtId] = useState<string | null>(null);
   const [selectedSlots, setSelectedSlots] = useState<Slot[]>([]);
+
+  const [openPlayModal, setOpenPlayModal] = useState<OpenPlaySession | null>(null);
 
   const [selectedDate, setSelectedDate] = useState(() => {
     const d = new Date();
@@ -404,7 +415,7 @@ export default function VenueHomePage() {
                       ({t("home.durationHours", { count: hours })})
                     </span>
                   </p>
-                  <div className="flex items-center gap-3 mb-4">
+                  <div className="flex items-center gap-3 mb-3">
                     <div className="flex-1 h-2.5 rounded-full bg-[var(--cm-border)] overflow-hidden">
                       {session.spotsTaken > 0 && (
                         <div
@@ -419,6 +430,32 @@ export default function VenueHomePage() {
                       {session.spotsTaken}/{session.maxPlayers}
                     </span>
                   </div>
+
+                  {/* Player avatars */}
+                  {session.players.length > 0 && (
+                    <div className="flex items-center gap-2 mb-4">
+                      <div className="flex -space-x-2">
+                        {session.players.slice(0, 5).map((p, i) => (
+                          <div
+                            key={i}
+                            title={p.name}
+                            className="w-8 h-8 rounded-full border-2 border-[var(--cm-bg-card)] flex items-center justify-center text-[10px] font-bold text-black shrink-0"
+                            style={{ backgroundColor: p.avatarColor }}
+                          >
+                            {p.initials}
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setOpenPlayModal(session)}
+                        className="text-xs font-medium text-[var(--cm-accent)] underline-offset-2 hover:underline"
+                      >
+                        {t("home.seeAllPlayers", { count: session.players.length })} →
+                      </button>
+                    </div>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => handleOpenPlayJoin(session)}
@@ -469,6 +506,79 @@ export default function VenueHomePage() {
                 <span className="text-[var(--cm-accent)] text-sm">{t("common.bookArrow")}</span>
               </Link>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Open Play Players Modal */}
+      {openPlayModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50"
+          onClick={() => setOpenPlayModal(null)}
+        >
+          <div
+            className="w-full max-w-lg bg-[var(--cm-sheet-bg)] rounded-t-2xl overflow-hidden"
+            style={{ maxHeight: "85dvh" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full bg-[var(--cm-border)]" />
+            </div>
+
+            {/* Header */}
+            <div className="px-5 pb-3 border-b border-[var(--cm-border)]">
+              <p className="font-bold text-base text-[var(--cm-text)]">
+                {t("home.sessionTitle", { title: openPlayModal.title })}
+              </p>
+              <p className="text-xs text-[var(--cm-text-sec)] mt-0.5">
+                {openPlayModal.players.length} {t("home.playersRegistered")} · {formatTime(openPlayModal.startTime)}–{formatTime(openPlayModal.endTime)}
+              </p>
+            </div>
+
+            {/* Player list */}
+            <div className="overflow-y-auto" style={{ maxHeight: "calc(85dvh - 100px)" }}>
+              {openPlayModal.players.length === 0 ? (
+                <p className="text-sm text-[var(--cm-text-muted)] text-center py-8">
+                  {t("home.noPlayersYet")}
+                </p>
+              ) : (
+                openPlayModal.players.map((p, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-3 px-5 py-3 border-b border-[var(--cm-border)] last:border-0"
+                  >
+                    <div
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold text-black shrink-0"
+                      style={{ backgroundColor: p.avatarColor }}
+                    >
+                      {p.initials}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-[var(--cm-text)] truncate">{p.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {p.skillLevel && (
+                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                            p.skillLevel === "pro" ? "bg-red-500/15 text-red-500" :
+                            p.skillLevel === "advanced" ? "bg-amber-500/15 text-amber-600" :
+                            p.skillLevel === "intermediate" ? "bg-blue-500/15 text-blue-500" :
+                            "bg-green-500/15 text-green-600"
+                          }`}>
+                            {p.skillLevel.charAt(0).toUpperCase() + p.skillLevel.slice(1)}
+                          </span>
+                        )}
+                        <span className="text-xs text-[var(--cm-text-muted)]">
+                          {p.checkInCount > 0
+                            ? t("home.sessionCount", { count: p.checkInCount })
+                            : t("home.newPlayer")}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+              <div style={{ height: "env(safe-area-inset-bottom, 16px)" }} />
+            </div>
           </div>
         </div>
       )}
