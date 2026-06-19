@@ -23,6 +23,16 @@ import { ScanFace, UserCheck } from "lucide-react";
 
 const SKILL_LEVELS = ["beginner", "intermediate", "advanced", "pro"] as const;
 const GENDERS = ["male", "female"] as const;
+
+const COUNTRIES = [
+  { code: "VN", name: "Vietnam", flag: "🇻🇳" },
+  { code: "TH", name: "Thailand", flag: "🇹🇭" },
+  { code: "SG", name: "Singapore", flag: "🇸🇬" },
+  { code: "MY", name: "Malaysia", flag: "🇲🇾" },
+  { code: "FR", name: "France", flag: "🇫🇷" },
+  { code: "ES", name: "Spain", flag: "🇪🇸" },
+  { code: "AU", name: "Australia", flag: "🇦🇺" },
+];
 const THEME_OPTIONS = [
   { value: "light" as const, labelKey: "theme.light" },
   { value: "dark" as const, labelKey: "theme.dark" },
@@ -39,6 +49,7 @@ type ProfileSnapshot = {
   phone: string;
   gender: string;
   skillLevel: string;
+  country: string;
 };
 
 function segmentClass(selected: boolean) {
@@ -57,6 +68,7 @@ export default function EditProfilePage() {
   const [phone, setPhone] = useState("");
   const [gender, setGender] = useState("");
   const [skillLevel, setSkillLevel] = useState("");
+  const [country, setCountry] = useState("");
   const [email, setEmail] = useState("");
   const [venueTimezone, setVenueTimezone] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
@@ -71,6 +83,8 @@ export default function EditProfilePage() {
   const [faceModal, setFaceModal] = useState<"verify" | "register" | null>(null);
   const [faceCheckInResult, setFaceCheckInResult] = useState<FaceCheckInResult | null>(null);
   const [faceRegisterCapture, setFaceRegisterCapture] = useState<string | null>(null);
+  const [linkingState, setLinkingState] = useState<"idle" | "linking" | "linked" | "error">("idle");
+  const [linkError, setLinkError] = useState<string | null>(null);
 
   const [cropFile, setCropFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -88,9 +102,10 @@ export default function EditProfilePage() {
       name !== initialProfile.name ||
       phone !== initialProfile.phone ||
       gender !== initialProfile.gender ||
-      skillLevel !== initialProfile.skillLevel
+      skillLevel !== initialProfile.skillLevel ||
+      country !== initialProfile.country
     );
-  }, [initialProfile, name, phone, gender, skillLevel]);
+  }, [initialProfile, name, phone, gender, skillLevel, country]);
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/book/login");
@@ -103,11 +118,13 @@ export default function EditProfilePage() {
             phone: p.phone ?? "",
             gender: p.gender ?? "",
             skillLevel: p.skillLevel ?? "",
+            country: p.country ?? "",
           };
           setName(snapshot.name);
           setPhone(snapshot.phone);
           setGender(snapshot.gender);
           setSkillLevel(snapshot.skillLevel);
+          setCountry(snapshot.country);
           setInitialProfile(snapshot);
           setEmail(p.email ?? "");
           setVenueTimezone(p.venue?.timezone ?? null);
@@ -159,7 +176,7 @@ export default function EditProfilePage() {
       const res = await portalFetch("/api/public/account", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, phone, gender, skillLevel }),
+        body: JSON.stringify({ name, phone, gender, skillLevel, country }),
       });
       if (!res.ok) {
         const d = await res.json();
@@ -169,6 +186,27 @@ export default function EditProfilePage() {
     } catch (e) {
       setError((e as Error).message);
       setSaving(false);
+    }
+  }
+
+  async function handleLinkCourtPay() {
+    if (!faceCheckInResult?.player?.id) return;
+    setLinkingState("linking");
+    setLinkError(null);
+    try {
+      const res = await portalFetch("/api/public/account/link-courtpay", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ checkInPlayerId: faceCheckInResult.player.id }),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || "Link failed");
+      }
+      setLinkingState("linked");
+    } catch (e) {
+      setLinkError((e as Error).message);
+      setLinkingState("error");
     }
   }
 
@@ -286,6 +324,23 @@ export default function EditProfilePage() {
         </div>
 
         <div>
+          <p className="text-xs font-medium text-[var(--cm-text-sec)] mb-1.5">{t("editProfile.country")}</p>
+          <select
+            value={country}
+            onChange={(e) => setCountry(e.target.value)}
+            className="w-full px-3 py-1.5 rounded-lg text-xs border border-[var(--cm-border)] bg-[var(--cm-bg-input)] text-[var(--cm-text)] focus:border-[var(--cm-accent)] outline-none"
+          >
+            <option value="">{t("editProfile.countryNone")}</option>
+            {COUNTRIES.map((c) => (
+              <option key={c.code} value={c.code}>{c.flag} {c.name}</option>
+            ))}
+          </select>
+          <p className="text-[10px] text-[var(--cm-text-muted)] mt-1">
+            {t("editProfile.countryHint")}
+          </p>
+        </div>
+
+        <div>
           <p className="text-xs font-medium text-[var(--cm-text-sec)] mb-1.5">{t("language.label")}</p>
           <div className="grid grid-cols-3 gap-2">
             {BOOK_LANGUAGES.map((lang) => (
@@ -352,7 +407,7 @@ export default function EditProfilePage() {
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => { setFaceCheckInResult(null); setFaceModal("verify"); }}
+              onClick={() => { setFaceCheckInResult(null); setLinkingState("idle"); setLinkError(null); setFaceModal("verify"); }}
               className="flex flex-1 items-center justify-center gap-2 py-2 rounded-lg border border-[var(--cm-border)] bg-[var(--cm-bg-input)] text-xs font-medium text-[var(--cm-text)] hover:border-[var(--cm-accent)] transition-colors"
             >
               <ScanFace className="h-4 w-4" />
@@ -393,7 +448,7 @@ export default function EditProfilePage() {
       {faceModal === "verify" && venueId ? (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--cm-overlay)] p-4"
-          onClick={() => setFaceModal(null)}
+          onClick={() => { setFaceModal(null); setLinkingState("idle"); setLinkError(null); }}
         >
           <div
             className="w-full max-w-lg bg-[var(--cm-sheet-bg)] rounded-2xl p-5 pb-8 border border-[var(--cm-border)] space-y-4 max-h-[90dvh] overflow-y-auto"
@@ -403,7 +458,7 @@ export default function EditProfilePage() {
               <h2 className="text-base font-bold text-[var(--cm-text)]">{t("editProfile.faceVerifyTitle")}</h2>
               <button
                 type="button"
-                onClick={() => setFaceModal(null)}
+                onClick={() => { setFaceModal(null); setLinkingState("idle"); setLinkError(null); }}
                 className="text-xs text-[var(--cm-text-muted)] hover:text-[var(--cm-text)]"
               >
                 {t("editProfile.close")}
@@ -412,11 +467,44 @@ export default function EditProfilePage() {
 
             {faceCheckInResult ? (
               faceCheckInResult.resultType === "matched" ? (
-                <FaceCheckInResultCard
-                  player={faceCheckInResult.player ?? null}
-                  label={t("editProfile.faceVerifySuccess")}
-                  onClose={() => setFaceCheckInResult(null)}
-                />
+                <div className="space-y-3">
+                  {linkingState === "linked" ? (
+                    <div className="text-center py-4 space-y-2">
+                      <div className="text-3xl">✓</div>
+                      <p className="font-semibold text-[var(--cm-text)]">Accounts linked</p>
+                      <p className="text-sm text-[var(--cm-text-sec)]">Your CourtPay check-in history and subscriptions are now connected to your CourtPass profile.</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="rounded-xl bg-[var(--cm-bg-surface)] border border-[var(--cm-border)] p-3 flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-[var(--cm-accent-bg)] flex items-center justify-center text-sm font-semibold text-[var(--cm-accent)] shrink-0">
+                          {faceCheckInResult.player?.name?.[0]?.toUpperCase() ?? "?"}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-[var(--cm-text)]">{faceCheckInResult.player?.name}</p>
+                          <p className="text-xs text-[var(--cm-text-sec)]">{faceCheckInResult.player?.phone}</p>
+                        </div>
+                      </div>
+                      <p className="text-sm text-[var(--cm-text-sec)]">CourtPay profile found. Link it to your CourtPass account to see your check-in history and subscriptions in one place.</p>
+                      {linkError && <p className="text-xs text-[var(--cm-red)]">{linkError}</p>}
+                      <button
+                        type="button"
+                        onClick={handleLinkCourtPay}
+                        disabled={linkingState === "linking"}
+                        className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm disabled:opacity-50"
+                      >
+                        {linkingState === "linking" ? "Linking..." : "Link accounts"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setFaceCheckInResult(null); setLinkingState("idle"); setLinkError(null); }}
+                        className="w-full py-2 text-xs text-[var(--cm-text-muted)]"
+                      >
+                        Not me, try again
+                      </button>
+                    </>
+                  )}
+                </div>
               ) : (
                 <FaceCheckInNotFoundCard
                   label={t("editProfile.faceVerifyNotFound")}
@@ -443,7 +531,7 @@ export default function EditProfilePage() {
 
             <button
               type="button"
-              onClick={() => setFaceModal(null)}
+              onClick={() => { setFaceModal(null); setLinkingState("idle"); setLinkError(null); }}
               className="w-full py-3 bg-[var(--cm-bg-surface)] text-[var(--cm-text-sec)] rounded-xl font-medium text-sm border border-[var(--cm-border)]"
             >
               {t("editProfile.close")}

@@ -71,6 +71,7 @@ export async function POST(request: NextRequest) {
       venueAssignments?: { venueId: string; appAccess: string[] }[];
       isCoach?: boolean;
       coachBio?: string | null;
+      organizationId?: string | null;
     }>(request);
 
     if (!body.name || !body.phone || !body.password) {
@@ -133,6 +134,32 @@ export async function POST(request: NextRequest) {
         },
       },
     });
+
+    // Link venues to an organization if applicable
+    const assignedVenueIds = staff.venueAssignments.map((a) => a.venueId);
+
+    if (createdRole === "manager" && assignedVenueIds.length > 0) {
+      let resolvedOrgId: string | null = body.organizationId?.trim() || null;
+
+      // If the caller is a manager (not superadmin), inherit their org from their own venues
+      if (auth.role === "manager" && !resolvedOrgId) {
+        const callerVenue = await prisma.venue.findFirst({
+          where: {
+            venueAssignments: { some: { staffId: auth.id } },
+            organizationId: { not: null },
+          },
+          select: { organizationId: true },
+        });
+        resolvedOrgId = callerVenue?.organizationId ?? null;
+      }
+
+      if (resolvedOrgId) {
+        await prisma.venue.updateMany({
+          where: { id: { in: assignedVenueIds }, organizationId: null },
+          data: { organizationId: resolvedOrgId },
+        });
+      }
+    }
 
     return json(
       {

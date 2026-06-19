@@ -15,6 +15,13 @@ interface StaffVenue {
   id: string;
   name: string;
   appAccess?: StaffAppAccessKind[];
+  organization?: { id: string; name: string; country: string } | null;
+}
+
+interface OrgOption {
+  id: string;
+  name: string;
+  country: string;
 }
 
 interface Staff {
@@ -37,6 +44,7 @@ export default function StaffPage() {
   const callerRole = useSessionStore((s) => s.role);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [venues, setVenues] = useState<StaffVenue[]>([]);
+  const [orgs, setOrgs] = useState<OrgOption[]>([]);
   const [modalMode, setModalMode] = useState<ModalMode>(null);
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
 
@@ -50,6 +58,7 @@ export default function StaffPage() {
     venueAppAccess: Record<string, StaffAppAccessKind[]>;
     isCoach: boolean;
     coachBio: string;
+    organizationId: string;
   }>({
     name: "",
     phone: "",
@@ -60,18 +69,21 @@ export default function StaffPage() {
     venueAppAccess: {},
     isCoach: false,
     coachBio: "",
+    organizationId: "",
   });
   const [newPassword, setNewPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
   const fetchAll = async () => {
-    const [s, v] = await Promise.all([
+    const [s, v, o] = await Promise.all([
       api.get<Staff[]>("/api/admin/staff"),
       api.get<StaffVenue[]>("/api/admin/venues"),
+      api.get<OrgOption[]>("/api/admin/organizations").catch(() => [] as OrgOption[]),
     ]);
     setStaff(s);
     setVenues(v);
+    setOrgs(o);
   };
 
   useEffect(() => {
@@ -89,6 +101,7 @@ export default function StaffPage() {
       venueAppAccess: {},
       isCoach: false,
       coachBio: "",
+      organizationId: "",
     });
     setErr("");
     setModalMode("create");
@@ -101,6 +114,12 @@ export default function StaffPage() {
       const a = v.appAccess?.length ? v.appAccess : (["courtpay"] as StaffAppAccessKind[]);
       venueAppAccess[v.id] = a;
     }
+    // Find org from the staff member's currently assigned venues
+    const staffVenueWithOrg = s.venues
+      .map((sv) => venues.find((v) => v.id === sv.id))
+      .find((v) => v?.organization?.id);
+    const staffOrgId = staffVenueWithOrg?.organization?.id ?? "";
+
     setForm({
       name: s.name,
       phone: s.phone,
@@ -111,6 +130,7 @@ export default function StaffPage() {
       venueAppAccess,
       isCoach: s.isCoach,
       coachBio: s.coachBio || "",
+      organizationId: staffOrgId,
     });
     setErr("");
     setModalMode("edit");
@@ -180,6 +200,7 @@ export default function StaffPage() {
         })),
         isCoach: form.isCoach,
         coachBio: form.coachBio || null,
+        ...(form.role === "manager" && form.organizationId ? { organizationId: form.organizationId } : {}),
       });
       await fetchAll();
       closeModal();
@@ -206,6 +227,7 @@ export default function StaffPage() {
         })),
         isCoach: form.isCoach,
         coachBio: form.coachBio || null,
+        ...(form.role === "manager" && form.organizationId ? { organizationId: form.organizationId } : {}),
       });
       await fetchAll();
       closeModal();
@@ -390,6 +412,40 @@ export default function StaffPage() {
                 </select>
                 <p className="mt-1 text-[10px] text-neutral-600">build: 2026-06-09 · roles: staff, manager, superadmin</p>
               </div>
+
+              {form.role === "manager" && (() => {
+                // Determine if the caller (manager) is already locked to an org via their venues
+                const callerOrgId = callerRole !== "superadmin"
+                  ? venues.find((v) => v.organization?.id)?.organization?.id ?? null
+                  : null;
+                const isLocked = callerRole !== "superadmin" && !!callerOrgId;
+                const lockedOrg = callerOrgId ? orgs.find((o) => o.id === callerOrgId) : null;
+
+                return (
+                  <div>
+                    <label className="mb-1.5 block text-sm text-neutral-400">Organization</label>
+                    {isLocked ? (
+                      <div className="flex items-center gap-2 rounded-lg border border-neutral-700 bg-neutral-800/50 px-3 py-2.5 text-sm text-neutral-400">
+                        <span className="text-white">{lockedOrg?.name ?? callerOrgId}</span>
+                        <span className="text-xs text-neutral-600">(inherited)</span>
+                      </div>
+                    ) : (
+                      <select
+                        value={form.organizationId}
+                        onChange={(e) => setForm({ ...form, organizationId: e.target.value })}
+                        className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-white focus:border-purple-500 focus:outline-none"
+                      >
+                        <option value="">No organization</option>
+                        {orgs.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                );
+              })()}
 
               <div>
                 <label className="mb-1.5 flex items-center gap-1 text-sm text-neutral-400">

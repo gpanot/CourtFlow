@@ -115,6 +115,21 @@ enum SubscriptionStatus {
   cancelled
 }
 
+model Organization {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  country       String
+  paymentRegion String   @default("SEA") @map("payment_region")
+  currency      String   @default("VND")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  venues Venue[]
+
+  @@map("organizations")
+}
+
 model Venue {
   id                 String    @id @default(cuid())
   name               String
@@ -140,6 +155,11 @@ model Venue {
 
   billingStatus String @default("active") @map("billing_status")
   timezone      String @default("Asia/Ho_Chi_Minh") @map("timezone")
+
+  organizationId String? @map("organization_id")
+  sportType      String  @default("pickleball") @map("sport_type")
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
 
   ownerId String? @map("owner_id")
   owner   StaffMember? @relation("VenueOwner", fields: [ownerId], references: [id], onDelete: SetNull)
@@ -168,6 +188,7 @@ model Venue {
   openPlayRegistrations OpenPlayRegistration[]
   playerNotes           PlayerNote[]
 
+  @@index([organizationId])
   @@map("venues")
 }
 
@@ -1238,6 +1259,7 @@ model PlayerAccount {
   image             String?
   passwordHash      String?   @map("password_hash")
   emailVerified     Boolean   @default(false) @map("email_verified")
+  country           String?
   createdAt         DateTime  @default(now()) @map("created_at")
 
   player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)

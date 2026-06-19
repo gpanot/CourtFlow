@@ -20,6 +20,7 @@ export async function GET(request: NextRequest) {
           orderBy: { openedAt: "desc" },
         },
         owner: { select: { id: true, name: true } },
+        organization: { select: { id: true, name: true, country: true, currency: true } },
         _count: { select: { staffAssignments: true } },
       },
     });
@@ -27,6 +28,8 @@ export async function GET(request: NextRequest) {
     return json(
       venues.map((v) => ({
         ...v,
+        sportType: v.sportType,
+        organization: v.organization ?? null,
         _count: { staff: v._count.staffAssignments },
       }))
     );
@@ -38,12 +41,44 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const auth = requireSuperAdmin(request.headers);
-    const body = await parseBody<{ name: string; location?: string }>(request);
+    const body = await parseBody<{
+      name: string;
+      location?: string;
+      sportType?: string;
+      orgName?: string;
+      orgCountry?: string;
+      orgCurrency?: string;
+    }>(request);
+
+    let organizationId: string | null = null;
+    if (body.orgName) {
+      const orgCountry = body.orgCountry ?? "";
+      const slug = body.orgName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      const existingOrg = await prisma.organization.findFirst({
+        where: { name: body.orgName, country: orgCountry },
+        select: { id: true },
+      });
+      if (existingOrg) {
+        organizationId = existingOrg.id;
+      } else {
+        const newOrg = await prisma.organization.create({
+          data: {
+            name: body.orgName,
+            slug,
+            country: orgCountry,
+            currency: body.orgCurrency ?? "VND",
+          },
+        });
+        organizationId = newOrg.id;
+      }
+    }
 
     const venue = await prisma.venue.create({
       data: {
         name: body.name,
         location: body.location || null,
+        sportType: body.sportType ?? "pickleball",
+        organizationId,
         ownerId: null,
         staffAssignments: {
           create: [{ staffId: auth.id, appAccess: ["courtflow"] }],
@@ -69,6 +104,9 @@ export async function POST(request: NextRequest) {
             contactEmail: null,
           },
         },
+      },
+      include: {
+        organization: { select: { id: true, name: true, country: true, currency: true } },
       },
     });
 

@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Globe, Clock, Check, Loader2, CheckCircle2 } from "lucide-react";
+import Link from "next/link";
+import { Globe, Clock, Check, Loader2, CheckCircle2, Building2 } from "lucide-react";
 import adminI18n, { ADMIN_I18N_STORAGE_KEY } from "@/i18n/admin-i18n";
 import { cn } from "@/lib/cn";
 import { api } from "@/lib/api-client";
 import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
+import { useSessionStore } from "@/stores/session-store";
 
 export const dynamic = "force-dynamic";
 
@@ -37,20 +39,63 @@ const TIMEZONE_OPTIONS: { value: string; label: string; region: string }[] = [
   { value: "UTC", label: "UTC (UTC+0)", region: "Other" },
 ];
 
+const SPORT_ICONS: Record<string, string> = {
+  pickleball: "🏓",
+  padel: "🎾",
+  tennis: "🎾",
+  badminton: "🏸",
+  golf: "⛳",
+};
+
+const PAYMENT_REGION_MAP: Record<string, string> = {
+  VN: "SEA", TH: "SEA", SG: "SEA", MY: "SEA", PH: "SEA",
+  FR: "EU",  ES: "EU",  DE: "EU",
+  AU: "ANZ", NZ: "ANZ",
+};
+
+const COUNTRIES_MAP: Record<string, { name: string; flag: string }> = {
+  VN: { name: "Vietnam", flag: "🇻🇳" },
+  TH: { name: "Thailand", flag: "🇹🇭" },
+  SG: { name: "Singapore", flag: "🇸🇬" },
+  MY: { name: "Malaysia", flag: "🇲🇾" },
+  PH: { name: "Philippines", flag: "🇵🇭" },
+  FR: { name: "France", flag: "🇫🇷" },
+  ES: { name: "Spain", flag: "🇪🇸" },
+  DE: { name: "Germany", flag: "🇩🇪" },
+  AU: { name: "Australia", flag: "🇦🇺" },
+  NZ: { name: "New Zealand", flag: "🇳🇿" },
+};
+
 interface VenueBasic {
   id: string;
   name: string;
   timezone: string;
 }
 
+interface VenueDetail {
+  id: string;
+  name: string;
+  timezone: string;
+  sportType: string;
+  organization: {
+    id: string;
+    name: string;
+    country: string;
+    currency: string;
+    paymentRegion?: string;
+  } | null;
+}
+
 export default function GeneralSettingsPage() {
   const { t, i18n } = useTranslation("translation", { i18n: adminI18n });
   const [currentLang, setCurrentLang] = useState<Language>("en");
   const { venueId, setVenueId, venues } = useAdminVenuePicker({ autoSelect: true });
+  const { role } = useSessionStore();
 
   const [venueTimezone, setVenueTimezone] = useState<string>("Asia/Ho_Chi_Minh");
   const [tzSaving, setTzSaving] = useState(false);
   const [tzMsg, setTzMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [venueDetails, setVenueDetails] = useState<VenueDetail[]>([]);
 
   useEffect(() => {
     const stored = localStorage.getItem(ADMIN_I18N_STORAGE_KEY);
@@ -60,13 +105,19 @@ export default function GeneralSettingsPage() {
   const fetchVenueTimezone = useCallback(async () => {
     if (!venueId) return;
     try {
-      const data = await api.get<VenueBasic[]>("/api/admin/venues");
+      const data = await api.get<VenueDetail[]>("/api/admin/venues");
+      setVenueDetails(data);
       const v = data.find((x) => x.id === venueId);
       if (v) setVenueTimezone(v.timezone ?? "Asia/Ho_Chi_Minh");
     } catch {
       // ignore
     }
   }, [venueId]);
+
+  const selectedVenue = useMemo(
+    () => venueDetails.find((v) => v.id === venueId) ?? null,
+    [venueDetails, venueId]
+  );
 
   useEffect(() => {
     void fetchVenueTimezone();
@@ -138,6 +189,63 @@ export default function GeneralSettingsPage() {
           </div>
         </section>
 
+        {/* Organization section — read-only, role-scoped */}
+        {venueId && selectedVenue && (
+          <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Building2 className="h-4 w-4 text-purple-400" />
+              <h2 className="text-sm font-semibold text-white">
+                {role === "superadmin" ? "Organization" : "Your Organization"}
+              </h2>
+            </div>
+            {selectedVenue.organization ? (
+              <>
+                <dl className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <dt className="text-neutral-400">Name</dt>
+                    <dd className="text-white">{selectedVenue.organization.name}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-neutral-400">Country</dt>
+                    <dd className="text-white">
+                      {COUNTRIES_MAP[selectedVenue.organization.country]?.flag ?? ""}{" "}
+                      {COUNTRIES_MAP[selectedVenue.organization.country]?.name ?? selectedVenue.organization.country}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-neutral-400">Currency</dt>
+                    <dd className="text-white">{selectedVenue.organization.currency}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-neutral-400">Payment region</dt>
+                    <dd>
+                      <span className="rounded-full bg-neutral-700/50 px-2 py-0.5 text-xs text-neutral-300">
+                        {selectedVenue.organization.paymentRegion ?? PAYMENT_REGION_MAP[selectedVenue.organization.country] ?? "OTHER"}
+                      </span>
+                    </dd>
+                  </div>
+                </dl>
+                {role === "superadmin" && (
+                  <Link
+                    href="/admin/organizations"
+                    className="mt-3 inline-block text-xs text-purple-400 hover:text-purple-300"
+                  >
+                    Manage organizations →
+                  </Link>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-neutral-500">
+                {role === "superadmin" ? (
+                  <>No organization linked.{" "}<Link href="/admin/organizations" className="text-purple-400 hover:text-purple-300">Link one in Organizations page.</Link></>
+                ) : (
+                  "Contact your platform administrator to set up your organization."
+                )}
+              </p>
+            )}
+          </section>
+        )}
+
         {/* Timezone section */}
         <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
           <div className="flex items-center gap-2 mb-1">
@@ -202,6 +310,25 @@ export default function GeneralSettingsPage() {
             </div>
           )}
         </section>
+
+        {/* Venue Details section */}
+        {venueId && selectedVenue && (
+          <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-base">{SPORT_ICONS[selectedVenue.sportType] ?? "🏟️"}</span>
+              <h2 className="text-sm font-semibold text-white">Venue Details</h2>
+            </div>
+            <dl className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <dt className="text-neutral-400">Sport</dt>
+                <dd className="text-white capitalize">{selectedVenue.sportType}</dd>
+              </div>
+            </dl>
+            <p className="mt-3 text-[11px] text-neutral-600">
+              Edit sport type from the Venues page.
+            </p>
+          </section>
+        )}
       </div>
     </div>
   );

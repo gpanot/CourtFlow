@@ -374,6 +374,9 @@
     "yesDelete": "Yes, delete my account",
     "deletedTitle": "Account deleted",
     "signingOut": "Signing you out…",
+    "country": "Country preference",
+    "countryNone": "No preference",
+    "countryHint": "We use this to show you venues near you. You can change it at any time.",
     "errors": {
       "uploadFailed": "Upload failed",
       "deletionFailed": "Deletion failed",

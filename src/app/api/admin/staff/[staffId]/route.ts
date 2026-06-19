@@ -22,6 +22,7 @@ export async function PATCH(
       isCoach?: boolean;
       coachBio?: string | null;
       coachPhoto?: string | null;
+      organizationId?: string | null;
     }>(request);
 
     const existing = await prisma.staffMember.findUnique({
@@ -86,6 +87,24 @@ export async function PATCH(
           });
         }
       });
+    }
+
+    // Link venues to an organization if applicable
+    const effectiveRole = body.role ?? existing.role;
+    if (effectiveRole === "manager" && body.organizationId?.trim()) {
+      const orgId = body.organizationId.trim();
+      // Fetch the updated venue assignments for this staff member
+      const assignments = await prisma.staffVenueAssignment.findMany({
+        where: { staffId },
+        select: { venueId: true },
+      });
+      const venueIds = assignments.map((a) => a.venueId);
+      if (venueIds.length > 0) {
+        await prisma.venue.updateMany({
+          where: { id: { in: venueIds }, organizationId: null },
+          data: { organizationId: orgId },
+        });
+      }
     }
 
     const staff = await prisma.staffMember.findUniqueOrThrow({

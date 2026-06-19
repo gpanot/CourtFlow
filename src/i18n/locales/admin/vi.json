@@ -25,7 +25,8 @@
     "courtflowSocial": "CourtFlow - Xã hội",
     "courtpayCheckin": "CourtPay - Điểm danh",
     "logsErrors": "Nhật ký & Lỗi",
-    "courtpassPlayers": "Người chơi CourtPass"
+    "courtpassPlayers": "Người chơi CourtPass",
+    "organizations": "Tổ chức"
   },
   "layout": {
     "adminPanel": "Bảng quản trị",

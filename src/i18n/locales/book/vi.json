@@ -374,6 +374,9 @@
     "yesDelete": "Có, xóa tài khoản",
     "deletedTitle": "Đã xóa tài khoản",
     "signingOut": "Đang đăng xuất…",
+    "country": "Quốc gia ưu tiên",
+    "countryNone": "Không chọn",
+    "countryHint": "Chúng tôi dùng thông tin này để hiển thị các sân gần bạn. Bạn có thể thay đổi bất cứ lúc nào.",
     "errors": {
       "uploadFailed": "Tải lên thất bại",
       "deletionFailed": "Xóa thất bại",

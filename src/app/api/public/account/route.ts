@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
         registrationVenueId: true,
         registrationVenue: { select: { id: true, name: true, location: true, timezone: true } },
         accounts: {
-          select: { provider: true, image: true, email: true, emailVerified: true },
+          select: { provider: true, image: true, email: true, emailVerified: true, country: true },
           take: 1,
         },
         coachCredits: {
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
     });
 
     const account = player.accounts[0];
-    const avatar = account?.image ?? player.avatarPhotoPath ?? player.facePhotoPath;
+    const avatar = account?.image ?? player.avatarPhotoPath ?? null;
     const displayPhone =
       player.phone.startsWith("oauth_") || player.phone.startsWith("email_")
         ? null
@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
       emailVerified,
       isCredentialsAccount,
       venue: player.registrationVenue,
+      country: account?.country ?? null,
     });
   } catch (e) {
     const msg = (e as Error).message;
@@ -115,12 +116,13 @@ export async function PATCH(request: NextRequest) {
   try {
     const { playerId } = await requirePortalAuth(request);
     const body = await request.json();
-    const { name, phone, gender, skillLevel, venueId } = body as {
+    const { name, phone, gender, skillLevel, venueId, country } = body as {
       name?: string;
       phone?: string;
       gender?: string;
       skillLevel?: string;
       venueId?: string;
+      country?: string;
     };
 
     const data: Record<string, unknown> = {};
@@ -135,6 +137,13 @@ export async function PATCH(request: NextRequest) {
       where: { id: playerId },
       data,
     });
+
+    if (country !== undefined) {
+      await prisma.playerAccount.updateMany({
+        where: { playerId },
+        data: { country: country || null },
+      });
+    }
 
     return json(updated);
   } catch (e) {

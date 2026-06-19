@@ -20,6 +20,28 @@ import {
 import { CourtsManager, type Court } from "@/components/admin/CourtsManager";
 
 export const dynamic = "force-dynamic";
+
+const COUNTRY_CURRENCY: Record<string, string> = {
+  VN: "VND", TH: "THB", SG: "SGD", MY: "MYR",
+  FR: "EUR", ES: "EUR", AU: "AUD",
+};
+
+const COUNTRIES = [
+  { code: "VN", name: "Vietnam", flag: "🇻🇳" },
+  { code: "TH", name: "Thailand", flag: "🇹🇭" },
+  { code: "SG", name: "Singapore", flag: "🇸🇬" },
+  { code: "MY", name: "Malaysia", flag: "🇲🇾" },
+  { code: "FR", name: "France", flag: "🇫🇷" },
+  { code: "ES", name: "Spain", flag: "🇪🇸" },
+  { code: "AU", name: "Australia", flag: "🇦🇺" },
+];
+
+const SPORT_TYPES = ["pickleball", "padel", "tennis", "badminton", "golf"];
+
+function flagFor(code: string): string {
+  return COUNTRIES.find((c) => c.code === code)?.flag ?? "";
+}
+
 interface VenueSettings {
   logoSpin?: boolean;
   tvLocale?: string;
@@ -43,6 +65,8 @@ interface Venue {
   sessions: { id: string; status: string }[];
   owner: { id: string; name: string } | null;
   _count: { staff: number };
+  sportType: string;
+  organization: { id: string; name: string; country: string; currency: string } | null;
 }
 
 export default function VenuesPage() {
@@ -52,6 +76,7 @@ export default function VenuesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [newLocation, setNewLocation] = useState("");
+  const [newSportType, setNewSportType] = useState("pickleball");
   const [expandedVenueId, setExpandedVenueId] = useState<string | null>(null);
 
   const fetchVenues = useCallback(async () => {
@@ -73,10 +98,12 @@ export default function VenuesPage() {
       await api.post("/api/admin/venues", {
         name: newName.trim(),
         location: newLocation.trim() || undefined,
+        sportType: newSportType,
       });
       setShowCreate(false);
       setNewName("");
       setNewLocation("");
+      setNewSportType("pickleball");
       await fetchVenues();
     } catch (e) {
       alert((e as Error).message);
@@ -116,6 +143,15 @@ export default function VenuesPage() {
             className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
             onKeyDown={(e) => e.key === "Enter" && createVenue()}
           />
+          <select
+            value={newSportType}
+            onChange={(e) => setNewSportType(e.target.value)}
+            className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
+          >
+            {SPORT_TYPES.map((s) => (
+              <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+            ))}
+          </select>
           <div className="flex gap-2">
             <button
               onClick={createVenue}
@@ -129,6 +165,7 @@ export default function VenuesPage() {
                 setShowCreate(false);
                 setNewName("");
                 setNewLocation("");
+                setNewSportType("pickleball");
               }}
               className="rounded-lg bg-neutral-800 px-4 py-2 text-sm text-neutral-400 hover:text-white"
             >
@@ -182,6 +219,7 @@ function VenueCard({
   const [editContactWhatsApp, setEditContactWhatsApp] = useState(venue.contactWhatsApp || "");
   const [editContactZalo, setEditContactZalo] = useState(venue.contactZalo || "");
   const [editContactLine, setEditContactLine] = useState(venue.contactLine || "");
+  const [editSportType, setEditSportType] = useState(venue.sportType ?? "pickleball");
   const [saving, setSaving] = useState(false);
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
   const [deleting, setDeleting] = useState(false);
@@ -197,6 +235,7 @@ function VenueCard({
         contactWhatsApp: editContactWhatsApp.trim() || null,
         contactZalo: editContactZalo.trim() || null,
         contactLine: editContactLine.trim() || null,
+        sportType: editSportType,
       });
       setEditing(false);
       await onRefresh();
@@ -215,6 +254,7 @@ function VenueCard({
     setEditContactWhatsApp(venue.contactWhatsApp || "");
     setEditContactZalo(venue.contactZalo || "");
     setEditContactLine(venue.contactLine || "");
+    setEditSportType(venue.sportType ?? "pickleball");
   };
 
   const handleDelete = async () => {
@@ -304,6 +344,15 @@ function VenueCard({
                   if (e.key === "Escape") cancelEdit();
                 }}
               />
+              <select
+                value={editSportType}
+                onChange={(e) => setEditSportType(e.target.value)}
+                className="w-full rounded-lg border border-neutral-600 bg-neutral-800 px-3 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none"
+              >
+                {SPORT_TYPES.map((s) => (
+                  <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                ))}
+              </select>
               <div className="flex gap-2">
                 <button
                   onClick={saveVenue}
@@ -345,6 +394,12 @@ function VenueCard({
                     <span className="rounded-full bg-blue-600/20 px-2 py-0.5 text-xs font-medium text-blue-400">
                       Player Portal
                     </span>
+                  )}
+                  <span className="rounded-full bg-neutral-700/50 px-2 py-0.5 text-xs text-neutral-300 capitalize">
+                    {venue.sportType ?? "pickleball"}
+                  </span>
+                  {venue.organization?.country && (
+                    <span title={venue.organization.name}>{flagFor(venue.organization.country)}</span>
                   )}
                 </div>
                 {venue.location && (

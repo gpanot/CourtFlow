@@ -25,7 +25,8 @@
     "courtflowSocial": "CourtFlow - Social",
     "courtpayCheckin": "CourtPay - Check-in",
     "logsErrors": "Logs & Errors",
-    "courtpassPlayers": "CourtPass Players"
+    "courtpassPlayers": "CourtPass Players",
+    "organizations": "Organizations"
   },
   "layout": {
     "adminPanel": "Admin Panel",
