@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
-import { json, error } from "@/lib/api-helpers";
+import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireAuth } from "@/lib/auth";
 import { sendBookingEmail } from "@/lib/email/send";
 
@@ -11,19 +11,28 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    requireAuth(request.headers);
+    const auth = requireAuth(request.headers);
     const { id } = await params;
+    const { reason } = await parseBody<{ reason?: string }>(request);
 
     const booking = await prisma.booking.findUnique({ where: { id } });
     if (!booking) return error("Booking not found", 404);
     if (booking.paymentStatus !== "proof_submitted") {
-      return error(`Cannot approve: payment status is "${booking.paymentStatus}", expected "proof_submitted"`, 400);
+      return error(`Cannot reject: payment status is "${booking.paymentStatus}", expected "proof_submitted"`, 400);
     }
 
     const updated = await prisma.booking.update({
       where: { id },
-      data: { paymentStatus: "paid" },
-      include: { court: { select: { label: true } }, player: { select: { name: true, email: true } } },
+      data: {
+        paymentStatus: "rejected",
+        rejectedAt: new Date(),
+        rejectedBy: auth.id,
+        rejectionReason: reason ?? null,
+      },
+      include: {
+        court: { select: { label: true } },
+        player: { select: { name: true, email: true } },
+      },
     });
 
     if (updated.player.email) {
@@ -31,8 +40,8 @@ export async function PATCH(
         to: updated.player.email,
         playerName: updated.player.name,
         bookingType: "court",
-        emailType: "approved",
-        details: {},
+        emailType: "rejected",
+        details: { rejectionReason: reason },
       });
     }
 

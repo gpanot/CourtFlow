@@ -136,6 +136,7 @@ export default function EditProfilePage() {
           setEmail(p.email ?? "");
           setVenueTimezone(p.venue?.timezone ?? null);
           setAvatarUrl(p.avatar ?? null);
+          if (p.playerIdentityId) setLinkingState("linked");
           setLoaded(true);
         });
     }

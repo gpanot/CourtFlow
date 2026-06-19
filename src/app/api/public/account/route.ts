@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
         skillLevel: true,
         avatarPhotoPath: true,
         facePhotoPath: true,
+        playerIdentityId: true,
         registrationVenueId: true,
         registrationVenue: { select: { id: true, name: true, location: true, timezone: true } },
         accounts: {

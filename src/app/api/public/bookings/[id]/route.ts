@@ -3,6 +3,7 @@ import { json, error } from "@/lib/api-helpers";
 import { prisma } from "@/lib/db";
 import { requirePortalAuth } from "@/lib/portal-auth";
 import { checkCancellationPolicy } from "@/lib/booking";
+import { sendBookingEmail } from "@/lib/email/send";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,20 @@ export async function DELETE(
       where: { id },
       data: { status: "cancelled", cancelledAt: new Date() },
     });
+
+    const player = await prisma.player.findUnique({
+      where: { id: playerId },
+      select: { name: true, email: true },
+    });
+    if (player?.email) {
+      await sendBookingEmail({
+        to: player.email,
+        playerName: player.name,
+        bookingType: "court",
+        emailType: "cancelled",
+        details: {},
+      });
+    }
 
     return json({ success: true });
   } catch (e) {

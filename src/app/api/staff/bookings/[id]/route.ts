@@ -4,6 +4,7 @@ import { json, error, parseBody, notFound } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
 import { getBookingConfig, resolveSlotPrice } from "@/lib/booking";
 import { toZonedTime } from "date-fns-tz";
+import { sendBookingEmail } from "@/lib/email/send";
 
 export const dynamic = "force-dynamic";
 
@@ -90,9 +91,20 @@ export async function PATCH(
           data: { status: "cancelled", cancelledAt: new Date() },
           include: {
             court: { select: { id: true, label: true } },
-            player: { select: { id: true, name: true, phone: true } },
+            player: { select: { id: true, name: true, phone: true, email: true } },
           },
         });
+
+        if (booking.player.email) {
+          await sendBookingEmail({
+            to: booking.player.email,
+            playerName: booking.player.name,
+            bookingType: "court",
+            emailType: "cancelled",
+            details: {},
+          });
+        }
+
         return json({ ...booking, partialRefund, freeCancel });
       }
 

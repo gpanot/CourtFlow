@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
 import { requireManagerOrSuperAdmin } from "@/lib/auth";
 import { assertVenueAccess } from "@/lib/venue-scope";
+import { sendBookingEmail } from "@/lib/email/send";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,17 @@ export async function PATCH(
       const updated = await prisma.openPlayRegistration.update({
         where: { id },
         data: { status: "cancelled" },
+        include: { player: { select: { name: true, email: true } } },
       });
+      if (updated.player.email) {
+        await sendBookingEmail({
+          to: updated.player.email,
+          playerName: updated.player.name,
+          bookingType: "open_play",
+          emailType: "cancelled",
+          details: {},
+        });
+      }
       return json(updated);
     }
 

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { sendBookingEmail } from "@/lib/email/send";
 
 export const dynamic = "force-dynamic";
 export async function PATCH(
@@ -118,11 +119,21 @@ export async function PATCH(
       data: data as never,
       include: {
         coach: { select: { id: true, name: true } },
-        player: { select: { id: true, name: true } },
+        player: { select: { id: true, name: true, email: true } },
         court: { select: { id: true, label: true } },
         package: { select: { id: true, name: true, lessonType: true, durationMin: true } },
       },
     });
+
+    if (body.status === "cancelled" && lesson.player.email) {
+      await sendBookingEmail({
+        to: lesson.player.email,
+        playerName: lesson.player.name,
+        bookingType: "coach",
+        emailType: "cancelled",
+        details: {},
+      });
+    }
 
     return json(lesson);
   } catch (e) {
@@ -145,6 +156,20 @@ export async function DELETE(
       where: { id },
       data: { status: "cancelled", cancelledAt: new Date() },
     });
+
+    const player = await prisma.player.findUnique({
+      where: { id: existing.playerId },
+      select: { name: true, email: true },
+    });
+    if (player?.email) {
+      await sendBookingEmail({
+        to: player.email,
+        playerName: player.name,
+        bookingType: "coach",
+        emailType: "cancelled",
+        details: {},
+      });
+    }
 
     return json({ success: true });
   } catch (e) {

@@ -4,6 +4,7 @@ import { sendPaymentPushToStaff } from "@/lib/staff-push";
 import { extractPaymentRef } from "./payment-reference";
 import { checkInSubscriber } from "./check-in";
 import { getActiveSubscription } from "./subscription";
+import { sendBookingEmail } from "@/lib/email/send";
 import type { SepayWebhookPayload } from "../types";
 
 /**
@@ -84,6 +85,21 @@ async function handlePortalBookingPayment(
     where: { id: booking.id },
     data: { paymentStatus: "paid" },
   });
+
+  const player = await prisma.player.findUnique({
+    where: { id: booking.playerId },
+    select: { name: true, email: true },
+  });
+  if (player?.email) {
+    await sendBookingEmail({
+      to: player.email,
+      playerName: player.name,
+      bookingType: "court",
+      emailType: "auto_confirmed",
+      details: {},
+    });
+  }
+
   return { matched: true, paymentId: booking.id };
 }
 
@@ -100,6 +116,21 @@ async function handlePortalLessonPayment(
     where: { id: lesson.id },
     data: { paymentStatus: "PAID", paidAt: new Date(), paymentMethod: "vietqr" },
   });
+
+  const player = await prisma.player.findUnique({
+    where: { id: lesson.playerId },
+    select: { name: true, email: true },
+  });
+  if (player?.email) {
+    await sendBookingEmail({
+      to: player.email,
+      playerName: player.name,
+      bookingType: "coach",
+      emailType: "auto_confirmed",
+      details: {},
+    });
+  }
+
   return { matched: true, paymentId: lesson.id };
 }
 
@@ -116,6 +147,21 @@ async function handlePortalOpenPlayPayment(
     where: { id: reg.id },
     data: { paymentStatus: "paid", holdExpiresAt: null },
   });
+
+  const player = await prisma.player.findUnique({
+    where: { id: reg.playerId },
+    select: { name: true, email: true },
+  });
+  if (player?.email) {
+    await sendBookingEmail({
+      to: player.email,
+      playerName: player.name,
+      bookingType: "open_play",
+      emailType: "auto_confirmed",
+      details: {},
+    });
+  }
+
   return { matched: true, paymentId: reg.id };
 }
 

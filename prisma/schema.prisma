@@ -610,6 +610,9 @@ model Booking {
   paymentRef      String?       @unique @map("payment_ref")
   createdAt       DateTime      @default(now()) @map("created_at")
   cancelledAt     DateTime?     @map("cancelled_at")
+  rejectedAt      DateTime?     @map("rejected_at")
+  rejectedBy      String?       @map("rejected_by")
+  rejectionReason String?       @map("rejection_reason")
 
   court  Court  @relation(fields: [courtId], references: [id])
   venue  Venue  @relation(fields: [venueId], references: [id])
@@ -681,14 +684,17 @@ model CoachLesson {
   status        CoachLessonStatus @default(confirmed)
   priceValue    Int               @map("price_value")
   note          String?
-  paymentStatus String            @default("UNPAID") @map("payment_status")
-  paidAt        DateTime?         @map("paid_at")
-  paymentMethod String?           @map("payment_method")
-  proofUrl      String?           @map("proof_url")
-  paymentNote   String?           @map("payment_note")
-  paymentRef    String?           @unique @map("payment_ref")
-  createdAt     DateTime          @default(now()) @map("created_at")
-  cancelledAt   DateTime?         @map("cancelled_at")
+  paymentStatus   String            @default("UNPAID") @map("payment_status")
+  paidAt          DateTime?         @map("paid_at")
+  paymentMethod   String?           @map("payment_method")
+  proofUrl        String?           @map("proof_url")
+  paymentNote     String?           @map("payment_note")
+  paymentRef      String?           @unique @map("payment_ref")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  cancelledAt     DateTime?         @map("cancelled_at")
+  rejectedAt      DateTime?         @map("rejected_at")
+  rejectedBy      String?           @map("rejected_by")
+  rejectionReason String?           @map("rejection_reason")
 
   venue   Venue        @relation(fields: [venueId], references: [id])
   coach   StaffMember  @relation(fields: [coachId], references: [id])
@@ -1313,6 +1319,9 @@ model OpenPlayRegistration {
   status           String    @default("confirmed") @map("status")
   createdAt        DateTime  @default(now()) @map("created_at")
   cancelledAt      DateTime? @map("cancelled_at")
+  rejectedAt       DateTime? @map("rejected_at")
+  rejectedBy       String?   @map("rejected_by")
+  rejectionReason  String?   @map("rejection_reason")
 
   venue  Venue  @relation(fields: [venueId], references: [id])
   player Player @relation(fields: [playerId], references: [id])
@@ -1338,4 +1347,18 @@ model PlayerNote {
   @@unique([playerId, venueId])
   @@index([venueId])
   @@map("player_notes")
+}
+
+model EmailLog {
+  id              String   @id @default(cuid())
+  playerId        String   @map("player_id")
+  bookingType     String   @map("booking_type")
+  bookingId       String   @map("booking_id")
+  emailType       String   @map("email_type")
+  resendMessageId String?  @map("resend_message_id")
+  sentAt          DateTime @default(now()) @map("sent_at")
+  status          String   @default("sent")
+
+  @@index([bookingId, emailType])
+  @@map("email_logs")
 }
