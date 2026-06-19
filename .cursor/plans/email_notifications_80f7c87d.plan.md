@@ -4,25 +4,25 @@ overview: "Add transactional email notifications (via Resend) to all booking pay
 todos:
   - id: stage1
     content: "Stage 1: Install Resend, create src/lib/email/client.ts and src/lib/email/send.ts, update .env.example"
-    status: in_progress
+    status: completed
   - id: stage2
     content: "Stage 2: Add EmailLog model to schema and run prisma migrate dev --name add_email_log"
-    status: pending
+    status: completed
   - id: stage3
     content: "Stage 3: Add rejection fields migration + create 3 reject-payment route files"
-    status: pending
+    status: completed
   - id: stage4
     content: "Stage 4: Wire sendBookingEmail (pending) into the 3 proof upload routes"
-    status: pending
+    status: completed
   - id: stage5
     content: "Stage 5: Wire sendBookingEmail (approved/rejected) into 6 approve and reject routes, widening player select to include email"
-    status: pending
+    status: completed
   - id: stage6
     content: "Stage 6: Wire sendBookingEmail (cancelled) into 6 cancel routes"
-    status: pending
+    status: completed
   - id: stage7
     content: "Stage 7: Show portal handler functions for confirmation, then wire sendBookingEmail (auto_confirmed) into the 3 Sepay portal handlers only"
-    status: pending
+    status: completed
 isProject: false
 ---
 

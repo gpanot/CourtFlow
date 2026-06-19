@@ -618,20 +618,13 @@ export function PaymentTabScreen() {
     setActionId(id);
     try {
       const deviceName = getDeviceLabel();
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 8000);
-      try {
-        await api.post("/api/staff/confirm-payment", {
-          pendingPaymentId: id,
-          ...(deviceName ? { confirmedOnDevice: deviceName } : {}),
-        });
-      } finally {
-        clearTimeout(timeout);
-      }
-      await fetchAll();
+      await api.post("/api/staff/confirm-payment", {
+        pendingPaymentId: id,
+        ...(deviceName ? { confirmedOnDevice: deviceName } : {}),
+      });
     } catch (err) {
       const isNetworkError =
-        err instanceof ApiRequestError ? err.status === 0 : true;
+        err instanceof ApiRequestError && err.status === 0;
       if (isNetworkError && attempt < 1) {
         setActionId(null);
         return handleConfirm(id, attempt + 1);
@@ -646,6 +639,13 @@ export function PaymentTabScreen() {
         ]
       );
       return;
+    }
+    // fetchAll is outside the POST try/catch — a refresh failure never
+    // causes a retry of the confirm request.
+    try {
+      await fetchAll();
+    } catch {
+      /* confirm already succeeded — ignore refresh errors */
     }
     setActionId(null);
   };

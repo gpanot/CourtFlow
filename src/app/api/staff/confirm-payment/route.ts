@@ -23,7 +23,13 @@ export async function POST(request: NextRequest) {
       include: { player: true, session: true, checkInPlayer: true },
     });
     if (!payment) return error("Payment not found", 404);
-    if (payment.status !== "pending") return error("Payment is no longer pending", 400);
+    if (payment.status === "confirmed") {
+      const playerName =
+        payment.checkInPlayer?.name ?? payment.player?.name ?? "Unknown";
+      return json({ queueNumber: null, playerName, alreadyConfirmed: true });
+    }
+    if (payment.status !== "pending")
+      return error(`Payment is no longer pending (status: ${payment.status})`, 400);
 
     // CourtPay payments (no sessionId/playerId on the regular session)
     if (!payment.sessionId || !payment.playerId) {
