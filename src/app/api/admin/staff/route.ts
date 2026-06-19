@@ -145,7 +145,7 @@ export async function POST(request: NextRequest) {
       if (auth.role === "manager" && !resolvedOrgId) {
         const callerVenue = await prisma.venue.findFirst({
           where: {
-            venueAssignments: { some: { staffId: auth.id } },
+            staffAssignments: { some: { staffId: auth.id } },
             organizationId: { not: null },
           },
           select: { organizationId: true },
