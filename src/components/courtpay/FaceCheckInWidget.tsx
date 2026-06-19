@@ -29,6 +29,8 @@ export interface FaceCheckInWidgetProps {
   venueId: string;
   /** Called when the scan produces a conclusive result. */
   onResult: (result: FaceCheckInResult) => void;
+  /** Which camera to start with. Defaults to "environment" (back). Pass "user" for selfie / front camera. */
+  initialFacing?: "user" | "environment";
   /** Labels / copy — callers provide translated strings. */
   labels?: {
     title?: string;
@@ -44,7 +46,7 @@ export interface FaceCheckInWidgetProps {
   };
 }
 
-export function FaceCheckInWidget({ venueId, onResult, labels = {} }: FaceCheckInWidgetProps) {
+export function FaceCheckInWidget({ venueId, onResult, initialFacing = "environment", labels = {} }: FaceCheckInWidgetProps) {
   const {
     title = "Face Check-In",
     hint = "Start the camera and capture your face to verify identity.",
@@ -58,7 +60,7 @@ export function FaceCheckInWidget({ venueId, onResult, labels = {} }: FaceCheckI
     somethingWrong = "Something went wrong.",
   } = labels;
 
-  const [facing, setFacing] = useState<"user" | "environment">("environment");
+  const [facing, setFacing] = useState<"user" | "environment">(initialFacing);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [cameraStarted, setCameraStarted] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);

@@ -19,7 +19,7 @@ import {
   type FaceCheckInResult,
 } from "@/components/courtpay/FaceCheckInWidget";
 import { FaceRegisterWidget } from "@/components/courtpay/FaceRegisterWidget";
-import { ScanFace, UserCheck } from "lucide-react";
+import { ScanFace } from "lucide-react";
 
 const SKILL_LEVELS = ["beginner", "intermediate", "advanced", "pro"] as const;
 const GENDERS = ["male", "female"] as const;
@@ -106,6 +106,13 @@ export default function EditProfilePage() {
       country !== initialProfile.country
     );
   }, [initialProfile, name, phone, gender, skillLevel, country]);
+
+  useEffect(() => {
+    if (linkingState === "linked") {
+      const t = setTimeout(() => setFaceModal(null), 1500);
+      return () => clearTimeout(t);
+    }
+  }, [linkingState]);
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/book/login");
@@ -404,24 +411,18 @@ export default function EditProfilePage() {
       {venueId ? (
         <div className="rounded-xl border border-[var(--cm-border)] bg-[var(--cm-bg-card)] p-3 mb-4 space-y-2">
           <p className="text-xs font-medium text-[var(--cm-text-sec)]">{t("editProfile.faceSection")}</p>
-          <div className="flex gap-2">
+          {linkingState === "linked" ? (
+            <p className="text-sm text-[var(--cm-accent)] font-medium">Your CourtPay account is linked.</p>
+          ) : (
             <button
               type="button"
               onClick={() => { setFaceCheckInResult(null); setLinkingState("idle"); setLinkError(null); setFaceModal("verify"); }}
-              className="flex flex-1 items-center justify-center gap-2 py-2 rounded-lg border border-[var(--cm-border)] bg-[var(--cm-bg-input)] text-xs font-medium text-[var(--cm-text)] hover:border-[var(--cm-accent)] transition-colors"
+              className="flex w-full items-center justify-center gap-2 py-2 rounded-lg border border-[var(--cm-border)] bg-[var(--cm-bg-input)] text-xs font-medium text-[var(--cm-text)] hover:border-[var(--cm-accent)] transition-colors"
             >
               <ScanFace className="h-4 w-4" />
               {t("editProfile.verifyFace")}
             </button>
-            <button
-              type="button"
-              onClick={() => { setFaceRegisterCapture(null); setFaceModal("register"); }}
-              className="flex flex-1 items-center justify-center gap-2 py-2 rounded-lg border border-[var(--cm-border)] bg-[var(--cm-bg-input)] text-xs font-medium text-[var(--cm-text)] hover:border-[var(--cm-accent)] transition-colors"
-            >
-              <UserCheck className="h-4 w-4" />
-              {t("editProfile.registerFace")}
-            </button>
-          </div>
+          )}
         </div>
       ) : null}
 
@@ -447,11 +448,11 @@ export default function EditProfilePage() {
       {/* Face Verify Modal */}
       {faceModal === "verify" && venueId ? (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--cm-overlay)] p-4"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--cm-overlay)] px-4 pt-4 pb-[calc(env(safe-area-inset-bottom,0px)+72px)]"
           onClick={() => { setFaceModal(null); setLinkingState("idle"); setLinkError(null); }}
         >
           <div
-            className="w-full max-w-lg bg-[var(--cm-sheet-bg)] rounded-2xl p-5 pb-8 border border-[var(--cm-border)] space-y-4 max-h-[90dvh] overflow-y-auto"
+            className="w-full max-w-lg bg-[var(--cm-sheet-bg)] rounded-2xl p-5 pb-10 border border-[var(--cm-border)] space-y-4 max-h-[90dvh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
@@ -519,6 +520,7 @@ export default function EditProfilePage() {
             ) : (
               <FaceCheckInWidget
                 venueId={venueId}
+                initialFacing="user"
                 onResult={(result) => setFaceCheckInResult(result)}
                 labels={{
                   title: t("editProfile.faceVerifyTitle"),
