@@ -75,7 +75,7 @@
       "staffFallback": "Staff",
       "noVenue": "No venue",
       "reclubClub": "Reclub club",
-      "reclubClubHint": "Default club for session roster (applies to all your venues).",
+      "reclubClubHint": "Configured by your manager in the admin panel.",
       "reclubClubNotSet": "Not set",
       "pinTitle": "Enter PIN",
       "pinSubtitle": "Enter the 4-digit boss PIN to access this menu",

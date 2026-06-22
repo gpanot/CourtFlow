@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslation } from "react-i18next";
@@ -34,6 +34,7 @@ import {
   ArrowLeftRight,
   Calendar,
 } from "lucide-react";
+import { RECLUB_CLUBS } from "@/lib/reclub";
 
 type PendingNav = "payment" | "subscriptions" | "boss" | null;
 
@@ -47,9 +48,7 @@ export function ProfileCourtPay({ legacyTab, onOpenSessionHistory, variant = "ta
 
   const [venueName, setVenueName] = useState<string | undefined>();
   const [profileLoaded, setProfileLoaded] = useState(false);
-  const [reclubClubs, setReclubClubs] = useState<{ groupId: number; name: string }[]>([]);
   const [reclubGroupId, setReclubGroupId] = useState<number | null | undefined>(undefined);
-  const [reclubSaving, setReclubSaving] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
 
@@ -72,29 +71,15 @@ export function ProfileCourtPay({ legacyTab, onOpenSessionHistory, variant = "ta
     let cancelled = false;
     void (async () => {
       try {
-        const [venueRes, meRes, clubsRes] = await Promise.all([
-          api.get<{ name: string }>(`/api/venues/${venueId}`),
-          api.get<{ name: string; phone: string; reclubGroupId?: number | null }>("/api/auth/staff-me"),
-          api.get<{ groupId: number; name: string }[]>("/api/reclub/clubs").catch(() => [] as { groupId: number; name: string }[]),
+        const [venueRes, meRes] = await Promise.all([
+          api.get<{ name: string; settings?: { reclubGroupId?: number | null } }>(`/api/venues/${venueId}`),
+          api.get<{ name: string; phone: string }>("/api/auth/staff-me"),
         ]);
         if (cancelled) return;
         if (venueRes) setVenueName(venueRes.name);
         setAuth({ staffName: meRes.name, staffPhone: meRes.phone });
-        const clubList = Array.isArray(clubsRes) && clubsRes.length ? clubsRes : [];
-        setReclubClubs(clubList);
-
-        const currentId = meRes.reclubGroupId ?? null;
-        if (currentId) {
-          setReclubGroupId(currentId);
-        } else {
-          const next11 = clubList.find((c) => c.name.toLowerCase().includes("next11"));
-          if (next11) {
-            setReclubGroupId(next11.groupId);
-            void api.patch("/api/staff/reclub-club", { reclubGroupId: next11.groupId }).catch(() => {});
-          } else {
-            setReclubGroupId(null);
-          }
-        }
+        const gid = venueRes?.settings?.reclubGroupId;
+        setReclubGroupId(typeof gid === "number" ? gid : null);
       } catch {
         /* silent */
       } finally {
@@ -148,21 +133,6 @@ export function ProfileCourtPay({ legacyTab, onOpenSessionHistory, variant = "ta
     lock();
     clearAuth();
     router.replace("/staff");
-  };
-
-  const handleReclubSelect = async (e: ChangeEvent<HTMLSelectElement>) => {
-    const v = e.target.value;
-    const gid = v === "" ? null : Number(v);
-    if (Number.isNaN(gid) && v !== "") return;
-    setReclubSaving(true);
-    try {
-      await api.patch("/api/staff/reclub-club", { reclubGroupId: gid });
-      setReclubGroupId(gid);
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : "Could not save");
-    } finally {
-      setReclubSaving(false);
-    }
   };
 
   const handleGoToRole = () => {
@@ -318,20 +288,14 @@ export function ProfileCourtPay({ legacyTab, onOpenSessionHistory, variant = "ta
               <Calendar className="h-4 w-4 shrink-0 text-client-primary" aria-hidden />
               <span className="text-sm font-medium text-neutral-200">{t("staff.profile.reclubClub")}</span>
             </div>
-            <p className="mb-3 text-xs text-neutral-500">{t("staff.profile.reclubClubHint")}</p>
-            <select
-              value={reclubGroupId === undefined ? "" : reclubGroupId === null ? "" : String(reclubGroupId)}
-              onChange={handleReclubSelect}
-              disabled={reclubSaving || reclubGroupId === undefined || reclubClubs.length === 0}
-              className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-sm text-white focus:border-client-primary focus:outline-none disabled:opacity-50"
-            >
-              <option value="">{t("staff.profile.reclubClubNotSet")}</option>
-              {reclubClubs.map((c) => (
-                <option key={c.groupId} value={c.groupId}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            <p className="mb-2 text-xs text-neutral-500">{t("staff.profile.reclubClubHint")}</p>
+            <p className="text-sm font-medium text-white">
+              {!profileLoaded
+                ? "…"
+                : reclubGroupId == null
+                  ? t("staff.profile.reclubClubNotSet")
+                  : (RECLUB_CLUBS.find((c) => c.groupId === reclubGroupId)?.name ?? t("staff.profile.reclubClubNotSet"))}
+            </p>
           </div>
 
           <div className="overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900/50">

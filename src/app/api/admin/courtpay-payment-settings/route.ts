@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
             autoApprovalCCCD: typeof s.autoApprovalCCCD === "string" ? s.autoApprovalCCCD : "",
             sepayEnabled: s.sepayEnabled === true,
             autoPaymentEnabled: s.autoPaymentEnabled === true,
+            reclubGroupId: typeof s.reclubGroupId === "number" ? s.reclubGroupId : null,
           };
         })
       );
@@ -58,6 +59,7 @@ export async function GET(request: NextRequest) {
       autoApprovalCCCD: typeof s.autoApprovalCCCD === "string" ? s.autoApprovalCCCD : "",
       sepayEnabled: s.sepayEnabled === true,
       autoPaymentEnabled: s.autoPaymentEnabled === true,
+      reclubGroupId: typeof s.reclubGroupId === "number" ? s.reclubGroupId : null,
     });
   } catch (e) {
     return error((e as Error).message, 500);
@@ -81,6 +83,7 @@ export async function PATCH(request: NextRequest) {
       autoApprovalCCCD?: string;
       sepayEnabled?: boolean;
       autoPaymentEnabled?: boolean;
+      reclubGroupId?: number | null;
     }>(request);
 
     const { venueId } = body;
@@ -98,7 +101,8 @@ export async function PATCH(request: NextRequest) {
       body.autoApprovalPhone !== undefined ||
       body.autoApprovalCCCD !== undefined ||
       body.sepayEnabled !== undefined ||
-      body.autoPaymentEnabled !== undefined;
+      body.autoPaymentEnabled !== undefined ||
+      body.reclubGroupId !== undefined;
 
     if (hasSettingsPayload) {
       const venue = await prisma.venue.findUnique({
@@ -117,6 +121,9 @@ export async function PATCH(request: NextRequest) {
         ...(body.sepayEnabled !== undefined ? { sepayEnabled: body.sepayEnabled } : {}),
         ...(body.autoPaymentEnabled !== undefined
           ? { autoPaymentEnabled: body.autoPaymentEnabled }
+          : {}),
+        ...(body.reclubGroupId !== undefined
+          ? { reclubGroupId: body.reclubGroupId ?? null }
           : {}),
       };
     }

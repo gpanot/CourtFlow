@@ -254,11 +254,15 @@ export function SessionCourtPay(props: StaffTabPanelProps) {
   }, [session?.id]);
 
   const fetchReclubGroup = useCallback(() => {
+    if (!venueId) return;
     void api
-      .get<{ reclubGroupId?: number | null }>("/api/auth/staff-me")
-      .then((me) => setReclubGroupId(me.reclubGroupId ?? null))
+      .get<{ settings?: { reclubGroupId?: number | null } }>(`/api/venues/${venueId}`)
+      .then((venue) => {
+        const gid = venue.settings?.reclubGroupId;
+        setReclubGroupId(typeof gid === "number" ? gid : null);
+      })
       .catch(() => {});
-  }, []);
+  }, [venueId]);
 
   useEffect(() => {
     void fetchReclubGroup();

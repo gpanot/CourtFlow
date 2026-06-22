@@ -230,7 +230,7 @@ const CHECK_IN_SCANNER_EN = {
   "profilePinIncorrect": "Incorrect PIN. Try again.",
   "profileLanguage": "Language",
   "profileReclubClub": "Reclub club",
-  "profileReclubClubHint": "Default for session roster (all venues)",
+  "profileReclubClubHint": "Configured by your manager in the admin panel.",
   "profileReclubNotSet": "Not set",
   "profileReclubChooseTitle": "Choose Reclub club",
 
@@ -832,7 +832,7 @@ const CHECK_IN_SCANNER_VI = {
   "profilePinIncorrect": "Mã PIN sai. Thử lại.",
   "profileLanguage": "Ngôn ngữ",
   "profileReclubClub": "Câu lạc bộ Reclub",
-  "profileReclubClubHint": "Mặc định cho danh sách buổi (mọi địa điểm)",
+  "profileReclubClubHint": "Được cấu hình bởi quản lý trong bảng điều khiển admin.",
   "profileReclubNotSet": "Chưa chọn",
   "profileReclubChooseTitle": "Chọn câu lạc bộ Reclub",
 

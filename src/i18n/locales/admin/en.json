@@ -921,7 +921,13 @@
     "generateTestQr": "Generate test QR",
     "refreshDebug": "Refresh debug",
     "saveSettings": "Save Settings",
-    "venueLabel": "Venue"
+    "venueLabel": "Venue",
+    "reclubClub": "Reclub Club",
+    "reclubClubDesc": "Default Reclub club used to load the session roster for this venue.",
+    "reclubClubSelect": "— Select club —",
+    "reclubClubNone": "None (not set)",
+    "reclubClubSave": "Save Reclub Club",
+    "reclubClubSaved": "Saved"
   },
   "courtpayAnalytics": {
     "title": "CP Analytics",

@@ -913,7 +913,13 @@
     "generateTestQr": "Tạo QR kiểm tra",
     "refreshDebug": "Làm mới debug",
     "saveSettings": "Lưu cài đặt",
-    "venueLabel": "Địa điểm"
+    "venueLabel": "Địa điểm",
+    "reclubClub": "Câu lạc bộ Reclub",
+    "reclubClubDesc": "Câu lạc bộ Reclub mặc định để tải danh sách buổi cho địa điểm này.",
+    "reclubClubSelect": "— Chọn câu lạc bộ —",
+    "reclubClubNone": "Không có (chưa chọn)",
+    "reclubClubSave": "Lưu câu lạc bộ Reclub",
+    "reclubClubSaved": "Đã lưu"
   },
   "courtpayAnalytics": {
     "title": "Thống kê CP",

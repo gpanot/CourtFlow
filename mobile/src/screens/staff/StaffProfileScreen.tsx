@@ -10,7 +10,6 @@ import {
   TextInput,
   Vibration,
   Switch,
-  FlatList,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -414,65 +413,48 @@ export function StaffProfileScreen() {
 
   const { unlocked, unlock, lock } = usePinStore();
 
-  const [reclubClubs, setReclubClubs] = useState<{ groupId: number; name: string }[]>([]);
   const [reclubGroupId, setReclubGroupId] = useState<number | null>(null);
-  const [reclubModal, setReclubModal] = useState(false);
-  const [reclubSaving, setReclubSaving] = useState(false);
+  const [reclubLoaded, setReclubLoaded] = useState(false);
 
   useEffect(() => {
+    if (!venueId) return;
     let cancelled = false;
     void (async () => {
       try {
-        const [me, clubs] = await Promise.all([
-          api.get<{ reclubGroupId?: number | null }>("/api/auth/staff-me"),
-          api.get<{ groupId: number; name: string }[]>("/api/reclub/clubs"),
-        ]);
+        const venue = await api.get<{ settings?: { reclubGroupId?: number | null } }>(`/api/venues/${venueId}`);
         if (cancelled) return;
-        const clubList = Array.isArray(clubs) ? clubs : [];
-        setReclubClubs(clubList);
-
-        const currentId = me.reclubGroupId ?? null;
-        if (currentId) {
-          setReclubGroupId(currentId);
-        } else {
-          const next11 = clubList.find((c) => c.name.toLowerCase().includes("next11"));
-          if (next11) {
-            setReclubGroupId(next11.groupId);
-            void api.patch("/api/staff/reclub-club", { reclubGroupId: next11.groupId }).catch(() => {});
-          }
-        }
+        const gid = venue?.settings?.reclubGroupId;
+        setReclubGroupId(typeof gid === "number" ? gid : null);
       } catch {
         /* silent */
+      } finally {
+        if (!cancelled) setReclubLoaded(true);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  const applyReclubClub = useCallback(async (gid: number | null) => {
-    setReclubSaving(true);
-    try {
-      await api.patch("/api/staff/reclub-club", { reclubGroupId: gid });
-      setReclubGroupId(gid);
-      setReclubModal(false);
-    } catch (err) {
-      const detail =
-        err instanceof ApiRequestError
-          ? err.message
-          : err instanceof Error
-            ? err.message
-            : "Could not save";
-      Alert.alert("Error", detail);
-    } finally {
-      setReclubSaving(false);
-    }
-  }, []);
+  }, [venueId]);
 
   const reclubDisplayName = useMemo(() => {
+    if (!reclubLoaded) return "…";
     if (reclubGroupId == null) return t("profileReclubNotSet");
-    return reclubClubs.find((c) => c.groupId === reclubGroupId)?.name ?? t("profileReclubNotSet");
-  }, [reclubGroupId, reclubClubs, t]);
+    // Static club list (same as RECLUB_CLUBS on the server)
+    const CLUBS: { groupId: number; name: string }[] = [
+      { groupId: 6648, name: "002 Pickleball Club (Thao Dien)" },
+      { groupId: 427921, name: "3UP Club" },
+      { groupId: 30158, name: "Ace Squad Pickleball" },
+      { groupId: 14164, name: "Aspire Drill Club" },
+      { groupId: 11186, name: "Big Balls Pickle Club" },
+      { groupId: 22476, name: "Elite Sport Pickleball @Pacific" },
+      { groupId: 26728, name: "GOPICK Lương Định Của" },
+      { groupId: 298257, name: "NEXT11 Pickleball Club" },
+      { groupId: 10888, name: "Player1st - Pickleball Performance Center" },
+      { groupId: 326472, name: "The MM Pickleball Club" },
+      { groupId: 104121, name: "Top One" },
+    ];
+    return CLUBS.find((c) => c.groupId === reclubGroupId)?.name ?? t("profileReclubNotSet");
+  }, [reclubGroupId, reclubLoaded, t]);
 
   // Which locked screen to navigate to after successful PIN entry
   const pendingRoute = useRef<keyof StaffStackParamList | null>(null);
@@ -618,67 +600,19 @@ export function StaffProfileScreen() {
           </View>
         </View>
 
-        {/* Reclub club (staff-level) */}
+        {/* Reclub club (venue-level, read-only) */}
         <View style={styles.reclubCard}>
           <View style={styles.reclubHeader}>
             <Ionicons name="calendar-outline" size={16} color={theme.blue400} />
             <Text style={styles.reclubHeaderText}>{t("profileReclubClub")}</Text>
           </View>
           <Text style={styles.reclubHint}>{t("profileReclubClubHint")}</Text>
-          <TouchableOpacity
-            style={styles.reclubValueRow}
-            onPress={() => setReclubModal(true)}
-            disabled={reclubSaving || reclubClubs.length === 0}
-            activeOpacity={0.7}
-          >
+          <View style={styles.reclubValueRow}>
             <Text style={styles.reclubValue} numberOfLines={1}>
               {reclubDisplayName}
             </Text>
-            <Ionicons name="chevron-forward" size={18} color={theme.dimmed} />
-          </TouchableOpacity>
-        </View>
-
-        <Modal visible={reclubModal} transparent animationType="slide" onRequestClose={() => setReclubModal(false)}>
-          <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.6)" }}>
-            <View
-              style={{
-                backgroundColor: theme.card,
-                borderTopLeftRadius: 20,
-                borderTopRightRadius: 20,
-                borderWidth: 1,
-                borderColor: theme.border,
-                maxHeight: "70%",
-                paddingBottom: 24,
-              }}
-            >
-              <Text style={styles.reclubModalTitle}>{t("profileReclubChooseTitle")}</Text>
-              <FlatList
-                style={{ maxHeight: 400 }}
-                data={[
-                  { id: "none", groupId: null as number | null, name: t("profileReclubNotSet") },
-                  ...reclubClubs.map((c) => ({ id: String(c.groupId), groupId: c.groupId, name: c.name })),
-                ]}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.reclubModalItem}
-                    onPress={() => void applyReclubClub(item.groupId)}
-                    disabled={reclubSaving}
-                  >
-                    <Text style={styles.reclubModalItemText}>{item.name}</Text>
-                  </TouchableOpacity>
-                )}
-              />
-              <TouchableOpacity
-                style={{ padding: 16, alignItems: "center" }}
-                onPress={() => setReclubModal(false)}
-                disabled={reclubSaving}
-              >
-                <Text style={{ fontSize: 15, color: theme.muted }}>{t("cancel")}</Text>
-              </TouchableOpacity>
-            </View>
           </View>
-        </Modal>
+        </View>
 
         {/* Push Notifications */}
         <View style={styles.pushCard}>
@@ -703,19 +637,6 @@ export function StaffProfileScreen() {
 
         {/* Menu */}
         <View style={styles.menuCard}>
-          {/* Payment Settings — locked */}
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => handleLockedNav("StaffPaymentSettings")}
-            activeOpacity={0.6}
-          >
-            <Ionicons name="card-outline" size={16} color={theme.green400} />
-            <Text style={styles.menuRowText}>{t("profilePaymentSettings")}</Text>
-            <LockIcon />
-            <Ionicons name="chevron-forward" size={16} color={theme.dimmed} style={styles.menuChevron} />
-          </TouchableOpacity>
-          <View style={styles.menuDivider} />
-
           {/* Subscriptions — locked */}
           <TouchableOpacity
             style={styles.menuRow}
@@ -737,19 +658,6 @@ export function StaffProfileScreen() {
           >
             <Ionicons name="people-outline" size={16} color={theme.blue400} />
             <Text style={styles.menuRowText}>{t("profileStaffDashboard")}</Text>
-            <Ionicons name="chevron-forward" size={16} color={theme.dimmed} style={styles.menuChevron} />
-          </TouchableOpacity>
-          <View style={styles.menuDivider} />
-
-          {/* Boss Dashboard — locked */}
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => handleLockedNav("StaffBossDashboard")}
-            activeOpacity={0.6}
-          >
-            <Ionicons name="bar-chart-outline" size={16} color={theme.purple400} />
-            <Text style={styles.menuRowText}>{t("profileBossDashboard")}</Text>
-            <LockIcon />
             <Ionicons name="chevron-forward" size={16} color={theme.dimmed} style={styles.menuChevron} />
           </TouchableOpacity>
         </View>

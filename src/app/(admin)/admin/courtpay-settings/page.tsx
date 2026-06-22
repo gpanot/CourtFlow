@@ -18,9 +18,11 @@ import {
   Loader2,
   ToggleLeft,
   ToggleRight,
+  Users,
 } from "lucide-react";
 import { resolveTvLocale, tvI18n, type TvLocale } from "@/i18n/tv-i18n";
 import { VIETQR_BANKS, buildVietQRUrl } from "@/lib/vietqr";
+import { RECLUB_CLUBS } from "@/lib/reclub";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +33,7 @@ interface VenueSettings {
   autoApprovalCCCD?: string;
   sepayEnabled?: boolean;
   autoPaymentEnabled?: boolean;
+  reclubGroupId?: number | null;
   [key: string]: unknown;
 }
 
@@ -152,16 +155,26 @@ export default function CourtPaySettingsPage() {
       )}
 
       {activeTab === "config" && selectedVenue && (
-        <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 md:p-5">
-          <TVDisplaySettings
-            key={selectedVenue.id}
-            venueId={selectedVenue.id}
-            venueName={selectedVenue.name}
-            logoUrl={selectedVenue.logoUrl}
-            tvText={selectedVenue.tvText}
-            settings={selectedVenue.settings}
-            onRefresh={fetchVenues}
-          />
+        <div className="space-y-4">
+          <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 md:p-5">
+            <ReclubClubSettings
+              key={selectedVenue.id}
+              venueId={selectedVenue.id}
+              settings={selectedVenue.settings}
+              onRefresh={fetchVenues}
+            />
+          </div>
+          <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 md:p-5">
+            <TVDisplaySettings
+              key={selectedVenue.id}
+              venueId={selectedVenue.id}
+              venueName={selectedVenue.name}
+              logoUrl={selectedVenue.logoUrl}
+              tvText={selectedVenue.tvText}
+              settings={selectedVenue.settings}
+              onRefresh={fetchVenues}
+            />
+          </div>
         </div>
       )}
 
@@ -172,6 +185,110 @@ export default function CourtPaySettingsPage() {
           onRefresh={fetchVenues}
         />
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Reclub Club Settings (Config tab)
+// ---------------------------------------------------------------------------
+
+function ReclubClubSettings({
+  venueId,
+  settings,
+  onRefresh,
+}: {
+  venueId: string;
+  settings: VenueSettings;
+  onRefresh: () => void;
+}) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
+  const token = useSessionStore((s) => s.token);
+
+  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(
+    typeof settings.reclubGroupId === "number" ? settings.reclubGroupId : null
+  );
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setSelectedGroupId(typeof settings.reclubGroupId === "number" ? settings.reclubGroupId : null);
+  }, [settings.reclubGroupId, venueId]);
+
+  const sortedClubs = useMemo(
+    () => [...RECLUB_CLUBS].sort((a, b) => a.name.localeCompare(b.name, "vi", { sensitivity: "base" })),
+    []
+  );
+
+  const currentName = sortedClubs.find((c) => c.groupId === selectedGroupId)?.name ?? null;
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaved(false);
+    try {
+      const res = await fetch("/api/admin/courtpay-payment-settings", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ venueId, reclubGroupId: selectedGroupId }),
+      });
+      if (!res.ok) throw new Error("Save failed");
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+      await onRefresh();
+    } catch {
+      /* noop */
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const dirty = selectedGroupId !== (typeof settings.reclubGroupId === "number" ? settings.reclubGroupId : null);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <Users className="h-4 w-4 text-blue-400" />
+        <p className="text-sm font-semibold text-white">{t("courtpaySettings.reclubClub")}</p>
+      </div>
+      <p className="text-[11px] text-neutral-500">{t("courtpaySettings.reclubClubDesc")}</p>
+
+      <div className="flex items-center gap-3">
+        <select
+          value={selectedGroupId ?? ""}
+          onChange={(e) => setSelectedGroupId(e.target.value === "" ? null : Number(e.target.value))}
+          className="flex-1 rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+        >
+          <option value="">{t("courtpaySettings.reclubClubNone")}</option>
+          {sortedClubs.map((club) => (
+            <option key={club.groupId} value={club.groupId}>
+              {club.name}
+            </option>
+          ))}
+        </select>
+
+        {dirty && (
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => void handleSave()}
+            className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-50 whitespace-nowrap"
+          >
+            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {saved && <Check className="h-3.5 w-3.5" />}
+            {t("courtpaySettings.reclubClubSave")}
+          </button>
+        )}
+
+        {!dirty && currentName && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/15 px-2.5 py-1 text-[11px] font-medium text-blue-300">
+            <Check className="h-3 w-3" />
+            {saved ? t("courtpaySettings.reclubClubSaved") : currentName}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

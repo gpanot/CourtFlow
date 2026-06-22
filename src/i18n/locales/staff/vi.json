@@ -75,7 +75,7 @@
       "staffFallback": "Nhân viên",
       "noVenue": "Chưa có địa điểm",
       "reclubClub": "Câu lạc bộ Reclub",
-      "reclubClubHint": "Câu lạc bộ mặc định để lấy danh sách buổi (áp dụng mọi địa điểm).",
+      "reclubClubHint": "Được cấu hình bởi quản lý trong bảng điều khiển admin.",
       "reclubClubNotSet": "Chưa chọn",
       "pinTitle": "Nhập mã PIN",
       "pinSubtitle": "Nhập mã PIN 4 chữ số của quản lý để truy cập",
