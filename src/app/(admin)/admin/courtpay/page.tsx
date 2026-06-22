@@ -18,6 +18,12 @@ import {
   Package,
   TrendingUp,
   Sparkles,
+  Smartphone,
+  CheckCircle2,
+  XCircle,
+  Infinity,
+  Star,
+  Gift,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -113,6 +119,8 @@ export default function AdminCourtPayPage() {
   const [search, setSearch] = useState(() => searchParams.get("search") ?? "");
   const [showForm, setShowForm] = useState(false);
   const [editingPkg, setEditingPkg] = useState<PackageData | null>(null);
+  const [showSubscriptionsInFlow, setShowSubscriptionsInFlow] = useState(true);
+  const [togglingFlow, setTogglingFlow] = useState(false);
 
   const fetchOverview = useCallback(async () => {
     try {
@@ -125,6 +133,34 @@ export default function AdminCourtPayPage() {
       console.error(e);
     }
   }, [selectedVenueId]);
+
+  const fetchVenueSettings = useCallback(async () => {
+    if (!selectedVenueId) return;
+    try {
+      const data = await api.get<{ showSubscriptionsInFlow: boolean }>(
+        `/api/courtpay/admin/settings?venueId=${selectedVenueId}`
+      );
+      setShowSubscriptionsInFlow(data.showSubscriptionsInFlow !== false);
+    } catch {
+      // non-fatal
+    }
+  }, [selectedVenueId]);
+
+  const handleToggleFlow = async (value: boolean) => {
+    if (!selectedVenueId) return;
+    setShowSubscriptionsInFlow(value);
+    setTogglingFlow(true);
+    try {
+      await api.patch("/api/courtpay/admin/settings", {
+        venueId: selectedVenueId,
+        showSubscriptionsInFlow: value,
+      });
+    } catch {
+      setShowSubscriptionsInFlow(!value);
+    } finally {
+      setTogglingFlow(false);
+    }
+  };
 
   const fetchPackages = useCallback(async () => {
     try {
@@ -170,10 +206,10 @@ export default function AdminCourtPayPage() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([fetchOverview(), fetchPackages(), fetchSubscribers(), fetchPayments()]).finally(
+    Promise.all([fetchOverview(), fetchPackages(), fetchSubscribers(), fetchPayments(), fetchVenueSettings()]).finally(
       () => setLoading(false)
     );
-  }, [fetchOverview, fetchPackages, fetchSubscribers, fetchPayments]);
+  }, [fetchOverview, fetchPackages, fetchSubscribers, fetchPayments, fetchVenueSettings]);
 
   const handleCreatePackage = async (data: {
     name: string;
@@ -338,79 +374,251 @@ export default function AdminCourtPayPage() {
           <Loader2 className="h-8 w-8 animate-spin text-neutral-600" />
         </div>
       ) : tab === "packages" ? (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-medium text-neutral-300">
-              {t("courtpay.packageLabel", { count: packages.length })}
-            </h2>
-            <div className="flex gap-2">
-              {selectedVenueId && (
+        <div className="flex gap-6 items-start">
+          {/* ── Left: package list ──────────────────────────────────────────── */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-medium text-neutral-300">
+                {t("courtpay.packageLabel", { count: packages.length })}
+              </h2>
+              <div className="flex gap-2">
+                {selectedVenueId && (
+                  <button
+                    onClick={handleCreateDefaults}
+                    className="flex items-center gap-1.5 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:bg-neutral-800"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {t("courtpay.createDefaults")}
+                  </button>
+                )}
                 <button
-                  onClick={handleCreateDefaults}
-                  className="flex items-center gap-1.5 rounded-lg border border-neutral-700 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:bg-neutral-800"
+                  onClick={() => {
+                    if (!selectedVenueId) {
+                      alert(t("courtpay.selectVenueFirst"));
+                      return;
+                    }
+                    setShowForm(true);
+                  }}
+                  className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-500"
                 >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  {t("courtpay.createDefaults")}
+                  <Plus className="h-3.5 w-3.5" />
+                  {t("courtpay.addPackage")}
                 </button>
-              )}
-              <button
-                onClick={() => {
-                  if (!selectedVenueId) {
-                    alert(t("courtpay.selectVenueFirst"));
-                    return;
-                  }
-                  setShowForm(true);
-                }}
-                className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-500"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                {t("courtpay.addPackage")}
-              </button>
+              </div>
             </div>
-          </div>
 
-          {packages.length === 0 ? (
-            <div className="py-16 text-center text-neutral-500">
-              {selectedVenueId
-                ? t("courtpay.noPackagesVenue")
-                : t("courtpay.noPackagesYet")}
-            </div>
-          ) : (
-            <>
-              <div className="mb-3 flex items-center gap-2">
-                <div className="flex gap-1">
-                  {[1, 2, 3].map((i) => (
-                    <div
-                      key={i}
-                      className={cn(
-                        "h-2 w-8 rounded-full transition-colors",
-                        i <= visibleCount ? "bg-green-500" : "bg-neutral-700"
-                      )}
+            {packages.length === 0 ? (
+              <div className="py-16 text-center text-neutral-500">
+                {selectedVenueId
+                  ? t("courtpay.noPackagesVenue")
+                  : t("courtpay.noPackagesYet")}
+              </div>
+            ) : (
+              <>
+                <div className="mb-3 flex items-center gap-2">
+                  <div className="flex gap-1">
+                    {[1, 2, 3].map((i) => (
+                      <div
+                        key={i}
+                        className={cn(
+                          "h-2 w-8 rounded-full transition-colors",
+                          i <= visibleCount ? "bg-green-500" : "bg-neutral-700"
+                        )}
+                      />
+                    ))}
+                  </div>
+                  <span className={cn(
+                    "text-xs font-medium",
+                    visibleCount >= MAX_VISIBLE_PACKAGES ? "text-amber-400" : "text-neutral-400"
+                  )}>
+                    {visibleCount}/{MAX_VISIBLE_PACKAGES} visible in app
+                    {visibleCount >= MAX_VISIBLE_PACKAGES && " — limit reached"}
+                  </span>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {packages.map((pkg) => (
+                    <PackageCard
+                      key={pkg.id}
+                      pkg={pkg}
+                      venueName={pkg.venue?.name}
+                      onEdit={() => setEditingPkg(pkg)}
+                      onDelete={handleDeletePackage}
+                      onToggleVisibility={handleToggleVisibility}
                     />
                   ))}
                 </div>
-                <span className={cn(
-                  "text-xs font-medium",
-                  visibleCount >= MAX_VISIBLE_PACKAGES ? "text-amber-400" : "text-neutral-400"
-                )}>
-                  {visibleCount}/{MAX_VISIBLE_PACKAGES} visible in app
-                  {visibleCount >= MAX_VISIBLE_PACKAGES && " — limit reached"}
-                </span>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {packages.map((pkg) => (
-                  <PackageCard
-                    key={pkg.id}
-                    pkg={pkg}
-                    venueName={pkg.venue?.name}
-                    onEdit={() => setEditingPkg(pkg)}
-                    onDelete={handleDeletePackage}
-                    onToggleVisibility={handleToggleVisibility}
+              </>
+            )}
+          </div>
+
+          {/* ── Right: Gate 1 toggle + phone preview ────────────────────────── */}
+          <div className="w-72 shrink-0 sticky top-4">
+            {/* Gate 1 toggle card */}
+            <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 mb-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white leading-tight">
+                    Show subscriptions in check-in
+                  </p>
+                  <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
+                    Master switch for the tablet kiosk. When OFF, no subscription offer appears — even if individual packages are set to visible.
+                  </p>
+                </div>
+                <button
+                  role="switch"
+                  aria-checked={showSubscriptionsInFlow}
+                  disabled={!selectedVenueId || togglingFlow}
+                  onClick={() => void handleToggleFlow(!showSubscriptionsInFlow)}
+                  className={cn(
+                    "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border-2 border-transparent transition-colors focus:outline-none disabled:cursor-not-allowed disabled:opacity-50",
+                    showSubscriptionsInFlow ? "bg-purple-600" : "bg-neutral-700"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform",
+                      showSubscriptionsInFlow ? "translate-x-5" : "translate-x-0"
+                    )}
                   />
-                ))}
+                </button>
               </div>
-            </>
-          )}
+
+              {/* Status indicator */}
+              <div className={cn(
+                "mt-3 flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium",
+                showSubscriptionsInFlow
+                  ? "bg-green-500/10 border border-green-500/20 text-green-400"
+                  : "bg-red-500/10 border border-red-500/20 text-red-400"
+              )}>
+                {showSubscriptionsInFlow ? (
+                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                ) : (
+                  <XCircle className="h-3.5 w-3.5 shrink-0" />
+                )}
+                {showSubscriptionsInFlow
+                  ? "Subscriptions shown during check-in"
+                  : "Subscriptions hidden during check-in"}
+              </div>
+
+              {!selectedVenueId && (
+                <p className="mt-2 text-xs text-amber-500">Select a venue to edit this setting.</p>
+              )}
+            </div>
+
+            {/* Phone preview */}
+            <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Smartphone className="h-4 w-4 text-neutral-400" />
+                <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wide">Tablet preview</span>
+              </div>
+
+              {/* Phone frame */}
+              <div className="mx-auto w-full max-w-[200px]">
+                <div className="relative rounded-[22px] border-2 border-neutral-700 bg-[#0f0f0f] overflow-hidden shadow-xl">
+                  {/* Notch */}
+                  <div className="flex justify-center pt-2 pb-1">
+                    <div className="h-1.5 w-12 rounded-full bg-neutral-700" />
+                  </div>
+
+                  {/* Screen content */}
+                  <div className="px-3 pb-4 min-h-[340px] flex flex-col">
+                    {/* Header row */}
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="h-2 w-16 rounded bg-neutral-700" />
+                      <div className="h-5 w-5 rounded-full bg-purple-600/40" />
+                    </div>
+
+                    {showSubscriptionsInFlow ? (
+                      <>
+                        {/* Gate is ON — show packages */}
+                        <p className="text-[9px] text-neutral-400 mb-2 font-medium">
+                          {visibleCount > 0
+                            ? "Choose a plan:"
+                            : "No visible packages yet"}
+                        </p>
+                        {packages
+                          .filter((p) => p.isActive && p.showInCheckIn)
+                          .slice(0, 3)
+                          .map((pkg) => (
+                            <div
+                              key={pkg.id}
+                              className={cn(
+                                "rounded-lg border p-2 mb-1.5 transition-colors",
+                                pkg.isBestChoice
+                                  ? "border-fuchsia-500/40 bg-fuchsia-500/10"
+                                  : "border-neutral-700 bg-neutral-800"
+                              )}
+                            >
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="text-[9px] font-semibold text-white truncate">{pkg.name}</span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {pkg.isBestChoice && <Star className="h-2 w-2 text-fuchsia-400 fill-fuchsia-400" />}
+                                  {pkg.isFreePass && <Gift className="h-2 w-2 text-emerald-400" />}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1 mt-0.5">
+                                {pkg.sessions === null ? (
+                                  <Infinity className="h-2 w-2 text-neutral-500" />
+                                ) : (
+                                  <span className="text-[8px] text-neutral-500">{pkg.sessions}x</span>
+                                )}
+                                <span className="text-[8px] text-neutral-500">· {pkg.durationDays}d</span>
+                                <span className="ml-auto text-[9px] font-bold text-purple-400">
+                                  {pkg.isFreePass ? "Free" : `${new Intl.NumberFormat("vi-VN").format(pkg.price)}`}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        {visibleCount === 0 && (
+                          <div className="rounded-lg border border-dashed border-neutral-700 p-3 text-center">
+                            <span className="text-[8px] text-neutral-600">No visible packages</span>
+                          </div>
+                        )}
+                        {/* Skip button */}
+                        <div className="mt-auto pt-2">
+                          <div className="h-6 w-full rounded-lg bg-purple-600/80 flex items-center justify-center">
+                            <span className="text-[8px] font-bold text-white">Select plan →</span>
+                          </div>
+                          <div className="mt-1 text-center">
+                            <span className="text-[7px] text-neutral-600">Skip, pay per session</span>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        {/* Gate is OFF — skips straight to payment */}
+                        <div className="flex-1 flex flex-col items-center justify-center gap-2 py-4">
+                          <div className="h-8 w-8 rounded-full bg-neutral-800 border border-neutral-700 flex items-center justify-center">
+                            <XCircle className="h-4 w-4 text-neutral-600" />
+                          </div>
+                          <p className="text-[8px] text-neutral-600 text-center leading-relaxed">
+                            Subscription offer<br />is hidden
+                          </p>
+                        </div>
+                        {/* Goes straight to pay */}
+                        <div className="mt-auto">
+                          <div className="h-6 w-full rounded-lg bg-purple-600/80 flex items-center justify-center">
+                            <span className="text-[8px] font-bold text-white">Pay session →</span>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Home indicator */}
+                  <div className="flex justify-center py-2">
+                    <div className="h-1 w-10 rounded-full bg-neutral-700" />
+                  </div>
+                </div>
+              </div>
+
+              <p className="mt-3 text-[10px] text-neutral-600 text-center leading-relaxed">
+                {showSubscriptionsInFlow
+                  ? "Players see subscription offers when checking in"
+                  : "Players skip directly to session payment"}
+              </p>
+            </div>
+          </div>
         </div>
       ) : tab === "subscribers" ? (
         <div>
