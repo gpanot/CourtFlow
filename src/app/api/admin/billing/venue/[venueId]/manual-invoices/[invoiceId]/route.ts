@@ -18,8 +18,10 @@ export async function PATCH(req: Request, { params }: Params) {
       action?: string;
       paidMethod?: string;
       paidRef?: string;
-      notes?: string;
-      pdfUrl?: string;
+      notes?: string | null;
+      pdfUrl?: string | null;
+      amount?: number;
+      dueDate?: string;
     };
 
     const invoice = await prisma.manualBillingInvoice.findFirst({
@@ -60,6 +62,23 @@ export async function PATCH(req: Request, { params }: Params) {
       const updated = await prisma.manualBillingInvoice.update({
         where: { id: invoiceId },
         data: { pdfUrl: body.pdfUrl ?? null },
+      });
+      return NextResponse.json(updated);
+    }
+
+    if (body.action === "update") {
+      const data: Record<string, unknown> = {};
+      if (body.amount !== undefined && body.amount > 0) data.amount = body.amount;
+      if (body.dueDate) {
+        const due = new Date(body.dueDate);
+        due.setHours(0, 0, 0, 0);
+        data.dueDate = due;
+      }
+      if ("notes" in body) data.notes = body.notes?.trim() || null;
+      if ("pdfUrl" in body) data.pdfUrl = body.pdfUrl?.trim() || null;
+      const updated = await prisma.manualBillingInvoice.update({
+        where: { id: invoiceId },
+        data,
       });
       return NextResponse.json(updated);
     }

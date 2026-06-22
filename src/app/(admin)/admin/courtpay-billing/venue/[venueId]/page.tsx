@@ -25,6 +25,8 @@ import {
   Upload,
   X,
   ExternalLink,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -394,6 +396,17 @@ export default function VenueBillingDetailPage() {
   const [manualMarkingPaid, setManualMarkingPaid] = useState<string | null>(null);
   const [manualMarkingUnpaid, setManualMarkingUnpaid] = useState<string | null>(null);
 
+  // Edit invoice drawer
+  const [editInvoiceDrawer, setEditInvoiceDrawer] = useState<ManualInvoice | null>(null);
+  const [editInvAmount, setEditInvAmount] = useState(0);
+  const [editInvDueDate, setEditInvDueDate] = useState("");
+  const [editInvNotes, setEditInvNotes] = useState("");
+  const [editInvPdfUrl, setEditInvPdfUrl] = useState("");
+  const [editInvPdfUploading, setEditInvPdfUploading] = useState(false);
+  const [editInvSaving, setEditInvSaving] = useState(false);
+  const [deletingInvoice, setDeletingInvoice] = useState<string | null>(null);
+  const editPdfInputRef = useRef<HTMLInputElement>(null);
+
   // ── Fetch ─────────────────────────────────────────────────────────────────
   const fetchManualInvoices = useCallback(async () => {
     setManualLoading(true);
@@ -676,6 +689,61 @@ export default function VenueBillingDetailPage() {
       console.error(e);
     }
     setManualMarkingUnpaid(null);
+  };
+
+  const openEditInvoiceDrawer = (inv: ManualInvoice) => {
+    setEditInvoiceDrawer(inv);
+    setEditInvAmount(inv.amount);
+    setEditInvDueDate(inv.dueDate.substring(0, 10));
+    setEditInvNotes(inv.notes ?? "");
+    setEditInvPdfUrl(inv.pdfUrl ?? "");
+  };
+
+  const uploadEditPdf = async (file: File) => {
+    setEditInvPdfUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const result = await api.upload<{ url: string }>(
+        `/api/admin/billing/venue/${venueId}/manual-invoices/upload-pdf`,
+        fd
+      );
+      if (result.url) setEditInvPdfUrl(result.url);
+    } catch (e) {
+      console.error(e);
+    }
+    setEditInvPdfUploading(false);
+  };
+
+  const saveEditInvoice = async () => {
+    if (!editInvoiceDrawer || !editInvAmount || editInvAmount <= 0 || !editInvDueDate) return;
+    setEditInvSaving(true);
+    try {
+      await api.patch(`/api/admin/billing/venue/${venueId}/manual-invoices/${editInvoiceDrawer.id}`, {
+        action: "update",
+        amount: editInvAmount,
+        dueDate: editInvDueDate,
+        notes: editInvNotes.trim() || null,
+        pdfUrl: editInvPdfUrl.trim() || null,
+      });
+      setEditInvoiceDrawer(null);
+      await fetchManualInvoices();
+    } catch (e) {
+      console.error(e);
+    }
+    setEditInvSaving(false);
+  };
+
+  const deleteManualInvoice = async (invoiceId: string) => {
+    if (!confirm("Delete this invoice? This cannot be undone.")) return;
+    setDeletingInvoice(invoiceId);
+    try {
+      await api.delete(`/api/admin/billing/venue/${venueId}/manual-invoices/${invoiceId}`);
+      await fetchManualInvoices();
+    } catch (e) {
+      console.error(e);
+    }
+    setDeletingInvoice(null);
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -1677,6 +1745,25 @@ export default function VenueBillingDetailPage() {
                         )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => openEditInvoiceDrawer(inv)}
+                          className="p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-neutral-800 transition-colors"
+                          title="Edit invoice"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => void deleteManualInvoice(inv.id)}
+                          disabled={deletingInvoice === inv.id}
+                          className="p-1.5 rounded-lg text-neutral-500 hover:text-red-400 hover:bg-red-900/20 transition-colors disabled:opacity-50"
+                          title="Delete invoice"
+                        >
+                          {deletingInvoice === inv.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                        </button>
                         {isPaid ? (
                           <button
                             onClick={() => void manualMarkUnpaid(inv.id)}
@@ -1922,6 +2009,135 @@ export default function VenueBillingDetailPage() {
                   <CheckCircle2 className="h-4 w-4" />
                 )}
                 Mark paid
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Invoice Drawer ────────────────────────────────────── */}
+      {editInvoiceDrawer && (
+        <div
+          className="fixed inset-0 z-50 flex justify-end bg-black/50"
+          onClick={() => setEditInvoiceDrawer(null)}
+        >
+          <div
+            className="h-full w-full max-w-md bg-neutral-900 border-l border-neutral-800 overflow-y-auto p-6 space-y-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold">Edit Invoice</h3>
+              <button
+                onClick={() => setEditInvoiceDrawer(null)}
+                className="rounded-lg p-1.5 hover:bg-neutral-800 text-neutral-500 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Amount */}
+            <div className="space-y-1">
+              <label className="text-xs text-neutral-500 block font-medium">Amount (VND) *</label>
+              <AmountInput
+                value={editInvAmount}
+                onChange={setEditInvAmount}
+                placeholder="e.g. 1,000,000"
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white"
+              />
+            </div>
+
+            {/* Due date */}
+            <div className="space-y-1">
+              <label className="text-xs text-neutral-500 block font-medium">Due date *</label>
+              <input
+                type="date"
+                value={editInvDueDate}
+                onChange={(e) => setEditInvDueDate(e.target.value)}
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white"
+              />
+            </div>
+
+            {/* Notes */}
+            <div className="space-y-1">
+              <label className="text-xs text-neutral-500 block font-medium">Notes (optional)</label>
+              <textarea
+                value={editInvNotes}
+                onChange={(e) => setEditInvNotes(e.target.value)}
+                rows={3}
+                placeholder="e.g. Q2 CourtFlow fee"
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white resize-none"
+              />
+            </div>
+
+            {/* PDF upload */}
+            <div className="space-y-2">
+              <label className="text-xs text-neutral-500 block font-medium">Invoice PDF (optional)</label>
+              {editInvPdfUrl ? (
+                <div className="flex items-center gap-3 rounded-lg border border-neutral-700 bg-neutral-800/60 px-3 py-2">
+                  <FileText className="h-4 w-4 text-purple-400 shrink-0" />
+                  <a
+                    href={editInvPdfUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-purple-400 hover:text-purple-300 truncate flex-1"
+                  >
+                    {editInvPdfUrl.split("/").pop()}
+                  </a>
+                  <button
+                    onClick={() => setEditInvPdfUrl("")}
+                    className="text-neutral-500 hover:text-red-400"
+                    title="Remove file"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => editPdfInputRef.current?.click()}
+                  disabled={editInvPdfUploading}
+                  className="flex items-center gap-2 w-full rounded-lg border border-dashed border-neutral-700 bg-neutral-800/40 px-4 py-3 text-sm text-neutral-500 hover:border-neutral-500 hover:text-neutral-300 disabled:opacity-50"
+                >
+                  {editInvPdfUploading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Upload className="h-4 w-4" />
+                  )}
+                  {editInvPdfUploading ? "Uploading…" : "Upload PDF or image"}
+                </button>
+              )}
+              <input
+                ref={editPdfInputRef}
+                type="file"
+                accept="application/pdf,image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void uploadEditPdf(file);
+                  e.target.value = "";
+                }}
+              />
+            </div>
+
+            {/* Footer */}
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setEditInvoiceDrawer(null)}
+                className="flex-1 rounded-lg border border-neutral-700 py-2.5 text-sm text-neutral-400 hover:text-white hover:border-neutral-600"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void saveEditInvoice()}
+                disabled={editInvSaving || !editInvAmount || !editInvDueDate}
+                className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-purple-600 py-2.5 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-50"
+              >
+                {editInvSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                Save changes
               </button>
             </div>
           </div>
