@@ -24,6 +24,8 @@ import {
   Infinity,
   Star,
   Gift,
+  Maximize2,
+  X,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -98,6 +100,128 @@ const paymentStatusColors: Record<string, string> = {
   expired: "bg-red-900/30 text-red-400",
 };
 
+/* ─── Shared kiosk preview frame ──────────────────────────────────────────── */
+function KioskPreviewFrame({
+  showSubscriptionsInFlow,
+  packages,
+  visibleCount,
+  scale,
+}: {
+  showSubscriptionsInFlow: boolean;
+  packages: PackageData[];
+  visibleCount: number;
+  scale: "sm" | "lg";
+}) {
+  const isLg = scale === "lg";
+  const visiblePkgs = packages.filter((p) => p.isActive && p.showInCheckIn).slice(0, 3);
+
+  return (
+    <div className={cn("mx-auto w-full", isLg ? "max-w-[360px]" : "max-w-[220px]")}>
+      <div className="relative rounded-[18px] border-2 border-neutral-700 bg-black overflow-hidden shadow-xl">
+        {/* Status bar notch */}
+        <div className="flex justify-center pt-2 pb-1">
+          <div className={cn("rounded-full bg-neutral-700", isLg ? "h-2 w-16" : "h-1.5 w-10")} />
+        </div>
+
+        {/* Screen body */}
+        <div className={cn(
+          "flex flex-col items-center text-center",
+          isLg ? "px-5 pb-6 min-h-[520px]" : "px-3 pb-4 min-h-[360px]"
+        )}>
+          {showSubscriptionsInFlow ? (
+            <>
+              <p className={cn("font-bold text-white mt-3 leading-tight", isLg ? "text-base" : "text-[10px]")}>
+                Welcome back!
+              </p>
+              <p className={cn("text-neutral-500 mt-0.5 mb-4", isLg ? "text-sm" : "text-[8px]")}>
+                Play more, wait less
+              </p>
+
+              <div className="w-full space-y-2">
+                {visiblePkgs.map((pkg) => (
+                  <div
+                    key={pkg.id}
+                    className={cn(
+                      "w-full rounded-xl border text-left transition-colors",
+                      isLg ? "px-4 py-3" : "px-2.5 py-2",
+                      pkg.isBestChoice
+                        ? "border-fuchsia-500/50 bg-fuchsia-500/10"
+                        : "border-neutral-700 bg-neutral-900"
+                    )}
+                  >
+                    <div className={cn("flex items-center gap-1.5 mb-0.5")}>
+                      <span className={cn("font-semibold text-white truncate flex-1", isLg ? "text-sm" : "text-[9px]")}>
+                        {pkg.name}
+                      </span>
+                      {pkg.isBestChoice && (
+                        <Star className={cn("text-fuchsia-400 fill-fuchsia-400 shrink-0", isLg ? "h-3.5 w-3.5" : "h-2.5 w-2.5")} />
+                      )}
+                      {pkg.isFreePass && (
+                        <Gift className={cn("text-emerald-400 shrink-0", isLg ? "h-3.5 w-3.5" : "h-2.5 w-2.5")} />
+                      )}
+                      {pkg.discountPct != null && pkg.discountPct > 0 && !pkg.isFreePass && (
+                        <span className={cn("font-bold text-emerald-400 shrink-0", isLg ? "text-xs" : "text-[7px]")}>
+                          -{pkg.discountPct}%
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {pkg.sessions === null ? (
+                        <Infinity className={cn("text-neutral-500", isLg ? "h-3 w-3" : "h-2 w-2")} />
+                      ) : (
+                        <span className={cn("text-neutral-500", isLg ? "text-xs" : "text-[8px]")}>
+                          {pkg.sessions} sessions
+                        </span>
+                      )}
+                      <span className={cn("text-neutral-600", isLg ? "text-xs" : "text-[8px]")}>·</span>
+                      <span className={cn("text-neutral-500", isLg ? "text-xs" : "text-[8px]")}>{pkg.durationDays}d</span>
+                      <span className={cn("ml-auto font-bold text-purple-400", isLg ? "text-sm" : "text-[9px]")}>
+                        {pkg.isFreePass ? "Free" : new Intl.NumberFormat("vi-VN").format(pkg.price)}
+                        {!pkg.isFreePass && <span className={cn("text-neutral-500 font-normal", isLg ? "text-xs" : "text-[7px]")}> VND</span>}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+
+                {visibleCount === 0 && (
+                  <div className="w-full rounded-lg border border-dashed border-neutral-700 py-4 text-center">
+                    <span className={cn("text-neutral-600", isLg ? "text-xs" : "text-[8px]")}>No visible packages</span>
+                  </div>
+                )}
+              </div>
+
+              <span className={cn("mt-4 text-neutral-600 underline", isLg ? "text-xs" : "text-[8px]")}>
+                Skip — pay today only
+              </span>
+            </>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center gap-3 py-6 w-full">
+              <div className="w-full rounded-lg border border-dashed border-neutral-700 py-5 flex flex-col items-center gap-2">
+                <XCircle className={cn("text-neutral-700", isLg ? "h-7 w-7" : "h-5 w-5")} />
+                <p className={cn("text-neutral-600 leading-snug", isLg ? "text-xs" : "text-[8px]")}>
+                  Subscription offer skipped
+                </p>
+              </div>
+              <div className="w-full rounded-lg bg-fuchsia-900/40 border border-fuchsia-700/30 py-4 flex flex-col items-center gap-1.5">
+                <div className={cn("rounded bg-white/10", isLg ? "h-16 w-16" : "h-10 w-10")} />
+                <p className={cn("text-fuchsia-300 font-semibold mt-1", isLg ? "text-sm" : "text-[8px]")}>
+                  VietQR payment
+                </p>
+                <p className={cn("text-neutral-500", isLg ? "text-xs" : "text-[7px]")}>Scan to pay session fee</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Home indicator */}
+        <div className="flex justify-center py-2">
+          <div className={cn("rounded-full bg-neutral-700", isLg ? "h-1.5 w-16" : "h-1 w-10")} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminCourtPayPage() {
   const { t } = useTranslation("translation", { i18n: adminI18n });
   const searchParams = useSearchParams();
@@ -121,6 +245,7 @@ export default function AdminCourtPayPage() {
   const [editingPkg, setEditingPkg] = useState<PackageData | null>(null);
   const [showSubscriptionsInFlow, setShowSubscriptionsInFlow] = useState(true);
   const [togglingFlow, setTogglingFlow] = useState(false);
+  const [previewExpanded, setPreviewExpanded] = useState(false);
 
   const fetchOverview = useCallback(async () => {
     try {
@@ -514,101 +639,27 @@ export default function AdminCourtPayPage() {
 
             {/* Kiosk preview */}
             <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Smartphone className="h-4 w-4 text-neutral-400" />
-                <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wide">Kiosk preview</span>
-              </div>
-
-              {/* Screen frame — mirrors actual SubscriptionOffer component */}
-              <div className="mx-auto w-full max-w-[220px]">
-                <div className="relative rounded-[18px] border-2 border-neutral-700 bg-black overflow-hidden shadow-xl">
-                  {/* Status bar */}
-                  <div className="flex justify-center pt-2 pb-1">
-                    <div className="h-1.5 w-10 rounded-full bg-neutral-700" />
-                  </div>
-
-                  {/* Screen body */}
-                  <div className="px-3 pb-4 min-h-[360px] flex flex-col items-center text-center">
-                    {showSubscriptionsInFlow ? (
-                      <>
-                        {/* Greeting — mirrors "Welcome back, [name]!" */}
-                        <p className="text-[10px] font-bold text-white mt-3 leading-tight">Welcome back!</p>
-                        <p className="text-[8px] text-neutral-500 mt-0.5 mb-4">Play more, wait less</p>
-
-                        {/* Visible package cards */}
-                        <div className="w-full space-y-1.5">
-                          {packages
-                            .filter((p) => p.isActive && p.showInCheckIn)
-                            .slice(0, 3)
-                            .map((pkg) => (
-                              <div
-                                key={pkg.id}
-                                className={cn(
-                                  "w-full rounded-lg border px-2.5 py-2 text-left transition-colors",
-                                  pkg.isBestChoice
-                                    ? "border-fuchsia-500/50 bg-fuchsia-500/10"
-                                    : "border-neutral-700 bg-neutral-900"
-                                )}
-                              >
-                                <div className="flex items-center gap-1 mb-0.5">
-                                  <span className="text-[9px] font-semibold text-white truncate flex-1">{pkg.name}</span>
-                                  {pkg.isBestChoice && <Star className="h-2.5 w-2.5 text-fuchsia-400 fill-fuchsia-400 shrink-0" />}
-                                  {pkg.isFreePass && <Gift className="h-2.5 w-2.5 text-emerald-400 shrink-0" />}
-                                  {pkg.discountPct != null && pkg.discountPct > 0 && !pkg.isFreePass && (
-                                    <span className="text-[7px] font-bold text-emerald-400 shrink-0">-{pkg.discountPct}%</span>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  {pkg.sessions === null ? (
-                                    <Infinity className="h-2 w-2 text-neutral-500" />
-                                  ) : (
-                                    <span className="text-[8px] text-neutral-500">{pkg.sessions} sessions</span>
-                                  )}
-                                  <span className="text-[8px] text-neutral-600">·</span>
-                                  <span className="text-[8px] text-neutral-500">{pkg.durationDays}d</span>
-                                  <span className="ml-auto text-[9px] font-bold text-purple-400">
-                                    {pkg.isFreePass ? "Free" : `${new Intl.NumberFormat("vi-VN").format(pkg.price)}`}
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
-
-                          {visibleCount === 0 && (
-                            <div className="w-full rounded-lg border border-dashed border-neutral-700 py-4 text-center">
-                              <span className="text-[8px] text-neutral-600">No visible packages</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Skip link — mirrors "Skip — pay today only" */}
-                        <button className="mt-4 text-[8px] text-neutral-600 underline">
-                          Skip — pay today only
-                        </button>
-                      </>
-                    ) : (
-                      /* Gate OFF — subscription step is bypassed, goes straight to QR payment */
-                      <div className="flex-1 flex flex-col items-center justify-center gap-3 py-6 w-full">
-                        <div className="w-full rounded-lg border border-dashed border-neutral-700 py-5 flex flex-col items-center gap-1.5">
-                          <XCircle className="h-5 w-5 text-neutral-700" />
-                          <p className="text-[8px] text-neutral-600 leading-snug">
-                            Subscription offer skipped
-                          </p>
-                        </div>
-                        <div className="w-full rounded-lg bg-fuchsia-900/40 border border-fuchsia-700/30 py-3 flex flex-col items-center gap-1">
-                          <div className="h-10 w-10 rounded bg-white/10" />
-                          <p className="text-[8px] text-fuchsia-300 font-semibold mt-1">VietQR payment</p>
-                          <p className="text-[7px] text-neutral-500">Scan to pay session fee</p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Home indicator */}
-                  <div className="flex justify-center py-2">
-                    <div className="h-1 w-10 rounded-full bg-neutral-700" />
-                  </div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Smartphone className="h-4 w-4 text-neutral-400" />
+                  <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wide">Kiosk preview</span>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setPreviewExpanded(true)}
+                  className="flex items-center gap-1.5 rounded-lg border border-neutral-700 px-2 py-1 text-[10px] font-medium text-neutral-400 hover:border-neutral-500 hover:bg-neutral-800 hover:text-white transition-colors"
+                >
+                  <Maximize2 className="h-3 w-3" />
+                  Expand
+                </button>
               </div>
+
+              <KioskPreviewFrame
+                showSubscriptionsInFlow={showSubscriptionsInFlow}
+                packages={packages}
+                visibleCount={visibleCount}
+                scale="sm"
+              />
 
               <p className="mt-3 text-[10px] text-neutral-600 text-center leading-relaxed">
                 {showSubscriptionsInFlow
@@ -618,6 +669,48 @@ export default function AdminCourtPayPage() {
                   : "Players go straight to session payment"}
               </p>
             </div>
+
+            {/* Expanded preview modal */}
+            {previewExpanded && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+                onClick={() => setPreviewExpanded(false)}
+              >
+                <div
+                  className="relative flex flex-col items-center gap-5"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <Smartphone className="h-4 w-4 text-neutral-400" />
+                      <span className="text-sm font-semibold text-neutral-300 uppercase tracking-wide">Kiosk preview</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewExpanded(false)}
+                      className="ml-4 rounded-lg border border-neutral-700 p-1.5 text-neutral-400 hover:bg-neutral-800 hover:text-white transition-colors"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <KioskPreviewFrame
+                    showSubscriptionsInFlow={showSubscriptionsInFlow}
+                    packages={packages}
+                    visibleCount={visibleCount}
+                    scale="lg"
+                  />
+
+                  <p className="text-xs text-neutral-600 text-center">
+                    {showSubscriptionsInFlow
+                      ? visibleCount > 0
+                        ? `${visibleCount} package${visibleCount > 1 ? "s" : ""} shown to players`
+                        : "Toggle ON but no packages visible yet"
+                      : "Players go straight to session payment"}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       ) : tab === "subscribers" ? (
