@@ -6,6 +6,7 @@ import { Loader2, Receipt, CheckCircle2, Clock, AlertTriangle, FileText, Externa
 import { cn } from "@/lib/cn";
 import { useTranslation } from "react-i18next";
 import adminI18n from "@/i18n/admin-i18n";
+import { AdminVenuePicker } from "@/components/admin/AdminVenuePicker";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +64,7 @@ export default function MyBillingPage() {
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedVenueId, setSelectedVenueId] = useState<string>("");
 
   const statusConfig: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; className: string }> = {
     paid: { label: t("myBilling.paid"), icon: CheckCircle2, className: "text-emerald-400" },
@@ -98,11 +100,32 @@ export default function MyBillingPage() {
     return <p className="text-red-400 p-4">{t("myBilling.error")}: {error}</p>;
   }
 
+  const filteredVenues = selectedVenueId
+    ? venues.filter((v) => v.id === selectedVenueId)
+    : venues;
+  const filteredInvoices = selectedVenueId
+    ? invoices.filter((inv) => inv.venueId === selectedVenueId)
+    : invoices;
+
+  // Build venue options list from the loaded venues for the picker
+  const venueOptions = venues.map((v) => ({ id: v.id, name: v.name }));
+
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold">{t("myBilling.title")}</h1>
-        <p className="text-sm text-neutral-400 mt-1">{t("myBilling.subtitle")}</p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold">{t("myBilling.title")}</h1>
+          <p className="text-sm text-neutral-400 mt-1">{t("myBilling.subtitle")}</p>
+        </div>
+        {venues.length > 1 && (
+          <AdminVenuePicker
+            venueId={selectedVenueId}
+            venues={venueOptions}
+            onChange={setSelectedVenueId}
+            allowAll
+            placeholder="All venues"
+          />
+        )}
       </div>
 
       {venues.length === 0 ? (
@@ -110,7 +133,7 @@ export default function MyBillingPage() {
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {venues.map((v) => (
+            {filteredVenues.map((v) => (
               <div key={v.id} className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="font-semibold truncate">{v.name}</h3>
@@ -164,8 +187,13 @@ export default function MyBillingPage() {
             <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
               <Receipt className="h-5 w-5 text-purple-400" />
               {t("myBilling.recentInvoices")}
+              {selectedVenueId && (
+                <span className="text-sm font-normal text-neutral-500">
+                  — {venues.find((v) => v.id === selectedVenueId)?.name}
+                </span>
+              )}
             </h2>
-            {invoices.length === 0 ? (
+            {filteredInvoices.length === 0 ? (
               <p className="text-neutral-500 text-sm">{t("myBilling.noInvoices")}</p>
             ) : (
               <div className="overflow-x-auto">
@@ -183,7 +211,7 @@ export default function MyBillingPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {invoices.map((inv) => {
+                    {filteredInvoices.map((inv) => {
                       const cfg = statusConfig[inv.status] ?? statusConfig.pending;
                       const Icon = cfg.icon;
                       const isManual = inv.kind === "manual";
