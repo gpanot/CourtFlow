@@ -40,8 +40,11 @@ function isCourtPassHost(host: string): boolean {
  */
 function isMainDomainBookPath(host: string, pathname: string): boolean {
   if (!pathname.startsWith("/book")) return false;
-  // Do NOT redirect if this is already on the CourtPass host
-  return !isCourtPassHost(host);
+  // Do NOT redirect if this is already on the CourtPass host or if the request
+  // is an internal rewrite (host will be localhost:* on the second middleware pass).
+  if (isCourtPassHost(host)) return false;
+  if (host.startsWith("localhost") || host.startsWith("127.0.0.1")) return false;
+  return true;
 }
 
 export function middleware(request: NextRequest) {
@@ -83,19 +86,11 @@ export function middleware(request: NextRequest) {
     url.protocol = "http";
     url.host = "localhost:3000";
     url.pathname = rewrittenPath;
-    // Mark this as a CourtPass internal rewrite so the middleware does not
-    // apply the main-domain /book/* → CourtPass redirect on the second pass
-    // (when Next.js re-invokes middleware with the rewritten path, x-forwarded-host
-    // is no longer present and the host looks like the main domain).
-    return NextResponse.rewrite(url, {
-      request: { headers: new Headers({ ...Object.fromEntries(request.headers), "x-courtpass-rewrite": "1" }) },
-    });
+    return NextResponse.rewrite(url);
   }
 
   // ── Main domain: /book/* → 308 permanent redirect to CourtPass ────────────
-  // Skip if this request was internally rewritten from a CourtPass hostname.
-  const isInternalRewrite = request.headers.get("x-courtpass-rewrite") === "1";
-  if (!isInternalRewrite && isMainDomainBookPath(host, pathname)) {
+  if (isMainDomainBookPath(host, pathname)) {
     const courtpassUrl =
       process.env.NEXT_PUBLIC_COURTPASS_URL?.replace(/\/$/, "") ??
       "https://courtpass.thecourtflow.com";
