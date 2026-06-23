@@ -233,8 +233,10 @@ model Player {
   registrationVenueId   String?        @map("registration_venue_id")
   reclubUserId          Int?           @map("reclub_user_id")
   playerIdentityId      String?        @map("player_identity_id")
+  coachStaffId          String?        @map("coach_staff_id")
 
   playerIdentity      PlayerIdentity?  @relation(fields: [playerIdentityId], references: [id], onDelete: SetNull)
+  coachStaff          StaffMember?     @relation("PlayerCoachLink", fields: [coachStaffId], references: [id], onDelete: SetNull)
   queueEntries        QueueEntry[]
   playerRankings      PlayerRanking[]
   pushSubscriptions   PushSubscription[]
@@ -260,6 +262,7 @@ model Player {
 
   @@index([registrationVenueId])
   @@index([playerIdentityId])
+  @@index([coachStaffId])
   @@map("players")
 }
 
@@ -327,6 +330,11 @@ model StaffMember {
   /// Default Reclub club (group) for session roster — staff-level, not per-venue.
   reclubGroupId Int? @map("reclub_group_id")
 
+  googleRefreshToken        String?  @map("google_refresh_token")
+  googleCalendarId          String?  @map("google_calendar_id")
+  calendarSyncEnabled       Boolean  @default(false) @map("calendar_sync_enabled")
+  creditPackageValidityDays Int      @default(90) @map("credit_package_validity_days")
+
   venueAssignments StaffVenueAssignment[]
   auditLogs        AuditLog[]
   sessions      Session[]
@@ -343,6 +351,7 @@ model StaffMember {
   coachCredits          PlayerCoachCredit[]
   coachAvailabilities   CoachAvailability[]
   coachHolidays         CoachHoliday[]
+  linkedPlayers         Player[]  @relation("PlayerCoachLink")
 
   @@map("staff_members")
 }
@@ -641,6 +650,7 @@ enum LessonType {
 }
 
 enum CoachLessonStatus {
+  pending_approval
   confirmed
   completed
   cancelled
@@ -690,6 +700,7 @@ model CoachLesson {
   proofUrl        String?           @map("proof_url")
   paymentNote     String?           @map("payment_note")
   paymentRef      String?           @unique @map("payment_ref")
+  googleEventId   String?           @map("google_event_id")
   createdAt       DateTime          @default(now()) @map("created_at")
   cancelledAt     DateTime?         @map("cancelled_at")
   rejectedAt      DateTime?         @map("rejected_at")
@@ -1293,10 +1304,11 @@ model PlayerCoachCredit {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
-  player  Player       @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  coach   StaffMember  @relation(fields: [coachId], references: [id])
-  venue   Venue        @relation(fields: [venueId], references: [id])
-  package CoachPackage @relation(fields: [packageId], references: [id])
+  player       Player              @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  coach        StaffMember         @relation(fields: [coachId], references: [id])
+  venue        Venue               @relation(fields: [venueId], references: [id])
+  package      CoachPackage        @relation(fields: [packageId], references: [id])
+  transactions CreditTransaction[]
 
   @@index([playerId, coachId])
   @@index([venueId])
@@ -1355,10 +1367,25 @@ model EmailLog {
   bookingType     String   @map("booking_type")
   bookingId       String   @map("booking_id")
   emailType       String   @map("email_type")
+  recipientRole   String   @default("student") @map("recipient_role")
   resendMessageId String?  @map("resend_message_id")
   sentAt          DateTime @default(now()) @map("sent_at")
   status          String   @default("sent")
 
   @@index([bookingId, emailType])
   @@map("email_logs")
+}
+
+model CreditTransaction {
+  id        String   @id @default(cuid())
+  creditId  String   @map("credit_id")
+  lessonId  String?  @map("lesson_id")
+  amount    Int
+  reason    String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  credit PlayerCoachCredit @relation(fields: [creditId], references: [id], onDelete: Cascade)
+
+  @@index([creditId])
+  @@map("credit_transactions")
 }
