@@ -67,6 +67,24 @@ export async function PATCH(
       },
     });
 
+    // When toggling isCoach on for the first time, seed a full-week default schedule
+    // so the coach is immediately bookable without needing to visit the availability editor
+    if (body.isCoach === true && !existing.isCoach) {
+      const existingAvail = await prisma.coachAvailability.count({ where: { coachId: staffId } });
+      if (existingAvail === 0) {
+        await prisma.coachAvailability.createMany({
+          data: [0, 1, 2, 3, 4, 5, 6].map((day) => ({
+            coachId: staffId,
+            dayOfWeek: day,
+            startTime: "08:00",
+            endTime: "20:00",
+            enabled: true,
+          })),
+          skipDuplicates: true,
+        });
+      }
+    }
+
     if (body.venueAssignments !== undefined) {
       await prisma.$transaction(async (tx) => {
         await tx.staffVenueAssignment.deleteMany({ where: { staffId } });

@@ -135,6 +135,20 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    // Seed full-week availability for new coaches so all slots are bookable immediately
+    if (body.isCoach) {
+      await prisma.coachAvailability.createMany({
+        data: [0, 1, 2, 3, 4, 5, 6].map((day) => ({
+          coachId: staff.id,
+          dayOfWeek: day,
+          startTime: "08:00",
+          endTime: "20:00",
+          enabled: true,
+        })),
+        skipDuplicates: true,
+      });
+    }
+
     // Link venues to an organization if applicable
     const assignedVenueIds = staff.venueAssignments.map((a) => a.venueId);
 
