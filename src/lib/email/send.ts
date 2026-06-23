@@ -23,6 +23,9 @@ export interface SendBookingEmailParams {
     studentName?: string;
     approvedBy?: string;
     paymentRef?: string;
+    /** ISO strings used to generate Add-to-Calendar links */
+    startTimeISO?: string;
+    endTimeISO?: string;
   };
 }
 
@@ -49,12 +52,73 @@ function buildEmail(params: SendBookingEmailParams): { subject: string; html: st
   const approvedByLine = details.approvedBy ? `<p><strong>Approved by:</strong> ${details.approvedBy}</p>` : "";
   const detailsBlock = [venueLine, dateLine, timeLine, amountLine, coachLine, studentLine, approvedByLine].filter(Boolean).join("\n");
 
+  // Add-to-Calendar links (only for student/coach on confirmed events)
+  const calendarButtons = (() => {
+    if (recipientRole === "staff") return "";
+    if (!details.startTimeISO || !details.endTimeISO) return "";
+
+    const start = new Date(details.startTimeISO);
+    const end = new Date(details.endTimeISO);
+
+    // Google Calendar: https://calendar.google.com/calendar/render?action=TEMPLATE&...
+    const fmt = (d: Date) =>
+      d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    const eventTitle = encodeURIComponent(
+      recipientRole === "coach"
+        ? `Coaching lesson — ${details.studentName ?? playerName}`
+        : `Coaching lesson — ${details.coachName ?? "Coach"}`
+    );
+    const location = encodeURIComponent(details.venueName ?? "");
+    const googleUrl =
+      `https://calendar.google.com/calendar/render?action=TEMPLATE` +
+      `&text=${eventTitle}` +
+      `&dates=${fmt(start)}/${fmt(end)}` +
+      (location ? `&location=${location}` : "") +
+      `&details=${encodeURIComponent(`Booking ref: ${details.paymentRef ?? ""}`)}`;
+
+    // Apple / iCal: serve an .ics file from our own API
+    const icsUrl =
+      `${process.env.APP_URL ?? ""}/api/public/calendar/ics` +
+      `?title=${eventTitle}` +
+      `&start=${encodeURIComponent(details.startTimeISO)}` +
+      `&end=${encodeURIComponent(details.endTimeISO)}` +
+      (location ? `&location=${location}` : "") +
+      `&ref=${encodeURIComponent(details.paymentRef ?? "")}`;
+
+    return `
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:20px;">
+  <tr>
+    <td align="center">
+      <p style="font-size:13px;color:#6b7280;margin-bottom:10px;">Add this lesson to your calendar:</p>
+      <table cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="padding-right:8px;">
+            <a href="${googleUrl}" target="_blank"
+               style="display:inline-block;background:#4285F4;color:#fff;font-size:13px;font-weight:600;
+                      padding:10px 18px;border-radius:8px;text-decoration:none;">
+              📅 Google Calendar
+            </a>
+          </td>
+          <td>
+            <a href="${icsUrl}" target="_blank"
+               style="display:inline-block;background:#1C1C1E;color:#fff;font-size:13px;font-weight:600;
+                      padding:10px 18px;border-radius:8px;text-decoration:none;">
+               Apple Calendar
+            </a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
+  })();
+
   // Role-specific greeting
   const greeting = recipientRole === "student"
     ? `Hi ${playerName},`
     : recipientRole === "coach"
     ? `Hi Coach ${playerName},`
-    : `Staff notification for ${details.studentName ?? playerName}:`;
+    : `Staff notification for ${details.studentName ?? playerName}`;
 
   switch (emailType) {
     case "pending":
@@ -79,13 +143,13 @@ function buildEmail(params: SendBookingEmailParams): { subject: string; html: st
       if (recipientRole === "student") {
         return {
           subject: `${refPrefix}Payment approved — your ${label} is confirmed`,
-          html: `<p>${greeting}</p><p>Great news! Your payment for your <strong>${label}</strong> has been approved and your booking is confirmed.</p>${detailsBlock}<p>We look forward to seeing you on the court!</p><p>Thank you,<br/>The CourtFlow Team</p>`,
+          html: `<p>${greeting}</p><p>Great news! Your payment for your <strong>${label}</strong> has been approved and your booking is confirmed.</p>${detailsBlock}${calendarButtons}<p style="margin-top:20px;">We look forward to seeing you on the court!</p><p>Thank you,<br/>The CourtFlow Team</p>`,
         };
       }
       if (recipientRole === "coach") {
         return {
           subject: `${refPrefix}Lesson confirmed — ${details.studentName ?? playerName}`,
-          html: `<p>${greeting}</p><p>A <strong>${label}</strong> with your student has been confirmed.</p>${detailsBlock}<p>CourtFlow</p>`,
+          html: `<p>${greeting}</p><p>A <strong>${label}</strong> with your student has been confirmed.</p>${detailsBlock}${calendarButtons}<p>CourtFlow</p>`,
         };
       }
       return {
@@ -137,13 +201,13 @@ function buildEmail(params: SendBookingEmailParams): { subject: string; html: st
       if (recipientRole === "student") {
         return {
           subject: `${refPrefix}Payment confirmed — your ${label} is booked`,
-          html: `<p>${greeting}</p><p>Your payment has been automatically confirmed and your <strong>${label}</strong> is now booked.</p>${detailsBlock}<p>We look forward to seeing you on the court!</p><p>Thank you,<br/>The CourtFlow Team</p>`,
+          html: `<p>${greeting}</p><p>Your payment has been automatically confirmed and your <strong>${label}</strong> is now booked.</p>${detailsBlock}${calendarButtons}<p style="margin-top:20px;">We look forward to seeing you on the court!</p><p>Thank you,<br/>The CourtFlow Team</p>`,
         };
       }
       if (recipientRole === "coach") {
         return {
           subject: `${refPrefix}Lesson auto-confirmed — ${details.studentName ?? playerName}`,
-          html: `<p>${greeting}</p><p>A <strong>${label}</strong> with your student has been automatically confirmed via Sepay.</p>${detailsBlock}<p>CourtFlow</p>`,
+          html: `<p>${greeting}</p><p>A <strong>${label}</strong> with your student has been automatically confirmed via Sepay.</p>${detailsBlock}${calendarButtons}<p>CourtFlow</p>`,
         };
       }
       return {
@@ -283,6 +347,8 @@ export async function buildLessonEmailContext(
       date: lesson.date.toLocaleDateString(),
       time: `${lesson.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} – ${lesson.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
       amount: lesson.priceValue,
+      startTimeISO: lesson.startTime.toISOString(),
+      endTimeISO: lesson.endTime.toISOString(),
       ...(lesson.paymentRef ? { paymentRef: lesson.paymentRef } : {}),
       ...(options?.approvedBy ? { approvedBy: options.approvedBy } : {}),
     },
