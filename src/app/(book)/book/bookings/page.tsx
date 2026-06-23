@@ -129,7 +129,7 @@ function NextUpHeroCard({
           </span>
 
           <p className="text-xs text-[var(--cm-text-sec)] mb-0.5">
-            {t("bookings.today")} · {formatDateField(date)}
+            {formatDateField(date)}
           </p>
 
           <p className="text-lg font-bold text-[var(--cm-text)] leading-tight">
