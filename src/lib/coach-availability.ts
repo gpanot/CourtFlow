@@ -29,6 +29,7 @@ export async function isCoachAvailable(
   endTime: Date
 ): Promise<AvailabilityResult> {
   const dayOfWeek = date.getDay();
+  const slotLabel = `${startTime.toISOString()} – ${endTime.toISOString()} (DOW=${dayOfWeek})`;
 
   const coach = await prisma.staffMember.findUnique({
     where: { id: coachId },
@@ -48,11 +49,16 @@ export async function isCoachAvailable(
     },
   });
 
-  if (!coach) return { available: false, reason: "outside_schedule" };
+  if (!coach) {
+    console.log(`[avail] ${slotLabel} → BLOCKED: coach ${coachId} not found`);
+    return { available: false, reason: "outside_schedule" };
+  }
 
   // Layer 1 — weekly availability
   const startFrac = startTime.getHours() + startTime.getMinutes() / 60;
   const endFrac = endTime.getHours() + endTime.getMinutes() / 60;
+
+  console.log(`[avail] ${slotLabel} | L1: schedules=${JSON.stringify(coach.coachAvailabilities.map(s => `${s.startTime}-${s.endTime}`))} slot=${startFrac}-${endFrac}`);
 
   const inSchedule = coach.coachAvailabilities.some((slot) => {
     const slotStart = parseTimeStr(slot.startTime);
@@ -60,10 +66,14 @@ export async function isCoachAvailable(
     return startFrac >= slotStart && endFrac <= slotEnd;
   });
 
-  if (!inSchedule) return { available: false, reason: "outside_schedule" };
+  if (!inSchedule) {
+    console.log(`[avail] ${slotLabel} → BLOCKED: outside_schedule`);
+    return { available: false, reason: "outside_schedule" };
+  }
 
   // Layer 2 — holiday blackouts
   if (coach.coachHolidays.length > 0) {
+    console.log(`[avail] ${slotLabel} → BLOCKED: holiday (${coach.coachHolidays.length} holiday rows)`);
     return { available: false, reason: "holiday" };
   }
 
@@ -78,12 +88,13 @@ export async function isCoachAvailable(
     },
   });
 
-  if (lessonConflict) return { available: false, reason: "lesson_conflict" };
+  if (lessonConflict) {
+    console.log(`[avail] ${slotLabel} → BLOCKED: lesson_conflict (lessonId=${lessonConflict.id} status=${lessonConflict.status})`);
+    return { available: false, reason: "lesson_conflict" };
+  }
 
   // Layer 4 — Google Calendar free/busy (optional, always non-fatal)
-  // If the token is invalid, expired, or the API is unreachable, we skip this
-  // layer and return available=true from layers 1-3. Never block a booking
-  // because of a calendar API failure.
+  console.log(`[avail] ${slotLabel} | L4: calendarSync=${coach.calendarSyncEnabled} hasToken=${!!coach.googleRefreshToken} hasCalId=${!!coach.googleCalendarId}`);
   if (
     coach.calendarSyncEnabled &&
     coach.googleRefreshToken &&
@@ -96,12 +107,16 @@ export async function isCoachAvailable(
         startTime,
         endTime
       );
-      if (busy) return { available: false, reason: "calendar_busy" };
-    } catch {
-      // Swallow silently — a broken/missing OAuth token must not block bookings
+      if (busy) {
+        console.log(`[avail] ${slotLabel} → BLOCKED: calendar_busy`);
+        return { available: false, reason: "calendar_busy" };
+      }
+    } catch (err) {
+      console.log(`[avail] ${slotLabel} | L4 error (skipped): ${(err as Error).message}`);
     }
   }
 
+  console.log(`[avail] ${slotLabel} → AVAILABLE`);
   return { available: true };
 }
 
