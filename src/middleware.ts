@@ -53,14 +53,21 @@ export function middleware(request: NextRequest) {
 
   // ── CourtPass hostname → rewrite /xxx to /book/xxx ────────────────────────
   if (isCourtPassHost(host)) {
-    // Pass through requests that are already under /book, plus Next.js
-    // internals and API routes that must not be rewritten.
+    // Pass through requests that are already under /book, Next.js internals,
+    // API routes, and all public static assets (images, icons, manifests, uploads).
     if (
       pathname.startsWith("/book") ||
       pathname.startsWith("/api/") ||
       pathname.startsWith("/_next/") ||
       pathname.startsWith("/__nextjs") ||
-      pathname === "/favicon.ico"
+      pathname.startsWith("/images/") ||
+      pathname.startsWith("/icons/") ||
+      pathname.startsWith("/uploads/") ||
+      pathname.startsWith("/store-assets/") ||
+      pathname === "/favicon.ico" ||
+      pathname === "/manifest.json" ||
+      pathname === "/manifest-tv.json" ||
+      /\.(png|jpg|jpeg|svg|webp|ico|json|woff2?|txt|xml)$/.test(pathname)
     ) {
       return NextResponse.next();
     }
