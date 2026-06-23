@@ -1,5 +1,6 @@
 import { prisma } from "./db";
 import { getFreeBusy } from "./google-calendar";
+import { toDateKey, toDbDate } from "./date";
 
 /**
  * Parse a "HH:MM" time string into fractional hours (e.g. "09:30" → 9.5).
@@ -24,12 +25,15 @@ export interface AvailabilityResult {
  */
 export async function isCoachAvailable(
   coachId: string,
-  date: Date,       // local-midnight date
+  date: Date,       // local-midnight date — used for day-of-week (local) and date arithmetic
   startTime: Date,
   endTime: Date
 ): Promise<AvailabilityResult> {
-  const dayOfWeek = date.getDay();
+  const dayOfWeek = date.getDay();  // local — correct
   const slotLabel = `${startTime.toISOString()} – ${endTime.toISOString()} (DOW=${dayOfWeek})`;
+  // All Prisma DATE column filters must use UTC midnight so the pg driver serialises
+  // the date correctly (local midnight = previous UTC day in UTC+7).
+  const dbDate = toDbDate(toDateKey(date));
 
   const coach = await prisma.staffMember.findUnique({
     where: { id: coachId },
@@ -42,8 +46,8 @@ export async function isCoachAvailable(
       },
       coachHolidays: {
         where: {
-          startDate: { lte: date },
-          endDate: { gte: date },
+          startDate: { lte: dbDate },
+          endDate: { gte: dbDate },
         },
       },
     },
@@ -81,7 +85,7 @@ export async function isCoachAvailable(
   const lessonConflict = await prisma.coachLesson.findFirst({
     where: {
       coachId,
-      date,
+      date: dbDate,
       status: { in: ["confirmed", "completed", "pending_approval"] },
       startTime: { lt: endTime },
       endTime: { gt: startTime },

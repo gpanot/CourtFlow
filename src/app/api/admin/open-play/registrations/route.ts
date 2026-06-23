@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
 import { requireManagerOrSuperAdmin } from "@/lib/auth";
 import { assertVenueAccess } from "@/lib/venue-scope";
+import { toDbDate, toDateKey } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
@@ -21,8 +22,7 @@ export async function GET(request: NextRequest) {
     if (!venueId) return error("venueId required", 400);
     await assertVenueAccess(auth, venueId);
 
-    const date = dateStr ? new Date(dateStr) : new Date();
-    date.setHours(0, 0, 0, 0);
+    const date = dateStr ? toDbDate(dateStr) : toDbDate(toDateKey(new Date()));
 
     const regs = await prisma.openPlayRegistration.findMany({
       where: {

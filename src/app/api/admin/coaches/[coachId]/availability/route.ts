@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
 import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { toDbDate } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 export async function GET(
@@ -23,8 +24,7 @@ export async function GET(
     });
     if (!coach) return error("Coach not found", 404);
 
-    const date = new Date(dateStr);
-    date.setHours(0, 0, 0, 0);
+    const date = toDbDate(dateStr);
     const nextDay = new Date(date);
     nextDay.setDate(nextDay.getDate() + 1);
 

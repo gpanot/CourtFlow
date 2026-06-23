@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { toDbDate } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
@@ -18,9 +19,7 @@ export async function GET(request: NextRequest) {
     if (coachId) where.coachId = coachId;
     if (playerId) where.playerId = playerId;
     if (dateStr) {
-      const date = new Date(dateStr);
-      date.setHours(0, 0, 0, 0);
-      where.date = date;
+      where.date = toDbDate(dateStr);
     }
 
     const lessons = await prisma.coachLesson.findMany({
@@ -82,9 +81,7 @@ export async function POST(request: NextRequest) {
       if (!court) return error("Court not found", 404);
     }
 
-    const date = new Date(body.date);
-    date.setHours(0, 0, 0, 0);
-
+    const date = toDbDate(body.date);
     const startTime = new Date(body.startTime);
     const endTime = body.endTime
       ? new Date(body.endTime)

@@ -1,7 +1,7 @@
 import { prisma } from "./db";
 import type { Booking } from "@prisma/client";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
-import { parseDateKey, toDateKey } from "./date";
+import { toDateKey, toDbDate } from "./date";
 
 export const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
 
@@ -214,8 +214,8 @@ export async function getAvailableSlots(
     orderBy: { label: "asc" },
   });
 
-  // Normalise to local midnight — server TZ equals venue TZ, matching how parseDateKey works
-  const dateOnly = parseDateKey(toDateKey(date));
+  // Use UTC midnight for Prisma DATE column queries (pg driver uses UTC portion of ISO string)
+  const dateOnly = toDbDate(toDateKey(date));
 
   const existingBookings = await prisma.booking.findMany({
     where: {
