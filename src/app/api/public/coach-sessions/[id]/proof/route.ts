@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { json, error } from "@/lib/api-helpers";
 import { prisma } from "@/lib/db";
 import { requirePortalAuth } from "@/lib/portal-auth";
-import { sendBookingEmail } from "@/lib/email/send";
+import { buildLessonEmailContext, sendLessonEventEmails } from "@/lib/email/send";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 
@@ -52,18 +52,9 @@ export async function POST(
       data: { paymentStatus: "proof_submitted", proofUrl },
     });
 
-    const player = await prisma.player.findUnique({
-      where: { id: playerId },
-      select: { name: true, email: true },
-    });
-    if (player?.email) {
-      await sendBookingEmail({
-        to: player.email,
-        playerName: player.name,
-        bookingType: "coach",
-        emailType: "pending",
-        details: {},
-      });
+    const ctx = await buildLessonEmailContext(id);
+    if (ctx) {
+      void sendLessonEventEmails(ctx, "pending");
     }
 
     return json({ success: true, proofUrl });

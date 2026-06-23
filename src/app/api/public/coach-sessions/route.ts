@@ -6,6 +6,8 @@ import { getPortalVenueId } from "@/lib/venue-config";
 import { getBookingConfig } from "@/lib/booking";
 import { generatePaymentRef } from "@/modules/courtpay/lib/payment-reference";
 import { buildVietQRUrl } from "@/lib/vietqr";
+import { isCoachAvailable, findNextAvailableSlot } from "@/lib/coach-availability";
+import { buildLessonEmailContext, sendLessonEventEmails } from "@/lib/email/send";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +40,7 @@ export async function POST(request: NextRequest) {
 
     const pkg = await prisma.coachPackage.findFirst({
       where: { id: packageId, coachId, venueId, active: true },
+      include: { coach: { select: { creditPackageValidityDays: true } } },
     });
     if (!pkg) return error("Package not found", 404);
 
@@ -55,16 +58,31 @@ export async function POST(request: NextRequest) {
     endTime.setMinutes(endTime.getMinutes() + pkg.durationMin * slots);
     const totalPrice = pkg.priceValue * slots;
 
-    const conflict = await prisma.coachLesson.findFirst({
-      where: {
+    // Three-layer availability check (Google Calendar is layer 4, inside isCoachAvailable)
+    const avail = await isCoachAvailable(coachId, date, startTime, endTime);
+    if (!avail.available) {
+      const next = await findNextAvailableSlot(
         coachId,
         date,
-        status: { in: ["confirmed", "completed"] },
-        startTime: { lt: endTime },
-        endTime: { gt: startTime },
-      },
-    });
-    if (conflict) return error("Coach is not available at this time", 409);
+        pkg.durationMin,
+        config.bookingStartHour,
+        config.bookingEndHour
+      );
+      return json(
+        {
+          error: "Coach is not available at this time",
+          reason: avail.reason,
+          nextAvailableSlot: next
+            ? {
+                date: next.date.toISOString(),
+                startTime: next.startTime.toISOString(),
+                endTime: next.endTime.toISOString(),
+              }
+            : null,
+        },
+        409
+      );
+    }
 
     const courts = await prisma.court.findMany({
       where: { venueId, isBookable: true },
@@ -91,7 +109,7 @@ export async function POST(request: NextRequest) {
         where: {
           courtId: court.id,
           date,
-          status: { in: ["confirmed", "completed"] },
+          status: { in: ["confirmed", "completed", "pending_approval"] },
           startTime: { lt: endTime },
           endTime: { gt: startTime },
         },
@@ -102,37 +120,67 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Credit payment path — deduct 1 credit atomically, create audit row
     if (payWithCredit && creditId) {
-      const result = await prisma.$executeRaw`
-        UPDATE player_coach_credits
-        SET used_sessions = used_sessions + 1, updated_at = NOW()
-        WHERE id = ${creditId}
-          AND used_sessions < total_sessions
-          AND payment_status = 'paid'
-          AND expires_at > NOW()
-      `;
-      if (result === 0) return error("No credits remaining or credit expired", 400);
+      const [updated, lesson] = await prisma.$transaction(async (tx) => {
+        const credit = await tx.playerCoachCredit.findFirst({
+          where: {
+            id: creditId,
+            playerId,
+            coachId,
+            paymentStatus: "paid",
+            expiresAt: { gt: new Date() },
+          },
+          select: { id: true, usedSessions: true, totalSessions: true },
+        });
+        if (!credit || credit.usedSessions >= credit.totalSessions) {
+          throw new Error("No credits remaining or credit expired");
+        }
 
-      const lesson = await prisma.coachLesson.create({
-        data: {
-          venueId,
-          coachId,
-          playerId,
-          courtId: assignedCourtId,
-          packageId,
-          date,
-          startTime,
-          endTime,
-          priceValue: totalPrice,
-          paymentStatus: "paid",
-          paidAt: new Date(),
-          paymentMethod: "credit",
-        },
+        const updatedCredit = await tx.playerCoachCredit.update({
+          where: { id: creditId },
+          data: { usedSessions: { increment: 1 } },
+        });
+
+        const newLesson = await tx.coachLesson.create({
+          data: {
+            venueId,
+            coachId,
+            playerId,
+            courtId: assignedCourtId,
+            packageId,
+            date,
+            startTime,
+            endTime,
+            priceValue: totalPrice,
+            paymentStatus: "paid",
+            paidAt: new Date(),
+            paymentMethod: "credit",
+            status: "confirmed",
+          },
+        });
+
+        await tx.creditTransaction.create({
+          data: {
+            creditId,
+            lessonId: newLesson.id,
+            amount: -1,
+            reason: "booked",
+          },
+        });
+
+        return [updatedCredit, newLesson];
       });
+
+      void updated; // used inside transaction
+
+      const ctx = await buildLessonEmailContext(lesson.id);
+      if (ctx) void sendLessonEventEmails(ctx, "auto_confirmed");
 
       return json({ lesson, paidWithCredit: true }, 201);
     }
 
+    // VietQR / manual QR path — lesson starts as pending_approval
     const paymentRef = await generatePaymentRef("coach-lesson");
     const lesson = await prisma.coachLesson.create({
       data: {
@@ -147,6 +195,7 @@ export async function POST(request: NextRequest) {
         priceValue: totalPrice,
         paymentStatus: "pending",
         paymentRef,
+        status: "pending_approval",
       },
     });
 
@@ -178,6 +227,7 @@ export async function POST(request: NextRequest) {
   } catch (e) {
     const msg = (e as Error).message;
     if (msg === "Authentication required") return error(msg, 401);
+    if (msg === "No credits remaining or credit expired") return error(msg, 400);
     return error(msg, 500);
   }
 }

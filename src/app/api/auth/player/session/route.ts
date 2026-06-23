@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   if (creds) {
     const player = await prisma.player.findUnique({
       where: { id: creds.playerId },
-      select: { phone: true, registrationVenueId: true },
+      select: { phone: true, registrationVenueId: true, coachStaffId: true },
     });
     const onboardingComplete =
       !!player &&
@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
       email: creds.email,
       provider: "credentials",
       onboardingComplete,
+      coachStaffId: player?.coachStaffId ?? null,
     });
   }
 
@@ -42,7 +43,7 @@ export async function GET(req: NextRequest) {
   if (oauth) {
     const player = await prisma.player.findUnique({
       where: { id: oauth.playerId },
-      select: { phone: true, registrationVenueId: true },
+      select: { phone: true, registrationVenueId: true, coachStaffId: true },
     });
     const onboardingComplete =
       !!player &&
@@ -55,6 +56,7 @@ export async function GET(req: NextRequest) {
       email: oauth.email,
       provider: oauth.provider,
       onboardingComplete,
+      coachStaffId: player?.coachStaffId ?? null,
     });
   }
 

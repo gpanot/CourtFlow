@@ -2,7 +2,8 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
 import { requireManagerOrSuperAdmin } from "@/lib/auth";
-import { sendBookingEmail } from "@/lib/email/send";
+import { buildLessonEmailContext, sendLessonEventEmails } from "@/lib/email/send";
+import { createCalendarEvent } from "@/lib/google-calendar";
 
 export const dynamic = "force-dynamic";
 
@@ -26,21 +27,47 @@ export async function PATCH(
         paymentStatus: "paid",
         paidAt: new Date(),
         paymentMethod: "bank_transfer",
+        status: "confirmed",
       },
       include: {
-        coach: { select: { id: true, name: true } },
+        coach: {
+          select: {
+            id: true,
+            name: true,
+            googleRefreshToken: true,
+            googleCalendarId: true,
+            calendarSyncEnabled: true,
+          },
+        },
         player: { select: { id: true, name: true, email: true } },
       },
     });
 
-    if (updated.player.email) {
-      await sendBookingEmail({
-        to: updated.player.email,
-        playerName: updated.player.name,
-        bookingType: "coach",
-        emailType: "approved",
-        details: {},
-      });
+    const ctx = await buildLessonEmailContext(id);
+    if (ctx) {
+      void sendLessonEventEmails(ctx, "approved");
+    }
+
+    // Google Calendar: create event and persist the event ID for later deletion
+    if (
+      updated.coach.calendarSyncEnabled &&
+      updated.coach.googleRefreshToken &&
+      updated.coach.googleCalendarId
+    ) {
+      createCalendarEvent(
+        updated.coach.googleRefreshToken,
+        updated.coach.googleCalendarId,
+        updated
+      )
+        .then((googleEventId) =>
+          prisma.coachLesson.update({
+            where: { id },
+            data: { googleEventId },
+          })
+        )
+        .catch((err) =>
+          console.error("[approve-payment] Calendar event creation failed:", err)
+        );
     }
 
     return json(updated);

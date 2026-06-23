@@ -1,4 +1,4 @@
-import React, { useMemo, useLayoutEffect, useState, useCallback, useRef, useEffect } from "react";
+import React, { useMemo, useLayoutEffect, useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,9 +6,6 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  Modal,
-  TextInput,
-  Vibration,
   Switch,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -273,129 +270,6 @@ function createProfileStyles(t: AppColors) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PIN modal component
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface PinModalProps {
-  visible: boolean;
-  onSuccess: () => void;
-  onCancel: () => void;
-  styles: ReturnType<typeof createProfileStyles>;
-  theme: AppColors;
-  title: string;
-  subtitle: string;
-  errorText: string;
-  cancelLabel: string;
-}
-
-function PinModal({ visible, onSuccess, onCancel, styles, theme, title, subtitle, errorText, cancelLabel }: PinModalProps) {
-  const verify = usePinStore((s) => s.verify);
-  const [digits, setDigits] = useState<string[]>([]);
-  const [error, setError] = useState(false);
-
-  const handleKey = (key: string) => {
-    if (error) {
-      setError(false);
-      setDigits([]);
-      return;
-    }
-    if (key === "del") {
-      setDigits((d) => d.slice(0, -1));
-      return;
-    }
-    const next = [...digits, key];
-    if (next.length > 4) return;
-    setDigits(next);
-    if (next.length === 4) {
-      const code = next.join("");
-      if (verify(code)) {
-        setDigits([]);
-        setError(false);
-        onSuccess();
-      } else {
-        setError(true);
-        Vibration.vibrate(300);
-        setTimeout(() => {
-          setDigits([]);
-          setError(false);
-        }, 800);
-      }
-    }
-  };
-
-  const handleCancel = () => {
-    setDigits([]);
-    setError(false);
-    onCancel();
-  };
-
-  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "del"];
-
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleCancel}>
-      <TouchableOpacity
-        style={styles.modalOverlay}
-        activeOpacity={1}
-        onPress={handleCancel}
-      >
-        <TouchableOpacity
-          style={styles.modalCard}
-          activeOpacity={1}
-          onPress={() => {/* prevent bubbling */}}
-        >
-          <Text style={styles.modalTitle}>{title}</Text>
-          <Text style={styles.modalSubtitle}>{subtitle}</Text>
-
-          {/* Dots */}
-          <View style={styles.pinDotsRow}>
-            {[0, 1, 2, 3].map((i) => (
-              <View
-                key={i}
-                style={[
-                  styles.pinDot,
-                  digits.length > i && (error ? styles.pinDotError : styles.pinDotFilled),
-                ]}
-              />
-            ))}
-          </View>
-
-          {error && (
-            <Text style={styles.pinErrorText}>{errorText}</Text>
-          )}
-
-          {/* Keypad */}
-          <View style={styles.pinGrid}>
-            {keys.map((k, idx) => {
-              if (k === "") {
-                return <View key={idx} style={[styles.pinKey, { opacity: 0 }]} />;
-              }
-              return (
-                <TouchableOpacity
-                  key={idx}
-                  style={[styles.pinKey, k === "del" && styles.pinKeyDelete]}
-                  onPress={() => handleKey(k)}
-                  activeOpacity={0.6}
-                >
-                  {k === "del" ? (
-                    <Ionicons name="backspace-outline" size={22} color={theme.muted} />
-                  ) : (
-                    <Text style={styles.pinKeyText}>{k}</Text>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <TouchableOpacity style={styles.pinCancelBtn} onPress={handleCancel}>
-            <Text style={styles.pinCancelText}>{cancelLabel}</Text>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </TouchableOpacity>
-    </Modal>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Main screen
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -411,7 +285,7 @@ export function StaffProfileScreen() {
   const toggleTheme = useThemeStore((s) => s.toggleMode);
   const { locale, toggleLocale, t } = useTabletKioskLocale();
 
-  const { unlocked, unlock, lock } = usePinStore();
+  const { lock } = usePinStore();
 
   const [reclubGroupId, setReclubGroupId] = useState<number | null>(null);
   const [reclubLoaded, setReclubLoaded] = useState(false);
@@ -455,10 +329,6 @@ export function StaffProfileScreen() {
     ];
     return CLUBS.find((c) => c.groupId === reclubGroupId)?.name ?? t("profileReclubNotSet");
   }, [reclubGroupId, reclubLoaded, t]);
-
-  // Which locked screen to navigate to after successful PIN entry
-  const pendingRoute = useRef<keyof StaffStackParamList | null>(null);
-  const [pinVisible, setPinVisible] = useState(false);
 
   // ── Push notifications (registration runs app-wide via StaffPushBootstrap) ─
   const pushEnabled = useAuthStore((s) => s.pushNotificationsEnabled);
@@ -527,50 +397,8 @@ export function StaffProfileScreen() {
     ]);
   };
 
-  /** Navigate to a locked route, prompting for PIN if not yet unlocked */
-  const handleLockedNav = (route: keyof StaffStackParamList) => {
-    if (unlocked) {
-      navigation.navigate(route as never);
-    } else {
-      pendingRoute.current = route;
-      setPinVisible(true);
-    }
-  };
-
-  const handlePinSuccess = () => {
-    unlock();
-    setPinVisible(false);
-    if (pendingRoute.current) {
-      navigation.navigate(pendingRoute.current as never);
-      pendingRoute.current = null;
-    }
-  };
-
-  const handlePinCancel = () => {
-    setPinVisible(false);
-    pendingRoute.current = null;
-  };
-
-  const LockIcon = () =>
-    unlocked ? null : (
-      <View style={styles.lockBadge}>
-        <Ionicons name="lock-closed" size={10} color={theme.amber400} />
-      </View>
-    );
-
   return (
     <>
-      <PinModal
-        visible={pinVisible}
-        onSuccess={handlePinSuccess}
-        onCancel={handlePinCancel}
-        styles={styles}
-        theme={theme}
-        title={t("profilePinTitle")}
-        subtitle={t("profilePinSubtitle")}
-        errorText={t("profilePinIncorrect")}
-        cancelLabel={t("cancel")}
-      />
 
       <ScrollView
         style={styles.container}
@@ -596,7 +424,25 @@ export function StaffProfileScreen() {
                 <Text style={styles.identityValueMuted}>{staffPhone || "—"}</Text>
               </View>
             </View>
-            <Text style={styles.venueLabel}>{venueName}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+              <Text style={styles.venueLabel}>{venueName}</Text>
+              <TouchableOpacity
+                onPress={handleLogout}
+                activeOpacity={0.7}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 4,
+                  paddingHorizontal: 10,
+                  paddingVertical: 5,
+                  borderRadius: 8,
+                  backgroundColor: "rgba(220,38,38,0.12)",
+                }}
+              >
+                <Ionicons name="log-out-outline" size={14} color={theme.red400} />
+                <Text style={{ color: theme.red400, fontSize: 12, fontWeight: "600" }}>{t("profileLogOut")}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
@@ -637,19 +483,6 @@ export function StaffProfileScreen() {
 
         {/* Menu */}
         <View style={styles.menuCard}>
-          {/* Subscriptions — locked */}
-          <TouchableOpacity
-            style={styles.menuRow}
-            onPress={() => handleLockedNav("StaffSubscriptions")}
-            activeOpacity={0.6}
-          >
-            <Ionicons name="cube-outline" size={16} color={theme.purple400} />
-            <Text style={styles.menuRowText}>{t("profileSubscriptions")}</Text>
-            <LockIcon />
-            <Ionicons name="chevron-forward" size={16} color={theme.dimmed} style={styles.menuChevron} />
-          </TouchableOpacity>
-          <View style={styles.menuDivider} />
-
           {/* Staff Dashboard — free */}
           <TouchableOpacity
             style={styles.menuRow}
@@ -661,12 +494,6 @@ export function StaffProfileScreen() {
             <Ionicons name="chevron-forward" size={16} color={theme.dimmed} style={styles.menuChevron} />
           </TouchableOpacity>
         </View>
-
-        {/* Log Out */}
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
-          <Ionicons name="log-out-outline" size={20} color={theme.red400} />
-          <Text style={styles.logoutText}>{t("profileLogOut")}</Text>
-        </TouchableOpacity>
 
         {/* Go to Role / Tablet */}
         <TouchableOpacity

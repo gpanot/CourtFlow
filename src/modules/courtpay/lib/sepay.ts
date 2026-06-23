@@ -4,17 +4,39 @@ import { sendPaymentPushToStaff } from "@/lib/staff-push";
 import { extractPaymentRef } from "./payment-reference";
 import { checkInSubscriber } from "./check-in";
 import { getActiveSubscription } from "./subscription";
-import { sendBookingEmail } from "@/lib/email/send";
+import { sendBookingEmail, buildLessonEmailContext, sendLessonEventEmails } from "@/lib/email/send";
+import { createCalendarEvent } from "@/lib/google-calendar";
 import type { SepayWebhookPayload } from "../types";
 
 /**
- * Validate SePay webhook request using API key header.
+ * Validate SePay webhook request using the API key header.
+ *
+ * Fails CLOSED by default: if SEPAY_WEBHOOK_SECRET is not set the request is
+ * rejected. This prevents a misconfigured environment from silently accepting
+ * forged payment confirmations.
+ *
+ * To bypass validation in local development, set SEPAY_SKIP_VALIDATION=true
+ * explicitly. This env var must never be set in staging or production.
  */
 export function validateSepayWebhook(
   headers: Headers
 ): boolean {
   const secret = process.env.SEPAY_WEBHOOK_SECRET;
-  if (!secret) return true; // No secret configured = skip validation (dev)
+
+  if (!secret) {
+    // Explicit dev-only escape hatch — must be deliberately set, not an accident
+    if (process.env.SEPAY_SKIP_VALIDATION === "true") {
+      console.warn(
+        "[sepay-webhook] SEPAY_SKIP_VALIDATION=true — skipping signature check (dev only)"
+      );
+      return true;
+    }
+    console.error(
+      "[sepay-webhook] SEPAY_WEBHOOK_SECRET is not set — rejecting request to prevent forged payments"
+    );
+    return false;
+  }
+
   const provided = headers.get("x-sepay-key") || headers.get("authorization");
   return provided === secret || provided === `Bearer ${secret}`;
 }
@@ -112,23 +134,49 @@ async function handlePortalLessonPayment(
   if (payload.transferAmount < lesson.priceValue) return { matched: false };
   if (!(await checkVenueAutoPayment(lesson.venueId))) return { matched: false };
 
-  await prisma.coachLesson.update({
+  const updated = await prisma.coachLesson.update({
     where: { id: lesson.id },
-    data: { paymentStatus: "PAID", paidAt: new Date(), paymentMethod: "vietqr" },
+    data: {
+      paymentStatus: "paid",
+      paidAt: new Date(),
+      paymentMethod: "vietqr",
+      status: "confirmed",
+    },
+    include: {
+      coach: {
+        select: {
+          googleRefreshToken: true,
+          googleCalendarId: true,
+          calendarSyncEnabled: true,
+        },
+      },
+      player: { select: { name: true } },
+      package: { select: { name: true } },
+    },
   });
 
-  const player = await prisma.player.findUnique({
-    where: { id: lesson.playerId },
-    select: { name: true, email: true },
-  });
-  if (player?.email) {
-    await sendBookingEmail({
-      to: player.email,
-      playerName: player.name,
-      bookingType: "coach",
-      emailType: "auto_confirmed",
-      details: {},
-    });
+  const ctx = await buildLessonEmailContext(lesson.id);
+  if (ctx) {
+    void sendLessonEventEmails(ctx, "auto_confirmed");
+  }
+
+  if (
+    updated.coach.calendarSyncEnabled &&
+    updated.coach.googleRefreshToken &&
+    updated.coach.googleCalendarId
+  ) {
+    createCalendarEvent(
+      updated.coach.googleRefreshToken,
+      updated.coach.googleCalendarId,
+      updated
+    )
+      .then((googleEventId) =>
+        prisma.coachLesson.update({
+          where: { id: lesson.id },
+          data: { googleEventId },
+        })
+      )
+      .catch((err) => console.error("[sepay] Calendar event creation failed:", err));
   }
 
   return { matched: true, paymentId: lesson.id };
@@ -178,6 +226,36 @@ async function handlePortalCreditPayment(
     where: { id: credit.id },
     data: { paymentStatus: "paid", confirmedBy: "sepay", confirmedAt: new Date() },
   });
+
+  // Notify student, coach, and staff about credit package confirmation
+  const [player, coach, venue] = await Promise.all([
+    prisma.player.findUnique({ where: { id: credit.playerId }, select: { name: true, email: true } }),
+    prisma.staffMember.findUnique({ where: { id: credit.coachId }, select: { name: true, email: true } }),
+    prisma.venue.findUnique({ where: { id: credit.venueId }, select: { settings: true } }),
+  ]);
+
+  const venueSettings = (venue?.settings ?? {}) as Record<string, unknown>;
+  const staffEmail = (venueSettings.notificationEmail as string | undefined) ?? null;
+
+  const roles = [
+    { role: "student" as const, email: player?.email ?? null, name: player?.name ?? "" },
+    { role: "coach" as const, email: coach?.email ?? null, name: coach?.name ?? "" },
+    { role: "staff" as const, email: staffEmail, name: "Staff" },
+  ];
+
+  for (const { role, email, name } of roles) {
+    if (email) {
+      void sendBookingEmail({
+        to: email,
+        playerName: name,
+        bookingType: "coach",
+        emailType: "auto_confirmed",
+        recipientRole: role,
+        details: { studentName: player?.name, coachName: coach?.name },
+      });
+    }
+  }
+
   return { matched: true, paymentId: credit.id };
 }
 

@@ -3,6 +3,7 @@ import { json, error } from "@/lib/api-helpers";
 import { prisma } from "@/lib/db";
 import { resolveVenueId } from "@/lib/venue-config";
 import { getBookingConfig } from "@/lib/booking";
+import { isCoachAvailable } from "@/lib/coach-availability";
 
 export const dynamic = "force-dynamic";
 
@@ -56,15 +57,6 @@ export async function GET(
       });
       const config = getBookingConfig(venue.settings as Record<string, unknown>);
 
-      const existingLessons = await prisma.coachLesson.findMany({
-        where: {
-          coachId,
-          date,
-          status: { in: ["confirmed", "completed"] },
-        },
-        select: { startTime: true, endTime: true },
-      });
-
       const now = new Date();
       const isToday = date.toDateString() === now.toDateString();
 
@@ -78,11 +70,13 @@ export async function GET(
         // Block past slots on today
         const isPast = isToday && slotStart <= now;
 
-        const hasConflict = existingLessons.some(
-          (l) => slotStart.getTime() < l.endTime.getTime() && slotEnd.getTime() > l.startTime.getTime()
-        );
+        if (isPast) {
+          availability.push({ hour: h, available: false });
+          continue;
+        }
 
-        availability.push({ hour: h, available: !hasConflict && !isPast });
+        const result = await isCoachAvailable(coachId, date, slotStart, slotEnd);
+        availability.push({ hour: h, available: result.available });
       }
     }
 

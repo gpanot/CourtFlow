@@ -8,16 +8,24 @@ import { useState, useEffect } from "react";
 
 const HIDDEN_PATHS = ["/book/login", "/book/intro", "/book/onboarding"];
 
-const tabs = [
-  { labelKey: "nav.book", href: "/book", icon: BookIcon, requiresAuth: false },
-  { labelKey: "nav.coaches", href: "/book/coaches", icon: CoachIcon, requiresAuth: false },
-  { labelKey: "nav.bookings", href: "/book/bookings", icon: BookingsIcon, requiresAuth: true },
-  { labelKey: "nav.profile", href: "/book/account", icon: ProfileIcon, requiresAuth: true },
+const BASE_TABS = [
+  { labelKey: "nav.book", href: "/book", icon: BookIcon, requiresAuth: false, coachOnly: false },
+  { labelKey: "nav.coaches", href: "/book/coaches", icon: CoachIcon, requiresAuth: false, coachOnly: false },
+  { labelKey: "nav.bookings", href: "/book/bookings", icon: BookingsIcon, requiresAuth: true, coachOnly: false },
+  { labelKey: "nav.profile", href: "/book/account", icon: ProfileIcon, requiresAuth: true, coachOnly: false },
 ] as const;
+
+const COACH_TAB = {
+  labelKey: "nav.myCoaching",
+  href: "/book/coach-portal",
+  icon: CoachPortalIcon,
+  requiresAuth: true,
+  coachOnly: true,
+} as const;
 
 export function BottomNav() {
   const pathname = usePathname();
-  const { status } = usePlayerSession();
+  const { status, isCoach } = usePlayerSession();
   const router = useRouter();
   const { t } = useTranslation();
   const [mounted, setMounted] = useState(false);
@@ -28,12 +36,14 @@ export function BottomNav() {
 
   const visible = mounted && status === "authenticated" && !HIDDEN_PATHS.includes(pathname);
 
+  const tabs = isCoach ? [...BASE_TABS, COACH_TAB] : BASE_TABS;
+
   function isActive(href: string) {
     if (href === "/book") return pathname === "/book";
     return pathname.startsWith(href);
   }
 
-  function handleClick(e: React.MouseEvent, tab: (typeof tabs)[number]) {
+  function handleClick(e: React.MouseEvent, tab: typeof tabs[number]) {
     if (tab.requiresAuth && status !== "authenticated") {
       e.preventDefault();
       router.push(`/book/login?callbackUrl=${encodeURIComponent(tab.href)}`);
@@ -105,6 +115,16 @@ function ProfileIcon({ filled }: { filled: boolean }) {
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={filled ? 2.5 : 1.5} strokeLinecap="round" strokeLinejoin="round">
       <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
       <circle cx="12" cy="7" r="4" />
+    </svg>
+  );
+}
+
+function CoachPortalIcon({ filled }: { filled: boolean }) {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={filled ? 2.5 : 1.5} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2L2 7l10 5 10-5-10-5z" />
+      <path d="M2 17l10 5 10-5" />
+      <path d="M2 12l10 5 10-5" />
     </svg>
   );
 }

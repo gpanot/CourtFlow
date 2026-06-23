@@ -15,6 +15,8 @@ export interface PlayerSession {
   onboardingComplete: boolean;
   isCredentials: boolean;
   token: string | null;
+  coachStaffId: string | null;
+  isCoach: boolean;
 }
 
 export interface UsePlayerSessionResult {
@@ -22,6 +24,8 @@ export interface UsePlayerSessionResult {
   status: PlayerSessionStatus;
   authHeader: Record<string, string>;
   refresh: () => void;
+  isCoach: boolean;
+  coachStaffId: string | null;
 }
 
 interface ServerSession {
@@ -29,6 +33,7 @@ interface ServerSession {
   email: string | null;
   provider: string;
   onboardingComplete: boolean;
+  coachStaffId?: string | null;
 }
 
 /**
@@ -73,41 +78,55 @@ export function usePlayerSession(): UsePlayerSessionResult {
   }
 
   // Path 1: credentials token (synchronous)
+  // coachStaffId is not embedded in the token — it's loaded server-side.
+  // For credentials users it'll appear after the session endpoint is also hit.
   const tokenData = credentialsRawToken ? getPlayerFromToken() : null;
   if (tokenData) {
+    const coachStaffId = serverSession && serverSession !== "loading"
+      ? serverSession.coachStaffId ?? null
+      : null;
     return {
       session: {
         playerId: tokenData.playerId,
         onboardingComplete: false, // refreshed from /api/public/account
         isCredentials: true,
         token: credentialsRawToken,
+        coachStaffId,
+        isCoach: !!coachStaffId,
       },
       status: "authenticated",
       authHeader: { Authorization: `Bearer ${credentialsRawToken}` },
       refresh,
+      isCoach: !!coachStaffId,
+      coachStaffId,
     };
   }
 
   // Path 2: OAuth cookie session
   if (serverSession === "loading") {
-    return { session: null, status: "loading", authHeader: {}, refresh };
+    return { session: null, status: "loading", authHeader: {}, refresh, isCoach: false, coachStaffId: null };
   }
 
   if (serverSession?.playerId) {
+    const coachStaffId = serverSession.coachStaffId ?? null;
     return {
       session: {
         playerId: serverSession.playerId,
         onboardingComplete: serverSession.onboardingComplete,
         isCredentials: false,
         token: null,
+        coachStaffId,
+        isCoach: !!coachStaffId,
       },
       status: "authenticated",
       authHeader: {},
       refresh,
+      isCoach: !!coachStaffId,
+      coachStaffId,
     };
   }
 
-  return { session: null, status: "unauthenticated", authHeader: {}, refresh };
+  return { session: null, status: "unauthenticated", authHeader: {}, refresh, isCoach: false, coachStaffId: null };
 }
 
 /** Sign out from whichever auth path is active */

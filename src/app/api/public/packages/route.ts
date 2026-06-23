@@ -8,8 +8,6 @@ import { buildVietQRUrl } from "@/lib/vietqr";
 
 export const dynamic = "force-dynamic";
 
-const CREDIT_EXPIRY_DAYS = 90;
-
 export async function POST(request: NextRequest) {
   try {
     const { playerId } = await requirePortalAuth(request);
@@ -25,6 +23,7 @@ export async function POST(request: NextRequest) {
 
     const pkg = await prisma.coachPackage.findFirst({
       where: { id: packageId, coachId, venueId, active: true },
+      include: { coach: { select: { creditPackageValidityDays: true } } },
     });
     if (!pkg) return error("Package not found", 404);
 
@@ -34,8 +33,9 @@ export async function POST(request: NextRequest) {
     });
 
     const paymentRef = await generatePaymentRef("credit");
+    const validityDays = pkg.coach.creditPackageValidityDays ?? 90;
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + CREDIT_EXPIRY_DAYS);
+    expiresAt.setDate(expiresAt.getDate() + validityDays);
 
     const credit = await prisma.playerCoachCredit.create({
       data: {

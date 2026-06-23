@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireManagerOrSuperAdmin } from "@/lib/auth";
-import { sendBookingEmail } from "@/lib/email/send";
+import { buildLessonEmailContext, sendLessonEventEmails } from "@/lib/email/send";
 
 export const dynamic = "force-dynamic";
 
@@ -26,9 +26,11 @@ export async function PATCH(
       data: {
         paymentStatus: "rejected",
         paidAt: null,
+        status: "cancelled",
         rejectedAt: new Date(),
         rejectedBy: auth.id,
         rejectionReason: reason ?? null,
+        cancelledAt: new Date(),
       },
       include: {
         coach: { select: { id: true, name: true } },
@@ -36,14 +38,12 @@ export async function PATCH(
       },
     });
 
-    if (updated.player.email) {
-      await sendBookingEmail({
-        to: updated.player.email,
-        playerName: updated.player.name,
-        bookingType: "coach",
-        emailType: "rejected",
-        details: { rejectionReason: reason },
-      });
+    const ctx = await buildLessonEmailContext(id);
+    if (ctx) {
+      void sendLessonEventEmails(
+        { ...ctx, details: { ...ctx.details, rejectionReason: reason } },
+        "rejected"
+      );
     }
 
     return json(updated);
