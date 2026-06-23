@@ -67,7 +67,14 @@ export function middleware(request: NextRequest) {
 
     // / → /book/intro, /login → /book/login, etc.
     const rewrittenPath = pathname === "/" ? "/book/intro" : `/book${pathname}`;
+    // Force the rewrite target to the internal server origin (localhost:3000).
+    // If we leave the host as courtpass.thecourtflow.com, Next.js treats it as
+    // an external rewrite and tries to proxy to that host externally — which
+    // fails because the custom domain points back to this same server.
+    // Using the internal origin makes Next.js resolve the route locally.
     const url = request.nextUrl.clone();
+    url.protocol = "http";
+    url.host = "localhost:3000";
     url.pathname = rewrittenPath;
     return NextResponse.rewrite(url);
   }
