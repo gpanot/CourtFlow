@@ -3,7 +3,6 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireManagerOrSuperAdmin } from "@/lib/auth";
 import { sendBookingEmail } from "@/lib/email/send";
-import { toDbDate } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 export async function PATCH(
@@ -77,7 +76,8 @@ export async function PATCH(
     if (body.amountValue !== undefined) data.priceValue = body.amountValue;
 
     if (body.date || body.startTime || body.endTime) {
-      const date = body.date ? toDbDate(body.date) : toDbDate(existing.date.toISOString().slice(0, 10));
+      const date = body.date ? new Date(body.date) : new Date(existing.date);
+      date.setHours(0, 0, 0, 0);
 
       const startTime = body.startTime ? new Date(body.startTime) : new Date(existing.startTime);
       const endTime = body.endTime

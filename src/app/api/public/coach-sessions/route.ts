@@ -8,7 +8,7 @@ import { generatePaymentRef } from "@/modules/courtpay/lib/payment-reference";
 import { buildVietQRUrl } from "@/lib/vietqr";
 import { isCoachAvailable, findNextAvailableSlot } from "@/lib/coach-availability";
 import { buildLessonEmailContext, sendLessonEventEmails } from "@/lib/email/send";
-import { parseDateKey, toDateKey, toDbDate } from "@/lib/date";
+import { toDateKey } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
@@ -51,8 +51,8 @@ export async function POST(request: NextRequest) {
     });
     const config = getBookingConfig(venue.settings as Record<string, unknown>);
 
-    const localDate = parseDateKey(dateStr); // local midnight — for local arithmetic
-    const date = toDbDate(dateStr);          // UTC midnight — for Prisma DATE column writes
+    // new Date("YYYY-MM-DD") → UTC midnight. PG DATE stores the correct day from this.
+    const date = new Date(dateStr);
     const startTime = new Date(startTimeStr);
     const endTime = new Date(startTime);
     const slots = Math.max(1, Math.min(4, slotCount ?? 1));
@@ -60,11 +60,11 @@ export async function POST(request: NextRequest) {
     const totalPrice = pkg.priceValue * slots;
 
     // Three-layer availability check (Google Calendar is layer 4, inside isCoachAvailable)
-    const avail = await isCoachAvailable(coachId, localDate, startTime, endTime);
+    const avail = await isCoachAvailable(coachId, date, startTime, endTime);
     if (!avail.available) {
       const next = await findNextAvailableSlot(
         coachId,
-        localDate,
+        date,
         pkg.durationMin,
         config.bookingStartHour,
         config.bookingEndHour

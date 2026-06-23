@@ -2,7 +2,6 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireManagerOrSuperAdmin } from "@/lib/auth";
-import { toDbDate } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
@@ -16,7 +15,9 @@ export async function GET(request: NextRequest) {
 
     const where: Record<string, unknown> = { venueId };
     if (dateStr) {
-      where.date = toDbDate(dateStr);
+      const date = new Date(dateStr);
+      date.setHours(0, 0, 0, 0);
+      where.date = date;
     }
 
     const blocks = await prisma.courtBlock.findMany({
@@ -53,7 +54,8 @@ export async function POST(request: NextRequest) {
       return error("Invalid block type", 400);
     }
 
-    const date = toDbDate(body.date);
+    const date = new Date(body.date);
+    date.setHours(0, 0, 0, 0);
     const startTime = new Date(body.startTime);
     const endTime = new Date(body.endTime);
 

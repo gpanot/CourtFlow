@@ -1,7 +1,6 @@
 import { prisma } from "./db";
 import { getScheduleConfig } from "./booking";
 import { generatePaymentRef } from "@/modules/courtpay/lib/payment-reference";
-import { toDateKey, toDbDate } from "@/lib/date";
 
 export interface OpenPlaySessionPlayer {
   name: string;
@@ -53,10 +52,8 @@ export async function resolveOpenPlaySessions(
 
   if (openPlayEntries.length === 0) return [];
 
-  const localDate = new Date(date);
-  localDate.setHours(0, 0, 0, 0);
-  // dbDate must be UTC midnight for Prisma DATE column queries/writes
-  const dbDate = toDbDate(toDateKey(localDate));
+  const dateOnly = new Date(date);
+  dateOnly.setHours(0, 0, 0, 0);
 
   // Fetch all registrations for this venue + date in one query, including player info
   let registrations: {
@@ -73,7 +70,7 @@ export async function resolveOpenPlaySessions(
     registrations = await prisma.openPlayRegistration.findMany({
       where: {
         venueId,
-        date: dbDate,
+        date: dateOnly,
         status: "confirmed",
         OR: [
           { paymentStatus: { in: ["proof_submitted", "paid"] } },
@@ -115,9 +112,9 @@ export async function resolveOpenPlaySessions(
   }
 
   return openPlayEntries.map((entry) => {
-    const startTime = new Date(localDate);
+    const startTime = new Date(dateOnly);
     startTime.setHours(entry.startHour, 0, 0, 0);
-    const endTime = new Date(localDate);
+    const endTime = new Date(dateOnly);
     endTime.setHours(entry.endHour, 0, 0, 0);
 
     const entryRegs = registrations.filter((r) => r.scheduleEntryId === entry.id);
@@ -163,12 +160,11 @@ export async function createOpenPlayRegistration(
   scheduleEntryId: string,
   date: Date
 ) {
-  // localDate is used for local arithmetic (day-of-week, setHours for timestamps).
-  // dbDate is used for Prisma DATE column writes — must be UTC midnight so the pg
-  // driver serialises it as "YYYY-MM-DD" without an off-by-one shift.
-  const localDate = new Date(date);
-  localDate.setHours(0, 0, 0, 0);
-  const dbDate = toDbDate(toDateKey(localDate));
+  // Keep UTC midnight for the PG DATE column — new Date("YYYY-MM-DD") preserves it.
+  // Build a separate local-midnight copy for setHours() slot arithmetic.
+  const dateOnly = new Date(date);
+  const localMidnight = new Date(date);
+  localMidnight.setHours(0, 0, 0, 0);
 
   const venue = await prisma.venue.findUnique({
     where: { id: venueId },
@@ -182,12 +178,12 @@ export async function createOpenPlayRegistration(
     throw Object.assign(new Error("Schedule entry not found"), { status: 404 });
   }
 
-  const startTime = new Date(localDate);
+  const startTime = new Date(localMidnight);
   startTime.setHours(entry.startHour, 0, 0, 0);
-  const endTime = new Date(localDate);
+  const endTime = new Date(localMidnight);
   endTime.setHours(entry.endHour, 0, 0, 0);
 
-  const dayOfWeek = localDate.getDay();
+  const dayOfWeek = localMidnight.getDay();
   if (!entry.daysOfWeek.includes(dayOfWeek)) {
     throw Object.assign(new Error("Session not available on this day"), { status: 400 });
   }
@@ -205,7 +201,7 @@ export async function createOpenPlayRegistration(
   return prisma.$transaction(async (tx) => {
     // Check if player already has an active registration for this session
     const existing = await tx.openPlayRegistration.findUnique({
-      where: { scheduleEntryId_date_playerId: { scheduleEntryId, date: dbDate, playerId } },
+      where: { scheduleEntryId_date_playerId: { scheduleEntryId, date: dateOnly, playerId } },
     });
 
     if (existing) {
@@ -247,7 +243,7 @@ export async function createOpenPlayRegistration(
     const spotsTaken = await tx.openPlayRegistration.count({
       where: {
         scheduleEntryId,
-        date: dbDate,
+        date: dateOnly,
         status: "confirmed",
         OR: [
           { paymentStatus: { in: ["proof_submitted", "paid"] } },
@@ -264,7 +260,7 @@ export async function createOpenPlayRegistration(
       data: {
         venueId,
         scheduleEntryId,
-        date: dbDate,
+        date: dateOnly,
         startTime,
         endTime,
         playerId,
