@@ -16,6 +16,7 @@ import {
   ChevronDown,
   ChevronUp,
   AlertTriangle,
+  HelpCircle,
 } from "lucide-react";
 import { CourtsManager, type Court } from "@/components/admin/CourtsManager";
 
@@ -45,6 +46,7 @@ function flagFor(code: string): string {
 interface VenueSettings {
   logoSpin?: boolean;
   tvLocale?: string;
+  notificationEmail?: string | null;
   [key: string]: unknown;
 }
 
@@ -456,6 +458,11 @@ function VenueCard({
               enabled={venue.portalEnabled}
               onRefresh={onRefresh}
             />
+            <NotificationEmailEditor
+              venueId={venue.id}
+              current={venue.settings.notificationEmail ?? null}
+              onRefresh={onRefresh}
+            />
             {role === "superadmin" && (
               <VenueOwnerSelect
                 venueId={venue.id}
@@ -601,6 +608,107 @@ interface ManagerOption {
   id: string;
   name: string;
   phone: string;
+}
+
+function NotificationEmailEditor({
+  venueId,
+  current,
+  onRefresh,
+}: {
+  venueId: string;
+  current: string | null;
+  onRefresh: () => void;
+}) {
+  const [value, setValue] = useState(current ?? "");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [tooltipOpen, setTooltipOpen] = useState(false);
+
+  const dirty = value.trim() !== (current ?? "");
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.put(`/api/admin/venues/${venueId}/notification-email`, {
+        notificationEmail: value.trim() || null,
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+      await onRefresh();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-1.5">
+        <h4 className="text-sm font-medium text-neutral-400 uppercase tracking-wider">
+          General booking notification email
+        </h4>
+        <div className="relative">
+          <button
+            type="button"
+            onMouseEnter={() => setTooltipOpen(true)}
+            onMouseLeave={() => setTooltipOpen(false)}
+            onFocus={() => setTooltipOpen(true)}
+            onBlur={() => setTooltipOpen(false)}
+            className="text-neutral-500 hover:text-neutral-300 transition-colors"
+            aria-label="What does this email receive?"
+          >
+            <HelpCircle className="h-3.5 w-3.5" />
+          </button>
+          {tooltipOpen && (
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-72 rounded-lg border border-neutral-700 bg-neutral-800 p-3 text-xs text-neutral-300 shadow-xl">
+              <p className="font-medium text-white mb-1">This inbox receives:</p>
+              <ul className="space-y-0.5 list-disc list-inside text-neutral-400">
+                <li>New coach lesson booking proof submitted (action required)</li>
+                <li>Coach lesson confirmed or rejected</li>
+                <li>Coach lesson cancelled by student</li>
+                <li>Sepay auto-confirmed lesson or credit package</li>
+              </ul>
+              <p className="mt-2 text-neutral-500">
+                It is a single address — one inbox for the whole venue. Leave blank to disable staff notifications.
+              </p>
+              {/* Arrow */}
+              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-neutral-700" />
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <input
+          type="email"
+          value={value}
+          onChange={(e) => { setValue(e.target.value); setSaved(false); }}
+          placeholder="e.g. manager@yourvenue.com"
+          className="flex-1 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
+          onKeyDown={(e) => e.key === "Enter" && dirty && save()}
+        />
+        {dirty && (
+          <button
+            onClick={save}
+            disabled={saving}
+            className="rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-40 whitespace-nowrap"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+        )}
+        {saved && !dirty && (
+          <span className="flex items-center gap-1 text-sm text-green-400">
+            <Check className="h-4 w-4" /> Saved
+          </span>
+        )}
+      </div>
+
+      <p className="text-xs text-neutral-600">
+        Staff notifications for court bookings, coach lessons, and payment events are sent to this address.
+      </p>
+    </div>
+  );
 }
 
 function VenueOwnerSelect({
