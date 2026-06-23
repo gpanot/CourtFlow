@@ -22,6 +22,7 @@ export interface SendBookingEmailParams {
     coachName?: string;
     studentName?: string;
     approvedBy?: string;
+    paymentRef?: string;
   };
 }
 
@@ -36,6 +37,7 @@ function bookingLabel(bookingType: BookingType): string {
 function buildEmail(params: SendBookingEmailParams): { subject: string; html: string } {
   const { playerName, bookingType, emailType, details, recipientRole = "student" } = params;
   const label = bookingLabel(bookingType);
+  const refPrefix = details.paymentRef ? `[${details.paymentRef}] ` : "";
   const venueLine = details.venueName ? `<p><strong>Venue:</strong> ${details.venueName}</p>` : "";
   const dateLine = details.date ? `<p><strong>Date:</strong> ${details.date}</p>` : "";
   const timeLine = details.time ? `<p><strong>Time:</strong> ${details.time}</p>` : "";
@@ -58,36 +60,36 @@ function buildEmail(params: SendBookingEmailParams): { subject: string; html: st
     case "pending":
       if (recipientRole === "student") {
         return {
-          subject: `Payment proof received — your ${label} is pending review`,
+          subject: `${refPrefix}Payment proof received — your ${label} is pending review`,
           html: `<p>${greeting}</p><p>We have received your payment proof for your <strong>${label}</strong> and it is currently being reviewed by our team.</p>${detailsBlock}<p>We will notify you once the payment has been approved. This usually takes less than 24 hours.</p><p>Thank you,<br/>The CourtFlow Team</p>`,
         };
       }
       if (recipientRole === "coach") {
         return {
-          subject: `New lesson booking pending — ${details.studentName ?? playerName}`,
+          subject: `${refPrefix}New lesson booking pending — ${details.studentName ?? playerName}`,
           html: `<p>${greeting}</p><p>A student has submitted a booking and payment proof for a <strong>${label}</strong>. The booking is pending staff approval.</p>${detailsBlock}<p>You will be notified once the booking is confirmed.</p><p>CourtFlow</p>`,
         };
       }
       return {
-        subject: `[Action required] New ${label} pending approval`,
+        subject: `${refPrefix}[Action required] New ${label} pending approval`,
         html: `<p>${greeting}</p><p>A new <strong>${label}</strong> has been submitted with a payment proof and is awaiting your approval.</p>${detailsBlock}<p>Please review and approve or reject it in the admin panel.</p><p>CourtFlow</p>`,
       };
 
     case "approved":
       if (recipientRole === "student") {
         return {
-          subject: `Payment approved — your ${label} is confirmed`,
+          subject: `${refPrefix}Payment approved — your ${label} is confirmed`,
           html: `<p>${greeting}</p><p>Great news! Your payment for your <strong>${label}</strong> has been approved and your booking is confirmed.</p>${detailsBlock}<p>We look forward to seeing you on the court!</p><p>Thank you,<br/>The CourtFlow Team</p>`,
         };
       }
       if (recipientRole === "coach") {
         return {
-          subject: `Lesson confirmed — ${details.studentName ?? playerName}`,
+          subject: `${refPrefix}Lesson confirmed — ${details.studentName ?? playerName}`,
           html: `<p>${greeting}</p><p>A <strong>${label}</strong> with your student has been confirmed.</p>${detailsBlock}<p>CourtFlow</p>`,
         };
       }
       return {
-        subject: `[Confirmed] ${label} approved`,
+        subject: `${refPrefix}[Confirmed] ${label} approved`,
         html: `<p>${greeting}</p><p>The <strong>${label}</strong> has been approved and confirmed.</p>${detailsBlock}<p>CourtFlow</p>`,
       };
 
@@ -97,18 +99,18 @@ function buildEmail(params: SendBookingEmailParams): { subject: string; html: st
         : "";
       if (recipientRole === "student") {
         return {
-          subject: `Payment proof rejected — action required for your ${label}`,
+          subject: `${refPrefix}Payment proof rejected — action required for your ${label}`,
           html: `<p>${greeting}</p><p>Unfortunately, the payment proof you submitted for your <strong>${label}</strong> could not be verified.</p>${detailsBlock}${reasonLine}<p>Please contact the venue directly or submit a new payment proof to complete your booking.</p><p>Thank you,<br/>The CourtFlow Team</p>`,
         };
       }
       if (recipientRole === "coach") {
         return {
-          subject: `Lesson booking rejected — ${details.studentName ?? playerName}`,
+          subject: `${refPrefix}Lesson booking rejected — ${details.studentName ?? playerName}`,
           html: `<p>${greeting}</p><p>A <strong>${label}</strong> booking was rejected by staff.</p>${detailsBlock}${reasonLine}<p>CourtFlow</p>`,
         };
       }
       return {
-        subject: `[Rejected] ${label} rejected`,
+        subject: `${refPrefix}[Rejected] ${label} rejected`,
         html: `<p>${greeting}</p><p>The <strong>${label}</strong> booking was rejected.</p>${detailsBlock}${reasonLine}<p>CourtFlow</p>`,
       };
     }
@@ -116,36 +118,36 @@ function buildEmail(params: SendBookingEmailParams): { subject: string; html: st
     case "cancelled":
       if (recipientRole === "student") {
         return {
-          subject: `Your ${label} has been cancelled`,
+          subject: `${refPrefix}Your ${label} has been cancelled`,
           html: `<p>${greeting}</p><p>Your <strong>${label}</strong> has been cancelled.</p>${detailsBlock}<p>If you did not request this cancellation or believe this is an error, please contact the venue directly.</p><p>Thank you,<br/>The CourtFlow Team</p>`,
         };
       }
       if (recipientRole === "coach") {
         return {
-          subject: `Lesson cancelled — ${details.studentName ?? playerName}`,
+          subject: `${refPrefix}Lesson cancelled — ${details.studentName ?? playerName}`,
           html: `<p>${greeting}</p><p>A <strong>${label}</strong> booking has been cancelled.</p>${detailsBlock}<p>CourtFlow</p>`,
         };
       }
       return {
-        subject: `[Cancelled] ${label} cancelled`,
+        subject: `${refPrefix}[Cancelled] ${label} cancelled`,
         html: `<p>${greeting}</p><p>A <strong>${label}</strong> booking has been cancelled.</p>${detailsBlock}<p>CourtFlow</p>`,
       };
 
     case "auto_confirmed":
       if (recipientRole === "student") {
         return {
-          subject: `Payment confirmed — your ${label} is booked`,
+          subject: `${refPrefix}Payment confirmed — your ${label} is booked`,
           html: `<p>${greeting}</p><p>Your payment has been automatically confirmed and your <strong>${label}</strong> is now booked.</p>${detailsBlock}<p>We look forward to seeing you on the court!</p><p>Thank you,<br/>The CourtFlow Team</p>`,
         };
       }
       if (recipientRole === "coach") {
         return {
-          subject: `Lesson auto-confirmed — ${details.studentName ?? playerName}`,
+          subject: `${refPrefix}Lesson auto-confirmed — ${details.studentName ?? playerName}`,
           html: `<p>${greeting}</p><p>A <strong>${label}</strong> with your student has been automatically confirmed via Sepay.</p>${detailsBlock}<p>CourtFlow</p>`,
         };
       }
       return {
-        subject: `[Auto-confirmed] ${label} confirmed via Sepay`,
+        subject: `${refPrefix}[Auto-confirmed] ${label} confirmed via Sepay`,
         html: `<p>${greeting}</p><p>A <strong>${label}</strong> was automatically confirmed via Sepay payment.</p>${detailsBlock}<p>CourtFlow</p>`,
       };
   }
@@ -281,6 +283,7 @@ export async function buildLessonEmailContext(
       date: lesson.date.toLocaleDateString(),
       time: `${lesson.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} – ${lesson.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
       amount: lesson.priceValue,
+      ...(lesson.paymentRef ? { paymentRef: lesson.paymentRef } : {}),
       ...(options?.approvedBy ? { approvedBy: options.approvedBy } : {}),
     },
   };
