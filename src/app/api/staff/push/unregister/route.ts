@@ -7,13 +7,19 @@ export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   try {
     const auth = requireStaff(request.headers);
-    const body = await parseBody<{ token: string }>(request);
+    const body = await parseBody<{ token?: string }>(request);
 
-    if (!body.token?.trim()) return error("token is required", 400);
-
-    await prisma.staffPushToken.deleteMany({
-      where: { staffId: auth.id, token: body.token },
-    });
+    if (body.token?.trim()) {
+      // Remove the specific device token
+      await prisma.staffPushToken.deleteMany({
+        where: { staffId: auth.id, token: body.token.trim() },
+      });
+    } else {
+      // No token provided — remove ALL tokens for this staff member (full logout cleanup)
+      await prisma.staffPushToken.deleteMany({
+        where: { staffId: auth.id },
+      });
+    }
 
     return json({ success: true });
   } catch (e) {

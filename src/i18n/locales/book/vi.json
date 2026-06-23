@@ -213,7 +213,8 @@
     "booking": "Đang đặt...",
     "bookingFailed": "Đặt thất bại",
     "selectUpTo4Slots": "Chọn tối đa 4 slot",
-    "slots": "Slot"
+    "slots": "Slot",
+    "lessonDetail": "Buổi huấn luyện"
   },
   "buyCredits": {
     "title": "Mua gói credit",

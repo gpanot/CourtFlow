@@ -112,18 +112,46 @@ export async function getDevicePushToken(): Promise<PushTokenResult> {
 
 /**
  * Call before `clearAuth()` so the unregister request still has a valid Bearer token.
+ *
+ * Strategy (in order):
+ * 1. Use the cached token from the current session if available.
+ * 2. Fall back to fetching the device FCM token live (covers the case where the
+ *    app was restarted since login and the module-level cache was reset to null).
+ * 3. If no device token can be obtained at all, call the unregister endpoint with
+ *    no token body — the server will delete ALL tokens for this staff member.
+ *    This is the nuclear option but ensures logout always cleans up.
  */
 export async function logoutUnregisterStaffPush(): Promise<void> {
   const jwt = useAuthStore.getState().token;
-  const deviceToken = cachedStaffPushDeviceToken;
-  if (!jwt || !deviceToken) {
+  if (!jwt) {
     cachedStaffPushDeviceToken = null;
     return;
   }
+
+  let deviceToken = cachedStaffPushDeviceToken;
+
+  // Fall back to a live FCM token fetch if the in-memory cache is empty
+  if (!deviceToken) {
+    dbg("logout — cache miss, attempting live FCM token fetch…");
+    try {
+      const result = await getDevicePushToken();
+      if (result.token) {
+        deviceToken = result.token;
+        dbg("logout — got live FCM token:", result.token.slice(0, 30) + "…");
+      } else {
+        dbg("logout — live FCM token unavailable:", result.error);
+      }
+    } catch (err) {
+      dbg("logout — live FCM token fetch threw:", err);
+    }
+  }
+
   dbg("logout — unregistering push token with backend…");
   try {
-    await api.post("/api/staff/push/unregister", { token: deviceToken });
-    dbg("✓ Push token removed server-side");
+    // If we have a specific token, remove only that device. Otherwise remove all
+    // tokens for this staff member so no stale device receives notifications.
+    await api.post("/api/staff/push/unregister", deviceToken ? { token: deviceToken } : {});
+    dbg(deviceToken ? "✓ Push token removed server-side" : "✓ All push tokens removed server-side (fallback)");
   } catch (err) {
     dbg("unregister at logout (best-effort) failed:", err);
   }

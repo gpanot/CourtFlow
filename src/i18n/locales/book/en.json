@@ -213,7 +213,8 @@
     "booking": "Booking...",
     "bookingFailed": "Booking failed",
     "selectUpTo4Slots": "Select up to 4 slots",
-    "slots": "Slots"
+    "slots": "Slots",
+    "lessonDetail": "Coach Lesson"
   },
   "buyCredits": {
     "title": "Buy Credit Pack",

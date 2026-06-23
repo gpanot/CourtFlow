@@ -103,7 +103,7 @@ export default function CoachSessionDetailPage() {
         ← {t("common.back")}
       </button>
 
-      <h1 className="text-xl font-bold mb-4">{t("bookingDetail.title")}</h1>
+      <h1 className="text-xl font-bold mb-4">{t("coaching.lessonDetail", "Coach Lesson")}</h1>
 
       {!isCancelled && <ProgressStepper paymentStatus={paymentStatus} />}
 
