@@ -98,7 +98,16 @@ function weekStart(date: Date): Date {
   d.setHours(0, 0, 0, 0);
   return d;
 }
+/** Returns a human-friendly label for a week: "This week", "Next week", or date range. */
 function weekLabel(start: Date): string {
+  const now = new Date();
+  const thisWeekStart = weekStart(now);
+  const nextWeekStart = new Date(thisWeekStart); nextWeekStart.setDate(nextWeekStart.getDate() + 7);
+
+  const startIso = start.toISOString().split("T")[0]!;
+  if (startIso === thisWeekStart.toISOString().split("T")[0]!) return "This week";
+  if (startIso === nextWeekStart.toISOString().split("T")[0]!) return "Next week";
+
   const end = new Date(start); end.setDate(end.getDate() + 6);
   const o: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
   return `${start.toLocaleDateString([], o)} – ${end.toLocaleDateString([], o)}`;
@@ -715,6 +724,9 @@ export default function CoachPortalPage() {
 
   const [upcomingLessons, setUpcomingLessons] = useState<CoachLesson[]>([]);
   const [upcomingLoading, setUpcomingLoading] = useState(true);
+  const [upcomingMoreLoading, setUpcomingMoreLoading] = useState(false);
+  // windowWeeks is how many weeks ahead we have fetched (grows by 3 on "Load more")
+  const [windowWeeks, setWindowWeeks] = useState(3);
   const [activeSection, setActiveSection] = useState<"upcoming" | "availability" | "history">("upcoming");
   const [calendarConnected, setCalendarConnected] = useState<boolean | null>(null);
   const [connectingCalendar, setConnectingCalendar] = useState(false);
@@ -746,19 +758,28 @@ export default function CoachPortalPage() {
     } catch { /* ignore */ } finally { setConnectingCalendar(false); }
   }, [token, staffId]);
 
-  const loadUpcoming = useCallback(async () => {
+  const fetchUpcoming = useCallback(async (weeks: number, isLoadMore = false) => {
     if (!token) return;
-    setUpcomingLoading(true);
+    if (isLoadMore) setUpcomingMoreLoading(true); else setUpcomingLoading(true);
     try {
-      const from = isoToday(); const to = isoNDaysFromNow(21);
+      const from = isoToday();
+      const to = isoNDaysFromNow(weeks * 7);
       const res = await fetch(`/api/admin/coach-portal/lessons?from=${from}&to=${to}`, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) return;
       const data = (await res.json()) as CoachLesson[];
       setUpcomingLessons(data.filter((l) => ["confirmed", "pending_approval"].includes(l.status)));
-    } finally { setUpcomingLoading(false); }
+    } finally {
+      if (isLoadMore) setUpcomingMoreLoading(false); else setUpcomingLoading(false);
+    }
   }, [token]);
 
-  useEffect(() => { void loadUpcoming(); }, [loadUpcoming]);
+  useEffect(() => { void fetchUpcoming(3); }, [fetchUpcoming]);
+
+  const handleLoadMore = useCallback(async () => {
+    const newWeeks = windowWeeks + 3;
+    setWindowWeeks(newWeeks);
+    await fetchUpcoming(newWeeks, true);
+  }, [windowWeeks, fetchUpcoming]);
 
   if (!token || !staffId) return null;
 
@@ -818,17 +839,39 @@ export default function CoachPortalPage() {
               ) : weekGroups.length === 0 ? (
                 <div className="flex flex-col items-center gap-3 py-16 text-center">
                   <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-900"><CalendarDays className="h-8 w-8 text-neutral-700" /></div>
-                  <p className="text-sm text-neutral-500">No upcoming lessons in the next 3 weeks.</p>
+                  <p className="text-sm text-neutral-500">No upcoming lessons in the next {windowWeeks} weeks.</p>
+                  <button type="button" onClick={handleLoadMore} disabled={upcomingMoreLoading}
+                    className="flex items-center gap-2 rounded-xl border border-neutral-700 bg-neutral-800 px-4 py-2.5 text-sm font-medium text-neutral-300 active:bg-neutral-700 disabled:opacity-50">
+                    {upcomingMoreLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    Look further ahead
+                  </button>
                 </div>
-              ) : weekGroups.map((group) => (
-                <div key={group.weekStartIso}>
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{group.label}</span>
-                    <span className="rounded-full bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-400">{group.lessons.length}</span>
-                  </div>
-                  <div className="space-y-2">{group.lessons.map((l) => <LessonCard key={l.id} lesson={l} />)}</div>
-                </div>
-              ))}
+              ) : (
+                <>
+                  {weekGroups.map((group) => (
+                    <div key={group.weekStartIso}>
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className={cn(
+                          "text-xs font-bold uppercase tracking-wide",
+                          group.label === "This week" ? "text-teal-400"
+                            : group.label === "Next week" ? "text-neutral-300"
+                              : "text-neutral-500"
+                        )}>{group.label}</span>
+                        <span className="rounded-full bg-neutral-800 px-1.5 py-0.5 text-[10px] font-medium text-neutral-400">{group.lessons.length}</span>
+                      </div>
+                      <div className="space-y-2">{group.lessons.map((l) => <LessonCard key={l.id} lesson={l} />)}</div>
+                    </div>
+                  ))}
+
+                  {/* Load more */}
+                  <button type="button" onClick={handleLoadMore} disabled={upcomingMoreLoading}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-neutral-800 bg-neutral-900/40 py-3.5 text-sm font-medium text-neutral-400 active:bg-neutral-800 disabled:opacity-50">
+                    {upcomingMoreLoading
+                      ? <><Loader2 className="h-4 w-4 animate-spin" /> Loading…</>
+                      : <><CalendarDays className="h-4 w-4" /> Load next 3 weeks</>}
+                  </button>
+                </>
+              )}
             </div>
           )}
 
