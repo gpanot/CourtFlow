@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { resolveVenueId } from "@/lib/venue-config";
 import { getBookingConfig } from "@/lib/booking";
 import { isCoachAvailable } from "@/lib/coach-availability";
+import { verifyPlayerToken } from "@/app/api/public/auth/login/route";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,7 @@ export async function GET(
 
     if (!coach) return error("Coach not found", 404);
 
-    let availability: { hour: number; available: boolean }[] = [];
+    let availability: { hour: number; available: boolean; bookingStatus: string | null }[] = [];
 
     if (dateParam) {
       const date = new Date(dateParam);
@@ -60,6 +61,31 @@ export async function GET(
       const now = new Date();
       const isToday = date.toDateString() === now.toDateString();
 
+      // Resolve requesting player (optional — no auth required for browsing)
+      let requestingPlayerId: string | null = null;
+      const authHeader = request.headers.get("authorization");
+      const cookieToken = request.cookies.get("player_token")?.value;
+      const rawToken = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : cookieToken;
+      if (rawToken) {
+        const payload = verifyPlayerToken(rawToken);
+        if (payload?.playerId) requestingPlayerId = payload.playerId;
+      }
+
+      // Fetch this player's existing lessons on this date for this coach
+      const dayStart = new Date(date); dayStart.setHours(0, 0, 0, 0);
+      const dayEnd   = new Date(date); dayEnd.setHours(23, 59, 59, 999);
+      const existingLessons = requestingPlayerId
+        ? await prisma.coachLesson.findMany({
+            where: {
+              coachId,
+              playerId: requestingPlayerId,
+              startTime: { gte: dayStart, lte: dayEnd },
+              status: { in: ["confirmed", "pending_approval"] },
+            },
+            select: { startTime: true, endTime: true, status: true },
+          })
+        : [];
+
       availability = [];
       for (let h = config.bookingStartHour; h < config.bookingEndHour; h++) {
         const slotStart = new Date(date);
@@ -71,12 +97,21 @@ export async function GET(
         const isPast = isToday && slotStart <= now;
 
         if (isPast) {
-          availability.push({ hour: h, available: false });
+          availability.push({ hour: h, available: false, bookingStatus: null });
+          continue;
+        }
+
+        // Check if this player already has a booking covering this slot
+        const playerBooking = existingLessons.find(
+          (l) => new Date(l.startTime) <= slotStart && new Date(l.endTime) > slotStart
+        );
+        if (playerBooking) {
+          availability.push({ hour: h, available: false, bookingStatus: playerBooking.status });
           continue;
         }
 
         const result = await isCoachAvailable(coachId, date, slotStart, slotEnd);
-        availability.push({ hour: h, available: result.available });
+        availability.push({ hour: h, available: result.available, bookingStatus: null });
       }
     }
 

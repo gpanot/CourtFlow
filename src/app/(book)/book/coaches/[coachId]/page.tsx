@@ -19,13 +19,19 @@ interface Package {
   sessionsIncluded: number;
 }
 
+interface AvailSlot {
+  hour: number;
+  available: boolean;
+  bookingStatus: string | null; // "confirmed" | "pending_approval" | null
+}
+
 interface CoachProfile {
   id: string;
   name: string;
   coachBio: string | null;
   coachPhoto: string | null;
   packages: Package[];
-  availability: { hour: number; available: boolean }[];
+  availability: AvailSlot[];
 }
 
 function formatHour(h: number) {
@@ -44,7 +50,7 @@ export default function CoachProfilePage() {
   const [selectedPkg, setSelectedPkg] = useState<Package | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedHours, setSelectedHours] = useState<number[]>([]);
-  const [availability, setAvailability] = useState<{ hour: number; available: boolean }[]>([]);
+  const [availability, setAvailability] = useState<AvailSlot[]>([]);
   const [booking, setBooking] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [step, setStep] = useState<"profile" | "booking" | "summary">("profile");
@@ -238,9 +244,38 @@ export default function CoachProfilePage() {
           <div className="grid grid-cols-3 gap-2 mb-4">
             {availability.map((slot) => {
               const isSel = selectedHours.includes(slot.hour);
-              // Disable if not available, or if adding would break consecutiveness
+
+              // ── My booking on this slot ──────────────────────────────────────
+              if (slot.bookingStatus === "confirmed") {
+                return (
+                  <div key={slot.hour}
+                    className="flex flex-col items-center justify-center gap-0.5 rounded-xl border border-teal-500/30 bg-teal-500/10 py-2.5 cursor-default select-none">
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-teal-400">Confirmed</span>
+                    <span className="text-xs text-teal-500/70">{formatHour(slot.hour)}</span>
+                  </div>
+                );
+              }
+              if (slot.bookingStatus === "pending_approval") {
+                return (
+                  <div key={slot.hour}
+                    className="flex flex-col items-center justify-center gap-0.5 rounded-xl border border-amber-500/30 bg-amber-500/10 py-2.5 cursor-default select-none">
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-amber-400">Pending</span>
+                    <span className="text-xs text-amber-500/70">{formatHour(slot.hour)}</span>
+                  </div>
+                );
+              }
+
+              // ── Blocked (booked by someone else / unavailable) ───────────────
+              if (!slot.available) {
+                return (
+                  <div key={slot.hour}
+                    className="rounded-xl border border-transparent bg-[var(--cm-bg-surface)] py-2.5 cursor-not-allowed" />
+                );
+              }
+
+              // ── Consecutive check ────────────────────────────────────────────
               const wouldBeConsecutive = (() => {
-                if (isSel) return true; // deselecting is always ok
+                if (isSel) return true;
                 if (selectedHours.length === 0) return true;
                 const sorted = [...selectedHours, slot.hour].sort((a, b) => a - b);
                 for (let i = 1; i < sorted.length; i++) {
@@ -249,17 +284,19 @@ export default function CoachProfilePage() {
                 return true;
               })();
               const atMax = !isSel && selectedHours.length >= MAX_COACH_SLOTS;
-              const disabled = !slot.available || atMax || (!isSel && !wouldBeConsecutive);
+              const softDisabled = atMax || (!isSel && !wouldBeConsecutive);
+
+              // ── Available ────────────────────────────────────────────────────
               return (
                 <button
                   key={slot.hour}
-                  disabled={disabled}
+                  disabled={softDisabled}
                   onClick={() => toggleHour(slot.hour)}
                   className={`py-2.5 rounded-xl text-sm font-medium border transition-colors ${
                     isSel
                       ? "bg-[var(--cm-accent)] text-black border-[var(--cm-accent)]"
-                      : disabled
-                      ? "bg-[var(--cm-bg-surface)] text-[var(--cm-text-muted)] border-transparent cursor-not-allowed"
+                      : softDisabled
+                      ? "bg-[var(--cm-bg-surface)] text-[var(--cm-text-muted)] border-[var(--cm-border)] opacity-40 cursor-not-allowed"
                       : "bg-[var(--cm-bg-card)] text-[var(--cm-text-sec)] border-[var(--cm-border)]"
                   }`}
                 >
