@@ -1426,6 +1426,10 @@ function EditLessonPaymentModal({
     try {
       if (selectedAction === "approve_payment") {
         await api.patch(`/api/admin/coach-lessons/${lesson.id}/approve-payment`, {});
+      } else if (selectedAction === "cancel") {
+        await api.patch(`/api/admin/coach-lessons/${lesson.id}`, { status: "cancelled" });
+      } else if (selectedAction === "no_show") {
+        await api.patch(`/api/admin/coach-lessons/${lesson.id}`, { status: "no_show" });
       }
       onUpdated();
     } catch (e) {
@@ -1525,7 +1529,7 @@ function EditLessonPaymentModal({
             )}
 
             {/* Action dropdown */}
-            {isActive && !isPaid && (
+            {isActive && (
               <div className="space-y-1.5">
                 <label className="text-xs text-neutral-400">Action</label>
                 <select
@@ -1538,6 +1542,8 @@ function EditLessonPaymentModal({
                   {normalised === "proof_submitted" && (
                     <option value="approve_payment">✓ Approve payment</option>
                   )}
+                  <option value="cancel">✕ Cancel lesson</option>
+                  <option value="no_show">⚠ Mark as no-show</option>
                 </select>
               </div>
             )}

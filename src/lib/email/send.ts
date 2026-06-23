@@ -21,6 +21,7 @@ export interface SendBookingEmailParams {
     rejectionReason?: string;
     coachName?: string;
     studentName?: string;
+    approvedBy?: string;
   };
 }
 
@@ -43,7 +44,8 @@ function buildEmail(params: SendBookingEmailParams): { subject: string; html: st
     : "";
   const coachLine = details.coachName ? `<p><strong>Coach:</strong> ${details.coachName}</p>` : "";
   const studentLine = details.studentName ? `<p><strong>Student:</strong> ${details.studentName}</p>` : "";
-  const detailsBlock = [venueLine, dateLine, timeLine, amountLine, coachLine, studentLine].filter(Boolean).join("\n");
+  const approvedByLine = details.approvedBy ? `<p><strong>Approved by:</strong> ${details.approvedBy}</p>` : "";
+  const detailsBlock = [venueLine, dateLine, timeLine, amountLine, coachLine, studentLine, approvedByLine].filter(Boolean).join("\n");
 
   // Role-specific greeting
   const greeting = recipientRole === "student"
@@ -180,6 +182,10 @@ export interface LessonEmailContext {
   details: SendBookingEmailParams["details"];
 }
 
+export type LessonEmailOptions = {
+  approvedBy?: string;
+};
+
 /**
  * Fire lesson notification emails to all three roles (student, coach, staff) in parallel.
  * Logs each send to EmailLog with the correct recipientRole.
@@ -239,7 +245,8 @@ export async function sendLessonEventEmails(
  * Returns null if the lesson doesn't exist.
  */
 export async function buildLessonEmailContext(
-  lessonId: string
+  lessonId: string,
+  options?: LessonEmailOptions
 ): Promise<LessonEmailContext | null> {
   const lesson = await prisma.coachLesson.findUnique({
     where: { id: lessonId },
@@ -255,6 +262,11 @@ export async function buildLessonEmailContext(
   const venueSettings = (lesson.venue.settings ?? {}) as Record<string, unknown>;
   const staffEmail = (venueSettings.notificationEmail as string | undefined) ?? null;
 
+  console.log(
+    `[lessonEmail] lesson=${lessonId} student="${lesson.player.name}" studentEmail=${lesson.player.email ?? "NONE"} ` +
+    `coachEmail=${lesson.coach.email ?? "NONE"} staffEmail=${staffEmail ?? "NONE"}`
+  );
+
   return {
     lessonId: lesson.id,
     studentPlayerId: lesson.player.id,
@@ -267,6 +279,7 @@ export async function buildLessonEmailContext(
       date: lesson.date.toLocaleDateString(),
       time: `${lesson.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} – ${lesson.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
       amount: lesson.priceValue,
+      ...(options?.approvedBy ? { approvedBy: options.approvedBy } : {}),
     },
   };
 }

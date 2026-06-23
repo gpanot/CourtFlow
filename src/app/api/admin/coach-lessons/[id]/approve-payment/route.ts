@@ -12,10 +12,13 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    requireManagerOrSuperAdmin(request.headers);
+    const auth = requireManagerOrSuperAdmin(request.headers);
     const { id } = await params;
 
-    const lesson = await prisma.coachLesson.findUnique({ where: { id } });
+    const [lesson, approver] = await Promise.all([
+      prisma.coachLesson.findUnique({ where: { id } }),
+      prisma.staffMember.findUnique({ where: { id: auth.id }, select: { name: true } }),
+    ]);
     if (!lesson) return error("Lesson not found", 404);
     if (lesson.paymentStatus !== "proof_submitted") {
       return error(`Cannot approve: payment status is "${lesson.paymentStatus}", expected "proof_submitted"`, 400);
@@ -43,7 +46,9 @@ export async function PATCH(
       },
     });
 
-    const ctx = await buildLessonEmailContext(id);
+    const ctx = await buildLessonEmailContext(id, {
+      approvedBy: approver?.name ?? undefined,
+    });
     if (ctx) {
       void sendLessonEventEmails(ctx, "approved");
     }
