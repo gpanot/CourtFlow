@@ -54,40 +54,11 @@ export function middleware(request: NextRequest) {
     "";
   const { pathname, search } = request.nextUrl;
 
-  // ── CourtPass hostname → rewrite /xxx to /book/xxx ────────────────────────
-  if (isCourtPassHost(host)) {
-    // Pass through requests that are already under /book, Next.js internals,
-    // API routes, and all public static assets (images, icons, manifests, uploads).
-    if (
-      pathname.startsWith("/book") ||
-      pathname.startsWith("/api/") ||
-      pathname.startsWith("/_next/") ||
-      pathname.startsWith("/__nextjs") ||
-      pathname.startsWith("/images/") ||
-      pathname.startsWith("/icons/") ||
-      pathname.startsWith("/uploads/") ||
-      pathname.startsWith("/store-assets/") ||
-      pathname === "/favicon.ico" ||
-      pathname === "/manifest.json" ||
-      pathname === "/manifest-tv.json" ||
-      /\.(png|jpg|jpeg|svg|webp|ico|json|woff2?|txt|xml)$/.test(pathname)
-    ) {
-      return NextResponse.next();
-    }
-
-    // / → /book/intro, /login → /book/login, etc.
-    const rewrittenPath = pathname === "/" ? "/book/intro" : `/book${pathname}`;
-    // Force the rewrite target to the internal server origin (localhost:3000).
-    // If we leave the host as courtpass.thecourtflow.com, Next.js treats it as
-    // an external rewrite and tries to proxy to that host externally — which
-    // fails because the custom domain points back to this same server.
-    // Using the internal origin makes Next.js resolve the route locally.
-    const url = request.nextUrl.clone();
-    url.protocol = "http";
-    url.host = "localhost:3000";
-    url.pathname = rewrittenPath;
-    return NextResponse.rewrite(url);
-  }
+  // CourtPass hostname path mapping is handled by next.config.ts rewrites()
+  // using beforeFiles + has: [{ type: "host" }]. Middleware rewrites via
+  // NextResponse.rewrite() do not work with this app's custom Express server
+  // in Railway standalone mode — the x-middleware-rewrite header leaks through
+  // instead of being consumed internally, causing 500s.
 
   // ── Main domain: /book/* → 308 permanent redirect to CourtPass ────────────
   if (isMainDomainBookPath(host, pathname)) {
