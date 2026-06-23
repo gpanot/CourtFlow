@@ -2,12 +2,17 @@
  * GET /api/auth/coach-google-calendar
  *
  * Initiates Google OAuth for coach calendar access.
- * Requires the player to be logged in as a coach (coachStaffId must be set).
- * Requests offline access with calendar.events scope so we get a refresh token.
+ *
+ * Supports two auth paths:
+ *  1. Staff JWT (Authorization: Bearer <staff_token>) — used by the admin coach portal.
+ *     The staff member must have isCoach: true.
+ *  2. Player token (Authorization: Bearer <player_token> or player_token cookie) — legacy
+ *     path from CourtPass player portal. Requires the player's coachStaffId to be set.
  */
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { requirePortalAuth } from "@/lib/portal-auth";
+import { verifyToken } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { error } from "@/lib/api-helpers";
 
@@ -21,19 +26,30 @@ function getBaseUrl(req: NextRequest): string {
 
 export async function GET(req: NextRequest) {
   try {
-    const { playerId, coachStaffId } = await requirePortalAuth(req);
+    let resolvedCoachStaffId: string | null = null;
 
-    if (!coachStaffId) {
-      return error("Not a coach account", 403);
+    // Path 1: try staff JWT first (admin coach portal)
+    const authHeader = req.headers.get("authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+      const payload = verifyToken(authHeader.slice(7));
+      if (payload?.id && (payload.role === "staff" || payload.role === "manager" || payload.role === "superadmin")) {
+        const staffMember = await prisma.staffMember.findUnique({
+          where: { id: payload.id, isCoach: true },
+          select: { id: true },
+        });
+        if (staffMember) {
+          resolvedCoachStaffId = staffMember.id;
+        }
+      }
     }
 
-    const player = await prisma.player.findUnique({
-      where: { id: playerId },
-      select: { coachStaffId: true },
-    });
-
-    if (!player?.coachStaffId) {
-      return error("Not a coach account", 403);
+    // Path 2: player token fallback (CourtPass portal)
+    if (!resolvedCoachStaffId) {
+      const { coachStaffId } = await requirePortalAuth(req);
+      if (!coachStaffId) {
+        return error("Not a coach account", 403);
+      }
+      resolvedCoachStaffId = coachStaffId;
     }
 
     const state = crypto.randomBytes(16).toString("hex");
@@ -57,8 +73,7 @@ export async function GET(req: NextRequest) {
       maxAge: 600,
       path: "/",
     });
-    // Store coachStaffId in cookie so the callback can identify which coach to update
-    res.cookies.set("coach_calendar_staff_id", coachStaffId, {
+    res.cookies.set("coach_calendar_staff_id", resolvedCoachStaffId, {
       httpOnly: true,
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",

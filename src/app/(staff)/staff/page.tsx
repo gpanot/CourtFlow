@@ -725,6 +725,7 @@ export default function StaffPage() {
           name: string;
           phone: string;
           role: string;
+          isCoach: boolean;
           venues: StaffVenue[];
           venueId: string | null;
           onboardingCompleted: boolean;
@@ -743,6 +744,7 @@ export default function StaffPage() {
         staffName: data.staff.name,
         staffPhone: data.staff.phone,
         role: data.staff.role as "staff" | "manager" | "superadmin",
+        isCoach: data.staff.isCoach ?? false,
         venueId: data.staff.venueId,
         onboardingCompleted: data.staff.onboardingCompleted,
         rememberMe,
@@ -757,6 +759,12 @@ export default function StaffPage() {
         }
         setLoginVenues(data.staff.venues);
         setShowRoleChoice(true);
+        return;
+      }
+
+      // Coach-only staff members go directly to the coach portal
+      if (data.staff.isCoach && data.staff.role === "staff") {
+        router.replace("/coach-portal");
         return;
       }
 

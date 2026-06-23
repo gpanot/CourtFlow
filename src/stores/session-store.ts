@@ -15,6 +15,7 @@ interface AuthState {
   venueId: string | null;
   playerName: string | null;
   onboardingCompleted: boolean | null;
+  isCoach: boolean | null;
   rememberMe: boolean;
 }
 
@@ -41,6 +42,7 @@ export const useSessionStore = create<SessionStore>()(
       venueId: null,
       playerName: null,
       onboardingCompleted: null,
+      isCoach: null,
       rememberMe: true,
       setAuth: (data) => {
         set((state) => ({ ...state, ...data }));
@@ -67,7 +69,7 @@ export const useSessionStore = create<SessionStore>()(
         set({
           token: null, role: null, playerId: null, staffId: null,
           staffName: null, staffPhone: null, venueId: null, playerName: null,
-          onboardingCompleted: null, rememberMe: true,
+          onboardingCompleted: null, isCoach: null, rememberMe: true,
         });
         if (typeof window !== "undefined") {
           void fetch("/api/auth/player-logout", {

@@ -130,6 +130,7 @@ export async function POST(request: NextRequest) {
         name: staff.name,
         phone: staff.phone,
         role: staff.role,
+        isCoach: staff.isCoach,
         venues,
         venueId: firstVenueId || null,
         onboardingCompleted: staff.onboardingCompleted,

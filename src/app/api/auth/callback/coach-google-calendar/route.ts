@@ -16,9 +16,11 @@ function getBaseUrl(req: NextRequest): string {
   return `${proto}://${host}`;
 }
 
-/** Base URL for the CourtPass player portal (strips trailing slash). */
-function getCourtPassBase(): string {
-  return (process.env.NEXT_PUBLIC_COURTPASS_URL ?? "https://courtpass.thecourtflow.com").replace(/\/$/, "");
+/** Admin-domain base URL for the coach portal. */
+function getAdminCoachPortalUrl(req: NextRequest): string {
+  const appUrl = process.env.APP_URL;
+  if (appUrl) return appUrl.replace(/\/$/, "");
+  return getBaseUrl(req);
 }
 
 export async function GET(req: NextRequest) {
@@ -28,9 +30,10 @@ export async function GET(req: NextRequest) {
   const cookieState = req.cookies.get("oauth_state_coach_calendar")?.value;
   const coachStaffId = req.cookies.get("coach_calendar_staff_id")?.value;
 
+  const portalBase = getAdminCoachPortalUrl(req);
+
   if (!code || !state || state !== cookieState || !coachStaffId) {
-    const cpBase = getCourtPassBase();
-    return NextResponse.redirect(`${cpBase}/coach-portal?calendarError=invalid_state`);
+    return NextResponse.redirect(`${portalBase}/coach-portal?calendarError=invalid_state`);
   }
 
   const base = getBaseUrl(req);
@@ -51,8 +54,7 @@ export async function GET(req: NextRequest) {
 
     if (!tokenRes.ok) {
       console.error("[coach-calendar-callback] Token exchange failed:", await tokenRes.text());
-      const cpBase = getCourtPassBase();
-      return NextResponse.redirect(`${cpBase}/coach-portal?calendarError=token_exchange`);
+      return NextResponse.redirect(`${portalBase}/coach-portal?calendarError=token_exchange`);
     }
 
     const tokenData = (await tokenRes.json()) as {
@@ -62,8 +64,7 @@ export async function GET(req: NextRequest) {
     };
 
     if (!tokenData.refresh_token) {
-      const cpBase = getCourtPassBase();
-      return NextResponse.redirect(`${cpBase}/coach-portal?calendarError=no_refresh_token`);
+      return NextResponse.redirect(`${portalBase}/coach-portal?calendarError=no_refresh_token`);
     }
 
     // Discover the coach's primary calendar ID
@@ -87,14 +88,12 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    const cpBase = getCourtPassBase();
-    const res = NextResponse.redirect(`${cpBase}/coach-portal?calendarConnected=1`);
+    const res = NextResponse.redirect(`${portalBase}/coach-portal?calendarConnected=1`);
     res.cookies.delete("oauth_state_coach_calendar");
     res.cookies.delete("coach_calendar_staff_id");
     return res;
   } catch (e) {
     console.error("[coach-calendar-callback] Error:", e);
-    const cpBase = getCourtPassBase();
-    return NextResponse.redirect(`${cpBase}/coach-portal?calendarError=server_error`);
+    return NextResponse.redirect(`${portalBase}/coach-portal?calendarError=server_error`);
   }
 }
