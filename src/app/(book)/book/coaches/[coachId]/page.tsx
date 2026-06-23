@@ -56,12 +56,18 @@ export default function CoachProfilePage() {
   const [step, setStep] = useState<"profile" | "booking" | "summary">("profile");
   const MAX_COACH_SLOTS = 4;
 
-  const dates = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() + i);
-    d.setHours(0, 0, 0, 0);
-    return d;
-  });
+  // Computed client-side only to avoid SSR/hydration date mismatch
+  const [dates, setDates] = useState<Date[]>([]);
+  useEffect(() => {
+    const d: Date[] = [];
+    for (let i = 0; i < 7; i++) {
+      const day = new Date();
+      day.setDate(day.getDate() + i);
+      day.setHours(0, 0, 0, 0);
+      d.push(day);
+    }
+    setDates(d);
+  }, []);
 
   const vq = playerVenueId ? `venueId=${playerVenueId}` : "";
 
@@ -84,7 +90,9 @@ export default function CoachProfilePage() {
       try {
         const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
         const extra = vq ? `&${vq}` : "";
-        const res = await fetch(`/api/public/coaches/${coachId}?date=${dateStr}${extra}`);
+        // Use portalFetch so the player's auth token is sent — required to show
+        // their own booking status (Confirmed / Pending) on slots they already booked.
+        const res = await portalFetch(`/api/public/coaches/${coachId}?date=${dateStr}${extra}`);
         if (!res.ok) return;
         const data = await res.json();
         setAvailability(data.availability ?? []);
