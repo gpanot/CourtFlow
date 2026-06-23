@@ -33,6 +33,19 @@ export function parseDateKey(s: string): Date {
 }
 
 /**
+ * Converts a "YYYY-MM-DD" string to a Date at UTC midnight.
+ * This is what Prisma / the pg driver needs when writing a PostgreSQL DATE column:
+ * the driver serialises the Date as an ISO string; UTC midnight maps to the correct
+ * calendar day in the DB regardless of the server timezone.
+ *
+ * Use parseDateKey() for local date arithmetic (day-of-week, hour extraction, display).
+ * Use toDbDate() only at the Prisma write boundary.
+ */
+export function toDbDate(s: string): Date {
+  return new Date(s); // "YYYY-MM-DD" → ISO 8601 date-only → UTC midnight per spec
+}
+
+/**
  * Displays a "YYYY-MM-DD" date-only string for a user, safely.
  * Internally calls parseDateKey (local midnight) then toLocaleDateString.
  * Use this instead of formatDate() for any Prisma @db.Date field.
