@@ -8,6 +8,7 @@ import { generatePaymentRef } from "@/modules/courtpay/lib/payment-reference";
 import { buildVietQRUrl } from "@/lib/vietqr";
 import { isCoachAvailable, findNextAvailableSlot } from "@/lib/coach-availability";
 import { buildLessonEmailContext, sendLessonEventEmails } from "@/lib/email/send";
+import { parseDateKey, toDateKey } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
@@ -50,8 +51,7 @@ export async function POST(request: NextRequest) {
     });
     const config = getBookingConfig(venue.settings as Record<string, unknown>);
 
-    const date = new Date(dateStr);
-    date.setHours(0, 0, 0, 0);
+    const date = parseDateKey(dateStr);
     const startTime = new Date(startTimeStr);
     const endTime = new Date(startTime);
     const slots = Math.max(1, Math.min(4, slotCount ?? 1));
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
           reason: avail.reason,
           nextAvailableSlot: next
             ? {
-                date: next.date.toISOString(),
+                date: toDateKey(next.date),
                 startTime: next.startTime.toISOString(),
                 endTime: next.endTime.toISOString(),
               }
@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
       const ctx = await buildLessonEmailContext(lesson.id);
       if (ctx) void sendLessonEventEmails(ctx, "auto_confirmed");
 
-      return json({ lesson, paidWithCredit: true }, 201);
+      return json({ lesson: { ...lesson, date: toDateKey(lesson.date) }, paidWithCredit: true }, 201);
     }
 
     // VietQR / manual QR path — lesson starts as pending_approval
@@ -211,7 +211,7 @@ export async function POST(request: NextRequest) {
 
     return json(
       {
-        lesson,
+        lesson: { ...lesson, date: toDateKey(lesson.date) },
         payment: {
           paymentRef,
           holdExpiresAt: holdExpiresAt.toISOString(),
@@ -246,7 +246,7 @@ export async function GET(request: NextRequest) {
       orderBy: { startTime: "desc" },
     });
 
-    return json(lessons);
+    return json(lessons.map((l) => ({ ...l, date: toDateKey(l.date) })));
   } catch (e) {
     const msg = (e as Error).message;
     if (msg === "Authentication required") return error(msg, 401);

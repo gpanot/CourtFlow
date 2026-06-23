@@ -47,7 +47,7 @@ export default function OpenPlayDetailPage() {
   const router = useRouter();
   const { status } = usePlayerSession();
   const { t } = useTranslation();
-  const { formatDate, formatTime, formatPrice } = useBookFormatters();
+  const { formatDateField, formatTime, formatPrice } = useBookFormatters();
   const { venueId: playerVenueId } = usePlayerVenue();
   const [reg, setReg] = useState<OpenPlayRegistrationDetail | null>(null);
   const [venueContact, setVenueContact] = useState<VenueContact | null>(null);
@@ -126,7 +126,7 @@ export default function OpenPlayDetailPage() {
 
       {/* Details card */}
       <div className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-4 space-y-2">
-        <Row label={t("common.date")} value={formatDate(new Date(reg.date))} />
+        <Row label={t("common.date")} value={formatDateField(reg.date)} />
         <Row label={t("common.time")} value={`${formatTime(reg.startTime)} – ${formatTime(reg.endTime)}`} />
         <Row label={t("common.price")} value={formatPrice(reg.priceValue)} />
         {isCancelled && <Row label={t("common.status")} value={t("bookings.cancelled")} />}

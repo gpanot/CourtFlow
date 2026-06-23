@@ -5,6 +5,7 @@ import { resolveVenueId } from "@/lib/venue-config";
 import { getBookingConfig } from "@/lib/booking";
 import { isCoachAvailable } from "@/lib/coach-availability";
 import { verifyPlayerToken } from "@/app/api/public/auth/login/route";
+import { parseDateKey } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
@@ -49,8 +50,7 @@ export async function GET(
     let availability: { hour: number; available: boolean; bookingStatus: string | null }[] = [];
 
     if (dateParam) {
-      const date = new Date(dateParam);
-      date.setHours(0, 0, 0, 0);
+      const date = parseDateKey(dateParam);
 
       const venue = await prisma.venue.findUniqueOrThrow({
         where: { id: venueId },

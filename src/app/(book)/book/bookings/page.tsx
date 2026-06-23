@@ -82,26 +82,6 @@ function PaymentPill({ status, bookingStatus }: { status: string | null; booking
   );
 }
 
-/**
- * Parse a YYYY-MM-DD string as **local** midnight (avoids UTC-shift bug where
- * new Date("2026-06-26") → UTC midnight → shows as Jun 25 in UTC+7).
- */
-function parseDateLocal(dateStr: string): Date {
-  const [y, m, d] = dateStr.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
-
-/** Returns "Today", "Tomorrow", or null (caller falls back to formatted date). */
-function getDayLabel(dateStr: string, t: (k: string) => string): string | null {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const bookingDay = parseDateLocal(dateStr);
-  const diff = Math.round((bookingDay.getTime() - today.getTime()) / 86_400_000);
-  if (diff === 0) return t("bookings.today");
-  if (diff === 1) return t("bookings.tomorrow");
-  return null;
-}
-
 /** Generic hero card for the very next upcoming item (courts, sessions, open play) */
 function NextUpHeroCard({
   href,
@@ -114,7 +94,7 @@ function NextUpHeroCard({
   date,
   price,
   paymentStatus,
-  formatDate,
+  formatDateField,
   formatTime,
   formatPrice,
   t,
@@ -129,14 +109,13 @@ function NextUpHeroCard({
   date: string;
   price: number;
   paymentStatus: string | null;
-  formatDate: (d: Date | string) => string;
+  formatDateField: (s: string) => string;
   formatTime: (s: string) => string;
   formatPrice: (n: number) => string;
   t: (k: string) => string;
 }) {
   const durationMs = new Date(endTime).getTime() - new Date(startTime).getTime();
   const durationHours = durationMs / 3600000;
-  const dayLabel = getDayLabel(date, t);
 
   return (
     <Link href={href}>
@@ -150,7 +129,7 @@ function NextUpHeroCard({
           </span>
 
           <p className="text-xs text-[var(--cm-text-sec)] mb-0.5">
-            {dayLabel ? `${dayLabel} · ` : ""}{formatDate(parseDateLocal(date))}
+            {t("bookings.today")} · {formatDateField(date)}
           </p>
 
           <p className="text-lg font-bold text-[var(--cm-text)] leading-tight">
@@ -263,7 +242,7 @@ export default function MyBookingsPage() {
   const { status } = usePlayerSession();
   const router = useRouter();
   const { t } = useTranslation();
-  const { formatDate, formatTime, formatPrice } = useBookFormatters();
+  const { formatDate, formatDateField, formatTime, formatPrice } = useBookFormatters();
   const [tab, setTab] = useState<MainTab>("courts");
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("upcoming");
   const [bookings, setBookings] = useState<BookingItem[]>([]);
@@ -435,7 +414,7 @@ export default function MyBookingsPage() {
                     date={nextUpCourt.date}
                     price={nextUpCourt.priceValue}
                     paymentStatus={nextUpCourt.paymentStatus}
-                    formatDate={formatDate}
+                    formatDateField={formatDateField}
                     formatTime={formatTime}
                     formatPrice={formatPrice}
                     t={t}
@@ -449,7 +428,7 @@ export default function MyBookingsPage() {
                         key={b.id}
                         href={`/book/bookings/${b.id}`}
                         icon={<span className="text-base">📅</span>}
-                        title={`${formatDate(parseDateLocal(b.date))} · ${formatTime(b.startTime)} – ${formatTime(b.endTime)}`}
+                        title={`${formatDateField(b.date)} · ${formatTime(b.startTime)} – ${formatTime(b.endTime)}`}
                         subtitle={b.court.label}
                         venueName={b.venue.name}
                         price={b.priceValue}
@@ -474,7 +453,7 @@ export default function MyBookingsPage() {
                   key={b.id}
                   href={`/book/bookings/${b.id}`}
                   icon={<span className="text-base">📅</span>}
-                  title={`${formatDate(parseDateLocal(b.date))} · ${formatTime(b.startTime)} – ${formatTime(b.endTime)}`}
+                  title={`${formatDateField(b.date)} · ${formatTime(b.startTime)} – ${formatTime(b.endTime)}`}
                   subtitle={b.court.label}
                   venueName={b.venue.name}
                   price={b.priceValue}
@@ -509,7 +488,7 @@ export default function MyBookingsPage() {
                     date={nextUpLesson.date}
                     price={nextUpLesson.priceValue}
                     paymentStatus={nextUpLesson.paymentStatus}
-                    formatDate={formatDate}
+                    formatDateField={formatDateField}
                     formatTime={formatTime}
                     formatPrice={formatPrice}
                     t={t}
@@ -523,7 +502,7 @@ export default function MyBookingsPage() {
                         key={l.id}
                         href={`/book/coach-sessions/${l.id}`}
                         avatarUrl={l.coach.coachPhoto}
-                        title={`${formatDate(parseDateLocal(l.date))} · ${formatTime(l.startTime)} – ${formatTime(l.endTime)}`}
+                        title={`${formatDateField(l.date)} · ${formatTime(l.startTime)} – ${formatTime(l.endTime)}`}
                         subtitle={`${l.coach.name} · ${l.package.name}`}
                         venueName={l.venue?.name ?? ""}
                         price={l.priceValue}
@@ -548,7 +527,7 @@ export default function MyBookingsPage() {
                   key={l.id}
                   href={`/book/coach-sessions/${l.id}`}
                   avatarUrl={l.coach.coachPhoto}
-                  title={`${formatDate(parseDateLocal(l.date))} · ${formatTime(l.startTime)} – ${formatTime(l.endTime)}`}
+                  title={`${formatDateField(l.date)} · ${formatTime(l.startTime)} – ${formatTime(l.endTime)}`}
                   subtitle={`${l.coach.name} · ${l.package.name}`}
                   venueName={l.venue?.name ?? ""}
                   price={l.priceValue}
@@ -582,7 +561,7 @@ export default function MyBookingsPage() {
                     date={nextUpOP.date}
                     price={nextUpOP.priceValue}
                     paymentStatus={nextUpOP.paymentStatus}
-                    formatDate={formatDate}
+                    formatDateField={formatDateField}
                     formatTime={formatTime}
                     formatPrice={formatPrice}
                     t={t}
@@ -596,7 +575,7 @@ export default function MyBookingsPage() {
                         key={r.id}
                         href={`/book/open-play/${r.id}`}
                         icon={<span className="text-base">🏸</span>}
-                        title={`${formatDate(parseDateLocal(r.date))} · ${formatTime(r.startTime)} – ${formatTime(r.endTime)}`}
+                        title={`${formatDateField(r.date)} · ${formatTime(r.startTime)} – ${formatTime(r.endTime)}`}
                         subtitle={t("home.bookingTypeOpenPlay")}
                         venueName={r.venue?.name ?? ""}
                         price={r.priceValue}
@@ -621,7 +600,7 @@ export default function MyBookingsPage() {
                   key={r.id}
                   href={`/book/open-play/${r.id}`}
                   icon={<span className="text-base">🏸</span>}
-                  title={`${formatDate(parseDateLocal(r.date))} · ${formatTime(r.startTime)} – ${formatTime(r.endTime)}`}
+                  title={`${formatDateField(r.date)} · ${formatTime(r.startTime)} – ${formatTime(r.endTime)}`}
                   subtitle={t("home.bookingTypeOpenPlay")}
                   venueName={r.venue?.name ?? ""}
                   price={r.priceValue}

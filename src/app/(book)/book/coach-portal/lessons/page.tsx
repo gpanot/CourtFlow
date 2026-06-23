@@ -34,7 +34,7 @@ export default function CoachLessonsPage() {
   const { status, isCoach } = usePlayerSession();
   const router = useRouter();
   const { t } = useTranslation();
-  const { formatDate, formatPrice } = useBookFormatters();
+  const { formatDateField, formatPrice } = useBookFormatters();
   const [lessons, setLessons] = useState<Lesson[] | null>(null);
 
   useEffect(() => {
@@ -83,7 +83,7 @@ export default function CoachLessonsPage() {
           </span>
         </div>
         <p className="text-xs text-[var(--cm-text-sec)]">
-          {formatDate(new Date(lesson.date))} ·{" "}
+          {formatDateField(lesson.date)} ·{" "}
           {start.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}–
           {end.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
         </p>

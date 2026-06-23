@@ -28,7 +28,7 @@ export default function BookingDetailPage() {
   const router = useRouter();
   const { status } = usePlayerSession();
   const { t } = useTranslation();
-  const { formatDate, formatTime, formatPrice } = useBookFormatters();
+  const { formatDateField, formatTime, formatPrice } = useBookFormatters();
   const { venueId: playerVenueId } = usePlayerVenue();
   const [booking, setBooking] = useState<Record<string, unknown> | null>(null);
   const [venueContact, setVenueContact] = useState<VenueContact | null>(null);
@@ -113,7 +113,7 @@ export default function BookingDetailPage() {
       {/* Booking details card */}
       <div className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-4 space-y-2">
         <Row label={t("common.court")} value={court.label} />
-        <Row label={t("common.date")} value={formatDate(bookingDate)} />
+        <Row label={t("common.date")} value={formatDateField(bookingDate)} />
         <Row label={t("common.time")} value={`${formatTime(startTime)} – ${formatTime(endTime)}`} />
         <Row label={t("common.price")} value={formatPrice(priceValue)} />
         {isCancelled && <Row label={t("common.status")} value={t("bookings.cancelled")} />}

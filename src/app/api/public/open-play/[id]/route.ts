@@ -3,6 +3,7 @@ import { json, error } from "@/lib/api-helpers";
 import { prisma } from "@/lib/db";
 import { requirePortalAuth } from "@/lib/portal-auth";
 import { sendBookingEmail } from "@/lib/email/send";
+import { toDateKey } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ export async function GET(
     });
     if (!reg) return error("Registration not found", 404);
 
-    return json(reg);
+    return json({ ...reg, date: toDateKey(reg.date) });
   } catch (e) {
     const msg = (e as Error).message;
     if (msg === "Authentication required") return error(msg, 401);

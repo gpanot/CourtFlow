@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { formatDateKey as _formatDateKey } from "@/lib/date";
 
 function resolveLocale(lang: string | undefined): string {
   if (lang?.startsWith("vi")) return "vi-VN";
@@ -48,5 +49,20 @@ export function useBookFormatters() {
     [locale]
   );
 
-  return { locale, formatDate, formatTime, formatDateLong, formatPrice: formatBookPrice };
+  /**
+   * Safe formatter for Prisma @db.Date fields (YYYY-MM-DD strings).
+   * Use instead of formatDate() whenever the value is a date-only field.
+   */
+  const formatDateField = useCallback(
+    (s: string, options?: Intl.DateTimeFormatOptions) =>
+      _formatDateKey(s, locale, {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        ...options,
+      }),
+    [locale]
+  );
+
+  return { locale, formatDate, formatDateField, formatTime, formatDateLong, formatPrice: formatBookPrice };
 }

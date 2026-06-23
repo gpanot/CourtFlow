@@ -43,7 +43,7 @@ export default function CoachSessionDetailPage() {
   const router = useRouter();
   const { status } = usePlayerSession();
   const { t } = useTranslation();
-  const { formatDate, formatTime, formatPrice } = useBookFormatters();
+  const { formatDateField, formatTime, formatPrice } = useBookFormatters();
   const { venueId: playerVenueId } = usePlayerVenue();
 
   const [lesson, setLesson] = useState<LessonDetail | null>(null);
@@ -131,7 +131,7 @@ export default function CoachSessionDetailPage() {
           </>
         )}
         {lesson.court && <Row label={t("common.court")} value={lesson.court.label} />}
-        <Row label={t("common.date")} value={formatDate(lesson.date)} />
+        <Row label={t("common.date")} value={formatDateField(lesson.date)} />
         <Row label={t("common.time")} value={`${formatTime(lesson.startTime)} – ${formatTime(lesson.endTime)}`} />
         <Row label={t("common.price")} value={formatPrice(lesson.priceValue)} />
         {isCancelled && <Row label={t("common.status")} value={t("bookings.cancelled")} />}

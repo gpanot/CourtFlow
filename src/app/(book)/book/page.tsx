@@ -116,18 +116,22 @@ export default function VenueHomePage() {
 
   const [openPlayModal, setOpenPlayModal] = useState<OpenPlaySession | null>(null);
 
-  const [selectedDate, setSelectedDate] = useState(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  });
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [dates, setDates] = useState<Date[]>([]);
 
-  const dates = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() + i);
-    d.setHours(0, 0, 0, 0);
-    return d;
-  });
+  // Compute dates client-side only to avoid SSR/hydration mismatch when
+  // the server's UTC clock is behind the client's local date (e.g. UTC+7).
+  useEffect(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const strip = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(today);
+      d.setDate(d.getDate() + i);
+      return d;
+    });
+    setDates(strip);
+    setSelectedDate(today);
+  }, []);
 
   const vq = playerVenueId ? `&venueId=${playerVenueId}` : "";
 
@@ -167,7 +171,7 @@ export default function VenueHomePage() {
   }, [playerVenueId]);
 
   useEffect(() => {
-    loadGrid(selectedDate);
+    if (selectedDate) loadGrid(selectedDate);
   }, [selectedDate, loadGrid]);
 
   function isSlotSelected(courtId: string, slot: Slot) {
@@ -234,6 +238,7 @@ export default function VenueHomePage() {
       return;
     }
     const first = sortedSelected[0];
+    if (!selectedDate) return;
     const localDate = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
     const params = new URLSearchParams({
       courtId: selectedCourtId!,
@@ -251,6 +256,7 @@ export default function VenueHomePage() {
       router.push(`/book/login?callbackUrl=/book`);
       return;
     }
+    if (!selectedDate) return;
     const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
     const params = new URLSearchParams({
       scheduleEntryId: session.entryId,
@@ -306,7 +312,7 @@ export default function VenueHomePage() {
         <h3 className="text-sm font-medium text-[var(--cm-text-sec)] mb-2">{t("home.selectDate")}</h3>
         <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
           {dates.map((d) => {
-            const isActive = d.toDateString() === selectedDate.toDateString();
+            const isActive = selectedDate ? d.toDateString() === selectedDate.toDateString() : false;
             return (
               <button
                 key={d.toISOString()}

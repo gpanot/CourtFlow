@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { json, error } from "@/lib/api-helpers";
 import { prisma } from "@/lib/db";
 import { requirePortalAuth } from "@/lib/portal-auth";
+import { toDateKey } from "@/lib/date";
 import { getPortalVenueId } from "@/lib/venue-config";
 
 import { getBookingConfig, resolveSlotPrice } from "@/lib/booking";
@@ -148,7 +149,7 @@ export async function GET(request: NextRequest) {
       orderBy: { startTime: "desc" },
     });
 
-    return json(bookings);
+    return json(bookings.map((b) => ({ ...b, date: toDateKey(b.date) })));
   } catch (e) {
     const msg = (e as Error).message;
     if (msg === "Authentication required") return error(msg, 401);

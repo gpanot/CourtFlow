@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requirePortalAuth } from "@/lib/portal-auth";
 import { checkCancellationPolicy } from "@/lib/booking";
 import { sendBookingEmail } from "@/lib/email/send";
+import { toDateKey } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +24,7 @@ export async function GET(
 
     const cancellation = await checkCancellationPolicy(booking);
 
-    return json({ ...booking, cancellation });
+    return json({ ...booking, date: toDateKey(booking.date), cancellation });
   } catch (e) {
     const msg = (e as Error).message;
     if (msg === "Authentication required") return error(msg, 401);

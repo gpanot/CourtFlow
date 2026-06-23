@@ -1,6 +1,7 @@
 import { prisma } from "./db";
 import type { Booking } from "@prisma/client";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
+import { parseDateKey, toDateKey } from "./date";
 
 export const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
 
@@ -159,12 +160,12 @@ export function resolveSlotPrice(config: BookingConfig, dayOfWeek: number, hour:
 }
 
 /**
- * Generate time slots for a given UTC-midnight date using the venue's local timezone.
+ * Generate time slots for a given local-midnight date using the venue's local timezone.
  * All hour arithmetic is done in venue-local time so the server's process TZ is irrelevant.
  */
-function generateTimeSlots(utcMidnight: Date, config: BookingConfig, venueTimezone: string): TimeSlot[] {
-  // Convert the UTC midnight to the venue's local representation
-  const zonedDate = toZonedTime(utcMidnight, venueTimezone);
+function generateTimeSlots(localMidnight: Date, config: BookingConfig, venueTimezone: string): TimeSlot[] {
+  // Convert the local midnight to the venue's local representation
+  const zonedDate = toZonedTime(localMidnight, venueTimezone);
   const dayOfWeek = zonedDate.getDay();
   const slots: TimeSlot[] = [];
 
@@ -173,7 +174,7 @@ function generateTimeSlots(utcMidnight: Date, config: BookingConfig, venueTimezo
     const minutes = Math.round((hour % 1) * 60);
 
     // Build a local-time wall-clock date in the venue's timezone, then convert to UTC
-    const zonedStart = toZonedTime(utcMidnight, venueTimezone);
+    const zonedStart = toZonedTime(localMidnight, venueTimezone);
     zonedStart.setHours(floorHour, minutes, 0, 0);
     const start = fromZonedTime(zonedStart, venueTimezone);
 
@@ -213,11 +214,8 @@ export async function getAvailableSlots(
     orderBy: { label: "asc" },
   });
 
-  // Normalise to UTC midnight — matches what PG stores in the DATE column
-  const dateOnly = new Date(date);
-  dateOnly.setUTCHours(0, 0, 0, 0);
-  const nextDay = new Date(dateOnly);
-  nextDay.setUTCDate(nextDay.getUTCDate() + 1);
+  // Normalise to local midnight — server TZ equals venue TZ, matching how parseDateKey works
+  const dateOnly = parseDateKey(toDateKey(date));
 
   const existingBookings = await prisma.booking.findMany({
     where: {

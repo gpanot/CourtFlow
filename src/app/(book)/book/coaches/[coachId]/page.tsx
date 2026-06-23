@@ -8,6 +8,7 @@ import { usePlayerSession } from "../../components/usePlayerSession";
 import { usePlayerVenue } from "../../components/PlayerVenueContext";
 import { useTranslation } from "react-i18next";
 import { useBookFormatters } from "../../lib/useBookFormatters";
+import { toDateKey } from "@/lib/date";
 
 interface Package {
   id: string;
@@ -157,7 +158,7 @@ export default function CoachProfilePage() {
         body: JSON.stringify({
           coachId,
           packageId: selectedPkg.id,
-          date: selectedDate.toISOString(),
+          date: toDateKey(selectedDate),
           startTime: startTime.toISOString(),
           slotCount: selectedHours.length,
           payWithCredit,
