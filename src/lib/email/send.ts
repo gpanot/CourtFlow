@@ -199,18 +199,17 @@ export async function sendLessonEventEmails(
   ctx: LessonEmailContext,
   emailType: EmailType
 ): Promise<void> {
-  const tasks: Promise<void>[] = [];
-
   const roles: { role: RecipientRole; email: string | null; name: string }[] = [
     { role: "student", email: ctx.studentEmail, name: ctx.studentName },
     { role: "coach", email: ctx.coachEmail, name: ctx.coachName },
     { role: "staff", email: ctx.staffEmail, name: "Staff" },
   ];
 
+  // Send sequentially with a 600ms gap to stay within Resend's 2 req/s free-plan limit
   for (const { role, email, name } of roles) {
     if (!email) continue;
 
-    const sendTask = sendBookingEmail({
+    await sendBookingEmail({
       to: email,
       playerName: name,
       bookingType: "coach",
@@ -221,27 +220,26 @@ export async function sendLessonEventEmails(
         studentName: ctx.studentName,
         coachName: ctx.coachName,
       },
-    }).then(async () => {
-      try {
-        await prisma.emailLog.create({
-          data: {
-            playerId: ctx.studentPlayerId,
-            bookingType: "coach",
-            bookingId: ctx.lessonId,
-            emailType,
-            recipientRole: role,
-            status: "sent",
-          },
-        });
-      } catch (logErr) {
-        console.error("[sendLessonEventEmails] Failed to write EmailLog:", logErr);
-      }
     });
 
-    tasks.push(sendTask);
-  }
+    try {
+      await prisma.emailLog.create({
+        data: {
+          playerId: ctx.studentPlayerId,
+          bookingType: "coach",
+          bookingId: ctx.lessonId,
+          emailType,
+          recipientRole: role,
+          status: "sent",
+        },
+      });
+    } catch (logErr) {
+      console.error("[sendLessonEventEmails] Failed to write EmailLog:", logErr);
+    }
 
-  await Promise.allSettled(tasks);
+    // 600ms gap avoids Resend 429 on free plan (limit: 2 req/s)
+    await new Promise((r) => setTimeout(r, 600));
+  }
 }
 
 /**
