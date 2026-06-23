@@ -83,11 +83,19 @@ export function middleware(request: NextRequest) {
     url.protocol = "http";
     url.host = "localhost:3000";
     url.pathname = rewrittenPath;
-    return NextResponse.rewrite(url);
+    // Mark this as a CourtPass internal rewrite so the middleware does not
+    // apply the main-domain /book/* → CourtPass redirect on the second pass
+    // (when Next.js re-invokes middleware with the rewritten path, x-forwarded-host
+    // is no longer present and the host looks like the main domain).
+    return NextResponse.rewrite(url, {
+      request: { headers: new Headers({ ...Object.fromEntries(request.headers), "x-courtpass-rewrite": "1" }) },
+    });
   }
 
   // ── Main domain: /book/* → 308 permanent redirect to CourtPass ────────────
-  if (isMainDomainBookPath(host, pathname)) {
+  // Skip if this request was internally rewritten from a CourtPass hostname.
+  const isInternalRewrite = request.headers.get("x-courtpass-rewrite") === "1";
+  if (!isInternalRewrite && isMainDomainBookPath(host, pathname)) {
     const courtpassUrl =
       process.env.NEXT_PUBLIC_COURTPASS_URL?.replace(/\/$/, "") ??
       "https://courtpass.thecourtflow.com";
