@@ -43,7 +43,7 @@ function isMainDomainBookPath(host: string, pathname: string): boolean {
   // Do NOT redirect if this is already on the CourtPass host or if the request
   // is an internal rewrite (host will be localhost:* on the second middleware pass).
   if (isCourtPassHost(host)) return false;
-  if (host.startsWith("localhost") || host.startsWith("127.0.0.1")) return false;
+  if (host.startsWith("localhost") || host.startsWith("127.0.0.1") || host.startsWith("0.0.0.0")) return false;
   return true;
 }
 
