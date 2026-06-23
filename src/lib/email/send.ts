@@ -165,7 +165,11 @@ export async function sendBookingEmail(params: SendBookingEmailParams): Promise<
       subject,
       html,
     });
-    return void result;
+    if (result.error) {
+      console.error(`[sendBookingEmail] Resend rejected to=${params.to} subject="${subject}":`, result.error);
+    } else {
+      console.log(`[sendBookingEmail] Sent to=${params.to} id=${result.data?.id} subject="${subject}"`);
+    }
   } catch (err) {
     console.error("[sendBookingEmail] Failed to send email:", err);
   }
