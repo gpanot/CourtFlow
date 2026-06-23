@@ -141,7 +141,7 @@ export default function CoachSessionDetailPage() {
 
   const isCancelled = lesson.status === "cancelled";
   const paymentStatus = lesson.paymentStatus;
-  const isVerifying = paymentStatus === "proof_submitted";
+  const isVerifying = paymentStatus === "proof_submitted" && !isCancelled;
   const paid = isPaid(paymentStatus);
   const proofUrl = resolveUploadUrl(lesson.proofUrl);
 
@@ -243,6 +243,15 @@ export default function CoachSessionDetailPage() {
         <div className="mb-4 rounded-xl border border-[var(--cm-orange)]/40 bg-[var(--cm-orange)]/10 px-4 py-3">
           <p className="text-sm font-semibold text-[var(--cm-orange)] text-center leading-snug">
             {t("bookingDetail.verifyingBanner")}
+          </p>
+        </div>
+      )}
+
+      {/* Cancelled banner */}
+      {isCancelled && (
+        <div className="mb-4 rounded-xl border border-[var(--cm-text-muted)]/30 bg-[var(--cm-text-muted)]/10 px-4 py-3">
+          <p className="text-sm font-semibold text-[var(--cm-text-muted)] text-center leading-snug">
+            {t("bookingDetail.cancelledBanner")}
           </p>
         </div>
       )}

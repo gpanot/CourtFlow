@@ -270,6 +270,7 @@
     },
     "confirmedBanner": "Đặt sân và thanh toán đã xác nhận. Hẹn gặp bạn trên sân.",
     "verifyingBanner": "Nhân viên đang xác minh thanh toán — vui lòng đợi một chút 🙏",
+    "cancelledBanner": "Đăng ký này đã bị hủy.",
     "paymentProof": "Chứng từ thanh toán",
     "venueContact": "Liên hệ địa điểm",
     "needHelp": "Cần trợ giúp hoặc hủy? Liên hệ trực tiếp địa điểm.",

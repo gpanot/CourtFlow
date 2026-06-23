@@ -128,7 +128,7 @@ export default function BookingDetailPage() {
   const court = booking.court as { label: string };
   const isCancelled = booking.status === "cancelled";
   const paymentStatus = booking.paymentStatus as string | null;
-  const isVerifying: boolean = paymentStatus === "proof_submitted";
+  const isVerifying: boolean = paymentStatus === "proof_submitted" && !isCancelled;
   const paymentRef = booking.paymentRef as string | null | undefined;
   const paymentProofUrl = resolveUploadUrl(booking.paymentProofUrl as string | null | undefined);
   const priceValue = booking.priceValue as number;
@@ -204,6 +204,14 @@ export default function BookingDetailPage() {
         <div className="mb-4 rounded-xl border border-[var(--cm-orange)]/40 bg-[var(--cm-orange)]/10 px-4 py-3">
           <p className="text-sm font-semibold text-[var(--cm-orange)] text-center leading-snug">
             {t("bookingDetail.verifyingBanner")}
+          </p>
+        </div>
+      ) : null}
+
+      {isCancelled ? (
+        <div className="mb-4 rounded-xl border border-[var(--cm-text-muted)]/30 bg-[var(--cm-text-muted)]/10 px-4 py-3">
+          <p className="text-sm font-semibold text-[var(--cm-text-muted)] text-center leading-snug">
+            {t("bookingDetail.cancelledBanner")}
           </p>
         </div>
       ) : null}

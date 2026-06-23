@@ -270,6 +270,7 @@
     },
     "confirmedBanner": "Your booking and payment is confirmed. See you at the court.",
     "verifyingBanner": "Our staff is verifying your payment — give us a moment 🙏",
+    "cancelledBanner": "This registration has been cancelled.",
     "paymentProof": "Payment proof",
     "venueContact": "Venue Contact",
     "needHelp": "Need help or cancel? Contact the venue directly.",

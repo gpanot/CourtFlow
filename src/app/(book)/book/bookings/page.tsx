@@ -54,8 +54,15 @@ interface OpenPlayItem {
 type MainTab = "courts" | "sessions" | "openplay";
 type TimeFilter = "upcoming" | "past";
 
-function PaymentPill({ status }: { status: string | null }) {
+function PaymentPill({ status, bookingStatus }: { status: string | null; bookingStatus?: string }) {
   const { t } = useTranslation();
+  if (bookingStatus === "cancelled") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-[var(--cm-text-muted)]/15 text-[var(--cm-text-muted)]">
+        {t("bookings.cancelled")}
+      </span>
+    );
+  }
   const key = status && t(`bookings.status.${status}`, { defaultValue: "" });
   const label = key || t("bookings.status.confirmed");
   const colorMap: Record<string, string> = {
@@ -181,6 +188,7 @@ function BookingRow({
   venueName,
   price,
   paymentStatus,
+  bookingStatus,
   dimmed,
   formatPrice,
 }: {
@@ -192,6 +200,7 @@ function BookingRow({
   venueName: string;
   price: number;
   paymentStatus: string | null;
+  bookingStatus?: string;
   dimmed: boolean;
   formatPrice: (n: number) => string;
 }) {
@@ -221,7 +230,7 @@ function BookingRow({
       {/* Right side */}
       <div className="flex flex-col items-end gap-1 shrink-0">
         <span className="text-xs font-semibold text-[var(--cm-text)]">{formatPrice(price)}</span>
-        <PaymentPill status={paymentStatus} />
+        <PaymentPill status={paymentStatus} bookingStatus={bookingStatus} />
       </div>
 
       <ChevronRight className="h-4 w-4 text-[var(--cm-text-muted)] shrink-0" />
@@ -424,6 +433,7 @@ export default function MyBookingsPage() {
                         venueName={b.venue.name}
                         price={b.priceValue}
                         paymentStatus={b.paymentStatus}
+                        bookingStatus={b.status}
                         dimmed={false}
                         formatPrice={formatPrice}
                       />
@@ -448,6 +458,7 @@ export default function MyBookingsPage() {
                   venueName={b.venue.name}
                   price={b.priceValue}
                   paymentStatus={b.paymentStatus}
+                  bookingStatus={b.status}
                   dimmed={false}
                   formatPrice={formatPrice}
                 />
@@ -496,6 +507,7 @@ export default function MyBookingsPage() {
                         venueName={l.venue?.name ?? ""}
                         price={l.priceValue}
                         paymentStatus={l.paymentStatus}
+                        bookingStatus={l.status}
                         dimmed={false}
                         formatPrice={formatPrice}
                       />
@@ -520,6 +532,7 @@ export default function MyBookingsPage() {
                   venueName={l.venue?.name ?? ""}
                   price={l.priceValue}
                   paymentStatus={l.paymentStatus}
+                  bookingStatus={l.status}
                   dimmed={false}
                   formatPrice={formatPrice}
                 />
@@ -567,6 +580,7 @@ export default function MyBookingsPage() {
                         venueName={r.venue?.name ?? ""}
                         price={r.priceValue}
                         paymentStatus={r.paymentStatus}
+                        bookingStatus={r.status}
                         dimmed={false}
                         formatPrice={formatPrice}
                       />
@@ -591,6 +605,7 @@ export default function MyBookingsPage() {
                   venueName={r.venue?.name ?? ""}
                   price={r.priceValue}
                   paymentStatus={r.paymentStatus}
+                  bookingStatus={r.status}
                   dimmed={false}
                   formatPrice={formatPrice}
                 />
