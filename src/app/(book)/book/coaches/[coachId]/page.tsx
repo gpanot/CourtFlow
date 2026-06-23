@@ -40,6 +40,7 @@ export default function CoachProfilePage() {
   const { formatDate, formatPrice } = useBookFormatters();
   const { venueId: playerVenueId } = usePlayerVenue();
   const [coach, setCoach] = useState<CoachProfile | null>(null);
+  const [coachError, setCoachError] = useState(false);
   const [selectedPkg, setSelectedPkg] = useState<Package | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedHours, setSelectedHours] = useState<number[]>([]);
@@ -60,16 +61,30 @@ export default function CoachProfilePage() {
 
   useEffect(() => {
     const q = vq ? `?${vq}` : "";
-    fetch(`/api/public/coaches/${coachId}${q}`).then((r) => r.json()).then(setCoach);
+    fetch(`/api/public/coaches/${coachId}${q}`)
+      .then((r) => {
+        if (!r.ok) throw new Error("not_found");
+        return r.json();
+      })
+      .then((data) => {
+        // Ensure required arrays are always present to prevent render crashes
+        setCoach({ ...data, packages: data.packages ?? [], availability: data.availability ?? [] });
+      })
+      .catch(() => setCoachError(true));
   }, [coachId, vq]);
 
   const loadAvailability = useCallback(
     async (date: Date) => {
-      const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-      const extra = vq ? `&${vq}` : "";
-      const res = await fetch(`/api/public/coaches/${coachId}?date=${dateStr}${extra}`);
-      const data = await res.json();
-      setAvailability(data.availability || []);
+      try {
+        const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+        const extra = vq ? `&${vq}` : "";
+        const res = await fetch(`/api/public/coaches/${coachId}?date=${dateStr}${extra}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        setAvailability(data.availability ?? []);
+      } catch {
+        // Non-fatal — leave existing availability state unchanged
+      }
     },
     [coachId, vq]
   );
@@ -149,6 +164,24 @@ export default function CoachProfilePage() {
       setBookingError((e as Error).message);
       setBooking(false);
     }
+  }
+
+  if (coachError) {
+    return (
+      <div className="px-4 pt-12 text-center space-y-3">
+        <p className="text-2xl">😕</p>
+        <p className="font-semibold">{t("coaches.notFound", "Coach not found")}</p>
+        <p className="text-sm text-[var(--cm-text-sec)]">
+          {t("coaches.notFoundHint", "This coach may no longer be available.")}
+        </p>
+        <button
+          onClick={() => router.push("/book/coaches")}
+          className="mt-4 px-5 py-2.5 bg-[var(--cm-accent)] text-black rounded-xl text-sm font-medium"
+        >
+          {t("coaches.browseCoaches", "Browse coaches")}
+        </button>
+      </div>
+    );
   }
 
   if (!coach) {

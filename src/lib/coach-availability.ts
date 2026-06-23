@@ -80,7 +80,10 @@ export async function isCoachAvailable(
 
   if (lessonConflict) return { available: false, reason: "lesson_conflict" };
 
-  // Layer 4 — Google Calendar free/busy (optional)
+  // Layer 4 — Google Calendar free/busy (optional, always non-fatal)
+  // If the token is invalid, expired, or the API is unreachable, we skip this
+  // layer and return available=true from layers 1-3. Never block a booking
+  // because of a calendar API failure.
   if (
     coach.calendarSyncEnabled &&
     coach.googleRefreshToken &&
@@ -94,9 +97,8 @@ export async function isCoachAvailable(
         endTime
       );
       if (busy) return { available: false, reason: "calendar_busy" };
-    } catch (err) {
-      console.error("[isCoachAvailable] Google Calendar check failed:", err);
-      // Non-fatal: skip layer 4 on error
+    } catch {
+      // Swallow silently — a broken/missing OAuth token must not block bookings
     }
   }
 
