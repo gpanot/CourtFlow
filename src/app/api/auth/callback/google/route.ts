@@ -20,8 +20,16 @@ function getBaseUrl(req: NextRequest): string {
   return `${proto}://${host}`;
 }
 
+/** Base URL for the CourtPass player portal (strips trailing slash). */
+function getCourtPassBase(): string {
+  return (process.env.NEXT_PUBLIC_COURTPASS_URL ?? "https://courtpass.thecourtflow.com").replace(/\/$/, "");
+}
+
 function errorRedirect(base: string, msg: string) {
-  return NextResponse.redirect(`${base}/book/login?error=${encodeURIComponent(msg)}`);
+  // Always send player errors to the CourtPass login page
+  const cpBase = getCourtPassBase();
+  void base; // callback base kept for redirect_uri calculation only
+  return NextResponse.redirect(`${cpBase}/login?error=${encodeURIComponent(msg)}`);
 }
 
 export async function GET(req: NextRequest) {
@@ -87,11 +95,12 @@ export async function GET(req: NextRequest) {
     provider: "google",
   });
 
-  const res = NextResponse.redirect(`${base}/book/onboarding`);
+  const cpBase = getCourtPassBase();
+  const res = NextResponse.redirect(`${cpBase}/onboarding`);
   const isSecure = base.startsWith("https");
   setOAuthCookie(res, token, isSecure);
   // Clear state cookie
   res.cookies.set("oauth_state_google", "", { maxAge: 0, path: "/" });
-  console.log("[OAuth Google] redirecting to /book/onboarding, cookie set, isSecure:", isSecure);
+  console.log("[OAuth Google] redirecting to CourtPass /onboarding, cookie set, isSecure:", isSecure);
   return res;
 }

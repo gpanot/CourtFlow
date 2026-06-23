@@ -11,12 +11,83 @@ function isSiteGateEnabled(): boolean {
   return v === "true" || v === "1";
 }
 
+/**
+ * Returns true when the request is coming from the CourtPass player-portal
+ * hostname. We match:
+ *   - courtpass.thecourtflow.com          (production)
+ *   - courtpass.localhost / courtpass.*   (local dev convenience — any host
+ *     whose first label is "courtpass")
+ *   - NEXT_PUBLIC_COURTPASS_URL override  (staging / preview domains)
+ */
+function isCourtPassHost(host: string): boolean {
+  const courtpassUrl = process.env.NEXT_PUBLIC_COURTPASS_URL ?? "";
+  if (courtpassUrl) {
+    try {
+      const cpHost = new URL(courtpassUrl).hostname;
+      if (host === cpHost) return true;
+    } catch {
+      // ignore malformed env value
+    }
+  }
+  // First label of the hostname is "courtpass"
+  return host.split(".")[0] === "courtpass";
+}
+
+/**
+ * Returns true when the request is from the main CourtFlow domain and the
+ * path starts with /book — i.e. an old bookmark or hardcoded link that should
+ * now live on CourtPass.
+ */
+function isMainDomainBookPath(host: string, pathname: string): boolean {
+  if (!pathname.startsWith("/book")) return false;
+  // Do NOT redirect if this is already on the CourtPass host
+  return !isCourtPassHost(host);
+}
+
 export function middleware(request: NextRequest) {
+  const host =
+    request.headers.get("x-forwarded-host") ??
+    request.headers.get("host") ??
+    "";
+  const { pathname, search } = request.nextUrl;
+
+  // ── CourtPass hostname → rewrite /xxx to /book/xxx ────────────────────────
+  if (isCourtPassHost(host)) {
+    // Pass through requests that are already under /book, plus Next.js
+    // internals and API routes that must not be rewritten.
+    if (
+      pathname.startsWith("/book") ||
+      pathname.startsWith("/api/") ||
+      pathname.startsWith("/_next/") ||
+      pathname.startsWith("/__nextjs") ||
+      pathname === "/favicon.ico"
+    ) {
+      return NextResponse.next();
+    }
+
+    // / → /book/intro, /login → /book/login, etc.
+    const rewrittenPath = pathname === "/" ? "/book/intro" : `/book${pathname}`;
+    const url = request.nextUrl.clone();
+    url.pathname = rewrittenPath;
+    return NextResponse.rewrite(url);
+  }
+
+  // ── Main domain: /book/* → 308 permanent redirect to CourtPass ────────────
+  if (isMainDomainBookPath(host, pathname)) {
+    const courtpassUrl =
+      process.env.NEXT_PUBLIC_COURTPASS_URL?.replace(/\/$/, "") ??
+      "https://courtpass.thecourtflow.com";
+
+    // Strip the leading /book from the path: /book/login → /login, /book → /
+    const strippedPath = pathname.slice("/book".length) || "/";
+    const destination = `${courtpassUrl}${strippedPath}${search}`;
+    return NextResponse.redirect(destination, { status: 308 });
+  }
+
+  // ── Site gate (unchanged logic) ───────────────────────────────────────────
   if (SITE_GATE_TEMPORARILY_OFF || !isSiteGateEnabled()) {
     return NextResponse.next();
   }
-
-  const { pathname } = request.nextUrl;
 
   if (pathname === "/gate") {
     return NextResponse.next();
