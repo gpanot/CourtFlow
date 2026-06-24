@@ -54,8 +54,8 @@ export async function POST(request: NextRequest) {
       return error("Invalid block type", 400);
     }
 
-    const date = new Date(body.date);
-    date.setHours(0, 0, 0, 0);
+    const dateKey = (body.date as string).split("T")[0];
+    const date = new Date(dateKey + "T12:00:00+07:00"); // noon local → UTC safe for PG DATE
     const startTime = new Date(body.startTime);
     const endTime = new Date(body.endTime);
 

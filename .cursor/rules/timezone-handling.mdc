@@ -63,6 +63,28 @@ end.setUTCMinutes(end.getUTCMinutes() + 60);
 - The `start_time` / `end_time` columns are `timestamp without time zone` — PostgreSQL stores the value as-is, and Node.js interprets it in the server's timezone.
 - When seeding or creating records, always use `setHours()` (local) to match how the server queries.
 
+### CRITICAL — Prisma writes to `@db.Date` columns
+
+**Never pass a `Date` object at local midnight to Prisma for a `@db.Date` field.**
+
+Prisma serialises `Date` objects via `.toISOString()` before sending to PostgreSQL.
+On a UTC+7 server, local midnight = `17:00 UTC the previous day`.
+PostgreSQL's `DATE` cast uses UTC, so `2026-06-26T00:00:00+07:00` → `2026-06-25T17:00:00Z` → stored as **`2026-06-25`** — one day off.
+
+**Correct pattern for all Prisma `@db.Date` writes and WHERE-date queries:**
+```ts
+// Build a Date at noon local time — noon UTC+7 = 05:00 UTC, always same calendar day.
+const dateForPrisma = new Date(dateKey + "T12:00:00+07:00");
+
+// Use for both create data AND findMany where:
+await prisma.coachLesson.create({ data: { date: dateForPrisma, ... } });
+await prisma.coachLesson.findMany({ where: { date: dateForPrisma } });
+```
+
+This applies to ALL `@db.Date` columns: `bookings.date`, `coach_lessons.date`, `court_blocks.date`, `open_play_registrations.date`.
+
+`parseDateKey(dateKey)` (local midnight) remains correct for slot arithmetic (`getDay()`, `setHours()`, etc.) — just never pass it to Prisma's `data` or `where` for a DATE column.
+
 ## Key Principle
 
 > The server timezone IS the venue timezone. Use `setHours` / `getHours` (local) everywhere on the server. The `.toISOString()` output will automatically encode the correct UTC offset. The client's `toLocaleTimeString()` will then display the correct user-local time.

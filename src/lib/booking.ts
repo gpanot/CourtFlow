@@ -214,8 +214,11 @@ export async function getAvailableSlots(
     orderBy: { label: "asc" },
   });
 
-  // Normalise to local midnight — server TZ equals venue TZ, matching how parseDateKey works
-  const dateOnly = parseDateKey(toDateKey(date));
+  // Noon local (UTC+7) → 05:00 UTC → same calendar date as what is stored.
+  // Prisma queries on @db.Date columns compare the UTC date portion, so using
+  // local midnight (17:00 UTC the previous day) would miss every record.
+  const dateKey = toDateKey(date);
+  const dateOnly = new Date(dateKey + "T12:00:00+07:00");
 
   const existingBookings = await prisma.booking.findMany({
     where: {

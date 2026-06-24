@@ -154,8 +154,9 @@ export async function POST(request: NextRequest) {
     }
 
     const dateKey = body.date.split("T")[0];
-    const date = new Date(dateKey);
+    const date = new Date(dateKey + "T00:00:00"); // local midnight for WHERE queries
     date.setHours(0, 0, 0, 0);
+    const dateForWrite = new Date(dateKey + "T12:00:00+07:00"); // noon local → UTC safe for PG DATE
 
     const startTime = new Date(body.startTime);
     const endTime = body.endTime
@@ -208,7 +209,7 @@ export async function POST(request: NextRequest) {
         playerId: body.playerId,
         packageId: body.packageId,
         courtId: body.courtId || null,
-        date: dateKey,
+        date: dateForWrite,
         startTime,
         endTime,
         priceValue,

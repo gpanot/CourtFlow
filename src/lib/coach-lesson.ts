@@ -158,12 +158,15 @@ export async function createCoachLesson(
   });
   const config = getBookingConfig(venue.settings as Record<string, unknown>);
 
-  // Keep a Date object for availability checks (uses getDay(), getHours() etc.)
-  // but write the raw YYYY-MM-DD string into Prisma DATE columns — Prisma would
-  // otherwise call .toISOString() on a Date object, producing UTC midnight which
-  // shifts the stored date back by 7 h in UTC+7.
-  const dateKey = dateStr.split("T")[0]; // ensure bare YYYY-MM-DD
-  const date = parseDateKey(dateKey);    // local-midnight Date for availability logic
+  const dateKey = dateStr.split("T")[0]; // bare YYYY-MM-DD
+  // parseDateKey → local midnight (2026-06-26T00:00:00+07:00 = 2026-06-25T17:00:00Z).
+  // Used for availability WHERE queries (getDay/getHours local methods — correct).
+  const date = parseDateKey(dateKey);
+  // For Prisma DATE column writes: Prisma requires a Date object but serialises it
+  // via .toISOString() → UTC. To prevent the 7-h shift, we build a Date that sits
+  // at noon local time so its UTC representation still falls on the same calendar day
+  // regardless of timezone offset (noon UTC+7 = 05:00 UTC → date stays 2026-06-26).
+  const dateForWrite = new Date(dateKey + "T12:00:00+07:00");
   const startTime = new Date(startTimeStr);
   const endTime = new Date(startTime);
   const slots = Math.max(1, Math.min(4, slotCount ?? 1));
@@ -261,7 +264,7 @@ export async function createCoachLesson(
           playerId,
           courtId: assignedCourtId,
           packageId,
-          date: dateKey,
+          date: dateForWrite,
           startTime,
           endTime,
           priceValue: totalPrice,
@@ -301,7 +304,7 @@ export async function createCoachLesson(
       playerId,
       courtId: assignedCourtId,
       packageId,
-      date: dateKey,
+      date: dateForWrite,
       startTime,
       endTime,
       priceValue: totalPrice,

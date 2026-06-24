@@ -1,6 +1,15 @@
 import { prisma } from "./db";
 import { getScheduleConfig } from "./booking";
 import { generatePaymentRef } from "@/modules/courtpay/lib/payment-reference";
+import { toDateKey } from "@/lib/date";
+
+/** Returns a Date at noon local time (UTC+7) for a given local-midnight Date.
+ *  Prisma serialises Date via .toISOString(); noon local = 05:00 UTC which always
+ *  lands on the same calendar day as the intended date, regardless of UTC offset. */
+function dateForPrisma(localMidnight: Date): Date {
+  const key = toDateKey(localMidnight); // "YYYY-MM-DD"
+  return new Date(key + "T12:00:00+07:00");
+}
 
 export interface OpenPlaySessionPlayer {
   name: string;
@@ -52,8 +61,9 @@ export async function resolveOpenPlaySessions(
 
   if (openPlayEntries.length === 0) return [];
 
-  const dateOnly = new Date(date);
-  dateOnly.setHours(0, 0, 0, 0);
+  const localMidnight = new Date(date);
+  localMidnight.setHours(0, 0, 0, 0);
+  const dateOnly = dateForPrisma(localMidnight); // noon local → consistent UTC for WHERE + writes
 
   // Fetch all registrations for this venue + date in one query, including player info
   let registrations: {
@@ -160,11 +170,10 @@ export async function createOpenPlayRegistration(
   scheduleEntryId: string,
   date: Date
 ) {
-  // Keep UTC midnight for the PG DATE column — new Date("YYYY-MM-DD") preserves it.
-  // Build a separate local-midnight copy for setHours() slot arithmetic.
-  const dateOnly = new Date(date);
   const localMidnight = new Date(date);
   localMidnight.setHours(0, 0, 0, 0);
+  // noon local → UTC stays on same calendar day; used for all Prisma WHERE + writes
+  const dateOnly = dateForPrisma(localMidnight);
 
   const venue = await prisma.venue.findUnique({
     where: { id: venueId },

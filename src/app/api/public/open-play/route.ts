@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { requirePortalAuth } from "@/lib/portal-auth";
 import { getPortalVenueId } from "@/lib/venue-config";
 import { resolveOpenPlaySessions, createOpenPlayRegistration } from "@/lib/open-play";
+import { parseDateKey } from "@/lib/date";
 import { buildVietQRUrl } from "@/lib/vietqr";
 
 export const dynamic = "force-dynamic";
@@ -56,8 +57,7 @@ export async function POST(request: NextRequest) {
     });
     if (!venue) return error("Venue not found", 404);
 
-    // Use new Date("YYYY-MM-DD") — produces UTC midnight, which PG DATE stores correctly.
-    const reg = await createOpenPlayRegistration(playerId, venueId, body.scheduleEntryId, new Date(body.date));
+    const reg = await createOpenPlayRegistration(playerId, venueId, body.scheduleEntryId, parseDateKey(body.date));
 
     const qrUrl = buildVietQRUrl({
       bankBin: venue.bankName || "",

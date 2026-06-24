@@ -40,8 +40,10 @@ export async function POST(request: NextRequest) {
     const venueTimezone = venue.timezone ?? "Asia/Ho_Chi_Minh";
     const config = getBookingConfig(venue.settings as Record<string, unknown>);
 
-    const dateKey = dateStr.split("T")[0]; // bare YYYY-MM-DD — written to Prisma DATE columns
+    const dateKey = dateStr.split("T")[0]; // bare YYYY-MM-DD
     const date = parseDateKey(dateKey);    // local-midnight Date — used for conflict WHERE queries
+    // Noon local time → UTC is always same calendar day regardless of offset.
+    const dateForWrite = new Date(dateKey + "T12:00:00+07:00");
     const startTime = new Date(startTimeStr);
     const endTime = new Date(startTime.getTime() + config.slotDurationMinutes * slotCount * 60 * 1000);
 
@@ -80,7 +82,7 @@ export async function POST(request: NextRequest) {
             courtId,
             venueId,
             playerId,
-            date: dateKey,
+            date: dateForWrite,
             startTime,
             endTime,
             status: "confirmed",
