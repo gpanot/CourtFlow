@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { formatDateKey as _formatDateKey } from "@/lib/date";
+import { formatDateKey as _formatDateKey, parseDateKey } from "@/lib/date";
 
 function resolveLocale(lang: string | undefined): string {
   if (lang?.startsWith("vi")) return "vi-VN";
@@ -40,12 +40,18 @@ export function useBookFormatters() {
   );
 
   const formatDateLong = useCallback(
-    (d: Date | string) =>
-      new Date(d).toLocaleDateString(locale, {
+    (d: Date | string) => {
+      // If d is a date-only string (YYYY-MM-DD), parse via parseDateKey to get
+      // local midnight — avoids the UTC midnight trap of new Date("YYYY-MM-DD").
+      const date = typeof d === "string" && /^\d{4}-\d{2}-\d{2}$/.test(d)
+        ? parseDateKey(d)
+        : new Date(d);
+      return date.toLocaleDateString(locale, {
         year: "numeric",
         month: "2-digit",
         day: "2-digit",
-      }),
+      });
+    },
     [locale]
   );
 

@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { json, error } from "@/lib/api-helpers";
 import { prisma } from "@/lib/db";
 import { requirePortalAuth } from "@/lib/portal-auth";
-import { toDateKey } from "@/lib/date";
+import { toDateKey, parseDateKey } from "@/lib/date";
 import { getPortalVenueId } from "@/lib/venue-config";
 
 import { getBookingConfig, resolveSlotPrice } from "@/lib/booking";
@@ -40,8 +40,7 @@ export async function POST(request: NextRequest) {
     const venueTimezone = venue.timezone ?? "Asia/Ho_Chi_Minh";
     const config = getBookingConfig(venue.settings as Record<string, unknown>);
 
-    // "YYYY-MM-DD" → UTC midnight. PG DATE stores "2026-06-17" correctly from this.
-    const date = new Date(dateStr.split("T")[0]);
+    const date = parseDateKey(dateStr.split("T")[0]);
     const startTime = new Date(startTimeStr);
     const endTime = new Date(startTime.getTime() + config.slotDurationMinutes * slotCount * 60 * 1000);
 

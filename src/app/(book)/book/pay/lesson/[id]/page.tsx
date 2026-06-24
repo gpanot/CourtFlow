@@ -14,7 +14,9 @@ interface LessonDetail {
   paymentStatus: string;
   paymentRef: string | null;
   priceValue: number;
+  date: string;
   startTime: string;
+  endTime: string;
   coach: { name: string };
   court: { label: string } | null;
   package: { name: string };
@@ -33,7 +35,7 @@ export default function LessonPaymentPage() {
   const searchParams = useSearchParams();
   const { status } = usePlayerSession();
   const { t } = useTranslation();
-  const { formatPrice } = useBookFormatters();
+  const { formatPrice, formatDateField, formatTime } = useBookFormatters();
   const { venueId: playerVenueId } = usePlayerVenue();
 
   const [lesson, setLesson] = useState<LessonDetail | null>(null);
@@ -229,9 +231,17 @@ export default function LessonPaymentPage() {
         {lesson.paymentRef && (
           <p className="text-sm font-bold text-[var(--cm-accent)] mb-1">{lesson.paymentRef}</p>
         )}
-        <p className="text-sm font-medium">{lesson.coach.name}</p>
-        <p className="text-xs text-[var(--cm-text-sec)]">{lesson.package.name}{lesson.court ? ` · ${lesson.court.label}` : ""}</p>
-        <p className="text-sm font-semibold text-[var(--cm-accent)] mt-1">{formatPrice(lesson.priceValue)}</p>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="text-sm font-medium">{lesson.coach.name}</p>
+            <p className="text-xs text-[var(--cm-text-sec)]">{lesson.package.name}{lesson.court ? ` · ${lesson.court.label}` : ""}</p>
+            <p className="text-sm font-semibold text-[var(--cm-accent)] mt-1">{formatPrice(lesson.priceValue)}</p>
+          </div>
+          <div className="text-right shrink-0">
+            <p className="text-xs font-medium text-[var(--cm-text)]">{formatDateField(lesson.date)}</p>
+            <p className="text-xs text-[var(--cm-text-sec)]">{formatTime(lesson.startTime)} – {formatTime(lesson.endTime)}</p>
+          </div>
+        </div>
       </div>
 
       {/* QR + upload / auto-payment */}
