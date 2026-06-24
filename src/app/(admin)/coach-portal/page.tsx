@@ -244,7 +244,7 @@ function AvailabilityEditor({ token }: { token: string }) {
     <div className="space-y-3">
       {err && <div className="flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400"><AlertCircle className="h-4 w-4 shrink-0" />{err}</div>}
 
-      <CoachAvailabilityEditor slots={slots} onChange={setSlots} longLabels />
+      <CoachAvailabilityEditor slots={slots} onChange={setSlots} longLabels useDropdowns />
 
       <button type="button" onClick={() => setShowHolidays((v) => !v)}
         className="flex w-full items-center justify-between rounded-xl border border-neutral-800 bg-neutral-900/40 px-4 py-3 text-sm text-neutral-400">
