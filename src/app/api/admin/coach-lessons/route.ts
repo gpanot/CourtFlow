@@ -47,14 +47,10 @@ export async function GET(request: NextRequest) {
       if (dateFrom || dateTo) {
         const dateFilter: Record<string, unknown> = {};
         if (dateFrom) {
-          const d = new Date(dateFrom);
-          d.setHours(0, 0, 0, 0);
-          dateFilter.gte = d;
+          dateFilter.gte = new Date((dateFrom as string).split("T")[0] + "T12:00:00+07:00");
         }
         if (dateTo) {
-          const d = new Date(dateTo);
-          d.setHours(23, 59, 59, 999);
-          dateFilter.lte = d;
+          dateFilter.lte = new Date((dateTo as string).split("T")[0] + "T12:00:00+07:00");
         }
         where.date = dateFilter;
       }
@@ -89,9 +85,7 @@ export async function GET(request: NextRequest) {
 
     // Legacy day-by-day mode
     if (dateStr) {
-      const date = new Date(dateStr);
-      date.setHours(0, 0, 0, 0);
-      where.date = date;
+      where.date = new Date((dateStr as string).split("T")[0] + "T12:00:00+07:00");
     }
 
     const lessons = await prisma.coachLesson.findMany({

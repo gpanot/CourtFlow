@@ -15,9 +15,7 @@ export async function GET(request: NextRequest) {
 
     const where: Record<string, unknown> = { venueId };
     if (dateStr) {
-      const date = new Date(dateStr);
-      date.setHours(0, 0, 0, 0);
-      where.date = date;
+      where.date = new Date((dateStr as string).split("T")[0] + "T12:00:00+07:00");
     }
 
     const blocks = await prisma.courtBlock.findMany({
