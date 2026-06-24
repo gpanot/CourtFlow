@@ -120,6 +120,137 @@ export async function isCoachAvailable(
   return { available: true };
 }
 
+export interface CoachAvailabilitySummary {
+  coachId: string;
+  coachName: string;
+  /** First entry from coachSpecialties[], or undefined when empty. */
+  specialization: string | undefined;
+  /** Lowest priceValue across the coach's active packages for this venue (VND). */
+  hourlyRate: number;
+  nextAvailableSlot: { date: Date; startTime: Date; endTime: Date } | null;
+}
+
+/**
+ * Find active coaches at a venue who teach a given sport and report their
+ * next available slot.
+ *
+ * Sport matching: the `sport` parameter is matched case-insensitively against
+ * each coach's `coachSpecialties` array (a free-text String[] on StaffMember).
+ * A coach is included if any element of coachSpecialties contains the sport
+ * string (substring, case-insensitive), e.g. "pickleball" matches
+ * ["Pickleball", "Doubles Strategy"].
+ *
+ * Two modes depending on what `options` contains:
+ *
+ *  • date + timeWindow supplied → for each coach, probe every hourly slot
+ *    within [startHour, endHour) on that date using `isCoachAvailable`.
+ *    nextAvailableSlot is the first open slot found, or null if all are busy.
+ *
+ *  • date / timeWindow absent → use `findNextAvailableSlot` starting from
+ *    today (local midnight), with a 14-day look-ahead. The slot duration fed
+ *    to that function is the minimum durationMin across the coach's active
+ *    packages for this venue (falls back to 60 min when no packages exist).
+ *
+ * Coaches with null nextAvailableSlot are excluded from the result.
+ * Remaining coaches are sorted soonest-first by nextAvailableSlot.startTime
+ * and capped at `options.limit` (default 3).
+ *
+ * No Next.js coupling — plain importable async function.
+ */
+export async function findAvailableCoachesForSport(
+  venueId: string,
+  sport: string,
+  options?: {
+    date?: Date;
+    timeWindow?: { startHour: number; endHour: number };
+    limit?: number;
+  }
+): Promise<CoachAvailabilitySummary[]> {
+  const limit = options?.limit ?? 3;
+
+  // Load all active coaches at this venue whose specialties mention the sport
+  const coaches = await prisma.staffMember.findMany({
+    where: {
+      isCoach: true,
+      venueAssignments: { some: { venueId } },
+    },
+    select: {
+      id: true,
+      name: true,
+      coachSpecialties: true,
+      coachPackages: {
+        where: { venueId, active: true },
+        select: { durationMin: true, priceValue: true },
+      },
+    },
+  });
+
+  // Filter by sport — case-insensitive substring match against any specialty
+  const sportLower = sport.toLowerCase();
+  const matchingCoaches = coaches.filter((c) =>
+    c.coachSpecialties.some((s) => s.toLowerCase().includes(sportLower))
+  );
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const results: CoachAvailabilitySummary[] = [];
+
+  for (const coach of matchingCoaches) {
+    const lowestPrice =
+      coach.coachPackages.length > 0
+        ? Math.min(...coach.coachPackages.map((p) => p.priceValue))
+        : 0;
+
+    let nextAvailableSlot: { date: Date; startTime: Date; endTime: Date } | null = null;
+
+    if (options?.date && options?.timeWindow) {
+      // Probe each whole-hour slot within the given window
+      const { startHour, endHour } = options.timeWindow;
+      const probeDate = new Date(options.date);
+      probeDate.setHours(0, 0, 0, 0);
+
+      for (let h = startHour; h < endHour; h++) {
+        const slotStart = new Date(probeDate);
+        slotStart.setHours(h, 0, 0, 0);
+        const slotEnd = new Date(slotStart);
+        slotEnd.setHours(h + 1, 0, 0, 0);
+
+        const avail = await isCoachAvailable(coach.id, probeDate, slotStart, slotEnd);
+        if (avail.available) {
+          nextAvailableSlot = { date: probeDate, startTime: slotStart, endTime: slotEnd };
+          break;
+        }
+      }
+    } else {
+      // No specific window — scan forward from today using the shortest package duration
+      const minDuration =
+        coach.coachPackages.length > 0
+          ? Math.min(...coach.coachPackages.map((p) => p.durationMin))
+          : 60;
+
+      nextAvailableSlot = await findNextAvailableSlot(coach.id, today, minDuration);
+    }
+
+    if (!nextAvailableSlot) continue;
+
+    results.push({
+      coachId: coach.id,
+      coachName: coach.name,
+      specialization: coach.coachSpecialties[0],
+      hourlyRate: lowestPrice,
+      nextAvailableSlot,
+    });
+  }
+
+  // Sort soonest-first, cap at limit
+  results.sort(
+    (a, b) => a.nextAvailableSlot!.startTime.getTime() - b.nextAvailableSlot!.startTime.getTime()
+  );
+
+  return results.slice(0, limit);
+}
+
 /**
  * Scan forward from `fromDate` to find the nearest available slot for a coach.
  * Searches up to 14 days ahead, returns null if nothing found.

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import type { CoachPackage } from "@prisma/client";
 import { getBookingConfig } from "@/lib/booking";
 import { generatePaymentRef } from "@/modules/courtpay/lib/payment-reference";
 import { buildVietQRUrl } from "@/lib/vietqr";
@@ -7,6 +8,58 @@ import { buildLessonEmailContext, sendLessonEventEmails } from "@/lib/email/send
 import { toDateKey } from "@/lib/date";
 
 const HOLD_MINUTES = 5;
+
+export type DefaultPackage = Pick<
+  CoachPackage,
+  "id" | "name" | "lessonType" | "durationMin" | "priceValue" | "sessionsIncluded"
+>;
+
+/**
+ * Returns the "default" single-session package for a coach at a venue.
+ *
+ * Selection order (first match wins):
+ *   1. Active private package with sessionsIncluded = 1, lowest sortOrder
+ *   2. Any active private package, lowest sortOrder
+ *   3. Any active package, lowest sortOrder
+ *   4. null — no active packages exist
+ *
+ * This lets the booking agent proceed without the player ever knowing package IDs.
+ * When a player says "book a one-time lesson" the agent calls this, gets the
+ * packageId, then passes it to create_coach_lesson.
+ */
+export async function getDefaultPackageForCoach(
+  coachId: string,
+  venueId: string
+): Promise<DefaultPackage | null> {
+  const packages = await prisma.coachPackage.findMany({
+    where: { coachId, venueId, active: true },
+    select: {
+      id: true,
+      name: true,
+      lessonType: true,
+      durationMin: true,
+      priceValue: true,
+      sessionsIncluded: true,
+      sortOrder: true,
+    },
+    orderBy: { sortOrder: "asc" },
+  });
+
+  if (packages.length === 0) return null;
+
+  // Prefer: private + single-session
+  const singlePrivate = packages.find(
+    (p) => p.lessonType === "private" && p.sessionsIncluded === 1
+  );
+  if (singlePrivate) return singlePrivate;
+
+  // Fallback: any private
+  const anyPrivate = packages.find((p) => p.lessonType === "private");
+  if (anyPrivate) return anyPrivate;
+
+  // Last resort: first active package
+  return packages[0];
+}
 
 export interface CreateCoachLessonInput {
   coachId: string;

@@ -6,6 +6,7 @@ import os from "os";
 import next from "next";
 import path from "path";
 import { Server as SocketIOServer } from "socket.io";
+import { handleMcpRequest } from "./mcp-handler";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = "0.0.0.0";
@@ -97,6 +98,18 @@ app.prepare().then(() => {
       });
     }
   }
+
+  // MCP server — internal only, bearer-token protected (MCP_SERVER_SECRET).
+  // Mounted before the Next.js catch-all so it is handled by Express directly.
+  expressApp.post("/mcp", (req, res) => {
+    handleMcpRequest(req, res).catch((err: unknown) => {
+      console.error("[MCP] Unhandled error:", err);
+      if (!res.headersSent) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Internal server error" }));
+      }
+    });
+  });
 
   expressApp.all("/{*path}", (req, res) => {
     return handle(req, res);
