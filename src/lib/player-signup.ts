@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import { prisma } from "./db";
 import bcrypt from "bcryptjs";
 import type { Prisma } from "@prisma/client";
 

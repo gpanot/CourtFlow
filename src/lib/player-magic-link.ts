@@ -24,7 +24,7 @@
 
 import jwt from "jsonwebtoken";
 import { randomUUID } from "crypto";
-import { prisma } from "@/lib/db";
+import { prisma } from "./db";
 
 const PLAYER_JWT_SECRET =
   process.env.PLAYER_JWT_SECRET ||

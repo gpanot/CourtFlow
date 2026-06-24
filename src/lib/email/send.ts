@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import { prisma } from "../db";
 import { getResendClient } from "./client";
 
 const FROM = "noreply_bookings@thecourtflow.com";

@@ -1,11 +1,11 @@
-import { prisma } from "@/lib/db";
+import { prisma } from "./db";
 import type { CoachPackage } from "@prisma/client";
-import { getBookingConfig } from "@/lib/booking";
-import { generatePaymentRef } from "@/modules/courtpay/lib/payment-reference";
-import { buildVietQRUrl } from "@/lib/vietqr";
-import { isCoachAvailable, findNextAvailableSlot } from "@/lib/coach-availability";
-import { buildLessonEmailContext, sendLessonEventEmails } from "@/lib/email/send";
-import { toDateKey, parseDateKey } from "@/lib/date";
+import { getBookingConfig } from "./booking";
+import { generatePaymentRef } from "../modules/courtpay/lib/payment-reference";
+import { buildVietQRUrl } from "./vietqr";
+import { isCoachAvailable, findNextAvailableSlot } from "./coach-availability";
+import { buildLessonEmailContext, sendLessonEventEmails } from "./email/send";
+import { toDateKey, parseDateKey } from "./date";
 
 const HOLD_MINUTES = 5;
 
