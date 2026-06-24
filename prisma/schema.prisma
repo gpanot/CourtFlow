@@ -259,6 +259,7 @@ model Player {
   coachCredits          PlayerCoachCredit[]
   openPlayRegistrations OpenPlayRegistration[]
   playerNotes           PlayerNote[]
+  magicTokens           PlayerMagicToken[]
 
   @@index([registrationVenueId])
   @@index([playerIdentityId])
@@ -1388,4 +1389,22 @@ model CreditTransaction {
 
   @@index([creditId])
   @@map("credit_transactions")
+}
+
+/// One-time login tokens for players whose accounts were created by the
+/// booking agent (no password known to the player). Each token may be
+/// consumed exactly once; subsequent visits return a 410 Gone response.
+model PlayerMagicToken {
+  id        String    @id @default(cuid())
+  playerId  String    @map("player_id")
+  /// jti (JWT ID) stored so we can look up the token without embedding secrets
+  jti       String    @unique @map("jti")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([playerId])
+  @@map("player_magic_tokens")
 }

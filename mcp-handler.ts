@@ -24,9 +24,10 @@ import {
   findNextAvailableSlot,
   findAvailableCoachesForSport,
 } from "./src/lib/coach-availability";
-import { toDateKey } from "./src/lib/date";
+import { toDateKey, parseDateKey } from "./src/lib/date";
 import { createPhonePlayer } from "./src/lib/player-signup";
 import { createCoachLesson, getDefaultPackageForCoach } from "./src/lib/coach-lesson";
+import { createMagicLoginToken } from "./src/lib/player-magic-link";
 
 // ---------------------------------------------------------------------------
 // Timezone helper — all times are serialized in Asia/Ho_Chi_Minh (UTC+7).
@@ -81,8 +82,7 @@ function buildMcpServer(): McpServer {
       venueId: z.string().describe("Venue ID (used by findNextAvailableSlot for booking config)"),
     },
     async ({ coachId, date, startTime, endTime, venueId }) => {
-      const dateObj = new Date(date);
-      dateObj.setHours(0, 0, 0, 0);
+      const dateObj = parseDateKey(date);
       const startObj = new Date(startTime);
       const endObj = new Date(endTime);
 
@@ -139,7 +139,7 @@ function buildMcpServer(): McpServer {
     },
     async ({ sport, venueId, date, timeWindow, limit }) => {
       const coaches = await findAvailableCoachesForSport(venueId, sport, {
-        date: date ? (() => { const d = new Date(date); d.setHours(0, 0, 0, 0); return d; })() : undefined,
+        date: date ? parseDateKey(date) : undefined,
         timeWindow,
         limit,
       });
@@ -241,6 +241,28 @@ function buildMcpServer(): McpServer {
 
       return {
         content: [{ type: "text" as const, text: JSON.stringify(serialized) }],
+      };
+    }
+  );
+
+  // ── Tool 6: generate_login_link ────────────────────────────────────────────
+  server.tool(
+    "generate_login_link",
+    "Generate a one-time magic login URL for a player. Call this after create_coach_lesson succeeds and include the URL in the booking confirmation. The link is valid for 5 minutes and single-use — the player must click it right away to view their booking.",
+    {
+      playerId: z.string().describe("Player ID returned by create_player_account"),
+      venueId: z.string().describe("Venue ID"),
+    },
+    async ({ playerId, venueId }) => {
+      void venueId;
+      const { url } = await createMagicLoginToken(playerId);
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({ url, expiresInSeconds: 300, singleUse: true }),
+          },
+        ],
       };
     }
   );

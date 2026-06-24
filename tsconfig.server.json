@@ -13,5 +13,20 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["server.ts", "mcp-handler.ts"]
+  "include": [
+    "server.ts",
+    "mcp-handler.ts",
+    "src/lib/coach-availability.ts",
+    "src/lib/date.ts",
+    "src/lib/player-signup.ts",
+    "src/lib/coach-lesson.ts",
+    "src/lib/player-magic-link.ts",
+    "src/lib/db.ts",
+    "src/lib/google-calendar.ts",
+    "src/lib/booking.ts",
+    "src/lib/vietqr.ts",
+    "src/lib/email/send.ts",
+    "src/lib/email/client.ts",
+    "src/modules/courtpay/lib/payment-reference.ts"
+  ]
 }
