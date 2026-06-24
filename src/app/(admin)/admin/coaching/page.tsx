@@ -32,6 +32,7 @@ import {
   ZoomIn,
   Filter,
   Calendar,
+  Download,
 } from "lucide-react";
 import { PaymentConfirmModal, type PaymentModalData, type PaymentConfirmResult } from "@/components/admin/PaymentConfirmModal";
 import { CoachProfileEditor } from "@/components/admin/CoachProfileEditor";
@@ -1773,6 +1774,34 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
   const unpaidCount = rows.filter((r) => !r.paymentStatus || r.paymentStatus === "pending").length;
   const proofCount = rows.filter((r) => r.paymentStatus === "proof_submitted").length;
 
+  const [exporting, setExporting] = useState(false);
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams({ venueId, dateFrom, dateTo });
+      if (statusFilter !== "all") params.set("status", statusFilter);
+      if (paymentFilter !== "all") params.set("paymentStatus", paymentFilter);
+      if (coachFilter !== "all") params.set("coachId", coachFilter);
+      if (debouncedSearch.trim().length >= 2) params.set("search", debouncedSearch.trim());
+      const token = typeof window !== "undefined" ? (localStorage.getItem("staff_token") ?? "") : "";
+      const res = await fetch(`/api/admin/coach-lessons/export-list?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `lessons-${dateFrom}-to-${dateTo}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Filter bar */}
@@ -1802,6 +1831,14 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
               onChange={(e) => setDateTo(e.target.value)}
               className="rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-white focus:border-teal-500 focus:outline-none"
             />
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:border-teal-500 hover:text-teal-300 disabled:opacity-50 transition-colors"
+            >
+              {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              Export CSV
+            </button>
           </div>
         </div>
 

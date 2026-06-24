@@ -42,6 +42,7 @@ import {
   Filter,
   DollarSign,
   CreditCard,
+  Download,
 } from "lucide-react";
 import { CourtsManager } from "@/components/admin/CourtsManager";
 
@@ -2251,6 +2252,33 @@ function AllBookingsTab({
   const unpaidCount = rows.filter((r) => !r.paymentStatus || r.paymentStatus === "pending").length;
   const proofCount = rows.filter((r) => r.paymentStatus === "proof_submitted").length;
 
+  const [exporting, setExporting] = useState(false);
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams({ venueId, dateFrom, dateTo });
+      if (statusFilter !== "all") params.set("status", statusFilter);
+      if (paymentFilter !== "all") params.set("paymentStatus", paymentFilter);
+      if (debouncedSearch.trim().length >= 2) params.set("search", debouncedSearch.trim());
+      const token = typeof window !== "undefined" ? (localStorage.getItem("staff_token") ?? "") : "";
+      const res = await fetch(`/api/admin/bookings/export?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `bookings-${dateFrom}-to-${dateTo}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Filter bar */}
@@ -2281,6 +2309,14 @@ function AllBookingsTab({
               onChange={(e) => setDateTo(e.target.value)}
               className="rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-white focus:border-purple-500 focus:outline-none"
             />
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:border-purple-500 hover:text-purple-300 disabled:opacity-50 transition-colors"
+            >
+              {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+              Export CSV
+            </button>
           </div>
         </div>
 
