@@ -45,10 +45,7 @@ export async function POST(request: NextRequest) {
     });
 
     const lesson = result.lesson as { date?: string; startTime?: unknown };
-    console.log(
-      `[coach-session:create] dateReceived="${date}" startTimeReceived="${startTime}"` +
-      ` → stored date="${lesson.date}" startTime="${lesson.startTime}"`
-    );
+    console.log(`[coach-session:create] dateReceived="${date}" startTimeReceived="${startTime}" → stored date="${lesson.date}" startTime="${lesson.startTime}"`);
 
     return json(result, 201);
   } catch (e) {

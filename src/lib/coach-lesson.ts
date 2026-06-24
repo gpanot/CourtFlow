@@ -5,7 +5,7 @@ import { generatePaymentRef } from "@/modules/courtpay/lib/payment-reference";
 import { buildVietQRUrl } from "@/lib/vietqr";
 import { isCoachAvailable, findNextAvailableSlot } from "@/lib/coach-availability";
 import { buildLessonEmailContext, sendLessonEventEmails } from "@/lib/email/send";
-import { toDateKey } from "@/lib/date";
+import { toDateKey, parseDateKey } from "@/lib/date";
 
 const HOLD_MINUTES = 5;
 
@@ -158,8 +158,12 @@ export async function createCoachLesson(
   });
   const config = getBookingConfig(venue.settings as Record<string, unknown>);
 
-  // new Date("YYYY-MM-DD") → UTC midnight. PG DATE stores the correct day from this.
-  const date = new Date(dateStr);
+  // Keep a Date object for availability checks (uses getDay(), getHours() etc.)
+  // but write the raw YYYY-MM-DD string into Prisma DATE columns — Prisma would
+  // otherwise call .toISOString() on a Date object, producing UTC midnight which
+  // shifts the stored date back by 7 h in UTC+7.
+  const dateKey = dateStr.split("T")[0]; // ensure bare YYYY-MM-DD
+  const date = parseDateKey(dateKey);    // local-midnight Date for availability logic
   const startTime = new Date(startTimeStr);
   const endTime = new Date(startTime);
   const slots = Math.max(1, Math.min(4, slotCount ?? 1));
@@ -257,7 +261,7 @@ export async function createCoachLesson(
           playerId,
           courtId: assignedCourtId,
           packageId,
-          date,
+          date: dateKey,
           startTime,
           endTime,
           priceValue: totalPrice,
@@ -297,7 +301,7 @@ export async function createCoachLesson(
       playerId,
       courtId: assignedCourtId,
       packageId,
-      date,
+      date: dateKey,
       startTime,
       endTime,
       priceValue: totalPrice,

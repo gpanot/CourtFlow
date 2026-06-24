@@ -153,7 +153,8 @@ export async function POST(request: NextRequest) {
       if (!court) return error("Court not found", 404);
     }
 
-    const date = new Date(body.date);
+    const dateKey = body.date.split("T")[0];
+    const date = new Date(dateKey);
     date.setHours(0, 0, 0, 0);
 
     const startTime = new Date(body.startTime);
@@ -207,7 +208,7 @@ export async function POST(request: NextRequest) {
         playerId: body.playerId,
         packageId: body.packageId,
         courtId: body.courtId || null,
-        date,
+        date: dateKey,
         startTime,
         endTime,
         priceValue,
