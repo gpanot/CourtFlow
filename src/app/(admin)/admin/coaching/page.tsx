@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import adminI18n from "@/i18n/admin-i18n";
 import { api } from "@/lib/api-client";
+import { useSessionStore } from "@/stores/session-store";
 import { cn } from "@/lib/cn";
 import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
 import {
@@ -1783,9 +1784,10 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
       if (paymentFilter !== "all") params.set("paymentStatus", paymentFilter);
       if (coachFilter !== "all") params.set("coachId", coachFilter);
       if (debouncedSearch.trim().length >= 2) params.set("search", debouncedSearch.trim());
-      const token = typeof window !== "undefined" ? (localStorage.getItem("staff_token") ?? "") : "";
+      const token = useSessionStore.getState().token ?? "";
       const res = await fetch(`/api/admin/coach-lessons/export-list?${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: "include",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) throw new Error("Export failed");
       const blob = await res.blob();
