@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import adminI18n from "@/i18n/admin-i18n";
 import { api } from "@/lib/api-client";
@@ -29,6 +30,8 @@ import {
   TableProperties,
   Loader2,
   ZoomIn,
+  Filter,
+  Calendar,
 } from "lucide-react";
 import { PaymentConfirmModal, type PaymentModalData, type PaymentConfirmResult } from "@/components/admin/PaymentConfirmModal";
 import { CoachProfileEditor } from "@/components/admin/CoachProfileEditor";
@@ -153,21 +156,26 @@ const STATUS_LABELS: Record<string, string> = {
 
 export default function CoachingPage() {
   const { t } = useTranslation("translation", { i18n: adminI18n });
+  const searchParams = useSearchParams();
   const {
     venueId: selectedVenueId,
     setVenueId: setSelectedVenueId,
     venues,
   } = useAdminVenuePicker({ autoSelect: true });
-  const [tab, setTab] = useState<"coaches" | "lessons">("coaches");
+
+  const initialTab = (searchParams.get("tab") ?? "lessons") as "coaches" | "lessons" | "list";
+  const initialPaymentFilter = searchParams.get("paymentFilter") ?? "all";
+  const [tab, setTab] = useState<"coaches" | "lessons" | "list">(
+    ["coaches", "lessons", "list"].includes(initialTab) ? initialTab : "lessons"
+  );
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="text-xl font-bold md:text-2xl flex items-center gap-2">
           <GraduationCap className="h-6 w-6 text-teal-400" />
           {t("coaching.title")}
         </h2>
-
         {venues.length > 1 && (
           <AdminVenuePicker
             venueId={selectedVenueId}
@@ -178,25 +186,28 @@ export default function CoachingPage() {
         )}
       </div>
 
-      <div className="flex gap-1 rounded-xl bg-neutral-900 p-1">
-        <button
-          onClick={() => setTab("coaches")}
-          className={cn(
-            "flex-1 flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-medium transition-colors",
-            tab === "coaches" ? "bg-teal-600 text-white" : "text-neutral-400 hover:text-white"
-          )}
-        >
-          <Package className="h-4 w-4" /> {t("coaching.tabCoachesPackages")}
-        </button>
-        <button
-          onClick={() => setTab("lessons")}
-          className={cn(
-            "flex-1 flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-medium transition-colors",
-            tab === "lessons" ? "bg-teal-600 text-white" : "text-neutral-400 hover:text-white"
-          )}
-        >
-          <CalendarDays className="h-4 w-4" /> {t("coaching.tabLessons")}
-        </button>
+      <div className="flex items-center justify-between border-b border-neutral-800">
+        <div className="flex gap-1">
+          {([
+            { key: "lessons" as const, label: t("coaching.tabLessons"), icon: CalendarDays },
+            { key: "list" as const, label: "All Lessons", icon: TableProperties },
+            { key: "coaches" as const, label: t("coaching.tabCoachesPackages"), icon: Package },
+          ]).map((item) => (
+            <button
+              key={item.key}
+              onClick={() => setTab(item.key)}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px",
+                tab === item.key
+                  ? "border-teal-500 text-white"
+                  : "border-transparent text-neutral-500 hover:text-neutral-300"
+              )}
+            >
+              <item.icon className="h-4 w-4" />
+              {item.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {selectedVenueId && tab === "coaches" && (
@@ -204,6 +215,9 @@ export default function CoachingPage() {
       )}
       {selectedVenueId && tab === "lessons" && (
         <LessonsTab venueId={selectedVenueId} />
+      )}
+      {selectedVenueId && tab === "list" && (
+        <AllLessonsTab venueId={selectedVenueId} initialPaymentFilter={initialPaymentFilter} />
       )}
     </div>
   );
@@ -1567,6 +1581,479 @@ function LessonsTab({ venueId }: { venueId: string }) {
       )}
 
       {/* Payment Confirm Modal */}
+      {paymentModalData && (
+        <PaymentConfirmModal
+          data={paymentModalData}
+          accentColor="teal"
+          onConfirm={handlePaymentConfirm}
+          onRevert={paymentModalData.currentStatus === "PAID" ? handlePaymentRevert : undefined}
+          onClose={() => setPaymentModalData(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── AllLessonsTab ─────────────────────────────────────────────────────────────
+
+interface AllLessonRow {
+  id: string;
+  venueId: string;
+  coachId: string;
+  playerId: string;
+  courtId: string | null;
+  packageId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  status: "confirmed" | "completed" | "cancelled" | "no_show";
+  priceValue: number;
+  note: string | null;
+  paymentStatus: string;
+  paidAt: string | null;
+  paymentMethod: string | null;
+  proofUrl: string | null;
+  paymentNote: string | null;
+  coach: { id: string; name: string; coachPhoto: string | null };
+  player: { id: string; name: string; phone: string };
+  court: { id: string; label: string } | null;
+  package: { id: string; name: string; lessonType: string; durationMin: number };
+}
+
+const LESSON_STATUS_COLORS: Record<string, string> = {
+  confirmed: "bg-blue-600/20 text-blue-400",
+  completed: "bg-green-600/20 text-green-400",
+  cancelled: "bg-neutral-700/40 text-neutral-400",
+  no_show: "bg-red-600/20 text-red-400",
+};
+
+const LESSON_PAYMENT_COLORS: Record<string, string> = {
+  paid: "bg-green-600/20 text-green-400",
+  PAID: "bg-green-600/20 text-green-400",
+  proof_submitted: "bg-orange-600/20 text-orange-400",
+  pending: "bg-neutral-700/30 text-neutral-400",
+};
+
+const LESSON_PAYMENT_LABELS: Record<string, string> = {
+  paid: "Paid",
+  PAID: "Paid",
+  proof_submitted: "Proof",
+  pending: "Unpaid",
+};
+
+const LESSON_DATE_PRESETS = [
+  { label: "Last 7 days", days: 7 },
+  { label: "Last 30 days", days: 30 },
+  { label: "Last 90 days", days: 90 },
+];
+
+function lessonLocalISODate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: string; initialPaymentFilter?: string }) {
+  const defaultTo = lessonLocalISODate(new Date());
+  const defaultFrom = lessonLocalISODate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+
+  const [dateFrom, setDateFrom] = useState(defaultFrom);
+  const [dateTo, setDateTo] = useState(defaultTo);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [paymentFilter, setPaymentFilter] = useState(initialPaymentFilter);
+  const [coachFilter, setCoachFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [rows, setRows] = useState<AllLessonRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [coaches, setCoaches] = useState<Array<{ id: string; name: string }>>([]);
+  const [paymentModalData, setPaymentModalData] = useState<PaymentModalData | null>(null);
+
+  useEffect(() => {
+    api.get<Array<{ id: string; name: string }>>(`/api/admin/coaches?venueId=${venueId}`)
+      .then(setCoaches)
+      .catch(() => {});
+  }, [venueId]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const fetchRows = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        venueId,
+        list: "true",
+        dateFrom,
+        dateTo,
+        page: String(page),
+        pageSize: "50",
+      });
+      if (statusFilter !== "all") params.set("status", statusFilter);
+      if (paymentFilter !== "all") params.set("paymentStatus", paymentFilter);
+      if (coachFilter !== "all") params.set("coachId", coachFilter);
+      if (debouncedSearch.trim().length >= 2) params.set("search", debouncedSearch.trim());
+
+      const data = await api.get<{ lessons: AllLessonRow[]; total: number; totalPages: number }>(
+        `/api/admin/coach-lessons?${params}`
+      );
+      setRows(data.lessons ?? []);
+      setTotal(data.total ?? 0);
+      setTotalPages(data.totalPages ?? 1);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [venueId, dateFrom, dateTo, statusFilter, paymentFilter, coachFilter, debouncedSearch, page]);
+
+  useEffect(() => { void fetchRows(); }, [fetchRows]);
+  useEffect(() => { setPage(1); }, [venueId, dateFrom, dateTo, statusFilter, paymentFilter, coachFilter, debouncedSearch]);
+
+  const applyPreset = (days: number) => {
+    setDateTo(lessonLocalISODate(new Date()));
+    setDateFrom(lessonLocalISODate(new Date(Date.now() - days * 24 * 60 * 60 * 1000)));
+  };
+
+  const fmtTime = (iso: string) =>
+    new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+  const fmtDate = (iso: string) =>
+    new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+
+  const handleApprovePayment = async (id: string) => {
+    setApprovingId(id);
+    try {
+      await api.patch(`/api/admin/coach-lessons/${id}/approve-payment`, {});
+      await fetchRows();
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
+  const handlePaymentConfirm = async (entityId: string, result: PaymentConfirmResult) => {
+    await api.patch(`/api/admin/coach-lessons/${entityId}`, {
+      paymentStatus: result.status,
+      amountValue: result.amountValue,
+      paymentMethod: result.paymentMethod,
+      paidAt: result.paidAt,
+      paymentNote: result.note,
+      proofUrl: result.proofUrl,
+    });
+    setPaymentModalData(null);
+    await fetchRows();
+  };
+
+  const handlePaymentRevert = async (entityId: string) => {
+    await api.patch(`/api/admin/coach-lessons/${entityId}`, { paymentStatus: "pending" });
+    setPaymentModalData(null);
+    await fetchRows();
+  };
+
+  const openPaymentModal = (row: AllLessonRow) => {
+    setPaymentModalData({
+      entityId: row.id,
+      label: `${row.coach.name} → ${row.player.name}`,
+      amountValue: row.priceValue,
+      currentStatus: (row.paymentStatus === "PAID" || row.paymentStatus === "paid" ? "PAID" : "UNPAID") as "PAID" | "UNPAID",
+      existingProofUrl: row.proofUrl,
+      paymentMethod: row.paymentMethod,
+      paidAt: row.paidAt,
+      note: row.paymentNote,
+    });
+  };
+
+  const unpaidCount = rows.filter((r) => !r.paymentStatus || r.paymentStatus === "pending").length;
+  const proofCount = rows.filter((r) => r.paymentStatus === "proof_submitted").length;
+
+  return (
+    <div className="space-y-4">
+      {/* Filter bar */}
+      <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 space-y-3">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Filter className="h-3.5 w-3.5 text-neutral-500 shrink-0" />
+          {LESSON_DATE_PRESETS.map((p) => (
+            <button
+              key={p.days}
+              onClick={() => applyPreset(p.days)}
+              className="rounded-full border border-neutral-700 px-3 py-1 text-xs font-medium text-neutral-400 hover:border-teal-500 hover:text-teal-300 transition-colors"
+            >
+              {p.label}
+            </button>
+          ))}
+          <div className="flex items-center gap-2 ml-auto">
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-white focus:border-teal-500 focus:outline-none"
+            />
+            <span className="text-xs text-neutral-500">→</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-white focus:border-teal-500 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Status filter */}
+          <div className="flex items-center rounded-lg border border-neutral-700 overflow-hidden text-xs">
+            {(["all", "confirmed", "completed", "cancelled", "no_show"] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={cn(
+                  "px-3 py-1.5 font-medium transition-colors border-r border-neutral-700 last:border-r-0",
+                  statusFilter === s ? "bg-teal-600 text-white" : "bg-neutral-800 text-neutral-400 hover:text-white"
+                )}
+              >
+                {s === "all" ? "All status" : s === "no_show" ? "No show" : s.charAt(0).toUpperCase() + s.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          {/* Payment filter */}
+          <div className="flex items-center rounded-lg border border-neutral-700 overflow-hidden text-xs">
+            {([
+              { key: "all", label: "All payments" },
+              { key: "pending", label: "Unpaid" },
+              { key: "proof_submitted", label: "Proof" },
+              { key: "paid", label: "Paid" },
+            ] as const).map((p) => (
+              <button
+                key={p.key}
+                onClick={() => setPaymentFilter(p.key)}
+                className={cn(
+                  "px-3 py-1.5 font-medium transition-colors border-r border-neutral-700 last:border-r-0",
+                  paymentFilter === p.key ? "bg-teal-600 text-white" : "bg-neutral-800 text-neutral-400 hover:text-white"
+                )}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Coach filter */}
+          {coaches.length > 0 && (
+            <select
+              value={coachFilter}
+              onChange={(e) => setCoachFilter(e.target.value)}
+              className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs text-white focus:border-teal-500 focus:outline-none"
+            >
+              <option value="all">All coaches</option>
+              {coaches.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          )}
+
+          {/* Search */}
+          <div className="flex items-center gap-2 flex-1 min-w-[200px] rounded-lg border border-neutral-700 bg-neutral-800 px-3">
+            <Search className="h-3.5 w-3.5 text-neutral-500 shrink-0" />
+            <input
+              type="text"
+              placeholder="Search player name or phone…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="flex-1 bg-transparent py-2 text-sm text-white placeholder:text-neutral-500 focus:outline-none"
+            />
+            {search && (
+              <button onClick={() => setSearch("")} className="text-neutral-500 hover:text-white">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Summary chips */}
+      {(unpaidCount > 0 || proofCount > 0) && (
+        <div className="flex items-center gap-2">
+          {unpaidCount > 0 && (
+            <button
+              onClick={() => setPaymentFilter("pending")}
+              className="flex items-center gap-1.5 rounded-full bg-amber-600/15 border border-amber-600/30 px-3 py-1 text-xs font-medium text-amber-400 hover:bg-amber-600/25 transition-colors"
+            >
+              <DollarSign className="h-3 w-3" /> {unpaidCount} unpaid on this page
+            </button>
+          )}
+          {proofCount > 0 && (
+            <button
+              onClick={() => setPaymentFilter("proof_submitted")}
+              className="flex items-center gap-1.5 rounded-full bg-orange-600/15 border border-orange-600/30 px-3 py-1 text-xs font-medium text-orange-400 hover:bg-orange-600/25 transition-colors"
+            >
+              <ZoomIn className="h-3 w-3" /> {proofCount} proof{proofCount > 1 ? "s" : ""} to review
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Table */}
+      <div className="rounded-xl border border-neutral-800 overflow-hidden">
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-6 w-6 animate-spin text-neutral-500" />
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="py-16 text-center">
+            <Calendar className="h-10 w-10 text-neutral-600 mx-auto mb-3" />
+            <p className="text-neutral-400 text-sm">No lessons found for these filters</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="border-b border-neutral-800 bg-neutral-900/80">
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Player</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Coach</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Package</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Date</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Time</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Status</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Payment</th>
+                  <th className="text-right px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Price</th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => {
+                  const isPaid = row.paymentStatus === "paid" || row.paymentStatus === "PAID";
+                  const isProof = row.paymentStatus === "proof_submitted";
+                  const isPending = !row.paymentStatus || row.paymentStatus === "pending";
+                  return (
+                    <tr
+                      key={row.id}
+                      className="border-b border-neutral-800/50 hover:bg-neutral-800/30 transition-colors"
+                    >
+                      <td className="px-4 py-3">
+                        <div>
+                          <p className="font-medium text-white">{row.player.name}</p>
+                          <p className="text-xs text-neutral-500">{row.player.phone}</p>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-1.5">
+                          <GraduationCap className="h-3.5 w-3.5 text-teal-400 shrink-0" />
+                          <span className="text-neutral-300 whitespace-nowrap">{row.coach.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div>
+                          <p className="text-neutral-300 text-xs whitespace-nowrap">{row.package.name}</p>
+                          <span className={cn(
+                            "text-[10px] rounded px-1.5 py-0.5",
+                            row.package.lessonType === "private" ? "bg-purple-600/20 text-purple-400" : "bg-blue-600/20 text-blue-400"
+                          )}>
+                            {row.package.lessonType === "private" ? "Private" : "Group"}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-neutral-300 whitespace-nowrap">{fmtDate(row.startTime)}</td>
+                      <td className="px-4 py-3 text-neutral-300 whitespace-nowrap">
+                        {fmtTime(row.startTime)} – {fmtTime(row.endTime)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={cn("rounded px-2 py-0.5 text-xs font-medium", LESSON_STATUS_COLORS[row.status] ?? "bg-neutral-700 text-neutral-400")}>
+                          {row.status === "no_show" ? "No show" : row.status.charAt(0).toUpperCase() + row.status.slice(1)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <span className={cn("rounded px-2 py-0.5 text-xs font-medium", LESSON_PAYMENT_COLORS[row.paymentStatus] ?? "bg-neutral-700/30 text-neutral-400")}>
+                            {LESSON_PAYMENT_LABELS[row.paymentStatus] ?? "Unpaid"}
+                          </span>
+                          {isProof && row.proofUrl && (
+                            <a
+                              href={row.proofUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-orange-400 hover:text-orange-300"
+                              title="View proof"
+                            >
+                              <ZoomIn className="h-3.5 w-3.5" />
+                            </a>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right text-neutral-300 whitespace-nowrap">
+                        {formatPrice(row.priceValue)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-1 justify-end">
+                          {isProof && (
+                            <button
+                              onClick={() => handleApprovePayment(row.id)}
+                              disabled={approvingId === row.id}
+                              className="flex items-center gap-1 rounded-lg bg-green-600/15 border border-green-600/30 px-2 py-1 text-xs font-medium text-green-400 hover:bg-green-600/25 disabled:opacity-50 transition-colors"
+                            >
+                              {approvingId === row.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                              Approve
+                            </button>
+                          )}
+                          {(isPending || isPaid) && row.status !== "cancelled" && (
+                            <button
+                              onClick={() => openPaymentModal(row)}
+                              className={cn(
+                                "flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium transition-colors",
+                                isPaid
+                                  ? "bg-green-600/15 border border-green-600/30 text-green-400 hover:bg-green-600/25"
+                                  : "bg-amber-600/15 border border-amber-600/30 text-amber-400 hover:bg-amber-600/25"
+                              )}
+                            >
+                              <DollarSign className="h-3 w-3" />
+                              {isPaid ? "Paid" : "Record"}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-neutral-500">{total} total lessons</span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white disabled:opacity-30"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="text-neutral-400">
+              Page {page} of {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white disabled:opacity-30"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+      {totalPages <= 1 && total > 0 && (
+        <p className="text-xs text-neutral-500 text-right">{total} lesson{total !== 1 ? "s" : ""}</p>
+      )}
+
       {paymentModalData && (
         <PaymentConfirmModal
           data={paymentModalData}

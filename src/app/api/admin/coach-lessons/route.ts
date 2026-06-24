@@ -8,15 +8,86 @@ export async function GET(request: NextRequest) {
   try {
     requireManagerOrSuperAdmin(request.headers);
 
-    const venueId = request.nextUrl.searchParams.get("venueId");
-    const dateStr = request.nextUrl.searchParams.get("date");
-    const coachId = request.nextUrl.searchParams.get("coachId");
-    const playerId = request.nextUrl.searchParams.get("playerId");
+    const sp = request.nextUrl.searchParams;
+    const venueId = sp.get("venueId");
+    const dateStr = sp.get("date");
+    const coachId = sp.get("coachId");
+    const playerId = sp.get("playerId");
+
+    // List mode — cross-date with filters & pagination
+    const listMode = sp.get("list") === "true";
+    const status = sp.get("status");
+    const paymentStatus = sp.get("paymentStatus");
+    const search = sp.get("search");
+    const dateFrom = sp.get("dateFrom");
+    const dateTo = sp.get("dateTo");
+    const page = Math.max(1, parseInt(sp.get("page") ?? "1", 10));
+    const pageSize = Math.min(100, Math.max(1, parseInt(sp.get("pageSize") ?? "50", 10)));
 
     const where: Record<string, unknown> = {};
     if (venueId) where.venueId = venueId;
     if (coachId) where.coachId = coachId;
     if (playerId) where.playerId = playerId;
+
+    if (listMode) {
+      // Cross-date list mode
+      if (status && status !== "all") where.status = status;
+
+      if (paymentStatus && paymentStatus !== "all") {
+        if (paymentStatus === "paid") {
+          where.paymentStatus = { in: ["paid", "PAID"] };
+        } else if (paymentStatus === "pending") {
+          // "UNPAID" is the DB default, "pending" is the normalised code value
+          where.paymentStatus = { in: ["pending", "UNPAID"] };
+        } else {
+          where.paymentStatus = paymentStatus;
+        }
+      }
+
+      if (dateFrom || dateTo) {
+        const dateFilter: Record<string, unknown> = {};
+        if (dateFrom) {
+          const d = new Date(dateFrom);
+          d.setHours(0, 0, 0, 0);
+          dateFilter.gte = d;
+        }
+        if (dateTo) {
+          const d = new Date(dateTo);
+          d.setHours(23, 59, 59, 999);
+          dateFilter.lte = d;
+        }
+        where.date = dateFilter;
+      }
+
+      if (search && search.trim().length >= 2) {
+        where.player = {
+          OR: [
+            { name: { contains: search.trim(), mode: "insensitive" } },
+            { phone: { contains: search.trim() } },
+          ],
+        };
+      }
+
+      const [total, lessons] = await Promise.all([
+        prisma.coachLesson.count({ where: where as never }),
+        prisma.coachLesson.findMany({
+          where: where as never,
+          include: {
+            coach: { select: { id: true, name: true, coachPhoto: true } },
+            player: { select: { id: true, name: true, phone: true } },
+            court: { select: { id: true, label: true } },
+            package: { select: { id: true, name: true, lessonType: true, durationMin: true } },
+          },
+          orderBy: { startTime: "desc" },
+          skip: (page - 1) * pageSize,
+          take: pageSize,
+        }),
+      ]);
+
+      return json({ lessons, total, page, pageSize, totalPages: Math.ceil(total / pageSize) });
+    }
+
+    // Legacy day-by-day mode
     if (dateStr) {
       const date = new Date(dateStr);
       date.setHours(0, 0, 0, 0);

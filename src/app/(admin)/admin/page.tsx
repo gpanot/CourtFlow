@@ -496,7 +496,7 @@ export default function AdminOverview() {
               bg="bg-teal-500/10 border-teal-500/20"
               text={t("overview.unpaidCoaching", { count: data.coaching.unpaidCount, amount: fmtPrice(data.coaching.unpaidAmount) })}
               action={t("overview.view")}
-              onClick={() => router.push("/admin/coaching")}
+              onClick={() => router.push("/admin/coaching?tab=list&paymentFilter=pending")}
             />
           )}
           {data.memberships.expiringThisWeek > 0 && (

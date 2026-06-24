@@ -35,6 +35,13 @@ import {
   LayoutGrid,
   TableProperties,
   ShieldAlert,
+  Loader2,
+  Check,
+  ZoomIn,
+  X,
+  Filter,
+  DollarSign,
+  CreditCard,
 } from "lucide-react";
 import { CourtsManager } from "@/components/admin/CourtsManager";
 
@@ -223,7 +230,7 @@ export default function BookingsPage() {
   const [editSlotTime, setEditSlotTime] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<"bookings" | "settings" | "cancellation">("bookings");
+  const [activeTab, setActiveTab] = useState<"bookings" | "list" | "settings" | "cancellation">("bookings");
   const [viewMode, setViewMode] = useState<"court" | "time">(() => {
     if (typeof window === "undefined") return "court";
     return (localStorage.getItem("bookings-view-mode") as "court" | "time") || "court";
@@ -654,6 +661,7 @@ export default function BookingsPage() {
         <div className="flex gap-1">
         {([
           { key: "bookings" as const, label: t("bookings.title"), icon: Calendar },
+          { key: "list" as const, label: "All Bookings", icon: CalendarDays },
           { key: "settings" as const, label: t("settings.title"), icon: Settings },
           { key: "cancellation" as const, label: t("cancellation.title"), icon: ShieldAlert },
         ]).map((tab) => (
@@ -694,7 +702,25 @@ export default function BookingsPage() {
             </button>
           </div>
         )}
+        {activeTab === "list" && selectedVenueId && (
+          <div className="pb-2">
+            <button
+              onClick={openCreateFresh}
+              className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-500"
+            >
+              <Plus className="h-4 w-4" /> {t("bookings.newBooking")}
+            </button>
+          </div>
+        )}
       </div>
+
+      {activeTab === "list" && selectedVenueId && (
+        <AllBookingsTab
+          venueId={selectedVenueId}
+          venueTimezone={venueTimezone}
+          onEditBooking={(b) => openEditModal(b as BookingRecord)}
+        />
+      )}
 
       {activeTab === "settings" && venueDetails?.settings && (
         <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 space-y-6">
@@ -2080,6 +2106,395 @@ function CancellationPolicySection({
         {savedMsg && <span className="text-xs text-emerald-400">{savedMsg}</span>}
         {saveErr && <span className="text-xs text-red-400">{saveErr}</span>}
       </div>
+    </div>
+  );
+}
+
+// ─── AllBookingsTab ────────────────────────────────────────────────────────────
+
+interface AllBookingRow {
+  id: string;
+  courtId: string;
+  venueId: string;
+  playerId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  status: "confirmed" | "cancelled" | "completed" | "no_show";
+  paymentStatus: string | null;
+  paymentProofUrl: string | null;
+  priceValue: number;
+  coPlayerIds: string[];
+  cancelledAt: string | null;
+  court: { id: string; label: string };
+  player: { id: string; name: string; phone: string; avatar?: string; avatarPhotoPath?: string; facePhotoPath?: string };
+}
+
+const BOOKING_STATUS_COLORS: Record<string, string> = {
+  confirmed: "bg-blue-600/20 text-blue-400",
+  completed: "bg-green-600/20 text-green-400",
+  cancelled: "bg-neutral-700/40 text-neutral-400",
+  no_show: "bg-amber-600/20 text-amber-400",
+};
+
+const PAYMENT_STATUS_COLORS: Record<string, string> = {
+  paid: "bg-green-600/20 text-green-400",
+  PAID: "bg-green-600/20 text-green-400",
+  proof_submitted: "bg-orange-600/20 text-orange-400",
+  pending: "bg-neutral-700/30 text-neutral-400",
+};
+
+const PAYMENT_STATUS_LABELS: Record<string, string> = {
+  paid: "Paid",
+  PAID: "Paid",
+  proof_submitted: "Proof submitted",
+  pending: "Unpaid",
+};
+
+const DATE_PRESETS = [
+  { label: "Last 7 days", days: 7 },
+  { label: "Last 30 days", days: 30 },
+  { label: "Last 90 days", days: 90 },
+];
+
+function localISODate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function AllBookingsTab({
+  venueId,
+  venueTimezone,
+  onEditBooking,
+}: {
+  venueId: string;
+  venueTimezone?: string;
+  onEditBooking: (b: AllBookingRow) => void;
+}) {
+  const defaultTo = localISODate(new Date());
+  const defaultFrom = localISODate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+
+  const [dateFrom, setDateFrom] = useState(defaultFrom);
+  const [dateTo, setDateTo] = useState(defaultTo);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [paymentFilter, setPaymentFilter] = useState("all");
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(1);
+
+  const [rows, setRows] = useState<AllBookingRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const fetchRows = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        venueId,
+        dateFrom,
+        dateTo,
+        page: String(page),
+        pageSize: "50",
+      });
+      if (statusFilter !== "all") params.set("status", statusFilter);
+      if (paymentFilter !== "all") params.set("paymentStatus", paymentFilter);
+      if (debouncedSearch.trim().length >= 2) params.set("search", debouncedSearch.trim());
+
+      const data = await api.get<{ bookings: AllBookingRow[]; total: number; totalPages: number }>(
+        `/api/admin/bookings?${params}`
+      );
+      setRows(data.bookings ?? []);
+      setTotal(data.total ?? 0);
+      setTotalPages(data.totalPages ?? 1);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [venueId, dateFrom, dateTo, statusFilter, paymentFilter, debouncedSearch, page]);
+
+  useEffect(() => { void fetchRows(); }, [fetchRows]);
+
+  // Reset page when filters change
+  useEffect(() => { setPage(1); }, [venueId, dateFrom, dateTo, statusFilter, paymentFilter, debouncedSearch]);
+
+  const applyPreset = (days: number) => {
+    setDateTo(localISODate(new Date()));
+    setDateFrom(localISODate(new Date(Date.now() - days * 24 * 60 * 60 * 1000)));
+  };
+
+  const fmtTime = (iso: string) =>
+    new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", ...(venueTimezone ? { timeZone: venueTimezone } : {}) });
+
+  const fmtDate = (iso: string) =>
+    new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", ...(venueTimezone ? { timeZone: venueTimezone } : {}) });
+
+  const handleApprovePayment = async (id: string) => {
+    setApprovingId(id);
+    try {
+      await api.patch(`/api/admin/bookings/${id}/approve-payment`, {});
+      await fetchRows();
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
+  const unpaidCount = rows.filter((r) => !r.paymentStatus || r.paymentStatus === "pending").length;
+  const proofCount = rows.filter((r) => r.paymentStatus === "proof_submitted").length;
+
+  return (
+    <div className="space-y-4">
+      {/* Filter bar */}
+      <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-4 space-y-3">
+        {/* Quick date presets */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Filter className="h-3.5 w-3.5 text-neutral-500 shrink-0" />
+          {DATE_PRESETS.map((p) => (
+            <button
+              key={p.days}
+              onClick={() => applyPreset(p.days)}
+              className="rounded-full border border-neutral-700 px-3 py-1 text-xs font-medium text-neutral-400 hover:border-purple-500 hover:text-purple-300 transition-colors"
+            >
+              {p.label}
+            </button>
+          ))}
+          <div className="flex items-center gap-2 ml-auto">
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-white focus:border-purple-500 focus:outline-none"
+            />
+            <span className="text-xs text-neutral-500">→</span>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="rounded-lg border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-white focus:border-purple-500 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        {/* Status + payment + search */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center rounded-lg border border-neutral-700 overflow-hidden text-xs">
+            {(["all", "confirmed", "completed", "cancelled", "no_show"] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={cn(
+                  "px-3 py-1.5 font-medium transition-colors border-r border-neutral-700 last:border-r-0",
+                  statusFilter === s ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400 hover:text-white"
+                )}
+              >
+                {s === "all" ? "All status" : s === "no_show" ? "No show" : s.charAt(0).toUpperCase() + s.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center rounded-lg border border-neutral-700 overflow-hidden text-xs">
+            {([
+              { key: "all", label: "All payments" },
+              { key: "pending", label: "Unpaid" },
+              { key: "proof_submitted", label: "Proof" },
+              { key: "paid", label: "Paid" },
+            ] as const).map((p) => (
+              <button
+                key={p.key}
+                onClick={() => setPaymentFilter(p.key)}
+                className={cn(
+                  "px-3 py-1.5 font-medium transition-colors border-r border-neutral-700 last:border-r-0",
+                  paymentFilter === p.key ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400 hover:text-white"
+                )}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2 flex-1 min-w-[200px] rounded-lg border border-neutral-700 bg-neutral-800 px-3">
+            <Search className="h-3.5 w-3.5 text-neutral-500 shrink-0" />
+            <input
+              type="text"
+              placeholder="Search player name or phone…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="flex-1 bg-transparent py-2 text-sm text-white placeholder:text-neutral-500 focus:outline-none"
+            />
+            {search && (
+              <button onClick={() => setSearch("")} className="text-neutral-500 hover:text-white">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Summary chips */}
+      {(unpaidCount > 0 || proofCount > 0) && (
+        <div className="flex items-center gap-2">
+          {unpaidCount > 0 && (
+            <button
+              onClick={() => setPaymentFilter("pending")}
+              className="flex items-center gap-1.5 rounded-full bg-amber-600/15 border border-amber-600/30 px-3 py-1 text-xs font-medium text-amber-400 hover:bg-amber-600/25 transition-colors"
+            >
+              <DollarSign className="h-3 w-3" /> {unpaidCount} unpaid on this page
+            </button>
+          )}
+          {proofCount > 0 && (
+            <button
+              onClick={() => setPaymentFilter("proof_submitted")}
+              className="flex items-center gap-1.5 rounded-full bg-orange-600/15 border border-orange-600/30 px-3 py-1 text-xs font-medium text-orange-400 hover:bg-orange-600/25 transition-colors"
+            >
+              <ZoomIn className="h-3 w-3" /> {proofCount} proof{proofCount > 1 ? "s" : ""} to review
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Table */}
+      <div className="rounded-xl border border-neutral-800 overflow-hidden">
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="h-6 w-6 animate-spin text-neutral-500" />
+          </div>
+        ) : rows.length === 0 ? (
+          <div className="py-16 text-center">
+            <Calendar className="h-10 w-10 text-neutral-600 mx-auto mb-3" />
+            <p className="text-neutral-400 text-sm">No bookings found for these filters</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="border-b border-neutral-800 bg-neutral-900/80">
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Player</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Court</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Date</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Time</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Status</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Payment</th>
+                  <th className="text-right px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Price</th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => {
+                  const isPaid = row.paymentStatus === "paid" || row.paymentStatus === "PAID";
+                  const isProof = row.paymentStatus === "proof_submitted";
+                  return (
+                    <tr
+                      key={row.id}
+                      className="border-b border-neutral-800/50 hover:bg-neutral-800/30 transition-colors cursor-pointer"
+                      onClick={() => onEditBooking(row)}
+                    >
+                      <td className="px-4 py-3">
+                        <div>
+                          <p className="font-medium text-white">{row.player.name}</p>
+                          <p className="text-xs text-neutral-500">{row.player.phone}</p>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-neutral-300 whitespace-nowrap">{row.court.label}</td>
+                      <td className="px-4 py-3 text-neutral-300 whitespace-nowrap">{fmtDate(row.startTime)}</td>
+                      <td className="px-4 py-3 text-neutral-300 whitespace-nowrap">
+                        {fmtTime(row.startTime)} – {fmtTime(row.endTime)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={cn("rounded px-2 py-0.5 text-xs font-medium", BOOKING_STATUS_COLORS[row.status] ?? "bg-neutral-700 text-neutral-400")}>
+                          {row.status === "no_show" ? "No show" : row.status.charAt(0).toUpperCase() + row.status.slice(1)}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <span className={cn("rounded px-2 py-0.5 text-xs font-medium", PAYMENT_STATUS_COLORS[row.paymentStatus ?? "pending"] ?? "bg-neutral-700/30 text-neutral-400")}>
+                            {PAYMENT_STATUS_LABELS[row.paymentStatus ?? "pending"] ?? row.paymentStatus ?? "Unpaid"}
+                          </span>
+                          {isPaid && row.paymentStatus && (
+                            <CreditCard className="h-3 w-3 text-green-500/60" />
+                          )}
+                          {isProof && row.paymentProofUrl && (
+                            <a
+                              href={row.paymentProofUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-orange-400 hover:text-orange-300"
+                              title="View proof"
+                            >
+                              <ZoomIn className="h-3.5 w-3.5" />
+                            </a>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right text-neutral-300 whitespace-nowrap">
+                        {fmtPrice(row.priceValue)}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-1 justify-end">
+                          {isProof && (
+                            <button
+                              onClick={() => handleApprovePayment(row.id)}
+                              disabled={approvingId === row.id}
+                              className="flex items-center gap-1 rounded-lg bg-green-600/15 border border-green-600/30 px-2 py-1 text-xs font-medium text-green-400 hover:bg-green-600/25 disabled:opacity-50 transition-colors"
+                            >
+                              {approvingId === row.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                              Approve
+                            </button>
+                          )}
+                          <button
+                            onClick={() => onEditBooking(row)}
+                            className="rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-700 hover:text-white transition-colors"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-neutral-500">{total} total bookings</span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white disabled:opacity-30"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="text-neutral-400">
+              Page {page} of {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white disabled:opacity-30"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+      {totalPages <= 1 && total > 0 && (
+        <p className="text-xs text-neutral-500 text-right">{total} booking{total !== 1 ? "s" : ""}</p>
+      )}
     </div>
   );
 }
