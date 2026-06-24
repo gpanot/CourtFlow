@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation";
 import { useSessionStore } from "@/stores/session-store";
 import {
   LogOut, Calendar, Clock, Loader2, CalendarDays,
-  ToggleLeft, ToggleRight, AlertCircle, ChevronDown, ChevronUp,
+  AlertCircle, ChevronDown, ChevronUp,
   Download, Save, User, Camera, Trash2, ChevronLeft, X,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { AvatarPhotoCropper } from "@/components/avatar-photo-cropper";
+import { CoachAvailabilityEditor, type AvailSlot } from "@/components/admin/CoachAvailabilityEditor";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,12 +41,7 @@ interface CoachProfile {
   coachGroupSizes: string[];
 }
 
-interface AvailabilitySlot {
-  dayOfWeek: number;
-  startTime: string;
-  endTime: string;
-  enabled: boolean;
-}
+type AvailabilitySlot = AvailSlot;
 
 interface Holiday {
   startDate: string;
@@ -228,16 +224,6 @@ function AvailabilityEditor({ token }: { token: string }) {
 
   useEffect(() => { void load(); }, [load]);
 
-  const toggleDay = (day: number) => {
-    setSlots((prev) => {
-      const ex = prev.find((s) => s.dayOfWeek === day);
-      if (ex) return prev.map((s) => s.dayOfWeek === day ? { ...s, enabled: !s.enabled } : s);
-      return [...prev, { dayOfWeek: day, startTime: "08:00", endTime: "20:00", enabled: true }];
-    });
-  };
-  const updateTime = (day: number, f: "startTime" | "endTime", v: string) =>
-    setSlots((prev) => prev.map((s) => s.dayOfWeek === day ? { ...s, [f]: v } : s));
-
   const save = async () => {
     setSaving(true); setSaved(false); setErr(null);
     try {
@@ -257,30 +243,8 @@ function AvailabilityEditor({ token }: { token: string }) {
   return (
     <div className="space-y-3">
       {err && <div className="flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400"><AlertCircle className="h-4 w-4 shrink-0" />{err}</div>}
-      <div className="space-y-2">
-        {[1, 2, 3, 4, 5, 6, 0].map((day) => {
-          const slot = slots.find((s) => s.dayOfWeek === day);
-          const enabled = slot?.enabled ?? false;
-          return (
-            <div key={day} className={cn("rounded-2xl border px-4 py-3 transition-colors", enabled ? "border-teal-600/30 bg-teal-600/5" : "border-neutral-800 bg-neutral-900/40")}>
-              <button type="button" onClick={() => toggleDay(day)} className="flex w-full items-center gap-3">
-                {enabled ? <ToggleRight className="h-6 w-6 shrink-0 text-teal-400" /> : <ToggleLeft className="h-6 w-6 shrink-0 text-neutral-600" />}
-                <span className={cn("flex-1 text-left text-base font-medium", enabled ? "text-white" : "text-neutral-500")}>{DAY_NAMES[day]}</span>
-                {!enabled && <span className="text-xs text-neutral-600">Off</span>}
-              </button>
-              {enabled && slot && (
-                <div className="mt-3 flex items-center gap-2 pl-9">
-                  <input type="time" value={slot.startTime} onChange={(e) => updateTime(day, "startTime", e.target.value)}
-                    className="flex-1 rounded-xl border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-teal-500 focus:outline-none" />
-                  <span className="text-xs text-neutral-500">to</span>
-                  <input type="time" value={slot.endTime} onChange={(e) => updateTime(day, "endTime", e.target.value)}
-                    className="flex-1 rounded-xl border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-teal-500 focus:outline-none" />
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+
+      <CoachAvailabilityEditor slots={slots} onChange={setSlots} longLabels />
 
       <button type="button" onClick={() => setShowHolidays((v) => !v)}
         className="flex w-full items-center justify-between rounded-xl border border-neutral-800 bg-neutral-900/40 px-4 py-3 text-sm text-neutral-400">

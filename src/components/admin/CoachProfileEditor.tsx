@@ -5,15 +5,16 @@ import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import {
   X,
-  Plus,
   Trash2,
   User,
   Calendar,
   Save,
   Loader2,
   Camera,
+  Plus,
 } from "lucide-react";
 import { AvatarPhotoCropper } from "@/components/avatar-photo-cropper";
+import { CoachAvailabilityEditor, type AvailSlot as AvailSlotType } from "@/components/admin/CoachAvailabilityEditor";
 
 /* ─── Types ─── */
 
@@ -31,12 +32,7 @@ interface CoachProfile {
   coachGroupSizes: string[];
 }
 
-interface AvailSlot {
-  dayOfWeek: number;
-  startTime: string;
-  endTime: string;
-  enabled: boolean;
-}
+type AvailSlot = AvailSlotType;
 
 interface HolidayPeriod {
   startDate: string;
@@ -51,8 +47,6 @@ interface Props {
 }
 
 /* ─── Constants ─── */
-
-const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const LANGUAGES = ["English", "Vietnamese", "Thai", "Japanese", "Korean"];
 const SPECIALTIES = ["Pickleball", "Tennis", "Badminton", "Ping Pong"];
@@ -193,65 +187,6 @@ export function CoachProfileEditor({ coach, onClose, onSaved }: Props) {
     } finally {
       setUploadingPhoto(false);
     }
-  }
-
-  /* ─── Availability helpers ─── */
-
-  function slotsForDay(day: number) {
-    return availSlots.filter((s) => s.dayOfWeek === day);
-  }
-
-  function isDayEnabled(day: number) {
-    const ds = slotsForDay(day);
-    return ds.length > 0 && ds.some((s) => s.enabled);
-  }
-
-  function toggleDay(day: number) {
-    const ds = slotsForDay(day);
-    if (ds.length === 0) {
-      setAvailSlots((prev) => [...prev, { dayOfWeek: day, startTime: "09:00", endTime: "12:00", enabled: true }]);
-    } else {
-      const newEnabled = !isDayEnabled(day);
-      setAvailSlots((prev) =>
-        prev.map((s) => (s.dayOfWeek === day ? { ...s, enabled: newEnabled } : s))
-      );
-    }
-  }
-
-  function addSlotToDay(day: number) {
-    setAvailSlots((prev) => [...prev, { dayOfWeek: day, startTime: "09:00", endTime: "12:00", enabled: true }]);
-  }
-
-  function removeSlot(day: number, idx: number) {
-    const daySlots = slotsForDay(day);
-    if (daySlots.length <= 1) return;
-    let dayCounter = 0;
-    setAvailSlots((prev) =>
-      prev.filter((s) => {
-        if (s.dayOfWeek === day) {
-          const isTarget = dayCounter === idx;
-          dayCounter++;
-          return !isTarget;
-        }
-        return true;
-      })
-    );
-  }
-
-  function updateSlotTime(day: number, idx: number, field: "startTime" | "endTime", val: string) {
-    let dayCounter = 0;
-    setAvailSlots((prev) =>
-      prev.map((s) => {
-        if (s.dayOfWeek === day) {
-          if (dayCounter === idx) {
-            dayCounter++;
-            return { ...s, [field]: val };
-          }
-          dayCounter++;
-        }
-        return s;
-      })
-    );
   }
 
   function addHoliday() {
@@ -489,68 +424,10 @@ export function CoachProfileEditor({ coach, onClose, onSaved }: Props) {
               ) : (
                 <>
                   {/* Weekly schedule */}
-                  <div className="space-y-3">
-                    {DAY_LABELS.map((label, dayIdx) => {
-                      const daySlots = slotsForDay(dayIdx);
-                      const enabled = isDayEnabled(dayIdx);
-                      return (
-                        <div key={dayIdx} className="rounded-lg border border-neutral-800 bg-neutral-800/30 p-3">
-                          <div className="flex items-center gap-3 mb-2">
-                            <button
-                              type="button"
-                              onClick={() => toggleDay(dayIdx)}
-                              className={cn(
-                                "h-5 w-9 rounded-full transition-colors relative",
-                                enabled ? "bg-teal-500" : "bg-neutral-700"
-                              )}
-                            >
-                              <span
-                                className={cn(
-                                  "absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all",
-                                  enabled ? "left-[18px]" : "left-0.5"
-                                )}
-                              />
-                            </button>
-                            <span className="text-sm font-semibold text-white w-8">{label}</span>
-                          </div>
-
-                          {enabled && daySlots.map((slot, slotIdx) => (
-                            <div key={slotIdx} className="flex items-center gap-2 mt-1.5 ml-12">
-                              <input
-                                type="time"
-                                value={slot.startTime}
-                                onChange={(e) => updateSlotTime(dayIdx, slotIdx, "startTime", e.target.value)}
-                                className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1 text-sm text-white focus:border-teal-500 focus:outline-none"
-                              />
-                              <span className="text-neutral-500 text-xs">–</span>
-                              <input
-                                type="time"
-                                value={slot.endTime}
-                                onChange={(e) => updateSlotTime(dayIdx, slotIdx, "endTime", e.target.value)}
-                                className="rounded border border-neutral-700 bg-neutral-900 px-2 py-1 text-sm text-white focus:border-teal-500 focus:outline-none"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => addSlotToDay(dayIdx)}
-                                className="rounded-full p-1 text-teal-400 hover:bg-teal-600/20"
-                              >
-                                <Plus className="h-3.5 w-3.5" />
-                              </button>
-                              {daySlots.length > 1 && (
-                                <button
-                                  type="button"
-                                  onClick={() => removeSlot(dayIdx, slotIdx)}
-                                  className="rounded-full p-1 text-red-400 hover:bg-red-600/20"
-                                >
-                                  <X className="h-3.5 w-3.5" />
-                                </button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <CoachAvailabilityEditor
+                    slots={availSlots}
+                    onChange={setAvailSlots}
+                  />
 
                   {/* Holiday periods */}
                   <div className="border-t border-neutral-800 pt-4">
