@@ -953,15 +953,17 @@ model CheckInRecord {
 // ─── Billing Module ─────────────────────────────────────────
 
 model BillingConfig {
-  id                String   @id @default("default")
-  bankBin           String   @default("") @map("bank_bin")
-  bankAccount       String   @default("") @map("bank_account")
-  bankOwner         String   @default("") @map("bank_owner")
-  defaultBaseRate   Int      @default(5000) @map("default_base_rate")
-  defaultSubAddon   Int      @default(1000) @map("default_sub_addon")
-  defaultSepayAddon Int      @default(1000) @map("default_sepay_addon")
-  paymentGateway    String   @default("payos") @map("payment_gateway")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  id                  String   @id @default("default")
+  bankBin             String   @default("") @map("bank_bin")
+  bankAccount         String   @default("") @map("bank_account")
+  bankOwner           String   @default("") @map("bank_owner")
+  defaultBaseRate     Int      @default(5000) @map("default_base_rate")
+  defaultSubAddon     Int      @default(1000) @map("default_sub_addon")
+  defaultSepayAddon   Int      @default(1000) @map("default_sepay_addon")
+  paymentGateway      String   @default("payos") @map("payment_gateway")
+  /// Email address to notify when a client submits payment proof
+  notificationEmail   String?  @map("notification_email")
+  updatedAt           DateTime @updatedAt @map("updated_at")
 
   @@map("billing_config")
 }

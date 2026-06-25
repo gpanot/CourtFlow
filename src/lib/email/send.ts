@@ -354,3 +354,68 @@ export async function buildLessonEmailContext(
     },
   };
 }
+
+export interface BillingProofNotificationParams {
+  to: string;
+  venueName: string;
+  invoiceAmount: number;
+  proofMethod: string;
+  proofRef?: string | null;
+  paidAt: string;
+  proofUrl: string;
+  adminUrl: string;
+}
+
+export async function sendBillingProofNotification(
+  params: BillingProofNotificationParams
+): Promise<void> {
+  if (!params.to) {
+    console.warn("[sendBillingProofNotification] No email address — skipping");
+    return;
+  }
+  try {
+    const resend = getResendClient();
+    const formattedAmount = new Intl.NumberFormat("vi-VN").format(params.invoiceAmount);
+    const methodLabel = params.proofMethod.replace(/_/g, " ");
+
+    const html = `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#111">
+        <h2 style="color:#7c3aed">Payment Proof Submitted</h2>
+        <p>A venue has submitted payment proof for a CourtFlow invoice. Please review and approve or reject it.</p>
+        <table style="border-collapse:collapse;width:100%;margin:16px 0">
+          <tr>
+            <td style="padding:8px 12px;background:#f5f5f5;font-weight:600;width:40%">Venue</td>
+            <td style="padding:8px 12px;background:#fafafa">${params.venueName}</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 12px;background:#f5f5f5;font-weight:600">Amount</td>
+            <td style="padding:8px 12px;background:#fafafa">${formattedAmount} VND</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 12px;background:#f5f5f5;font-weight:600">Payment date</td>
+            <td style="padding:8px 12px;background:#fafafa">${new Date(params.paidAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</td>
+          </tr>
+          <tr>
+            <td style="padding:8px 12px;background:#f5f5f5;font-weight:600">Method</td>
+            <td style="padding:8px 12px;background:#fafafa;text-transform:capitalize">${methodLabel}</td>
+          </tr>
+          ${params.proofRef ? `<tr><td style="padding:8px 12px;background:#f5f5f5;font-weight:600">Reference</td><td style="padding:8px 12px;background:#fafafa">${params.proofRef}</td></tr>` : ""}
+        </table>
+        <p style="margin-top:20px">
+          <a href="${params.proofUrl}" style="display:inline-block;padding:10px 20px;background:#e5e7eb;color:#111;text-decoration:none;border-radius:6px;font-weight:600;margin-right:12px">View Proof</a>
+          <a href="${params.adminUrl}" style="display:inline-block;padding:10px 20px;background:#7c3aed;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">Review in Admin</a>
+        </p>
+        <p style="margin-top:32px;color:#6b7280;font-size:12px">CourtFlow Billing</p>
+      </div>
+    `;
+
+    await resend.emails.send({
+      from: FROM,
+      to: params.to,
+      subject: `[CourtFlow] Payment proof submitted — ${params.venueName} · ${formattedAmount} VND`,
+      html,
+    });
+  } catch (err) {
+    console.error("[sendBillingProofNotification] Failed:", err);
+  }
+}

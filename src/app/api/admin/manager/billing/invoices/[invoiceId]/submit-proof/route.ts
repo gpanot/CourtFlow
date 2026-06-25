@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireManagerOrSuperAdmin } from "@/lib/auth";
 import { getAuthorizedVenueIds } from "@/lib/venue-scope";
+import { sendBillingProofNotification } from "@/lib/email/send";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +57,27 @@ export async function POST(req: NextRequest, { params }: Params) {
         proofRef: body.proofRef?.trim() || null,
         proofSubmittedAt: new Date(body.paidAt),
       },
+      include: { venue: { select: { name: true } } },
     });
+
+    // Send notification email to billing admin (fire-and-forget)
+    const billingConfig = await prisma.billingConfig.findUnique({
+      where: { id: "default" },
+      select: { notificationEmail: true },
+    });
+    if (billingConfig?.notificationEmail) {
+      const baseUrl = process.env.NEXTAUTH_URL ?? process.env.APP_URL ?? "https://app.thecourtflow.com";
+      void sendBillingProofNotification({
+        to: billingConfig.notificationEmail,
+        venueName: updated.venue.name,
+        invoiceAmount: updated.amount,
+        proofMethod: updated.proofMethod ?? body.proofMethod,
+        proofRef: updated.proofRef,
+        paidAt: updated.proofSubmittedAt?.toISOString() ?? body.paidAt,
+        proofUrl: `${baseUrl}${updated.proofUrl}`,
+        adminUrl: `${baseUrl}/admin/courtpay-billing/venue/${updated.venueId}`,
+      });
+    }
 
     return NextResponse.json(updated);
   } catch (err: unknown) {

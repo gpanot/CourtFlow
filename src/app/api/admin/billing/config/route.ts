@@ -38,6 +38,7 @@ export async function PUT(req: Request) {
       defaultSubAddon,
       defaultSepayAddon,
       paymentGateway,
+      notificationEmail,
     } = body;
 
     const config = await prisma.billingConfig.upsert({
@@ -51,6 +52,7 @@ export async function PUT(req: Request) {
         defaultSubAddon: defaultSubAddon ?? 1000,
         defaultSepayAddon: defaultSepayAddon ?? 1000,
         paymentGateway: paymentGateway ?? "payos",
+        notificationEmail: notificationEmail ?? null,
       },
       update: {
         ...(bankBin !== undefined && { bankBin }),
@@ -60,6 +62,7 @@ export async function PUT(req: Request) {
         ...(defaultSubAddon !== undefined && { defaultSubAddon }),
         ...(defaultSepayAddon !== undefined && { defaultSepayAddon }),
         ...(paymentGateway !== undefined && { paymentGateway }),
+        ...("notificationEmail" in body && { notificationEmail: notificationEmail ?? null }),
       },
     });
 
