@@ -1190,10 +1190,14 @@ function LessonsTab({ venueId }: { venueId: string }) {
                     <GraduationCap className="h-3.5 w-3.5 text-teal-400" />
                     {lesson.coach.name}
                   </span>
-                  <span className="flex items-center gap-1">
+                  <a
+                    href={`/admin/courtpass-players?playerId=${lesson.player.id}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-1 hover:text-purple-400 hover:underline transition-colors"
+                  >
                     <User className="h-3.5 w-3.5" />
                     {lesson.player.name}
-                  </span>
+                  </a>
                   {lesson.court && (
                     <span className="text-neutral-500">{t("coaching.court")}: {lesson.court.label}</span>
                   )}
@@ -1273,7 +1277,13 @@ function LessonsTab({ venueId }: { venueId: string }) {
                 <span className="font-medium">{fmtTime(lesson.startTime)} – {fmtTime(lesson.endTime)}</span>
                 <span className="text-neutral-500">{lesson.coach.name}</span>
                 <span className="text-neutral-500">→</span>
-                <span className="text-neutral-500">{lesson.player.name}</span>
+                <a
+                  href={`/admin/courtpass-players?playerId=${lesson.player.id}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-neutral-500 hover:text-purple-400 hover:underline transition-colors"
+                >
+                  {lesson.player.name}
+                </a>
                 <span className={cn("rounded px-2 py-0.5 text-xs", STATUS_COLORS.cancelled)}>Cancelled</span>
               </div>
             </div>
@@ -1976,7 +1986,13 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
                     >
                       <td className="px-4 py-3">
                         <div>
-                          <p className="font-medium text-white">{row.player.name}</p>
+                          <a
+                            href={`/admin/courtpass-players?playerId=${row.player.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="font-medium text-white hover:text-purple-400 hover:underline transition-colors"
+                          >
+                            {row.player.name}
+                          </a>
                           <p className="text-xs text-neutral-500">{row.player.phone}</p>
                         </div>
                       </td>

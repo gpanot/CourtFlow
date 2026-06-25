@@ -5,14 +5,18 @@ import { signPlayerToken } from "@/app/api/public/auth/login/route";
 
 export const dynamic = "force-dynamic";
 
-const BASE_URL = (
-  process.env.NEXT_PUBLIC_COURTPASS_URL ?? "https://courtpass.thecourtflow.com"
-).replace(/\/$/, "");
+// Read lazily per-request so NEXT_PUBLIC_COURTPASS_URL changes (e.g. env.local
+// pointing to localhost:3001) are picked up without a module-level cache.
+function getBaseUrl(): string {
+  return (
+    process.env.NEXT_PUBLIC_COURTPASS_URL ?? "https://courtpass.thecourtflow.com"
+  ).replace(/\/$/, "");
+}
 
 // Use the clean /auth/magic URL — next.config.ts rewrites it to /book/auth/magic
 // on the CourtPass host, so the client page renders without an extra round-trip.
 function errorRedirect(code: "expired" | "already_used" | "invalid"): NextResponse {
-  return NextResponse.redirect(`${BASE_URL}/auth/magic?error=${code}`);
+  return NextResponse.redirect(`${getBaseUrl()}/auth/magic?error=${code}`);
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
@@ -49,6 +53,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // Redirect to the client-side page that persists the token to localStorage.
   // /auth/magic is the clean public URL; next.config.ts rewrites it to /book/auth/magic.
   return NextResponse.redirect(
-    `${BASE_URL}/auth/magic?session=${encodeURIComponent(sessionToken)}`
+    `${getBaseUrl()}/auth/magic?session=${encodeURIComponent(sessionToken)}`
   );
 }

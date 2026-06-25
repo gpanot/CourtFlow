@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import adminI18n from "@/i18n/admin-i18n";
 import { api } from "@/lib/api-client";
@@ -1065,6 +1066,8 @@ export default function CourtPassPlayersPage() {
   const { venueId, setVenueId, venues } = useAdminVenuePicker({ autoSelect: true });
   const { role } = useSessionStore();
   const canEditPlayer = role === "manager" || role === "superadmin";
+  const searchParams = useSearchParams();
+  const initialPlayerId = searchParams.get("playerId");
 
   // ── List state ──
   const [players, setPlayers] = useState<PlayerListItem[]>([]);
@@ -1181,6 +1184,14 @@ export default function CourtPassPlayersPage() {
     setSelectedId(pid);
     void fetchDetail(pid);
   };
+
+  // Auto-select player from ?playerId= URL param once venue is ready
+  useEffect(() => {
+    if (initialPlayerId && venueId) {
+      selectPlayer(initialPlayerId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPlayerId, venueId]);
 
   // ── Save note ──
   async function saveNote() {

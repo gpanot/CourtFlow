@@ -1202,7 +1202,13 @@ export default function BookingsPage() {
               )}>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium">{b.player.name}</span>
+                    <a
+                      href={`/admin/courtpass-players?playerId=${b.player.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="font-medium hover:text-purple-400 hover:underline transition-colors"
+                    >
+                      {b.player.name}
+                    </a>
                     <span className="text-xs text-neutral-500">{b.player.phone}</span>
                     <BookingStatusBadge status={b.status} />
                     {b.paymentStatus && <PaymentStatusBadge status={b.paymentStatus} />}
@@ -2437,7 +2443,13 @@ function AllBookingsTab({
                     >
                       <td className="px-4 py-3">
                         <div>
-                          <p className="font-medium text-white">{row.player.name}</p>
+                          <a
+                            href={`/admin/courtpass-players?playerId=${row.player.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="font-medium text-white hover:text-purple-400 hover:underline transition-colors"
+                          >
+                            {row.player.name}
+                          </a>
                           <p className="text-xs text-neutral-500">{row.player.phone}</p>
                         </div>
                       </td>
