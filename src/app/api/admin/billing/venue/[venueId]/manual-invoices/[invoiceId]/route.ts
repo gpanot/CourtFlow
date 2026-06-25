@@ -22,6 +22,7 @@ export async function PATCH(req: Request, { params }: Params) {
       pdfUrl?: string | null;
       amount?: number;
       dueDate?: string;
+      rejectionNote?: string;
     };
 
     const invoice = await prisma.manualBillingInvoice.findFirst({
@@ -79,6 +80,49 @@ export async function PATCH(req: Request, { params }: Params) {
       const updated = await prisma.manualBillingInvoice.update({
         where: { id: invoiceId },
         data,
+      });
+      return NextResponse.json(updated);
+    }
+
+    if (body.action === "approve-proof") {
+      if (invoice.status !== "pending_review") {
+        return NextResponse.json(
+          { error: "Invoice is not pending review" },
+          { status: 400 }
+        );
+      }
+      const updated = await prisma.manualBillingInvoice.update({
+        where: { id: invoiceId },
+        data: {
+          status: "paid",
+          paidAt: invoice.proofSubmittedAt ?? new Date(),
+          paidMethod: invoice.proofMethod ?? "manual",
+          paidRef: invoice.proofRef ?? null,
+          // Keep proof fields intact for audit trail
+        },
+      });
+      return NextResponse.json(updated);
+    }
+
+    if (body.action === "reject-proof") {
+      if (invoice.status !== "pending_review") {
+        return NextResponse.json(
+          { error: "Invoice is not pending review" },
+          { status: 400 }
+        );
+      }
+      const updated = await prisma.manualBillingInvoice.update({
+        where: { id: invoiceId },
+        data: {
+          status: "pending",
+          proofUrl: null,
+          proofSubmittedAt: null,
+          proofMethod: null,
+          proofRef: null,
+          notes: body.rejectionNote?.trim()
+            ? `Rejected: ${body.rejectionNote.trim()}`
+            : invoice.notes,
+        },
       });
       return NextResponse.json(updated);
     }

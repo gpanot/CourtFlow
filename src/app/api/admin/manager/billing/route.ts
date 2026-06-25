@@ -96,6 +96,11 @@ export async function GET(request: NextRequest) {
       pdfUrl: inv.pdfUrl,
       notes: inv.notes,
       invoiceType: "manual",
+      // Proof fields (client-submitted payment proof)
+      proofUrl: inv.proofUrl,
+      proofSubmittedAt: inv.proofSubmittedAt,
+      proofMethod: inv.proofMethod,
+      proofRef: inv.proofRef,
     }));
 
     // Merge and sort by date descending, cap at 50

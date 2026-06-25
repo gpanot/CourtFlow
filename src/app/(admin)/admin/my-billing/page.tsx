@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api-client";
-import { Loader2, Receipt, CheckCircle2, Clock, AlertTriangle, FileText, ExternalLink } from "lucide-react";
+import { Loader2, Receipt, CheckCircle2, Clock, AlertTriangle, FileText, ExternalLink, Upload, X, Eye } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useTranslation } from "react-i18next";
 import adminI18n from "@/i18n/admin-i18n";
@@ -48,6 +48,11 @@ interface InvoiceRow {
   pdfUrl: string | null;
   notes: string | null;
   invoiceType: string | null;
+  // Proof fields
+  proofUrl: string | null;
+  proofSubmittedAt: string | null;
+  proofMethod: string | null;
+  proofRef: string | null;
 }
 
 function formatVND(amount: number): string {
@@ -66,10 +71,31 @@ export default function MyBillingPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedVenueId, setSelectedVenueId] = useState<string>("");
 
+  // Submit payment proof modal
+  const [proofModal, setProofModal] = useState<InvoiceRow | null>(null);
+  const [proofPaidAt, setProofPaidAt] = useState("");
+  const [proofMethod, setProofMethod] = useState("bank_transfer");
+  const [proofRef, setProofRef] = useState("");
+  const [proofFileUrl, setProofFileUrl] = useState("");
+  const [proofUploading, setProofUploading] = useState(false);
+  const [proofSubmitting, setProofSubmitting] = useState(false);
+  const proofFileRef = useRef<HTMLInputElement>(null);
+
+  // Submit payment proof state
+  const [proofModal, setProofModal] = useState<InvoiceRow | null>(null);
+  const [proofDate, setProofDate] = useState("");
+  const [proofMethod, setProofMethod] = useState("bank_transfer");
+  const [proofRef, setProofRef] = useState("");
+  const [proofFileUrl, setProofFileUrl] = useState("");
+  const [proofUploading, setProofUploading] = useState(false);
+  const [proofSubmitting, setProofSubmitting] = useState(false);
+  const proofFileInputRef = useRef<HTMLInputElement>(null);
+
   const statusConfig: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; className: string }> = {
     paid: { label: t("myBilling.paid"), icon: CheckCircle2, className: "text-emerald-400" },
     pending: { label: t("myBilling.pending"), icon: Clock, className: "text-yellow-400" },
     overdue: { label: t("myBilling.overdue"), icon: AlertTriangle, className: "text-red-400" },
+    pending_review: { label: "Submitted", icon: Eye, className: "text-sky-400" },
   };
 
   const load = useCallback(async () => {
@@ -87,6 +113,51 @@ export default function MyBillingPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const openProofModal = (inv: InvoiceRow) => {
+    setProofModal(inv);
+    setProofPaidAt(new Date().toISOString().substring(0, 10));
+    setProofMethod("bank_transfer");
+    setProofRef("");
+    setProofFileUrl("");
+  };
+
+  const uploadProofFile = async (file: File) => {
+    setProofUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const result = await api.upload<{ url: string }>(
+        "/api/admin/manager/billing/upload-proof",
+        fd
+      );
+      if (result.url) setProofFileUrl(result.url);
+    } catch (e) {
+      console.error(e);
+    }
+    setProofUploading(false);
+  };
+
+  const submitProof = async () => {
+    if (!proofModal || !proofFileUrl || !proofPaidAt) return;
+    setProofSubmitting(true);
+    try {
+      await api.post(
+        `/api/admin/manager/billing/invoices/${proofModal.id}/submit-proof`,
+        {
+          proofUrl: proofFileUrl,
+          proofMethod,
+          proofRef: proofRef.trim() || undefined,
+          paidAt: new Date(proofPaidAt).toISOString(),
+        }
+      );
+      setProofModal(null);
+      await load();
+    } catch (e) {
+      console.error(e);
+    }
+    setProofSubmitting(false);
+  };
 
   if (loading) {
     return (
@@ -208,6 +279,7 @@ export default function MyBillingPage() {
                       <th className="py-2 pr-4 font-medium">{t("myBilling.paidAt")}</th>
                       <th className="py-2 pr-4 font-medium">Issued</th>
                       <th className="py-2 font-medium">PDF</th>
+                      <th className="py-2 font-medium"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -215,6 +287,8 @@ export default function MyBillingPage() {
                       const cfg = statusConfig[inv.status] ?? statusConfig.pending;
                       const Icon = cfg.icon;
                       const isManual = inv.kind === "manual";
+                      const isPendingReview = inv.status === "pending_review";
+                      const canSubmitProof = isManual && (inv.status === "pending" || inv.status === "overdue");
                       return (
                         <tr key={inv.id} className="border-b border-neutral-800/50 hover:bg-neutral-800/30">
                           <td className="py-2 pr-4 max-w-[180px]">
@@ -244,14 +318,17 @@ export default function MyBillingPage() {
                               <Icon className="h-3.5 w-3.5" />
                               {cfg.label}
                             </span>
+                            {isPendingReview && (
+                              <p className="text-[11px] text-neutral-500 mt-0.5">Awaiting review</p>
+                            )}
                           </td>
                           <td className="py-2 pr-4 text-neutral-400">
-                            {inv.paidAt ? formatDate(inv.paidAt) : "—"}
+                            {inv.paidAt ? formatDate(inv.paidAt) : isPendingReview && inv.proofSubmittedAt ? formatDate(inv.proofSubmittedAt) : "—"}
                           </td>
                           <td className="py-2 pr-4 text-neutral-400">
                             {formatDate(inv.createdAt)}
                           </td>
-                          <td className="py-2">
+                          <td className="py-2 pr-4">
                             {inv.pdfUrl ? (
                               <a
                                 href={inv.pdfUrl}
@@ -260,10 +337,31 @@ export default function MyBillingPage() {
                                 className="flex items-center gap-1 text-purple-400 hover:text-purple-300 text-xs font-medium"
                               >
                                 <ExternalLink className="h-3.5 w-3.5" />
-                                Download
+                                Invoice
                               </a>
                             ) : (
                               <span className="text-neutral-700 text-xs">—</span>
+                            )}
+                          </td>
+                          <td className="py-2 whitespace-nowrap">
+                            {canSubmitProof && (
+                              <button
+                                onClick={() => openProofModal(inv)}
+                                className="text-xs px-3 py-1.5 rounded-lg font-medium bg-purple-600 text-white hover:bg-purple-500 transition-colors"
+                              >
+                                Submit Payment
+                              </button>
+                            )}
+                            {isPendingReview && inv.proofUrl && (
+                              <a
+                                href={inv.proofUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-sky-400 hover:text-sky-300 text-xs font-medium"
+                              >
+                                <ExternalLink className="h-3.5 w-3.5" />
+                                View proof
+                              </a>
                             )}
                           </td>
                         </tr>
@@ -275,6 +373,156 @@ export default function MyBillingPage() {
             )}
           </div>
         </>
+      )}
+
+      {/* ── Submit Payment Proof Modal ─────────────────────────────── */}
+      {proofModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+          onClick={() => setProofModal(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold">Submit Payment Proof</h3>
+              <button
+                onClick={() => setProofModal(null)}
+                className="rounded-lg p-1.5 hover:bg-neutral-800 text-neutral-500 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <p className="text-sm text-neutral-400">
+              Invoice:{" "}
+              <span className="text-white font-semibold">{formatVND(proofModal.totalAmount)}</span>
+              {proofModal.notes && (
+                <span className="ml-2 text-neutral-500 italic">&ldquo;{proofModal.notes}&rdquo;</span>
+              )}
+            </p>
+
+            {/* Payment date */}
+            <div className="space-y-1">
+              <label className="text-xs text-neutral-500 block font-medium">Payment date *</label>
+              <input
+                type="date"
+                value={proofPaidAt}
+                onChange={(e) => setProofPaidAt(e.target.value)}
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white"
+              />
+            </div>
+
+            {/* Payment method */}
+            <div className="space-y-1">
+              <label className="text-xs text-neutral-500 block font-medium">Payment method *</label>
+              <div className="flex gap-2 flex-wrap">
+                {(["bank_transfer", "cash", "other"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setProofMethod(m)}
+                    className={cn(
+                      "flex-1 rounded-lg py-2 text-xs font-medium border transition-colors",
+                      proofMethod === m
+                        ? "border-purple-500 bg-purple-900/30 text-white"
+                        : "border-neutral-700 text-neutral-400 hover:border-neutral-600"
+                    )}
+                  >
+                    {m === "bank_transfer" ? "Bank Transfer" : m === "cash" ? "Cash" : "Other"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Payment reference */}
+            <div className="space-y-1">
+              <label className="text-xs text-neutral-500 block font-medium">Payment reference (optional)</label>
+              <input
+                type="text"
+                value={proofRef}
+                onChange={(e) => setProofRef(e.target.value)}
+                placeholder="e.g. Bank transfer ref #12345"
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white"
+              />
+            </div>
+
+            {/* Upload proof */}
+            <div className="space-y-2">
+              <label className="text-xs text-neutral-500 block font-medium">
+                Proof of payment *{" "}
+                <span className="text-neutral-600 font-normal">(image or PDF)</span>
+              </label>
+              {proofFileUrl ? (
+                <div className="flex items-center gap-3 rounded-lg border border-neutral-700 bg-neutral-800/60 px-3 py-2">
+                  <FileText className="h-4 w-4 text-sky-400 shrink-0" />
+                  <a
+                    href={proofFileUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-sky-400 hover:text-sky-300 truncate flex-1"
+                  >
+                    {proofFileUrl.split("/").pop()}
+                  </a>
+                  <button
+                    onClick={() => setProofFileUrl("")}
+                    className="text-neutral-500 hover:text-red-400"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => proofFileRef.current?.click()}
+                  disabled={proofUploading}
+                  className="flex items-center gap-2 w-full rounded-lg border border-dashed border-neutral-700 bg-neutral-800/40 px-4 py-3 text-sm text-neutral-500 hover:border-neutral-500 hover:text-neutral-300 disabled:opacity-50"
+                >
+                  {proofUploading ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Upload className="h-4 w-4" />
+                  )}
+                  {proofUploading ? "Uploading…" : "Upload proof (image or PDF)"}
+                </button>
+              )}
+              <input
+                ref={proofFileRef}
+                type="file"
+                accept="application/pdf,image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void uploadProofFile(file);
+                  e.target.value = "";
+                }}
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setProofModal(null)}
+                className="flex-1 rounded-lg border border-neutral-700 py-2.5 text-sm text-neutral-400 hover:text-white hover:border-neutral-600"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void submitProof()}
+                disabled={proofSubmitting || !proofFileUrl || !proofPaidAt}
+                className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-purple-600 py-2.5 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-50"
+              >
+                {proofSubmitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="h-4 w-4" />
+                )}
+                Submit Payment
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

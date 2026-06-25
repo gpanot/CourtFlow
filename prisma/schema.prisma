@@ -1049,13 +1049,18 @@ model ManualBillingInvoice {
   venueId   String    @map("venue_id")
   amount    Int
   dueDate   DateTime  @map("due_date")
-  /// "pending" | "paid" | "overdue"
+  /// "pending" | "pending_review" | "paid" | "overdue"
   status    String    @default("pending")
   pdfUrl    String?   @map("pdf_url")
   paidAt    DateTime? @map("paid_at")
   paidMethod String?  @map("paid_method")
   paidRef   String?   @map("paid_ref")
   notes     String?
+  /// Client-submitted payment proof fields
+  proofUrl         String?   @map("proof_url")
+  proofSubmittedAt DateTime? @map("proof_submitted_at")
+  proofMethod      String?   @map("proof_method")
+  proofRef         String?   @map("proof_ref")
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
 

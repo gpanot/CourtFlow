@@ -27,6 +27,9 @@ import {
   ExternalLink,
   Pencil,
   Trash2,
+  Eye,
+  ThumbsUp,
+  ThumbsDown,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -50,13 +53,18 @@ interface ManualInvoice {
   venueId: string;
   amount: number;
   dueDate: string;
-  status: "pending" | "paid" | "overdue";
+  status: "pending" | "pending_review" | "paid" | "overdue";
   pdfUrl: string | null;
   paidAt: string | null;
   paidMethod: string | null;
   paidRef: string | null;
   notes: string | null;
   createdAt: string;
+  // Client-submitted proof fields
+  proofUrl: string | null;
+  proofSubmittedAt: string | null;
+  proofMethod: string | null;
+  proofRef: string | null;
 }
 
 interface InvoiceRow {
@@ -396,6 +404,12 @@ export default function VenueBillingDetailPage() {
   const [manualMarkingPaid, setManualMarkingPaid] = useState<string | null>(null);
   const [manualMarkingUnpaid, setManualMarkingUnpaid] = useState<string | null>(null);
 
+  // Approve / reject proof
+  const [approvingProof, setApprovingProof] = useState<string | null>(null);
+  const [rejectModal, setRejectModal] = useState<ManualInvoice | null>(null);
+  const [rejectNote, setRejectNote] = useState("");
+  const [rejectingProof, setRejectingProof] = useState(false);
+
   // Edit invoice drawer
   const [editInvoiceDrawer, setEditInvoiceDrawer] = useState<ManualInvoice | null>(null);
   const [editInvAmount, setEditInvAmount] = useState(0);
@@ -689,6 +703,36 @@ export default function VenueBillingDetailPage() {
       console.error(e);
     }
     setManualMarkingUnpaid(null);
+  };
+
+  const approveProof = async (invoiceId: string) => {
+    setApprovingProof(invoiceId);
+    try {
+      await api.patch(`/api/admin/billing/venue/${venueId}/manual-invoices/${invoiceId}`, {
+        action: "approve-proof",
+      });
+      await fetchManualInvoices();
+    } catch (e) {
+      console.error(e);
+    }
+    setApprovingProof(null);
+  };
+
+  const submitRejectProof = async () => {
+    if (!rejectModal) return;
+    setRejectingProof(true);
+    try {
+      await api.patch(`/api/admin/billing/venue/${venueId}/manual-invoices/${rejectModal.id}`, {
+        action: "reject-proof",
+        rejectionNote: rejectNote.trim() || undefined,
+      });
+      setRejectModal(null);
+      setRejectNote("");
+      await fetchManualInvoices();
+    } catch (e) {
+      console.error(e);
+    }
+    setRejectingProof(false);
   };
 
   const openEditInvoiceDrawer = (inv: ManualInvoice) => {
@@ -1700,97 +1744,165 @@ export default function VenueBillingDetailPage() {
                 {manualInvoices.map((inv) => {
                   const isPaid = inv.status === "paid";
                   const isOverdue = inv.status === "overdue";
+                  const isPendingReview = inv.status === "pending_review";
                   return (
-                    <div key={inv.id} className="px-5 py-3.5 flex items-center justify-between gap-4">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-semibold">{formatVND(inv.amount)} VND</p>
-                          <span
-                            className={cn(
-                              "text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5",
-                              isPaid
-                                ? "bg-green-900/30 text-green-400"
-                                : isOverdue
-                                ? "bg-amber-900/30 text-amber-400"
-                                : "bg-yellow-900/20 text-yellow-400"
+                    <div key={inv.id} className="px-5 py-3.5">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm font-semibold">{formatVND(inv.amount)} VND</p>
+                            <span
+                              className={cn(
+                                "text-[10px] font-semibold uppercase tracking-wide rounded px-1.5 py-0.5",
+                                isPaid
+                                  ? "bg-green-900/30 text-green-400"
+                                  : isOverdue
+                                  ? "bg-amber-900/30 text-amber-400"
+                                  : isPendingReview
+                                  ? "bg-sky-900/30 text-sky-400"
+                                  : "bg-yellow-900/20 text-yellow-400"
+                              )}
+                            >
+                              {isPaid ? "Paid" : isOverdue ? "Overdue" : isPendingReview ? "Review Proof" : "Pending"}
+                            </span>
+                            {inv.pdfUrl && (
+                              <a
+                                href={inv.pdfUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex items-center gap-1 text-[10px] text-purple-400 hover:text-purple-300"
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                                PDF
+                              </a>
                             )}
+                          </div>
+                          <p className="text-xs text-neutral-500 mt-0.5">
+                            Issued {fmtShort(inv.createdAt)} · Due {fmtDate(inv.dueDate)}
+                            {isPaid && inv.paidAt && (
+                              <span className="text-green-400 ml-2">
+                                · Paid {fmtDate(inv.paidAt)}
+                                {inv.paidMethod && ` (${inv.paidMethod})`}
+                                {inv.paidRef && ` — ref: ${inv.paidRef}`}
+                              </span>
+                            )}
+                          </p>
+                          {inv.notes && (
+                            <p className="text-xs text-neutral-600 mt-0.5 italic">&ldquo;{inv.notes}&rdquo;</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => openEditInvoiceDrawer(inv)}
+                            className="p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-neutral-800 transition-colors"
+                            title="Edit invoice"
                           >
-                            {isPaid ? "Paid" : isOverdue ? "Overdue" : "Pending"}
-                          </span>
-                          {inv.pdfUrl && (
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            onClick={() => void deleteManualInvoice(inv.id)}
+                            disabled={deletingInvoice === inv.id}
+                            className="p-1.5 rounded-lg text-neutral-500 hover:text-red-400 hover:bg-red-900/20 transition-colors disabled:opacity-50"
+                            title="Delete invoice"
+                          >
+                            {deletingInvoice === inv.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3.5 w-3.5" />
+                            )}
+                          </button>
+                          {isPaid ? (
+                            <button
+                              onClick={() => void manualMarkUnpaid(inv.id)}
+                              disabled={manualMarkingUnpaid === inv.id}
+                              className="text-[10px] text-neutral-500 hover:text-red-400 underline"
+                            >
+                              {manualMarkingUnpaid === inv.id ? "…" : "undo"}
+                            </button>
+                          ) : isPendingReview ? (
+                            <>
+                              <button
+                                onClick={() => void approveProof(inv.id)}
+                                disabled={approvingProof === inv.id}
+                                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium bg-green-900/30 text-green-400 hover:bg-green-900/50 disabled:opacity-50"
+                              >
+                                {approvingProof === inv.id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <ThumbsUp className="h-3 w-3" />
+                                )}
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => { setRejectModal(inv); setRejectNote(""); }}
+                                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium bg-red-900/20 text-red-400 hover:bg-red-900/40"
+                              >
+                                <ThumbsDown className="h-3 w-3" />
+                                Reject
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              onClick={() => openManualPayModal(inv)}
+                              disabled={manualMarkingPaid === inv.id}
+                              className={cn(
+                                "text-xs px-3 py-1.5 rounded-lg font-medium",
+                                isOverdue
+                                  ? "bg-amber-900/30 text-amber-400 hover:bg-amber-900/50"
+                                  : "bg-yellow-900/20 text-yellow-400 hover:bg-yellow-900/40"
+                              )}
+                            >
+                              {manualMarkingPaid === inv.id ? (
+                                <Loader2 className="h-3 w-3 animate-spin inline" />
+                              ) : (
+                                "Mark paid"
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Proof review panel — shown when pending_review */}
+                      {isPendingReview && (
+                        <div className="mt-3 rounded-lg border border-sky-800/40 bg-sky-950/20 px-4 py-3 space-y-2">
+                          <p className="text-xs font-semibold text-sky-400 flex items-center gap-1.5">
+                            <Eye className="h-3.5 w-3.5" />
+                            Payment proof submitted by client
+                          </p>
+                          <div className="grid grid-cols-3 gap-3 text-xs">
+                            <div>
+                              <p className="text-neutral-500 mb-0.5">Date</p>
+                              <p className="text-neutral-300">
+                                {inv.proofSubmittedAt ? fmtDate(inv.proofSubmittedAt) : "—"}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-neutral-500 mb-0.5">Method</p>
+                              <p className="text-neutral-300 capitalize">
+                                {inv.proofMethod?.replace("_", " ") ?? "—"}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-neutral-500 mb-0.5">Reference</p>
+                              <p className="text-neutral-300 font-mono truncate">
+                                {inv.proofRef ?? "—"}
+                              </p>
+                            </div>
+                          </div>
+                          {inv.proofUrl && (
                             <a
-                              href={inv.pdfUrl}
+                              href={inv.proofUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex items-center gap-1 text-[10px] text-purple-400 hover:text-purple-300"
+                              className="inline-flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300 font-medium"
                             >
-                              <ExternalLink className="h-3 w-3" />
-                              PDF
+                              <ExternalLink className="h-3.5 w-3.5" />
+                              View proof document
                             </a>
                           )}
                         </div>
-                        <p className="text-xs text-neutral-500 mt-0.5">
-                          Issued {fmtShort(inv.createdAt)} · Due {fmtDate(inv.dueDate)}
-                          {isPaid && inv.paidAt && (
-                            <span className="text-green-400 ml-2">
-                              · Paid {fmtDate(inv.paidAt)}
-                              {inv.paidMethod && ` (${inv.paidMethod})`}
-                              {inv.paidRef && ` — ref: ${inv.paidRef}`}
-                            </span>
-                          )}
-                        </p>
-                        {inv.notes && (
-                          <p className="text-xs text-neutral-600 mt-0.5 italic">&ldquo;{inv.notes}&rdquo;</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          onClick={() => openEditInvoiceDrawer(inv)}
-                          className="p-1.5 rounded-lg text-neutral-500 hover:text-white hover:bg-neutral-800 transition-colors"
-                          title="Edit invoice"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={() => void deleteManualInvoice(inv.id)}
-                          disabled={deletingInvoice === inv.id}
-                          className="p-1.5 rounded-lg text-neutral-500 hover:text-red-400 hover:bg-red-900/20 transition-colors disabled:opacity-50"
-                          title="Delete invoice"
-                        >
-                          {deletingInvoice === inv.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-3.5 w-3.5" />
-                          )}
-                        </button>
-                        {isPaid ? (
-                          <button
-                            onClick={() => void manualMarkUnpaid(inv.id)}
-                            disabled={manualMarkingUnpaid === inv.id}
-                            className="text-[10px] text-neutral-500 hover:text-red-400 underline"
-                          >
-                            {manualMarkingUnpaid === inv.id ? "…" : "undo"}
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => openManualPayModal(inv)}
-                            disabled={manualMarkingPaid === inv.id}
-                            className={cn(
-                              "text-xs px-3 py-1.5 rounded-lg font-medium",
-                              isOverdue
-                                ? "bg-amber-900/30 text-amber-400 hover:bg-amber-900/50"
-                                : "bg-yellow-900/20 text-yellow-400 hover:bg-yellow-900/40"
-                            )}
-                          >
-                            {manualMarkingPaid === inv.id ? (
-                              <Loader2 className="h-3 w-3 animate-spin inline" />
-                            ) : (
-                              "Mark paid"
-                            )}
-                          </button>
-                        )}
-                      </div>
+                      )}
                     </div>
                   );
                 })}
@@ -2009,6 +2121,58 @@ export default function VenueBillingDetailPage() {
                   <CheckCircle2 className="h-4 w-4" />
                 )}
                 Mark paid
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Reject Proof Modal ─────────────────────────────────────── */}
+      {rejectModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+          onClick={() => setRejectModal(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold">Reject Payment Proof</h3>
+            <p className="text-sm text-neutral-400">
+              Invoice: <span className="text-white font-semibold">{formatVND(rejectModal.amount)} VND</span>
+            </p>
+            <p className="text-xs text-neutral-500">
+              The invoice will return to <strong className="text-yellow-400">Pending</strong> and the proof will be cleared.
+              The client will need to resubmit.
+            </p>
+            <div>
+              <label className="text-xs text-neutral-500 mb-1 block">Rejection note (optional)</label>
+              <textarea
+                value={rejectNote}
+                onChange={(e) => setRejectNote(e.target.value)}
+                rows={3}
+                placeholder="e.g. Proof image is unclear, please resubmit"
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white resize-none"
+              />
+            </div>
+            <div className="flex gap-3 pt-1">
+              <button
+                onClick={() => setRejectModal(null)}
+                className="flex-1 rounded-lg border border-neutral-700 py-2 text-sm text-neutral-400 hover:text-white hover:border-neutral-600"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void submitRejectProof()}
+                disabled={rejectingProof}
+                className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-red-600 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
+              >
+                {rejectingProof ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <ThumbsDown className="h-4 w-4" />
+                )}
+                Reject proof
               </button>
             </div>
           </div>
