@@ -111,6 +111,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const { t } = useTranslation("translation", { i18n: adminI18n });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
+  const [lang, setLang] = useState<"en" | "vi">("en");
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => {
     if (typeof window === "undefined") return {};
     try { return JSON.parse(localStorage.getItem("admin-nav-sections") || "{}"); } catch { return {}; }
@@ -162,6 +163,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     applyThemeMode(mode);
   }, []);
 
+  useEffect(() => {
+    // Sync lang state with the i18n instance after hydration
+    setLang((adminI18n.language?.startsWith("vi") ? "vi" : "en") as "en" | "vi");
+  }, []);
+
+  const toggleLang = () => {
+    const next: "en" | "vi" = lang === "en" ? "vi" : "en";
+    void adminI18n.changeLanguage(next);
+    setLang(next);
+  };
+
   const toggleThemeMode = () => {
     setThemeMode((prev) => {
       const next: ThemeMode = prev === "dark" ? "light" : "dark";
@@ -204,15 +216,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="mb-6">
           <div className="flex items-center justify-between gap-2">
             <h1 className="text-lg font-bold text-purple-500">{role === "manager" ? t("layout.managerPanel") : t("layout.adminPanel")}</h1>
-            <button
-              type="button"
-              onClick={toggleThemeMode}
-              aria-label={themeMode === "dark" ? t("layout.switchToLight") : t("layout.switchToDark")}
-              title={themeMode === "dark" ? t("layout.switchToLight") : t("layout.switchToDark")}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800 hover:text-white"
-            >
-              {themeMode === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={toggleLang}
+                aria-label={lang === "en" ? "Switch to Vietnamese" : "Switch to English"}
+                title={lang === "en" ? "Switch to Vietnamese" : "Switch to English"}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 text-base hover:bg-neutral-800"
+              >
+                {lang === "en" ? "🇻🇳" : "🇬🇧"}
+              </button>
+              <button
+                type="button"
+                onClick={toggleThemeMode}
+                aria-label={themeMode === "dark" ? t("layout.switchToLight") : t("layout.switchToDark")}
+                title={themeMode === "dark" ? t("layout.switchToLight") : t("layout.switchToDark")}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800 hover:text-white"
+              >
+                {themeMode === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
           <p className="text-xs text-neutral-500">{t("layout.courtflow")}</p>
           {(staffName || staffPhone) && (
@@ -314,9 +337,27 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         >
           {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <h1 className="text-base font-bold text-purple-500">{role === "manager" ? t("layout.managerPanel") : t("layout.adminPanel")}</h1>
           <p className="text-[10px] text-neutral-500 leading-none">{t("layout.courtflow")}</p>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={toggleLang}
+            aria-label={lang === "en" ? "Switch to Vietnamese" : "Switch to English"}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 text-base hover:bg-neutral-800"
+          >
+            {lang === "en" ? "🇻🇳" : "🇬🇧"}
+          </button>
+          <button
+            type="button"
+            onClick={toggleThemeMode}
+            aria-label={themeMode === "dark" ? t("layout.switchToLight") : t("layout.switchToDark")}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900 text-neutral-300 hover:bg-neutral-800 hover:text-white"
+          >
+            {themeMode === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </button>
         </div>
       </div>
 
