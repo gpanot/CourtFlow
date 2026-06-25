@@ -1,6 +1,8 @@
 // Minimal service worker — enables PWA installability and offline shell caching.
 const CACHE = "courtflow-v1";
-const PRECACHE = ["/", "/book"];
+// Only precache same-origin pages that do NOT redirect cross-origin.
+// /book redirects to courtpass.thecourtflow.com (308) which is blocked by CORS.
+const PRECACHE = ["/"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(
@@ -17,10 +19,13 @@ self.addEventListener("activate", (e) => {
 });
 
 self.addEventListener("fetch", (e) => {
-  // Only cache GET requests for same-origin navigation; pass API calls through.
+  // Only handle same-origin GET requests; skip API calls and cross-origin requests.
   const url = new URL(e.request.url);
   if (e.request.method !== "GET") return;
+  if (url.origin !== self.location.origin) return;
   if (url.pathname.startsWith("/api/")) return;
+  // Skip /book — middleware issues a 308 cross-origin redirect to CourtPass.
+  if (url.pathname.startsWith("/book")) return;
 
   e.respondWith(
     fetch(e.request).catch(() => caches.match(e.request))
