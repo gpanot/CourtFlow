@@ -85,7 +85,7 @@ export default function MyBillingPage() {
     paid: { label: t("myBilling.paid"), icon: CheckCircle2, className: "text-emerald-400" },
     pending: { label: t("myBilling.pending"), icon: Clock, className: "text-yellow-400" },
     overdue: { label: t("myBilling.overdue"), icon: AlertTriangle, className: "text-red-400" },
-    pending_review: { label: "Submitted", icon: Eye, className: "text-sky-400" },
+    pending_review: { label: t("myBilling.submitted"), icon: Eye, className: "text-sky-400" },
   };
 
   const load = useCallback(async () => {
@@ -184,7 +184,7 @@ export default function MyBillingPage() {
             venues={venueOptions}
             onChange={setSelectedVenueId}
             allowAll
-            placeholder="All venues"
+            placeholder={t("myBilling.allVenues")}
           />
         )}
       </div>
@@ -210,25 +210,25 @@ export default function MyBillingPage() {
                     {v.rate.billingModel === "monthly" ? (
                       <>
                         <p className="font-medium text-purple-400">
-                          Monthly: {formatVND(v.rate.monthlyRate ?? 0)}/month
+                          {t("myBilling.monthly")}: {formatVND(v.rate.monthlyRate ?? 0)}/tháng
                         </p>
                         <p>
                           {v.rate.monthlyStatus === "active" && (
-                            <span className="text-emerald-400">Active</span>
+                            <span className="text-emerald-400">{t("myBilling.activeStatus")}</span>
                           )}
                           {v.rate.monthlyStatus === "cancelled" && (
-                            <span className="text-red-400">Cancelled</span>
+                            <span className="text-red-400">{t("myBilling.cancelledStatus")}</span>
                           )}
                           {v.rate.monthlyPeriodStart && (
-                            <span className="ml-1">· since {formatDate(v.rate.monthlyPeriodStart)}</span>
+                            <span className="ml-1">· {t("myBilling.since")} {formatDate(v.rate.monthlyPeriodStart)}</span>
                           )}
                         </p>
                         {v.rate.monthlyEndDate && (
-                          <p>Expires: {formatDate(v.rate.monthlyEndDate)}</p>
+                          <p>{t("myBilling.expires")}: {formatDate(v.rate.monthlyEndDate)}</p>
                         )}
                       </>
                     ) : v.rate.billingModel === "manual" ? (
-                      <p className="font-medium text-purple-400">Manual invoicing</p>
+                      <p className="font-medium text-purple-400">{t("myBilling.manualInvoicing")}</p>
                     ) : (
                       <>
                         <p>{t("myBilling.baseRate")}: {v.rate.isFreeBase ? t("myBilling.free") : formatVND(v.rate.baseRatePerCheckin)} {t("myBilling.perCheckin")}</p>
@@ -267,7 +267,7 @@ export default function MyBillingPage() {
                       <th className="py-2 pr-4 font-medium text-right">{t("myBilling.amount")}</th>
                       <th className="py-2 pr-4 font-medium">{t("myBilling.status")}</th>
                       <th className="py-2 pr-4 font-medium">{t("myBilling.paidAt")}</th>
-                      <th className="py-2 pr-4 font-medium">Issued</th>
+                      <th className="py-2 pr-4 font-medium">{t("myBilling.issued")}</th>
                       <th className="py-2 font-medium">PDF</th>
                       <th className="py-2 font-medium"></th>
                     </tr>
@@ -296,7 +296,7 @@ export default function MyBillingPage() {
                           </td>
                           <td className="py-2 pr-4 whitespace-nowrap text-neutral-400">
                             {isManual
-                              ? `Due ${formatDate(inv.dueDate!)}`
+                              ? `${t("myBilling.dueOn")} ${formatDate(inv.dueDate!)}`
                               : `${formatDate(inv.weekStartDate)} – ${formatDate(inv.weekEndDate)}`}
                           </td>
                           <td className="py-2 pr-4 text-right text-neutral-500">
@@ -309,7 +309,7 @@ export default function MyBillingPage() {
                               {cfg.label}
                             </span>
                             {isPendingReview && (
-                              <p className="text-[11px] text-neutral-500 mt-0.5">Awaiting review</p>
+                              <p className="text-[11px] text-neutral-500 mt-0.5">{t("myBilling.awaitingReview")}</p>
                             )}
                           </td>
                           <td className="py-2 pr-4 text-neutral-400">
@@ -327,7 +327,7 @@ export default function MyBillingPage() {
                                 className="flex items-center gap-1 text-purple-400 hover:text-purple-300 text-xs font-medium"
                               >
                                 <ExternalLink className="h-3.5 w-3.5" />
-                                Invoice
+                                {t("myBilling.invoice")}
                               </a>
                             ) : (
                               <span className="text-neutral-700 text-xs">—</span>
@@ -339,7 +339,7 @@ export default function MyBillingPage() {
                                 onClick={() => openProofModal(inv)}
                                 className="text-xs px-3 py-1.5 rounded-lg font-medium bg-purple-600 text-white hover:bg-purple-500 transition-colors"
                               >
-                                Submit Payment
+                                {t("myBilling.submitPayment")}
                               </button>
                             )}
                             {isPendingReview && inv.proofUrl && (
@@ -350,7 +350,7 @@ export default function MyBillingPage() {
                                 className="flex items-center gap-1 text-sky-400 hover:text-sky-300 text-xs font-medium"
                               >
                                 <ExternalLink className="h-3.5 w-3.5" />
-                                View proof
+                                {t("myBilling.viewProof")}
                               </a>
                             )}
                           </td>
@@ -376,7 +376,7 @@ export default function MyBillingPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
-              <h3 className="text-base font-semibold">Submit Payment Proof</h3>
+              <h3 className="text-base font-semibold">{t("myBilling.proofModal.title")}</h3>
               <button
                 onClick={() => setProofModal(null)}
                 className="rounded-lg p-1.5 hover:bg-neutral-800 text-neutral-500 hover:text-white"
@@ -386,7 +386,7 @@ export default function MyBillingPage() {
             </div>
 
             <p className="text-sm text-neutral-400">
-              Invoice:{" "}
+              {t("myBilling.proofModal.invoice")}{" "}
               <span className="text-white font-semibold">{formatVND(proofModal.totalAmount)}</span>
               {proofModal.notes && (
                 <span className="ml-2 text-neutral-500 italic">&ldquo;{proofModal.notes}&rdquo;</span>
@@ -395,7 +395,7 @@ export default function MyBillingPage() {
 
             {/* Payment date */}
             <div className="space-y-1">
-              <label className="text-xs text-neutral-500 block font-medium">Payment date *</label>
+              <label className="text-xs text-neutral-500 block font-medium">{t("myBilling.proofModal.paymentDate")}</label>
               <input
                 type="date"
                 value={proofPaidAt}
@@ -406,7 +406,7 @@ export default function MyBillingPage() {
 
             {/* Payment method */}
             <div className="space-y-1">
-              <label className="text-xs text-neutral-500 block font-medium">Payment method *</label>
+              <label className="text-xs text-neutral-500 block font-medium">{t("myBilling.proofModal.paymentMethod")}</label>
               <div className="flex gap-2 flex-wrap">
                 {(["bank_transfer", "cash", "other"] as const).map((m) => (
                   <button
@@ -420,7 +420,7 @@ export default function MyBillingPage() {
                         : "border-neutral-700 text-neutral-400 hover:border-neutral-600"
                     )}
                   >
-                    {m === "bank_transfer" ? "Bank Transfer" : m === "cash" ? "Cash" : "Other"}
+                    {m === "bank_transfer" ? t("myBilling.proofModal.bankTransfer") : m === "cash" ? t("myBilling.proofModal.cash") : t("myBilling.proofModal.other")}
                   </button>
                 ))}
               </div>
@@ -428,12 +428,12 @@ export default function MyBillingPage() {
 
             {/* Payment reference */}
             <div className="space-y-1">
-              <label className="text-xs text-neutral-500 block font-medium">Payment reference (optional)</label>
+              <label className="text-xs text-neutral-500 block font-medium">{t("myBilling.proofModal.reference")}</label>
               <input
                 type="text"
                 value={proofRef}
                 onChange={(e) => setProofRef(e.target.value)}
-                placeholder="e.g. Bank transfer ref #12345"
+                placeholder={t("myBilling.proofModal.referencePlaceholder")}
                 className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white"
               />
             </div>
@@ -441,8 +441,8 @@ export default function MyBillingPage() {
             {/* Upload proof */}
             <div className="space-y-2">
               <label className="text-xs text-neutral-500 block font-medium">
-                Proof of payment *{" "}
-                <span className="text-neutral-600 font-normal">(image or PDF)</span>
+                {t("myBilling.proofModal.proofLabel")}{" "}
+                <span className="text-neutral-600 font-normal">{t("myBilling.proofModal.proofHint")}</span>
               </label>
               {proofFileUrl ? (
                 <div className="flex items-center gap-3 rounded-lg border border-neutral-700 bg-neutral-800/60 px-3 py-2">
@@ -474,7 +474,7 @@ export default function MyBillingPage() {
                   ) : (
                     <Upload className="h-4 w-4" />
                   )}
-                  {proofUploading ? "Uploading…" : "Upload proof (image or PDF)"}
+                  {proofUploading ? t("myBilling.proofModal.uploading") : t("myBilling.proofModal.uploadBtn")}
                 </button>
               )}
               <input
@@ -496,7 +496,7 @@ export default function MyBillingPage() {
                 onClick={() => setProofModal(null)}
                 className="flex-1 rounded-lg border border-neutral-700 py-2.5 text-sm text-neutral-400 hover:text-white hover:border-neutral-600"
               >
-                Cancel
+                {t("myBilling.proofModal.cancel")}
               </button>
               <button
                 onClick={() => void submitProof()}
@@ -508,7 +508,7 @@ export default function MyBillingPage() {
                 ) : (
                   <Upload className="h-4 w-4" />
                 )}
-                Submit Payment
+                {t("myBilling.proofModal.submit")}
               </button>
             </div>
           </div>
