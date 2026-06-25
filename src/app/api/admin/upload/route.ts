@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { writeFile } from "fs/promises";
+import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { json, error } from "@/lib/api-helpers";
 import { requireManagerOrSuperAdmin } from "@/lib/auth";
@@ -21,7 +21,9 @@ export async function POST(request: NextRequest) {
 
     const ext = file.name.split(".").pop() || "jpg";
     const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const dest = path.join(process.cwd(), "public", "uploads", "payment-proofs", filename);
+    const uploadDir = path.join(process.cwd(), "uploads", "payment-proofs");
+    await mkdir(uploadDir, { recursive: true });
+    const dest = path.join(uploadDir, filename);
 
     const buffer = Buffer.from(await file.arrayBuffer());
     await writeFile(dest, buffer);
