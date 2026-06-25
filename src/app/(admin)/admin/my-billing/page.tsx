@@ -81,16 +81,6 @@ export default function MyBillingPage() {
   const [proofSubmitting, setProofSubmitting] = useState(false);
   const proofFileRef = useRef<HTMLInputElement>(null);
 
-  // Submit payment proof state
-  const [proofModal, setProofModal] = useState<InvoiceRow | null>(null);
-  const [proofDate, setProofDate] = useState("");
-  const [proofMethod, setProofMethod] = useState("bank_transfer");
-  const [proofRef, setProofRef] = useState("");
-  const [proofFileUrl, setProofFileUrl] = useState("");
-  const [proofUploading, setProofUploading] = useState(false);
-  const [proofSubmitting, setProofSubmitting] = useState(false);
-  const proofFileInputRef = useRef<HTMLInputElement>(null);
-
   const statusConfig: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; className: string }> = {
     paid: { label: t("myBilling.paid"), icon: CheckCircle2, className: "text-emerald-400" },
     pending: { label: t("myBilling.pending"), icon: Clock, className: "text-yellow-400" },
