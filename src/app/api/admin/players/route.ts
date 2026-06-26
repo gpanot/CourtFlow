@@ -162,6 +162,8 @@ export async function GET(request: NextRequest) {
       where.OR = [
         { name: { contains: search, mode: "insensitive" } },
         { phone: { contains: search } },
+        { email: { contains: search, mode: "insensitive" } },
+        { accounts: { some: { providerAccountId: { contains: search, mode: "insensitive" } } } },
       ];
     }
 
@@ -216,6 +218,8 @@ export async function GET(request: NextRequest) {
       baseWhere.OR = [
         { name: { contains: search, mode: "insensitive" } },
         { phone: { contains: search } },
+        { email: { contains: search, mode: "insensitive" } },
+        { accounts: { some: { providerAccountId: { contains: search, mode: "insensitive" } } } },
       ];
     }
     if (skillLevel) baseWhere.skillLevel = skillLevel;

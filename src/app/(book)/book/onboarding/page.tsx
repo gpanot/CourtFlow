@@ -223,12 +223,9 @@ function OnboardingContent() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || t("onboarding.errors.genericFailed"));
         setFaceLinked(true);
+        setFaceModalOpen(false);
         setSaving(false);
-        // Give the user a moment to see "Account linked" then proceed
-        setTimeout(() => {
-          refresh();
-          router.push("/book");
-        }, 2000);
+        // User continues filling the form and submits normally
       } catch (e) {
         setError((e as Error).message);
         setSaving(false);
