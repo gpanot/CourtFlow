@@ -7,31 +7,40 @@ export async function POST(request: NextRequest) {
   try {
     const { playerId } = await requirePortalAuth(request);
     const body = await request.json();
-    const { phone, gender, skillLevel, venueId, faceLinked } = body as {
-      phone: string;
-      gender: string;
-      skillLevel: string;
+    const { phone, gender, skillLevel, venueId, faceLinked, venueOnly } = body as {
+      phone?: string;
+      gender?: string;
+      skillLevel?: string;
       venueId?: string | null;
       faceLinked?: boolean;
+      venueOnly?: boolean;
     };
 
-    console.log("[onboarding API] received:", { playerId, phone, phoneLen: phone?.length, gender, skillLevel, venueId });
+    // Venue-only update: the profile step already validated & saved the phone.
+    // Skip all phone validation and conflict checks — just set registrationVenueId.
+    if (venueOnly && venueId) {
+      const updated = await prisma.player.update({
+        where: { id: playerId },
+        data: { registrationVenueId: venueId },
+      });
+      console.log("[onboarding API] venue-only update:", { playerId, venueId });
+      return json({ playerId: updated.id });
+    }
 
     if (!phone || phone.length < 8) return error(`Phone number is required (got "${phone}", len=${phone?.length})`, 400);
-    if (!["male", "female"].includes(gender)) return error("Invalid gender", 400);
-    if (!["beginner", "intermediate", "advanced", "pro"].includes(skillLevel))
+    if (!["male", "female"].includes(gender ?? "")) return error("Invalid gender", 400);
+    if (!["beginner", "intermediate", "advanced", "pro"].includes(skillLevel ?? ""))
       return error("Invalid skill level", 400);
 
     const normalizedPhone = phone.replace(/\s+/g, "");
 
     // Last 9 digits for fuzzy duplicate check — same logic as check-phone route.
-    // "+849595656959" → tail "595656959" matches "9595656959" stored by CourtPay (tail "595656959").
     const digits = normalizedPhone.replace(/\D/g, "");
     const tail = digits.length >= 9 ? digits.slice(-9) : digits;
 
-    console.log("[onboarding API] received:", { playerId, phone: normalizedPhone, tail, gender, skillLevel, venueId });
+    console.log("[onboarding API] phone check:", { playerId, phone: normalizedPhone, tail, faceLinked });
 
-    // Check if another real player (not the placeholder-phone current user) has this phone.
+    // Check if another real player (not the current user) has this phone.
     const existingRows = await prisma.$queryRaw<{ id: string; phone: string }[]>`
       SELECT id, phone
       FROM players
@@ -47,8 +56,7 @@ export async function POST(request: NextRequest) {
     `;
 
     const existing = existingRows[0] ?? null;
-
-    console.log("[onboarding API] conflict check:", { tail, match: existing?.phone ?? "none", matchId: existing?.id ?? "none" });
+    console.log("[onboarding API] conflict check:", { tail, match: existing?.phone ?? "none", matchId: existing?.id ?? "none", faceLinked });
 
     if (existing && !faceLinked) {
       return json({ existingPlayerId: existing.id, error: "phone_match" }, 409);

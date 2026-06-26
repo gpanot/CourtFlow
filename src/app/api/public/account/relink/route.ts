@@ -7,38 +7,62 @@ export async function POST(request: NextRequest) {
   try {
     const { playerId: currentPlayerId } = await requirePortalAuth(request);
     const body = await request.json();
-    const { existingPlayerId, link, phone, gender, skillLevel } = body as {
-      existingPlayerId: string;
+    const { link, phone, gender, skillLevel } = body as {
       link: boolean;
       phone: string;
-      gender: string;
-      skillLevel: string;
+      gender?: string;
+      skillLevel?: string;
     };
 
     const normalizedPhone = phone.replace(/\s+/g, "");
 
     if (link) {
-      // CourtPass is the source of truth — we never overwrite its data or delete it.
-      // We only set the playerIdentityId on the current CourtPass player so it is
-      // linked to the CourtPay face identity, and store the confirmed phone number.
-      const courtPayPlayer = await prisma.player.findUnique({
-        where: { id: existingPlayerId },
-        select: { playerIdentityId: true },
-      });
-      if (!courtPayPlayer) return error("CourtPay player not found", 404);
+      const { checkInPlayerId } = body as { checkInPlayerId?: string };
+      if (!checkInPlayerId) return error("checkInPlayerId is required", 400);
 
-      await prisma.player.update({
-        where: { id: currentPlayerId },
-        data: {
-          phone: normalizedPhone,
-          ...(courtPayPlayer.playerIdentityId
-            ? { playerIdentityId: courtPayPlayer.playerIdentityId }
-            : {}),
-        },
+      // Look up both sides
+      const [courtPassPlayer, checkInPlayer] = await Promise.all([
+        prisma.player.findUnique({
+          where: { id: currentPlayerId },
+          select: { id: true, name: true, playerIdentityId: true },
+        }),
+        prisma.checkInPlayer.findUnique({
+          where: { id: checkInPlayerId },
+          select: { id: true, playerIdentityId: true },
+        }),
+      ]);
+
+      if (!courtPassPlayer) return error("Player not found", 404);
+      if (!checkInPlayer) return error("CourtPay check-in player not found", 404);
+
+      // Reuse existing identity or create a new one — same logic as link-courtpay
+      let identityId: string;
+      await prisma.$transaction(async (tx) => {
+        if (courtPassPlayer.playerIdentityId) {
+          identityId = courtPassPlayer.playerIdentityId;
+        } else if (checkInPlayer.playerIdentityId) {
+          identityId = checkInPlayer.playerIdentityId;
+        } else {
+          const identity = await tx.playerIdentity.create({
+            data: { name: courtPassPlayer.name },
+            select: { id: true },
+          });
+          identityId = identity.id;
+        }
+
+        // Link CourtPass player to the shared identity and save confirmed phone
+        await tx.player.update({
+          where: { id: currentPlayerId },
+          data: { playerIdentityId: identityId, phone: normalizedPhone },
+        });
+
+        // Link CourtPay CheckInPlayer to the same identity
+        await tx.checkInPlayer.update({
+          where: { id: checkInPlayerId },
+          data: { playerIdentityId: identityId },
+        });
       });
 
-      // The current player is NOT deleted — CourtPass is the source of truth.
-      // The existing token remains valid; just return success.
       return json({ playerId: currentPlayerId });
     }
 

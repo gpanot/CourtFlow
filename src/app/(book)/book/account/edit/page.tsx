@@ -83,6 +83,7 @@ export default function EditProfilePage() {
   const [email, setEmail] = useState("");
   const [venueTimezone, setVenueTimezone] = useState<string | null>(null);
   const [registrationVenueId, setRegistrationVenueId] = useState<string | null>(null);
+  const [fallbackVenueId, setFallbackVenueId] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [initialProfile, setInitialProfile] = useState<ProfileSnapshot | null>(null);
   const [saving, setSaving] = useState(false);
@@ -126,6 +127,14 @@ export default function EditProfilePage() {
       return () => clearTimeout(t);
     }
   }, [linkingState]);
+
+  // Fetch any venue ID for the face widget — decoupled from registration venue
+  useEffect(() => {
+    fetch("/api/public/venues")
+      .then((r) => r.json())
+      .then((data: { id: string }[]) => { if (data[0]?.id) setFallbackVenueId(data[0].id); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (status === "unauthenticated") router.replace("/book/login");
@@ -444,9 +453,8 @@ export default function EditProfilePage() {
         </div>
       </div>
 
-      {/* Face Check-in section */}
-      {(venueId || registrationVenueId) ? (
-        <div className="rounded-xl border border-[var(--cm-border)] bg-[var(--cm-bg-card)] p-3 mb-4 space-y-2">
+      {/* Face Check-in section — always visible, venue is resolved at scan time */}
+      <div className="rounded-xl border border-[var(--cm-border)] bg-[var(--cm-bg-card)] p-3 mb-4 space-y-2">
           <p className="text-xs font-medium text-[var(--cm-text-sec)]">{t("editProfile.faceSection")}</p>
           {linkingState === "linked" ? (
             <div className="space-y-2">
@@ -471,7 +479,6 @@ export default function EditProfilePage() {
             </button>
           )}
         </div>
-      ) : null}
 
       <div className="mt-8 pt-6 border-t border-[var(--cm-border)]">
         <button
@@ -493,7 +500,7 @@ export default function EditProfilePage() {
       )}
 
       {/* Face Verify Modal */}
-      {faceModal === "verify" && (venueId || registrationVenueId) ? (
+      {faceModal === "verify" && (venueId || registrationVenueId || fallbackVenueId) ? (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--cm-overlay)] px-4 pt-4 pb-[calc(env(safe-area-inset-bottom,0px)+72px)]"
           onClick={() => { setFaceModal(null); setLinkingState("idle"); setLinkError(null); }}
@@ -566,7 +573,7 @@ export default function EditProfilePage() {
               )
             ) : (
               <FaceCheckInWidget
-                venueId={(venueId || registrationVenueId)!}
+                venueId={(venueId || registrationVenueId || fallbackVenueId)!}
                 initialFacing="user"
                 onResult={(result) => setFaceCheckInResult(result)}
                 labels={{

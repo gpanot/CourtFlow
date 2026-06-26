@@ -204,7 +204,7 @@ function OnboardingContent() {
 
   async function handleFaceResult(result: FaceCheckInResult) {
     setFaceResult(result);
-    if (result.resultType === "matched" && result.player?.id && takenPlayerId) {
+    if (result.resultType === "matched" && result.player?.id) {
       setSaving(true);
       setError(null);
       try {
@@ -213,11 +213,9 @@ function OnboardingContent() {
           headers: { "Content-Type": "application/json", ...authHeader },
           credentials: "include",
           body: JSON.stringify({
-            existingPlayerId: takenPlayerId,
+            checkInPlayerId: result.player.id,  // CheckInPlayer.id from face recognition
             link: true,
             phone: buildE164(countryCode, phone),
-            gender,
-            skillLevel,
           }),
         });
         const data = await res.json();

@@ -46,22 +46,13 @@ export default function OnboardingVenuePage() {
         "Content-Type": "application/json",
         ...(session.token ? { Authorization: `Bearer ${session.token}` } : {}),
       };
-      const profileRes = await fetch("/api/public/account", {
-        headers: session.token ? { Authorization: `Bearer ${session.token}` } : {},
-        credentials: "include",
-      });
-      const profile = await profileRes.json();
-
+      // venueOnly=true: phone was already validated & saved in the profile step.
+      // Skip all phone conflict checks — just set registrationVenueId.
       const res = await fetch("/api/public/account/onboarding", {
         method: "POST",
         headers,
         credentials: "include",
-        body: JSON.stringify({
-          phone: profile.phone,
-          gender: profile.gender,
-          skillLevel: profile.skillLevel,
-          venueId,
-        }),
+        body: JSON.stringify({ venueId, venueOnly: true }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || t("onboarding.errors.saveFailed"));
