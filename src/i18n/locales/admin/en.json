@@ -140,6 +140,7 @@
     "statusCancelled": "Cancelled",
     "statusCompleted": "Completed",
     "statusNoShow": "No Show",
+    "statusPendingApproval": "Pending approval",
     "statusPending": "Pending",
     "statusProofSubmitted": "Proof submitted",
     "statusPaid": "Paid",

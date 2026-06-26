@@ -138,6 +138,7 @@
      "statusCancelled": "Đã huỷ",
      "statusCompleted": "Hoàn thành",
      "statusNoShow": "Vắng mặt",
+     "statusPendingApproval": "Chờ xác nhận",
      "statusPending": "Chờ thanh toán",
      "statusProofSubmitted": "Đã gửi bằng chứng",
      "statusPaid": "Đã thanh toán",

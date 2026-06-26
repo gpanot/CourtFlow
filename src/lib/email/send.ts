@@ -37,6 +37,17 @@ function bookingLabel(bookingType: BookingType): string {
   }
 }
 
+function signature(venueName?: string): string {
+  const venueBlock = venueName
+    ? `<p style="margin:0 0 4px 0;font-weight:600;">${venueName}</p>`
+    : "";
+  return `
+<p style="margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px;font-size:13px;color:#6b7280;">
+  ${venueBlock}
+  <span>Powered by <a href="https://www.thecourtflow.com/" target="_blank" style="color:#7c3aed;text-decoration:none;font-weight:600;">CourtPass</a></span>
+</p>`.trim();
+}
+
 function buildEmail(params: SendBookingEmailParams): { subject: string; html: string } {
   const { playerName, bookingType, emailType, details, recipientRole = "student" } = params;
   const label = bookingLabel(bookingType);
@@ -125,36 +136,36 @@ function buildEmail(params: SendBookingEmailParams): { subject: string; html: st
       if (recipientRole === "student") {
         return {
           subject: `${refPrefix}Payment proof received — your ${label} is pending review`,
-          html: `<p>${greeting}</p><p>We have received your payment proof for your <strong>${label}</strong> and it is currently being reviewed by our team.</p>${detailsBlock}<p>We will notify you once the payment has been approved. This usually takes less than 24 hours.</p><p>Thank you,<br/>The CourtFlow Team</p>`,
+          html: `<p>${greeting}</p><p>We have received your payment proof for your <strong>${label}</strong> and it is currently being reviewed by our team.</p>${detailsBlock}<p>We will notify you once the payment has been approved. This usually takes less than 24 hours.</p>${signature(details.venueName)}`,
         };
       }
       if (recipientRole === "coach") {
         return {
           subject: `${refPrefix}New lesson booking pending — ${details.studentName ?? playerName}`,
-          html: `<p>${greeting}</p><p>A student has submitted a booking and payment proof for a <strong>${label}</strong>. The booking is pending staff approval.</p>${detailsBlock}<p>You will be notified once the booking is confirmed.</p><p>CourtFlow</p>`,
+          html: `<p>${greeting}</p><p>A student has submitted a booking and payment proof for a <strong>${label}</strong>. The booking is pending staff approval.</p>${detailsBlock}<p>You will be notified once the booking is confirmed.</p>${signature(details.venueName)}`,
         };
       }
       return {
         subject: `${refPrefix}[Action required] New ${label} pending approval`,
-        html: `<p>${greeting}</p><p>A new <strong>${label}</strong> has been submitted with a payment proof and is awaiting your approval.</p>${detailsBlock}<p>Please review and approve or reject it in the admin panel.</p><p>CourtFlow</p>`,
+        html: `<p>${greeting}</p><p>A new <strong>${label}</strong> has been submitted with a payment proof and is awaiting your approval.</p>${detailsBlock}<p>Please review and approve or reject it in the admin panel.</p>${signature(details.venueName)}`,
       };
 
     case "approved":
       if (recipientRole === "student") {
         return {
           subject: `${refPrefix}Payment approved — your ${label} is confirmed`,
-          html: `<p>${greeting}</p><p>Great news! Your payment for your <strong>${label}</strong> has been approved and your booking is confirmed.</p>${detailsBlock}${calendarButtons}<p style="margin-top:20px;">We look forward to seeing you on the court!</p><p>Thank you,<br/>The CourtFlow Team</p>`,
+          html: `<p>${greeting}</p><p>Great news! Your payment for your <strong>${label}</strong> has been approved and your booking is confirmed.</p>${detailsBlock}${calendarButtons}<p style="margin-top:20px;">We look forward to seeing you on the court!</p>${signature(details.venueName)}`,
         };
       }
       if (recipientRole === "coach") {
         return {
           subject: `${refPrefix}Lesson confirmed — ${details.studentName ?? playerName}`,
-          html: `<p>${greeting}</p><p>A <strong>${label}</strong> with your student has been confirmed.</p>${detailsBlock}${calendarButtons}<p>CourtFlow</p>`,
+          html: `<p>${greeting}</p><p>A <strong>${label}</strong> with your student has been confirmed.</p>${detailsBlock}${calendarButtons}${signature(details.venueName)}`,
         };
       }
       return {
         subject: `${refPrefix}[Confirmed] ${label} approved`,
-        html: `<p>${greeting}</p><p>The <strong>${label}</strong> has been approved and confirmed.</p>${detailsBlock}<p>CourtFlow</p>`,
+        html: `<p>${greeting}</p><p>The <strong>${label}</strong> has been approved and confirmed.</p>${detailsBlock}${signature(details.venueName)}`,
       };
 
     case "rejected": {
@@ -164,18 +175,18 @@ function buildEmail(params: SendBookingEmailParams): { subject: string; html: st
       if (recipientRole === "student") {
         return {
           subject: `${refPrefix}Payment proof rejected — action required for your ${label}`,
-          html: `<p>${greeting}</p><p>Unfortunately, the payment proof you submitted for your <strong>${label}</strong> could not be verified.</p>${detailsBlock}${reasonLine}<p>Please contact the venue directly or submit a new payment proof to complete your booking.</p><p>Thank you,<br/>The CourtFlow Team</p>`,
+          html: `<p>${greeting}</p><p>Unfortunately, the payment proof you submitted for your <strong>${label}</strong> could not be verified.</p>${detailsBlock}${reasonLine}<p>Please contact the venue directly or submit a new payment proof to complete your booking.</p>${signature(details.venueName)}`,
         };
       }
       if (recipientRole === "coach") {
         return {
           subject: `${refPrefix}Lesson booking rejected — ${details.studentName ?? playerName}`,
-          html: `<p>${greeting}</p><p>A <strong>${label}</strong> booking was rejected by staff.</p>${detailsBlock}${reasonLine}<p>CourtFlow</p>`,
+          html: `<p>${greeting}</p><p>A <strong>${label}</strong> booking was rejected by staff.</p>${detailsBlock}${reasonLine}${signature(details.venueName)}`,
         };
       }
       return {
         subject: `${refPrefix}[Rejected] ${label} rejected`,
-        html: `<p>${greeting}</p><p>The <strong>${label}</strong> booking was rejected.</p>${detailsBlock}${reasonLine}<p>CourtFlow</p>`,
+        html: `<p>${greeting}</p><p>The <strong>${label}</strong> booking was rejected.</p>${detailsBlock}${reasonLine}${signature(details.venueName)}`,
       };
     }
 
@@ -183,36 +194,36 @@ function buildEmail(params: SendBookingEmailParams): { subject: string; html: st
       if (recipientRole === "student") {
         return {
           subject: `${refPrefix}Your ${label} has been cancelled`,
-          html: `<p>${greeting}</p><p>Your <strong>${label}</strong> has been cancelled.</p>${detailsBlock}<p>If you did not request this cancellation or believe this is an error, please contact the venue directly.</p><p>Thank you,<br/>The CourtFlow Team</p>`,
+          html: `<p>${greeting}</p><p>Your <strong>${label}</strong> has been cancelled.</p>${detailsBlock}<p>If you did not request this cancellation or believe this is an error, please contact the venue directly.</p>${signature(details.venueName)}`,
         };
       }
       if (recipientRole === "coach") {
         return {
           subject: `${refPrefix}Lesson cancelled — ${details.studentName ?? playerName}`,
-          html: `<p>${greeting}</p><p>A <strong>${label}</strong> booking has been cancelled.</p>${detailsBlock}<p>CourtFlow</p>`,
-        };
+          html: `<p>${greeting}</p><p>A <strong>${label}</strong> booking has been cancelled.</p>${detailsBlock}${signature(details.venueName)}`,
+      };
       }
       return {
         subject: `${refPrefix}[Cancelled] ${label} cancelled`,
-        html: `<p>${greeting}</p><p>A <strong>${label}</strong> booking has been cancelled.</p>${detailsBlock}<p>CourtFlow</p>`,
+        html: `<p>${greeting}</p><p>A <strong>${label}</strong> booking has been cancelled.</p>${detailsBlock}${signature(details.venueName)}`,
       };
 
     case "auto_confirmed":
       if (recipientRole === "student") {
         return {
           subject: `${refPrefix}Payment confirmed — your ${label} is booked`,
-          html: `<p>${greeting}</p><p>Your payment has been automatically confirmed and your <strong>${label}</strong> is now booked.</p>${detailsBlock}${calendarButtons}<p style="margin-top:20px;">We look forward to seeing you on the court!</p><p>Thank you,<br/>The CourtFlow Team</p>`,
+          html: `<p>${greeting}</p><p>Your payment has been automatically confirmed and your <strong>${label}</strong> is now booked.</p>${detailsBlock}${calendarButtons}<p style="margin-top:20px;">We look forward to seeing you on the court!</p>${signature(details.venueName)}`,
         };
       }
       if (recipientRole === "coach") {
         return {
           subject: `${refPrefix}Lesson auto-confirmed — ${details.studentName ?? playerName}`,
-          html: `<p>${greeting}</p><p>A <strong>${label}</strong> with your student has been automatically confirmed via Sepay.</p>${detailsBlock}${calendarButtons}<p>CourtFlow</p>`,
+          html: `<p>${greeting}</p><p>A <strong>${label}</strong> with your student has been automatically confirmed via Sepay.</p>${detailsBlock}${calendarButtons}${signature(details.venueName)}`,
         };
       }
       return {
         subject: `${refPrefix}[Auto-confirmed] ${label} confirmed via Sepay`,
-        html: `<p>${greeting}</p><p>A <strong>${label}</strong> was automatically confirmed via Sepay payment.</p>${detailsBlock}<p>CourtFlow</p>`,
+        html: `<p>${greeting}</p><p>A <strong>${label}</strong> was automatically confirmed via Sepay payment.</p>${detailsBlock}${signature(details.venueName)}`,
       };
   }
 }
@@ -405,7 +416,10 @@ export async function sendBillingProofNotification(
           <a href="${params.proofUrl}" style="display:inline-block;padding:10px 20px;background:#e5e7eb;color:#111;text-decoration:none;border-radius:6px;font-weight:600;margin-right:12px">View Proof</a>
           <a href="${params.adminUrl}" style="display:inline-block;padding:10px 20px;background:#7c3aed;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">Review in Admin</a>
         </p>
-        <p style="margin-top:32px;color:#6b7280;font-size:12px">CourtFlow Billing</p>
+        <p style="margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px;font-size:13px;color:#6b7280;">
+          ${params.venueName}<br/>
+          Powered by <a href="https://www.thecourtflow.com/" target="_blank" style="color:#7c3aed;text-decoration:none;font-weight:600;">CourtPass</a>
+        </p>
       </div>
     `;
 

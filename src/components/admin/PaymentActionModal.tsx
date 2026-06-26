@@ -64,6 +64,7 @@ const BOOKING_STATUS_LABEL: Record<string, { label: string; cls: string }> = {
   completed: { label: "Completed", cls: "bg-blue-600/20 text-blue-400" },
   cancelled: { label: "Cancelled", cls: "bg-red-600/20 text-red-400" },
   no_show: { label: "No Show", cls: "bg-amber-600/20 text-amber-400" },
+  pending_approval: { label: "Pending approval", cls: "bg-yellow-600/20 text-yellow-400" },
 };
 
 type ConfirmingAction = "approve" | "cancel" | "no_show";

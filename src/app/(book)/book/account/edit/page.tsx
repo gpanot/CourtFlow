@@ -85,6 +85,7 @@ export default function EditProfilePage() {
   const [faceRegisterCapture, setFaceRegisterCapture] = useState<string | null>(null);
   const [linkingState, setLinkingState] = useState<"idle" | "linking" | "linked" | "error">("idle");
   const [linkError, setLinkError] = useState<string | null>(null);
+  const [unlinking, setUnlinking] = useState(false);
 
   const [cropFile, setCropFile] = useState<File | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -215,6 +216,23 @@ export default function EditProfilePage() {
     } catch (e) {
       setLinkError((e as Error).message);
       setLinkingState("error");
+    }
+  }
+
+  async function handleUnlinkCourtPay() {
+    setUnlinking(true);
+    try {
+      const res = await portalFetch("/api/public/account/unlink-courtpay", { method: "POST" });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.error || "Unlink failed");
+      }
+      setLinkingState("idle");
+      setFaceCheckInResult(null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setUnlinking(false);
     }
   }
 
@@ -413,7 +431,17 @@ export default function EditProfilePage() {
         <div className="rounded-xl border border-[var(--cm-border)] bg-[var(--cm-bg-card)] p-3 mb-4 space-y-2">
           <p className="text-xs font-medium text-[var(--cm-text-sec)]">{t("editProfile.faceSection")}</p>
           {linkingState === "linked" ? (
-            <p className="text-sm text-[var(--cm-accent)] font-medium">Your CourtPay account is linked.</p>
+            <div className="space-y-2">
+              <p className="text-sm text-[var(--cm-accent)] font-medium">✓ Your CourtPay account is linked.</p>
+              <button
+                type="button"
+                onClick={handleUnlinkCourtPay}
+                disabled={unlinking}
+                className="w-full py-2 rounded-lg border border-[var(--cm-red)]/40 text-[var(--cm-red)] text-xs font-medium hover:bg-[var(--cm-red)]/10 transition-colors disabled:opacity-50"
+              >
+                {unlinking ? t("common.loading") : t("editProfile.unlinkFace")}
+              </button>
+            </div>
           ) : (
             <button
               type="button"

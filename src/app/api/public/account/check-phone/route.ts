@@ -18,5 +18,5 @@ export async function GET(request: NextRequest) {
     select: { id: true },
   });
 
-  return json({ exists: !!player });
+  return json({ exists: !!player, existingPlayerId: player?.id ?? null });
 }

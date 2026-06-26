@@ -25,10 +25,6 @@ import {
 import { cn } from "@/lib/cn";
 import { PaymentStatusBadge } from "@/components/admin/EditBookingModal";
 import {
-  EditBookingModalController,
-  type EditBookingTarget,
-} from "@/components/admin/EditBookingModalController";
-import {
   PaymentActionModal,
   type PaymentActionTarget,
 } from "@/components/admin/PaymentActionModal";
@@ -233,35 +229,17 @@ function PlayerAvatarImg({ photo, avatar, size = "md" }: { photo: string | null;
   return <span className={textSize}>{avatar || "🏓"}</span>;
 }
 
-function formatBookingDate(iso: string): string {
-  const d = new Date(iso);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
 export default function AdminOverview() {
   const { t } = useTranslation("translation", { i18n: adminI18n });
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
-  const [editTarget, setEditTarget] = useState<EditBookingTarget | null>(null);
   const [openPlayDetailGroup, setOpenPlayDetailGroup] = useState<OpenPlayTodayGroup | null>(null);
   const [paymentActionTarget, setPaymentActionTarget] = useState<PaymentActionTarget | null>(null);
 
   const refreshDashboard = useCallback(() => {
     api.get<DashboardData>("/api/admin/dashboard").then(setData).catch(console.error);
   }, []);
-
-  const openBookingEditor = (entry: RecentEntry) => {
-    if (entry.kind !== "booking" || !entry.venueId) return;
-    setEditTarget({
-      id: entry.id,
-      venueId: entry.venueId,
-      date: formatBookingDate(entry.date),
-    });
-  };
 
   useEffect(() => {
     setLoading(true);
@@ -565,12 +543,41 @@ export default function AdminOverview() {
                   </td>
                   <td className="px-4 py-2.5">
                     {entry.kind === "booking" && entry.paymentStatus ? (
-                      <button onClick={() => openBookingEditor(entry)} title="Click to manage this booking">
+                      <button
+                        onClick={() => setPaymentActionTarget({
+                          type: "booking",
+                          entityId: entry.id,
+                          playerName: entry.playerName,
+                          detail: entry.detail,
+                          venueName: entry.venueName,
+                          date: entry.date,
+                          startTime: entry.startTime,
+                          endTime: entry.endTime,
+                          priceValue: entry.priceValue,
+                          paymentStatus: entry.paymentStatus!,
+                          paymentProofUrl: entry.paymentProofUrl,
+                          bookingStatus: entry.status,
+                        })}
+                        title="Manage booking payment"
+                      >
                         <PaymentStatusBadge status={entry.paymentStatus} />
                       </button>
                     ) : entry.kind === "booking" ? (
                       <button
-                        onClick={() => openBookingEditor(entry)}
+                        onClick={() => setPaymentActionTarget({
+                          type: "booking",
+                          entityId: entry.id,
+                          playerName: entry.playerName,
+                          detail: entry.detail,
+                          venueName: entry.venueName,
+                          date: entry.date,
+                          startTime: entry.startTime,
+                          endTime: entry.endTime,
+                          priceValue: entry.priceValue,
+                          paymentStatus: "pending",
+                          paymentProofUrl: entry.paymentProofUrl,
+                          bookingStatus: entry.status,
+                        })}
                         className="text-neutral-600 hover:text-neutral-400 text-[10px]"
                         title="Manage booking"
                       >
@@ -654,7 +661,22 @@ export default function AdminOverview() {
                   </span>
                   <BookingStatusBadge status={entry.status} />
                   {entry.kind === "booking" && entry.paymentStatus && (
-                    <button onClick={() => openBookingEditor(entry)}>
+                    <button
+                      onClick={() => setPaymentActionTarget({
+                        type: "booking",
+                        entityId: entry.id,
+                        playerName: entry.playerName,
+                        detail: entry.detail,
+                        venueName: entry.venueName,
+                        date: entry.date,
+                        startTime: entry.startTime,
+                        endTime: entry.endTime,
+                        priceValue: entry.priceValue,
+                        paymentStatus: entry.paymentStatus!,
+                        paymentProofUrl: entry.paymentProofUrl,
+                        bookingStatus: entry.status,
+                      })}
+                    >
                       <PaymentStatusBadge status={entry.paymentStatus} />
                     </button>
                   )}
@@ -1001,11 +1023,6 @@ export default function AdminOverview() {
         <QuickLink label={t("overview.coaching")} icon={GraduationCap} onClick={() => router.push("/admin/coaching")} />
       </div>
 
-      <EditBookingModalController
-        target={editTarget}
-        onClose={() => setEditTarget(null)}
-        onUpdated={refreshDashboard}
-      />
     </div>
   );
 }
@@ -1140,6 +1157,7 @@ function BookingStatusBadge({ status }: { status: string }) {
     status === "confirmed" ? t("overview.statusConfirmed") :
     status === "cancelled" ? t("overview.statusCancelled") :
     status === "completed" ? t("overview.statusCompleted") :
+    status === "pending_approval" ? t("overview.statusPendingApproval") :
     status;
   return (
     <span
@@ -1149,6 +1167,7 @@ function BookingStatusBadge({ status }: { status: string }) {
         status === "cancelled" && "bg-red-600/20 text-red-400",
         status === "completed" && "bg-blue-600/20 text-blue-400",
         status === "no_show" && "bg-amber-600/20 text-amber-400",
+        status === "pending_approval" && "bg-yellow-600/20 text-yellow-400",
       )}
     >
       {label}

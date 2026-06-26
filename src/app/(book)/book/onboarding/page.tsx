@@ -6,6 +6,12 @@ import { useEffect, useState, useCallback, useRef, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { usePlayerSession } from "../components/usePlayerSession";
 import { signOutToIntro } from "@/app/(book)/book/lib/sign-out-to-intro";
+import { ScanFace } from "lucide-react";
+import {
+  FaceCheckInWidget,
+  FaceCheckInNotFoundCard,
+  type FaceCheckInResult,
+} from "@/components/courtpay/FaceCheckInWidget";
 
 const SKILL_LEVELS = ["beginner", "intermediate", "advanced", "pro"] as const;
 const GENDERS = ["male", "female"] as const;
@@ -83,12 +89,20 @@ function OnboardingContent() {
   const [venuesLoading, setVenuesLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [phoneStatus, setPhoneStatus] = useState<"idle" | "checking" | "taken" | "ok">("idle");
+  const [takenPlayerId, setTakenPlayerId] = useState<string | null>(null);
   const [linkPrompt, setLinkPrompt] = useState<{
     existingPlayerId: string;
     phone: string;
   } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [initialCheckDone, setInitialCheckDone] = useState(false);
+  // First available venue ID, fetched on mount so the face widget has a venueId even before onboarding completes
+  const [faceVenueId, setFaceVenueId] = useState<string | null>(null);
+
+  // Face linking state (inline in "phoneTaken" section)
+  const [faceModalOpen, setFaceModalOpen] = useState(false);
+  const [faceResult, setFaceResult] = useState<FaceCheckInResult | null>(null);
+  const [faceLinked, setFaceLinked] = useState(false);
 
   // Auth gate
   useEffect(() => {
@@ -97,6 +111,16 @@ function OnboardingContent() {
       router.replace("/book/login");
     }
   }, [status, router]);
+
+  // Fetch a venue ID for the face widget early (even before venue selection step)
+  useEffect(() => {
+    fetch("/api/public/venues")
+      .then((r) => r.json())
+      .then((data: PortalVenue[]) => {
+        if (data.length > 0) setFaceVenueId(data[0].id);
+      })
+      .catch(() => {});
+  }, []);
 
   // Pre-fill profile fields if the player already has a real phone (e.g. resuming after interruption)
   useEffect(() => {
@@ -157,6 +181,11 @@ function OnboardingContent() {
       const res = await fetch(`/api/public/account/check-phone?phone=${encodeURIComponent(e164)}`);
       const data = await res.json();
       setPhoneStatus(data.exists ? "taken" : "ok");
+      setTakenPlayerId(data.existingPlayerId ?? null);
+      // Reset face state when phone changes
+      setFaceResult(null);
+      setFaceLinked(false);
+      setFaceModalOpen(false);
     } catch {
       setPhoneStatus("idle");
     }
@@ -173,9 +202,43 @@ function OnboardingContent() {
     }
   }
 
+  async function handleFaceResult(result: FaceCheckInResult) {
+    setFaceResult(result);
+    if (result.resultType === "matched" && result.player?.id && takenPlayerId) {
+      setSaving(true);
+      setError(null);
+      try {
+        const res = await fetch("/api/public/account/relink", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", ...authHeader },
+          credentials: "include",
+          body: JSON.stringify({
+            existingPlayerId: takenPlayerId,
+            link: true,
+            phone: buildE164(countryCode, phone),
+            gender,
+            skillLevel,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || t("onboarding.errors.genericFailed"));
+        setFaceLinked(true);
+        setSaving(false);
+        // Give the user a moment to see "Account linked" then proceed
+        setTimeout(() => {
+          refresh();
+          router.push("/book");
+        }, 2000);
+      } catch (e) {
+        setError((e as Error).message);
+        setSaving(false);
+      }
+    }
+  }
+
   const canContinue =
     phone.replace(/\D/g, "").length >= 8 &&
-    phoneStatus !== "taken" &&
+    (phoneStatus !== "taken" || faceLinked) &&
     phoneStatus !== "checking" &&
     !!gender &&
     !!skillLevel &&
@@ -359,8 +422,25 @@ function OnboardingContent() {
           </div>
         </div>
       </div>
-      {phoneStatus === "taken" && (
-        <p className="text-xs text-[var(--cm-red)] mb-4">{t("onboarding.phoneTaken")}</p>
+      {phoneStatus === "taken" && !faceLinked && (
+        <div className="mb-4 space-y-2">
+          <p className="text-xs text-[var(--cm-red)]">{t("onboarding.phoneTaken")}</p>
+          {faceVenueId && (
+            <button
+              type="button"
+              onClick={() => { setFaceResult(null); setFaceModalOpen(true); }}
+              className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-[var(--cm-accent)] text-[var(--cm-accent)] text-xs font-medium hover:bg-[var(--cm-accent-bg)] transition-colors"
+            >
+              <ScanFace className="h-4 w-4" />
+              {t("onboarding.verifyWithFace")}
+            </button>
+          )}
+        </div>
+      )}
+      {phoneStatus === "taken" && faceLinked && (
+        <div className="mb-4 p-3 bg-[var(--cm-green)]/10 text-[var(--cm-green)] text-sm rounded-xl font-medium text-center">
+          ✓ {t("onboarding.faceLinkedTitle")}
+        </div>
       )}
       {phoneStatus !== "taken" && <div className="mb-5" />}
 
@@ -410,6 +490,74 @@ function OnboardingContent() {
               className="w-full py-3 bg-[var(--cm-bg-surface)] text-[var(--cm-text-sec)] border border-[var(--cm-border)] rounded-xl font-medium text-sm disabled:opacity-40"
             >
               {t("onboarding.noCreateNew")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Face verify modal — shown when phone is taken and user clicks "Verify with Face" */}
+      {faceModalOpen && faceVenueId && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--cm-overlay)] px-4 pt-4 pb-8"
+          onClick={() => { setFaceModalOpen(false); setFaceResult(null); }}
+        >
+          <div
+            className="w-full max-w-lg bg-[var(--cm-sheet-bg)] rounded-2xl p-5 pb-8 border border-[var(--cm-border)] space-y-4 max-h-[90dvh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-[var(--cm-text)]">{t("editProfile.faceVerifyTitle")}</h2>
+              <button
+                type="button"
+                onClick={() => { setFaceModalOpen(false); setFaceResult(null); }}
+                className="text-xs text-[var(--cm-text-muted)] hover:text-[var(--cm-text)]"
+              >
+                {t("editProfile.close")}
+              </button>
+            </div>
+
+            {faceLinked ? (
+              <div className="text-center py-6 space-y-2">
+                <div className="text-3xl">✓</div>
+                <p className="font-semibold text-[var(--cm-text)]">{t("onboarding.faceLinkedTitle")}</p>
+                <p className="text-sm text-[var(--cm-text-sec)]">{t("onboarding.faceLinkedBody")}</p>
+              </div>
+            ) : faceResult ? (
+              faceResult.resultType === "matched" ? (
+                <div className="text-center py-4 space-y-2">
+                  <div className="text-3xl">✓</div>
+                  <p className="font-semibold text-[var(--cm-text)]">{t("onboarding.faceLinkedTitle")}</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <FaceCheckInNotFoundCard
+                    label={t("editProfile.faceVerifyNotFound")}
+                    hint={t("onboarding.faceNotRecognized")}
+                    onClose={() => setFaceResult(null)}
+                  />
+                  <p className="text-xs text-[var(--cm-text-sec)] text-center">{t("onboarding.faceNotRecognized")}</p>
+                </div>
+              )
+            ) : (
+              <FaceCheckInWidget
+                venueId={faceVenueId}
+                initialFacing="user"
+                onResult={handleFaceResult}
+                labels={{
+                  title: t("editProfile.faceVerifyTitle"),
+                  hint: t("onboarding.faceVerifyHint"),
+                  noFace: t("editProfile.faceVerifyNoFace"),
+                  notRecognized: t("editProfile.faceVerifyNotFound"),
+                }}
+              />
+            )}
+
+            <button
+              type="button"
+              onClick={() => { setFaceModalOpen(false); setFaceResult(null); }}
+              className="w-full py-3 bg-[var(--cm-bg-surface)] text-[var(--cm-text-sec)] rounded-xl font-medium text-sm border border-[var(--cm-border)]"
+            >
+              {t("editProfile.close")}
             </button>
           </div>
         </div>
