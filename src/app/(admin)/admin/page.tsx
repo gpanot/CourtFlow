@@ -18,18 +18,20 @@ import {
   ArrowRight,
   CalendarCheck,
   XCircle,
-  CheckCircle,
   UserX,
   Banknote,
   Play,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { resolveUploadUrl } from "@/lib/resolve-upload-url";
 import { PaymentStatusBadge } from "@/components/admin/EditBookingModal";
 import {
   EditBookingModalController,
   type EditBookingTarget,
 } from "@/components/admin/EditBookingModalController";
+import {
+  PaymentActionModal,
+  type PaymentActionTarget,
+} from "@/components/admin/PaymentActionModal";
 import {
   ADMIN_DASHBOARD_POLL_MS,
   ADMIN_DASHBOARD_REFRESH_EVENT,
@@ -204,6 +206,18 @@ function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
+function fmtReceivedTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function fmtReceivedDate(iso: string): string {
+  const d = new Date(iso);
+  const day   = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year  = d.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
 function PlayerAvatarImg({ photo, avatar, size = "md" }: { photo: string | null; avatar: string; size?: "sm" | "md" }) {
   const dim = size === "sm" ? "h-6 w-6" : "h-8 w-8";
   const textSize = size === "sm" ? "text-sm" : "text-lg";
@@ -234,35 +248,7 @@ export default function AdminOverview() {
   const router = useRouter();
   const [editTarget, setEditTarget] = useState<EditBookingTarget | null>(null);
   const [openPlayDetailGroup, setOpenPlayDetailGroup] = useState<OpenPlayTodayGroup | null>(null);
-  const [openPlayRegModal, setOpenPlayRegModal] = useState<{
-    id: string;
-    playerName: string;
-    playerAvatar: string;
-    playerPhoto: string | null;
-    venueName: string;
-    date: string;
-    startTime: string;
-    endTime: string;
-    priceValue: number;
-    paymentStatus: string;
-    paymentProofUrl: string | null;
-    status: string;
-  } | null>(null);
-  const [lessonModal, setLessonModal] = useState<{
-    id: string;
-    playerName: string;
-    playerAvatar: string;
-    playerPhoto: string | null;
-    coachName: string;
-    venueName: string;
-    date: string;
-    startTime: string;
-    endTime: string;
-    priceValue: number;
-    paymentStatus: string;
-    paymentProofUrl: string | null;
-    status: string;
-  } | null>(null);
+  const [paymentActionTarget, setPaymentActionTarget] = useState<PaymentActionTarget | null>(null);
 
   const refreshDashboard = useCallback(() => {
     api.get<DashboardData>("/api/admin/dashboard").then(setData).catch(console.error);
@@ -537,6 +523,7 @@ export default function AdminOverview() {
                 <th className="px-4 py-2.5 text-left font-medium">{t("overview.detail")}</th>
                 <th className="px-4 py-2.5 text-left font-medium">{t("overview.date")}</th>
                 <th className="px-4 py-2.5 text-left font-medium">{t("overview.time")}</th>
+                <th className="px-4 py-2.5 text-left font-medium">Received</th>
                 <th className="px-4 py-2.5 text-left font-medium">{t("overview.status")}</th>
                 <th className="px-4 py-2.5 text-left font-medium">{t("overview.payment")}</th>
                 <th className="px-4 py-2.5 text-right font-medium">{t("overview.price")}</th>
@@ -561,15 +548,17 @@ export default function AdminOverview() {
                       <span className="font-medium">{entry.playerName}</span>
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 text-neutral-400">
-                    {entry.detail}
-                    {data.venues.length > 1 && (
-                      <span className="text-neutral-600 ml-1">· {entry.venueName}</span>
-                    )}
+                  <td className="px-4 py-2.5">
+                    <span className="block text-sm text-neutral-200 leading-snug">{entry.detail}</span>
+                    <span className="block text-xs text-neutral-500 leading-snug">{entry.venueName}</span>
                   </td>
                   <td className="px-4 py-2.5 text-neutral-400">{fmtDate(entry.date)}</td>
                   <td className="px-4 py-2.5 text-neutral-400">
                     {fmtTime(entry.startTime)} – {fmtTime(entry.endTime)}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <span className="block text-[11px] text-neutral-500 leading-snug">{fmtReceivedTime(entry.createdAt)}</span>
+                    <span className="block text-[11px] text-neutral-600 leading-snug">{fmtReceivedDate(entry.createdAt)}</span>
                   </td>
                   <td className="px-4 py-2.5">
                     <BookingStatusBadge status={entry.status} />
@@ -589,12 +578,11 @@ export default function AdminOverview() {
                       </button>
                     ) : entry.kind === "lesson" && entry.paymentStatus ? (
                       <button
-                        onClick={() => setLessonModal({
-                          id: entry.id,
+                        onClick={() => setPaymentActionTarget({
+                          type: "lesson",
+                          entityId: entry.id,
                           playerName: entry.playerName,
-                          playerAvatar: entry.playerAvatar,
-                          playerPhoto: entry.playerPhoto,
-                          coachName: entry.detail,
+                          detail: entry.detail,
                           venueName: entry.venueName,
                           date: entry.date,
                           startTime: entry.startTime,
@@ -602,7 +590,7 @@ export default function AdminOverview() {
                           priceValue: entry.priceValue,
                           paymentStatus: entry.paymentStatus!,
                           paymentProofUrl: entry.paymentProofUrl,
-                          status: entry.status,
+                          bookingStatus: entry.status,
                         })}
                         title="Manage lesson payment"
                       >
@@ -610,11 +598,11 @@ export default function AdminOverview() {
                       </button>
                     ) : entry.kind === "openplay" && entry.paymentStatus ? (
                       <button
-                        onClick={() => setOpenPlayRegModal({
-                          id: entry.id,
+                        onClick={() => setPaymentActionTarget({
+                          type: "openplay",
+                          entityId: entry.id,
                           playerName: entry.playerName,
-                          playerAvatar: entry.playerAvatar,
-                          playerPhoto: entry.playerPhoto,
+                          detail: "Open Play",
                           venueName: entry.venueName,
                           date: entry.date,
                           startTime: entry.startTime,
@@ -622,7 +610,7 @@ export default function AdminOverview() {
                           priceValue: entry.priceValue,
                           paymentStatus: entry.paymentStatus!,
                           paymentProofUrl: entry.paymentProofUrl,
-                          status: entry.status,
+                          bookingStatus: entry.status,
                         })}
                         title="View open play registration"
                       >
@@ -637,7 +625,7 @@ export default function AdminOverview() {
               ))}
               {recentEntries.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-neutral-500">
+                  <td colSpan={9} className="px-4 py-8 text-center text-neutral-500">
                     {t("overview.noBookings")}
                   </td>
                 </tr>
@@ -671,11 +659,11 @@ export default function AdminOverview() {
                     </button>
                   )}
                   {entry.kind === "openplay" && entry.paymentStatus && (
-                    <button onClick={() => setOpenPlayRegModal({
-                      id: entry.id,
+                    <button onClick={() => setPaymentActionTarget({
+                      type: "openplay",
+                      entityId: entry.id,
                       playerName: entry.playerName,
-                      playerAvatar: entry.playerAvatar,
-                      playerPhoto: entry.playerPhoto,
+                      detail: "Open Play",
                       venueName: entry.venueName,
                       date: entry.date,
                       startTime: entry.startTime,
@@ -683,18 +671,23 @@ export default function AdminOverview() {
                       priceValue: entry.priceValue,
                       paymentStatus: entry.paymentStatus!,
                       paymentProofUrl: entry.paymentProofUrl,
-                      status: entry.status,
+                      bookingStatus: entry.status,
                     })}>
                       <PaymentStatusBadge status={entry.paymentStatus} />
                     </button>
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-3 text-xs text-neutral-500">
-                <span>{entry.detail}</span>
-                <span>{fmtDate(entry.date)}</span>
-                <span>{fmtTime(entry.startTime)}</span>
-                <span className="ml-auto font-medium text-neutral-300">{fmtPrice(entry.priceValue)}</span>
+              <div className="flex items-start justify-between gap-2 mt-0.5">
+                <div className="text-xs text-neutral-400 leading-snug">
+                  <span className="block">{entry.detail}</span>
+                  <span className="block text-neutral-600">{entry.venueName}</span>
+                </div>
+                <div className="text-xs text-neutral-500 text-right leading-snug shrink-0">
+                  <span className="block">{fmtDate(entry.date)} · {fmtTime(entry.startTime)}</span>
+                  <span className="block text-neutral-600">rcvd {fmtReceivedTime(entry.createdAt)}</span>
+                </div>
+                <span className="text-xs font-medium text-neutral-300 shrink-0 self-center">{fmtPrice(entry.priceValue)}</span>
               </div>
             </div>
           ))}
@@ -742,11 +735,11 @@ export default function AdminOverview() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setOpenPlayRegModal({
-                          id: r.id,
+                        setPaymentActionTarget({
+                          type: "openplay",
+                          entityId: r.id,
                           playerName: r.playerName,
-                          playerAvatar: r.playerAvatar,
-                          playerPhoto: r.playerPhoto,
+                          detail: "Open Play",
                           venueName: openPlayDetailGroup.venueName,
                           date: openPlayDetailGroup.startTime,
                           startTime: openPlayDetailGroup.startTime,
@@ -754,7 +747,7 @@ export default function AdminOverview() {
                           priceValue: openPlayDetailGroup.priceValue,
                           paymentStatus: r.paymentStatus,
                           paymentProofUrl: r.paymentProofUrl,
-                          status: r.status,
+                          bookingStatus: r.status,
                         });
                       }}
                     >
@@ -775,25 +768,14 @@ export default function AdminOverview() {
         </div>
       )}
 
-      {/* Edit Open Play Booking Modal */}
-      {openPlayRegModal && (
-        <EditOpenPlayBookingModal
-          reg={openPlayRegModal}
-          onClose={() => setOpenPlayRegModal(null)}
+      {/* Unified Payment Action Modal */}
+      {paymentActionTarget && (
+        <PaymentActionModal
+          target={paymentActionTarget}
+          onClose={() => setPaymentActionTarget(null)}
           onUpdated={() => {
-            setOpenPlayRegModal(null);
+            setPaymentActionTarget(null);
             setOpenPlayDetailGroup(null);
-            refreshDashboard();
-          }}
-        />
-      )}
-
-      {lessonModal && (
-        <EditLessonPaymentModal
-          lesson={lessonModal}
-          onClose={() => setLessonModal(null)}
-          onUpdated={() => {
-            setLessonModal(null);
             refreshDashboard();
           }}
         />
@@ -1174,433 +1156,3 @@ function BookingStatusBadge({ status }: { status: string }) {
   );
 }
 
-function EditOpenPlayBookingModal({
-  reg,
-  onClose,
-  onUpdated,
-}: {
-  reg: {
-    id: string;
-    playerName: string;
-    playerAvatar: string;
-    playerPhoto: string | null;
-    venueName: string;
-    date: string;
-    startTime: string;
-    endTime: string;
-    priceValue: number;
-    paymentStatus: string;
-    paymentProofUrl: string | null;
-    status: string;
-  };
-  onClose: () => void;
-  onUpdated: () => void;
-}) {
-  const { t } = useTranslation("translation", { i18n: adminI18n });
-  const [showProof, setShowProof] = useState(false);
-  const [selectedAction, setSelectedAction] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const proofUrl = resolveUploadUrl(reg.paymentProofUrl);
-
-  const paymentStatusLabel: Record<string, { label: string; color: string }> = {
-    pending: { label: t("overview.statusPending"), color: "text-neutral-400" },
-    proof_submitted: { label: t("overview.statusProofSubmitted"), color: "text-amber-400" },
-    paid: { label: t("overview.statusPaid"), color: "text-emerald-400" },
-    refunded: { label: t("overview.statusRefunded"), color: "text-blue-400" },
-  };
-  const ps = paymentStatusLabel[reg.paymentStatus] ?? { label: reg.paymentStatus, color: "text-neutral-400" };
-
-  async function handleSave() {
-    if (!selectedAction) return;
-    setSaving(true);
-    setErrorMsg(null);
-    try {
-      await api.patch(`/api/admin/open-play/${reg.id}`, { action: selectedAction });
-      onUpdated();
-    } catch (e) {
-      setErrorMsg((e as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const isCancelled = reg.status === "cancelled";
-  const isNoShow = reg.status === "no_show";
-  const isActive = !isCancelled && !isNoShow;
-
-  return (
-    <>
-      <div
-        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-4"
-        onClick={onClose}
-      >
-        <div
-          className="w-full max-w-lg rounded-2xl border border-neutral-700 bg-neutral-900 overflow-hidden"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-neutral-800 px-5 py-4">
-            <div>
-              <h3 className="text-base font-semibold text-white">{t("overview.editOpenPlayBooking")}</h3>
-              <p className="text-xs text-neutral-500 mt-0.5">{reg.venueName}</p>
-            </div>
-            <button
-              onClick={onClose}
-              className="rounded-full bg-neutral-800 p-1.5 text-neutral-400 hover:bg-neutral-700 transition-colors"
-            >
-              <XCircle className="h-4 w-4" />
-            </button>
-          </div>
-
-          {/* Player */}
-          <div className="flex items-center gap-3 px-5 py-4 border-b border-neutral-800">
-            <PlayerAvatarImg photo={reg.playerPhoto} avatar={reg.playerAvatar} />
-            <div>
-              <p className="font-medium text-white">{reg.playerName}</p>
-              <p className="text-xs text-neutral-500 capitalize">
-                {reg.status === "no_show" ? t("overview.statusNoShow") : reg.status}
-              </p>
-            </div>
-          </div>
-
-          {/* Details grid */}
-          <div className="px-5 py-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl bg-neutral-800/50 px-3 py-2.5">
-                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">{t("overview.date")}</p>
-                <p className="text-sm font-medium text-white">{fmtDate(reg.date)}</p>
-              </div>
-              <div className="rounded-xl bg-neutral-800/50 px-3 py-2.5">
-                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">{t("overview.time")}</p>
-                <p className="text-sm font-medium text-white">
-                  {fmtTime(reg.startTime)} – {fmtTime(reg.endTime)}
-                </p>
-              </div>
-              <div className="rounded-xl bg-neutral-800/50 px-3 py-2.5">
-                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">{t("overview.price")}</p>
-                <p className="text-sm font-medium text-white">{fmtPrice(reg.priceValue)}</p>
-              </div>
-              <div className="rounded-xl bg-neutral-800/50 px-3 py-2.5">
-                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">{t("overview.payment")}</p>
-                <p className={cn("text-sm font-medium", ps.color)}>{ps.label}</p>
-              </div>
-            </div>
-
-            {/* Payment proof */}
-            {proofUrl && (
-              <div className="rounded-xl border border-neutral-700 overflow-hidden">
-                <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-800 bg-neutral-800/40">
-                  <p className="text-xs font-medium text-neutral-300">{t("overview.paymentProof")}</p>
-                  <button
-                    onClick={() => setShowProof(true)}
-                    className="text-[10px] text-amber-400 hover:text-amber-300 transition-colors"
-                  >
-                    {t("overview.viewFullSize")}
-                  </button>
-                </div>
-                <button
-                  onClick={() => setShowProof(true)}
-                  className="w-full bg-neutral-800/20 hover:bg-neutral-800/40 transition-colors"
-                >
-                  <img
-                    src={proofUrl}
-                    alt="Payment proof"
-                    className="w-full max-h-48 object-contain"
-                  />
-                </button>
-              </div>
-            )}
-
-            {/* Action dropdown */}
-            <div className="space-y-1.5">
-              <label className="text-xs text-neutral-400">{t("overview.action")}</label>
-              <select
-                value={selectedAction}
-                disabled={saving || !isActive}
-                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none disabled:opacity-50"
-                onChange={(e) => setSelectedAction(e.target.value)}
-              >
-                <option value="">— {t("overview.selectAction")} —</option>
-                {reg.paymentStatus === "proof_submitted" && (
-                  <option value="approve_payment">✓ {t("overview.approvePayment")}</option>
-                )}
-                {isActive && (
-                  <>
-                    <option value="cancel">✕ {t("overview.cancelRegistration")}</option>
-                    <option value="no_show">⚠ {t("overview.markNoShow")}</option>
-                  </>
-                )}
-              </select>
-            </div>
-
-            {errorMsg && (
-              <p className="text-xs text-red-400 rounded-lg bg-red-500/10 px-3 py-2">{errorMsg}</p>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="border-t border-neutral-800 px-5 py-3 flex gap-3">
-            <button
-              onClick={handleSave}
-              disabled={saving || !selectedAction}
-              className="flex-1 rounded-xl bg-purple-600 py-2.5 text-sm font-semibold text-white hover:bg-purple-500 transition-colors disabled:opacity-40"
-            >
-              {saving ? t("common.saving") : t("common.saveChanges")}
-            </button>
-            <button
-              onClick={onClose}
-              disabled={saving}
-              className="flex-1 rounded-xl bg-neutral-800 py-2.5 text-sm font-medium text-neutral-300 hover:bg-neutral-700 transition-colors disabled:opacity-50"
-            >
-              {t("common.cancel")}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Full-size proof lightbox */}
-      {showProof && proofUrl && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4 cursor-zoom-out"
-          onClick={() => setShowProof(false)}
-        >
-          <img
-            src={proofUrl}
-            alt="Payment proof"
-            className="max-w-full max-h-full rounded-xl object-contain shadow-2xl"
-          />
-          <button
-            type="button"
-            className="absolute top-4 right-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 transition-colors"
-            onClick={() => setShowProof(false)}
-          >
-            <XCircle className="h-5 w-5" />
-          </button>
-        </div>
-      )}
-    </>
-  );
-}
-
-function EditLessonPaymentModal({
-  lesson,
-  onClose,
-  onUpdated,
-}: {
-  lesson: {
-    id: string;
-    playerName: string;
-    playerAvatar: string;
-    playerPhoto: string | null;
-    coachName: string;
-    venueName: string;
-    date: string;
-    startTime: string;
-    endTime: string;
-    priceValue: number;
-    paymentStatus: string;
-    paymentProofUrl: string | null;
-    status: string;
-  };
-  onClose: () => void;
-  onUpdated: () => void;
-}) {
-  const { t } = useTranslation("translation", { i18n: adminI18n });
-  const [showProof, setShowProof] = useState(false);
-  const [selectedAction, setSelectedAction] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const proofUrl = resolveUploadUrl(lesson.paymentProofUrl);
-
-  const normalised =
-    lesson.paymentStatus === "PAID" ? "paid"
-    : lesson.paymentStatus === "UNPAID" ? "pending"
-    : lesson.paymentStatus;
-
-  const paymentStatusLabel: Record<string, { label: string; color: string }> = {
-    pending: { label: t("overview.statusPending"), color: "text-neutral-400" },
-    proof_submitted: { label: t("overview.statusProofSubmitted"), color: "text-amber-400" },
-    paid: { label: t("overview.statusPaid"), color: "text-emerald-400" },
-  };
-  const ps = paymentStatusLabel[normalised] ?? { label: lesson.paymentStatus, color: "text-neutral-400" };
-
-  const isPaid = normalised === "paid";
-  const isActive = lesson.status !== "cancelled";
-
-  async function handleSave() {
-    if (!selectedAction) return;
-    setSaving(true);
-    setErrorMsg(null);
-    try {
-      if (selectedAction === "approve_payment") {
-        await api.patch(`/api/admin/coach-lessons/${lesson.id}/approve-payment`, {});
-      } else if (selectedAction === "cancel") {
-        await api.patch(`/api/admin/coach-lessons/${lesson.id}`, { status: "cancelled" });
-      } else if (selectedAction === "no_show") {
-        await api.patch(`/api/admin/coach-lessons/${lesson.id}`, { status: "no_show" });
-      }
-      onUpdated();
-    } catch (e) {
-      setErrorMsg((e as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <>
-      <div
-        className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-4"
-        onClick={onClose}
-      >
-        <div
-          className="w-full max-w-lg rounded-2xl border border-neutral-700 bg-neutral-900 overflow-hidden"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between border-b border-neutral-800 px-5 py-4">
-            <div>
-              <h3 className="text-base font-semibold text-white">{t("overview.coachLessonPayment")}</h3>
-              <p className="text-xs text-neutral-500 mt-0.5">{lesson.venueName}</p>
-            </div>
-            <button
-              onClick={onClose}
-              className="rounded-full bg-neutral-800 p-1.5 text-neutral-400 hover:bg-neutral-700 transition-colors"
-            >
-              <XCircle className="h-4 w-4" />
-            </button>
-          </div>
-
-          {/* Player */}
-          <div className="flex items-center gap-3 px-5 py-4 border-b border-neutral-800">
-            <PlayerAvatarImg photo={lesson.playerPhoto} avatar={lesson.playerAvatar} />
-            <div>
-              <p className="font-medium text-white">{lesson.playerName}</p>
-              <p className="text-xs text-neutral-500">{lesson.coachName}</p>
-            </div>
-          </div>
-
-          {/* Details grid */}
-          <div className="px-5 py-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl bg-neutral-800/50 px-3 py-2.5">
-                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">{t("overview.date")}</p>
-                <p className="text-sm font-medium text-white">{fmtDate(lesson.date)}</p>
-              </div>
-              <div className="rounded-xl bg-neutral-800/50 px-3 py-2.5">
-                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">{t("overview.time")}</p>
-                <p className="text-sm font-medium text-white">
-                  {fmtTime(lesson.startTime)} – {fmtTime(lesson.endTime)}
-                </p>
-              </div>
-              <div className="rounded-xl bg-neutral-800/50 px-3 py-2.5">
-                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">{t("overview.price")}</p>
-                <p className="text-sm font-medium text-white">{fmtPrice(lesson.priceValue)}</p>
-              </div>
-              <div className="rounded-xl bg-neutral-800/50 px-3 py-2.5">
-                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">{t("overview.payment")}</p>
-                <p className={cn("text-sm font-medium", ps.color)}>{ps.label}</p>
-              </div>
-            </div>
-
-            {/* Payment proof image */}
-            {proofUrl && (
-              <div className="rounded-xl border border-neutral-700 overflow-hidden">
-                <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-800 bg-neutral-800/40">
-                  <p className="text-xs font-medium text-neutral-300">{t("overview.paymentProof")}</p>
-                  <button
-                    onClick={() => setShowProof(true)}
-                    className="text-[10px] text-amber-400 hover:text-amber-300 transition-colors"
-                  >
-                    {t("overview.viewFullSize")}
-                  </button>
-                </div>
-                <button
-                  onClick={() => setShowProof(true)}
-                  className="w-full bg-neutral-800/20 hover:bg-neutral-800/40 transition-colors"
-                >
-                  <img
-                    src={proofUrl}
-                    alt="Payment proof"
-                    className="w-full max-h-48 object-contain"
-                  />
-                </button>
-              </div>
-            )}
-
-            {/* Paid banner */}
-            {isPaid && (
-              <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-3 py-2.5">
-                <CheckCircle className="h-4 w-4 text-emerald-400 shrink-0" />
-                <p className="text-sm text-emerald-400 font-medium">{t("overview.paymentConfirmed")}</p>
-              </div>
-            )}
-
-            {/* Action dropdown */}
-            {isActive && (
-              <div className="space-y-1.5">
-                <label className="text-xs text-neutral-400">{t("overview.action")}</label>
-                <select
-                  value={selectedAction}
-                  disabled={saving}
-                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none disabled:opacity-50"
-                  onChange={(e) => setSelectedAction(e.target.value)}
-                >
-                  <option value="">— {t("overview.selectAction")} —</option>
-                  {normalised === "proof_submitted" && (
-                    <option value="approve_payment">✓ {t("overview.approvePayment")}</option>
-                  )}
-                  <option value="cancel">✕ {t("overview.cancelLesson")}</option>
-                  <option value="no_show">⚠ {t("overview.markNoShow")}</option>
-                </select>
-              </div>
-            )}
-
-            {errorMsg && (
-              <p className="text-xs text-red-400 rounded-lg bg-red-500/10 px-3 py-2">{errorMsg}</p>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="border-t border-neutral-800 px-5 py-3 flex gap-3">
-            <button
-              onClick={handleSave}
-              disabled={saving || !selectedAction}
-              className="flex-1 rounded-xl bg-purple-600 py-2.5 text-sm font-semibold text-white hover:bg-purple-500 transition-colors disabled:opacity-40"
-            >
-              {saving ? t("common.saving") : t("common.saveChanges")}
-            </button>
-            <button
-              onClick={onClose}
-              className="rounded-xl border border-neutral-700 px-4 py-2.5 text-sm text-neutral-400 hover:bg-neutral-800 transition-colors"
-            >
-              {t("common.close")}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Full-size proof lightbox */}
-      {showProof && proofUrl && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/90 p-4 cursor-zoom-out"
-          onClick={() => setShowProof(false)}
-        >
-          <img
-            src={proofUrl}
-            alt="Payment proof"
-            className="max-w-full max-h-full rounded-xl object-contain shadow-2xl"
-          />
-          <button
-            type="button"
-            className="absolute top-4 right-4 rounded-full bg-white/10 p-2 text-white hover:bg-white/20 transition-colors"
-            onClick={() => setShowProof(false)}
-          >
-            <XCircle className="h-5 w-5" />
-          </button>
-        </div>
-      )}
-    </>
-  );
-}

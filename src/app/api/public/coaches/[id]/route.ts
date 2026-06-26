@@ -9,6 +9,43 @@ import { parseDateKey } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
+/** Canonical focus-level values as shown in the admin UI. */
+const FOCUS_LEVEL_ALIASES: Record<string, string> = {
+  advance:     "Advanced",
+  advanced:    "Advanced",
+  beginner:    "Beginner",
+  pro:         "Pro",
+};
+
+/** Canonical group-size order matching the admin CoachProfileEditor. */
+const GROUP_SIZE_ORDER = ["1-1", "2", "3", "4", "4+"];
+
+/**
+ * Normalise an array of string labels:
+ *  - lowercase lookup via alias map → canonical label
+ *  - unknown values kept as-is (trimmed)
+ *  - deduplicate (case-insensitive)
+ */
+function normalizeStringArray(values: string[], aliases: Record<string, string>): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const v of values) {
+    const canonical = aliases[v.toLowerCase().trim()] ?? v.trim();
+    const key = canonical.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(canonical);
+    }
+  }
+  return result;
+}
+
+/** Sort an array according to a reference order; unknown values go to the end. */
+function sortByOrder(values: string[], order: string[]): string[] {
+  const idx = new Map(order.map((v, i) => [v, i]));
+  return [...values].sort((a, b) => (idx.get(a) ?? 999) - (idx.get(b) ?? 999));
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -29,6 +66,13 @@ export async function GET(
         name: true,
         coachBio: true,
         coachPhoto: true,
+        coachDupr: true,
+        coachGender: true,
+        coachLanguages: true,
+        coachSpecialties: true,
+        coachFocusLevels: true,
+        coachYearsExperience: true,
+        coachGroupSizes: true,
         coachPackages: {
           where: { venueId, active: true },
           select: {
@@ -119,6 +163,8 @@ export async function GET(
       ...coach,
       packages: coach.coachPackages,
       availability,
+      coachFocusLevels: normalizeStringArray(coach.coachFocusLevels, FOCUS_LEVEL_ALIASES),
+      coachGroupSizes: sortByOrder(coach.coachGroupSizes, GROUP_SIZE_ORDER),
     });
   } catch (e) {
     return error((e as Error).message, 500);

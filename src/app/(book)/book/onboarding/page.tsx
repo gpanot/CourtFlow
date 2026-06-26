@@ -10,6 +10,59 @@ import { signOutToIntro } from "@/app/(book)/book/lib/sign-out-to-intro";
 const SKILL_LEVELS = ["beginner", "intermediate", "advanced", "pro"] as const;
 const GENDERS = ["male", "female"] as const;
 
+const COUNTRY_CODES = [
+  { code: "+54",  label: "Argentina",          flag: "🇦🇷" },
+  { code: "+61",  label: "Australia",          flag: "🇦🇺" },
+  { code: "+32",  label: "Belgium",            flag: "🇧🇪" },
+  { code: "+880", label: "Bangladesh",         flag: "🇧🇩" },
+  { code: "+55",  label: "Brazil",             flag: "🇧🇷" },
+  { code: "+855", label: "Cambodia",           flag: "🇰🇭" },
+  { code: "+1",   label: "Canada",             flag: "🇨🇦" },
+  { code: "+86",  label: "China",              flag: "🇨🇳" },
+  { code: "+45",  label: "Denmark",            flag: "🇩🇰" },
+  { code: "+358", label: "Finland",            flag: "🇫🇮" },
+  { code: "+33",  label: "France",             flag: "🇫🇷" },
+  { code: "+49",  label: "Germany",            flag: "🇩🇪" },
+  { code: "+852", label: "Hong Kong",          flag: "🇭🇰" },
+  { code: "+91",  label: "India",              flag: "🇮🇳" },
+  { code: "+62",  label: "Indonesia",          flag: "🇮🇩" },
+  { code: "+39",  label: "Italy",              flag: "🇮🇹" },
+  { code: "+81",  label: "Japan",              flag: "🇯🇵" },
+  { code: "+254", label: "Kenya",              flag: "🇰🇪" },
+  { code: "+82",  label: "South Korea",        flag: "🇰🇷" },
+  { code: "+965", label: "Kuwait",             flag: "🇰🇼" },
+  { code: "+856", label: "Laos",               flag: "🇱🇦" },
+  { code: "+60",  label: "Malaysia",           flag: "🇲🇾" },
+  { code: "+52",  label: "Mexico",             flag: "🇲🇽" },
+  { code: "+95",  label: "Myanmar",            flag: "🇲🇲" },
+  { code: "+31",  label: "Netherlands",        flag: "🇳🇱" },
+  { code: "+64",  label: "New Zealand",        flag: "🇳🇿" },
+  { code: "+234", label: "Nigeria",            flag: "🇳🇬" },
+  { code: "+47",  label: "Norway",             flag: "🇳🇴" },
+  { code: "+92",  label: "Pakistan",           flag: "🇵🇰" },
+  { code: "+63",  label: "Philippines",        flag: "🇵🇭" },
+  { code: "+974", label: "Qatar",              flag: "🇶🇦" },
+  { code: "+966", label: "Saudi Arabia",       flag: "🇸🇦" },
+  { code: "+65",  label: "Singapore",          flag: "🇸🇬" },
+  { code: "+27",  label: "South Africa",       flag: "🇿🇦" },
+  { code: "+34",  label: "Spain",              flag: "🇪🇸" },
+  { code: "+94",  label: "Sri Lanka",          flag: "🇱🇰" },
+  { code: "+46",  label: "Sweden",             flag: "🇸🇪" },
+  { code: "+41",  label: "Switzerland",        flag: "🇨🇭" },
+  { code: "+886", label: "Taiwan",             flag: "🇹🇼" },
+  { code: "+66",  label: "Thailand",           flag: "🇹🇭" },
+  { code: "+971", label: "UAE",                flag: "🇦🇪" },
+  { code: "+44",  label: "United Kingdom",     flag: "🇬🇧" },
+  { code: "+1",   label: "United States",      flag: "🇺🇸" },
+  { code: "+84",  label: "Vietnam",            flag: "🇻🇳" },
+];
+
+function buildE164(countryCode: string, localNum: string): string {
+  const digits = localNum.replace(/\D/g, "");
+  const core = digits.startsWith("0") ? digits.slice(1) : digits;
+  return `${countryCode}${core}`;
+}
+
 interface PortalVenue {
   id: string;
   name: string;
@@ -23,6 +76,7 @@ function OnboardingContent() {
   const { t } = useTranslation();
 
   const [phone, setPhone] = useState("");
+  const [countryCode, setCountryCode] = useState<string>("+84");
   const [gender, setGender] = useState<string>("");
   const [skillLevel, setSkillLevel] = useState<string>("");
   const [saving, setSaving] = useState(false);
@@ -42,11 +96,9 @@ function OnboardingContent() {
     if (status === "unauthenticated") {
       router.replace("/book/login");
     }
-    // No redirect when onboardingComplete — user may arrive here via back-navigation
   }, [status, router]);
 
   // Pre-fill profile fields if the player already has a real phone (e.g. resuming after interruption)
-  // Also handle the legacy case: real phone but no venue — fast-forward to venue step
   useEffect(() => {
     if (status !== "authenticated" || initialCheckDone) return;
     setInitialCheckDone(true);
@@ -59,12 +111,17 @@ function OnboardingContent() {
           !profile.phone.startsWith("email_");
         if (hasRealPhone && profile.venue) {
           // Fully onboarded — skip onboarding entirely
-          router.replace("/book/bookings");
+          router.replace("/book");
           return;
         }
 
         if (hasRealPhone) {
-          setPhone(profile.phone);
+          // Decompose E.164 back to local digits for the input field
+          if (profile.phone.startsWith("+84")) {
+            setPhone(profile.phone.slice(3));
+          } else {
+            setPhone(profile.phone); // legacy non-E.164 — show as-is
+          }
           setGender(profile.gender || "");
           setSkillLevel(profile.skillLevel || "");
 
@@ -75,10 +132,9 @@ function OnboardingContent() {
               .then((r) => r.json())
               .then((data: PortalVenue[]) => {
                 if (data.length === 0) {
-                  // No venues available — complete without one
-                  saveVenueAndNavigate(null, profile.phone, profile.gender || "", profile.skillLevel || "");
+                  saveVenueAndNavigate(null, buildE164(countryCode, profile.phone.startsWith("+84") ? profile.phone.slice(3) : profile.phone), profile.gender || "", profile.skillLevel || "");
                 } else if (data.length === 1) {
-                  saveVenueAndNavigate(data[0].id, profile.phone, profile.gender || "", profile.skillLevel || "");
+                  saveVenueAndNavigate(data[0].id, buildE164(countryCode, profile.phone.startsWith("+84") ? profile.phone.slice(3) : profile.phone), profile.gender || "", profile.skillLevel || "");
                 } else {
                   router.replace("/book/onboarding/venue");
                 }
@@ -93,22 +149,23 @@ function OnboardingContent() {
   }, [status, initialCheckDone]);
 
   const checkPhone = useCallback(async (value: string) => {
-    const normalized = value.replace(/\s+/g, "");
-    if (normalized.length < 5) { setPhoneStatus("idle"); return; }
+    const digits = value.replace(/\D/g, "");
+    if (digits.length < 5) { setPhoneStatus("idle"); return; }
+    const e164 = buildE164(countryCode, value);
     setPhoneStatus("checking");
     try {
-      const res = await fetch(`/api/public/account/check-phone?phone=${encodeURIComponent(normalized)}`);
+      const res = await fetch(`/api/public/account/check-phone?phone=${encodeURIComponent(e164)}`);
       const data = await res.json();
       setPhoneStatus(data.exists ? "taken" : "ok");
     } catch {
       setPhoneStatus("idle");
     }
-  }, []);
+  }, [countryCode]);
 
   function handlePhoneChange(value: string) {
     setPhone(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (value.replace(/\s+/g, "").length >= 5) {
+    if (value.replace(/\D/g, "").length >= 5) {
       setPhoneStatus("checking");
       debounceRef.current = setTimeout(() => checkPhone(value), 500);
     } else {
@@ -117,7 +174,7 @@ function OnboardingContent() {
   }
 
   const canContinue =
-    phone.length >= 8 &&
+    phone.replace(/\D/g, "").length >= 8 &&
     phoneStatus !== "taken" &&
     phoneStatus !== "checking" &&
     !!gender &&
@@ -125,7 +182,7 @@ function OnboardingContent() {
     !saving;
 
   async function handleProfileContinue() {
-    if (!phone || phone.trim().length < 8) {
+    if (!phone || phone.replace(/\D/g, "").length < 8) {
       setError(t("onboarding.errors.phoneRequired")); return;
     }
     if (!gender) { setError(t("onboarding.errors.genderRequired")); return; }
@@ -134,8 +191,7 @@ function OnboardingContent() {
     setError(null);
     setSaving(true);
 
-    // Immediately save phone/gender/skillLevel (no venue yet — account is created now)
-    const phoneToSend = phone.trim();
+    const phoneToSend = buildE164(countryCode, phone);
     try {
       const res = await fetch("/api/public/account/onboarding", {
         method: "POST",
@@ -165,19 +221,16 @@ function OnboardingContent() {
       const res = await fetch("/api/public/venues");
       const data: PortalVenue[] = await res.json();
       if (data.length === 0) {
-        // No venues — complete without one
         refresh();
-        router.push("/book/bookings");
+        router.push("/book");
       } else if (data.length === 1) {
-        // Single venue — auto-select and navigate
         await saveVenueAndNavigate(data[0].id, phoneToSend, gender, skillLevel);
       } else {
-        // Multiple venues — go to dedicated venue selection page (separate route = reliable back button)
         router.push("/book/onboarding/venue");
       }
     } catch {
       refresh();
-      router.push("/book/bookings");
+      router.push("/book");
     } finally {
       setVenuesLoading(false);
     }
@@ -206,7 +259,7 @@ function OnboardingContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || t("onboarding.errors.saveFailed"));
       refresh();
-      router.push("/book/bookings");
+      router.push("/book");
     } catch (e) {
       setError((e as Error).message);
       setSaving(false);
@@ -226,7 +279,7 @@ function OnboardingContent() {
         body: JSON.stringify({
           existingPlayerId: linkPrompt.existingPlayerId,
           link,
-          phone,
+          phone: buildE164(countryCode, phone),
           gender,
           skillLevel,
         }),
@@ -235,7 +288,7 @@ function OnboardingContent() {
       if (!res.ok) throw new Error(data.error || t("onboarding.errors.genericFailed"));
       setLinkPrompt(null);
       refresh();
-      router.push("/book/bookings");
+      router.push("/book");
     } catch (e) {
       setError((e as Error).message);
       setSaving(false);
@@ -269,29 +322,41 @@ function OnboardingContent() {
       )}
 
       <label className="block text-sm font-medium mb-1.5">{t("onboarding.phoneNumber")}</label>
-      <div className="relative mb-1.5">
-        <input
-          type="tel"
-          value={phone}
-          onChange={(e) => handlePhoneChange(e.target.value)}
-          placeholder={t("onboarding.phonePlaceholder")}
-          className={`w-full px-4 py-3 bg-[var(--cm-bg-input)] border rounded-xl text-sm outline-none transition-colors pr-10 text-[var(--cm-text)] ${
-            phoneStatus === "taken"
-              ? "border-[var(--cm-red)] focus:border-[var(--cm-red)]"
-              : phoneStatus === "ok"
-              ? "border-[var(--cm-green)] focus:border-[var(--cm-green)]"
-              : "border-[var(--cm-border)] focus:border-[var(--cm-accent)]"
-          }`}
-        />
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 text-sm">
-          {phoneStatus === "checking" && (
-            <svg className="animate-spin h-4 w-4 text-[var(--cm-text-muted)]" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-            </svg>
-          )}
-          {phoneStatus === "ok" && <span className="text-[var(--cm-green)]">✓</span>}
-          {phoneStatus === "taken" && <span className="text-[var(--cm-red)]">✕</span>}
+      <div className={`flex items-stretch border rounded-xl overflow-hidden mb-1.5 bg-[var(--cm-bg-input)] transition-colors ${
+        phoneStatus === "taken"
+          ? "border-[var(--cm-red)]"
+          : phoneStatus === "ok"
+          ? "border-[var(--cm-green)]"
+          : "border-[var(--cm-border)] focus-within:border-[var(--cm-accent)]"
+      }`}>
+        <select
+          value={countryCode}
+          onChange={(e) => { setCountryCode(e.target.value); setPhoneStatus("idle"); }}
+          className="bg-transparent text-sm font-medium text-[var(--cm-text)] pl-3 pr-1 py-3 border-r border-[var(--cm-border)] outline-none shrink-0 cursor-pointer"
+        >
+          {COUNTRY_CODES.map((c) => (
+            <option key={c.label} value={c.code}>{c.flag} {c.label} ({c.code})</option>
+          ))}
+        </select>
+        <div className="relative flex-1">
+          <input
+            type="tel"
+            inputMode="numeric"
+            value={phone}
+            onChange={(e) => handlePhoneChange(e.target.value)}
+            placeholder="912 345 678"
+            className="w-full px-3 py-3 bg-transparent text-sm outline-none text-[var(--cm-text)] pr-8"
+          />
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 text-sm">
+            {phoneStatus === "checking" && (
+              <svg className="animate-spin h-4 w-4 text-[var(--cm-text-muted)]" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            )}
+            {phoneStatus === "ok" && <span className="text-[var(--cm-green)]">✓</span>}
+            {phoneStatus === "taken" && <span className="text-[var(--cm-red)]">✕</span>}
+          </div>
         </div>
       </div>
       {phoneStatus === "taken" && (

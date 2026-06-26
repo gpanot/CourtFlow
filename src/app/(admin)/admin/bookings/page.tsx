@@ -37,7 +37,6 @@ import {
   TableProperties,
   ShieldAlert,
   Loader2,
-  Check,
   ZoomIn,
   X,
   Filter,
@@ -46,6 +45,10 @@ import {
   Download,
 } from "lucide-react";
 import { CourtsManager } from "@/components/admin/CourtsManager";
+import {
+  PaymentActionModal,
+  type PaymentActionTarget,
+} from "@/components/admin/PaymentActionModal";
 
 export const dynamic = "force-dynamic";
 
@@ -231,6 +234,8 @@ export default function BookingsPage() {
   const [editCourtId, setEditCourtId] = useState("");
   const [editSlotTime, setEditSlotTime] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const [paymentActionTarget, setPaymentActionTarget] = useState<PaymentActionTarget | null>(null);
 
   const [activeTab, setActiveTab] = useState<"bookings" | "list" | "settings" | "cancellation">("bookings");
   const [viewMode, setViewMode] = useState<"court" | "time">(() => {
@@ -574,14 +579,6 @@ export default function BookingsPage() {
       await api.patch(`/api/staff/bookings/${id}`, { status: "no_show" });
       await fetchBookings();
       await fetchAvailability();
-    } catch (e) { alert((e as Error).message); }
-  };
-
-  const approvePayment = async (id: string) => {
-    if (!confirm("Approve this payment?")) return;
-    try {
-      await api.patch(`/api/admin/bookings/${id}/approve-payment`, {});
-      await fetchBookings();
     } catch (e) { alert((e as Error).message); }
   };
 
@@ -1211,30 +1208,37 @@ export default function BookingsPage() {
                     </a>
                     <span className="text-xs text-neutral-500">{b.player.phone}</span>
                     <BookingStatusBadge status={b.status} />
-                    {b.paymentStatus && <PaymentStatusBadge status={b.paymentStatus} />}
+                    {b.paymentStatus && (
+                      <button
+                        onClick={() => setPaymentActionTarget({
+                          type: "booking",
+                          entityId: b.id,
+                          playerName: b.player.name,
+                          detail: b.court.label,
+                          date: b.date,
+                          startTime: b.startTime,
+                          endTime: b.endTime,
+                          priceValue: b.priceValue,
+                          paymentStatus: b.paymentStatus ?? "pending",
+                          paymentProofUrl: b.paymentProofUrl,
+                          bookingStatus: b.status,
+                        })}
+                        title="Manage payment"
+                      >
+                        <PaymentStatusBadge status={b.paymentStatus!} />
+                      </button>
+                    )}
                   </div>
                   <div className="flex items-center gap-3 mt-1 text-xs text-neutral-400">
                     <span>{b.court.label}</span>
                     <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{formatTime(b.startTime, venueTimezone)} – {formatTime(b.endTime, venueTimezone)}</span>
                     <span>{fmtPrice(b.priceValue)}</span>
                     {b.coPlayerIds.length > 0 && <span>+{b.coPlayerIds.length} co-player{b.coPlayerIds.length > 1 ? "s" : ""}</span>}
-                    {b.paymentProofUrl && b.paymentProofUrl !== "pending_proof" && (
-                      <a href={b.paymentProofUrl} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 underline">{t("bookings.viewProof")}</a>
-                    )}
                   </div>
                 </div>
                 <div className="flex gap-1 shrink-0 flex-wrap justify-end">
-                  {b.paymentStatus === "proof_submitted" && (
-                    <button onClick={() => approvePayment(b.id)} className="rounded-lg px-2 py-1 text-xs font-semibold text-green-400 hover:bg-green-900/30 border border-green-600/30">
-                      ✓ Approve
-                    </button>
-                  )}
                   {b.status === "confirmed" && (
-                    <>
-                      <button onClick={() => openEditModal(b)} className="rounded-lg px-2 py-1 text-xs text-blue-400 hover:bg-blue-900/30">{t("common.edit")}</button>
-                      <button onClick={() => cancelBooking(b.id)} className="rounded-lg px-2 py-1 text-xs text-red-400 hover:bg-red-900/30">{t("bookings.cancel")}</button>
-                      <button onClick={() => markNoShow(b.id)} className="rounded-lg px-2 py-1 text-xs text-amber-400 hover:bg-amber-900/30">{t("bookings.noShow")}</button>
-                    </>
+                    <button onClick={() => openEditModal(b)} className="rounded-lg px-2 py-1 text-xs text-blue-400 hover:bg-blue-900/30">{t("common.edit")}</button>
                   )}
                 </div>
               </div>
@@ -1391,6 +1395,19 @@ export default function BookingsPage() {
         </div>
       )}
 
+      {/* Payment Action Modal */}
+      {paymentActionTarget && (
+        <PaymentActionModal
+          target={paymentActionTarget}
+          onClose={() => setPaymentActionTarget(null)}
+          onUpdated={async () => {
+            setPaymentActionTarget(null);
+            await fetchBookings();
+            await fetchAvailability();
+          }}
+        />
+      )}
+
       {/* Edit Booking Modal */}
       {editBooking && (
         <EditBookingModal
@@ -1403,9 +1420,6 @@ export default function BookingsPage() {
           onSlotChange={setEditSlotTime}
           onSave={saveEdit}
           onClose={closeEditModal}
-          onApprovePayment={() => { approvePayment(editBooking.id).then(closeEditModal); }}
-          onCancel={() => { closeEditModal(); cancelBooking(editBooking.id); }}
-          onNoShow={() => { closeEditModal(); markNoShow(editBooking.id); }}
           getSlotPrice={getSlotPrice}
           availableSlotsForCourt={availableSlotsForCourt}
           formatTime={formatTime}
@@ -2198,7 +2212,7 @@ function AllBookingsTab({
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [paymentActionTarget, setPaymentActionTarget] = useState<PaymentActionTarget | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 300);
@@ -2247,16 +2261,6 @@ function AllBookingsTab({
 
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", ...(venueTimezone ? { timeZone: venueTimezone } : {}) });
-
-  const handleApprovePayment = async (id: string) => {
-    setApprovingId(id);
-    try {
-      await api.patch(`/api/admin/bookings/${id}/approve-payment`, {});
-      await fetchRows();
-    } finally {
-      setApprovingId(null);
-    }
-  };
 
   const unpaidCount = rows.filter((r) => !r.paymentStatus || r.paymentStatus === "pending").length;
   const proofCount = rows.filter((r) => r.paymentStatus === "proof_submitted").length;
@@ -2466,42 +2470,34 @@ function AllBookingsTab({
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
-                          <span className={cn("rounded px-2 py-0.5 text-xs font-medium", PAYMENT_STATUS_COLORS[row.paymentStatus ?? "pending"] ?? "bg-neutral-700/30 text-neutral-400")}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setPaymentActionTarget({
+                            type: "booking",
+                            entityId: row.id,
+                            playerName: row.player.name,
+                            detail: row.court.label,
+                            date: row.startTime,
+                            startTime: row.startTime,
+                            endTime: row.endTime,
+                            priceValue: row.priceValue,
+                            paymentStatus: row.paymentStatus ?? "pending",
+                            paymentProofUrl: row.paymentProofUrl,
+                            bookingStatus: row.status,
+                          }); }}
+                          className="flex items-center gap-1.5 group"
+                          title="Manage payment"
+                        >
+                          <span className={cn("rounded px-2 py-0.5 text-xs font-medium group-hover:ring-1 group-hover:ring-white/20 transition-all", PAYMENT_STATUS_COLORS[row.paymentStatus ?? "pending"] ?? "bg-neutral-700/30 text-neutral-400")}>
                             {PAYMENT_STATUS_LABELS[row.paymentStatus ?? "pending"] ?? row.paymentStatus ?? "Unpaid"}
                           </span>
-                          {isPaid && row.paymentStatus && (
-                            <CreditCard className="h-3 w-3 text-green-500/60" />
-                          )}
-                          {isProof && row.paymentProofUrl && (
-                            <a
-                              href={row.paymentProofUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="text-orange-400 hover:text-orange-300"
-                              title="View proof"
-                            >
-                              <ZoomIn className="h-3.5 w-3.5" />
-                            </a>
-                          )}
-                        </div>
+                          {isPaid && <CreditCard className="h-3 w-3 text-green-500/60" />}
+                        </button>
                       </td>
                       <td className="px-4 py-3 text-right text-neutral-300 whitespace-nowrap">
                         {fmtPrice(row.priceValue)}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1 justify-end">
-                          {isProof && (
-                            <button
-                              onClick={() => handleApprovePayment(row.id)}
-                              disabled={approvingId === row.id}
-                              className="flex items-center gap-1 rounded-lg bg-green-600/15 border border-green-600/30 px-2 py-1 text-xs font-medium text-green-400 hover:bg-green-600/25 disabled:opacity-50 transition-colors"
-                            >
-                              {approvingId === row.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-                              Approve
-                            </button>
-                          )}
                           <button
                             onClick={() => onEditBooking(row)}
                             className="rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-700 hover:text-white transition-colors"
@@ -2546,6 +2542,17 @@ function AllBookingsTab({
       )}
       {totalPages <= 1 && total > 0 && (
         <p className="text-xs text-neutral-500 text-right">{total} booking{total !== 1 ? "s" : ""}</p>
+      )}
+
+      {paymentActionTarget && (
+        <PaymentActionModal
+          target={paymentActionTarget}
+          onClose={() => setPaymentActionTarget(null)}
+          onUpdated={async () => {
+            setPaymentActionTarget(null);
+            await fetchRows();
+          }}
+        />
       )}
     </div>
   );

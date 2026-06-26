@@ -4,6 +4,8 @@ import { portalFetch } from "@/lib/portal-fetch";
 
 import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
+import { Award, BarChart2, Star, Target, Languages, Users, GraduationCap } from "lucide-react";
 import { usePlayerSession } from "../../components/usePlayerSession";
 import { usePlayerVenue } from "../../components/PlayerVenueContext";
 import { useTranslation } from "react-i18next";
@@ -31,8 +33,23 @@ interface CoachProfile {
   name: string;
   coachBio: string | null;
   coachPhoto: string | null;
+  coachDupr: string | null;
+  coachGender: string | null;
+  coachLanguages: string[];
+  coachSpecialties: string[];
+  coachFocusLevels: string[];
+  coachYearsExperience: string | null;
+  coachGroupSizes: string[];
   packages: Package[];
   availability: AvailSlot[];
+}
+
+interface OtherCoach {
+  id: string;
+  name: string;
+  coachBio: string | null;
+  coachPhoto: string | null;
+  startingPrice: number;
 }
 
 function formatHour(h: number) {
@@ -55,6 +72,7 @@ export default function CoachProfilePage() {
   const [booking, setBooking] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [step, setStep] = useState<"profile" | "booking" | "summary">("profile");
+  const [otherCoaches, setOtherCoaches] = useState<OtherCoach[]>([]);
   const MAX_COACH_SLOTS = 4;
 
   // Computed client-side only to avoid SSR/hydration date mismatch
@@ -80,10 +98,28 @@ export default function CoachProfilePage() {
         return r.json();
       })
       .then((data) => {
-        // Ensure required arrays are always present to prevent render crashes
-        setCoach({ ...data, packages: data.packages ?? [], availability: data.availability ?? [] });
+        setCoach({
+          ...data,
+          packages: data.packages ?? [],
+          availability: data.availability ?? [],
+          coachLanguages: data.coachLanguages ?? [],
+          coachSpecialties: data.coachSpecialties ?? [],
+          coachFocusLevels: data.coachFocusLevels ?? [],
+          coachGroupSizes: data.coachGroupSizes ?? [],
+        });
       })
       .catch(() => setCoachError(true));
+  }, [coachId, vq]);
+
+  // Fetch sibling coaches to power the "Other recommended coaches" section
+  useEffect(() => {
+    const q = vq ? `?${vq}` : "";
+    fetch(`/api/public/coaches${q}`)
+      .then((r) => r.json())
+      .then((list: OtherCoach[]) => {
+        setOtherCoaches(list.filter((c) => c.id !== coachId).slice(0, 3));
+      })
+      .catch(() => {});
   }, [coachId, vq]);
 
   const loadAvailability = useCallback(
@@ -444,6 +480,130 @@ export default function CoachProfilePage() {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* ── More about this coach ───────────────────────────────────── */}
+      {(coach.coachYearsExperience ||
+        coach.coachDupr ||
+        coach.coachSpecialties.length > 0 ||
+        coach.coachFocusLevels.length > 0 ||
+        coach.coachLanguages.length > 0 ||
+        coach.coachGroupSizes.length > 0) && (
+        <div className="px-4 mb-6">
+          <h2 className="text-base font-semibold mb-3">{t("coaches.moreAbout", "More about this coach")}</h2>
+          <div className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 space-y-3 text-sm">
+            {coach.coachYearsExperience && (
+              <div className="flex gap-3">
+                <GraduationCap className="h-4 w-4 text-[var(--cm-text-muted)] shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs text-[var(--cm-text-muted)] mb-0.5">{t("coaches.experience", "Experience")}</p>
+                  <p className="text-[var(--cm-text)]">{coach.coachYearsExperience}</p>
+                </div>
+              </div>
+            )}
+            {coach.coachDupr && (
+              <div className="flex gap-3">
+                <BarChart2 className="h-4 w-4 text-[var(--cm-text-muted)] shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs text-[var(--cm-text-muted)] mb-0.5">{t("coaches.dupr", "DUPR Rating")}</p>
+                  <p className="text-[var(--cm-text)]">{coach.coachDupr}</p>
+                </div>
+              </div>
+            )}
+            {coach.coachSpecialties.length > 0 && (
+              <div className="flex gap-3">
+                <Star className="h-4 w-4 text-[var(--cm-text-muted)] shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs text-[var(--cm-text-muted)] mb-1.5">{t("coaches.specialties", "Specialties")}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {coach.coachSpecialties.map((s) => (
+                      <span key={s} className="px-2 py-0.5 bg-[var(--cm-accent-bg)] text-[var(--cm-accent)] text-xs rounded-full">{s}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+            {coach.coachFocusLevels.length > 0 && (
+              <div className="flex gap-3">
+                <Target className="h-4 w-4 text-[var(--cm-text-muted)] shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs text-[var(--cm-text-muted)] mb-1.5">{t("coaches.focusLevels", "Focus level")}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {coach.coachFocusLevels.map((l) => (
+                      <span key={l} className="px-2 py-0.5 bg-[var(--cm-bg-surface)] text-[var(--cm-text-sec)] text-xs rounded-full border border-[var(--cm-border)]">{l}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+            {coach.coachLanguages.length > 0 && (
+              <div className="flex gap-3">
+                <Languages className="h-4 w-4 text-[var(--cm-text-muted)] shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs text-[var(--cm-text-muted)] mb-1.5">{t("coaches.languages", "Languages")}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {coach.coachLanguages.map((l) => (
+                      <span key={l} className="px-2 py-0.5 bg-[var(--cm-bg-surface)] text-[var(--cm-text-sec)] text-xs rounded-full border border-[var(--cm-border)]">{l}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+            {coach.coachGroupSizes.length > 0 && (
+              <div className="flex gap-3">
+                <Users className="h-4 w-4 text-[var(--cm-text-muted)] shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs text-[var(--cm-text-muted)] mb-1.5">{t("coaches.groupSizes", "Group sizes")}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {coach.coachGroupSizes.map((g) => (
+                      <span key={g} className="px-2 py-0.5 bg-[var(--cm-bg-surface)] text-[var(--cm-text-sec)] text-xs rounded-full border border-[var(--cm-border)]">{g}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Other recommended coaches ───────────────────────────────── */}
+      {otherCoaches.length > 0 && (
+        <div className="px-4 mb-8">
+          <h2 className="text-base font-semibold mb-3">{t("coaches.otherRecommended", "Other recommended coaches")}</h2>
+          <div className="space-y-3 mb-3">
+            {otherCoaches.map((c) => (
+              <Link
+                key={c.id}
+                href={`/book/coaches/${c.id}`}
+                className="flex items-center gap-3 bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-3"
+              >
+                {c.coachPhoto ? (
+                  <img src={c.coachPhoto} alt="" className="w-12 h-12 rounded-full object-cover shrink-0" />
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-[var(--cm-accent-bg)] flex items-center justify-center shrink-0 text-xl">
+                    🎓
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-sm truncate">{c.name}</p>
+                  {c.coachBio && (
+                    <p className="text-xs text-[var(--cm-text-sec)] line-clamp-1">{c.coachBio}</p>
+                  )}
+                  <p className="text-xs text-[var(--cm-text-sec)] mt-0.5">
+                    {t("common.from")} {formatPrice(c.startingPrice)}
+                  </p>
+                </div>
+                <span className="text-[var(--cm-accent)] text-sm font-medium shrink-0">→</span>
+              </Link>
+            ))}
+          </div>
+          <Link
+            href="/book/coaches"
+            className="block text-center text-sm text-[var(--cm-accent)] font-medium py-2"
+          >
+            {t("coaches.fullList", "Full list")} →
+          </Link>
         </div>
       )}
     </div>

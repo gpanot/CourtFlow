@@ -35,8 +35,11 @@ import {
   Calendar,
   Download,
 } from "lucide-react";
-import { PaymentConfirmModal, type PaymentModalData, type PaymentConfirmResult } from "@/components/admin/PaymentConfirmModal";
 import { CoachProfileEditor } from "@/components/admin/CoachProfileEditor";
+import {
+  PaymentActionModal,
+  type PaymentActionTarget,
+} from "@/components/admin/PaymentActionModal";
 
 export const dynamic = "force-dynamic";
 
@@ -828,50 +831,22 @@ function LessonsTab({ venueId }: { venueId: string }) {
     return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", ...(venueTimezone ? { timeZone: venueTimezone } : {}) });
   };
 
-  const [paymentModalData, setPaymentModalData] = useState<PaymentModalData | null>(null);
-
-  const [approvingLessonId, setApprovingLessonId] = useState<string | null>(null);
+  const [paymentActionTarget, setPaymentActionTarget] = useState<PaymentActionTarget | null>(null);
 
   const openPaymentModal = (lesson: CoachLesson) => {
-    setPaymentModalData({
+    setPaymentActionTarget({
+      type: "lesson",
       entityId: lesson.id,
-      label: `${lesson.coach.name} → ${lesson.player.name}`,
-      amountValue: lesson.priceValue,
-      currentStatus: (lesson.paymentStatus === "PAID" || lesson.paymentStatus === "paid" ? "PAID" : "UNPAID") as "PAID" | "UNPAID",
-      existingProofUrl: lesson.proofUrl,
-      paymentMethod: lesson.paymentMethod,
-      paidAt: lesson.paidAt,
-      note: lesson.paymentNote,
+      playerName: lesson.player.name,
+      detail: lesson.coach.name,
+      date: lesson.date,
+      startTime: lesson.startTime,
+      endTime: lesson.endTime,
+      priceValue: lesson.priceValue,
+      paymentStatus: lesson.paymentStatus,
+      paymentProofUrl: lesson.proofUrl,
+      bookingStatus: lesson.status,
     });
-  };
-
-  const handleApprovePayment = async (lessonId: string) => {
-    setApprovingLessonId(lessonId);
-    try {
-      await api.patch(`/api/admin/coach-lessons/${lessonId}/approve-payment`, {});
-      await fetchLessons();
-    } finally {
-      setApprovingLessonId(null);
-    }
-  };
-
-  const handlePaymentConfirm = async (entityId: string, result: PaymentConfirmResult) => {
-    await api.patch(`/api/admin/coach-lessons/${entityId}`, {
-      paymentStatus: result.status,
-      amountValue: result.amountValue,
-      paymentMethod: result.paymentMethod,
-      paidAt: result.paidAt,
-      paymentNote: result.note,
-      proofUrl: result.proofUrl,
-    });
-    setPaymentModalData(null);
-    await fetchLessons();
-  };
-
-  const handlePaymentRevert = async (entityId: string) => {
-    await api.patch(`/api/admin/coach-lessons/${entityId}`, { paymentStatus: "pending" });
-    setPaymentModalData(null);
-    await fetchLessons();
   };
 
   const activeLessons = lessons.filter((l) => l.status !== "cancelled");
@@ -1208,50 +1183,24 @@ function LessonsTab({ venueId }: { venueId: string }) {
 
                 {/* Payment row */}
                 <div className="flex items-center gap-2 mt-2 pt-2 border-t border-neutral-800 flex-wrap">
-                  {(lesson.paymentStatus === "PAID" || lesson.paymentStatus === "paid") ? (
-                    <button
-                      onClick={() => openPaymentModal(lesson)}
-                      className="flex items-center gap-1.5 rounded-lg bg-green-600/15 px-2.5 py-1 text-xs font-medium text-green-400 hover:bg-green-600/25 transition-colors"
-                    >
-                      <DollarSign className="h-3 w-3" /> Paid
-                      {lesson.paymentMethod && (
-                        <span className="flex items-center gap-0.5 text-green-500/70">
-                          <CreditCard className="h-2.5 w-2.5" />{lesson.paymentMethod === "bank_transfer" ? "Bank" : lesson.paymentMethod}
-                        </span>
-                      )}
-                    </button>
-                  ) : lesson.paymentStatus === "proof_submitted" ? (
-                    <>
-                      {lesson.proofUrl && (
-                        <a
-                          href={lesson.proofUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-1 rounded-lg bg-neutral-800 px-2 py-1 text-xs text-neutral-300 hover:bg-neutral-700 transition-colors"
-                          title="View payment proof"
-                        >
-                          <ZoomIn className="h-3 w-3" /> Proof
-                        </a>
-                      )}
-                      <button
-                        onClick={() => handleApprovePayment(lesson.id)}
-                        disabled={approvingLessonId === lesson.id}
-                        className="flex items-center gap-1.5 rounded-lg bg-orange-600/15 px-2.5 py-1 text-xs font-medium text-orange-400 hover:bg-orange-600/25 disabled:opacity-50 transition-colors"
-                      >
-                        {approvingLessonId === lesson.id
-                          ? <Loader2 className="h-3 w-3 animate-spin" />
-                          : <Check className="h-3 w-3" />}
-                        Approve payment
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => openPaymentModal(lesson)}
-                      className="flex items-center gap-1.5 rounded-lg bg-amber-600/15 px-2.5 py-1 text-xs font-medium text-amber-400 hover:bg-amber-600/25 transition-colors"
-                    >
-                      <DollarSign className="h-3 w-3" /> {t("coaching.unpaidRecordPayment")}
-                    </button>
-                  )}
+                  <button
+                    onClick={() => openPaymentModal(lesson)}
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors",
+                      (lesson.paymentStatus === "PAID" || lesson.paymentStatus === "paid")
+                        ? "bg-green-600/15 text-green-400 hover:bg-green-600/25"
+                        : lesson.paymentStatus === "proof_submitted"
+                          ? "bg-orange-600/15 text-orange-400 hover:bg-orange-600/25"
+                          : "bg-amber-600/15 text-amber-400 hover:bg-amber-600/25"
+                    )}
+                  >
+                    <DollarSign className="h-3 w-3" />
+                    {(lesson.paymentStatus === "PAID" || lesson.paymentStatus === "paid")
+                      ? "Paid"
+                      : lesson.paymentStatus === "proof_submitted"
+                        ? "Proof submitted — Review"
+                        : t("coaching.unpaidRecordPayment")}
+                  </button>
                 </div>
               </div>
 
@@ -1592,14 +1541,15 @@ function LessonsTab({ venueId }: { venueId: string }) {
         </div>
       )}
 
-      {/* Payment Confirm Modal */}
-      {paymentModalData && (
-        <PaymentConfirmModal
-          data={paymentModalData}
-          accentColor="teal"
-          onConfirm={handlePaymentConfirm}
-          onRevert={paymentModalData.currentStatus === "PAID" ? handlePaymentRevert : undefined}
-          onClose={() => setPaymentModalData(null)}
+      {/* Payment Action Modal */}
+      {paymentActionTarget && (
+        <PaymentActionModal
+          target={paymentActionTarget}
+          onClose={() => setPaymentActionTarget(null)}
+          onUpdated={async () => {
+            setPaymentActionTarget(null);
+            await fetchLessons();
+          }}
         />
       )}
     </div>
@@ -1683,9 +1633,8 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [approvingId, setApprovingId] = useState<string | null>(null);
   const [coaches, setCoaches] = useState<Array<{ id: string; name: string }>>([]);
-  const [paymentModalData, setPaymentModalData] = useState<PaymentModalData | null>(null);
+  const [paymentActionTarget, setPaymentActionTarget] = useState<PaymentActionTarget | null>(null);
 
   useEffect(() => {
     api.get<Array<{ id: string; name: string }>>(`/api/admin/coaches?venueId=${venueId}`)
@@ -1741,45 +1690,19 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
-  const handleApprovePayment = async (id: string) => {
-    setApprovingId(id);
-    try {
-      await api.patch(`/api/admin/coach-lessons/${id}/approve-payment`, {});
-      await fetchRows();
-    } finally {
-      setApprovingId(null);
-    }
-  };
-
-  const handlePaymentConfirm = async (entityId: string, result: PaymentConfirmResult) => {
-    await api.patch(`/api/admin/coach-lessons/${entityId}`, {
-      paymentStatus: result.status,
-      amountValue: result.amountValue,
-      paymentMethod: result.paymentMethod,
-      paidAt: result.paidAt,
-      paymentNote: result.note,
-      proofUrl: result.proofUrl,
-    });
-    setPaymentModalData(null);
-    await fetchRows();
-  };
-
-  const handlePaymentRevert = async (entityId: string) => {
-    await api.patch(`/api/admin/coach-lessons/${entityId}`, { paymentStatus: "pending" });
-    setPaymentModalData(null);
-    await fetchRows();
-  };
-
   const openPaymentModal = (row: AllLessonRow) => {
-    setPaymentModalData({
+    setPaymentActionTarget({
+      type: "lesson",
       entityId: row.id,
-      label: `${row.coach.name} → ${row.player.name}`,
-      amountValue: row.priceValue,
-      currentStatus: (row.paymentStatus === "PAID" || row.paymentStatus === "paid" ? "PAID" : "UNPAID") as "PAID" | "UNPAID",
-      existingProofUrl: row.proofUrl,
-      paymentMethod: row.paymentMethod,
-      paidAt: row.paidAt,
-      note: row.paymentNote,
+      playerName: row.player.name,
+      detail: row.coach.name,
+      date: row.startTime,
+      startTime: row.startTime,
+      endTime: row.endTime,
+      priceValue: row.priceValue,
+      paymentStatus: row.paymentStatus,
+      paymentProofUrl: row.proofUrl,
+      bookingStatus: row.status,
     });
   };
 
@@ -2024,54 +1947,20 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
                         </span>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
-                          <span className={cn("rounded px-2 py-0.5 text-xs font-medium", LESSON_PAYMENT_COLORS[row.paymentStatus] ?? "bg-neutral-700/30 text-neutral-400")}>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); openPaymentModal(row); }}
+                          className="flex items-center gap-1.5 group"
+                          title="Manage payment"
+                        >
+                          <span className={cn("rounded px-2 py-0.5 text-xs font-medium group-hover:ring-1 group-hover:ring-white/20 transition-all", LESSON_PAYMENT_COLORS[row.paymentStatus] ?? "bg-neutral-700/30 text-neutral-400")}>
                             {LESSON_PAYMENT_LABELS[row.paymentStatus] ?? "Unpaid"}
                           </span>
-                          {isProof && row.proofUrl && (
-                            <a
-                              href={row.proofUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-orange-400 hover:text-orange-300"
-                              title="View proof"
-                            >
-                              <ZoomIn className="h-3.5 w-3.5" />
-                            </a>
-                          )}
-                        </div>
+                        </button>
                       </td>
                       <td className="px-4 py-3 text-right text-neutral-300 whitespace-nowrap">
                         {formatPrice(row.priceValue)}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-1 justify-end">
-                          {isProof && (
-                            <button
-                              onClick={() => handleApprovePayment(row.id)}
-                              disabled={approvingId === row.id}
-                              className="flex items-center gap-1 rounded-lg bg-green-600/15 border border-green-600/30 px-2 py-1 text-xs font-medium text-green-400 hover:bg-green-600/25 disabled:opacity-50 transition-colors"
-                            >
-                              {approvingId === row.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-                              Approve
-                            </button>
-                          )}
-                          {(isPending || isPaid) && row.status !== "cancelled" && (
-                            <button
-                              onClick={() => openPaymentModal(row)}
-                              className={cn(
-                                "flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium transition-colors",
-                                isPaid
-                                  ? "bg-green-600/15 border border-green-600/30 text-green-400 hover:bg-green-600/25"
-                                  : "bg-amber-600/15 border border-amber-600/30 text-amber-400 hover:bg-amber-600/25"
-                              )}
-                            >
-                              <DollarSign className="h-3 w-3" />
-                              {isPaid ? "Paid" : "Record"}
-                            </button>
-                          )}
-                        </div>
-                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap" />
                     </tr>
                   );
                 })}
@@ -2110,13 +1999,14 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
         <p className="text-xs text-neutral-500 text-right">{total} lesson{total !== 1 ? "s" : ""}</p>
       )}
 
-      {paymentModalData && (
-        <PaymentConfirmModal
-          data={paymentModalData}
-          accentColor="teal"
-          onConfirm={handlePaymentConfirm}
-          onRevert={paymentModalData.currentStatus === "PAID" ? handlePaymentRevert : undefined}
-          onClose={() => setPaymentModalData(null)}
+      {paymentActionTarget && (
+        <PaymentActionModal
+          target={paymentActionTarget}
+          onClose={() => setPaymentActionTarget(null)}
+          onUpdated={async () => {
+            setPaymentActionTarget(null);
+            await fetchRows();
+          }}
         />
       )}
     </div>

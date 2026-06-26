@@ -37,11 +37,20 @@ export async function GET(request: NextRequest) {
         name: true,
         location: true,
         logoUrl: true,
+        organization: { select: { country: true } },
       },
       orderBy: { name: "asc" },
     });
 
-    return json(venues);
+    return json(
+      venues.map((v) => ({
+        id: v.id,
+        name: v.name,
+        location: v.location,
+        logoUrl: v.logoUrl,
+        country: v.organization?.country ?? null,
+      }))
+    );
   } catch (e) {
     return error((e as Error).message, 500);
   }

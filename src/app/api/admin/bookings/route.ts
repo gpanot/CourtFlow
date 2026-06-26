@@ -21,7 +21,15 @@ export async function GET(request: NextRequest) {
 
     if (!venueId) return error("venueId is required", 400);
 
-    const where: Record<string, unknown> = { venueId };
+    const now = new Date();
+    // Always exclude expired pending holds that haven't been cleaned up by cron yet
+    const where: Record<string, unknown> = {
+      venueId,
+      NOT: {
+        paymentStatus: "pending",
+        holdExpiresAt: { lt: now },
+      },
+    };
 
     if (status && status !== "all") {
       where.status = status;

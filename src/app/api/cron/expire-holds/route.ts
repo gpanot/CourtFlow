@@ -7,11 +7,17 @@ export const dynamic = "force-dynamic";
 /**
  * GET /api/cron/expire-holds
  *
- * Cancels all bookings / coach lessons / credit purchases whose payment hold
+ * Hard-deletes all bookings and open-play registrations whose payment hold
  * has expired (holdExpiresAt < now and paymentStatus still "pending").
+ * Hard-deleting (not soft-cancelling) immediately frees the slot for re-booking.
  *
- * Call via Railway cron or a server-side setInterval.
- * Protected by CRON_SECRET env var — pass as Bearer token or ?secret= query param.
+ * Also handles any lingering "cancelled" bookings that were soft-cancelled by
+ * an old version of this route — they are cleaned up so the admin view stays tidy.
+ *
+ * Should run every minute via Railway Cron:
+ *   Schedule: * * * * *
+ *   Command:  GET https://<your-domain>/api/cron/expire-holds
+ *   Header:   Authorization: Bearer $CRON_SECRET
  */
 export async function GET(request: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -24,32 +30,37 @@ export async function GET(request: NextRequest) {
   }
 
   const now = new Date();
-  let cancelledBookings = 0;
 
   try {
-    const expired = await prisma.booking.findMany({
+    // Hard-delete expired pending booking holds (frees the slot immediately)
+    const deletedBookings = await prisma.booking.deleteMany({
       where: {
         paymentStatus: "pending",
         holdExpiresAt: { lt: now },
         status: "confirmed",
       },
-      select: { id: true },
     });
 
-    if (expired.length > 0) {
-      const result = await prisma.booking.updateMany({
-        where: { id: { in: expired.map((b) => b.id) } },
-        data: {
-          status: "cancelled",
-          cancelledAt: now,
-          paymentStatus: "expired",
-        },
-      });
-      cancelledBookings = result.count;
-    }
+    // Hard-delete expired pending open-play registration holds
+    const deletedOpenPlay = await prisma.openPlayRegistration.deleteMany({
+      where: {
+        paymentStatus: "pending",
+        holdExpiresAt: { lt: now },
+      },
+    });
+
+    // Clean up any stale "expired" status bookings left by the old soft-cancel approach
+    const cleanedStale = await prisma.booking.deleteMany({
+      where: {
+        paymentStatus: "expired",
+        status: "cancelled",
+      },
+    });
 
     return json({
-      cancelledBookings,
+      deletedBookings: deletedBookings.count,
+      deletedOpenPlay: deletedOpenPlay.count,
+      cleanedStale: cleanedStale.count,
       checkedAt: now.toISOString(),
     });
   } catch (e) {

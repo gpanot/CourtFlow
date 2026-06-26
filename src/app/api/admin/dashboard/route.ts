@@ -31,7 +31,11 @@ export async function GET(request: NextRequest) {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
-    const bookingWhere = { venueId: { in: venueIds } };
+    // Exclude pending holds whose timer has expired (not yet cleaned up by cron)
+    const bookingWhere = {
+      venueId: { in: venueIds },
+      NOT: { paymentStatus: "pending", holdExpiresAt: { lt: now } },
+    };
 
     const [
       todayBookings,

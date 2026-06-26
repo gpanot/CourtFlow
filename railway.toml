@@ -9,6 +9,10 @@ releaseCommand = "npx prisma migrate deploy"
 # Configure these as separate Railway "Cron" services in the Railway dashboard.
 # Each cron calls the app URL with Authorization: Bearer $CRON_SECRET
 #
+#  expire-holds         → GET /api/cron/expire-holds           every minute  (* * * * *)
+#    Hard-deletes pending booking/open-play holds whose holdExpiresAt has passed,
+#    immediately freeing slots for re-booking.
+#
 #  auto-close-sessions  → GET /api/cron/auto-close-sessions   every hour  (0 * * * *)
 #    Closes sessions that have been open for more than 6 hours.
 #

@@ -174,30 +174,6 @@ export function EditBookingModalController({
     finally { setSaving(false); }
   };
 
-  const cancelBooking = async (id: string) => {
-    if (!confirm("Cancel this booking?")) return;
-    try {
-      await api.patch(`/api/staff/bookings/${id}`, { status: "cancelled" });
-      refreshAfterAction();
-    } catch (e) { alert((e as Error).message); }
-  };
-
-  const markNoShow = async (id: string) => {
-    if (!confirm("Mark this booking as no-show?")) return;
-    try {
-      await api.patch(`/api/staff/bookings/${id}`, { status: "no_show" });
-      refreshAfterAction();
-    } catch (e) { alert((e as Error).message); }
-  };
-
-  const approvePayment = async (id: string) => {
-    if (!confirm("Approve this payment?")) return;
-    try {
-      await api.patch(`/api/admin/bookings/${id}/approve-payment`, {});
-      refreshAfterAction();
-    } catch (e) { alert((e as Error).message); }
-  };
-
   if (!target) return null;
 
   if (loading || !booking) {
@@ -221,9 +197,6 @@ export function EditBookingModalController({
       onSlotChange={setEditSlotTime}
       onSave={saveEdit}
       onClose={handleClose}
-      onApprovePayment={() => approvePayment(booking.id)}
-      onCancel={() => cancelBooking(booking.id)}
-      onNoShow={() => markNoShow(booking.id)}
       getSlotPrice={getSlotPrice}
       availableSlotsForCourt={availableSlotsForCourt}
       formatTime={formatTime}

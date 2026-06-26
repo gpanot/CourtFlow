@@ -17,7 +17,7 @@ interface LessonDetail {
   date: string;
   startTime: string;
   endTime: string;
-  coach: { name: string };
+  coach: { name: string; coachPhoto: string | null };
   court: { label: string } | null;
   package: { name: string };
 }
@@ -229,17 +229,28 @@ export default function LessonPaymentPage() {
       {/* Lesson summary card */}
       <div className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-4">
         {lesson.paymentRef && (
-          <p className="text-sm font-bold text-[var(--cm-accent)] mb-1">{lesson.paymentRef}</p>
+          <p className="text-sm font-bold text-[var(--cm-accent)] mb-2">{lesson.paymentRef}</p>
         )}
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <p className="text-sm font-medium">{lesson.coach.name}</p>
-            <p className="text-xs text-[var(--cm-text-sec)]">{lesson.package.name}{lesson.court ? ` · ${lesson.court.label}` : ""}</p>
-            <p className="text-sm font-semibold text-[var(--cm-accent)] mt-1">{formatPrice(lesson.priceValue)}</p>
-          </div>
-          <div className="text-right shrink-0">
-            <p className="text-xs font-medium text-[var(--cm-text)]">{formatDateField(lesson.date)}</p>
-            <p className="text-xs text-[var(--cm-text-sec)]">{formatTime(lesson.startTime)} – {formatTime(lesson.endTime)}</p>
+        <div className="flex items-start gap-3">
+          {lesson.coach.coachPhoto ? (
+            <img src={lesson.coach.coachPhoto} alt="" className="w-12 h-12 rounded-full object-cover shrink-0" />
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-[var(--cm-accent-bg)] flex items-center justify-center shrink-0 text-xl">
+              🎓
+            </div>
+          )}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate">{lesson.coach.name}</p>
+                <p className="text-xs text-[var(--cm-text-sec)]">{lesson.package.name}{lesson.court ? ` · ${lesson.court.label}` : ""}</p>
+                <p className="text-sm font-semibold text-[var(--cm-accent)] mt-1">{formatPrice(lesson.priceValue)}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-xs font-medium text-[var(--cm-text)]">{formatDateField(lesson.date)}</p>
+                <p className="text-xs text-[var(--cm-text-sec)]">{formatTime(lesson.startTime)} – {formatTime(lesson.endTime)}</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>

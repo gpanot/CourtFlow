@@ -46,6 +46,18 @@ export async function DELETE(
     if (!booking) return error("Booking not found", 404);
     if (booking.status === "cancelled") return error("Already cancelled", 400);
 
+    // If the booking is still in the unpaid hold phase (no proof submitted, no payment),
+    // hard-delete it so the slot is immediately freed for other players.
+    const isUnpaidHold =
+      booking.paymentStatus === "pending" &&
+      booking.holdExpiresAt !== null;
+
+    if (isUnpaidHold) {
+      await prisma.booking.delete({ where: { id } });
+      return json({ success: true });
+    }
+
+    // Paid / proof-submitted bookings go through the normal cancellation policy.
     const policy = await checkCancellationPolicy(booking);
     if (!policy.canCancel) {
       return error(

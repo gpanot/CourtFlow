@@ -16,8 +16,17 @@ export async function GET(request: NextRequest) {
 
     const date = new Date(dateStr.split("T")[0]);
 
+    const now = new Date();
     const bookings = await prisma.booking.findMany({
-      where: { venueId, date },
+      where: {
+        venueId,
+        date,
+        // Exclude pending holds that have already expired (not yet cleaned up by cron)
+        NOT: {
+          paymentStatus: "pending",
+          holdExpiresAt: { lt: now },
+        },
+      },
       include: {
         court: { select: { id: true, label: true } },
         player: { select: { id: true, name: true, phone: true, avatar: true } },

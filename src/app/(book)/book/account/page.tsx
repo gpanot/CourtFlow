@@ -87,11 +87,6 @@ export default function AccountPage() {
             {profile.email && (
               <div className="flex items-center gap-1.5 mt-0.5">
                 <p className="text-sm text-[var(--cm-text-sec)] truncate">{profile.email}</p>
-                {profile.isCredentialsAccount && !profile.emailVerified && (
-                  <span className="flex-shrink-0 px-1.5 py-0.5 bg-[var(--cm-orange)]/15 text-[var(--cm-orange)] text-[10px] font-medium rounded">
-                    {t("account.notVerified")}
-                  </span>
-                )}
               </div>
             )}
             {profile.phone && <p className="text-sm text-[var(--cm-text-sec)]">{profile.phone}</p>}
