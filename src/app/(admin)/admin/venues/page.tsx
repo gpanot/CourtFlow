@@ -295,7 +295,7 @@ function VenueCard({
                 type="text"
                 value={editLocation}
                 onChange={(e) => setEditLocation(e.target.value)}
-                placeholder="Location"
+                placeholder={t("venues.locationPlaceholder")}
                 className="w-full rounded-lg border border-neutral-600 bg-neutral-800 px-3 py-1.5 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") saveVenue();
@@ -306,7 +306,7 @@ function VenueCard({
                 type="tel"
                 value={editContactPhone}
                 onChange={(e) => setEditContactPhone(e.target.value)}
-                placeholder="Phone (e.g. +66 99 619 2666)"
+                placeholder={t("venues.contactPhonePlaceholder")}
                 className="w-full rounded-lg border border-neutral-600 bg-neutral-800 px-3 py-1.5 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") saveVenue();
@@ -317,7 +317,7 @@ function VenueCard({
                 type="tel"
                 value={editContactWhatsApp}
                 onChange={(e) => setEditContactWhatsApp(e.target.value)}
-                placeholder="WhatsApp (e.g. +66 99 619 2666)"
+                placeholder={t("venues.contactWhatsAppPlaceholder")}
                 className="w-full rounded-lg border border-neutral-600 bg-neutral-800 px-3 py-1.5 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") saveVenue();
@@ -328,7 +328,7 @@ function VenueCard({
                 type="text"
                 value={editContactZalo}
                 onChange={(e) => setEditContactZalo(e.target.value)}
-                placeholder="Zalo (VN) — phone number"
+                placeholder={t("venues.contactZaloPlaceholder")}
                 className="w-full rounded-lg border border-neutral-600 bg-neutral-800 px-3 py-1.5 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") saveVenue();
@@ -339,7 +339,7 @@ function VenueCard({
                 type="text"
                 value={editContactLine}
                 onChange={(e) => setEditContactLine(e.target.value)}
-                placeholder="Line (TH) — ID or @username"
+                placeholder={t("venues.contactLinePlaceholder")}
                 className="w-full rounded-lg border border-neutral-600 bg-neutral-800 px-3 py-1.5 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") saveVenue();
@@ -394,7 +394,7 @@ function VenueCard({
                   )}
                   {venue.portalEnabled && (
                     <span className="rounded-full bg-blue-600/20 px-2 py-0.5 text-xs font-medium text-blue-400">
-                      Player Portal
+                      {t("venues.playerPortal")}
                     </span>
                   )}
                   <span className="rounded-full bg-neutral-700/50 px-2 py-0.5 text-xs text-neutral-300 capitalize">
@@ -558,6 +558,7 @@ function PortalToggle({
   enabled: boolean;
   onRefresh: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [saving, setSaving] = useState(false);
 
   const toggle = async () => {
@@ -575,7 +576,7 @@ function PortalToggle({
   return (
     <div className="space-y-1">
       <h4 className="text-sm font-medium text-neutral-400 uppercase tracking-wider">
-        Player Booking Portal
+        {t("venues.playerPortal")}
       </h4>
       <label className="flex items-center gap-3 cursor-pointer">
         <button
@@ -594,11 +595,11 @@ function PortalToggle({
           />
         </button>
         <span className="text-sm text-neutral-300">
-          {enabled ? "Enabled" : "Disabled"}
+          {enabled ? t("venues.portalEnabled") : t("venues.portalDisabled")}
         </span>
       </label>
       <p className="text-xs text-neutral-600">
-        When enabled, players can book courts and coaches at this venue via the web portal.
+        {t("venues.portalHint")}
       </p>
     </div>
   );
@@ -619,6 +620,7 @@ function NotificationEmailEditor({
   current: string | null;
   onRefresh: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [value, setValue] = useState(current ?? "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -646,7 +648,7 @@ function NotificationEmailEditor({
     <div className="space-y-2">
       <div className="flex items-center gap-1.5">
         <h4 className="text-sm font-medium text-neutral-400 uppercase tracking-wider">
-          General booking notification email
+          {t("venues.notifEmailTitle")}
         </h4>
         <div className="relative">
           <button
@@ -656,21 +658,21 @@ function NotificationEmailEditor({
             onFocus={() => setTooltipOpen(true)}
             onBlur={() => setTooltipOpen(false)}
             className="text-neutral-500 hover:text-neutral-300 transition-colors"
-            aria-label="What does this email receive?"
+            aria-label={t("venues.notifEmailTitle")}
           >
             <HelpCircle className="h-3.5 w-3.5" />
           </button>
           {tooltipOpen && (
             <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 w-72 rounded-lg border border-neutral-700 bg-neutral-800 p-3 text-xs text-neutral-300 shadow-xl">
-              <p className="font-medium text-white mb-1">This inbox receives:</p>
+              <p className="font-medium text-white mb-1">{t("venues.notifEmailTooltipTitle")}</p>
               <ul className="space-y-0.5 list-disc list-inside text-neutral-400">
-                <li>New coach lesson booking proof submitted (action required)</li>
-                <li>Coach lesson confirmed or rejected</li>
-                <li>Coach lesson cancelled by student</li>
-                <li>Sepay auto-confirmed lesson or credit package</li>
+                <li>{t("venues.notifEmailItem1")}</li>
+                <li>{t("venues.notifEmailItem2")}</li>
+                <li>{t("venues.notifEmailItem3")}</li>
+                <li>{t("venues.notifEmailItem4")}</li>
               </ul>
               <p className="mt-2 text-neutral-500">
-                It is a single address — one inbox for the whole venue. Leave blank to disable staff notifications.
+                {t("venues.notifEmailFooter")}
               </p>
               {/* Arrow */}
               <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-neutral-700" />
@@ -684,7 +686,7 @@ function NotificationEmailEditor({
           type="email"
           value={value}
           onChange={(e) => { setValue(e.target.value); setSaved(false); }}
-          placeholder="e.g. manager@yourvenue.com"
+          placeholder={t("venues.notifEmailPlaceholder")}
           className="flex-1 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
           onKeyDown={(e) => e.key === "Enter" && dirty && save()}
         />
@@ -694,18 +696,18 @@ function NotificationEmailEditor({
             disabled={saving}
             className="rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-40 whitespace-nowrap"
           >
-            {saving ? "Saving…" : "Save"}
+            {saving ? t("venues.notifEmailSaving") : t("venues.notifEmailSave")}
           </button>
         )}
         {saved && !dirty && (
           <span className="flex items-center gap-1 text-sm text-green-400">
-            <Check className="h-4 w-4" /> Saved
+            <Check className="h-4 w-4" /> {t("venues.notifEmailSaved")}
           </span>
         )}
       </div>
 
       <p className="text-xs text-neutral-600">
-        Staff notifications for court bookings, coach lessons, and payment events are sent to this address.
+        {t("venues.notifEmailHint")}
       </p>
     </div>
   );

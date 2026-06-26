@@ -872,7 +872,7 @@ export default function BookingsPage() {
               <table className="w-full border-collapse text-[11px]">
                 <thead>
                   <tr>
-                    <th className="sticky top-0 left-0 z-30 bg-neutral-900/95 backdrop-blur border-b border-r border-neutral-700 px-2 py-2 text-left text-xs font-medium text-neutral-500 min-w-[80px]">Court</th>
+                    <th className="sticky top-0 left-0 z-30 bg-neutral-900/95 backdrop-blur border-b border-r border-neutral-700 px-2 py-2 text-left text-xs font-medium text-neutral-500 min-w-[80px]">{t("bookings.court")}</th>
                     {slots.map((slot) => (
                       <th key={slot.startTime} className="sticky top-0 z-20 bg-neutral-900/95 backdrop-blur border-b border-l border-neutral-700 px-1 py-2 text-center font-medium text-neutral-500 min-w-[54px] whitespace-nowrap">
                         {formatTime(slot.startTime, venueTimezone)}
@@ -1219,7 +1219,7 @@ export default function BookingsPage() {
                     <span>{fmtPrice(b.priceValue)}</span>
                     {b.coPlayerIds.length > 0 && <span>+{b.coPlayerIds.length} co-player{b.coPlayerIds.length > 1 ? "s" : ""}</span>}
                     {b.paymentProofUrl && b.paymentProofUrl !== "pending_proof" && (
-                      <a href={b.paymentProofUrl} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 underline">View proof</a>
+                      <a href={b.paymentProofUrl} target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 underline">{t("bookings.viewProof")}</a>
                     )}
                   </div>
                 </div>
@@ -1732,7 +1732,7 @@ function BookingConfigSection({
                 <tr>
                   <th className="sticky left-0 z-10 bg-neutral-900 px-1 py-1 text-left font-medium text-neutral-500 w-[80px]">{t("bookings.day")}</th>
                   {activeHours.map((h) => <th key={h} className="px-0 py-1 text-center font-medium text-neutral-500 w-[46px]">{h}:00</th>)}
-                  <th className="px-1 py-1 text-center font-medium text-neutral-500 min-w-[50px]">Quick</th>
+                  <th className="px-1 py-1 text-center font-medium text-neutral-500 min-w-[50px]">{t("bookings.quickFill")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -1762,9 +1762,9 @@ function BookingConfigSection({
                     <td className="px-0.5 py-0.5">
                       <div className="flex gap-0.5">
                         <button onClick={() => { const val = prompt(`Set all ${DAY_LABELS[day]} slots ($):`, String(centsToDollars(bCfg.defaultPriceValue))); if (val !== null) fillDay(day, dollarsToCents(Math.max(0, parseInt(val.replace(/[^0-9]/g, "") || "0", 10)))); }}
-                          className="rounded px-1.5 py-1 text-[9px] text-neutral-500 hover:bg-neutral-700 hover:text-neutral-300" title={`Fill all ${DAY_LABELS[day]} slots`}>Fill</button>
+                          className="rounded px-1.5 py-1 text-[9px] text-neutral-500 hover:bg-neutral-700 hover:text-neutral-300" title={`Fill all ${DAY_LABELS[day]} slots`}>{t("bookings.fillDay")}</button>
                         <button onClick={() => { if (confirm(`Copy ${DAY_LABELS[day]} prices to all days?`)) copyDayToAll(day); }}
-                          className="rounded px-1.5 py-1 text-[9px] text-neutral-500 hover:bg-neutral-700 hover:text-neutral-300" title={`Copy ${DAY_LABELS[day]} to all days`}>Copy→All</button>
+                          className="rounded px-1.5 py-1 text-[9px] text-neutral-500 hover:bg-neutral-700 hover:text-neutral-300" title={`Copy ${DAY_LABELS[day]} to all days`}>{t("bookings.copyToAll")}</button>
                       </div>
                     </td>
                   </tr>
@@ -2016,6 +2016,7 @@ function CancellationPolicySection({
   settings?: Record<string, unknown>;
   onRefresh: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const rawPolicy = (settings?.cancellationPolicy as {
     freeCancelHours?: number;
     partialCancelHours?: number;
@@ -2035,7 +2036,7 @@ function CancellationPolicySection({
     setSavedMsg("");
     try {
       await api.put(`/api/admin/venues/${venueId}/cancellation-config`, { freeCancelHours, partialCancelHours, noCancelHours });
-      setSavedMsg("Saved!");
+      setSavedMsg(t("common.saved"));
       onRefresh();
     } catch (e) {
       setSaveErr((e as Error).message);
@@ -2047,18 +2048,18 @@ function CancellationPolicySection({
   return (
     <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-6 space-y-6">
       <div>
-        <h3 className="text-sm font-semibold text-white mb-1">Cancellation Policy</h3>
-        <p className="text-xs text-neutral-500">Set time-based cancellation rules for bookings at this venue.</p>
+        <h3 className="text-sm font-semibold text-white mb-1">{t("bookings.cancellationPolicy")}</h3>
+        <p className="text-xs text-neutral-500">{t("bookings.cancellationPolicyDesc")}</p>
       </div>
 
       <div className="rounded-lg border border-neutral-700 bg-neutral-800/50 px-4 py-3 text-xs text-neutral-400">
-        These are the recommended defaults. Adjust to match your venue policy.
+        {t("bookings.cancellationPolicyDefaults")}
       </div>
 
       <div className="space-y-5">
         <div>
-          <label className="block text-xs font-medium text-neutral-300 mb-0.5">Free cancellation window</label>
-          <p className="text-[11px] text-neutral-500 mb-2">Cancel up to X hours before start — full refund, no penalty</p>
+          <label className="block text-xs font-medium text-neutral-300 mb-0.5">{t("bookings.freeCancelWindow")}</label>
+          <p className="text-[11px] text-neutral-500 mb-2">{t("bookings.freeCancelDesc")}</p>
           <div className="flex items-center gap-2">
             <input
               type="number"
@@ -2067,13 +2068,13 @@ function CancellationPolicySection({
               onChange={(e) => setFreeCancelHours(Number(e.target.value))}
               className="w-24 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none"
             />
-            <span className="text-xs text-neutral-500">hours before start</span>
+            <span className="text-xs text-neutral-500">{t("bookings.hoursBeforeStart")}</span>
           </div>
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-neutral-300 mb-0.5">Partial cancel window</label>
-          <p className="text-[11px] text-neutral-500 mb-2">Cancel between X and Y hours before start — 50% of booking price retained</p>
+          <label className="block text-xs font-medium text-neutral-300 mb-0.5">{t("bookings.partialCancelWindow")}</label>
+          <p className="text-[11px] text-neutral-500 mb-2">{t("bookings.partialCancelDesc")}</p>
           <div className="flex items-center gap-2">
             <input
               type="number"
@@ -2082,13 +2083,13 @@ function CancellationPolicySection({
               onChange={(e) => setPartialCancelHours(Number(e.target.value))}
               className="w-24 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none"
             />
-            <span className="text-xs text-neutral-500">hours before start</span>
+            <span className="text-xs text-neutral-500">{t("bookings.hoursBeforeStart")}</span>
           </div>
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-neutral-300 mb-0.5">No cancellation window</label>
-          <p className="text-[11px] text-neutral-500 mb-2">Cancel less than X hours before start — not allowed, returns error</p>
+          <label className="block text-xs font-medium text-neutral-300 mb-0.5">{t("bookings.noCancelWindow")}</label>
+          <p className="text-[11px] text-neutral-500 mb-2">{t("bookings.noCancelDesc")}</p>
           <div className="flex items-center gap-2">
             <input
               type="number"
@@ -2097,7 +2098,7 @@ function CancellationPolicySection({
               onChange={(e) => setNoCancelHours(Number(e.target.value))}
               className="w-24 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none"
             />
-            <span className="text-xs text-neutral-500">hours before start</span>
+            <span className="text-xs text-neutral-500">{t("bookings.hoursBeforeStart")}</span>
           </div>
         </div>
       </div>
@@ -2109,7 +2110,7 @@ function CancellationPolicySection({
           className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-50"
         >
           <Save className="h-3.5 w-3.5" />
-          {saving ? "Saving…" : "Save settings"}
+          {saving ? t("bookings.savingSettings") : t("bookings.saveSettings")}
         </button>
         {savedMsg && <span className="text-xs text-emerald-400">{savedMsg}</span>}
         {saveErr && <span className="text-xs text-red-400">{saveErr}</span>}
@@ -2181,6 +2182,7 @@ function AllBookingsTab({
   venueTimezone?: string;
   onEditBooking: (b: AllBookingRow) => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const defaultTo = localISODate(new Date());
   const defaultFrom = localISODate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
 
@@ -2391,7 +2393,7 @@ function AllBookingsTab({
               onClick={() => setPaymentFilter("pending")}
               className="flex items-center gap-1.5 rounded-full bg-amber-600/15 border border-amber-600/30 px-3 py-1 text-xs font-medium text-amber-400 hover:bg-amber-600/25 transition-colors"
             >
-              <DollarSign className="h-3 w-3" /> {unpaidCount} unpaid on this page
+              <DollarSign className="h-3 w-3" /> {t("bookings.unpaidOnPage", { count: unpaidCount })}
             </button>
           )}
           {proofCount > 0 && (
@@ -2399,7 +2401,7 @@ function AllBookingsTab({
               onClick={() => setPaymentFilter("proof_submitted")}
               className="flex items-center gap-1.5 rounded-full bg-orange-600/15 border border-orange-600/30 px-3 py-1 text-xs font-medium text-orange-400 hover:bg-orange-600/25 transition-colors"
             >
-              <ZoomIn className="h-3 w-3" /> {proofCount} proof{proofCount > 1 ? "s" : ""} to review
+              <ZoomIn className="h-3 w-3" /> {t("bookings.proofsToReview", { count: proofCount })}
             </button>
           )}
         </div>
@@ -2414,20 +2416,20 @@ function AllBookingsTab({
         ) : rows.length === 0 ? (
           <div className="py-16 text-center">
             <Calendar className="h-10 w-10 text-neutral-600 mx-auto mb-3" />
-            <p className="text-neutral-400 text-sm">No bookings found for these filters</p>
+            <p className="text-neutral-400 text-sm">{t("bookings.noBookingsFilters")}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="border-b border-neutral-800 bg-neutral-900/80">
-                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Player</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Court</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Date</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Time</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Status</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Payment</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Price</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("bookings.player")}</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("bookings.court")}</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("bookings.date")}</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("bookings.time")}</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("bookings.status")}</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("bookings.colPayment")}</th>
+                  <th className="text-right px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("bookings.price")}</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>

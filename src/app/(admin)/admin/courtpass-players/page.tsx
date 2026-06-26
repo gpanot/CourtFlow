@@ -389,6 +389,7 @@ function CancelBookingModal({
   onConfirm: () => Promise<void>;
   onClose: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
@@ -422,25 +423,25 @@ function CancelBookingModal({
         </div>
 
         <div className="rounded-lg border border-neutral-700/50 bg-neutral-800/30 px-4 py-3 space-y-1.5">
-          <p className="text-xs font-medium text-neutral-400 mb-2">Cancellation policy</p>
+          <p className="text-xs font-medium text-neutral-400 mb-2">{t("courtpassPlayers.cancellationPolicySummary")}</p>
           <div className="flex items-start gap-2 text-xs">
             <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 text-emerald-500 shrink-0" />
-            <span className="text-neutral-300">Free cancellation up to {policy.freeCancelHours}h before start</span>
+            <span className="text-neutral-300">{t("courtpassPlayers.freeCancelInfo", { hours: policy.freeCancelHours })}</span>
           </div>
           <div className="flex items-start gap-2 text-xs">
             <AlertCircle className="h-3.5 w-3.5 mt-0.5 text-amber-500 shrink-0" />
-            <span className="text-neutral-300">50% retained within {policy.partialCancelHours}h of start</span>
+            <span className="text-neutral-300">{t("courtpassPlayers.partialCancelInfo", { hours: policy.partialCancelHours })}</span>
           </div>
           <div className="flex items-start gap-2 text-xs">
             <Ban className="h-3.5 w-3.5 mt-0.5 text-red-500 shrink-0" />
-            <span className="text-neutral-300">No cancellation within {policy.noCancelHours}h of start</span>
+            <span className="text-neutral-300">{t("courtpassPlayers.noCancelInfo", { hours: policy.noCancelHours })}</span>
           </div>
         </div>
 
         {hoursUntil < policy.noCancelHours && (
           <div className="flex items-center gap-2 rounded-lg border border-red-800/50 bg-red-900/20 px-3 py-2 text-xs text-red-300">
             <Ban className="h-3.5 w-3.5 shrink-0" />
-            Cancellation not allowed — less than {policy.noCancelHours}h before start
+            {t("courtpassPlayers.cancelNotAllowed", { hours: policy.noCancelHours })}
           </div>
         )}
 
@@ -455,10 +456,10 @@ function CancelBookingModal({
             className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-red-600 py-2 text-sm font-medium text-white hover:bg-red-500 disabled:opacity-50"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4" />}
-            {saving ? "Cancelling…" : "Confirm cancel"}
+            {saving ? t("courtpassPlayers.cancellingAction") : t("courtpassPlayers.confirmCancelAction")}
           </button>
           <button onClick={onClose} className="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-400 hover:text-white hover:bg-neutral-800">
-            Keep
+            {t("courtpassPlayers.keepBooking")}
           </button>
         </div>
       </div>
@@ -481,6 +482,7 @@ function NewBookingModal({
   onSuccess: () => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [courtId, setCourtId] = useState(courts[0]?.id ?? "");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [startHour, setStartHour] = useState(8);
@@ -513,10 +515,10 @@ function NewBookingModal({
   }
 
   return (
-    <Modal open onClose={onClose} title="New Booking">
+    <Modal open onClose={onClose} title={t("courtpassPlayers.newBookingModalTitle")}>
       <div className="space-y-4">
         <div>
-          <label className="mb-1 block text-xs text-neutral-400">Court</label>
+          <label className="mb-1 block text-xs text-neutral-400">{t("courtpassPlayers.courtLabel")}</label>
           <select
             value={courtId}
             onChange={(e) => setCourtId(e.target.value)}
@@ -529,7 +531,7 @@ function NewBookingModal({
         </div>
 
         <div>
-          <label className="mb-1 block text-xs text-neutral-400">Date</label>
+          <label className="mb-1 block text-xs text-neutral-400">{t("courtpassPlayers.dateLabel")}</label>
           <input
             type="date"
             value={date}
@@ -540,7 +542,7 @@ function NewBookingModal({
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="mb-1 block text-xs text-neutral-400">Start time</label>
+            <label className="mb-1 block text-xs text-neutral-400">{t("courtpassPlayers.startTimeLabel")}</label>
             <select
               value={startHour}
               onChange={(e) => setStartHour(Number(e.target.value))}
@@ -552,21 +554,21 @@ function NewBookingModal({
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-xs text-neutral-400">Duration (slots)</label>
+            <label className="mb-1 block text-xs text-neutral-400">{t("courtpassPlayers.durationSlots")}</label>
             <select
               value={slotCount}
               onChange={(e) => setSlotCount(Number(e.target.value))}
               className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
             >
               {[1, 2, 3, 4].map((n) => (
-                <option key={n} value={n}>{n} slot{n > 1 ? "s" : ""}</option>
+                <option key={n} value={n}>{n} {n > 1 ? t("courtpassPlayers.slotPlural") : t("courtpassPlayers.slotSingular")}</option>
               ))}
             </select>
           </div>
         </div>
 
         <div>
-          <label className="mb-1 block text-xs text-neutral-400">Notes</label>
+          <label className="mb-1 block text-xs text-neutral-400">{t("courtpassPlayers.notesLabel")}</label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -612,6 +614,7 @@ function MembershipModal({
   onSuccess: () => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [tierId, setTierId] = useState(membership?.tierId ?? tiers[0]?.id ?? "");
   const [sessionsUsed, setSessionsUsed] = useState<number>(membership?.sessionsUsed ?? 0);
   const [saving, setSaving] = useState(false);
@@ -652,7 +655,7 @@ function MembershipModal({
   }
 
   return (
-    <Modal open onClose={onClose} title="Adjust Membership">
+    <Modal open onClose={onClose} title={t("courtpassPlayers.adjustMembership")}>
       <div className="space-y-4">
         {membership && (
           <div className="rounded-lg border border-neutral-800 bg-neutral-800/50 px-4 py-3 text-sm">
@@ -667,7 +670,7 @@ function MembershipModal({
         )}
 
         <div>
-          <label className="mb-1 block text-xs text-neutral-400">Plan</label>
+          <label className="mb-1 block text-xs text-neutral-400">{t("courtpassPlayers.planOverrideLabel")}</label>
           <select
             value={tierId}
             onChange={(e) => setTierId(e.target.value)}
@@ -681,7 +684,7 @@ function MembershipModal({
 
         {membership && (
           <div>
-            <label className="mb-1 block text-xs text-neutral-400">Override sessions used</label>
+            <label className="mb-1 block text-xs text-neutral-400">{t("courtpassPlayers.overrideSessionsUsed")}</label>
             <input
               type="number"
               min={0}
@@ -703,19 +706,19 @@ function MembershipModal({
                 className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-purple-600 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-50"
               >
                 {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-                Save changes
+                {t("common.saveChanges")}
               </button>
               <button onClick={onClose} className="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-400 hover:text-white hover:bg-neutral-800">
-                Cancel
+                {t("common.cancel")}
               </button>
             </div>
             {membership.status === "active" && (
               <button onClick={() => update("suspend")} disabled={saving} className="w-full rounded-lg border border-amber-700/50 bg-amber-900/10 py-2 text-xs text-amber-400 hover:bg-amber-900/20 disabled:opacity-50">
-                Suspend membership
+                {t("courtpassPlayers.suspendMembership")}
               </button>
             )}
             <button onClick={() => update("cancel")} disabled={saving} className="w-full rounded-lg border border-red-800/50 bg-red-900/10 py-2 text-xs text-red-400 hover:bg-red-900/20 disabled:opacity-50">
-              Cancel membership
+              {t("courtpassPlayers.cancelMembership")}
             </button>
           </div>
         ) : (
@@ -726,10 +729,10 @@ function MembershipModal({
               className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2 text-sm font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
             >
               {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-              Activate membership
+              {t("courtpassPlayers.activateMembershipAction")}
             </button>
             <button onClick={onClose} className="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-400 hover:text-white hover:bg-neutral-800">
-              Cancel
+              {t("common.cancel")}
             </button>
           </div>
         )}
@@ -749,6 +752,7 @@ function AddPlayerModal({
   onSuccess: (playerId: string) => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -800,12 +804,12 @@ function AddPlayerModal({
   ];
 
   return (
-    <Modal open onClose={onClose} title="Add Player">
+    <Modal open onClose={onClose} title={t("courtpassPlayers.addPlayer")}>
       <div className="space-y-4">
         {/* Name */}
         <div>
           <label className="mb-1 block text-xs font-medium text-neutral-300">
-            Full name <span className="text-red-400">*</span>
+            {t("courtpassPlayers.fullName")} <span className="text-red-400">*</span>
           </label>
           <input
             type="text"
@@ -819,7 +823,7 @@ function AddPlayerModal({
         {/* Phone */}
         <div>
           <label className="mb-1 block text-xs font-medium text-neutral-300">
-            Phone number <span className="text-red-400">*</span>
+            {t("courtpassPlayers.phoneNumber")} <span className="text-red-400">*</span>
           </label>
           <input
             type="tel"
@@ -833,7 +837,7 @@ function AddPlayerModal({
         {/* Email */}
         <div>
           <label className="mb-1 block text-xs font-medium text-neutral-300">
-            Email <span className="text-red-400">*</span>
+            {t("courtpassPlayers.emailLabel")} <span className="text-red-400">*</span>
           </label>
           <input
             type="email"
@@ -842,13 +846,13 @@ function AddPlayerModal({
             placeholder="e.g. player@email.com"
             className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none"
           />
-          <p className="mt-1 text-[11px] text-neutral-500">Used to log in to the player portal</p>
+          <p className="mt-1 text-[11px] text-neutral-500">{t("courtpassPlayers.portalLoginHint")}</p>
         </div>
 
         {/* Password */}
         <div>
           <label className="mb-1 block text-xs font-medium text-neutral-300">
-            Password <span className="text-red-400">*</span>
+            {t("staff.password")} <span className="text-red-400">*</span>
           </label>
           <div className="relative">
             <input
@@ -866,12 +870,12 @@ function AddPlayerModal({
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
-          <p className="mt-1 text-[11px] text-neutral-500">Share this with the player so they can log in</p>
+          <p className="mt-1 text-[11px] text-neutral-500">{t("courtpassPlayers.shareWithPlayer")}</p>
         </div>
 
         {/* Gender */}
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-neutral-300">Gender</label>
+          <label className="mb-1.5 block text-xs font-medium text-neutral-300">{t("courtpassPlayers.genderLabel")}</label>
           <div className="flex gap-2">
             {(["male", "female"] as const).map((g) => (
               <button
@@ -885,7 +889,7 @@ function AddPlayerModal({
                     : "border-neutral-700 bg-neutral-800 text-neutral-400 hover:border-neutral-600 hover:text-white"
                 )}
               >
-                {g === "male" ? "Male" : "Female"}
+                {g === "male" ? t("players.male") : t("players.female")}
               </button>
             ))}
           </div>
@@ -893,7 +897,7 @@ function AddPlayerModal({
 
         {/* Skill level */}
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-neutral-300">Skill level</label>
+          <label className="mb-1.5 block text-xs font-medium text-neutral-300">{t("courtpassPlayers.skillLevelLabel")}</label>
           <div className="grid grid-cols-2 gap-2">
             {SKILL_LEVELS.map((s) => (
               <button
@@ -926,13 +930,13 @@ function AddPlayerModal({
             className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-purple-600 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-50"
           >
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            {saving ? "Creating…" : "Create player"}
+            {saving ? t("common.creating") : t("courtpassPlayers.addPlayer")}
           </button>
           <button
             onClick={onClose}
             className="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-400 hover:text-white hover:bg-neutral-800"
           >
-            Cancel
+            {t("common.cancel")}
           </button>
         </div>
       </div>
@@ -951,6 +955,7 @@ function EditPlayerModal({
   onSuccess: () => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [form, setForm] = useState({
     name: player.name,
     phone: player.phone,
@@ -991,26 +996,26 @@ function EditPlayerModal({
   const inputCls = "w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none";
 
   return (
-    <Modal open onClose={onClose} title="Edit Player Profile">
+    <Modal open onClose={onClose} title={t("courtpassPlayers.editPlayer")}>
       <div className="space-y-4">
         <div>
-          <label className="mb-1 block text-xs font-medium text-neutral-300">Full name <span className="text-red-400">*</span></label>
+          <label className="mb-1 block text-xs font-medium text-neutral-300">{t("courtpassPlayers.fullName")} <span className="text-red-400">*</span></label>
           <input type="text" value={form.name} onChange={(e) => update("name", e.target.value)} className={inputCls} />
         </div>
 
         <div>
-          <label className="mb-1 block text-xs font-medium text-neutral-300">Phone number <span className="text-red-400">*</span></label>
+          <label className="mb-1 block text-xs font-medium text-neutral-300">{t("courtpassPlayers.phoneNumber")} <span className="text-red-400">*</span></label>
           <input type="tel" value={form.phone} onChange={(e) => update("phone", e.target.value)} className={inputCls} />
         </div>
 
         <div>
-          <label className="mb-1 block text-xs font-medium text-neutral-300">Email</label>
+          <label className="mb-1 block text-xs font-medium text-neutral-300">{t("courtpassPlayers.emailLabel")}</label>
           <input type="email" value={form.email} onChange={(e) => update("email", e.target.value)} placeholder="Leave empty to remove" className={inputCls} />
-          <p className="mt-1 text-[11px] text-neutral-500">Used to log in to the player portal</p>
+          <p className="mt-1 text-[11px] text-neutral-500">{t("courtpassPlayers.portalLoginHint")}</p>
         </div>
 
         <div>
-          <label className="mb-1 block text-xs font-medium text-neutral-300">Reset password</label>
+          <label className="mb-1 block text-xs font-medium text-neutral-300">{t("courtpassPlayers.resetPasswordLabel")}</label>
           <div className="relative">
             <input
               type={showPassword ? "text" : "password"}
@@ -1027,12 +1032,12 @@ function EditPlayerModal({
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
           </div>
-          <p className="mt-1 text-[11px] text-neutral-500">Min. 8 characters — only applies to email/password accounts</p>
+          <p className="mt-1 text-[11px] text-neutral-500">{t("courtpassPlayers.passwordMinHint")}</p>
         </div>
 
         {player.reclubUserId !== null && (
           <div className="rounded-lg border border-neutral-700/50 bg-neutral-800/30 px-3 py-2.5">
-            <p className="text-[11px] text-neutral-500 mb-0.5">Reclub ID</p>
+            <p className="text-[11px] text-neutral-500 mb-0.5">{t("courtpassPlayers.reclubId")}</p>
             <p className="text-sm font-mono text-neutral-300">{player.reclubUserId}</p>
           </div>
         )}
@@ -1048,10 +1053,10 @@ function EditPlayerModal({
             className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-purple-600 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-50"
           >
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            {saving ? "Saving…" : "Save changes"}
+            {saving ? t("common.saving") : t("common.saveChanges")}
           </button>
           <button onClick={onClose} className="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-400 hover:text-white hover:bg-neutral-800">
-            Cancel
+            {t("common.cancel")}
           </button>
         </div>
       </div>
@@ -1225,7 +1230,7 @@ export default function CourtPassPlayersPage() {
       <div className="flex items-center justify-between gap-4 shrink-0">
         <div>
           <h1 className="text-xl font-bold text-white">{t("courtpassPlayers.title")}</h1>
-          <p className="text-xs text-neutral-500 mt-0.5">Unified player CRM — CourtPass + CourtPay</p>
+          <p className="text-xs text-neutral-500 mt-0.5">{t("courtpassPlayers.crmSubtitle")}</p>
         </div>
         <div className="flex items-center gap-2">
           <AdminVenuePicker
@@ -1276,12 +1281,12 @@ export default function CourtPassPlayersPage() {
                 <AlertCircle className="h-8 w-8 text-red-400" />
                 <p className="text-xs text-neutral-500">{listError}</p>
                 <button onClick={() => void fetchList()} className="flex items-center gap-1 text-xs text-purple-400 hover:text-purple-300">
-                  <RefreshCw className="h-3 w-3" /> Retry
+                  <RefreshCw className="h-3 w-3" /> {t("courtpassPlayers.retry")}
                 </button>
               </div>
             ) : players.length === 0 ? (
               <div className="flex flex-col items-center gap-2 p-6 text-center">
-                <p className="text-sm text-neutral-500">No players found</p>
+                <p className="text-sm text-neutral-500">{t("courtpassPlayers.noPlayersFound")}</p>
               </div>
             ) : (
               <div className="pb-2">
@@ -1330,8 +1335,8 @@ export default function CourtPassPlayersPage() {
                       className="w-full flex items-center justify-center gap-1.5 rounded-lg border border-neutral-700 py-2 text-xs text-neutral-400 hover:text-white hover:bg-neutral-800 disabled:opacity-50 transition-colors"
                     >
                       {listLoadingMore
-                        ? <><Loader2 className="h-3 w-3 animate-spin" /> Loading…</>
-                        : `Load more (${listTotal - players.length} remaining)`}
+                        ? <><Loader2 className="h-3 w-3 animate-spin" /> {t("common.loading")}</>
+                        : t("courtpassPlayers.loadMore", { count: listTotal - players.length })}
                     </button>
                   </div>
                 )}
@@ -1394,7 +1399,7 @@ export default function CourtPassPlayersPage() {
                     {detail.stats.pendingBalance > 0 && (
                       <div className="mt-1.5 flex items-center gap-1.5 rounded-full bg-red-900/30 border border-red-800/40 px-2.5 py-0.5 w-fit">
                         <AlertCircle className="h-3 w-3 text-red-400" />
-                        <span className="text-xs text-red-300 font-medium">Balance due: {fmtCurrency(detail.stats.pendingBalance)} VND</span>
+                        <span className="text-xs text-red-300 font-medium">{t("courtpassPlayers.balanceDue", { amount: fmtCurrency(detail.stats.pendingBalance) })}</span>
                       </div>
                     )}
                   </div>
@@ -1404,7 +1409,7 @@ export default function CourtPassPlayersPage() {
                         onClick={() => setShowEditPlayer(true)}
                         className="flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:text-white hover:bg-neutral-700"
                       >
-                        <Pencil className="h-3.5 w-3.5" /> Edit
+                        <Pencil className="h-3.5 w-3.5" /> {t("common.edit")}
                       </button>
                     )}
                     {detail.source === "courtpass" && (
@@ -1413,13 +1418,13 @@ export default function CourtPassPlayersPage() {
                           onClick={() => setShowNewBooking(true)}
                           className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-500"
                         >
-                          <Plus className="h-3.5 w-3.5" /> Book
+                          <Plus className="h-3.5 w-3.5" /> {t("courtpassPlayers.book")}
                         </button>
                         <button
                           onClick={() => setShowMembership(true)}
                           className="flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs font-medium text-neutral-300 hover:text-white hover:bg-neutral-700"
                         >
-                          <Crown className="h-3.5 w-3.5" /> Membership
+                          <Crown className="h-3.5 w-3.5" /> {t("courtpassPlayers.membership")}
                         </button>
                       </>
                     )}
@@ -1454,7 +1459,7 @@ export default function CourtPassPlayersPage() {
                           <span className="text-xs font-medium text-white truncate">{detail.stats.membershipName}</span>
                         </>
                       ) : (
-                        <span className="text-sm text-neutral-500">None</span>
+                        <span className="text-sm text-neutral-500">{t("common.none")}</span>
                       )}
                     </div>
                   </div>
@@ -1520,7 +1525,7 @@ export default function CourtPassPlayersPage() {
                     icon={Crown}
                     action={
                       <button onClick={() => setShowMembership(true)} className="text-xs text-purple-400 hover:text-purple-300 flex items-center gap-1">
-                        <Pencil className="h-3 w-3" /> {detail.membership ? "Adjust" : "Activate"}
+                        <Pencil className="h-3 w-3" /> {detail.membership ? t("courtpassPlayers.adjust") : t("courtpassPlayers.activate")}
                       </button>
                     }
                   >
@@ -1532,24 +1537,24 @@ export default function CourtPassPlayersPage() {
                         </div>
                         <div className="grid grid-cols-3 gap-3 text-xs">
                           <div>
-                            <p className="text-neutral-500">Sessions</p>
+                            <p className="text-neutral-500">{t("courtpassPlayers.sessions")}</p>
                             <p className="font-medium text-white mt-0.5">{detail.membership.sessionsUsed} / {detail.membership.sessionsIncluded ?? "∞"}</p>
                           </div>
                           <div>
-                            <p className="text-neutral-500">Renewal</p>
+                            <p className="text-neutral-500">{t("courtpassPlayers.renewal")}</p>
                             <p className="font-medium text-white mt-0.5">{fmtDate(detail.membership.renewalDate)}</p>
                           </div>
                           <div>
-                            <p className="text-neutral-500">Activated</p>
+                            <p className="text-neutral-500">{t("courtpassPlayers.activated")}</p>
                             <p className="font-medium text-white mt-0.5">{fmtDate(detail.membership.activatedAt)}</p>
                           </div>
                         </div>
                       </div>
                     ) : (
                       <EmptyState
-                        message="No active membership"
+                        message={t("courtpassPlayers.noActiveMembership")}
                         action={
-                          <button onClick={() => setShowMembership(true)} className="text-xs text-purple-400 hover:text-purple-300">Activate membership</button>
+                          <button onClick={() => setShowMembership(true)} className="text-xs text-purple-400 hover:text-purple-300">{t("courtpassPlayers.activateMembership")}</button>
                         }
                       />
                     )}
@@ -1654,8 +1659,8 @@ export default function CourtPassPlayersPage() {
                   <div className="space-y-3">
                     {detail.staffNote ? (
                       <div className="text-xs text-neutral-500 mb-1">
-                        Last updated {fmtDateTime(detail.staffNote.updatedAt)}
-                        {detail.staffNote.updatedBy && ` by ${detail.staffNote.updatedBy}`}
+                        {t("courtpassPlayers.lastUpdated", { date: fmtDateTime(detail.staffNote.updatedAt) })}
+                        {detail.staffNote.updatedBy && ` ${t("courtpassPlayers.updatedBy")} ${detail.staffNote.updatedBy}`}
                       </div>
                     ) : (
                       <p className="text-xs text-neutral-600 italic">{t("courtpassPlayers.noNotes")}</p>
@@ -1668,7 +1673,7 @@ export default function CourtPassPlayersPage() {
                         setNoteErr("");
                       }}
                       rows={4}
-                      placeholder="Add a private note about this player…"
+                      placeholder={t("courtpassPlayers.notePlaceholder")}
                       className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none resize-none"
                     />
                     <div className="flex items-center gap-3">

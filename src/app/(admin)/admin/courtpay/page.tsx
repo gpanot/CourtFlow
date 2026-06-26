@@ -112,6 +112,7 @@ function KioskPreviewFrame({
   visibleCount: number;
   scale: "sm" | "lg";
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const isLg = scale === "lg";
   const visiblePkgs = packages.filter((p) => p.isActive && p.showInCheckIn).slice(0, 3);
 
@@ -131,10 +132,10 @@ function KioskPreviewFrame({
           {showSubscriptionsInFlow ? (
             <>
               <p className={cn("font-bold text-white mt-3 leading-tight", isLg ? "text-base" : "text-[10px]")}>
-                Welcome back!
+                {t("courtpay.kioskWelcome")}
               </p>
               <p className={cn("text-neutral-500 mt-0.5 mb-4", isLg ? "text-sm" : "text-[8px]")}>
-                Play more, wait less
+                {t("courtpay.kioskTagline")}
               </p>
 
               <div className="w-full space-y-2">
@@ -170,13 +171,13 @@ function KioskPreviewFrame({
                         <Infinity className={cn("text-neutral-500", isLg ? "h-3 w-3" : "h-2 w-2")} />
                       ) : (
                         <span className={cn("text-neutral-500", isLg ? "text-xs" : "text-[8px]")}>
-                          {pkg.sessions} sessions
+                          {pkg.sessions} {t("courtpay.sessions")}
                         </span>
                       )}
                       <span className={cn("text-neutral-600", isLg ? "text-xs" : "text-[8px]")}>·</span>
                       <span className={cn("text-neutral-500", isLg ? "text-xs" : "text-[8px]")}>{pkg.durationDays}d</span>
                       <span className={cn("ml-auto font-bold text-purple-400", isLg ? "text-sm" : "text-[9px]")}>
-                        {pkg.isFreePass ? "Free" : new Intl.NumberFormat("vi-VN").format(pkg.price)}
+                        {pkg.isFreePass ? t("courtpay.free") : new Intl.NumberFormat("vi-VN").format(pkg.price)}
                         {!pkg.isFreePass && <span className={cn("text-neutral-500 font-normal", isLg ? "text-xs" : "text-[7px]")}> VND</span>}
                       </span>
                     </div>
@@ -185,13 +186,13 @@ function KioskPreviewFrame({
 
                 {visibleCount === 0 && (
                   <div className="w-full rounded-lg border border-dashed border-neutral-700 py-4 text-center">
-                    <span className={cn("text-neutral-600", isLg ? "text-xs" : "text-[8px]")}>No visible packages</span>
+                    <span className={cn("text-neutral-600", isLg ? "text-xs" : "text-[8px]")}>{t("courtpay.noVisiblePackages")}</span>
                   </div>
                 )}
               </div>
 
               <span className={cn("mt-4 text-neutral-600 underline", isLg ? "text-xs" : "text-[8px]")}>
-                Skip — pay today only
+                {t("courtpay.skipPayToday")}
               </span>
             </>
           ) : (
@@ -199,15 +200,15 @@ function KioskPreviewFrame({
               <div className="w-full rounded-lg border border-dashed border-neutral-700 py-5 flex flex-col items-center gap-2">
                 <XCircle className={cn("text-neutral-700", isLg ? "h-7 w-7" : "h-5 w-5")} />
                 <p className={cn("text-neutral-600 leading-snug", isLg ? "text-xs" : "text-[8px]")}>
-                  Subscription offer skipped
+                  {t("courtpay.subscriptionSkipped")}
                 </p>
               </div>
               <div className="w-full rounded-lg bg-fuchsia-900/40 border border-fuchsia-700/30 py-4 flex flex-col items-center gap-1.5">
                 <div className={cn("rounded bg-white/10", isLg ? "h-16 w-16" : "h-10 w-10")} />
                 <p className={cn("text-fuchsia-300 font-semibold mt-1", isLg ? "text-sm" : "text-[8px]")}>
-                  VietQR payment
+                  {t("courtpay.vietQRPayment")}
                 </p>
-                <p className={cn("text-neutral-500", isLg ? "text-xs" : "text-[7px]")}>Scan to pay session fee</p>
+                <p className={cn("text-neutral-500", isLg ? "text-xs" : "text-[7px]")}>{t("courtpay.scanToPayFee")}</p>
               </div>
             </div>
           )}
@@ -563,8 +564,8 @@ export default function AdminCourtPayPage() {
                     "text-xs font-medium",
                     visibleCount >= MAX_VISIBLE_PACKAGES ? "text-amber-400" : "text-neutral-400"
                   )}>
-                    {visibleCount}/{MAX_VISIBLE_PACKAGES} visible in app
-                    {visibleCount >= MAX_VISIBLE_PACKAGES && " — limit reached"}
+                    {visibleCount}/{MAX_VISIBLE_PACKAGES} {t("courtpay.visibleInApp")}
+                    {visibleCount >= MAX_VISIBLE_PACKAGES && ` — ${t("courtpay.limitReached")}`}
                   </span>
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -590,10 +591,10 @@ export default function AdminCourtPayPage() {
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-white leading-tight">
-                    Show subscriptions in check-in
+                    {t("courtpay.showSubscriptionsTitle")}
                   </p>
                   <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
-                    Master switch for the tablet kiosk. When OFF, no subscription offer appears — even if individual packages are set to visible.
+                    {t("courtpay.showSubscriptionsDesc")}
                   </p>
                 </div>
                 <button
@@ -628,12 +629,12 @@ export default function AdminCourtPayPage() {
                   <XCircle className="h-3.5 w-3.5 shrink-0" />
                 )}
                 {showSubscriptionsInFlow
-                  ? "Subscriptions shown during check-in"
-                  : "Subscriptions hidden during check-in"}
+                  ? t("courtpay.subscriptionsShown")
+                  : t("courtpay.subscriptionsHidden")}
               </div>
 
               {!selectedVenueId && (
-                <p className="mt-2 text-xs text-amber-500">Select a venue to edit this setting.</p>
+                <p className="mt-2 text-xs text-amber-500">{t("courtpay.selectVenueToEdit")}</p>
               )}
             </div>
 
@@ -642,7 +643,7 @@ export default function AdminCourtPayPage() {
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <Smartphone className="h-4 w-4 text-neutral-400" />
-                  <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wide">Kiosk preview</span>
+                  <span className="text-xs font-semibold text-neutral-400 uppercase tracking-wide">{t("courtpay.kioskPreview")}</span>
                 </div>
                 <button
                   type="button"
@@ -650,7 +651,7 @@ export default function AdminCourtPayPage() {
                   className="flex items-center gap-1.5 rounded-lg border border-neutral-700 px-2 py-1 text-[10px] font-medium text-neutral-400 hover:border-neutral-500 hover:bg-neutral-800 hover:text-white transition-colors"
                 >
                   <Maximize2 className="h-3 w-3" />
-                  Expand
+                  {t("courtpay.expand")}
                 </button>
               </div>
 
@@ -664,9 +665,9 @@ export default function AdminCourtPayPage() {
               <p className="mt-3 text-[10px] text-neutral-600 text-center leading-relaxed">
                 {showSubscriptionsInFlow
                   ? visibleCount > 0
-                    ? `${visibleCount} package${visibleCount > 1 ? "s" : ""} shown to players`
-                    : "Toggle ON but no packages visible yet"
-                  : "Players go straight to session payment"}
+                    ? t("courtpay.packagesShownToPlayers", { count: visibleCount })
+                    : t("courtpay.toggleOnNoPackages")
+                  : t("courtpay.playersGoDirectly")}
               </p>
             </div>
 
@@ -683,7 +684,7 @@ export default function AdminCourtPayPage() {
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-2">
                       <Smartphone className="h-4 w-4 text-neutral-400" />
-                      <span className="text-sm font-semibold text-neutral-300 uppercase tracking-wide">Kiosk preview</span>
+                      <span className="text-sm font-semibold text-neutral-300 uppercase tracking-wide">{t("courtpay.kioskPreview")}</span>
                     </div>
                     <button
                       type="button"
@@ -704,9 +705,9 @@ export default function AdminCourtPayPage() {
                   <p className="text-xs text-neutral-600 text-center">
                     {showSubscriptionsInFlow
                       ? visibleCount > 0
-                        ? `${visibleCount} package${visibleCount > 1 ? "s" : ""} shown to players`
-                        : "Toggle ON but no packages visible yet"
-                      : "Players go straight to session payment"}
+                        ? t("courtpay.packagesShownToPlayers", { count: visibleCount })
+                        : t("courtpay.toggleOnNoPackages")
+                      : t("courtpay.playersGoDirectly")}
                   </p>
                 </div>
               </div>

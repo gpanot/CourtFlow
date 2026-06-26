@@ -138,7 +138,7 @@ export default function GeneralSettingsPage() {
     setVenueTimezone(tz);
     try {
       await api.put(`/api/admin/venues/${venueId}/timezone`, { timezone: tz });
-      setTzMsg({ type: "ok", text: "Timezone saved" });
+      setTzMsg({ type: "ok", text: t("settings.timezoneSaved") });
     } catch (e) {
       setVenueTimezone(prev);
       setTzMsg({ type: "err", text: (e as Error).message });
@@ -195,29 +195,29 @@ export default function GeneralSettingsPage() {
             <div className="flex items-center gap-2 mb-3">
               <Building2 className="h-4 w-4 text-purple-400" />
               <h2 className="text-sm font-semibold text-white">
-                {role === "superadmin" ? "Organization" : "Your Organization"}
+                {role === "superadmin" ? t("settings.organizationTitle") : t("settings.yourOrganization")}
               </h2>
             </div>
             {selectedVenue.organization ? (
               <>
                 <dl className="space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <dt className="text-neutral-400">Name</dt>
+                    <dt className="text-neutral-400">{t("settings.orgName")}</dt>
                     <dd className="text-white">{selectedVenue.organization.name}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-neutral-400">Country</dt>
+                    <dt className="text-neutral-400">{t("settings.orgCountry")}</dt>
                     <dd className="text-white">
                       {COUNTRIES_MAP[selectedVenue.organization.country]?.flag ?? ""}{" "}
                       {COUNTRIES_MAP[selectedVenue.organization.country]?.name ?? selectedVenue.organization.country}
                     </dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-neutral-400">Currency</dt>
+                    <dt className="text-neutral-400">{t("settings.orgCurrency")}</dt>
                     <dd className="text-white">{selectedVenue.organization.currency}</dd>
                   </div>
                   <div className="flex justify-between">
-                    <dt className="text-neutral-400">Payment region</dt>
+                    <dt className="text-neutral-400">{t("settings.orgPaymentRegion")}</dt>
                     <dd>
                       <span className="rounded-full bg-neutral-700/50 px-2 py-0.5 text-xs text-neutral-300">
                         {selectedVenue.organization.paymentRegion ?? PAYMENT_REGION_MAP[selectedVenue.organization.country] ?? "OTHER"}
@@ -230,16 +230,16 @@ export default function GeneralSettingsPage() {
                     href="/admin/organizations"
                     className="mt-3 inline-block text-xs text-purple-400 hover:text-purple-300"
                   >
-                    Manage organizations →
+                    {t("settings.manageOrganizations")}
                   </Link>
                 )}
               </>
             ) : (
               <p className="text-xs text-neutral-500">
                 {role === "superadmin" ? (
-                  <>No organization linked.{" "}<Link href="/admin/organizations" className="text-purple-400 hover:text-purple-300">Link one in Organizations page.</Link></>
+                  <>{t("settings.noOrgLinked")}{" "}<Link href="/admin/organizations" className="text-purple-400 hover:text-purple-300">{t("settings.linkOrgInPage")}</Link></>
                 ) : (
-                  "Contact your platform administrator to set up your organization."
+                  t("settings.contactAdminForOrg")
                 )}
               </p>
             )}
@@ -250,15 +250,15 @@ export default function GeneralSettingsPage() {
         <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
           <div className="flex items-center gap-2 mb-1">
             <Clock className="h-4 w-4 text-purple-400" />
-            <h2 className="text-sm font-semibold text-white">Venue Timezone</h2>
+            <h2 className="text-sm font-semibold text-white">{t("settings.venueTimezoneTitle")}</h2>
           </div>
           <p className="mb-4 text-xs text-neutral-400">
-            Controls how booking times, session schedules, and the "now" indicator are displayed in the admin panel — regardless of where you access it from.
+            {t("settings.venueTimezoneDesc")}
           </p>
 
           {/* Venue picker */}
           <div className="mb-4">
-            <label className="block text-xs font-medium text-neutral-400 mb-1.5">Venue</label>
+            <label className="block text-xs font-medium text-neutral-400 mb-1.5">{t("settings.venueLabel")}</label>
             <AdminVenuePicker
               venueId={venueId}
               venues={venues}
@@ -269,7 +269,7 @@ export default function GeneralSettingsPage() {
 
           {venueId && (
             <div>
-              <label className="block text-xs font-medium text-neutral-400 mb-1.5">Timezone</label>
+              <label className="block text-xs font-medium text-neutral-400 mb-1.5">{t("settings.timezoneLabel")}</label>
               <div className="relative max-w-xs">
                 <select
                   value={venueTimezone}
@@ -305,7 +305,7 @@ export default function GeneralSettingsPage() {
               )}
 
               <p className="mt-3 text-[11px] text-neutral-600">
-                Current selection: <span className="font-mono text-neutral-400">{venueTimezone}</span>
+                {t("settings.currentSelection")} <span className="font-mono text-neutral-400">{venueTimezone}</span>
               </p>
             </div>
           )}
@@ -316,16 +316,16 @@ export default function GeneralSettingsPage() {
           <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-base">{SPORT_ICONS[selectedVenue.sportType] ?? "🏟️"}</span>
-              <h2 className="text-sm font-semibold text-white">Venue Details</h2>
+              <h2 className="text-sm font-semibold text-white">{t("settings.venueDetailsTitle")}</h2>
             </div>
             <dl className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <dt className="text-neutral-400">Sport</dt>
+                <dt className="text-neutral-400">{t("settings.sportLabel")}</dt>
                 <dd className="text-white capitalize">{selectedVenue.sportType}</dd>
               </div>
             </dl>
             <p className="mt-3 text-[11px] text-neutral-600">
-              Edit sport type from the Venues page.
+              {t("settings.editSportHint")}
             </p>
           </section>
         )}

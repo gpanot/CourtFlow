@@ -538,7 +538,7 @@ export default function AdminOverview() {
                 <th className="px-4 py-2.5 text-left font-medium">{t("overview.date")}</th>
                 <th className="px-4 py-2.5 text-left font-medium">{t("overview.time")}</th>
                 <th className="px-4 py-2.5 text-left font-medium">{t("overview.status")}</th>
-                <th className="px-4 py-2.5 text-left font-medium">Payment</th>
+                <th className="px-4 py-2.5 text-left font-medium">{t("overview.payment")}</th>
                 <th className="px-4 py-2.5 text-right font-medium">{t("overview.price")}</th>
               </tr>
             </thead>
@@ -552,7 +552,7 @@ export default function AdminOverview() {
                       entry.kind === "openplay" ? "bg-emerald-600/20 text-emerald-400" :
                       "bg-purple-600/20 text-purple-400",
                     )}>
-                      {entry.kind === "lesson" ? "Lesson" : entry.kind === "openplay" ? "Open Play" : "Booking"}
+                      {entry.kind === "lesson" ? t("overview.typeLesson") : entry.kind === "openplay" ? t("overview.typeOpenPlay") : t("overview.typeBooking")}
                     </span>
                   </td>
                   <td className="px-4 py-2.5">
@@ -662,7 +662,7 @@ export default function AdminOverview() {
                     entry.kind === "openplay" ? "bg-emerald-600/20 text-emerald-400" :
                     "bg-purple-600/20 text-purple-400",
                   )}>
-                    {entry.kind === "lesson" ? "Lesson" : entry.kind === "openplay" ? "Open Play" : "Booking"}
+                    {entry.kind === "lesson" ? t("overview.typeLesson") : entry.kind === "openplay" ? t("overview.typeOpenPlay") : t("overview.typeBooking")}
                   </span>
                   <BookingStatusBadge status={entry.status} />
                   {entry.kind === "booking" && entry.paymentStatus && (
@@ -721,7 +721,7 @@ export default function AdminOverview() {
                 </p>
                 <p className="text-xs text-neutral-500">
                   {openPlayDetailGroup.venueName}
-                  {openPlayDetailGroup.title ? ` · ${openPlayDetailGroup.title}` : " · Open Play"}
+                  {openPlayDetailGroup.title ? ` · ${openPlayDetailGroup.title}` : ` · ${t("overview.openPlay")}`}
                 </p>
               </div>
               <button
@@ -733,7 +733,7 @@ export default function AdminOverview() {
             </div>
             <div className="max-h-[60vh] overflow-y-auto divide-y divide-neutral-800/60">
               {openPlayDetailGroup.registrations.length === 0 ? (
-                <p className="px-4 py-8 text-center text-sm text-neutral-500">No registrations yet.</p>
+                <p className="px-4 py-8 text-center text-sm text-neutral-500">{t("overview.noRegistrationsYet")}</p>
               ) : (
                 openPlayDetailGroup.registrations.map((r) => (
                   <div key={r.id} className="flex items-center gap-3 px-4 py-3">
@@ -767,9 +767,9 @@ export default function AdminOverview() {
             <div className="border-t border-neutral-800 px-4 py-3 flex items-center justify-between text-xs text-neutral-500">
               <span>
                 {openPlayDetailGroup.registrations.length}
-                {openPlayDetailGroup.maxPlayers > 0 && `/${openPlayDetailGroup.maxPlayers}`} players
+                {openPlayDetailGroup.maxPlayers > 0 && `/${openPlayDetailGroup.maxPlayers}`} {t("overview.players")}
               </span>
-              <span>{fmtPrice(openPlayDetailGroup.priceValue)} each</span>
+              <span>{fmtPrice(openPlayDetailGroup.priceValue)} {t("overview.each")}</span>
             </div>
           </div>
         </div>
@@ -855,16 +855,16 @@ export default function AdminOverview() {
         {/* Open Play Today */}
         <section className="rounded-xl border border-neutral-800 bg-neutral-900 overflow-hidden">
           <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
-            <h3 className="flex items-center gap-2 text-sm font-semibold">
+              <h3 className="flex items-center gap-2 text-sm font-semibold">
               <Play className="h-4 w-4 text-emerald-400" />
-              Open Play Today
+              {t("overview.openPlayToday")}
             </h3>
             <span className="text-xs text-neutral-500">
-              {(data.openPlayToday ?? []).length} session{(data.openPlayToday ?? []).length !== 1 ? "s" : ""}
+              {t("overview.sessionCount", { count: (data.openPlayToday ?? []).length })}
             </span>
           </div>
           {(data.openPlayToday ?? []).length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-neutral-500">No open play sessions today.</p>
+            <p className="px-4 py-8 text-center text-sm text-neutral-500">{t("overview.noOpenPlayToday")}</p>
           ) : (
             <div className="divide-y divide-neutral-800/50">
               {(data.openPlayToday ?? []).map((group) => {
@@ -885,7 +885,7 @@ export default function AdminOverview() {
                         {fmtTime(group.startTime)} – {fmtTime(group.endTime)}
                       </p>
                       <p className="text-xs text-neutral-500 truncate">
-                        {group.title || "Open Play"}
+                        {group.title || t("overview.openPlay")}
                         {data.venues.length > 1 && ` · ${group.venueName}`}
                       </p>
                       {/* Capacity bar */}
@@ -906,11 +906,11 @@ export default function AdminOverview() {
                       </span>
                       <div className="flex gap-2 text-[10px] justify-end mt-0.5">
                         {total === 0
-                          ? <span className="text-neutral-600">Empty</span>
+                          ? <span className="text-neutral-600">{t("overview.empty")}</span>
                           : <>
-                              {paid > 0 && <span className="text-emerald-400">{paid} paid</span>}
-                              {verifying > 0 && <span className="text-amber-400">{verifying} verif.</span>}
-                              {pending > 0 && <span className="text-neutral-500">{pending} pend.</span>}
+                              {paid > 0 && <span className="text-emerald-400">{paid} {t("overview.paid")}</span>}
+                              {verifying > 0 && <span className="text-amber-400">{verifying} {t("overview.verifying")}</span>}
+                              {pending > 0 && <span className="text-neutral-500">{pending} {t("overview.pending")}</span>}
                             </>
                         }
                       </div>
@@ -1152,6 +1152,13 @@ function QuickLink({
 }
 
 function BookingStatusBadge({ status }: { status: string }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
+  const label =
+    status === "no_show" ? t("overview.statusNoShow") :
+    status === "confirmed" ? t("overview.statusConfirmed") :
+    status === "cancelled" ? t("overview.statusCancelled") :
+    status === "completed" ? t("overview.statusCompleted") :
+    status;
   return (
     <span
       className={cn(
@@ -1162,7 +1169,7 @@ function BookingStatusBadge({ status }: { status: string }) {
         status === "no_show" && "bg-amber-600/20 text-amber-400",
       )}
     >
-      {status === "no_show" ? "No Show" : status}
+      {label}
     </span>
   );
 }
@@ -1189,6 +1196,7 @@ function EditOpenPlayBookingModal({
   onClose: () => void;
   onUpdated: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [showProof, setShowProof] = useState(false);
   const [selectedAction, setSelectedAction] = useState("");
   const [saving, setSaving] = useState(false);
@@ -1196,10 +1204,10 @@ function EditOpenPlayBookingModal({
   const proofUrl = resolveUploadUrl(reg.paymentProofUrl);
 
   const paymentStatusLabel: Record<string, { label: string; color: string }> = {
-    pending: { label: "Pending", color: "text-neutral-400" },
-    proof_submitted: { label: "Proof submitted", color: "text-amber-400" },
-    paid: { label: "Paid", color: "text-emerald-400" },
-    refunded: { label: "Refunded", color: "text-blue-400" },
+    pending: { label: t("overview.statusPending"), color: "text-neutral-400" },
+    proof_submitted: { label: t("overview.statusProofSubmitted"), color: "text-amber-400" },
+    paid: { label: t("overview.statusPaid"), color: "text-emerald-400" },
+    refunded: { label: t("overview.statusRefunded"), color: "text-blue-400" },
   };
   const ps = paymentStatusLabel[reg.paymentStatus] ?? { label: reg.paymentStatus, color: "text-neutral-400" };
 
@@ -1234,7 +1242,7 @@ function EditOpenPlayBookingModal({
           {/* Header */}
           <div className="flex items-center justify-between border-b border-neutral-800 px-5 py-4">
             <div>
-              <h3 className="text-base font-semibold text-white">Edit Open Play Booking</h3>
+              <h3 className="text-base font-semibold text-white">{t("overview.editOpenPlayBooking")}</h3>
               <p className="text-xs text-neutral-500 mt-0.5">{reg.venueName}</p>
             </div>
             <button
@@ -1251,7 +1259,7 @@ function EditOpenPlayBookingModal({
             <div>
               <p className="font-medium text-white">{reg.playerName}</p>
               <p className="text-xs text-neutral-500 capitalize">
-                {reg.status === "no_show" ? "No show" : reg.status}
+                {reg.status === "no_show" ? t("overview.statusNoShow") : reg.status}
               </p>
             </div>
           </div>
@@ -1260,21 +1268,21 @@ function EditOpenPlayBookingModal({
           <div className="px-5 py-4 space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-xl bg-neutral-800/50 px-3 py-2.5">
-                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">Date</p>
+                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">{t("overview.date")}</p>
                 <p className="text-sm font-medium text-white">{fmtDate(reg.date)}</p>
               </div>
               <div className="rounded-xl bg-neutral-800/50 px-3 py-2.5">
-                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">Time</p>
+                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">{t("overview.time")}</p>
                 <p className="text-sm font-medium text-white">
                   {fmtTime(reg.startTime)} – {fmtTime(reg.endTime)}
                 </p>
               </div>
               <div className="rounded-xl bg-neutral-800/50 px-3 py-2.5">
-                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">Price</p>
+                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">{t("overview.price")}</p>
                 <p className="text-sm font-medium text-white">{fmtPrice(reg.priceValue)}</p>
               </div>
               <div className="rounded-xl bg-neutral-800/50 px-3 py-2.5">
-                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">Payment</p>
+                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">{t("overview.payment")}</p>
                 <p className={cn("text-sm font-medium", ps.color)}>{ps.label}</p>
               </div>
             </div>
@@ -1283,12 +1291,12 @@ function EditOpenPlayBookingModal({
             {proofUrl && (
               <div className="rounded-xl border border-neutral-700 overflow-hidden">
                 <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-800 bg-neutral-800/40">
-                  <p className="text-xs font-medium text-neutral-300">Payment Proof</p>
+                  <p className="text-xs font-medium text-neutral-300">{t("overview.paymentProof")}</p>
                   <button
                     onClick={() => setShowProof(true)}
                     className="text-[10px] text-amber-400 hover:text-amber-300 transition-colors"
                   >
-                    View full size
+                    {t("overview.viewFullSize")}
                   </button>
                 </div>
                 <button
@@ -1306,21 +1314,21 @@ function EditOpenPlayBookingModal({
 
             {/* Action dropdown */}
             <div className="space-y-1.5">
-              <label className="text-xs text-neutral-400">Action</label>
+              <label className="text-xs text-neutral-400">{t("overview.action")}</label>
               <select
                 value={selectedAction}
                 disabled={saving || !isActive}
                 className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none disabled:opacity-50"
                 onChange={(e) => setSelectedAction(e.target.value)}
               >
-                <option value="">— Select an action —</option>
+                <option value="">— {t("overview.selectAction")} —</option>
                 {reg.paymentStatus === "proof_submitted" && (
-                  <option value="approve_payment">✓ Approve payment</option>
+                  <option value="approve_payment">✓ {t("overview.approvePayment")}</option>
                 )}
                 {isActive && (
                   <>
-                    <option value="cancel">✕ Cancel registration</option>
-                    <option value="no_show">⚠ Mark as no-show</option>
+                    <option value="cancel">✕ {t("overview.cancelRegistration")}</option>
+                    <option value="no_show">⚠ {t("overview.markNoShow")}</option>
                   </>
                 )}
               </select>
@@ -1338,14 +1346,14 @@ function EditOpenPlayBookingModal({
               disabled={saving || !selectedAction}
               className="flex-1 rounded-xl bg-purple-600 py-2.5 text-sm font-semibold text-white hover:bg-purple-500 transition-colors disabled:opacity-40"
             >
-              {saving ? "Saving…" : "Save Changes"}
+              {saving ? t("common.saving") : t("common.saveChanges")}
             </button>
             <button
               onClick={onClose}
               disabled={saving}
               className="flex-1 rounded-xl bg-neutral-800 py-2.5 text-sm font-medium text-neutral-300 hover:bg-neutral-700 transition-colors disabled:opacity-50"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
           </div>
         </div>
@@ -1398,6 +1406,7 @@ function EditLessonPaymentModal({
   onClose: () => void;
   onUpdated: () => void;
 }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [showProof, setShowProof] = useState(false);
   const [selectedAction, setSelectedAction] = useState("");
   const [saving, setSaving] = useState(false);
@@ -1410,9 +1419,9 @@ function EditLessonPaymentModal({
     : lesson.paymentStatus;
 
   const paymentStatusLabel: Record<string, { label: string; color: string }> = {
-    pending: { label: "Pending", color: "text-neutral-400" },
-    proof_submitted: { label: "Proof submitted", color: "text-amber-400" },
-    paid: { label: "Paid", color: "text-emerald-400" },
+    pending: { label: t("overview.statusPending"), color: "text-neutral-400" },
+    proof_submitted: { label: t("overview.statusProofSubmitted"), color: "text-amber-400" },
+    paid: { label: t("overview.statusPaid"), color: "text-emerald-400" },
   };
   const ps = paymentStatusLabel[normalised] ?? { label: lesson.paymentStatus, color: "text-neutral-400" };
 
@@ -1452,7 +1461,7 @@ function EditLessonPaymentModal({
           {/* Header */}
           <div className="flex items-center justify-between border-b border-neutral-800 px-5 py-4">
             <div>
-              <h3 className="text-base font-semibold text-white">Coach Lesson Payment</h3>
+              <h3 className="text-base font-semibold text-white">{t("overview.coachLessonPayment")}</h3>
               <p className="text-xs text-neutral-500 mt-0.5">{lesson.venueName}</p>
             </div>
             <button
@@ -1476,21 +1485,21 @@ function EditLessonPaymentModal({
           <div className="px-5 py-4 space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-xl bg-neutral-800/50 px-3 py-2.5">
-                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">Date</p>
+                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">{t("overview.date")}</p>
                 <p className="text-sm font-medium text-white">{fmtDate(lesson.date)}</p>
               </div>
               <div className="rounded-xl bg-neutral-800/50 px-3 py-2.5">
-                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">Time</p>
+                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">{t("overview.time")}</p>
                 <p className="text-sm font-medium text-white">
                   {fmtTime(lesson.startTime)} – {fmtTime(lesson.endTime)}
                 </p>
               </div>
               <div className="rounded-xl bg-neutral-800/50 px-3 py-2.5">
-                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">Price</p>
+                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">{t("overview.price")}</p>
                 <p className="text-sm font-medium text-white">{fmtPrice(lesson.priceValue)}</p>
               </div>
               <div className="rounded-xl bg-neutral-800/50 px-3 py-2.5">
-                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">Payment</p>
+                <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">{t("overview.payment")}</p>
                 <p className={cn("text-sm font-medium", ps.color)}>{ps.label}</p>
               </div>
             </div>
@@ -1499,12 +1508,12 @@ function EditLessonPaymentModal({
             {proofUrl && (
               <div className="rounded-xl border border-neutral-700 overflow-hidden">
                 <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-800 bg-neutral-800/40">
-                  <p className="text-xs font-medium text-neutral-300">Payment Proof</p>
+                  <p className="text-xs font-medium text-neutral-300">{t("overview.paymentProof")}</p>
                   <button
                     onClick={() => setShowProof(true)}
                     className="text-[10px] text-amber-400 hover:text-amber-300 transition-colors"
                   >
-                    View full size
+                    {t("overview.viewFullSize")}
                   </button>
                 </div>
                 <button
@@ -1524,26 +1533,26 @@ function EditLessonPaymentModal({
             {isPaid && (
               <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-3 py-2.5">
                 <CheckCircle className="h-4 w-4 text-emerald-400 shrink-0" />
-                <p className="text-sm text-emerald-400 font-medium">Payment confirmed</p>
+                <p className="text-sm text-emerald-400 font-medium">{t("overview.paymentConfirmed")}</p>
               </div>
             )}
 
             {/* Action dropdown */}
             {isActive && (
               <div className="space-y-1.5">
-                <label className="text-xs text-neutral-400">Action</label>
+                <label className="text-xs text-neutral-400">{t("overview.action")}</label>
                 <select
                   value={selectedAction}
                   disabled={saving}
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none disabled:opacity-50"
                   onChange={(e) => setSelectedAction(e.target.value)}
                 >
-                  <option value="">— Select an action —</option>
+                  <option value="">— {t("overview.selectAction")} —</option>
                   {normalised === "proof_submitted" && (
-                    <option value="approve_payment">✓ Approve payment</option>
+                    <option value="approve_payment">✓ {t("overview.approvePayment")}</option>
                   )}
-                  <option value="cancel">✕ Cancel lesson</option>
-                  <option value="no_show">⚠ Mark as no-show</option>
+                  <option value="cancel">✕ {t("overview.cancelLesson")}</option>
+                  <option value="no_show">⚠ {t("overview.markNoShow")}</option>
                 </select>
               </div>
             )}
@@ -1560,13 +1569,13 @@ function EditLessonPaymentModal({
               disabled={saving || !selectedAction}
               className="flex-1 rounded-xl bg-purple-600 py-2.5 text-sm font-semibold text-white hover:bg-purple-500 transition-colors disabled:opacity-40"
             >
-              {saving ? "Saving…" : "Save Changes"}
+              {saving ? t("common.saving") : t("common.saveChanges")}
             </button>
             <button
               onClick={onClose}
               className="rounded-xl border border-neutral-700 px-4 py-2.5 text-sm text-neutral-400 hover:bg-neutral-800 transition-colors"
             >
-              Close
+              {t("common.close")}
             </button>
           </div>
         </div>

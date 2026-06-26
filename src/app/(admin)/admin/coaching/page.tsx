@@ -967,7 +967,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
             <table className="w-full border-collapse text-[11px]">
               <thead>
                 <tr>
-                  <th className="sticky top-0 left-0 z-30 bg-neutral-900/95 backdrop-blur border-b border-r border-neutral-700 px-2 py-2 text-left text-xs font-medium text-neutral-500 min-w-[80px]">Court</th>
+                  <th className="sticky top-0 left-0 z-30 bg-neutral-900/95 backdrop-blur border-b border-r border-neutral-700 px-2 py-2 text-left text-xs font-medium text-neutral-500 min-w-[80px]">{t("bookings.court")}</th>
                   {calendarSlots.map((slot) => (
                     <th key={slot.startTime} className="sticky top-0 z-20 bg-neutral-900/95 backdrop-blur border-b border-l border-neutral-700 px-1 py-2 text-center font-medium text-neutral-500 min-w-[54px] whitespace-nowrap">
                       {formatSlotTime(slot.startTime, venueTimezone)}
@@ -1284,7 +1284,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
                 >
                   {lesson.player.name}
                 </a>
-                <span className={cn("rounded px-2 py-0.5 text-xs", STATUS_COLORS.cancelled)}>Cancelled</span>
+                <span className={cn("rounded px-2 py-0.5 text-xs", STATUS_COLORS.cancelled)}>{t("coaching.cancelled")}</span>
               </div>
             </div>
           ))}
@@ -1503,11 +1503,11 @@ function LessonsTab({ venueId }: { venueId: string }) {
 
               {loadingAvail ? (
                 <div className="flex-1 flex items-center justify-center">
-                  <p className="text-sm text-neutral-500">Loading availability...</p>
+                  <p className="text-sm text-neutral-500">{t("coaching.loadingAvailability")}</p>
                 </div>
               ) : availability.length === 0 ? (
                 <div className="flex-1 flex items-center justify-center">
-                  <p className="text-sm text-neutral-500">No bookable courts for this venue.</p>
+                  <p className="text-sm text-neutral-500">{t("bookings.noBookableCourts")}</p>
                 </div>
               ) : (
                 <div className="flex-1 overflow-auto">
@@ -1576,7 +1576,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
                                 </div>
                               ) : (
                                 <div className="absolute inset-x-0.5 top-0.5 bottom-0.5 rounded bg-purple-600/15 border border-purple-500/20 flex items-center px-1.5 overflow-hidden">
-                                  <span className="text-[9px] text-purple-400 truncate">Booked</span>
+                                  <span className="text-[9px] text-purple-400 truncate">{t("coaching.slotBooked")}</span>
                                 </div>
                               )}
                             </div>
@@ -1667,6 +1667,7 @@ function lessonLocalISODate(d: Date): string {
 }
 
 function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: string; initialPaymentFilter?: string }) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const defaultTo = lessonLocalISODate(new Date());
   const defaultFrom = lessonLocalISODate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
 
@@ -1899,7 +1900,7 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
               onChange={(e) => setCoachFilter(e.target.value)}
               className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs text-white focus:border-teal-500 focus:outline-none"
             >
-              <option value="all">All coaches</option>
+              <option value="all">{t("coaching.allCoachesOption")}</option>
               {coaches.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
@@ -1911,7 +1912,7 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
             <Search className="h-3.5 w-3.5 text-neutral-500 shrink-0" />
             <input
               type="text"
-              placeholder="Search player name or phone…"
+              placeholder={t("coaching.searchPlayerPhone")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="flex-1 bg-transparent py-2 text-sm text-white placeholder:text-neutral-500 focus:outline-none"
@@ -1933,7 +1934,7 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
               onClick={() => setPaymentFilter("pending")}
               className="flex items-center gap-1.5 rounded-full bg-amber-600/15 border border-amber-600/30 px-3 py-1 text-xs font-medium text-amber-400 hover:bg-amber-600/25 transition-colors"
             >
-              <DollarSign className="h-3 w-3" /> {unpaidCount} unpaid on this page
+              <DollarSign className="h-3 w-3" /> {t("coaching.unpaidOnPage", { count: unpaidCount })}
             </button>
           )}
           {proofCount > 0 && (
@@ -1941,7 +1942,7 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
               onClick={() => setPaymentFilter("proof_submitted")}
               className="flex items-center gap-1.5 rounded-full bg-orange-600/15 border border-orange-600/30 px-3 py-1 text-xs font-medium text-orange-400 hover:bg-orange-600/25 transition-colors"
             >
-              <ZoomIn className="h-3 w-3" /> {proofCount} proof{proofCount > 1 ? "s" : ""} to review
+              <ZoomIn className="h-3 w-3" /> {t("coaching.proofsToReview", { count: proofCount })}
             </button>
           )}
         </div>
@@ -1956,21 +1957,21 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
         ) : rows.length === 0 ? (
           <div className="py-16 text-center">
             <Calendar className="h-10 w-10 text-neutral-600 mx-auto mb-3" />
-            <p className="text-neutral-400 text-sm">No lessons found for these filters</p>
+            <p className="text-neutral-400 text-sm">{t("coaching.noLessonsFilters")}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="border-b border-neutral-800 bg-neutral-900/80">
-                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Player</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Coach</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Package</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Date</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Time</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Status</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Payment</th>
-                  <th className="text-right px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">Price</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("coaching.player")}</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("coaching.coach")}</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("coaching.colPackage")}</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("coaching.date")}</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("coaching.time")}</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("coaching.status")}</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("coaching.colPayment")}</th>
+                  <th className="text-right px-4 py-3 text-xs font-medium text-neutral-500 whitespace-nowrap">{t("coaching.price")}</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
