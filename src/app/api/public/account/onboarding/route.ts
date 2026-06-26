@@ -23,18 +23,31 @@ export async function POST(request: NextRequest) {
 
     const normalizedPhone = phone.replace(/\s+/g, "");
 
-    // Check if another real player (not the placeholder-phone current user) has this phone
-    const existing = await prisma.player.findFirst({
-      where: {
-        phone: normalizedPhone,
-        NOT: { id: playerId },
-        // Only treat it as a conflict if it's a real player (not another placeholder)
-        AND: [
-          { NOT: { phone: { startsWith: "oauth_" } } },
-          { NOT: { phone: { startsWith: "email_" } } },
-        ],
-      },
-    });
+    // Last 9 digits for fuzzy duplicate check — same logic as check-phone route.
+    // "+849595656959" → tail "595656959" matches "9595656959" stored by CourtPay (tail "595656959").
+    const digits = normalizedPhone.replace(/\D/g, "");
+    const tail = digits.length >= 9 ? digits.slice(-9) : digits;
+
+    console.log("[onboarding API] received:", { playerId, phone: normalizedPhone, tail, gender, skillLevel, venueId });
+
+    // Check if another real player (not the placeholder-phone current user) has this phone.
+    const existingRows = await prisma.$queryRaw<{ id: string; phone: string }[]>`
+      SELECT id, phone
+      FROM players
+      WHERE id != ${playerId}
+        AND phone NOT LIKE 'oauth_%'
+        AND phone NOT LIKE 'email_%'
+        AND phone NOT LIKE 'deleted_%'
+        AND phone NOT LIKE 'walkin:%'
+        AND phone NOT LIKE '%+'
+        AND length(regexp_replace(phone, '\\D', '', 'g')) >= 8
+        AND right(regexp_replace(phone, '\\D', '', 'g'), 9) = ${tail}
+      LIMIT 1
+    `;
+
+    const existing = existingRows[0] ?? null;
+
+    console.log("[onboarding API] conflict check:", { tail, match: existing?.phone ?? "none", matchId: existing?.id ?? "none" });
 
     if (existing) {
       return json({ existingPlayerId: existing.id, error: "phone_match" }, 409);

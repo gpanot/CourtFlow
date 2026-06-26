@@ -18,31 +18,28 @@ export async function POST(request: NextRequest) {
     const normalizedPhone = phone.replace(/\s+/g, "");
 
     if (link) {
-      const existingPlayer = await prisma.player.findUnique({
+      // CourtPass is the source of truth — we never overwrite its data or delete it.
+      // We only set the playerIdentityId on the current CourtPass player so it is
+      // linked to the CourtPay face identity, and store the confirmed phone number.
+      const courtPayPlayer = await prisma.player.findUnique({
         where: { id: existingPlayerId },
+        select: { playerIdentityId: true },
       });
-      if (!existingPlayer) return error("Player not found", 404);
+      if (!courtPayPlayer) return error("CourtPay player not found", 404);
 
-      await prisma.$transaction(async (tx) => {
-        await tx.playerAccount.updateMany({
-          where: { playerId: currentPlayerId },
-          data: { playerId: existingPlayerId },
-        });
-
-        if (gender) {
-          await tx.player.update({
-            where: { id: existingPlayerId },
-            data: {
-              gender: gender as "male" | "female",
-              skillLevel: (skillLevel as "beginner" | "intermediate" | "advanced" | "pro") ?? existingPlayer.skillLevel,
-            },
-          });
-        }
-
-        await tx.player.delete({ where: { id: currentPlayerId } });
+      await prisma.player.update({
+        where: { id: currentPlayerId },
+        data: {
+          phone: normalizedPhone,
+          ...(courtPayPlayer.playerIdentityId
+            ? { playerIdentityId: courtPayPlayer.playerIdentityId }
+            : {}),
+        },
       });
 
-      return json({ playerId: existingPlayerId });
+      // The current player is NOT deleted — CourtPass is the source of truth.
+      // The existing token remains valid; just return success.
+      return json({ playerId: currentPlayerId });
     }
 
     const uniquePhone = `${normalizedPhone}_${Date.now()}`;
@@ -59,6 +56,7 @@ export async function POST(request: NextRequest) {
   } catch (e) {
     const msg = (e as Error).message;
     if (msg === "Authentication required") return error(msg, 401);
-    return error(msg, 500);
+    console.error("[relink] error:", msg);
+    return error("Account linking failed. Please try again.", 500);
   }
 }
