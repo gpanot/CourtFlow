@@ -257,16 +257,18 @@ function OnboardingContent() {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeader },
         credentials: "include",
-        body: JSON.stringify({ phone: phoneToSend, gender, skillLevel, venueId: null }),
+        body: JSON.stringify({ phone: phoneToSend, gender, skillLevel, venueId: null, faceLinked }),
       });
       const data = await res.json();
       if (!res.ok) {
-        if (data.existingPlayerId) {
+        if (data.existingPlayerId && !faceLinked) {
           setLinkPrompt({ existingPlayerId: data.existingPlayerId, phone: phoneToSend });
           setSaving(false);
           return;
         }
-        throw new Error(data.error || t("onboarding.errors.saveFailed"));
+        if (!faceLinked) {
+          throw new Error(data.error || t("onboarding.errors.saveFailed"));
+        }
       }
     } catch (e) {
       setError((e as Error).message);

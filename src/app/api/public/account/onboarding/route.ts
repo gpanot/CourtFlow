@@ -7,11 +7,12 @@ export async function POST(request: NextRequest) {
   try {
     const { playerId } = await requirePortalAuth(request);
     const body = await request.json();
-    const { phone, gender, skillLevel, venueId } = body as {
+    const { phone, gender, skillLevel, venueId, faceLinked } = body as {
       phone: string;
       gender: string;
       skillLevel: string;
       venueId?: string | null;
+      faceLinked?: boolean;
     };
 
     console.log("[onboarding API] received:", { playerId, phone, phoneLen: phone?.length, gender, skillLevel, venueId });
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
 
     console.log("[onboarding API] conflict check:", { tail, match: existing?.phone ?? "none", matchId: existing?.id ?? "none" });
 
-    if (existing) {
+    if (existing && !faceLinked) {
       return json({ existingPlayerId: existing.id, error: "phone_match" }, 409);
     }
 
