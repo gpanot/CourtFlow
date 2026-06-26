@@ -33,6 +33,17 @@ const COUNTRIES = [
   { code: "ES", name: "Spain", flag: "🇪🇸" },
   { code: "AU", name: "Australia", flag: "🇦🇺" },
 ];
+
+const TIMEZONE_TO_COUNTRY: Record<string, string> = {
+  "Asia/Saigon":    "VN",
+  "Asia/Ho_Chi_Minh": "VN",
+  "Asia/Bangkok":   "TH",
+  "Asia/Singapore": "SG",
+  "Asia/Kuala_Lumpur": "MY",
+  "Europe/Paris":   "FR",
+  "Europe/Madrid":  "ES",
+  "Australia/Sydney": "AU",
+};
 const THEME_OPTIONS = [
   { value: "light" as const, labelKey: "theme.light" },
   { value: "dark" as const, labelKey: "theme.dark" },
@@ -71,6 +82,7 @@ export default function EditProfilePage() {
   const [country, setCountry] = useState("");
   const [email, setEmail] = useState("");
   const [venueTimezone, setVenueTimezone] = useState<string | null>(null);
+  const [registrationVenueId, setRegistrationVenueId] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [initialProfile, setInitialProfile] = useState<ProfileSnapshot | null>(null);
   const [saving, setSaving] = useState(false);
@@ -121,12 +133,17 @@ export default function EditProfilePage() {
       portalFetch("/api/public/account")
         .then((r) => r.json())
         .then((p) => {
+          const timezone = p.venue?.timezone ?? null;
+          const derivedCountry =
+            p.country ||
+            (timezone ? (TIMEZONE_TO_COUNTRY[timezone] ?? "VN") : "VN");
+
           const snapshot: ProfileSnapshot = {
             name: p.name ?? "",
             phone: p.phone ?? "",
             gender: p.gender ?? "",
             skillLevel: p.skillLevel ?? "",
-            country: p.country ?? "",
+            country: derivedCountry,
           };
           setName(snapshot.name);
           setPhone(snapshot.phone);
@@ -135,7 +152,8 @@ export default function EditProfilePage() {
           setCountry(snapshot.country);
           setInitialProfile(snapshot);
           setEmail(p.email ?? "");
-          setVenueTimezone(p.venue?.timezone ?? null);
+          setVenueTimezone(timezone);
+          setRegistrationVenueId(p.registrationVenueId ?? null);
           setAvatarUrl(p.avatar ?? null);
           if (p.playerIdentityId) setLinkingState("linked");
           setLoaded(true);
@@ -427,7 +445,7 @@ export default function EditProfilePage() {
       </div>
 
       {/* Face Check-in section */}
-      {venueId ? (
+      {(venueId || registrationVenueId) ? (
         <div className="rounded-xl border border-[var(--cm-border)] bg-[var(--cm-bg-card)] p-3 mb-4 space-y-2">
           <p className="text-xs font-medium text-[var(--cm-text-sec)]">{t("editProfile.faceSection")}</p>
           {linkingState === "linked" ? (
@@ -475,7 +493,7 @@ export default function EditProfilePage() {
       )}
 
       {/* Face Verify Modal */}
-      {faceModal === "verify" && venueId ? (
+      {faceModal === "verify" && (venueId || registrationVenueId) ? (
         <div
           className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--cm-overlay)] px-4 pt-4 pb-[calc(env(safe-area-inset-bottom,0px)+72px)]"
           onClick={() => { setFaceModal(null); setLinkingState("idle"); setLinkError(null); }}
@@ -548,7 +566,7 @@ export default function EditProfilePage() {
               )
             ) : (
               <FaceCheckInWidget
-                venueId={venueId}
+                venueId={(venueId || registrationVenueId)!}
                 initialFacing="user"
                 onResult={(result) => setFaceCheckInResult(result)}
                 labels={{
