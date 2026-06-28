@@ -84,6 +84,7 @@ export async function PATCH(request: NextRequest) {
       sepayEnabled?: boolean;
       autoPaymentEnabled?: boolean;
       reclubGroupId?: number | null;
+      sessionFee?: number;
     }>(request);
 
     const { venueId } = body;
@@ -102,7 +103,8 @@ export async function PATCH(request: NextRequest) {
       body.autoApprovalCCCD !== undefined ||
       body.sepayEnabled !== undefined ||
       body.autoPaymentEnabled !== undefined ||
-      body.reclubGroupId !== undefined;
+      body.reclubGroupId !== undefined ||
+      body.sessionFee !== undefined;
 
     if (hasSettingsPayload) {
       const venue = await prisma.venue.findUnique({
@@ -124,6 +126,9 @@ export async function PATCH(request: NextRequest) {
           : {}),
         ...(body.reclubGroupId !== undefined
           ? { reclubGroupId: body.reclubGroupId ?? null }
+          : {}),
+        ...(body.sessionFee !== undefined
+          ? { sessionFee: Math.max(0, Math.round(body.sessionFee)) }
           : {}),
       };
     }

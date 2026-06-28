@@ -34,6 +34,7 @@ interface VenueSettings {
   sepayEnabled?: boolean;
   autoPaymentEnabled?: boolean;
   reclubGroupId?: number | null;
+  sessionFee?: number;
   [key: string]: unknown;
 }
 
@@ -320,6 +321,11 @@ function AutoPaymentSettings({
     typeof venue.settings.autoApprovalCCCD === "string" ? venue.settings.autoApprovalCCCD : ""
   );
 
+  // Default session fee (venue-level fallback when no session-specific fee is set)
+  const [sessionFee, setSessionFee] = useState(
+    typeof venue.settings.sessionFee === "number" ? String(venue.settings.sessionFee) : ""
+  );
+
   // Gateway + auto-payment toggles
   const [sepayEnabled, setSepayEnabled] = useState(venue.settings.sepayEnabled === true);
   const [autoPaymentEnabled, setAutoPaymentEnabled] = useState(
@@ -349,6 +355,7 @@ function AutoPaymentSettings({
     );
     setSepayEnabled(venue.settings.sepayEnabled === true);
     setAutoPaymentEnabled(venue.settings.autoPaymentEnabled === true);
+    setSessionFee(typeof venue.settings.sessionFee === "number" ? String(venue.settings.sessionFee) : "");
   }, [venue]);
 
   const qrPreviewUrl = useMemo(() => {
@@ -418,6 +425,7 @@ function AutoPaymentSettings({
           autoApprovalCCCD,
           sepayEnabled,
           autoPaymentEnabled,
+          sessionFee: sessionFee ? parseInt(sessionFee.replace(/[^0-9]/g, ""), 10) : 0,
         }),
       });
       if (!res.ok) throw new Error("Save failed");
@@ -589,6 +597,28 @@ function AutoPaymentSettings({
             placeholder={t("courtpaySettings.accountNamePlaceholder")}
             className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none"
           />
+        </div>
+
+        {/* Session fee */}
+        <div>
+          <label className="mb-0.5 block text-[11px] text-neutral-500">
+            {t("courtpaySettings.sessionFee")}
+          </label>
+          <div className="relative">
+            <input
+              type="text"
+              inputMode="numeric"
+              value={sessionFee ? Number(sessionFee).toLocaleString("en") : ""}
+              onChange={(e) => {
+                const raw = e.target.value.replace(/[^0-9]/g, "");
+                setSessionFee(raw);
+              }}
+              placeholder="50,000"
+              className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-2.5 py-1.5 pr-12 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none"
+            />
+            <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-neutral-500">VND</span>
+          </div>
+          <p className="mt-0.5 text-[10px] text-neutral-600">{t("courtpaySettings.sessionFeeDesc")}</p>
         </div>
 
         <div className="grid grid-cols-2 gap-2">

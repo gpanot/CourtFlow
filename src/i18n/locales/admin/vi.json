@@ -1073,7 +1073,9 @@
     "reclubClubSelect": "— Chọn câu lạc bộ —",
     "reclubClubNone": "Không có (chưa chọn)",
     "reclubClubSave": "Lưu câu lạc bộ Reclub",
-    "reclubClubSaved": "Đã lưu"
+    "reclubClubSaved": "Đã lưu",
+    "sessionFee": "Phí phiên mặc định",
+    "sessionFeeDesc": "Giá dự phòng tính trên mỗi người chơi khi nhân viên chưa đặt phí riêng cho phiên"
   },
   "courtpayAnalytics": {
     "title": "Thống kê CP",

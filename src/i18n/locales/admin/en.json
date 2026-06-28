@@ -1081,7 +1081,9 @@
     "reclubClubSelect": "— Select club —",
     "reclubClubNone": "None (not set)",
     "reclubClubSave": "Save Reclub Club",
-    "reclubClubSaved": "Saved"
+    "reclubClubSaved": "Saved",
+    "sessionFee": "Default session fee",
+    "sessionFeeDesc": "Fallback price charged per player when no per-session fee is set by staff"
   },
   "courtpayAnalytics": {
     "title": "CP Analytics",
