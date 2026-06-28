@@ -16,11 +16,16 @@ export async function DELETE(
     const log = await prisma.stickerPaymentLog.findUnique({ where: { id } });
     if (!log) return notFound("Payment log not found");
 
-    // Atomically delete the log and reset the linked pack to unpaid
+    // Atomically delete the log and reset the linked pack to unpaid.
+    // Match by payosOrderCode first (PayOS packs), fall back to paymentCode (legacy SePay packs).
+    const packWhere = log.payosOrderCode
+      ? { payosOrderCode: log.payosOrderCode }
+      : { paymentCode: log.paymentCode };
+
     await prisma.$transaction([
       prisma.stickerPaymentLog.delete({ where: { id } }),
       prisma.playerStickerPack.updateMany({
-        where: { paymentCode: log.paymentCode },
+        where: packWhere,
         data: { isPaid: false, paidAt: null },
       }),
     ]);
