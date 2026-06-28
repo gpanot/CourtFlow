@@ -87,6 +87,27 @@ describe("POST /api/webhooks/sepay (isolated)", () => {
     process.env.SEPAY_SKIP_VALIDATION = "true";
   });
 
+  it("accepts a valid secret as Apikey token in Authorization header (SePay format)", async () => {
+    delete process.env.SEPAY_SKIP_VALIDATION;
+    process.env.SEPAY_WEBHOOK_SECRET = "test-secret-123";
+
+    const req = new Request("http://localhost/api/webhooks/sepay", {
+      method: "POST",
+      body: JSON.stringify({ id: 1, transferAmount: 30000 }),
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Apikey test-secret-123",
+      },
+    });
+
+    const res = await POST(req as never);
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toEqual({ success: true });
+
+    delete process.env.SEPAY_WEBHOOK_SECRET;
+    process.env.SEPAY_SKIP_VALIDATION = "true";
+  });
+
   it("rejects a wrong secret (validation fails, route still returns 200)", async () => {
     delete process.env.SEPAY_SKIP_VALIDATION;
     process.env.SEPAY_WEBHOOK_SECRET = "real-secret";

@@ -38,7 +38,11 @@ export function validateSepayWebhook(
   }
 
   const provided = headers.get("x-sepay-key") || headers.get("authorization");
-  return provided === secret || provided === `Bearer ${secret}`;
+  return (
+    provided === secret ||
+    provided === `Bearer ${secret}` ||
+    provided === `Apikey ${secret}`
+  );
 }
 
 async function handleBillingPayment(
