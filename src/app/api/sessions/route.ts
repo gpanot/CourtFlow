@@ -53,17 +53,30 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const latestSession = await prisma.session.findFirst({
-      where: { venueId },
-      orderBy: { openedAt: "desc" },
-      select: { sessionFee: true },
-    });
+    const [latestSession, venue] = await Promise.all([
+      prisma.session.findFirst({
+        where: { venueId },
+        orderBy: { openedAt: "desc" },
+        select: { sessionFee: true },
+      }),
+      prisma.venue.findUnique({
+        where: { id: venueId },
+        select: { settings: true },
+      }),
+    ]);
+
+    const venueDefaultFee = typeof (venue?.settings as Record<string, unknown> | null)?.sessionFee === "number"
+      ? (venue!.settings as Record<string, unknown>).sessionFee as number
+      : null;
+
+    // Priority: venue default fee (set in CP Settings) → last session fee → 0
+    const defaultSessionFee = venueDefaultFee ?? latestSession?.sessionFee ?? 0;
 
     const session = await prisma.session.create({
       data: {
         venueId,
         staffId: auth.id,
-        sessionFee: latestSession?.sessionFee ?? 0,
+        sessionFee: defaultSessionFee,
         gameTypeMix: gameTypeMix ?? undefined,
         warmupMode: warmupMode ?? "manual",
         type: type ?? "open_play",
