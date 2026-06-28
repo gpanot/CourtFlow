@@ -124,9 +124,9 @@ export async function POST(request: NextRequest) {
       where: { sessionId: session.id, playerId, status: "pending" },
     });
     if (existingPending) {
-      // Ensure older records that were created without a paymentRef get one now
+      // Ensure stored paymentRef is a proper CF-SES-XXXXXX ref; backfill if it's an old name+date string
       let resumeRef = existingPending.paymentRef;
-      if (!resumeRef) {
+      if (!resumeRef || !resumeRef.startsWith("CF-SES-")) {
         resumeRef = await generatePaymentRef("session");
         await prisma.pendingPayment.update({
           where: { id: existingPending.id },
@@ -157,7 +157,6 @@ export async function POST(request: NextRequest) {
     }
 
     const paymentRef = await generatePaymentRef("session");
-
     const pendingPayment = await prisma.pendingPayment.create({
       data: {
         venueId,
@@ -166,8 +165,8 @@ export async function POST(request: NextRequest) {
         amount,
         type: "checkin",
         status: "pending",
-        paymentRef,
         expiresAt: new Date(Date.now() + PAYMENT_TIMEOUT_MS),
+        paymentRef,
       },
     });
 
