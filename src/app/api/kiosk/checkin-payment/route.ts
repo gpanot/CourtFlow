@@ -5,6 +5,7 @@ import { faceRecognitionService } from "@/lib/face-recognition";
 import { emitToVenue } from "@/lib/socket-server";
 import { sendPaymentPushToStaff } from "@/lib/staff-push";
 import { buildVietQRUrl } from "@/lib/vietqr";
+import { generatePaymentRef } from "@/modules/courtpay/lib/payment-reference";
 
 export const dynamic = "force-dynamic";
 const PAYMENT_TIMEOUT_MS = 3 * 60 * 1000;
@@ -123,15 +124,22 @@ export async function POST(request: NextRequest) {
       where: { sessionId: session.id, playerId, status: "pending" },
     });
     if (existingPending) {
-      const today = new Date().toISOString().slice(0, 10);
+      // Ensure older records that were created without a paymentRef get one now
+      let resumeRef = existingPending.paymentRef;
+      if (!resumeRef) {
+        resumeRef = await generatePaymentRef("session");
+        await prisma.pendingPayment.update({
+          where: { id: existingPending.id },
+          data: { paymentRef: resumeRef },
+        });
+      }
       const resumeQR = buildVietQRUrl({
         bankBin: venue.bankName || "",
         accountNumber: venue.bankAccount || "",
         accountName: venue.bankOwnerName || "",
         amount: existingPending.amount,
-        description: `${playerName} ${today}`,
+        description: resumeRef,
       });
-      const resumePaymentRef = `${playerName} ${new Date().toISOString().slice(0, 10)}`;
       return json({
         pendingPaymentId: existingPending.id,
         playerId,
@@ -144,9 +152,11 @@ export async function POST(request: NextRequest) {
         resuming: true,
         bankBin: venue.bankName,
         bankAccount: venue.bankAccount,
-        paymentRef: resumePaymentRef,
+        paymentRef: resumeRef,
       });
     }
+
+    const paymentRef = await generatePaymentRef("session");
 
     const pendingPayment = await prisma.pendingPayment.create({
       data: {
@@ -156,17 +166,17 @@ export async function POST(request: NextRequest) {
         amount,
         type: "checkin",
         status: "pending",
+        paymentRef,
         expiresAt: new Date(Date.now() + PAYMENT_TIMEOUT_MS),
       },
     });
 
-    const today = new Date().toISOString().slice(0, 10);
     const vietQR = buildVietQRUrl({
       bankBin: venue.bankName || "",
       accountNumber: venue.bankAccount || "",
       accountName: venue.bankOwnerName || "",
       amount,
-      description: `${playerName} ${today}`,
+      description: paymentRef,
     });
 
     emitToVenue(venueId, "payment:new", {
@@ -197,7 +207,7 @@ export async function POST(request: NextRequest) {
       isReturning: true,
       bankBin: venue.bankName,
       bankAccount: venue.bankAccount,
-      paymentRef: `${playerName} ${today}`,
+      paymentRef,
     });
   } catch (e) {
     console.error("[Kiosk Checkin Payment] Error:", e);
