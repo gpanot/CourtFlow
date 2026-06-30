@@ -9,6 +9,7 @@ export type RootStackParamList = {
   StaffStack: undefined;
   TabletStack: undefined;
   AdminWebView: undefined;
+  CoachPortalStack: undefined;
 };
 
 export type StaffStackParamList = {
@@ -47,6 +48,12 @@ export type TabletStackParamList = {
   CourtPayCheckIn: undefined;
 };
 
+export type CoachPortalStackParamList = {
+  CoachPortal: undefined;
+  CoachLessons: undefined;
+  CoachAvailability: undefined;
+};
+
 export type RootStackScreenProps<T extends keyof RootStackParamList> =
   NativeStackScreenProps<RootStackParamList, T>;
 
@@ -58,3 +65,6 @@ export type StaffTabScreenProps<T extends keyof StaffTabParamList> =
 
 export type TabletStackScreenProps<T extends keyof TabletStackParamList> =
   NativeStackScreenProps<TabletStackParamList, T>;
+
+export type CoachPortalStackScreenProps<T extends keyof CoachPortalStackParamList> =
+  NativeStackScreenProps<CoachPortalStackParamList, T>;

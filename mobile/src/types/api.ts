@@ -9,6 +9,7 @@ export interface StaffLoginStaffPayload {
   name: string;
   phone: string;
   role: "staff" | "superadmin";
+  isCoach: boolean;
   venues: { id: string; name: string }[];
   venueId: string | null;
   onboardingCompleted: boolean;

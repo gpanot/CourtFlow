@@ -7,6 +7,7 @@ const PERSIST_KEY = "courtpay-auth";
 interface AuthState {
   token: string | null;
   role: "staff" | "superadmin" | null;
+  isCoach: boolean;
   staffId: string | null;
   staffName: string | null;
   staffPhone: string | null;
@@ -32,6 +33,7 @@ export type AuthStore = AuthState & AuthActions;
 const STATE_KEYS: (keyof AuthState)[] = [
   "token",
   "role",
+  "isCoach",
   "staffId",
   "staffName",
   "staffPhone",
@@ -45,6 +47,7 @@ const STATE_KEYS: (keyof AuthState)[] = [
 const initialState: AuthState = {
   token: null,
   role: null,
+  isCoach: false,
   staffId: null,
   staffName: null,
   staffPhone: null,

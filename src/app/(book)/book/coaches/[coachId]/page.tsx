@@ -427,7 +427,16 @@ export default function CoachProfilePage() {
           {coach.packages.map((pkg) => (
             <div key={pkg.id} className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 flex justify-between items-center">
               <div>
-                <p className="font-medium text-sm">{pkg.name}</p>
+                <div className="flex items-center gap-2 mb-0.5">
+                  <p className="font-medium text-sm">{pkg.name}</p>
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${
+                    pkg.lessonType === "group"
+                      ? "bg-blue-500/20 text-blue-400"
+                      : "bg-purple-500/20 text-purple-400"
+                  }`}>
+                    {pkg.lessonType === "group" ? t("coaches.group", "Group") : t("coaches.private", "Private")}
+                  </span>
+                </div>
                 <p className="text-xs text-[var(--cm-text-sec)]">
                   {pkg.durationMin} {t("common.min")} · {formatPrice(pkg.priceValue)}
                 </p>
@@ -443,12 +452,12 @@ export default function CoachProfilePage() {
         </div>
       </div>
 
-      {coach.packages.length > 0 && (
+      {coach.packages.some((p) => p.lessonType === "private") && (
         <div className="px-4 mb-6">
           <h2 className="text-base font-semibold mb-3">{t("coaches.creditPacks")}</h2>
           <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
             {[1, 5, 10].map((qty) => {
-              const basePkg = coach.packages[0];
+              const basePkg = coach.packages.find((p) => p.lessonType === "private") ?? coach.packages[0];
               const discount = qty === 5 ? 10 : qty === 10 ? 20 : 0;
               const total = Math.round(basePkg.priceValue * qty * (1 - discount / 100));
               return (

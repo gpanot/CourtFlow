@@ -8,6 +8,7 @@ import { StaffLoginScreen } from "../screens/auth/StaffLoginScreen";
 import { ContinueAsScreen } from "../screens/auth/ContinueAsScreen";
 import { StaffNavigator } from "./StaffNavigator";
 import { TabletNavigator } from "./TabletNavigator";
+import { CoachPortalNavigator } from "./CoachPortalNavigator";
 import { AdminWebViewScreen } from "../screens/admin/AdminWebViewScreen";
 import { useLocaleStore } from "../stores/locale-store";
 
@@ -33,6 +34,7 @@ export function RootNavigator() {
         options={{ gestureEnabled: false }}
       />
       <Stack.Screen name="AdminWebView" component={AdminWebViewScreen} />
+      <Stack.Screen name="CoachPortalStack" component={CoachPortalNavigator} />
     </Stack.Navigator>
   );
 }

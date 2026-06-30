@@ -12,6 +12,7 @@ export function SplashScreen({
   const hydrated = useAuthStore((s) => s.hydrated);
   const hydratePin = usePinStore((s) => s.hydrate);
   const token = useAuthStore((s) => s.token);
+  const isCoach = useAuthStore((s) => s.isCoach);
   const onboardingSeen = useAuthStore((s) => s.onboardingSeen);
   const venueId = useAuthStore((s) => s.venueId);
 
@@ -28,15 +29,15 @@ export function SplashScreen({
         navigation.replace("Onboarding");
       } else if (!token) {
         navigation.replace("StaffLogin");
-      } else if (venueId) {
-        navigation.replace("ContinueAs");
+      } else if (isCoach) {
+        navigation.replace("CoachPortalStack");
       } else {
         navigation.replace("ContinueAs");
       }
     }, 800);
 
     return () => clearTimeout(timer);
-  }, [hydrated, token, onboardingSeen, venueId, navigation]);
+  }, [hydrated, token, isCoach, onboardingSeen, venueId, navigation]);
 
   return (
     <View style={styles.container}>

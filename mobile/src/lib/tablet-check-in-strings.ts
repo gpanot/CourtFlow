@@ -602,7 +602,27 @@ const CHECK_IN_SCANNER_EN = {
   "billingBlockedMessage": "You have unpaid bills so you can't see the content of this page. Pay the bill to get full access.",
   "billingBlockedHint": "Go to Boss Dashboard > Billing",
   "bossDashboardBillingPayQR": "Pay now via QR",
-  "bossDashboardBillingHideQRBtn": "Hide QR"
+  "bossDashboardBillingHideQRBtn": "Hide QR",
+
+  // ── Coach Portal ────────────────────────────────────────────────────────────
+  "coachPortalTitle": "Coach Portal",
+  "coachPortalSubtitle": "My dashboard",
+  "coachPortalMyLessons": "My Lessons",
+  "coachPortalMyLessonsDesc": "View all your upcoming & past lessons",
+  "coachPortalMyAvailability": "My Availability",
+  "coachPortalMyAvailabilityDesc": "Set your weekly schedule & holidays",
+  "coachPortalUpcoming": "Upcoming",
+  "coachPortalPast": "Past",
+  "coachPortalNoLessons": "No lessons yet.",
+  "coachPortalWeeklySchedule": "Weekly Schedule",
+  "coachPortalHolidays": "Holidays",
+  "coachPortalNoHolidays": "No holidays added.",
+  "coachPortalHolidayNote": "Note (optional)",
+  "coachPortalUnavailable": "Unavailable",
+  "coachPortalSavedSuccess": "Saved successfully",
+  "coachPortalBackToRoles": "Back to role selection",
+  "continueAsCoachLabel": "Coach Portal",
+  "continueAsCoachDesc": "View your lessons and manage availability"
 } as const;
 
 const CHECK_IN_SCANNER_VI = {
@@ -1203,7 +1223,27 @@ const CHECK_IN_SCANNER_VI = {
   "billingBlockedMessage": "Bạn có hóa đơn chưa thanh toán nên không thể xem nội dung trang này. Thanh toán hóa đơn để được truy cập đầy đủ.",
   "billingBlockedHint": "Vào Boss Dashboard > Billing",
   "bossDashboardBillingPayQR": "Thanh toán qua QR",
-  "bossDashboardBillingHideQRBtn": "Ẩn QR"
+  "bossDashboardBillingHideQRBtn": "Ẩn QR",
+
+  // ── Coach Portal ────────────────────────────────────────────────────────────
+  "coachPortalTitle": "Cổng huấn luyện viên",
+  "coachPortalSubtitle": "Bảng điều khiển của tôi",
+  "coachPortalMyLessons": "Buổi học của tôi",
+  "coachPortalMyLessonsDesc": "Xem tất cả buổi học sắp tới và đã qua",
+  "coachPortalMyAvailability": "Lịch trống của tôi",
+  "coachPortalMyAvailabilityDesc": "Đặt lịch hàng tuần và ngày nghỉ",
+  "coachPortalUpcoming": "Sắp tới",
+  "coachPortalPast": "Đã qua",
+  "coachPortalNoLessons": "Chưa có buổi học nào.",
+  "coachPortalWeeklySchedule": "Lịch hàng tuần",
+  "coachPortalHolidays": "Ngày nghỉ",
+  "coachPortalNoHolidays": "Chưa có ngày nghỉ.",
+  "coachPortalHolidayNote": "Ghi chú (tuỳ chọn)",
+  "coachPortalUnavailable": "Không có lịch",
+  "coachPortalSavedSuccess": "Đã lưu thành công",
+  "coachPortalBackToRoles": "Về trang chọn vai trò",
+  "continueAsCoachLabel": "Cổng HLV",
+  "continueAsCoachDesc": "Xem buổi học và quản lý lịch trống"
 } as const;
 
 export const TABLET_ARIA: Record<TabletKioskLocale, { switchToEnglishAria: string; switchToVietnameseAria: string }> = {

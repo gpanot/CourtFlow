@@ -58,11 +58,16 @@ export function StaffLoginScreen({
         staffName: staff.name,
         staffPhone: staff.phone,
         role: staff.role,
+        isCoach: staff.isCoach ?? false,
         venues: mapStaffVenuesToVenues(staff.venues),
         onboardingCompleted: staff.onboardingCompleted,
       });
 
-      navigation.replace("ContinueAs");
+      if (staff.isCoach) {
+        navigation.replace("CoachPortalStack");
+      } else {
+        navigation.replace("ContinueAs");
+      }
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Login failed";
