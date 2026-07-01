@@ -528,6 +528,7 @@
     "durationHours": "Duration (hours)",
     "sessions": "Sessions",
     "basePrice": "Base price (for min players)",
+    "basePriceForMinPlayers": "Base price (for min {{count}} players)",
     "priceLabel": "Price",
     "groupPricing": "Group pricing",
     "minPlayersLabel": "Min players",

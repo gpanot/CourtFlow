@@ -226,6 +226,9 @@
     "howManyPlayers": "Bao nhiêu người?",
     "estimatedTotal": "Ước tính",
     "groupPaymentNote": "Một lần thanh toán cho cả nhóm.",
+    "onlyPerPlayer": "Chỉ {{price}}/người",
+    "asLowAsLabel": "Chỉ từ",
+    "perPlayerRateSuffix": "/người",
     "basePriceLine": "Cơ bản ({{count}} người)",
     "additionalPlayersLine": "Người thêm ({{count}} × {{price}})",
     "playersRow": "Số người"

@@ -251,7 +251,6 @@ function CoachesTab({ venueId }: { venueId: string }) {
     minPlayers: "2",
     maxPlayers: "8",
     pricePerAdditionalPlayer: "",
-    groupPricingEnabled: false,
   });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
@@ -266,13 +265,12 @@ function CoachesTab({ venueId }: { venueId: string }) {
   }, [fetchCoaches]);
 
   const openCreatePkg = (coachId: string) => {
-    setPkgForm({ name: "", description: "", lessonType: "private", durationHours: "1", priceInDollars: "", sessionsIncluded: "1", minPlayers: "2", maxPlayers: "8", pricePerAdditionalPlayer: "", groupPricingEnabled: false });
+    setPkgForm({ name: "", description: "", lessonType: "private", durationHours: "1", priceInDollars: "", sessionsIncluded: "1", minPlayers: "2", maxPlayers: "8", pricePerAdditionalPlayer: "" });
     setErr("");
     setPkgModal({ mode: "create", coachId });
   };
 
   const openEditPkg = (coachId: string, pkg: CoachPackage) => {
-    const hasGroupPricing = pkg.lessonType === "group" && pkg.minPlayers != null;
     setPkgForm({
       name: pkg.name,
       description: pkg.description || "",
@@ -283,7 +281,6 @@ function CoachesTab({ venueId }: { venueId: string }) {
       minPlayers: pkg.minPlayers != null ? String(pkg.minPlayers) : "2",
       maxPlayers: pkg.maxPlayers != null ? String(pkg.maxPlayers) : "8",
       pricePerAdditionalPlayer: pkg.pricePerAdditionalPlayer != null ? formatPrice(vndToDisplay(pkg.pricePerAdditionalPlayer)) : "",
-      groupPricingEnabled: hasGroupPricing,
     });
     setErr("");
     setPkgModal({ mode: "edit", coachId, pkg });
@@ -295,14 +292,14 @@ function CoachesTab({ venueId }: { venueId: string }) {
     setSaving(true);
     setErr("");
     try {
-      const isGroupPricing = pkgForm.lessonType === "group" && pkgForm.groupPricingEnabled;
+      const isGroupPricing = pkgForm.lessonType === "group";
       const data = {
         name: pkgForm.name,
         description: pkgForm.description || null,
         lessonType: pkgForm.lessonType,
         durationMin: (parseInt(pkgForm.durationHours) || 1) * 60,
         priceValue: displayToVnd(pkgForm.priceInDollars),
-        sessionsIncluded: parseInt(pkgForm.sessionsIncluded) || 1,
+        sessionsIncluded: 1,
         ...(isGroupPricing
           ? {
               minPlayers: parseInt(pkgForm.minPlayers) || 2,
@@ -493,7 +490,10 @@ function CoachesTab({ venueId }: { venueId: string }) {
                   <label className="mb-1.5 block text-sm text-neutral-400">{t("coaching.type")}</label>
                   <select
                     value={pkgForm.lessonType}
-                    onChange={(e) => setPkgForm({ ...pkgForm, lessonType: e.target.value as "private" | "group" })}
+                    onChange={(e) => {
+                      const lessonType = e.target.value as "private" | "group";
+                      setPkgForm({ ...pkgForm, lessonType });
+                    }}
                     className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-white focus:border-teal-500 focus:outline-none"
                   >
                     <option value="private">{t("coaching.private")}</option>
@@ -513,13 +513,9 @@ function CoachesTab({ venueId }: { venueId: string }) {
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              {pkgForm.lessonType === "private" && (
                 <div>
-                  <label className="mb-1.5 block text-sm text-neutral-400">
-                    {pkgForm.lessonType === "group" && pkgForm.groupPricingEnabled
-                      ? t("coaching.basePrice")
-                      : t("coaching.priceLabel")}
-                  </label>
+                  <label className="mb-1.5 block text-sm text-neutral-400">{t("coaching.priceLabel")}</label>
                   <input
                     type="text"
                     inputMode="numeric"
@@ -529,86 +525,75 @@ function CoachesTab({ venueId }: { venueId: string }) {
                     className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-white focus:border-teal-500 focus:outline-none"
                   />
                 </div>
-                <div>
-                  <label className="mb-1.5 block text-sm text-neutral-400">{t("coaching.sessions")}</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={pkgForm.sessionsIncluded}
-                    onChange={(e) => setPkgForm({ ...pkgForm, sessionsIncluded: e.target.value })}
-                    className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-white focus:border-teal-500 focus:outline-none"
-                  />
-                </div>
-              </div>
+              )}
 
-              {/* Group pricing section — only shown for group type */}
+              {/* Group pricing section — shown when type is Group */}
               {pkgForm.lessonType === "group" && (
                 <div className="rounded-lg border border-blue-800/40 bg-blue-900/10 p-3 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-blue-300">{t("coaching.groupPricing")}</span>
-                    <button
-                      type="button"
-                      onClick={() => setPkgForm({ ...pkgForm, groupPricingEnabled: !pkgForm.groupPricingEnabled })}
-                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors ${pkgForm.groupPricingEnabled ? "bg-blue-500" : "bg-neutral-600"}`}
-                    >
-                      <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform ${pkgForm.groupPricingEnabled ? "translate-x-4" : "translate-x-0"}`} />
-                    </button>
+                  <span className="text-sm font-medium text-blue-300">{t("coaching.groupPricing")}</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-xs text-neutral-400">{t("coaching.minPlayersLabel")}</label>
+                      <input
+                        type="number"
+                        min={2}
+                        value={pkgForm.minPlayers}
+                        onChange={(e) => setPkgForm({ ...pkgForm, minPlayers: e.target.value })}
+                        className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-teal-500 focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-neutral-400">{t("coaching.maxPlayersLabel")}</label>
+                      <input
+                        type="number"
+                        min={2}
+                        value={pkgForm.maxPlayers}
+                        onChange={(e) => setPkgForm({ ...pkgForm, maxPlayers: e.target.value })}
+                        className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-teal-500 focus:outline-none"
+                      />
+                    </div>
                   </div>
-                  {pkgForm.groupPricingEnabled && (
-                    <>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="mb-1 block text-xs text-neutral-400">{t("coaching.minPlayersLabel")}</label>
-                          <input
-                            type="number"
-                            min={2}
-                            value={pkgForm.minPlayers}
-                            onChange={(e) => setPkgForm({ ...pkgForm, minPlayers: e.target.value })}
-                            className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-teal-500 focus:outline-none"
-                          />
-                        </div>
-                        <div>
-                          <label className="mb-1 block text-xs text-neutral-400">{t("coaching.maxPlayersLabel")}</label>
-                          <input
-                            type="number"
-                            min={2}
-                            value={pkgForm.maxPlayers}
-                            onChange={(e) => setPkgForm({ ...pkgForm, maxPlayers: e.target.value })}
-                            className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-teal-500 focus:outline-none"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs text-neutral-400">{t("coaching.pricePerAdditionalPlayerLabel")}</label>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          placeholder="0"
-                          value={pkgForm.pricePerAdditionalPlayer}
-                          onChange={(e) => setPkgForm({ ...pkgForm, pricePerAdditionalPlayer: parseFormattedPrice(e.target.value) })}
-                          className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-teal-500 focus:outline-none"
-                        />
-                      </div>
-                      {/* Live price preview */}
-                      {pkgForm.priceInDollars && (
-                        <div className="rounded-md bg-neutral-800/60 px-3 py-2 text-xs text-neutral-400 space-y-0.5">
-                          <p className="text-neutral-300 font-medium mb-1">{t("coaching.groupPricePreview")}</p>
-                          {(() => {
-                            const base = displayToVnd(pkgForm.priceInDollars);
-                            const perExtra = displayToVnd(pkgForm.pricePerAdditionalPlayer || "0");
-                            const min = parseInt(pkgForm.minPlayers) || 2;
-                            const max = parseInt(pkgForm.maxPlayers) || 8;
-                            const points = [...new Set([min, Math.floor((min + max) / 2), max])].filter(n => n >= min && n <= max);
-                            return points.map((n) => {
-                              const total = base + Math.max(0, n - min) * perExtra;
-                              return (
-                                <p key={n}>{n} {t("coaching.playersCount", { count: n })} → {formatPrice(total)} VND</p>
-                              );
-                            });
-                          })()}
-                        </div>
-                      )}
-                    </>
+                  <div>
+                    <label className="mb-1 block text-xs text-neutral-400">
+                      {t("coaching.basePriceForMinPlayers", { count: parseInt(pkgForm.minPlayers) || 2 })}
+                    </label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="0"
+                      value={pkgForm.priceInDollars}
+                      onChange={(e) => setPkgForm({ ...pkgForm, priceInDollars: parseFormattedPrice(e.target.value) })}
+                      className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-teal-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs text-neutral-400">{t("coaching.pricePerAdditionalPlayerLabel")}</label>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="0"
+                      value={pkgForm.pricePerAdditionalPlayer}
+                      onChange={(e) => setPkgForm({ ...pkgForm, pricePerAdditionalPlayer: parseFormattedPrice(e.target.value) })}
+                      className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-teal-500 focus:outline-none"
+                    />
+                  </div>
+                  {pkgForm.priceInDollars && (
+                    <div className="rounded-md bg-neutral-800/60 px-3 py-2 text-xs text-neutral-400 space-y-0.5">
+                      <p className="text-neutral-300 font-medium mb-1">{t("coaching.groupPricePreview")}</p>
+                      {(() => {
+                        const base = displayToVnd(pkgForm.priceInDollars);
+                        const perExtra = displayToVnd(pkgForm.pricePerAdditionalPlayer || "0");
+                        const min = parseInt(pkgForm.minPlayers) || 2;
+                        const max = parseInt(pkgForm.maxPlayers) || 8;
+                        const points = [...new Set([min, Math.floor((min + max) / 2), max])].filter(n => n >= min && n <= max);
+                        return points.map((n) => {
+                          const total = base + Math.max(0, n - min) * perExtra;
+                          return (
+                            <p key={n}>{t("coaching.playersCount", { count: n })} → {formatPrice(total)} VND</p>
+                          );
+                        });
+                      })()}
+                    </div>
                   )}
                 </div>
               )}

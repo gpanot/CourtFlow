@@ -226,6 +226,9 @@
     "howManyPlayers": "How many players?",
     "estimatedTotal": "Estimated total",
     "groupPaymentNote": "One payment covers the whole group.",
+    "onlyPerPlayer": "Only {{price}} per player",
+    "asLowAsLabel": "As low as",
+    "perPlayerRateSuffix": "/player",
     "basePriceLine": "Base ({{count}} players)",
     "additionalPlayersLine": "Additional players ({{count}} × {{price}})",
     "playersRow": "Players"

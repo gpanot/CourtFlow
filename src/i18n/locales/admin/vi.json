@@ -522,6 +522,7 @@
     "durationHours": "Thời lượng (giờ)",
     "sessions": "Buổi",
     "basePrice": "Giá cơ bản (cho số người tối thiểu)",
+    "basePriceForMinPlayers": "Giá cơ bản (cho {{count}} người tối thiểu)",
     "priceLabel": "Giá",
     "groupPricing": "Giá nhóm",
     "minPlayersLabel": "Số người tối thiểu",

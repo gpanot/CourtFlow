@@ -215,6 +215,9 @@
     "howManyPlayers": "กี่คน?",
     "estimatedTotal": "ประมาณการ",
     "groupPaymentNote": "ชำระเงินครั้งเดียวสำหรับทั้งกลุ่ม",
+    "onlyPerPlayer": "เพียง {{price}}/คน",
+    "asLowAsLabel": "เริ่มต้น",
+    "perPlayerRateSuffix": "/คน",
     "basePriceLine": "ราคาพื้นฐาน ({{count}} คน)",
     "additionalPlayersLine": "คนเพิ่ม ({{count}} × {{price}})",
     "playersRow": "จำนวนผู้เล่น"

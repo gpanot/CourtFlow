@@ -60,6 +60,11 @@ function formatHour(h: number) {
   return `${h.toString().padStart(2, "0")}:00`;
 }
 
+function formatPackageDuration(durationMin: number): string {
+  if (durationMin % 60 === 0) return `${durationMin / 60}h`;
+  return `${durationMin} min`;
+}
+
 export default function CoachProfilePage() {
   const { coachId } = useParams<{ coachId: string }>();
   const router = useRouter();
@@ -269,7 +274,7 @@ export default function CoachProfilePage() {
         </button>
         <h2 className="text-lg font-bold mb-1">{t("coaches.bookWith", { name: coach.name })}</h2>
         <p className="text-sm text-[var(--cm-text-sec)] mb-4">
-          {selectedPkg.name} · {selectedPkg.durationMin} {t("common.min")}
+          {selectedPkg.name} · {formatPackageDuration(selectedPkg.durationMin)}
         </p>
 
         {/* Player count stepper for scalable group packages */}
@@ -398,6 +403,11 @@ export default function CoachProfilePage() {
               {t("coaches.estimatedTotal")}: {formatPrice(totalSlotPrice)}
               {selectedHours.length > 1 && !isGroupPkg && ` (${selectedHours.length} × ${formatPrice(selectedPkg.priceValue)})`}
             </p>
+            {isGroupPkg && playerCount > 0 && (
+              <p className="text-[var(--cm-text-sec)] text-xs mt-0.5">
+                {t("coaches.onlyPerPlayer", { price: formatPrice(Math.round(totalSlotPrice / playerCount)) })}
+              </p>
+            )}
           </div>
         )}
 
@@ -460,9 +470,16 @@ export default function CoachProfilePage() {
       <div className="px-4 mb-6">
         <h2 className="text-base font-semibold mb-3">{t("coaches.sessionPackages")}</h2>
         <div className="space-y-3">
-          {coach.packages.map((pkg) => (
-            <div key={pkg.id} className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 flex justify-between items-center">
-              <div>
+          {coach.packages.map((pkg) => {
+            const isScalableGroup = hasGroupPlayerPricing(pkg);
+            const maxPlayers = pkg.maxPlayers ?? 8;
+            const asLowAsPerPlayer = isScalableGroup
+              ? Math.round(calculateSessionPrice(pkg, { playerCount: maxPlayers }) / maxPlayers)
+              : null;
+
+            return (
+            <div key={pkg.id} className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 flex justify-between items-center gap-3">
+              <div className="min-w-0">
                 <div className="flex items-center gap-2 mb-0.5">
                   <p className="font-medium text-sm">{pkg.name}</p>
                   <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide ${
@@ -473,10 +490,10 @@ export default function CoachProfilePage() {
                     {pkg.lessonType === "group" ? t("coaches.group", "Group") : t("coaches.private", "Private")}
                   </span>
                 </div>
-                {hasGroupPlayerPricing(pkg) ? (
+                {isScalableGroup ? (
                   <div className="mt-0.5">
                     <p className="text-xs text-[var(--cm-text-sec)]">
-                      {pkg.durationMin} {t("common.min")}
+                      {formatPackageDuration(pkg.durationMin)}
                     </p>
                     <p className="text-xs text-[var(--cm-text-sec)]">
                       {t("coaches.fromPriceForPlayers", { price: formatPrice(pkg.priceValue), count: pkg.minPlayers })}
@@ -488,18 +505,29 @@ export default function CoachProfilePage() {
                   </div>
                 ) : (
                   <p className="text-xs text-[var(--cm-text-sec)]">
-                    {pkg.durationMin} {t("common.min")} · {formatPrice(pkg.priceValue)}
+                    {formatPackageDuration(pkg.durationMin)} · {formatPrice(pkg.priceValue)}
                   </p>
                 )}
               </div>
-              <button
-                onClick={() => startBooking(pkg)}
-                className="px-4 py-2 bg-[var(--cm-accent)] text-black rounded-lg text-xs font-medium"
-              >
-                {t("common.bookArrow")}
-              </button>
+              <div className="flex flex-col items-end shrink-0">
+                <button
+                  onClick={() => startBooking(pkg)}
+                  className="px-4 py-2 bg-[var(--cm-accent)] text-black rounded-lg text-xs font-medium"
+                >
+                  {t("common.bookArrow")}
+                </button>
+                {asLowAsPerPlayer != null && (
+                  <p className="text-[10px] text-[var(--cm-text-muted)] mt-1 text-right whitespace-nowrap">
+                    {t("coaches.asLowAsLabel")}{" "}
+                    <span className="font-bold text-blue-500">
+                      {formatPrice(asLowAsPerPlayer)}{t("coaches.perPlayerRateSuffix")}
+                    </span>
+                  </p>
+                )}
+              </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
