@@ -96,6 +96,12 @@ interface CoachPackage {
 
 type BookingMode = "court" | "open_play" | "lesson";
 
+export interface InitialCourtSelection {
+  courtId: string;
+  courtLabel: string;
+  slots: { startTime: string; endTime: string; hour: number }[];
+}
+
 export interface StaffBookingModalProps {
   venueId: string;
   initialDate?: string;
@@ -103,6 +109,8 @@ export interface StaffBookingModalProps {
   allowModes?: BookingMode[];
   /** Which tab to start on. Defaults to allowModes[0]. */
   initialMode?: BookingMode;
+  /** Pre-select court slots when opening from the bookings grid. */
+  initialCourtSelection?: InitialCourtSelection;
   onClose: () => void;
   onCreated: () => void;
 }
@@ -149,6 +157,7 @@ export function StaffBookingModal({
   initialDate,
   allowModes = ["court", "open_play", "lesson"],
   initialMode,
+  initialCourtSelection,
   onClose,
   onCreated,
 }: StaffBookingModalProps) {
@@ -171,7 +180,14 @@ export function StaffBookingModal({
   const [showNewPlayerModal, setShowNewPlayerModal] = useState(false);
 
   // Court mode state
-  const [selectedCourtId, setSelectedCourtId] = useState("");
+  const [selectedCourtId, setSelectedCourtId] = useState(initialCourtSelection?.courtId ?? "");
+
+  useEffect(() => {
+    if (!initialCourtSelection) return;
+    const { courtId, courtLabel, slots } = initialCourtSelection;
+    setSelectedCourtId(courtId);
+    setSelectedSlots(slots.map((s) => ({ courtId, courtLabel, ...s })));
+  }, [initialCourtSelection]);
 
   // Open play mode state
   const [openPlaySessions, setOpenPlaySessions] = useState<OpenPlaySession[]>([]);
@@ -186,7 +202,11 @@ export function StaffBookingModal({
   const [lessonPlayerCount, setLessonPlayerCount] = useState(2);
 
   type SelectedSlot = { courtId: string; courtLabel: string; startTime: string; endTime: string; hour: number };
-  const [selectedSlots, setSelectedSlots] = useState<SelectedSlot[]>([]);
+  const [selectedSlots, setSelectedSlots] = useState<SelectedSlot[]>(() => {
+    if (!initialCourtSelection) return [];
+    const { courtId, courtLabel, slots } = initialCourtSelection;
+    return slots.map((s) => ({ courtId, courtLabel, ...s }));
+  });
 
   // Fetch venue timezone
   useEffect(() => {

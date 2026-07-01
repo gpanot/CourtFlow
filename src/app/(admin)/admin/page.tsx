@@ -141,6 +141,10 @@ interface RecentEntry {
   createdAt: string;
 }
 
+function displayPaymentStatus(status: string | null): string {
+  return status ?? "pending";
+}
+
 interface DashboardData {
   revenue: {
     todayBookings: number;
@@ -542,7 +546,7 @@ export default function AdminOverview() {
                     <BookingStatusBadge status={entry.status} />
                   </td>
                   <td className="px-4 py-2.5">
-                    {entry.kind === "booking" && entry.paymentStatus ? (
+                    {entry.kind === "booking" && entry.status !== "cancelled" && (
                       <button
                         onClick={() => setPaymentActionTarget({
                           type: "booking",
@@ -554,36 +558,16 @@ export default function AdminOverview() {
                           startTime: entry.startTime,
                           endTime: entry.endTime,
                           priceValue: entry.priceValue,
-                          paymentStatus: entry.paymentStatus!,
+                          paymentStatus: displayPaymentStatus(entry.paymentStatus),
                           paymentProofUrl: entry.paymentProofUrl,
                           bookingStatus: entry.status,
                         })}
                         title="Manage booking payment"
                       >
-                        <PaymentStatusBadge status={entry.paymentStatus} />
+                        <PaymentStatusBadge status={displayPaymentStatus(entry.paymentStatus)} />
                       </button>
-                    ) : entry.kind === "booking" ? (
-                      <button
-                        onClick={() => setPaymentActionTarget({
-                          type: "booking",
-                          entityId: entry.id,
-                          playerName: entry.playerName,
-                          detail: entry.detail,
-                          venueName: entry.venueName,
-                          date: entry.date,
-                          startTime: entry.startTime,
-                          endTime: entry.endTime,
-                          priceValue: entry.priceValue,
-                          paymentStatus: "pending",
-                          paymentProofUrl: entry.paymentProofUrl,
-                          bookingStatus: entry.status,
-                        })}
-                        className="text-neutral-600 hover:text-neutral-400 text-[10px]"
-                        title="Manage booking"
-                      >
-                        —
-                      </button>
-                    ) : entry.kind === "lesson" && entry.paymentStatus ? (
+                    )}
+                    {entry.kind === "lesson" && entry.paymentStatus && (
                       <button
                         onClick={() => setPaymentActionTarget({
                           type: "lesson",
@@ -603,7 +587,8 @@ export default function AdminOverview() {
                       >
                         <PaymentStatusBadge status={entry.paymentStatus} />
                       </button>
-                    ) : entry.kind === "openplay" && entry.paymentStatus ? (
+                    )}
+                    {entry.kind === "openplay" && entry.status !== "cancelled" && (
                       <button
                         onClick={() => setPaymentActionTarget({
                           type: "openplay",
@@ -615,15 +600,15 @@ export default function AdminOverview() {
                           startTime: entry.startTime,
                           endTime: entry.endTime,
                           priceValue: entry.priceValue,
-                          paymentStatus: entry.paymentStatus!,
+                          paymentStatus: displayPaymentStatus(entry.paymentStatus),
                           paymentProofUrl: entry.paymentProofUrl,
                           bookingStatus: entry.status,
                         })}
-                        title="View open play registration"
+                        title="Manage open play payment"
                       >
-                        <PaymentStatusBadge status={entry.paymentStatus} />
+                        <PaymentStatusBadge status={displayPaymentStatus(entry.paymentStatus)} />
                       </button>
-                    ) : null}
+                    )}
                   </td>
                   <td className="px-4 py-2.5 text-right font-medium">
                     {fmtPrice(entry.priceValue)}
@@ -660,7 +645,7 @@ export default function AdminOverview() {
                     {entry.kind === "lesson" ? t("overview.typeLesson") : entry.kind === "openplay" ? t("overview.typeOpenPlay") : t("overview.typeBooking")}
                   </span>
                   <BookingStatusBadge status={entry.status} />
-                  {entry.kind === "booking" && entry.paymentStatus && (
+                  {entry.kind === "booking" && entry.status !== "cancelled" && (
                     <button
                       onClick={() => setPaymentActionTarget({
                         type: "booking",
@@ -672,15 +657,15 @@ export default function AdminOverview() {
                         startTime: entry.startTime,
                         endTime: entry.endTime,
                         priceValue: entry.priceValue,
-                        paymentStatus: entry.paymentStatus!,
+                        paymentStatus: displayPaymentStatus(entry.paymentStatus),
                         paymentProofUrl: entry.paymentProofUrl,
                         bookingStatus: entry.status,
                       })}
                     >
-                      <PaymentStatusBadge status={entry.paymentStatus} />
+                      <PaymentStatusBadge status={displayPaymentStatus(entry.paymentStatus)} />
                     </button>
                   )}
-                  {entry.kind === "openplay" && entry.paymentStatus && (
+                  {entry.kind === "openplay" && entry.status !== "cancelled" && (
                     <button onClick={() => setPaymentActionTarget({
                       type: "openplay",
                       entityId: entry.id,
@@ -691,11 +676,11 @@ export default function AdminOverview() {
                       startTime: entry.startTime,
                       endTime: entry.endTime,
                       priceValue: entry.priceValue,
-                      paymentStatus: entry.paymentStatus!,
+                      paymentStatus: displayPaymentStatus(entry.paymentStatus),
                       paymentProofUrl: entry.paymentProofUrl,
                       bookingStatus: entry.status,
                     })}>
-                      <PaymentStatusBadge status={entry.paymentStatus} />
+                      <PaymentStatusBadge status={displayPaymentStatus(entry.paymentStatus)} />
                     </button>
                   )}
                 </div>
@@ -767,13 +752,13 @@ export default function AdminOverview() {
                           startTime: openPlayDetailGroup.startTime,
                           endTime: openPlayDetailGroup.endTime,
                           priceValue: openPlayDetailGroup.priceValue,
-                          paymentStatus: r.paymentStatus,
+                          paymentStatus: displayPaymentStatus(r.paymentStatus),
                           paymentProofUrl: r.paymentProofUrl,
                           bookingStatus: r.status,
                         });
                       }}
                     >
-                      <PaymentStatusBadge status={r.paymentStatus} />
+                      <PaymentStatusBadge status={displayPaymentStatus(r.paymentStatus)} />
                     </button>
                   </div>
                 ))

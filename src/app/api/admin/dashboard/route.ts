@@ -31,10 +31,20 @@ export async function GET(request: NextRequest) {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
-    // Exclude pending holds whose timer has expired (not yet cleaned up by cron)
+    // Exclude expired pending-payment holds (not yet cleaned up by cron).
+    // OR instead of NOT — SQL NULLs in paymentStatus/holdExpiresAt break compound NOT filters.
+    const activeBookingFilter = {
+      OR: [
+        { paymentStatus: { not: "pending" } },
+        { paymentStatus: null },
+        { holdExpiresAt: null },
+        { holdExpiresAt: { gte: now } },
+      ],
+    };
+
     const bookingWhere = {
       venueId: { in: venueIds },
-      NOT: { paymentStatus: "pending", holdExpiresAt: { lt: now } },
+      ...activeBookingFilter,
     };
 
     const [

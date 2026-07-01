@@ -43,16 +43,13 @@ import {
   DollarSign,
   CreditCard,
   Download,
-  Eye,
-  EyeOff,
-  UserPlus,
 } from "lucide-react";
 import { CourtsManager } from "@/components/admin/CourtsManager";
 import {
   PaymentActionModal,
   type PaymentActionTarget,
 } from "@/components/admin/PaymentActionModal";
-import { StaffBookingModal } from "@/components/admin/StaffBookingModal";
+import { StaffBookingModal, type InitialCourtSelection } from "@/components/admin/StaffBookingModal";
 
 export const dynamic = "force-dynamic";
 
@@ -143,12 +140,6 @@ interface CourtBlockRecord {
   createdAt: string;
 }
 
-interface PlayerResult {
-  id: string;
-  name: string;
-  phone: string;
-}
-
 interface OpenPlayRegRecord {
   id: string;
   venueId: string;
@@ -237,20 +228,10 @@ export default function BookingsPage() {
   // Unified slot selection state — supports multiple courts
   const [selectedSlots, setSelectedSlots] = useState<Record<string, { courtLabel: string; slots: SlotInfo[] }>>({});
 
-  // Create booking state
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [createSlot, setCreateSlot] = useState<{ courtId: string; courtLabel: string; startTime: string; endTime: string; priceValue: number } | null>(null);
-  const [playerSearch, setPlayerSearch] = useState("");
-  const [playerResults, setPlayerResults] = useState<PlayerResult[]>([]);
-  const [selectedPlayer, setSelectedPlayer] = useState<PlayerResult | null>(null);
-  const [searching, setSearching] = useState(false);
-  const [showNewPlayerModal, setShowNewPlayerModal] = useState(false);
-  const [newCourtId, setNewCourtId] = useState("");
-  const [newSlotTime, setNewSlotTime] = useState("");
-
   // Unified staff booking modal (Court + Open Play via StaffBookingModal)
   const [showStaffModal, setShowStaffModal] = useState(false);
   const [staffModalMode, setStaffModalMode] = useState<"court" | "open_play">("court");
+  const [staffModalInitialSelection, setStaffModalInitialSelection] = useState<InitialCourtSelection | undefined>();
 
   // Edit booking state
   const [editBooking, setEditBooking] = useState<BookingRecord | null>(null);
@@ -358,20 +339,6 @@ export default function BookingsPage() {
     if (activeTab === "bookings") { fetchAvailability(); fetchCourtBlocks(); fetchOpenPlayRegs(); }
   }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const searchPlayers = useCallback(async (query: string) => {
-    if (query.length < 2) { setPlayerResults([]); return; }
-    setSearching(true);
-    try {
-      const data = await api.get<{ players: PlayerResult[] }>(`/api/admin/players?search=${encodeURIComponent(query)}&limit=10`);
-      setPlayerResults(data.players || []);
-    } catch { setPlayerResults([]); } finally { setSearching(false); }
-  }, []);
-
-  useEffect(() => {
-    const t = setTimeout(() => searchPlayers(playerSearch), 300);
-    return () => clearTimeout(t);
-  }, [playerSearch, searchPlayers]);
-
   const shiftDate = (days: number) => {
     const d = new Date(selectedDate);
     d.setDate(d.getDate() + days);
@@ -427,6 +394,18 @@ export default function BookingsPage() {
 
   const clearSelection = () => setSelectedSlots({});
 
+  const openStaffModal = (mode: "court" | "open_play", courtSelection?: InitialCourtSelection) => {
+    setStaffModalMode(mode);
+    setStaffModalInitialSelection(courtSelection);
+    setShowStaffModal(true);
+  };
+
+  const closeStaffModal = () => {
+    setShowStaffModal(false);
+    setStaffModalInitialSelection(undefined);
+    clearSelection();
+  };
+
   const selectionCourtIds = Object.keys(selectedSlots);
   const selectionTotalSlots = selectionCourtIds.reduce((sum, cid) => sum + selectedSlots[cid].slots.length, 0);
   const hasSelection = selectionTotalSlots > 0;
@@ -461,20 +440,15 @@ export default function BookingsPage() {
     const cid = selectionCourtIds[0];
     const entry = selectedSlots[cid];
     const sorted = [...entry.slots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-    const first = sorted[0];
-    const last = sorted[sorted.length - 1];
-    setCreateSlot({
+    openStaffModal("court", {
       courtId: cid,
       courtLabel: entry.courtLabel,
-      startTime: first.startTime,
-      endTime: last.endTime,
-      priceValue: selectionTotalPrice,
+      slots: sorted.map((s) => ({
+        startTime: s.startTime,
+        endTime: s.endTime,
+        hour: s.hour,
+      })),
     });
-    setNewCourtId(cid);
-    setNewSlotTime(first.startTime);
-    setSelectedPlayer(null);
-    setPlayerSearch("");
-    setShowCreateModal(true);
   };
 
   const openBlockFromSelection = (presetType?: string) => {
@@ -493,40 +467,11 @@ export default function BookingsPage() {
     setShowBlockModal(true);
   };
 
-  const closeCreateModal = () => {
-    setShowCreateModal(false);
-    setCreateSlot(null);
-    clearSelection();
-    setSelectedPlayer(null);
-    setPlayerSearch("");
-  };
-
   const getSlotPrice = (courtId: string, startTime: string): number | null => {
     const court = availability.find((c) => c.courtId === courtId);
     if (!court) return null;
     const slot = court.slots.find((s) => s.startTime === startTime);
     return slot?.priceValue ?? null;
-  };
-
-  const createBooking = async () => {
-    if (!selectedPlayer || !newCourtId || !newSlotTime) return;
-    const courtEntry = selectedSlots[newCourtId];
-    const slotCount = courtEntry && courtEntry.slots.length > 1 ? courtEntry.slots.length : 1;
-    setSaving(true);
-    try {
-      await api.post("/api/staff/bookings", {
-        courtId: newCourtId,
-        venueId: selectedVenueId,
-        playerId: selectedPlayer.id,
-        date: selectedDate,
-        startTime: newSlotTime,
-        slotCount,
-      });
-      closeCreateModal();
-      await fetchBookings();
-      await fetchAvailability();
-    } catch (e) { alert((e as Error).message); }
-    finally { setSaving(false); }
   };
 
   const openEditModal = (booking: BookingRecord) => {
@@ -710,25 +655,19 @@ export default function BookingsPage() {
         {activeTab === "bookings" && availability.length > 0 && (
           <div className="flex items-center gap-2 pb-2 flex-wrap">
             <button
-              onClick={() => openBlockModal("open_play")}
-              className="flex items-center gap-1.5 rounded-lg border border-emerald-700/50 bg-emerald-900/20 px-3 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-900/40"
-            >
-              <Users className="h-4 w-4" /> {t("bookings.openPlay")}
-            </button>
-            <button
               onClick={() => openBlockModal()}
               className="flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm font-medium text-neutral-300 hover:bg-neutral-700 hover:text-white"
             >
               <Ban className="h-4 w-4" /> {t("bookings.blockTime")}
             </button>
             <button
-              onClick={() => { setStaffModalMode("open_play"); setShowStaffModal(true); }}
+              onClick={() => openStaffModal("open_play")}
               className="flex items-center gap-1.5 rounded-lg border border-emerald-600/60 bg-emerald-900/20 px-3 py-2 text-sm font-medium text-emerald-200 hover:bg-emerald-900/40"
             >
               <Plus className="h-4 w-4" /> Register Open Play
             </button>
             <button
-              onClick={() => { setStaffModalMode("court"); setShowStaffModal(true); }}
+              onClick={() => openStaffModal("court")}
               className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-500"
             >
               <Plus className="h-4 w-4" /> {t("bookings.newBooking")}
@@ -738,13 +677,13 @@ export default function BookingsPage() {
         {activeTab === "list" && selectedVenueId && (
           <div className="pb-2 flex items-center gap-2 flex-wrap">
             <button
-              onClick={() => { setStaffModalMode("open_play"); setShowStaffModal(true); }}
+              onClick={() => openStaffModal("open_play")}
               className="flex items-center gap-1.5 rounded-lg border border-emerald-600/60 bg-emerald-900/20 px-3 py-2 text-sm font-medium text-emerald-200 hover:bg-emerald-900/40"
             >
               <Plus className="h-4 w-4" /> Register Open Play
             </button>
             <button
-              onClick={() => { setStaffModalMode("court"); setShowStaffModal(true); }}
+              onClick={() => openStaffModal("court")}
               className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-500"
             >
               <Plus className="h-4 w-4" /> {t("bookings.newBooking")}
@@ -831,12 +770,6 @@ export default function BookingsPage() {
                 )}
               </p>
             </div>
-            <button
-              onClick={() => openBlockFromSelection("open_play")}
-              className="flex items-center gap-1 rounded-lg border border-emerald-600/50 bg-emerald-600/20 px-2 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-600/30 transition-colors"
-            >
-              <Users className="h-3.5 w-3.5" /> {t("bookings.openPlay")}
-            </button>
             <button
               onClick={() => openBlockFromSelection()}
               className="flex items-center gap-1 rounded-lg border border-amber-600/50 bg-amber-600/20 px-2 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-600/30 transition-colors"
@@ -1423,139 +1356,6 @@ export default function BookingsPage() {
 
       </>}
 
-      {/* Create Booking Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={closeCreateModal}>
-          <div className="w-full max-w-md mx-4 rounded-2xl border border-neutral-700 bg-neutral-900 p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold">{t("bookings.newBooking")}</h3>
-
-            {/* Court selector */}
-            <div className="space-y-2">
-              <label className="text-xs text-neutral-400">{t("bookings.court")}</label>
-              <select
-                value={newCourtId}
-                onChange={(e) => { setNewCourtId(e.target.value); setNewSlotTime(""); }}
-                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
-              >
-                <option value="">{t("bookings.selectCourt")}</option>
-                {availability.map((c) => (
-                  <option key={c.courtId} value={c.courtId}>{c.courtLabel}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* Time slot selector */}
-            {newCourtId && (
-              <div className="space-y-2">
-                <label className="text-xs text-neutral-400">{t("bookings.timeSlot")}</label>
-                <select
-                  value={newSlotTime}
-                  onChange={(e) => setNewSlotTime(e.target.value)}
-                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
-                >
-                  <option value="">{t("bookings.selectTime")}</option>
-                  {availableSlotsForCourt(newCourtId).map((s) => (
-                    <option key={s.startTime} value={s.startTime}>
-                      {formatTime(s.startTime, venueTimezone)} – {formatTime(s.endTime, venueTimezone)}  ({fmtPrice(s.priceValue)})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {/* Slot summary */}
-            {createSlot && selectionTotalSlots > 1 ? (
-              <div className="rounded-lg bg-neutral-800 p-3 text-sm space-y-1">
-                <p className="font-medium">{createSlot.courtLabel}</p>
-                <p className="text-neutral-400">
-                  {formatTime(createSlot.startTime, venueTimezone)} – {formatTime(createSlot.endTime, venueTimezone)}
-                  <span className="ml-1.5 text-neutral-500">({selectionTotalSlots} slots)</span>
-                </p>
-                <p className="font-semibold text-purple-400">{fmtPrice(createSlot.priceValue)}</p>
-              </div>
-            ) : newCourtId && newSlotTime ? (
-              <div className="rounded-lg bg-neutral-800 p-3 text-sm">
-                <p className="font-medium">{availability.find((c) => c.courtId === newCourtId)?.courtLabel}</p>
-                <p className="text-neutral-400">{formatTime(newSlotTime, venueTimezone)}</p>
-                {getSlotPrice(newCourtId, newSlotTime) !== null && (
-                  <p className="mt-1 font-semibold text-purple-400">{fmtPrice(getSlotPrice(newCourtId, newSlotTime)!)}</p>
-                )}
-              </div>
-            ) : null}
-
-            {/* Player search */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs text-neutral-400">{t("bookings.player")}</label>
-                <button
-                  type="button"
-                  onClick={() => setShowNewPlayerModal(true)}
-                  className="flex items-center gap-1 rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-300 hover:border-purple-500 hover:text-purple-300 transition-colors"
-                >
-                  <UserPlus className="h-3.5 w-3.5" />
-                  New player
-                </button>
-              </div>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
-                <input
-                  type="text"
-                  placeholder={t("bookings.searchByNameOrPhone")}
-                  value={playerSearch}
-                  onChange={(e) => { setPlayerSearch(e.target.value); setSelectedPlayer(null); }}
-                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 pl-9 pr-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
-                  autoFocus={!createSlot}
-                />
-              </div>
-              {searching && <p className="text-xs text-neutral-500">{t("bookings.searching")}</p>}
-              {playerResults.length > 0 && !selectedPlayer && (
-                <div className="max-h-40 overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-800">
-                  {playerResults.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => { setSelectedPlayer(p); setPlayerSearch(p.name); setPlayerResults([]); }}
-                      className="flex w-full items-center gap-2 px-3 py-2 text-sm hover:bg-neutral-700 text-left"
-                    >
-                      <span className="font-medium">{p.name}</span>
-                      <span className="text-xs text-neutral-500">{p.phone}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              {selectedPlayer && (
-                <p className="text-sm text-green-400">{t("bookings.selected")}: {selectedPlayer.name}</p>
-              )}
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={createBooking}
-                disabled={!selectedPlayer || !newCourtId || !newSlotTime || saving}
-                className="flex-1 rounded-xl bg-purple-600 py-3 font-semibold text-white hover:bg-purple-500 disabled:opacity-40"
-              >{saving ? t("bookings.booking") : t("bookings.book")}</button>
-              <button
-                onClick={closeCreateModal}
-                className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
-              >{t("common.cancel")}</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* New Player Modal — triggered from within the Create Booking modal */}
-      {showNewPlayerModal && (
-        <NewPlayerInlineModal
-          venueId={selectedVenueId}
-          onSuccess={(player) => {
-            setSelectedPlayer(player);
-            setPlayerSearch(player.name);
-            setPlayerResults([]);
-            setShowNewPlayerModal(false);
-          }}
-          onClose={() => setShowNewPlayerModal(false)}
-        />
-      )}
-
       {/* Unified Staff Booking Modal (Court + Open Play) */}
       {showStaffModal && selectedVenueId && (
         <StaffBookingModal
@@ -1563,9 +1363,10 @@ export default function BookingsPage() {
           initialDate={selectedDate}
           allowModes={["court", "open_play"]}
           initialMode={staffModalMode}
-          onClose={() => setShowStaffModal(false)}
+          initialCourtSelection={staffModalInitialSelection}
+          onClose={closeStaffModal}
           onCreated={async () => {
-            setShowStaffModal(false);
+            closeStaffModal();
             await fetchBookings();
             await fetchOpenPlayRegs();
             await fetchAvailability();
@@ -2733,220 +2534,6 @@ function AllBookingsTab({
           }}
         />
       )}
-    </div>
-  );
-}
-
-// ─── New Player Inline Modal ──────────────────────────────────────────────────
-
-function NewPlayerInlineModal({
-  venueId,
-  onSuccess,
-  onClose,
-}: {
-  venueId: string;
-  onSuccess: (player: PlayerResult) => void;
-  onClose: () => void;
-}) {
-  const { t } = useTranslation("translation", { i18n: adminI18n });
-  const [form, setForm] = useState({
-    name: "",
-    phone: "",
-    email: "",
-    password: "",
-    gender: "male" as "male" | "female",
-    skillLevel: "beginner" as "beginner" | "intermediate" | "advanced" | "pro",
-  });
-  const [showPassword, setShowPassword] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState("");
-
-  const update = (field: string, value: string) =>
-    setForm((f) => ({ ...f, [field]: value }));
-
-  async function submit() {
-    if (!form.name.trim()) { setErr("Name is required"); return; }
-    if (!form.phone.trim()) { setErr("Phone number is required"); return; }
-    if (!form.email.trim()) { setErr("Email is required"); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) { setErr("Invalid email address"); return; }
-    if (!form.password) { setErr("Password is required"); return; }
-    if (form.password.length < 8) { setErr("Password must be at least 8 characters"); return; }
-
-    setSaving(true);
-    setErr("");
-    try {
-      const player = await api.post<{ id: string; name: string; phone: string }>("/api/admin/players", {
-        name: form.name.trim(),
-        phone: form.phone.trim(),
-        email: form.email.trim().toLowerCase(),
-        password: form.password,
-        gender: form.gender,
-        skillLevel: form.skillLevel,
-      });
-      onSuccess({ id: player.id, name: player.name, phone: player.phone });
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const SKILL_LEVELS = [
-    { value: "beginner", label: "Beginner" },
-    { value: "intermediate", label: "Intermediate" },
-    { value: "advanced", label: "Advanced" },
-    { value: "pro", label: "Pro" },
-  ];
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between border-b border-neutral-800 px-5 py-4">
-          <h3 className="flex items-center gap-2 text-base font-semibold text-white">
-            <UserPlus className="h-4 w-4 text-purple-400" />
-            Add player
-          </h3>
-          <button onClick={onClose} className="rounded-lg p-1 text-neutral-400 hover:text-white hover:bg-neutral-800">
-            <XCircle className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
-          {/* Name */}
-          <div>
-            <label className="mb-1 block text-xs font-medium text-neutral-300">
-              Full name <span className="text-red-400">*</span>
-            </label>
-            <input
-              type="text"
-              value={form.name}
-              onChange={(e) => update("name", e.target.value)}
-              placeholder="e.g. Nguyen Van An"
-              className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none"
-            />
-          </div>
-
-          {/* Phone */}
-          <div>
-            <label className="mb-1 block text-xs font-medium text-neutral-300">
-              Phone number <span className="text-red-400">*</span>
-            </label>
-            <input
-              type="tel"
-              value={form.phone}
-              onChange={(e) => update("phone", e.target.value)}
-              placeholder="e.g. 0912345678"
-              className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none"
-            />
-          </div>
-
-          {/* Email */}
-          <div>
-            <label className="mb-1 block text-xs font-medium text-neutral-300">
-              Email <span className="text-red-400">*</span>
-            </label>
-            <input
-              type="email"
-              value={form.email}
-              onChange={(e) => update("email", e.target.value)}
-              placeholder="e.g. player@email.com"
-              className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none"
-            />
-            <p className="mt-1 text-[11px] text-neutral-500">Used to log in to the player portal</p>
-          </div>
-
-          {/* Password */}
-          <div>
-            <label className="mb-1 block text-xs font-medium text-neutral-300">
-              Password <span className="text-red-400">*</span>
-            </label>
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                value={form.password}
-                onChange={(e) => update("password", e.target.value)}
-                placeholder="Min. 8 characters"
-                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 pr-9 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300"
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-            <p className="mt-1 text-[11px] text-neutral-500">Share this with the player so they can log in</p>
-          </div>
-
-          {/* Gender */}
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-neutral-300">Gender</label>
-            <div className="flex gap-2">
-              {(["male", "female"] as const).map((g) => (
-                <button
-                  key={g}
-                  type="button"
-                  onClick={() => update("gender", g)}
-                  className={cn(
-                    "flex-1 rounded-lg border py-2 text-sm font-medium transition-colors capitalize",
-                    form.gender === g
-                      ? "border-purple-500 bg-purple-600/20 text-purple-300"
-                      : "border-neutral-700 bg-neutral-800 text-neutral-400 hover:border-neutral-600 hover:text-white"
-                  )}
-                >
-                  {g === "male" ? t("players.male") : t("players.female")}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Skill level */}
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-neutral-300">Skill level</label>
-            <div className="grid grid-cols-2 gap-2">
-              {SKILL_LEVELS.map((s) => (
-                <button
-                  key={s.value}
-                  type="button"
-                  onClick={() => update("skillLevel", s.value)}
-                  className={cn(
-                    "rounded-lg border py-2 text-sm font-medium transition-colors",
-                    form.skillLevel === s.value
-                      ? "border-purple-500 bg-purple-600/20 text-purple-300"
-                      : "border-neutral-700 bg-neutral-800 text-neutral-400 hover:border-neutral-600 hover:text-white"
-                  )}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {err && (
-            <p className="rounded-lg border border-red-800/50 bg-red-900/20 px-3 py-2 text-xs text-red-300">
-              {err}
-            </p>
-          )}
-
-          <div className="flex gap-2 pt-1">
-            <button
-              onClick={submit}
-              disabled={saving}
-              className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-purple-600 py-2.5 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-50"
-            >
-              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-              {saving ? t("common.creating") : "Add player"}
-            </button>
-            <button
-              onClick={onClose}
-              className="rounded-lg border border-neutral-700 px-4 py-2.5 text-sm text-neutral-400 hover:text-white hover:bg-neutral-800"
-            >
-              {t("common.cancel")}
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
