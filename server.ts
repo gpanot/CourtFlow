@@ -79,6 +79,10 @@ app.prepare().then(() => {
 
   expressApp.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 
+  // Serve public/ assets before Next.js so CourtPass host rewrites cannot
+  // rewrite /images/*, /manifest.json, /sw.js, etc. to /book/images/* (404).
+  expressApp.use(express.static(path.join(process.cwd(), "public")));
+
   // In dev, proxy /uploads to production when the file doesn't exist locally
   if (dev) {
     const productionBase = (process.env.APP_URL ?? "").replace(/\/$/, "");

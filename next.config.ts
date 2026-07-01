@@ -83,10 +83,10 @@ const nextConfig: NextConfig = {
         ...passthroughRewrites,
 
         // /anything (except paths matched above) → /book/anything
-        // Excludes already-prefixed paths (/book/*, /api/*, /_next/*) via
-        // path-to-regexp negative lookahead — no capturing groups allowed here.
+        // Excludes /book/*, /api/*, /_next/*, and all public/ static paths.
         {
-          source: "/:path((?!book|api|_next).*)",
+          source:
+            "/:path((?!book|api|_next|images|icons|uploads|store-assets|manifest\\.json|manifest-tv\\.json|sw\\.js|favicon|apple-touch-icon|robots\\.txt|sitemap\\.xml).*)",
           has: [{ type: "host", value: COURTPASS_HOST }],
           destination: "/book/:path",
         },
