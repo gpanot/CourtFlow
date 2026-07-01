@@ -659,18 +659,21 @@ enum CoachLessonStatus {
 }
 
 model CoachPackage {
-  id               String     @id @default(cuid())
-  coachId          String     @map("coach_id")
-  venueId          String     @map("venue_id")
-  name             String
-  description      String?
-  lessonType       LessonType @map("lesson_type")
-  durationMin      Int        @map("duration_min")
-  priceValue       Int        @map("price_value")
-  sessionsIncluded Int        @default(1) @map("sessions_included")
-  active           Boolean    @default(true)
-  sortOrder        Int        @default(0) @map("sort_order")
-  createdAt        DateTime   @default(now()) @map("created_at")
+  id                       String     @id @default(cuid())
+  coachId                  String     @map("coach_id")
+  venueId                  String     @map("venue_id")
+  name                     String
+  description              String?
+  lessonType               LessonType @map("lesson_type")
+  durationMin              Int        @map("duration_min")
+  priceValue               Int        @map("price_value")
+  sessionsIncluded         Int        @default(1) @map("sessions_included")
+  minPlayers               Int?       @map("min_players")
+  maxPlayers               Int?       @map("max_players")
+  pricePerAdditionalPlayer Int?       @map("price_per_additional_player")
+  active                   Boolean    @default(true)
+  sortOrder                Int        @default(0) @map("sort_order")
+  createdAt                DateTime   @default(now()) @map("created_at")
 
   coach   StaffMember   @relation(fields: [coachId], references: [id])
   venue   Venue         @relation(fields: [venueId], references: [id])
@@ -694,6 +697,7 @@ model CoachLesson {
   endTime       DateTime          @map("end_time")
   status        CoachLessonStatus @default(confirmed)
   priceValue    Int               @map("price_value")
+  playerCount   Int?              @map("player_count")
   note          String?
   paymentStatus   String            @default("UNPAID") @map("payment_status")
   paidAt          DateTime?         @map("paid_at")
@@ -918,7 +922,8 @@ model SubscriptionUsage {
 model StaffPushToken {
   id         String   @id @default(cuid())
   staffId    String   @map("staff_id")
-  venueId    String   @map("venue_id")
+  /// Null for coach-only accounts that never select a venue.
+  venueId    String?  @map("venue_id")
   token      String
   platform   String   @default("android")
   deviceId   String?  @map("device_id")

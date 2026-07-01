@@ -5,7 +5,9 @@ import { generatePaymentRef } from "../modules/courtpay/lib/payment-reference";
 import { buildVietQRUrl } from "./vietqr";
 import { isCoachAvailable, findNextAvailableSlot } from "./coach-availability";
 import { buildLessonEmailContext, sendLessonEventEmails } from "./email/send";
+import { sendCoachLessonPushFromCtx } from "./staff-push";
 import { toDateKey, parseDateKey } from "./date";
+import { hasGroupPlayerPricing, calculateSessionPrice } from "./coach-package-pricing";
 
 const HOLD_MINUTES = 5;
 
@@ -75,6 +77,8 @@ export interface CreateCoachLessonInput {
   /** Required when payWithCredit=true */
   creditId?: string;
   venueId: string;
+  /** Number of players in the session — required for scalable group packages */
+  playerCount?: number;
 }
 
 export type CreateCoachLessonResult =
@@ -144,6 +148,7 @@ export async function createCoachLesson(
     payWithCredit,
     creditId,
     venueId,
+    playerCount,
   } = input;
 
   const pkg = await prisma.coachPackage.findFirst({
@@ -151,6 +156,26 @@ export async function createCoachLesson(
     include: { coach: { select: { creditPackageValidityDays: true } } },
   });
   if (!pkg) throw new CoachLessonError("Package not found", 404);
+
+  // Block credit payment for group lessons
+  if (payWithCredit && pkg.lessonType === "group") {
+    throw new CoachLessonError("Credits are only available for private lessons", 400);
+  }
+
+  // Validate playerCount for scalable group packages
+  if (hasGroupPlayerPricing(pkg)) {
+    if (playerCount == null) {
+      throw new CoachLessonError("playerCount is required for this group package", 400);
+    }
+    const min = pkg.minPlayers!;
+    const max = pkg.maxPlayers ?? 99;
+    if (playerCount < min || playerCount > max) {
+      throw new CoachLessonError(
+        `playerCount must be between ${min} and ${max} for this package`,
+        400
+      );
+    }
+  }
 
   const venue = await prisma.venue.findUniqueOrThrow({
     where: { id: venueId },
@@ -171,7 +196,8 @@ export async function createCoachLesson(
   const endTime = new Date(startTime);
   const slots = Math.max(1, Math.min(4, slotCount ?? 1));
   endTime.setMinutes(endTime.getMinutes() + pkg.durationMin * slots);
-  const totalPrice = pkg.priceValue * slots;
+
+  const totalPrice = calculateSessionPrice(pkg, { playerCount, slotCount: slots });
 
   // Three-layer availability check (Google Calendar is layer 4, inside isCoachAvailable)
   const avail = await isCoachAvailable(coachId, date, startTime, endTime);
@@ -268,6 +294,7 @@ export async function createCoachLesson(
           startTime,
           endTime,
           priceValue: totalPrice,
+          playerCount: playerCount ?? null,
           paymentStatus: "paid",
           paidAt: new Date(),
           paymentMethod: "credit",
@@ -290,7 +317,10 @@ export async function createCoachLesson(
     void updated; // used inside transaction
 
     const ctx = await buildLessonEmailContext(lesson.id);
-    if (ctx) void sendLessonEventEmails(ctx, "auto_confirmed");
+    if (ctx) {
+      void sendLessonEventEmails(ctx, "auto_confirmed");
+      sendCoachLessonPushFromCtx(ctx, "lesson_auto_confirmed");
+    }
 
     return { lesson: { ...lesson, date: toDateKey(lesson.date) }, paidWithCredit: true };
   }
@@ -308,6 +338,7 @@ export async function createCoachLesson(
       startTime,
       endTime,
       priceValue: totalPrice,
+      playerCount: playerCount ?? null,
       paymentStatus: "pending",
       paymentRef,
       status: "pending_approval",

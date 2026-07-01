@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireManagerOrSuperAdmin } from "@/lib/auth";
 import { buildLessonEmailContext, sendLessonEventEmails } from "@/lib/email/send";
+import { sendCoachLessonPushFromCtx } from "@/lib/staff-push";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,7 @@ export async function PATCH(
         { ...ctx, details: { ...ctx.details, rejectionReason: reason } },
         "rejected"
       );
+      sendCoachLessonPushFromCtx(ctx, "lesson_rejected");
     }
 
     return json(updated);

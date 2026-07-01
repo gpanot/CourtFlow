@@ -211,6 +211,7 @@
     "courtAutoAssigned": "Court: auto-assigned",
     "sessionPackages": "Session Packages",
     "creditPacks": "Credit Packs",
+    "creditPacksPrivateOnly": "For 1-on-1 class only",
     "percentOff": "{{discount}}% off",
     "sessionSummary": "Session Summary",
     "payWithCredit": "Pay with Credit ({{count}} left)",
@@ -219,7 +220,15 @@
     "bookingFailed": "Booking failed",
     "selectUpTo4Slots": "Select up to 4 slots",
     "slots": "Slots",
-    "lessonDetail": "Coach Lesson"
+    "lessonDetail": "Coach Lesson",
+    "fromPriceForPlayers": "From {{price}} for {{count}} players",
+    "plusPricePerExtraPlayer": "+ {{price}} per extra player",
+    "howManyPlayers": "How many players?",
+    "estimatedTotal": "Estimated total",
+    "groupPaymentNote": "One payment covers the whole group.",
+    "basePriceLine": "Base ({{count}} players)",
+    "additionalPlayersLine": "Additional players ({{count}} × {{price}})",
+    "playersRow": "Players"
   },
   "buyCredits": {
     "title": "Buy Credit Pack",

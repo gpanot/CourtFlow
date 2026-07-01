@@ -203,12 +203,21 @@
     "courtAutoAssigned": "สนาม: จัดสรรอัตโนมัติ",
     "sessionPackages": "แพ็กเกจเซสชัน",
     "creditPacks": "แพ็กเครดิต",
+    "creditPacksPrivateOnly": "สำหรับคลาส 1-1 เท่านั้น",
     "percentOff": "ลด {{discount}}%",
     "sessionSummary": "สรุปเซสชัน",
     "payWithCredit": "ชำระด้วยเครดิต (เหลือ {{count}})",
     "payWithVietqr": "ชำระด้วย VietQR ({{price}})",
     "booking": "กำลังจอง...",
-    "bookingFailed": "จองไม่สำเร็จ"
+    "bookingFailed": "จองไม่สำเร็จ",
+    "fromPriceForPlayers": "เริ่มต้น {{price}} สำหรับ {{count}} คน",
+    "plusPricePerExtraPlayer": "+ {{price}} ต่อคนเพิ่ม",
+    "howManyPlayers": "กี่คน?",
+    "estimatedTotal": "ประมาณการ",
+    "groupPaymentNote": "ชำระเงินครั้งเดียวสำหรับทั้งกลุ่ม",
+    "basePriceLine": "ราคาพื้นฐาน ({{count}} คน)",
+    "additionalPlayersLine": "คนเพิ่ม ({{count}} × {{price}})",
+    "playersRow": "จำนวนผู้เล่น"
   },
   "buyCredits": {
     "title": "ซื้อแพ็กเครดิต",

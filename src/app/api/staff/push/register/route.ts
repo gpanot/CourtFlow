@@ -9,22 +9,34 @@ export async function POST(request: NextRequest) {
     const auth = requireStaff(request.headers);
     const body = await parseBody<{
       token: string;
-      venueId: string;
+      venueId?: string | null;
       platform?: string;
       deviceId?: string;
     }>(request);
 
     if (!body.token?.trim()) return error("token is required", 400);
-    if (!body.venueId?.trim()) return error("venueId is required", 400);
 
-    const venueId = body.venueId.trim();
+    const venueId = body.venueId?.trim() || null;
 
-    const assigned = await prisma.staffVenueAssignment.findFirst({
-      where: { staffId: auth.id, venueId },
-      select: { id: true },
-    });
-    if (!assigned) {
-      return error("You do not have access to this venue", 403);
+    // Non-coach staff must provide a valid venueId they are assigned to.
+    // Coaches register without a venue (venueId stays null).
+    if (venueId) {
+      const assigned = await prisma.staffVenueAssignment.findFirst({
+        where: { staffId: auth.id, venueId },
+        select: { id: true },
+      });
+      if (!assigned) {
+        return error("You do not have access to this venue", 403);
+      }
+    } else {
+      // Verify the caller is actually a coach when omitting venueId
+      const staff = await prisma.staffMember.findUnique({
+        where: { id: auth.id },
+        select: { isCoach: true },
+      });
+      if (!staff?.isCoach) {
+        return error("venueId is required for non-coach staff", 400);
+      }
     }
 
     await prisma.staffPushToken.upsert({
@@ -32,7 +44,7 @@ export async function POST(request: NextRequest) {
         staffId_token: { staffId: auth.id, token: body.token },
       },
       update: {
-        venueId,
+        venueId: venueId,
         platform: body.platform || "android",
         deviceId: body.deviceId || null,
         active: true,
@@ -40,7 +52,7 @@ export async function POST(request: NextRequest) {
       },
       create: {
         staffId: auth.id,
-        venueId,
+        venueId: venueId,
         token: body.token,
         platform: body.platform || "android",
         deviceId: body.deviceId || null,

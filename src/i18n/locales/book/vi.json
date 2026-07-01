@@ -211,6 +211,7 @@
     "courtAutoAssigned": "Sân: tự động phân",
     "sessionPackages": "Gói buổi học",
     "creditPacks": "Gói credit",
+    "creditPacksPrivateOnly": "Chỉ dành cho lớp 1-1",
     "percentOff": "Giảm {{discount}}%",
     "sessionSummary": "Tóm tắt buổi học",
     "payWithCredit": "Thanh toán bằng credit (còn {{count}})",
@@ -219,7 +220,15 @@
     "bookingFailed": "Đặt thất bại",
     "selectUpTo4Slots": "Chọn tối đa 4 slot",
     "slots": "Slot",
-    "lessonDetail": "Buổi huấn luyện"
+    "lessonDetail": "Buổi huấn luyện",
+    "fromPriceForPlayers": "Từ {{price}} cho {{count}} người",
+    "plusPricePerExtraPlayer": "+ {{price}}/người thêm",
+    "howManyPlayers": "Bao nhiêu người?",
+    "estimatedTotal": "Ước tính",
+    "groupPaymentNote": "Một lần thanh toán cho cả nhóm.",
+    "basePriceLine": "Cơ bản ({{count}} người)",
+    "additionalPlayersLine": "Người thêm ({{count}} × {{price}})",
+    "playersRow": "Số người"
   },
   "buyCredits": {
     "title": "Mua gói credit",

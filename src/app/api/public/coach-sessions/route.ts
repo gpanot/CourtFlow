@@ -21,6 +21,7 @@ export async function POST(request: NextRequest) {
       payWithCredit,
       creditId,
       venueId: bodyVenueId,
+      playerCount,
     } = body as {
       coachId: string;
       packageId: string;
@@ -30,6 +31,7 @@ export async function POST(request: NextRequest) {
       payWithCredit?: boolean;
       creditId?: string;
       venueId?: string;
+      playerCount?: number;
     };
     const venueId = bodyVenueId || getPortalVenueId();
 
@@ -42,6 +44,7 @@ export async function POST(request: NextRequest) {
       payWithCredit,
       creditId,
       venueId,
+      playerCount,
     });
 
     const lesson = result.lesson as { date?: string; startTime?: unknown };

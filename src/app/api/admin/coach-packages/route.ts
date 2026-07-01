@@ -42,16 +42,29 @@ export async function POST(request: NextRequest) {
       durationMin: number;
       priceValue: number;
       sessionsIncluded?: number;
+      minPlayers?: number;
+      maxPlayers?: number;
+      pricePerAdditionalPlayer?: number;
     }>(request);
 
     if (!body.coachId || !body.venueId || !body.name || !body.lessonType || !body.durationMin || body.priceValue == null) {
       return error("coachId, venueId, name, lessonType, durationMin, and priceValue are required", 400);
     }
 
+    // Validate group pricing fields when provided
+    if (body.lessonType === "group" && body.minPlayers != null) {
+      if (body.minPlayers < 2) return error("minPlayers must be at least 2", 400);
+      const maxP = body.maxPlayers ?? 8;
+      if (maxP < body.minPlayers) return error("maxPlayers must be >= minPlayers", 400);
+      if ((body.pricePerAdditionalPlayer ?? 0) < 0) return error("pricePerAdditionalPlayer must be >= 0", 400);
+    }
+
     const coach = await prisma.staffMember.findUnique({
       where: { id: body.coachId, isCoach: true },
     });
     if (!coach) return error("Coach not found", 404);
+
+    const isGroupPricing = body.lessonType === "group" && body.minPlayers != null;
 
     const pkg = await prisma.coachPackage.create({
       data: {
@@ -63,6 +76,9 @@ export async function POST(request: NextRequest) {
         durationMin: body.durationMin,
         priceValue: body.priceValue,
         sessionsIncluded: body.sessionsIncluded ?? 1,
+        minPlayers: isGroupPricing ? (body.minPlayers ?? null) : null,
+        maxPlayers: isGroupPricing ? (body.maxPlayers ?? 8) : null,
+        pricePerAdditionalPlayer: isGroupPricing ? (body.pricePerAdditionalPlayer ?? 0) : null,
       },
       include: {
         coach: { select: { id: true, name: true } },

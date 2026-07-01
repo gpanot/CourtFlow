@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 import { emitToVenue } from "@/lib/socket-server";
-import { sendPaymentPushToStaff } from "@/lib/staff-push";
+import { sendPaymentPushToStaff, sendCoachLessonPushFromCtx } from "@/lib/staff-push";
 import { extractPaymentRef } from "./payment-reference";
 import { checkInSubscriber } from "./check-in";
 import { getActiveSubscription } from "./subscription";
@@ -162,6 +162,7 @@ async function handlePortalLessonPayment(
   const ctx = await buildLessonEmailContext(lesson.id);
   if (ctx) {
     void sendLessonEventEmails(ctx, "auto_confirmed");
+    sendCoachLessonPushFromCtx(ctx, "lesson_auto_confirmed");
   }
 
   if (

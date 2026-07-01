@@ -34,6 +34,12 @@ import { buildLessonEmailContext, sendLessonEventEmails } from "@/lib/email/send
 import { processSepayWebhook } from "@/modules/courtpay/lib/sepay";
 import { signToken } from "@/lib/auth";
 import type { SepayWebhookPayload } from "@/modules/courtpay/types";
+import {
+  hasGroupPlayerPricing,
+  calculateSessionPrice,
+  groupPricePreviewRows,
+} from "@/lib/coach-package-pricing";
+import { createCoachLesson, CoachLessonError } from "@/lib/coach-lesson";
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -53,7 +59,10 @@ vi.mock("@/lib/email/client", () => ({
 
 // Stub socket / push — not under test here
 vi.mock("@/lib/socket-server", () => ({ emitToVenue: vi.fn() }));
-vi.mock("@/lib/staff-push", () => ({ sendPaymentPushToStaff: vi.fn() }));
+vi.mock("@/lib/staff-push", () => ({
+  sendPaymentPushToStaff: vi.fn(),
+  sendCoachLessonPushFromCtx: vi.fn(),
+}));
 
 import * as gcal from "@/lib/google-calendar";
 
@@ -480,14 +489,18 @@ describe("TEST 3 — Sepay auto-payment (CF-CL- webhook)", () => {
   });
 
   it("3b — all 3 confirmation emails fire", async () => {
-    // sendLessonEventEmails called inside processSepayWebhook (async void).
-    // We allow up to 200ms for the async tasks to settle.
-    await new Promise((r) => setTimeout(r, 200));
-    const logs = await emailLogs(lessonId);
-    const autoConfirmed = logs.filter((l) => l.emailType === "auto_confirmed");
+    // sendLessonEventEmails is called as async void inside processSepayWebhook.
+    // We poll for up to 2s until ≥2 EmailLog rows appear (student + coach minimum).
+    let autoConfirmed: { emailType: string }[] = [];
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      const logs = await emailLogs(lessonId);
+      autoConfirmed = logs.filter((l) => l.emailType === "auto_confirmed");
+      if (autoConfirmed.length >= 2) break;
+    }
     // student + coach at minimum; staff fires if notificationEmail is set (it is here)
     expect(autoConfirmed.length).toBeGreaterThanOrEqual(2);
-  });
+  }, 10000);
 
   it("3c — googleEventId gets persisted after calendar creation", async () => {
     // createCalendarEvent is called as a non-blocking `.then()` inside the webhook.
@@ -1054,5 +1067,259 @@ describe("TEST 9 — Staff email coverage across all event types", () => {
     for (const t of ["pending", "approved", "rejected", "auto_confirmed", "cancelled"]) {
       expect(coveredTypes.has(t), `Missing staff EmailLog for emailType="${t}"`).toBe(true);
     }
+  }, 20000);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TEST 10 — Scalable group package pricing unit tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("TEST 10 — Scalable group package pricing (unit)", () => {
+  const flatPrivate = {
+    lessonType: "private",
+    priceValue: 1_000_000,
+    minPlayers: null,
+    maxPlayers: null,
+    pricePerAdditionalPlayer: null,
+  };
+
+  const flatGroup = {
+    lessonType: "group",
+    priceValue: 1_000_000,
+    minPlayers: null,
+    maxPlayers: null,
+    pricePerAdditionalPlayer: null,
+  };
+
+  const scalableGroup = {
+    lessonType: "group",
+    priceValue: 2_400_000,
+    minPlayers: 2,
+    maxPlayers: 8,
+    pricePerAdditionalPlayer: 600_000,
+  };
+
+  it("10a — hasGroupPlayerPricing returns false for private packages", () => {
+    expect(hasGroupPlayerPricing(flatPrivate)).toBe(false);
+  });
+
+  it("10b — hasGroupPlayerPricing returns false for flat group (no minPlayers)", () => {
+    expect(hasGroupPlayerPricing(flatGroup)).toBe(false);
+  });
+
+  it("10c — hasGroupPlayerPricing returns true for scalable group", () => {
+    expect(hasGroupPlayerPricing(scalableGroup)).toBe(true);
+  });
+
+  it("10d — flat private: price = priceValue × slotCount", () => {
+    expect(calculateSessionPrice(flatPrivate, { slotCount: 3 })).toBe(3_000_000);
+  });
+
+  it("10e — flat group (no minPlayers): price = priceValue × slotCount", () => {
+    expect(calculateSessionPrice(flatGroup, { playerCount: 5, slotCount: 2 })).toBe(2_000_000);
+  });
+
+  it("10f — scalable group at minPlayers: price = priceValue × slotCount", () => {
+    expect(calculateSessionPrice(scalableGroup, { playerCount: 2, slotCount: 1 })).toBe(2_400_000);
+  });
+
+  it("10g — scalable group at 4 players: (2_400_000 + 2×600_000) × 1 = 3_600_000", () => {
+    expect(calculateSessionPrice(scalableGroup, { playerCount: 4, slotCount: 1 })).toBe(3_600_000);
+  });
+
+  it("10h — scalable group at maxPlayers (8): (2_400_000 + 6×600_000) × 1 = 6_000_000", () => {
+    expect(calculateSessionPrice(scalableGroup, { playerCount: 8, slotCount: 1 })).toBe(6_000_000);
+  });
+
+  it("10i — scalable group clamps above maxPlayers", () => {
+    // 10 players clamped to 8
+    expect(calculateSessionPrice(scalableGroup, { playerCount: 10, slotCount: 1 })).toBe(6_000_000);
+  });
+
+  it("10j — scalable group clamps below minPlayers", () => {
+    // 1 player clamped to 2
+    expect(calculateSessionPrice(scalableGroup, { playerCount: 1, slotCount: 1 })).toBe(2_400_000);
+  });
+
+  it("10k — scalable group with 2 slots: price doubles", () => {
+    // 4 players × 2 slots = (2_400_000 + 2×600_000) × 2 = 7_200_000
+    expect(calculateSessionPrice(scalableGroup, { playerCount: 4, slotCount: 2 })).toBe(7_200_000);
+  });
+
+  it("10l — groupPricePreviewRows returns 3 distinct price points", () => {
+    const rows = groupPricePreviewRows(scalableGroup, (v) => String(v));
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+    expect(rows[0].players).toBe(2);
+    expect(rows[0].total).toBe(2_400_000);
+    expect(rows[rows.length - 1].players).toBe(8);
+    expect(rows[rows.length - 1].total).toBe(6_000_000);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TEST 11 — Group lesson booking integration
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("TEST 11 — Group lesson booking integration", () => {
+  let coach: Awaited<ReturnType<typeof createCoach>>;
+  let student: Awaited<ReturnType<typeof createStudent>>;
+  let groupPkg: { id: string; priceValue: number; lessonType: string; minPlayers: number | null; maxPlayers: number | null; pricePerAdditionalPlayer: number | null };
+
+  const createdIds: { lessons: string[]; packages: string[]; players: string[]; coaches: string[] } = {
+    lessons: [], packages: [], players: [], coaches: [],
+  };
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    coach = await createCoach();
+    student = await createStudent(coach.id);
+    groupPkg = await prisma.coachPackage.create({
+      data: {
+        id: uid(),
+        venueId: VENUE_ID,
+        coachId: coach.id,
+        name: "Group Training",
+        lessonType: "group",
+        durationMin: 60,
+        priceValue: 2_400_000,
+        minPlayers: 2,
+        maxPlayers: 8,
+        pricePerAdditionalPlayer: 600_000,
+        sessionsIncluded: 1,
+        active: true,
+      },
+    });
+    await addAvailability(coach.id, new Date().getDay() === 0 ? 1 : new Date().getDay());
+    createdIds.packages.push(groupPkg.id);
+    createdIds.players.push(student.id);
+    createdIds.coaches.push(coach.id);
+  });
+
+  afterEach(async () => {
+    await cleanUp({
+      lessonIds: createdIds.lessons,
+      packageIds: createdIds.packages,
+      playerIds: createdIds.players,
+      coachIds: createdIds.coaches,
+    });
+    createdIds.lessons.length = 0;
+    createdIds.packages.length = 0;
+    createdIds.players.length = 0;
+    createdIds.coaches.length = 0;
+  });
+
+  it("11a — booking 4 players stores correct priceValue and playerCount", async () => {
+    const tomorrow = localDate(1);
+    const startTime = localDate(1, 10);
+
+    const result = await createCoachLesson(student.id, {
+      coachId: coach.id,
+      packageId: groupPkg.id,
+      date: tomorrow.toISOString().split("T")[0],
+      startTime: startTime.toISOString(),
+      slotCount: 1,
+      playerCount: 4,
+      venueId: VENUE_ID,
+    });
+
+    // priceValue = 2_400_000 + 2×600_000 = 3_600_000
+    const lesson = await prisma.coachLesson.findFirst({
+      where: { id: (result.lesson as { id: string }).id },
+    });
+    expect(lesson).not.toBeNull();
+    expect(lesson!.priceValue).toBe(3_600_000);
+    expect(lesson!.playerCount).toBe(4);
+    createdIds.lessons.push(lesson!.id);
+  });
+
+  it("11b — missing playerCount for scalable group returns 400 error", async () => {
+    const tomorrow = localDate(1);
+    const startTime = localDate(1, 11);
+
+    await expect(
+      createCoachLesson(student.id, {
+        coachId: coach.id,
+        packageId: groupPkg.id,
+        date: tomorrow.toISOString().split("T")[0],
+        startTime: startTime.toISOString(),
+        slotCount: 1,
+        venueId: VENUE_ID,
+        // no playerCount
+      })
+    ).rejects.toThrowError("playerCount is required");
+  });
+
+  it("11c — playerCount above maxPlayers returns 400 error", async () => {
+    const tomorrow = localDate(1);
+    const startTime = localDate(1, 12);
+
+    await expect(
+      createCoachLesson(student.id, {
+        coachId: coach.id,
+        packageId: groupPkg.id,
+        date: tomorrow.toISOString().split("T")[0],
+        startTime: startTime.toISOString(),
+        slotCount: 1,
+        playerCount: 10,
+        venueId: VENUE_ID,
+      })
+    ).rejects.toThrowError("playerCount must be between");
+  });
+
+  it("11d — payWithCredit on group package returns 400 error", async () => {
+    const tomorrow = localDate(1);
+    const startTime = localDate(1, 13);
+
+    await expect(
+      createCoachLesson(student.id, {
+        coachId: coach.id,
+        packageId: groupPkg.id,
+        date: tomorrow.toISOString().split("T")[0],
+        startTime: startTime.toISOString(),
+        slotCount: 1,
+        playerCount: 3,
+        payWithCredit: true,
+        creditId: "fake-credit-id",
+        venueId: VENUE_ID,
+      })
+    ).rejects.toMatchObject({ message: "Credits are only available for private lessons" });
+  });
+
+  it("11e — legacy flat group package uses flat priceValue (no playerCount required)", async () => {
+    const flatGroupPkg = await prisma.coachPackage.create({
+      data: {
+        id: uid(),
+        venueId: VENUE_ID,
+        coachId: coach.id,
+        name: "Flat Group",
+        lessonType: "group",
+        durationMin: 60,
+        priceValue: 1_500_000,
+        sessionsIncluded: 1,
+        active: true,
+        // minPlayers, maxPlayers, pricePerAdditionalPlayer all null (default)
+      },
+    });
+    createdIds.packages.push(flatGroupPkg.id);
+
+    const tomorrow = localDate(1);
+    const startTime = localDate(1, 14);
+
+    const result = await createCoachLesson(student.id, {
+      coachId: coach.id,
+      packageId: flatGroupPkg.id,
+      date: tomorrow.toISOString().split("T")[0],
+      startTime: startTime.toISOString(),
+      slotCount: 1,
+      venueId: VENUE_ID,
+      // no playerCount — should work fine for flat group
+    });
+
+    const lesson = await prisma.coachLesson.findFirst({
+      where: { id: (result.lesson as { id: string }).id },
+    });
+    expect(lesson!.priceValue).toBe(1_500_000);
+    expect(lesson!.playerCount).toBeNull();
+    createdIds.lessons.push(lesson!.id);
   });
 });

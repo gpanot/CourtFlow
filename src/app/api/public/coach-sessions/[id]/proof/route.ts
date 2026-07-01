@@ -3,6 +3,7 @@ import { json, error } from "@/lib/api-helpers";
 import { prisma } from "@/lib/db";
 import { requirePortalAuth } from "@/lib/portal-auth";
 import { buildLessonEmailContext, sendLessonEventEmails } from "@/lib/email/send";
+import { sendCoachLessonPushFromCtx } from "@/lib/staff-push";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 
@@ -55,6 +56,7 @@ export async function POST(
     const ctx = await buildLessonEmailContext(id);
     if (ctx) {
       void sendLessonEventEmails(ctx, "pending");
+      sendCoachLessonPushFromCtx(ctx, "lesson_pending");
     }
 
     return json({ success: true, proofUrl });

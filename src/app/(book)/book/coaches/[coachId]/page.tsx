@@ -11,6 +11,7 @@ import { usePlayerVenue } from "../../components/PlayerVenueContext";
 import { useTranslation } from "react-i18next";
 import { useBookFormatters } from "../../lib/useBookFormatters";
 import { toDateKey } from "@/lib/date";
+import { hasGroupPlayerPricing, calculateSessionPrice } from "@/lib/coach-package-pricing";
 
 interface Package {
   id: string;
@@ -20,6 +21,9 @@ interface Package {
   durationMin: number;
   lessonType: string;
   sessionsIncluded: number;
+  minPlayers: number | null;
+  maxPlayers: number | null;
+  pricePerAdditionalPlayer: number | null;
 }
 
 interface AvailSlot {
@@ -73,6 +77,7 @@ export default function CoachProfilePage() {
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [step, setStep] = useState<"profile" | "booking" | "summary">("profile");
   const [otherCoaches, setOtherCoaches] = useState<OtherCoach[]>([]);
+  const [playerCount, setPlayerCount] = useState<number>(2);
   const MAX_COACH_SLOTS = 4;
 
   // Computed client-side only to avoid SSR/hydration date mismatch
@@ -170,6 +175,7 @@ export default function CoachProfilePage() {
     setSelectedPkg(pkg);
     setSelectedDate(dates[0]);
     setSelectedHours([]);
+    setPlayerCount(pkg.minPlayers ?? 2);
     setStep("booking");
   }
 
@@ -200,6 +206,7 @@ export default function CoachProfilePage() {
           payWithCredit,
           creditId,
           venueId: playerVenueId || undefined,
+          ...(hasGroupPlayerPricing(selectedPkg) ? { playerCount } : {}),
         }),
       });
       const data = await res.json();
@@ -250,7 +257,10 @@ export default function CoachProfilePage() {
     const slotDurationH = Math.ceil(selectedPkg.durationMin / 60);
     const startHour = selectedHours.length > 0 ? Math.min(...selectedHours) : null;
     const endHour = selectedHours.length > 0 ? Math.max(...selectedHours) + slotDurationH : null;
-    const totalSlotPrice = selectedPkg.priceValue * selectedHours.length;
+    const isGroupPkg = hasGroupPlayerPricing(selectedPkg);
+    const totalSlotPrice = isGroupPkg
+      ? calculateSessionPrice(selectedPkg, { playerCount, slotCount: Math.max(1, selectedHours.length) })
+      : selectedPkg.priceValue * selectedHours.length;
 
     return (
       <div className="px-6 pt-8 pb-8">
@@ -261,6 +271,32 @@ export default function CoachProfilePage() {
         <p className="text-sm text-[var(--cm-text-sec)] mb-4">
           {selectedPkg.name} · {selectedPkg.durationMin} {t("common.min")}
         </p>
+
+        {/* Player count stepper for scalable group packages */}
+        {isGroupPkg && (
+          <div className="mb-5">
+            <label className="block text-sm font-medium mb-2">{t("coaches.howManyPlayers")}</label>
+            <div className="flex gap-2 flex-wrap mb-2">
+              {Array.from(
+                { length: (selectedPkg.maxPlayers ?? 8) - (selectedPkg.minPlayers ?? 2) + 1 },
+                (_, i) => (selectedPkg.minPlayers ?? 2) + i
+              ).map((n) => (
+                <button
+                  key={n}
+                  onClick={() => setPlayerCount(n)}
+                  className={`px-4 py-2 rounded-xl text-sm font-medium border transition-colors ${
+                    playerCount === n
+                      ? "bg-[var(--cm-accent)] text-black border-[var(--cm-accent)]"
+                      : "bg-[var(--cm-bg-card)] text-[var(--cm-text-sec)] border-[var(--cm-border)]"
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-[var(--cm-text-muted)]">{t("coaches.groupPaymentNote")}</p>
+          </div>
+        )}
 
         <label className="block text-sm font-medium mb-2">{t("coaches.selectDate")}</label>
         <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-hide">
@@ -358,11 +394,10 @@ export default function CoachProfilePage() {
               {formatDate(selectedDate)} · {formatHour(startHour)}–{formatHour(endHour)}
             </p>
             <p className="text-[var(--cm-text-sec)] text-xs mt-0.5">{t("coaches.courtAutoAssigned")}</p>
-            {selectedHours.length > 1 && (
-              <p className="text-[var(--cm-accent)] text-xs font-medium mt-0.5">
-                {formatPrice(totalSlotPrice)} ({selectedHours.length} × {formatPrice(selectedPkg.priceValue)})
-              </p>
-            )}
+            <p className="text-[var(--cm-accent)] text-xs font-medium mt-0.5">
+              {t("coaches.estimatedTotal")}: {formatPrice(totalSlotPrice)}
+              {selectedHours.length > 1 && !isGroupPkg && ` (${selectedHours.length} × ${formatPrice(selectedPkg.priceValue)})`}
+            </p>
           </div>
         )}
 
@@ -384,6 +419,7 @@ export default function CoachProfilePage() {
         pkg={selectedPkg}
         date={selectedDate}
         hours={selectedHours}
+        playerCount={playerCount}
         booking={booking}
         bookingError={bookingError}
         onBack={() => setStep("booking")}
@@ -437,9 +473,24 @@ export default function CoachProfilePage() {
                     {pkg.lessonType === "group" ? t("coaches.group", "Group") : t("coaches.private", "Private")}
                   </span>
                 </div>
-                <p className="text-xs text-[var(--cm-text-sec)]">
-                  {pkg.durationMin} {t("common.min")} · {formatPrice(pkg.priceValue)}
-                </p>
+                {hasGroupPlayerPricing(pkg) ? (
+                  <div className="mt-0.5">
+                    <p className="text-xs text-[var(--cm-text-sec)]">
+                      {pkg.durationMin} {t("common.min")}
+                    </p>
+                    <p className="text-xs text-[var(--cm-text-sec)]">
+                      {t("coaches.fromPriceForPlayers", { price: formatPrice(pkg.priceValue), count: pkg.minPlayers })}
+                    </p>
+                    <p className="text-[10px] text-[var(--cm-text-muted)]">
+                      {t("coaches.plusPricePerExtraPlayer", { price: formatPrice(pkg.pricePerAdditionalPlayer ?? 0) })}
+                      {pkg.maxPlayers ? ` · ${pkg.minPlayers}–${pkg.maxPlayers}` : ""}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-[var(--cm-text-sec)]">
+                    {pkg.durationMin} {t("common.min")} · {formatPrice(pkg.priceValue)}
+                  </p>
+                )}
               </div>
               <button
                 onClick={() => startBooking(pkg)}
@@ -454,7 +505,10 @@ export default function CoachProfilePage() {
 
       {coach.packages.some((p) => p.lessonType === "private") && (
         <div className="px-4 mb-6">
-          <h2 className="text-base font-semibold mb-3">{t("coaches.creditPacks")}</h2>
+          <div className="flex items-baseline gap-2 mb-3">
+            <h2 className="text-base font-semibold">{t("coaches.creditPacks")}</h2>
+            <span className="text-[11px] text-[var(--cm-text-muted)]">{t("coaches.creditPacksPrivateOnly")}</span>
+          </div>
           <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
             {[1, 5, 10].map((qty) => {
               const basePkg = coach.packages.find((p) => p.lessonType === "private") ?? coach.packages[0];
@@ -624,6 +678,7 @@ function CoachSessionSummary({
   pkg,
   date,
   hours,
+  playerCount,
   booking: isBooking,
   bookingError,
   onBack,
@@ -633,6 +688,7 @@ function CoachSessionSummary({
   pkg: Package;
   date: Date;
   hours: number[];
+  playerCount: number;
   booking: boolean;
   bookingError: string | null;
   onBack: () => void;
@@ -644,10 +700,14 @@ function CoachSessionSummary({
   const startHour = sortedHours[0];
   const slotDurationH = Math.ceil(pkg.durationMin / 60);
   const endHour = sortedHours[sortedHours.length - 1] + slotDurationH;
-  const totalPrice = pkg.priceValue * hours.length;
+  const isGroupPkg = hasGroupPlayerPricing(pkg);
+  const totalPrice = isGroupPkg
+    ? calculateSessionPrice(pkg, { playerCount, slotCount: hours.length })
+    : pkg.priceValue * hours.length;
   const [credits, setCredits] = useState<{ id: string; remaining: number }[]>([]);
 
   useEffect(() => {
+    if (isGroupPkg) return; // credits not available for group
     portalFetch("/api/public/account")
       .then((r) => r.json())
       .then((data) => {
@@ -663,10 +723,15 @@ function CoachSessionSummary({
         setCredits(coachCredits);
       })
       .catch(() => {});
-  }, []);
+  }, [isGroupPkg]);
 
-  const hasCredits = credits.length > 0;
+  const hasCredits = !isGroupPkg && credits.length > 0;
   const totalRemaining = credits.reduce((s, c) => s + c.remaining, 0);
+
+  // For group pricing: compute per-slot base and extra breakdown
+  const extraPlayers = isGroupPkg ? Math.max(0, playerCount - (pkg.minPlayers ?? 2)) : 0;
+  const basePerSlot = pkg.priceValue;
+  const extraPerSlot = extraPlayers * (pkg.pricePerAdditionalPlayer ?? 0);
 
   return (
     <div className="px-6 pt-8 pb-8">
@@ -684,10 +749,26 @@ function CoachSessionSummary({
         <Row label={t("common.package")} value={pkg.name} />
         <Row label={t("common.date")} value={formatDate(date)} />
         <Row label={t("common.time")} value={`${formatHour(startHour)} – ${formatHour(endHour)}`} />
-        {hours.length > 1 && (
+        {isGroupPkg && (
+          <Row label={t("coaches.playersRow")} value={String(playerCount)} />
+        )}
+        {!isGroupPkg && hours.length > 1 && (
           <Row label={t("coaches.slots")} value={`${hours.length} × ${formatPrice(pkg.priceValue)}`} />
         )}
         <Row label={t("common.court")} value={t("common.autoAssigned")} />
+        {isGroupPkg && (
+          <>
+            <div className="border-t border-[var(--cm-border)] pt-2 mt-2 space-y-1">
+              <Row label={t("coaches.basePriceLine", { count: pkg.minPlayers })} value={`${formatPrice(basePerSlot)}${hours.length > 1 ? ` × ${hours.length}` : ""}`} />
+              {extraPlayers > 0 && (
+                <Row
+                  label={t("coaches.additionalPlayersLine", { count: extraPlayers, price: formatPrice(pkg.pricePerAdditionalPlayer ?? 0) })}
+                  value={`${formatPrice(extraPerSlot)}${hours.length > 1 ? ` × ${hours.length}` : ""}`}
+                />
+              )}
+            </div>
+          </>
+        )}
         <div className="border-t border-[var(--cm-border)] pt-2 mt-2">
           <Row label={t("common.total")} value={formatPrice(totalPrice)} bold />
         </div>

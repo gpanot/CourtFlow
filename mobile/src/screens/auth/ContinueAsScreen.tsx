@@ -22,7 +22,7 @@ interface ModeOption {
   label: string;
   description: string;
   icon: keyof typeof Ionicons.glyphMap;
-  route: "StaffStack" | "AdminWebView" | "TabletStack";
+  route: "StaffStack" | "AdminWebView" | "TabletStack" | "CoachPortalStack";
   accent: string;
   accentBg: string;
 }
@@ -33,6 +33,7 @@ export function ContinueAsScreen({
   const insets = useSafeAreaInsets();
   const staffName = useAuthStore((s) => s.staffName);
   const role = useAuthStore((s) => s.role);
+  const isCoach = useAuthStore((s) => s.isCoach);
   const clearAuth = useAuthStore((s) => s.clearAuth);
   const { locale, toggleLocale, t } = useTabletKioskLocale();
   const canAccessAdmin = role === "superadmin";
@@ -65,11 +66,22 @@ export function ContinueAsScreen({
       accent: C.green400,
       accentBg: "rgba(34,197,94,0.15)",
     },
+    {
+      key: "coach",
+      label: t("continueAsCoachLabel"),
+      description: t("continueAsCoachDesc"),
+      icon: "tennisball-outline",
+      route: "CoachPortalStack",
+      accent: "#f5a623",
+      accentBg: "rgba(245,166,35,0.15)",
+    },
   ];
 
-  const visibleModes = canAccessAdmin
-    ? modes
-    : modes.filter((mode) => mode.key !== "admin");
+  const visibleModes = modes.filter((mode) => {
+    if (mode.key === "admin") return canAccessAdmin;
+    if (mode.key === "coach") return !!isCoach;
+    return true;
+  });
 
   const handleSelect = (mode: ModeOption) => {
     if (mode.route === "AdminWebView" && !canAccessAdmin) {

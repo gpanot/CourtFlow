@@ -220,8 +220,9 @@ function buildMcpServer(): McpServer {
       slotCount: z.number().int().min(1).max(4).optional().describe("Number of consecutive slots (default 1)"),
       payWithCredit: z.boolean().optional().describe("Set true to deduct from an existing credit package"),
       creditId: z.string().optional().describe("PlayerCoachCredit ID — required when payWithCredit is true"),
+      playerCount: z.number().int().min(2).optional().describe("Number of players — required for scalable group packages"),
     },
-    async ({ playerId, coachId, packageId, date, startTime, venueId, slotCount, payWithCredit, creditId }) => {
+    async ({ playerId, coachId, packageId, date, startTime, venueId, slotCount, payWithCredit, creditId, playerCount }) => {
       const result = await createCoachLesson(playerId, {
         coachId,
         packageId,
@@ -231,6 +232,7 @@ function buildMcpServer(): McpServer {
         slotCount,
         payWithCredit,
         creditId,
+        playerCount,
       });
 
       // Serialize any Date objects that may be present in the lesson record

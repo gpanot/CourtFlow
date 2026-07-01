@@ -254,6 +254,7 @@ export async function sendBookingEmail(params: SendBookingEmailParams): Promise<
 
 export interface LessonEmailContext {
   lessonId: string;
+  coachId: string;
   studentPlayerId: string;
   studentEmail: string | null;
   studentName: string;
@@ -331,7 +332,7 @@ export async function buildLessonEmailContext(
     where: { id: lessonId },
     include: {
       player: { select: { id: true, name: true, email: true } },
-      coach: { select: { name: true, email: true } },
+      coach: { select: { id: true, name: true, email: true } },
       venue: { select: { settings: true } },
     },
   });
@@ -348,6 +349,7 @@ export async function buildLessonEmailContext(
 
   return {
     lessonId: lesson.id,
+    coachId: lesson.coach.id,
     studentPlayerId: lesson.player.id,
     studentEmail: lesson.player.email ?? null,
     studentName: lesson.player.name,

@@ -50,8 +50,7 @@ export type TabletStackParamList = {
 
 export type CoachPortalStackParamList = {
   CoachPortal: undefined;
-  CoachLessons: undefined;
-  CoachAvailability: undefined;
+  CoachProfile: undefined;
 };
 
 export type RootStackScreenProps<T extends keyof RootStackParamList> =

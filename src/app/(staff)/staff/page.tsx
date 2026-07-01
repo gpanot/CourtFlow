@@ -7,7 +7,7 @@ import { useSessionStore } from "@/stores/session-store";
 import { api } from "@/lib/api-client";
 import { StaffDashboard } from "./dashboard";
 import Link from "next/link";
-import { Shield, Clipboard, Grid3X3, Phone, Lock, Eye, EyeOff, Loader2, Tablet, Sun, Moon, Layers } from "lucide-react";
+import { Shield, Clipboard, Grid3X3, Phone, Lock, Eye, EyeOff, Loader2, Tablet, Sun, Moon, Layers, Dumbbell } from "lucide-react";
 import { StickerKioskGate } from "@/components/sticker-kiosk-gate";
 import { CourtFlowLogo } from "@/components/courtflow-logo";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
@@ -56,7 +56,7 @@ function venueHasCourtFlowAccess(v: StaffVenue): boolean {
 
 export default function StaffPage() {
   const { t } = useTranslation();
-  const { token, staffId, staffName, venueId, role, onboardingCompleted, setAuth, clearAuth } = useSessionStore();
+  const { token, staffId, staffName, venueId, role, isCoach, onboardingCompleted, setAuth, clearAuth } = useSessionStore();
   const hydrated = useHasHydrated();
   const setStaffClientId = useSetStaffClientId();
   const { isAndroid, installed, canPrompt, promptInstall } = usePwaInstall();
@@ -565,6 +565,26 @@ export default function StaffPage() {
                   <div className="min-w-0">
                     <p className="font-semibold text-white">{t("staff.login.adminDashboard")}</p>
                     <p className="text-xs text-neutral-400">{t("staff.login.adminDashboardDesc")}</p>
+                  </div>
+                </button>
+              )}
+
+              {isCoach && (
+                <button
+                  onClick={() => {
+                    freshLoginChoiceRef.current = false;
+                    setShowRoleChoice(false);
+                    setShowOtherApps(false);
+                    router.replace("/coach-portal");
+                  }}
+                  className="group flex w-full items-center gap-4 rounded-2xl border border-orange-500/20 bg-orange-500/5 p-4 text-left transition-all hover:border-orange-500/40 hover:bg-orange-500/10"
+                >
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-500/15 transition-colors group-hover:bg-orange-500/25">
+                    <Dumbbell className="h-5 w-5 text-orange-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-white">{t("staff.login.coachPortal")}</p>
+                    <p className="text-xs text-neutral-400">{t("staff.login.coachPortalDesc")}</p>
                   </div>
                 </button>
               )}

@@ -13,6 +13,7 @@ import { prisma } from "@/lib/db";
 import { requirePortalAuth } from "@/lib/portal-auth";
 import { buildLessonEmailContext, sendLessonEventEmails } from "@/lib/email/send";
 import { deleteCalendarEvent } from "@/lib/google-calendar";
+import { sendCoachLessonPushFromCtx } from "@/lib/staff-push";
 
 export const dynamic = "force-dynamic";
 
@@ -124,6 +125,7 @@ export async function POST(
     const ctx = await buildLessonEmailContext(id);
     if (ctx) {
       void sendLessonEventEmails(ctx, "cancelled");
+      sendCoachLessonPushFromCtx(ctx, "lesson_cancelled");
     }
 
     return json({ success: true, lesson: cancelled });

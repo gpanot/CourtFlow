@@ -13,7 +13,9 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../../lib/api-client";
+import * as SecureStore from "expo-secure-store";
 import { useAuthStore } from "../../stores/auth-store";
+import { useThemeStore } from "../../stores/theme-store";
 import { C } from "../../theme/colors";
 import type { StaffLoginResponse } from "../../types/api";
 import type { RootStackScreenProps } from "../../navigation/types";
@@ -64,6 +66,10 @@ export function StaffLoginScreen({
       });
 
       if (staff.isCoach) {
+        const savedTheme = await SecureStore.getItemAsync("courtpay-theme-mode");
+        if (savedTheme !== "light") {
+          useThemeStore.getState().setMode("dark");
+        }
         navigation.replace("CoachPortalStack");
       } else {
         navigation.replace("ContinueAs");

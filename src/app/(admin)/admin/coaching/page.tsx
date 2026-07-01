@@ -8,6 +8,7 @@ import { api } from "@/lib/api-client";
 import { useSessionStore } from "@/stores/session-store";
 import { cn } from "@/lib/cn";
 import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
+import { hasGroupPlayerPricing, calculateSessionPrice } from "@/lib/coach-package-pricing";
 import {
   GraduationCap,
   Package,
@@ -60,6 +61,9 @@ interface CoachPackage {
   durationMin: number;
   priceValue: number;
   sessionsIncluded: number;
+  minPlayers: number | null;
+  maxPlayers: number | null;
+  pricePerAdditionalPlayer: number | null;
   active: boolean;
   sortOrder: number;
 }
@@ -100,6 +104,7 @@ interface CoachLesson {
   endTime: string;
   status: "confirmed" | "completed" | "cancelled" | "no_show";
   priceValue: number;
+  playerCount: number | null;
   note: string | null;
   paymentStatus: string;
   paidAt: string | null;
@@ -243,6 +248,10 @@ function CoachesTab({ venueId }: { venueId: string }) {
     durationHours: "1",
     priceInDollars: "",
     sessionsIncluded: "1",
+    minPlayers: "2",
+    maxPlayers: "8",
+    pricePerAdditionalPlayer: "",
+    groupPricingEnabled: false,
   });
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
@@ -257,12 +266,13 @@ function CoachesTab({ venueId }: { venueId: string }) {
   }, [fetchCoaches]);
 
   const openCreatePkg = (coachId: string) => {
-    setPkgForm({ name: "", description: "", lessonType: "private", durationHours: "1", priceInDollars: "", sessionsIncluded: "1" });
+    setPkgForm({ name: "", description: "", lessonType: "private", durationHours: "1", priceInDollars: "", sessionsIncluded: "1", minPlayers: "2", maxPlayers: "8", pricePerAdditionalPlayer: "", groupPricingEnabled: false });
     setErr("");
     setPkgModal({ mode: "create", coachId });
   };
 
   const openEditPkg = (coachId: string, pkg: CoachPackage) => {
+    const hasGroupPricing = pkg.lessonType === "group" && pkg.minPlayers != null;
     setPkgForm({
       name: pkg.name,
       description: pkg.description || "",
@@ -270,6 +280,10 @@ function CoachesTab({ venueId }: { venueId: string }) {
       durationHours: String(pkg.durationMin / 60),
       priceInDollars: formatPrice(vndToDisplay(pkg.priceValue)),
       sessionsIncluded: String(pkg.sessionsIncluded),
+      minPlayers: pkg.minPlayers != null ? String(pkg.minPlayers) : "2",
+      maxPlayers: pkg.maxPlayers != null ? String(pkg.maxPlayers) : "8",
+      pricePerAdditionalPlayer: pkg.pricePerAdditionalPlayer != null ? formatPrice(vndToDisplay(pkg.pricePerAdditionalPlayer)) : "",
+      groupPricingEnabled: hasGroupPricing,
     });
     setErr("");
     setPkgModal({ mode: "edit", coachId, pkg });
@@ -281,6 +295,7 @@ function CoachesTab({ venueId }: { venueId: string }) {
     setSaving(true);
     setErr("");
     try {
+      const isGroupPricing = pkgForm.lessonType === "group" && pkgForm.groupPricingEnabled;
       const data = {
         name: pkgForm.name,
         description: pkgForm.description || null,
@@ -288,6 +303,13 @@ function CoachesTab({ venueId }: { venueId: string }) {
         durationMin: (parseInt(pkgForm.durationHours) || 1) * 60,
         priceValue: displayToVnd(pkgForm.priceInDollars),
         sessionsIncluded: parseInt(pkgForm.sessionsIncluded) || 1,
+        ...(isGroupPricing
+          ? {
+              minPlayers: parseInt(pkgForm.minPlayers) || 2,
+              maxPlayers: parseInt(pkgForm.maxPlayers) || 8,
+              pricePerAdditionalPlayer: displayToVnd(pkgForm.pricePerAdditionalPlayer),
+            }
+          : { minPlayers: null, maxPlayers: null, pricePerAdditionalPlayer: null }),
       };
 
       if (pkgModal.mode === "create") {
@@ -395,9 +417,16 @@ function CoachesTab({ venueId }: { venueId: string }) {
                             {pkg.lessonType === "private" ? t("coaching.private") : t("coaching.group")}
                           </span>
                         </div>
-                        <div className="flex items-center gap-3 mt-1 text-xs text-neutral-500">
+                        <div className="flex items-center gap-3 mt-1 text-xs text-neutral-500 flex-wrap">
                           <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{pkg.durationMin / 60}h</span>
-                          <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{formatPrice(vndToDisplay(pkg.priceValue))} VND</span>
+                          {pkg.lessonType === "group" && pkg.minPlayers != null ? (
+                            <span className="flex items-center gap-1">
+                              <DollarSign className="h-3 w-3" />
+                              {formatPrice(vndToDisplay(pkg.priceValue))} + {formatPrice(vndToDisplay(pkg.pricePerAdditionalPlayer ?? 0))}/player · {pkg.minPlayers}–{pkg.maxPlayers ?? "∞"}
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1"><DollarSign className="h-3 w-3" />{formatPrice(vndToDisplay(pkg.priceValue))} VND</span>
+                          )}
                           {pkg.sessionsIncluded > 1 && (
                             <span className="flex items-center gap-1"><Users className="h-3 w-3" />{pkg.sessionsIncluded} sessions</span>
                           )}
@@ -486,7 +515,11 @@ function CoachesTab({ venueId }: { venueId: string }) {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1.5 block text-sm text-neutral-400">{t("coaching.priceLabel")}</label>
+                  <label className="mb-1.5 block text-sm text-neutral-400">
+                    {pkgForm.lessonType === "group" && pkgForm.groupPricingEnabled
+                      ? t("coaching.basePrice")
+                      : t("coaching.priceLabel")}
+                  </label>
                   <input
                     type="text"
                     inputMode="numeric"
@@ -507,6 +540,78 @@ function CoachesTab({ venueId }: { venueId: string }) {
                   />
                 </div>
               </div>
+
+              {/* Group pricing section — only shown for group type */}
+              {pkgForm.lessonType === "group" && (
+                <div className="rounded-lg border border-blue-800/40 bg-blue-900/10 p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-blue-300">{t("coaching.groupPricing")}</span>
+                    <button
+                      type="button"
+                      onClick={() => setPkgForm({ ...pkgForm, groupPricingEnabled: !pkgForm.groupPricingEnabled })}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full transition-colors ${pkgForm.groupPricingEnabled ? "bg-blue-500" : "bg-neutral-600"}`}
+                    >
+                      <span className={`inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform ${pkgForm.groupPricingEnabled ? "translate-x-4" : "translate-x-0"}`} />
+                    </button>
+                  </div>
+                  {pkgForm.groupPricingEnabled && (
+                    <>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="mb-1 block text-xs text-neutral-400">{t("coaching.minPlayersLabel")}</label>
+                          <input
+                            type="number"
+                            min={2}
+                            value={pkgForm.minPlayers}
+                            onChange={(e) => setPkgForm({ ...pkgForm, minPlayers: e.target.value })}
+                            className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-teal-500 focus:outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-xs text-neutral-400">{t("coaching.maxPlayersLabel")}</label>
+                          <input
+                            type="number"
+                            min={2}
+                            value={pkgForm.maxPlayers}
+                            onChange={(e) => setPkgForm({ ...pkgForm, maxPlayers: e.target.value })}
+                            className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-teal-500 focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs text-neutral-400">{t("coaching.pricePerAdditionalPlayerLabel")}</label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="0"
+                          value={pkgForm.pricePerAdditionalPlayer}
+                          onChange={(e) => setPkgForm({ ...pkgForm, pricePerAdditionalPlayer: parseFormattedPrice(e.target.value) })}
+                          className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-teal-500 focus:outline-none"
+                        />
+                      </div>
+                      {/* Live price preview */}
+                      {pkgForm.priceInDollars && (
+                        <div className="rounded-md bg-neutral-800/60 px-3 py-2 text-xs text-neutral-400 space-y-0.5">
+                          <p className="text-neutral-300 font-medium mb-1">{t("coaching.groupPricePreview")}</p>
+                          {(() => {
+                            const base = displayToVnd(pkgForm.priceInDollars);
+                            const perExtra = displayToVnd(pkgForm.pricePerAdditionalPlayer || "0");
+                            const min = parseInt(pkgForm.minPlayers) || 2;
+                            const max = parseInt(pkgForm.maxPlayers) || 8;
+                            const points = [...new Set([min, Math.floor((min + max) / 2), max])].filter(n => n >= min && n <= max);
+                            return points.map((n) => {
+                              const total = base + Math.max(0, n - min) * perExtra;
+                              return (
+                                <p key={n}>{n} {t("coaching.playersCount", { count: n })} → {formatPrice(total)} VND</p>
+                              );
+                            });
+                          })()}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="mt-5 flex gap-3">
@@ -585,6 +690,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
     playerSearch: "",
     note: "",
     status: "confirmed" as string,
+    playerCount: 2,
   });
 
   type SelectedSlot = { courtId: string; courtLabel: string; startTime: string; endTime: string; hour: number };
@@ -685,7 +791,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
 
   const openBookModal = () => {
     setEditingLesson(null);
-    setBookForm({ coachId: "", packageId: "", playerId: "", playerSearch: "", note: "", status: "confirmed" });
+    setBookForm({ coachId: "", packageId: "", playerId: "", playerSearch: "", note: "", status: "confirmed", playerCount: 2 });
     setSelectedSlots([]);
     setBookDate(selectedDate);
     setErr("");
@@ -702,6 +808,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
       playerSearch: "",
       note: lesson.note || "",
       status: lesson.status,
+      playerCount: lesson.playerCount ?? 2,
     });
     const lessonDate = localDateISO(new Date(lesson.date));
     setBookDate(lessonDate);
@@ -815,6 +922,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
           startTime: firstSlot.startTime,
           endTime: lastSlot.endTime,
           note: bookForm.note || undefined,
+          ...(selectedPkg && selectedPkg.minPlayers != null ? { playerCount: bookForm.playerCount } : {}),
         });
       }
       await fetchLessons();
@@ -1177,6 +1285,12 @@ function LessonsTab({ venueId }: { venueId: string }) {
                     <span className="text-neutral-500">{t("coaching.court")}: {lesson.court.label}</span>
                   )}
                   <span className="text-neutral-500">{formatPrice(vndToDisplay(lesson.priceValue))} VND</span>
+                  {lesson.playerCount != null && lesson.package.lessonType === "group" && (
+                    <span className="flex items-center gap-1 text-blue-400">
+                      <Users className="h-3.5 w-3.5" />
+                      {lesson.playerCount}
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-neutral-500 mt-1">{lesson.package.name}</p>
                 {lesson.note && <p className="text-xs text-neutral-500 mt-0.5 italic">{lesson.note}</p>}
@@ -1369,6 +1483,33 @@ function LessonsTab({ venueId }: { venueId: string }) {
                   </div>
                 )}
 
+                {/* Player count stepper for scalable group packages */}
+                {selectedPkg && hasGroupPlayerPricing(selectedPkg) && (
+                  <div>
+                    <label className="mb-1.5 block text-sm text-neutral-400">{t("coaching.playersCount", { count: bookForm.playerCount })}</label>
+                    <div className="flex gap-2 flex-wrap">
+                      {Array.from(
+                        { length: (selectedPkg.maxPlayers ?? 8) - (selectedPkg.minPlayers ?? 2) + 1 },
+                        (_, i) => (selectedPkg.minPlayers ?? 2) + i
+                      ).map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => setBookForm({ ...bookForm, playerCount: n })}
+                          className={cn(
+                            "rounded-lg px-3 py-1.5 text-sm font-medium border transition-colors",
+                            bookForm.playerCount === n
+                              ? "bg-teal-600 text-white border-teal-500"
+                              : "border-neutral-700 bg-neutral-800 text-neutral-400 hover:bg-neutral-700"
+                          )}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Selection summary */}
                 {selectedSlots.length > 0 && (
                   <div className="rounded-lg border border-teal-600/40 bg-teal-600/10 p-3">
@@ -1382,7 +1523,11 @@ function LessonsTab({ venueId }: { venueId: string }) {
                     </p>
                     {selectedPkg && (
                       <p className="text-xs text-teal-400 mt-1">
-                        {formatPrice(vndToDisplay(Math.round((selectedPkg.priceValue / selectedPkg.durationMin) * selectedSlots.length * 60)))} VND
+                        {formatPrice(vndToDisplay(
+                          hasGroupPlayerPricing(selectedPkg)
+                            ? calculateSessionPrice(selectedPkg, { playerCount: bookForm.playerCount, slotCount: selectedSlots.length })
+                            : Math.round((selectedPkg.priceValue / selectedPkg.durationMin) * selectedSlots.length * 60)
+                        ))} VND
                       </p>
                     )}
                   </div>

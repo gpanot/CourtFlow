@@ -13,6 +13,8 @@
       "staffDashboardDesc": "Manage courts & sessions on-site",
       "otherApps": "Other Apps",
       "otherAppsDesc": "CourtFlow player, TV display, and queue join",
+      "coachPortal": "Coach Portal",
+      "coachPortalDesc": "View lessons, schedule, and profile",
       "tabletMode": "Tablet mode",
       "tabletModeDesc": "CourtPay table flow (check-in, queue, and kiosk for this venue)",
       "selectTabletVenue": "Select venue for CourtPay tablet",

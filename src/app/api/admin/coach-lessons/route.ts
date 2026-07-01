@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { hasGroupPlayerPricing, calculateSessionPrice } from "@/lib/coach-package-pricing";
 
 export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
@@ -119,6 +120,7 @@ export async function POST(request: NextRequest) {
       startTime: string;
       endTime?: string;
       note?: string;
+      playerCount?: number;
     }>(request);
 
     if (!body.venueId || !body.coachId || !body.playerId || !body.packageId || !body.date || !body.startTime) {
@@ -194,7 +196,11 @@ export async function POST(request: NextRequest) {
 
     const durationMs = endTime.getTime() - startTime.getTime();
     const durationMin = durationMs / (60 * 1000);
-    const priceValue = Math.round((pkg.priceValue / pkg.durationMin) * durationMin);
+    const slotCount = Math.round(durationMin / pkg.durationMin) || 1;
+
+    const priceValue = hasGroupPlayerPricing(pkg)
+      ? calculateSessionPrice(pkg, { playerCount: body.playerCount, slotCount })
+      : Math.round((pkg.priceValue / pkg.durationMin) * durationMin);
 
     const lesson = await prisma.coachLesson.create({
       data: {
@@ -207,6 +213,7 @@ export async function POST(request: NextRequest) {
         startTime,
         endTime,
         priceValue,
+        playerCount: body.playerCount ?? null,
         note: body.note || null,
       },
       include: {
