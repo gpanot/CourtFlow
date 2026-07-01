@@ -82,6 +82,7 @@ export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
   const isActive = target.bookingStatus !== "cancelled" && target.bookingStatus !== "no_show";
   const isLesson = target.type === "lesson";
   const isBooking = target.type === "booking";
+  const isOpenPlay = target.type === "openplay";
 
   const ps = PAYMENT_LABEL[normalizedPayment] ?? { label: target.paymentStatus, color: "text-neutral-400" };
   const bs = BOOKING_STATUS_LABEL[target.bookingStatus] ?? { label: target.bookingStatus, cls: "bg-neutral-700/40 text-neutral-400" };
@@ -142,6 +143,12 @@ export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
       });
     } else if (target.type === "booking") {
       await api.patch(`/api/admin/bookings/${entityId}/approve-payment`, {
+        paymentMethod: result.paymentMethod,
+        note: result.note,
+        proofUrl: result.proofUrl,
+      });
+    } else if (target.type === "openplay") {
+      await api.patch(`/api/admin/open-play/${entityId}/approve-payment`, {
         paymentMethod: result.paymentMethod,
         note: result.note,
         proofUrl: result.proofUrl,
@@ -331,7 +338,7 @@ export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
                   </button>
                 )}
 
-                {(normalizedPayment === "pending" || normalizedPayment === "paid") && (isLesson || isBooking) && isActive && (
+                {(normalizedPayment === "pending" || normalizedPayment === "paid") && (isLesson || isBooking || isOpenPlay) && isActive && (
                   <button
                     onClick={() => setShowPaymentForm(true)}
                     className={cn(

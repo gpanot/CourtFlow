@@ -21,11 +21,15 @@ export async function GET(request: NextRequest) {
       where: {
         venueId,
         date,
-        // Exclude pending holds that have already expired (not yet cleaned up by cron)
-        NOT: {
-          paymentStatus: "pending",
-          holdExpiresAt: { lt: now },
-        },
+        // Include all except expired pending-payment holds (not yet cleaned up by cron).
+        // Written as OR because NOT with compound AND doesn't handle SQL NULLs correctly
+        // — rows with null paymentStatus or null holdExpiresAt must be explicitly included.
+        OR: [
+          { paymentStatus: { not: "pending" } },
+          { paymentStatus: null },
+          { holdExpiresAt: null },
+          { holdExpiresAt: { gte: now } },
+        ],
       },
       include: {
         court: { select: { id: true, label: true } },

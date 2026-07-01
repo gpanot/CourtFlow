@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
-import { json, error } from "@/lib/api-helpers";
+import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireAuth } from "@/lib/auth";
 import { sendBookingEmail } from "@/lib/email/send";
 
@@ -14,19 +14,35 @@ export async function PATCH(
     requireAuth(request.headers);
     const { id } = await params;
 
+    // Optional fields sent by the staff direct-payment flow
+    let body: { paymentMethod?: string; note?: string; proofUrl?: string | null } = {};
+    try { body = await parseBody(request); } catch { /* no body is fine */ }
+
     const booking = await prisma.booking.findUnique({ where: { id } });
     if (!booking) return error("Booking not found", 404);
-    if (booking.paymentStatus !== "proof_submitted") {
-      return error(`Cannot approve: payment status is "${booking.paymentStatus}", expected "proof_submitted"`, 400);
+
+    // Allow approving from:
+    //  - "proof_submitted" → player-portal flow (staff approves submitted proof)
+    //  - null / "pending"  → staff walk-in / direct cash recording
+    const allowedStatuses = [null, "pending", "proof_submitted"];
+    if (!allowedStatuses.includes(booking.paymentStatus)) {
+      return error(
+        `Cannot approve: payment status is "${booking.paymentStatus}"`,
+        400
+      );
     }
 
     const updated = await prisma.booking.update({
       where: { id },
-      data: { paymentStatus: "paid" },
+      data: {
+        paymentStatus: "paid",
+        ...(body.proofUrl !== undefined ? { paymentProofUrl: body.proofUrl } : {}),
+      },
       include: { court: { select: { label: true } }, player: { select: { name: true, email: true } } },
     });
 
-    if (updated.player.email) {
+    // Send confirmation email for portal-flow approvals (proof was submitted)
+    if (booking.paymentStatus === "proof_submitted" && updated.player.email) {
       await sendBookingEmail({
         to: updated.player.email,
         playerName: updated.player.name,

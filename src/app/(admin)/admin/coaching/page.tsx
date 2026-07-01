@@ -35,6 +35,9 @@ import {
   Filter,
   Calendar,
   Download,
+  UserPlus,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { CoachProfileEditor } from "@/components/admin/CoachProfileEditor";
 import {
@@ -658,6 +661,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showNewPlayerModal, setShowNewPlayerModal] = useState(false);
   const [viewMode, setViewMode] = useState<"court" | "time">(() => {
     if (typeof window === "undefined") return "court";
     return (localStorage.getItem("coaching-view-mode") as "court" | "time") || "court";
@@ -1396,7 +1400,17 @@ function LessonsTab({ venueId }: { venueId: string }) {
                 )}
 
                 <div>
-                  <label className="mb-1.5 block text-sm text-neutral-400">{t("coaching.player")}</label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-sm text-neutral-400">{t("coaching.player")}</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPlayerModal(true)}
+                      className="flex items-center gap-1 rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-300 hover:border-teal-500 hover:text-teal-300 transition-colors"
+                    >
+                      <UserPlus className="h-3.5 w-3.5" />
+                      New player
+                    </button>
+                  </div>
                   {bookForm.playerId ? (
                     <div className="flex items-center gap-2 rounded-lg border border-teal-600 bg-teal-600/10 px-3 py-2">
                       <User className="h-4 w-4 text-teal-400" />
@@ -1671,6 +1685,18 @@ function LessonsTab({ venueId }: { venueId: string }) {
         </div>
       )}
 
+      {/* New Player Modal — triggered from Book Lesson form */}
+      {showNewPlayerModal && (
+        <CoachingNewPlayerModal
+          onSuccess={(newPlayer) => {
+            setPlayers((prev) => [...prev, newPlayer]);
+            setBookForm((f) => ({ ...f, playerId: newPlayer.id, playerSearch: "" }));
+            setShowNewPlayerModal(false);
+          }}
+          onClose={() => setShowNewPlayerModal(false)}
+        />
+      )}
+
       {/* Payment Action Modal */}
       {paymentActionTarget && (
         <PaymentActionModal
@@ -1682,6 +1708,204 @@ function LessonsTab({ venueId }: { venueId: string }) {
           }}
         />
       )}
+    </div>
+  );
+}
+
+// ─── Coaching New Player Modal ────────────────────────────────────────────────
+
+function CoachingNewPlayerModal({
+  onSuccess,
+  onClose,
+}: {
+  onSuccess: (player: Player) => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
+  const [form, setForm] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    password: "",
+    gender: "male" as "male" | "female",
+    skillLevel: "beginner" as "beginner" | "intermediate" | "advanced" | "pro",
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  const update = (field: string, value: string) =>
+    setForm((f) => ({ ...f, [field]: value }));
+
+  async function submit() {
+    if (!form.name.trim()) { setErr("Name is required"); return; }
+    if (!form.phone.trim()) { setErr("Phone number is required"); return; }
+    if (!form.email.trim()) { setErr("Email is required"); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) { setErr("Invalid email address"); return; }
+    if (!form.password) { setErr("Password is required"); return; }
+    if (form.password.length < 8) { setErr("Password must be at least 8 characters"); return; }
+    setSaving(true);
+    setErr("");
+    try {
+      const player = await api.post<{ id: string; name: string; phone: string }>("/api/admin/players", {
+        name: form.name.trim(),
+        phone: form.phone.trim(),
+        email: form.email.trim().toLowerCase(),
+        password: form.password,
+        gender: form.gender,
+        skillLevel: form.skillLevel,
+      });
+      onSuccess({ id: player.id, name: player.name, phone: player.phone });
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const SKILL_LEVELS = [
+    { value: "beginner", label: "Beginner" },
+    { value: "intermediate", label: "Intermediate" },
+    { value: "advanced", label: "Advanced" },
+    { value: "pro", label: "Pro" },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between border-b border-neutral-800 px-5 py-4">
+          <h3 className="flex items-center gap-2 text-base font-semibold text-white">
+            <UserPlus className="h-4 w-4 text-teal-400" />
+            Add player
+          </h3>
+          <button onClick={onClose} className="rounded-lg p-1 text-neutral-400 hover:text-white hover:bg-neutral-800">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-300">
+              Full name <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={(e) => update("name", e.target.value)}
+              placeholder="e.g. Nguyen Van An"
+              className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-teal-500 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-300">
+              Phone number <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="tel"
+              value={form.phone}
+              onChange={(e) => update("phone", e.target.value)}
+              placeholder="e.g. 0912345678"
+              className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-teal-500 focus:outline-none"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-300">
+              Email <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="email"
+              value={form.email}
+              onChange={(e) => update("email", e.target.value)}
+              placeholder="e.g. player@email.com"
+              className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-teal-500 focus:outline-none"
+            />
+            <p className="mt-1 text-[11px] text-neutral-500">Used to log in to the player portal</p>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-300">
+              Password <span className="text-red-400">*</span>
+            </label>
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={form.password}
+                onChange={(e) => update("password", e.target.value)}
+                placeholder="Min. 8 characters"
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 pr-9 text-sm text-white placeholder:text-neutral-600 focus:border-teal-500 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300"
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            <p className="mt-1 text-[11px] text-neutral-500">Share this with the player so they can log in</p>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-neutral-300">Gender</label>
+            <div className="flex gap-2">
+              {(["male", "female"] as const).map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => update("gender", g)}
+                  className={cn(
+                    "flex-1 rounded-lg border py-2 text-sm font-medium transition-colors capitalize",
+                    form.gender === g
+                      ? "border-teal-500 bg-teal-600/20 text-teal-300"
+                      : "border-neutral-700 bg-neutral-800 text-neutral-400 hover:border-neutral-600 hover:text-white"
+                  )}
+                >
+                  {g === "male" ? t("players.male") : t("players.female")}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-neutral-300">Skill level</label>
+            <div className="grid grid-cols-2 gap-2">
+              {SKILL_LEVELS.map((s) => (
+                <button
+                  key={s.value}
+                  type="button"
+                  onClick={() => update("skillLevel", s.value)}
+                  className={cn(
+                    "rounded-lg border py-2 text-sm font-medium transition-colors",
+                    form.skillLevel === s.value
+                      ? "border-teal-500 bg-teal-600/20 text-teal-300"
+                      : "border-neutral-700 bg-neutral-800 text-neutral-400 hover:border-neutral-600 hover:text-white"
+                  )}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {err && (
+            <p className="rounded-lg border border-red-800/50 bg-red-900/20 px-3 py-2 text-xs text-red-300">
+              {err}
+            </p>
+          )}
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={submit}
+              disabled={saving}
+              className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-teal-600 py-2.5 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-50"
+            >
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+              {saving ? t("common.creating") : "Add player"}
+            </button>
+            <button
+              onClick={onClose}
+              className="rounded-lg border border-neutral-700 px-4 py-2.5 text-sm text-neutral-400 hover:text-white hover:bg-neutral-800"
+            >
+              {t("common.cancel")}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

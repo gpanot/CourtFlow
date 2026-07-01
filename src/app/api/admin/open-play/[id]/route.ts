@@ -27,8 +27,9 @@ export async function PATCH(
     await assertVenueAccess(auth, reg.venueId);
 
     if (action === "approve_payment") {
-      if (reg.paymentStatus !== "proof_submitted") {
-        return error(`Cannot approve: payment status is "${reg.paymentStatus}", expected "proof_submitted"`, 400);
+      const allowedStatuses = [null, "pending", "proof_submitted"];
+      if (!allowedStatuses.includes(reg.paymentStatus)) {
+        return error(`Cannot approve: payment status is "${reg.paymentStatus}"`, 400);
       }
       const updated = await prisma.openPlayRegistration.update({
         where: { id },

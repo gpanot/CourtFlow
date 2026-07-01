@@ -7,9 +7,10 @@ import { assertVenueAccess } from "@/lib/venue-scope";
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/admin/open-play/registrations?venueId=&date=YYYY-MM-DD
- * Returns counts of active registrations grouped by scheduleEntryId for a given date.
- * Used by admin schedule config to display "12/16 booked" on each entry.
+ * GET /api/admin/open-play/registrations?venueId=&date=YYYY-MM-DD[&detail=full]
+ *
+ * Without ?detail=full → returns counts grouped by scheduleEntryId (used by schedule config).
+ * With    ?detail=full → returns full per-player records for the bookings-for-date list.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -17,13 +18,34 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const venueId = searchParams.get("venueId");
     const dateStr = searchParams.get("date");
+    const detail = searchParams.get("detail");
 
     if (!venueId) return error("venueId required", 400);
     await assertVenueAccess(auth, venueId);
 
-    const date = dateStr ? new Date(dateStr) : new Date();
-    date.setHours(0, 0, 0, 0);
+    const dateKey = dateStr ? dateStr.split("T")[0] : (() => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    })();
+    const date = new Date(dateKey + "T12:00:00+07:00");
 
+    if (detail === "full") {
+      // Full records for the bookings-for-date section
+      const regs = await prisma.openPlayRegistration.findMany({
+        where: {
+          venueId,
+          date,
+          status: { not: "cancelled" },
+        },
+        include: {
+          player: { select: { id: true, name: true, phone: true } },
+        },
+        orderBy: { startTime: "asc" },
+      });
+      return json(regs);
+    }
+
+    // Default: counts grouped by scheduleEntryId (existing behaviour)
     const regs = await prisma.openPlayRegistration.findMany({
       where: {
         venueId,

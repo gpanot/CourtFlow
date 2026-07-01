@@ -43,12 +43,16 @@ import {
   DollarSign,
   CreditCard,
   Download,
+  Eye,
+  EyeOff,
+  UserPlus,
 } from "lucide-react";
 import { CourtsManager } from "@/components/admin/CourtsManager";
 import {
   PaymentActionModal,
   type PaymentActionTarget,
 } from "@/components/admin/PaymentActionModal";
+import { StaffBookingModal } from "@/components/admin/StaffBookingModal";
 
 export const dynamic = "force-dynamic";
 
@@ -145,6 +149,20 @@ interface PlayerResult {
   phone: string;
 }
 
+interface OpenPlayRegRecord {
+  id: string;
+  venueId: string;
+  scheduleEntryId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  status: "confirmed" | "cancelled" | "no_show";
+  paymentStatus: string | null;
+  paymentProofUrl: string | null;
+  priceValue: number;
+  player: { id: string; name: string; phone: string };
+}
+
 /** Return YYYY-MM-DD for a Date, interpreted in the given IANA timezone. */
 function formatDate(d: Date, tz?: string): string {
   if (tz) {
@@ -226,8 +244,13 @@ export default function BookingsPage() {
   const [playerResults, setPlayerResults] = useState<PlayerResult[]>([]);
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerResult | null>(null);
   const [searching, setSearching] = useState(false);
+  const [showNewPlayerModal, setShowNewPlayerModal] = useState(false);
   const [newCourtId, setNewCourtId] = useState("");
   const [newSlotTime, setNewSlotTime] = useState("");
+
+  // Unified staff booking modal (Court + Open Play via StaffBookingModal)
+  const [showStaffModal, setShowStaffModal] = useState(false);
+  const [staffModalMode, setStaffModalMode] = useState<"court" | "open_play">("court");
 
   // Edit booking state
   const [editBooking, setEditBooking] = useState<BookingRecord | null>(null);
@@ -243,6 +266,10 @@ export default function BookingsPage() {
     return (localStorage.getItem("bookings-view-mode") as "court" | "time") || "court";
   });
   const [venueDetails, setVenueDetails] = useState<Venue | null>(null);
+
+  // Open play registrations for the selected date
+  const [openPlayRegs, setOpenPlayRegs] = useState<OpenPlayRegRecord[]>([]);
+  const [bookingsListFilter, setBookingsListFilter] = useState<"all" | "booking" | "open_play">("all");
 
   // Court block state
   const [courtBlocks, setCourtBlocks] = useState<CourtBlockRecord[]>([]);
@@ -293,6 +320,16 @@ export default function BookingsPage() {
     } catch (e) { console.error(e); }
   }, [selectedVenueId, selectedDate]);
 
+  const fetchOpenPlayRegs = useCallback(async () => {
+    if (!selectedVenueId) return;
+    try {
+      const data = await api.get<OpenPlayRegRecord[]>(
+        `/api/admin/open-play/registrations?venueId=${selectedVenueId}&date=${selectedDate}&detail=full`
+      );
+      setOpenPlayRegs(data);
+    } catch (e) { console.error(e); }
+  }, [selectedVenueId, selectedDate]);
+
   const fetchVenueDetails = useCallback(async () => {
     if (!selectedVenueId) return;
     try {
@@ -314,10 +351,11 @@ export default function BookingsPage() {
   }, [selectedVenueId]);
 
   useEffect(() => { fetchVenues(); }, [fetchVenues]);
-  useEffect(() => { fetchBookings(); fetchAvailability(); fetchCourtBlocks(); }, [fetchBookings, fetchAvailability, fetchCourtBlocks]);
+  useEffect(() => { fetchBookings(); fetchAvailability(); fetchCourtBlocks(); fetchOpenPlayRegs(); }, [fetchBookings, fetchAvailability, fetchCourtBlocks, fetchOpenPlayRegs]);
+  useEffect(() => { setBookingsListFilter("all"); }, [selectedDate]);
   useEffect(() => { fetchVenueDetails(); }, [fetchVenueDetails]);
   useEffect(() => {
-    if (activeTab === "bookings") { fetchAvailability(); fetchCourtBlocks(); }
+    if (activeTab === "bookings") { fetchAvailability(); fetchCourtBlocks(); fetchOpenPlayRegs(); }
   }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const searchPlayers = useCallback(async (query: string) => {
@@ -453,16 +491,6 @@ export default function BookingsPage() {
       endHour: String(endHour),
     });
     setShowBlockModal(true);
-  };
-
-  const openCreateFresh = () => {
-    setCreateSlot(null);
-    clearSelection();
-    setNewCourtId(availability[0]?.courtId || "");
-    setNewSlotTime("");
-    setSelectedPlayer(null);
-    setPlayerSearch("");
-    setShowCreateModal(true);
   };
 
   const closeCreateModal = () => {
@@ -680,7 +708,7 @@ export default function BookingsPage() {
         ))}
         </div>
         {activeTab === "bookings" && availability.length > 0 && (
-          <div className="flex items-center gap-2 pb-2">
+          <div className="flex items-center gap-2 pb-2 flex-wrap">
             <button
               onClick={() => openBlockModal("open_play")}
               className="flex items-center gap-1.5 rounded-lg border border-emerald-700/50 bg-emerald-900/20 px-3 py-2 text-sm font-medium text-emerald-300 hover:bg-emerald-900/40"
@@ -694,7 +722,13 @@ export default function BookingsPage() {
               <Ban className="h-4 w-4" /> {t("bookings.blockTime")}
             </button>
             <button
-              onClick={openCreateFresh}
+              onClick={() => { setStaffModalMode("open_play"); setShowStaffModal(true); }}
+              className="flex items-center gap-1.5 rounded-lg border border-emerald-600/60 bg-emerald-900/20 px-3 py-2 text-sm font-medium text-emerald-200 hover:bg-emerald-900/40"
+            >
+              <Plus className="h-4 w-4" /> Register Open Play
+            </button>
+            <button
+              onClick={() => { setStaffModalMode("court"); setShowStaffModal(true); }}
               className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-500"
             >
               <Plus className="h-4 w-4" /> {t("bookings.newBooking")}
@@ -702,9 +736,15 @@ export default function BookingsPage() {
           </div>
         )}
         {activeTab === "list" && selectedVenueId && (
-          <div className="pb-2">
+          <div className="pb-2 flex items-center gap-2 flex-wrap">
             <button
-              onClick={openCreateFresh}
+              onClick={() => { setStaffModalMode("open_play"); setShowStaffModal(true); }}
+              className="flex items-center gap-1.5 rounded-lg border border-emerald-600/60 bg-emerald-900/20 px-3 py-2 text-sm font-medium text-emerald-200 hover:bg-emerald-900/40"
+            >
+              <Plus className="h-4 w-4" /> Register Open Play
+            </button>
+            <button
+              onClick={() => { setStaffModalMode("court"); setShowStaffModal(true); }}
               className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-500"
             >
               <Plus className="h-4 w-4" /> {t("bookings.newBooking")}
@@ -1182,14 +1222,52 @@ export default function BookingsPage() {
 
       {/* Bookings List */}
       <section className="space-y-3">
-        <h3 className="text-sm font-medium uppercase tracking-wider text-neutral-400">
-          {t("bookings.bookingsFor")} {new Date(selectedDate + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
-        </h3>
-        {bookings.length === 0 && courtBlocks.length === 0 ? (
-          <p className="text-sm text-neutral-500">{t("bookings.noBookingsForDate")}</p>
-        ) : (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h3 className="text-sm font-medium uppercase tracking-wider text-neutral-400">
+            {t("bookings.bookingsFor")} {new Date(selectedDate + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {([
+              { key: "all" as const, label: "All", count: bookings.length + openPlayRegs.length },
+              { key: "booking" as const, label: "Booking", count: bookings.length },
+              { key: "open_play" as const, label: "Open Play", count: openPlayRegs.length },
+            ]).map(({ key, label, count }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setBookingsListFilter(key)}
+                className={cn(
+                  "rounded-full px-3 py-1 text-xs font-medium transition-colors",
+                  bookingsListFilter === key
+                    ? key === "open_play"
+                      ? "bg-emerald-600/20 text-emerald-400"
+                      : key === "booking"
+                        ? "bg-purple-600/20 text-purple-400"
+                        : "bg-neutral-700 text-white"
+                    : "bg-neutral-800 text-neutral-400 hover:bg-neutral-700 hover:text-neutral-200"
+                )}
+              >
+                {label} ({count})
+              </button>
+            ))}
+          </div>
+        </div>
+        {(() => {
+          const showBookings = bookingsListFilter === "all" || bookingsListFilter === "booking";
+          const showOpenPlay = bookingsListFilter === "all" || bookingsListFilter === "open_play";
+          const showBlocks = bookingsListFilter === "all";
+          const hasVisibleItems =
+            (showBookings && bookings.length > 0) ||
+            (showOpenPlay && openPlayRegs.length > 0) ||
+            (showBlocks && courtBlocks.length > 0);
+
+          if (!hasVisibleItems) {
+            return <p className="text-sm text-neutral-500">{t("bookings.noBookingsForDate")}</p>;
+          }
+
+          return (
           <div className="space-y-2">
-            {bookings.map((b) => (
+            {showBookings && bookings.map((b) => (
               <div key={b.id} className={cn(
                 "flex items-center gap-3 rounded-xl border p-3",
                 b.status === "confirmed" && "border-neutral-800 bg-neutral-900",
@@ -1199,6 +1277,10 @@ export default function BookingsPage() {
               )}>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
+                    {/* Booking type tag */}
+                    <span className="text-[10px] rounded-full px-2 py-0.5 bg-purple-600/20 text-purple-400 font-medium">
+                      Booking
+                    </span>
                     <a
                       href={`/admin/courtpass-players?playerId=${b.player.id}`}
                       onClick={(e) => e.stopPropagation()}
@@ -1208,7 +1290,7 @@ export default function BookingsPage() {
                     </a>
                     <span className="text-xs text-neutral-500">{b.player.phone}</span>
                     <BookingStatusBadge status={b.status} />
-                    {b.paymentStatus && (
+                    {b.status !== "cancelled" && (
                       <button
                         onClick={() => setPaymentActionTarget({
                           type: "booking",
@@ -1225,7 +1307,7 @@ export default function BookingsPage() {
                         })}
                         title="Manage payment"
                       >
-                        <PaymentStatusBadge status={b.paymentStatus!} />
+                        <PaymentStatusBadge status={b.paymentStatus ?? "pending"} />
                       </button>
                     )}
                   </div>
@@ -1244,7 +1326,61 @@ export default function BookingsPage() {
               </div>
             ))}
 
-            {courtBlocks.map((bl) => (
+            {/* Open Play registrations */}
+            {showOpenPlay && openPlayRegs.map((r) => (
+              <div key={r.id} className={cn(
+                "flex items-center gap-3 rounded-xl border p-3",
+                r.status === "confirmed" && "border-emerald-800/30 bg-emerald-900/5",
+                r.status === "no_show" && "border-amber-800/30 bg-amber-900/10",
+              )}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Open Play type tag */}
+                    <span className="text-[10px] rounded-full px-2 py-0.5 bg-emerald-600/20 text-emerald-400 font-medium">
+                      Open Play
+                    </span>
+                    <a
+                      href={`/admin/courtpass-players?playerId=${r.player.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="font-medium hover:text-emerald-400 hover:underline transition-colors"
+                    >
+                      {r.player.name}
+                    </a>
+                    <span className="text-xs text-neutral-500">{r.player.phone}</span>
+                    <BookingStatusBadge status={r.status} />
+                    {r.status !== "cancelled" && (
+                      <button
+                        onClick={() => setPaymentActionTarget({
+                          type: "openplay",
+                          entityId: r.id,
+                          playerName: r.player.name,
+                          detail: "Open Play",
+                          date: r.date,
+                          startTime: r.startTime,
+                          endTime: r.endTime,
+                          priceValue: r.priceValue,
+                          paymentStatus: r.paymentStatus ?? "pending",
+                          paymentProofUrl: r.paymentProofUrl,
+                          bookingStatus: r.status,
+                        })}
+                        title="Manage payment"
+                      >
+                        <PaymentStatusBadge status={r.paymentStatus ?? "pending"} />
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 mt-1 text-xs text-neutral-400">
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {formatTime(r.startTime, venueTimezone)} – {formatTime(r.endTime, venueTimezone)}
+                    </span>
+                    <span>{fmtPrice(r.priceValue)}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {showBlocks && courtBlocks.map((bl) => (
               <div key={bl.id} className={cn(
                 "flex items-center gap-3 rounded-xl border p-3",
                 bl.type === "maintenance" && "border-neutral-700 bg-neutral-800/50",
@@ -1281,7 +1417,8 @@ export default function BookingsPage() {
               </div>
             ))}
           </div>
-        )}
+          );
+        })()}
       </section>
 
       </>}
@@ -1348,7 +1485,17 @@ export default function BookingsPage() {
 
             {/* Player search */}
             <div className="space-y-2">
-              <label className="text-xs text-neutral-400">{t("bookings.player")}</label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs text-neutral-400">{t("bookings.player")}</label>
+                <button
+                  type="button"
+                  onClick={() => setShowNewPlayerModal(true)}
+                  className="flex items-center gap-1 rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-300 hover:border-purple-500 hover:text-purple-300 transition-colors"
+                >
+                  <UserPlus className="h-3.5 w-3.5" />
+                  New player
+                </button>
+              </div>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
                 <input
@@ -1395,6 +1542,37 @@ export default function BookingsPage() {
         </div>
       )}
 
+      {/* New Player Modal — triggered from within the Create Booking modal */}
+      {showNewPlayerModal && (
+        <NewPlayerInlineModal
+          venueId={selectedVenueId}
+          onSuccess={(player) => {
+            setSelectedPlayer(player);
+            setPlayerSearch(player.name);
+            setPlayerResults([]);
+            setShowNewPlayerModal(false);
+          }}
+          onClose={() => setShowNewPlayerModal(false)}
+        />
+      )}
+
+      {/* Unified Staff Booking Modal (Court + Open Play) */}
+      {showStaffModal && selectedVenueId && (
+        <StaffBookingModal
+          venueId={selectedVenueId}
+          initialDate={selectedDate}
+          allowModes={["court", "open_play"]}
+          initialMode={staffModalMode}
+          onClose={() => setShowStaffModal(false)}
+          onCreated={async () => {
+            setShowStaffModal(false);
+            await fetchBookings();
+            await fetchOpenPlayRegs();
+            await fetchAvailability();
+          }}
+        />
+      )}
+
       {/* Payment Action Modal */}
       {paymentActionTarget && (
         <PaymentActionModal
@@ -1403,6 +1581,7 @@ export default function BookingsPage() {
           onUpdated={async () => {
             setPaymentActionTarget(null);
             await fetchBookings();
+            await fetchOpenPlayRegs();
             await fetchAvailability();
           }}
         />
@@ -2554,6 +2733,220 @@ function AllBookingsTab({
           }}
         />
       )}
+    </div>
+  );
+}
+
+// ─── New Player Inline Modal ──────────────────────────────────────────────────
+
+function NewPlayerInlineModal({
+  venueId,
+  onSuccess,
+  onClose,
+}: {
+  venueId: string;
+  onSuccess: (player: PlayerResult) => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
+  const [form, setForm] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    password: "",
+    gender: "male" as "male" | "female",
+    skillLevel: "beginner" as "beginner" | "intermediate" | "advanced" | "pro",
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  const update = (field: string, value: string) =>
+    setForm((f) => ({ ...f, [field]: value }));
+
+  async function submit() {
+    if (!form.name.trim()) { setErr("Name is required"); return; }
+    if (!form.phone.trim()) { setErr("Phone number is required"); return; }
+    if (!form.email.trim()) { setErr("Email is required"); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) { setErr("Invalid email address"); return; }
+    if (!form.password) { setErr("Password is required"); return; }
+    if (form.password.length < 8) { setErr("Password must be at least 8 characters"); return; }
+
+    setSaving(true);
+    setErr("");
+    try {
+      const player = await api.post<{ id: string; name: string; phone: string }>("/api/admin/players", {
+        name: form.name.trim(),
+        phone: form.phone.trim(),
+        email: form.email.trim().toLowerCase(),
+        password: form.password,
+        gender: form.gender,
+        skillLevel: form.skillLevel,
+      });
+      onSuccess({ id: player.id, name: player.name, phone: player.phone });
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const SKILL_LEVELS = [
+    { value: "beginner", label: "Beginner" },
+    { value: "intermediate", label: "Intermediate" },
+    { value: "advanced", label: "Advanced" },
+    { value: "pro", label: "Pro" },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between border-b border-neutral-800 px-5 py-4">
+          <h3 className="flex items-center gap-2 text-base font-semibold text-white">
+            <UserPlus className="h-4 w-4 text-purple-400" />
+            Add player
+          </h3>
+          <button onClick={onClose} className="rounded-lg p-1 text-neutral-400 hover:text-white hover:bg-neutral-800">
+            <XCircle className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+          {/* Name */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-300">
+              Full name <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={(e) => update("name", e.target.value)}
+              placeholder="e.g. Nguyen Van An"
+              className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none"
+            />
+          </div>
+
+          {/* Phone */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-300">
+              Phone number <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="tel"
+              value={form.phone}
+              onChange={(e) => update("phone", e.target.value)}
+              placeholder="e.g. 0912345678"
+              className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none"
+            />
+          </div>
+
+          {/* Email */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-300">
+              Email <span className="text-red-400">*</span>
+            </label>
+            <input
+              type="email"
+              value={form.email}
+              onChange={(e) => update("email", e.target.value)}
+              placeholder="e.g. player@email.com"
+              className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none"
+            />
+            <p className="mt-1 text-[11px] text-neutral-500">Used to log in to the player portal</p>
+          </div>
+
+          {/* Password */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-neutral-300">
+              Password <span className="text-red-400">*</span>
+            </label>
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={form.password}
+                onChange={(e) => update("password", e.target.value)}
+                placeholder="Min. 8 characters"
+                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 pr-9 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300"
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            <p className="mt-1 text-[11px] text-neutral-500">Share this with the player so they can log in</p>
+          </div>
+
+          {/* Gender */}
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-neutral-300">Gender</label>
+            <div className="flex gap-2">
+              {(["male", "female"] as const).map((g) => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => update("gender", g)}
+                  className={cn(
+                    "flex-1 rounded-lg border py-2 text-sm font-medium transition-colors capitalize",
+                    form.gender === g
+                      ? "border-purple-500 bg-purple-600/20 text-purple-300"
+                      : "border-neutral-700 bg-neutral-800 text-neutral-400 hover:border-neutral-600 hover:text-white"
+                  )}
+                >
+                  {g === "male" ? t("players.male") : t("players.female")}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Skill level */}
+          <div>
+            <label className="mb-1.5 block text-xs font-medium text-neutral-300">Skill level</label>
+            <div className="grid grid-cols-2 gap-2">
+              {SKILL_LEVELS.map((s) => (
+                <button
+                  key={s.value}
+                  type="button"
+                  onClick={() => update("skillLevel", s.value)}
+                  className={cn(
+                    "rounded-lg border py-2 text-sm font-medium transition-colors",
+                    form.skillLevel === s.value
+                      ? "border-purple-500 bg-purple-600/20 text-purple-300"
+                      : "border-neutral-700 bg-neutral-800 text-neutral-400 hover:border-neutral-600 hover:text-white"
+                  )}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {err && (
+            <p className="rounded-lg border border-red-800/50 bg-red-900/20 px-3 py-2 text-xs text-red-300">
+              {err}
+            </p>
+          )}
+
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={submit}
+              disabled={saving}
+              className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-purple-600 py-2.5 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-50"
+            >
+              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+              {saving ? t("common.creating") : "Add player"}
+            </button>
+            <button
+              onClick={onClose}
+              className="rounded-lg border border-neutral-700 px-4 py-2.5 text-sm text-neutral-400 hover:text-white hover:bg-neutral-800"
+            >
+              {t("common.cancel")}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
