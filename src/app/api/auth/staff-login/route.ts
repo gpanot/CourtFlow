@@ -76,12 +76,12 @@ export async function POST(request: NextRequest) {
     const ip = extractClientIp(request.headers);
     const userAgent = request.headers.get("user-agent");
 
-    // Rate-limit by IP (5 failures / 10 min) and by phone (10 failures / 10 min).
+    // Rate-limit by IP (10 failures / 10 min) and by phone (10 failures / 10 min).
     // We check BEFORE the DB lookup so locked-out IPs don't even reach the DB.
     const WINDOW = 10 * 60 * 1000;
     const ipKey = `staff-login-ip:${ip ?? "unknown"}`;
     const phoneKey = `staff-login-phone:${phone}`;
-    if (isRateLimitedCheck(ipKey, 5, WINDOW) || isRateLimitedCheck(phoneKey, 10, WINDOW)) {
+    if (isRateLimitedCheck(ipKey, 10, WINDOW) || isRateLimitedCheck(phoneKey, 10, WINDOW)) {
       await logAuth(null, "login_rate_limited", phone, ip, userAgent);
       return error("Too many login attempts. Please wait 10 minutes before trying again.", 429);
     }
