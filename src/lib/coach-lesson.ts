@@ -151,17 +151,17 @@ export async function createCoachLesson(
     playerCount,
   } = input;
 
-  console.log(`[coach-lesson:lookup] packageId="${packageId}" coachId="${coachId}" venueId="${venueId}"`);
-
-  // First, check if the package exists at all (ignoring venueId and active)
-  const pkgRaw = await prisma.coachPackage.findUnique({ where: { id: packageId }, select: { id: true, coachId: true, venueId: true, active: true, name: true } });
-  console.log(`[coach-lesson:lookup] raw result: ${pkgRaw ? JSON.stringify(pkgRaw) : "null"}`);
-
+  // Look up package by id + coachId only — do NOT filter by the client-provided venueId.
+  // The package's own venueId is the source of truth; the client may send a different
+  // venueId (e.g. NEXT_PUBLIC_VENUE_ID) than the one the admin used when creating the package.
   const pkg = await prisma.coachPackage.findFirst({
-    where: { id: packageId, coachId, venueId, active: true },
+    where: { id: packageId, coachId, active: true },
     include: { coach: { select: { creditPackageValidityDays: true } } },
   });
   if (!pkg) throw new CoachLessonError("Package not found", 404);
+
+  // Use the package's own venueId as authoritative — overrides whatever the client sent.
+  const resolvedVenueId = pkg.venueId;
 
   // Block credit payment for group lessons
   if (payWithCredit && pkg.lessonType === "group") {
@@ -184,7 +184,7 @@ export async function createCoachLesson(
   }
 
   const venue = await prisma.venue.findUniqueOrThrow({
-    where: { id: venueId },
+    where: { id: resolvedVenueId },
     select: { settings: true, bankName: true, bankAccount: true, bankOwnerName: true },
   });
   const config = getBookingConfig(venue.settings as Record<string, unknown>);
@@ -232,7 +232,7 @@ export async function createCoachLesson(
   }
 
   const courts = await prisma.court.findMany({
-    where: { venueId, isBookable: true },
+    where: { venueId: resolvedVenueId, isBookable: true },
     select: { id: true },
   });
 
@@ -291,7 +291,7 @@ export async function createCoachLesson(
 
       const newLesson = await tx.coachLesson.create({
         data: {
-          venueId,
+          venueId: resolvedVenueId,
           coachId,
           playerId,
           courtId: assignedCourtId,
@@ -335,7 +335,7 @@ export async function createCoachLesson(
   const paymentRef = await generatePaymentRef("coach-lesson");
   const lesson = await prisma.coachLesson.create({
     data: {
-      venueId,
+      venueId: resolvedVenueId,
       coachId,
       playerId,
       courtId: assignedCourtId,

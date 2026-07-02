@@ -43,14 +43,17 @@ export async function createCreditPurchase(
 ): Promise<CreateCreditPurchaseResult> {
   const { coachId, packageId, quantity, totalPrice, venueId } = input;
 
+  // Look up by id + coachId only — the client's venueId may differ from the package's stored venue.
   const pkg = await prisma.coachPackage.findFirst({
-    where: { id: packageId, coachId, venueId, active: true },
+    where: { id: packageId, coachId, active: true },
     include: { coach: { select: { creditPackageValidityDays: true } } },
   });
   if (!pkg) throw new Error("Package not found");
 
+  const resolvedVenueId = pkg.venueId;
+
   const venue = await prisma.venue.findUniqueOrThrow({
-    where: { id: venueId },
+    where: { id: resolvedVenueId },
     select: { bankName: true, bankAccount: true, bankOwnerName: true },
   });
 
@@ -63,7 +66,7 @@ export async function createCreditPurchase(
     data: {
       playerId,
       coachId,
-      venueId,
+      venueId: resolvedVenueId,
       packageId,
       totalSessions: quantity,
       priceValue: totalPrice,

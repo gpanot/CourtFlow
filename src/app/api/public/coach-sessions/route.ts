@@ -53,7 +53,6 @@ export async function POST(request: NextRequest) {
     return json(result, 201);
   } catch (e) {
     const msg = (e as Error).message;
-    console.error(`[coach-sessions:POST] error=${msg}`, e instanceof Error ? e.stack : e);
     if (msg === "Authentication required") return error(msg, 401);
     if (e instanceof CoachLessonError) {
       if (e.statusCode === 409 && e.extra) {
