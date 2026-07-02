@@ -47,9 +47,6 @@ export async function POST(request: NextRequest) {
       playerCount,
     });
 
-    const lesson = result.lesson as { date?: string; startTime?: unknown };
-    console.log(`[coach-session:create] dateReceived="${date}" startTimeReceived="${startTime}" → stored date="${lesson.date}" startTime="${lesson.startTime}"`);
-
     return json(result, 201);
   } catch (e) {
     const msg = (e as Error).message;
