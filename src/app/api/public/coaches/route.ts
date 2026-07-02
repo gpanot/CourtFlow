@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
         coachBio: true,
         coachPhoto: true,
         coachPackages: {
-          where: { active: true },
+          where: { active: true, venueId },
           select: {
             id: true,
             name: true,

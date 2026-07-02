@@ -74,7 +74,7 @@ export async function GET(
         coachYearsExperience: true,
         coachGroupSizes: true,
         coachPackages: {
-          where: { active: true },
+          where: { active: true, venueId },
           select: {
             id: true,
             name: true,
