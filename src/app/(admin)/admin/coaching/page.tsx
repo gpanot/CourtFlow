@@ -360,8 +360,12 @@ function CoachesTab({ venueId }: { venueId: string }) {
               onClick={() => setExpandedCoachId(expanded ? null : coach.id)}
               className="w-full flex items-center gap-3 p-4 text-left hover:bg-neutral-800/50 transition-colors"
             >
-              <div className="h-10 w-10 rounded-full bg-teal-600/20 flex items-center justify-center shrink-0">
-                <GraduationCap className="h-5 w-5 text-teal-400" />
+              <div className="h-10 w-10 rounded-full bg-teal-600/20 flex items-center justify-center shrink-0 overflow-hidden">
+                {coach.coachPhoto ? (
+                  <img src={coach.coachPhoto} alt={coach.name} className="h-10 w-10 rounded-full object-cover" />
+                ) : (
+                  <GraduationCap className="h-5 w-5 text-teal-400" />
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
