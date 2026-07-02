@@ -151,6 +151,12 @@ export async function createCoachLesson(
     playerCount,
   } = input;
 
+  console.log(`[coach-lesson:lookup] packageId="${packageId}" coachId="${coachId}" venueId="${venueId}"`);
+
+  // First, check if the package exists at all (ignoring venueId and active)
+  const pkgRaw = await prisma.coachPackage.findUnique({ where: { id: packageId }, select: { id: true, coachId: true, venueId: true, active: true, name: true } });
+  console.log(`[coach-lesson:lookup] raw result: ${pkgRaw ? JSON.stringify(pkgRaw) : "null"}`);
+
   const pkg = await prisma.coachPackage.findFirst({
     where: { id: packageId, coachId, venueId, active: true },
     include: { coach: { select: { creditPackageValidityDays: true } } },
