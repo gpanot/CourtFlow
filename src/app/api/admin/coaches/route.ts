@@ -21,7 +21,10 @@ export async function GET(request: NextRequest) {
           include: { venue: { select: { id: true, name: true } } },
         },
         coachPackages: {
-          where: { active: true },
+          where: {
+            active: true,
+            ...(venueId ? { venueId } : {}),
+          },
           orderBy: { sortOrder: "asc" },
         },
         _count: { select: { coachLessons: true } },
