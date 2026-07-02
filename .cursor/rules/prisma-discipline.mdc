@@ -1,0 +1,58 @@
+---
+description: Non-negotiable Prisma discipline rules — schema changes, migrations, and conflict resolution
+alwaysApply: true
+---
+
+# Prisma Discipline — Non-Negotiable Rules
+
+## Forbidden commands (never run under any circumstances)
+
+- **NEVER** run `prisma db push` — it silently bypasses the migration system and leaves the schema untrackable
+- **NEVER** run `prisma migrate reset` — it destroys all data and the entire migration history
+- **NEVER** run raw `ALTER TABLE`, `ADD COLUMN`, or any DDL SQL directly against any database — local or production
+- **NEVER** bundle multiple unrelated schema changes into a single migration
+
+## The only valid workflow for schema changes
+
+1. Edit `prisma/schema.prisma`
+2. Run: `npx prisma migrate dev --name <descriptive_name>`
+3. **Review the generated SQL** in the new `prisma/migrations/<timestamp>_<name>/migration.sql` before proceeding
+4. Commit both `schema.prisma` and the new migration folder together in the same commit
+5. Push — Railway runs `prisma migrate deploy` automatically on startup
+
+```bash
+# Example
+npx prisma migrate dev --name add_credit_package_validity_to_staff
+```
+
+## Status checks — mandatory before and after any schema work
+
+```bash
+npx prisma migrate status
+```
+
+Run this **before** starting any schema work and **after** applying migrations to confirm the DB is in sync.
+
+## Resolving migration conflicts
+
+If a migration is already applied in the DB but not recorded in migration history (e.g. applied via `db push` in the past):
+
+```bash
+# Mark as applied — use when the DB already has the changes
+npx prisma migrate resolve --applied <migration_name>
+
+# Mark as rolled back — use when the migration failed and changes were not applied
+npx prisma migrate resolve --rolled-back <migration_name>
+```
+
+Never resolve by running raw SQL — resolve through Prisma only.
+
+## Why these rules exist
+
+The investigation on 2026-07-02 revealed that `prisma db push` had been used repeatedly on the local dev database, causing:
+- Migration history showing "up to date" while the actual DB was missing columns (`credit_package_validity_days`, `google_refresh_token`, `calendar_sync_enabled`, and 7 coach columns)
+- The `20260512110000_sepay_payment` migration left in a failed state for weeks
+- 29 migrations marked as "not applied" while the schema drift was invisible to `prisma migrate status`
+- Staff login broken in production with `P2022` (column does not exist) errors
+
+Every `prisma db push` makes future debugging exponentially harder.
