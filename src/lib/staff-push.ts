@@ -172,6 +172,7 @@ export async function sendPushToCoach(ctx: CoachLessonPushContext): Promise<void
         token: t.token,
         notification: { title, body },
         data: {
+          screen: "CoachPortal",
           event: ctx.event,
           coachId: ctx.coachId,
           title,

@@ -297,6 +297,7 @@ export async function GET(request: NextRequest) {
       recentBookings: recentBookings.map((b) => ({
         id: b.id,
         venueId: b.venueId,
+        playerId: b.playerId,
         playerName: b.player.name,
         playerAvatar: b.player.avatar,
         playerPhoto: b.player.avatarPhotoPath || b.player.facePhotoPath || null,
@@ -314,6 +315,7 @@ export async function GET(request: NextRequest) {
       recentLessons: recentLessons.map((l) => ({
         id: l.id,
         venueId: l.venueId,
+        playerId: l.playerId,
         playerName: l.player.name,
         playerAvatar: l.player.avatar,
         playerPhoto: l.player.avatarPhotoPath || l.player.facePhotoPath || null,
@@ -373,6 +375,7 @@ export async function GET(request: NextRequest) {
       recentOpenPlay: recentOpenPlay.map((r) => ({
         id: r.id,
         venueId: r.venueId,
+        playerId: r.playerId,
         playerName: r.player.name,
         playerAvatar: r.player.avatar,
         playerPhoto: r.player.avatarPhotoPath || r.player.facePhotoPath || null,

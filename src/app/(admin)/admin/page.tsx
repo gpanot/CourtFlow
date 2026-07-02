@@ -50,6 +50,7 @@ interface UpcomingBooking {
 interface RecentBooking {
   id: string;
   venueId: string;
+  playerId: string;
   playerName: string;
   playerAvatar: string;
   playerPhoto: string | null;
@@ -68,6 +69,7 @@ interface RecentBooking {
 interface RecentLesson {
   id: string;
   venueId: string;
+  playerId: string;
   playerName: string;
   playerAvatar: string;
   playerPhoto: string | null;
@@ -87,6 +89,7 @@ interface RecentLesson {
 interface RecentOpenPlay {
   id: string;
   venueId: string;
+  playerId: string;
   playerName: string;
   playerAvatar: string;
   playerPhoto: string | null;
@@ -126,6 +129,7 @@ interface RecentEntry {
   id: string;
   kind: "booking" | "lesson" | "openplay";
   venueId: string | null;
+  playerId: string;
   playerName: string;
   playerAvatar: string;
   playerPhoto: string | null;
@@ -308,6 +312,7 @@ export default function AdminOverview() {
       id: b.id,
       kind: "booking",
       venueId: b.venueId,
+      playerId: b.playerId,
       playerName: b.playerName,
       playerAvatar: b.playerAvatar,
       playerPhoto: b.playerPhoto,
@@ -326,6 +331,7 @@ export default function AdminOverview() {
       id: l.id,
       kind: "lesson",
       venueId: l.venueId,
+      playerId: l.playerId,
       playerName: l.playerName,
       playerAvatar: l.playerAvatar,
       playerPhoto: l.playerPhoto,
@@ -344,6 +350,7 @@ export default function AdminOverview() {
       id: r.id,
       kind: "openplay",
       venueId: r.venueId,
+      playerId: r.playerId,
       playerName: r.playerName,
       playerAvatar: r.playerAvatar,
       playerPhoto: r.playerPhoto,
@@ -525,10 +532,14 @@ export default function AdminOverview() {
                     </span>
                   </td>
                   <td className="px-4 py-2.5">
-                    <span className="flex items-center gap-2">
+                    <button
+                      onClick={() => router.push(`/admin/courtpass-players?playerId=${entry.playerId}`)}
+                      className="flex items-center gap-2 hover:opacity-75 transition-opacity text-left"
+                      title="View player profile"
+                    >
                       <PlayerAvatarImg photo={entry.playerPhoto} avatar={entry.playerAvatar} size="sm" />
-                      <span className="font-medium">{entry.playerName}</span>
-                    </span>
+                      <span className="font-medium hover:underline">{entry.playerName}</span>
+                    </button>
                   </td>
                   <td className="px-4 py-2.5">
                     <span className="block text-sm text-neutral-200 leading-snug">{entry.detail}</span>
@@ -631,10 +642,14 @@ export default function AdminOverview() {
           {recentEntries.map((entry) => (
             <div key={entry.id} className="px-4 py-3">
               <div className="flex items-center justify-between mb-1">
-                <span className="flex items-center gap-2">
+                <button
+                  onClick={() => router.push(`/admin/courtpass-players?playerId=${entry.playerId}`)}
+                  className="flex items-center gap-2 hover:opacity-75 transition-opacity text-left"
+                  title="View player profile"
+                >
                   <PlayerAvatarImg photo={entry.playerPhoto} avatar={entry.playerAvatar} size="sm" />
-                  <span className="text-sm font-medium">{entry.playerName}</span>
-                </span>
+                  <span className="text-sm font-medium hover:underline">{entry.playerName}</span>
+                </button>
                 <div className="flex items-center gap-1.5 flex-wrap justify-end">
                   <span className={cn(
                     "inline-block rounded-full px-2 py-0.5 text-[10px] font-medium",

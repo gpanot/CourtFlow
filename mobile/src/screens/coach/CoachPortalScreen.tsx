@@ -9,6 +9,7 @@ import {
   Image,
   Modal,
   Platform,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Switch,
@@ -22,6 +23,7 @@ import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuthStore } from "../../stores/auth-store";
+import { useCoachPortalStore } from "../../stores/coach-portal-store";
 import { api } from "../../lib/api-client";
 import { useAppColors } from "../../theme/use-app-colors";
 import { useTabletKioskLocale } from "../../hooks/useTabletKioskLocale";
@@ -289,6 +291,7 @@ function UpcomingTab({
   windowWeeks: number;
   onLoadMore: () => void;
   theme: AppColors;
+  // onRefresh is handled by the parent ScrollView's RefreshControl
 }) {
   const weekGroups = groupByWeek(lessons);
 
@@ -699,7 +702,7 @@ function ScheduleTab({ token, theme }: { token: string; theme: AppColors }) {
 
 // ─── Tab: History ─────────────────────────────────────────────────────────────
 
-function HistoryTab({ token, coachId, theme }: { token: string; coachId: string; theme: AppColors }) {
+function HistoryTab({ token, coachId, theme, refreshKey }: { token: string; coachId: string; theme: AppColors; refreshKey?: number }) {
   const [preset, setPreset] = useState<PeriodPreset>("this_month");
   const [statusFilter, setStatusFilter] = useState<"completed" | "all">("completed");
   const [lessons, setLessons] = useState<CoachLesson[]>([]);
@@ -720,6 +723,13 @@ function HistoryTab({ token, coachId, theme }: { token: string; coachId: string;
   }, [from, to, statusFilter]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // Re-fetch when parent triggers a refresh (pull-to-refresh or notification tap)
+  useEffect(() => {
+    if (refreshKey === undefined || refreshKey === 0) return;
+    void load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]);
 
   const completedLessons = lessons.filter((l) => l.status === "completed");
   const totalHours = completedLessons.reduce((s, l) => s + durationHours(l.startTime, l.endTime), 0);
@@ -812,6 +822,7 @@ export function CoachPortalScreen() {
   const token = useAuthStore((s) => s.token ?? "");
   const staffId = useAuthStore((s) => s.staffId ?? "");
   const staffName = useAuthStore((s) => s.staffName);
+  const refreshTick = useCoachPortalStore((s) => s.refreshTick);
 
   const [activeTab, setActiveTab] = useState<"upcoming" | "availability" | "history">("upcoming");
   const [coachPhoto, setCoachPhoto] = useState<string | null>(null);
@@ -821,6 +832,8 @@ export function CoachPortalScreen() {
   const [upcomingLoading, setUpcomingLoading] = useState(true);
   const [upcomingMoreLoading, setUpcomingMoreLoading] = useState(false);
   const [windowWeeks, setWindowWeeks] = useState(3);
+  const [refreshing, setRefreshing] = useState(false);
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
 
   // Refresh coach photo when screen is focused (e.g. after profile edit)
   useFocusEffect(
@@ -853,6 +866,27 @@ export function CoachPortalScreen() {
     setWindowWeeks(newWeeks);
     await fetchUpcoming(newWeeks, true);
   }, [windowWeeks, fetchUpcoming]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      if (activeTab === "upcoming") {
+        await fetchUpcoming(windowWeeks);
+      } else if (activeTab === "history") {
+        setHistoryRefreshKey((k) => k + 1);
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  }, [activeTab, fetchUpcoming, windowWeeks]);
+
+  // Refresh both tabs when a coach notification is tapped (refreshTick incremented from App.tsx)
+  useEffect(() => {
+    if (refreshTick === 0) return;
+    void fetchUpcoming(windowWeeks);
+    setHistoryRefreshKey((k) => k + 1);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTick]);
 
   const TABS = [
     { key: "upcoming" as const, label: "Upcoming" },
@@ -921,6 +955,14 @@ export function CoachPortalScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor="#2dd4bf"
+            colors={["#2dd4bf"]}
+          />
+        }
       >
         {calendarConnected && (
           <View style={styles.calendarBanner}>
@@ -945,7 +987,7 @@ export function CoachPortalScreen() {
           <ScheduleTab token={token} theme={theme} />
         )}
         {activeTab === "history" && (
-          <HistoryTab token={token} coachId={staffId} theme={theme} />
+          <HistoryTab token={token} coachId={staffId} theme={theme} refreshKey={historyRefreshKey} />
         )}
       </ScrollView>
     </View>

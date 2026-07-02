@@ -9,6 +9,7 @@ import * as Notifications from "expo-notifications";
 import { RootNavigator } from "./src/navigation/RootNavigator";
 import { useThemeStore } from "./src/stores/theme-store";
 import { useAuthStore } from "./src/stores/auth-store";
+import { useCoachPortalStore } from "./src/stores/coach-portal-store";
 import { ENV } from "./src/config/env";
 import type { RootStackParamList } from "./src/navigation/types";
 
@@ -80,6 +81,14 @@ export default function App() {
               params: { screen: "PaymentTab" },
             } as never
           );
+        }
+
+        // Coach lesson notification tap → navigate to CoachPortalStack and trigger refresh
+        if (data?.screen === "CoachPortal") {
+          const nav = navigationRef.current;
+          if (!nav?.isReady()) return;
+          nav.navigate("CoachPortalStack" as never);
+          useCoachPortalStore.getState().triggerRefresh();
         }
       }
     );
