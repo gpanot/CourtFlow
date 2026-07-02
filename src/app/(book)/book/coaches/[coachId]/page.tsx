@@ -78,6 +78,7 @@ export default function CoachProfilePage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedHours, setSelectedHours] = useState<number[]>([]);
   const [availability, setAvailability] = useState<AvailSlot[]>([]);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [booking, setBooking] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [step, setStep] = useState<"profile" | "booking" | "summary">("profile");
@@ -134,6 +135,8 @@ export default function CoachProfilePage() {
 
   const loadAvailability = useCallback(
     async (date: Date) => {
+      setAvailability([]);
+      setAvailabilityLoading(true);
       try {
         const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
         const extra = vq ? `&${vq}` : "";
@@ -145,6 +148,8 @@ export default function CoachProfilePage() {
         setAvailability(data.availability ?? []);
       } catch {
         // Non-fatal — leave existing availability state unchanged
+      } finally {
+        setAvailabilityLoading(false);
       }
     },
     [coachId, vq]
@@ -324,7 +329,13 @@ export default function CoachProfilePage() {
               : t("coaches.selectUpTo4Slots")}
           </span>
         </div>
-        {availability.length === 0 ? (
+        {availabilityLoading ? (
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <div key={i} className="h-10 rounded-xl bg-[var(--cm-bg-card)] animate-pulse" />
+            ))}
+          </div>
+        ) : availability.length === 0 ? (
           <p className="text-sm text-[var(--cm-text-sec)] py-4">{t("coaches.loadingAvailability")}</p>
         ) : (
           <div className="grid grid-cols-3 gap-2 mb-4">
@@ -413,7 +424,7 @@ export default function CoachProfilePage() {
 
         <button
           onClick={goToSummary}
-          disabled={selectedHours.length === 0}
+          disabled={selectedHours.length === 0 || availabilityLoading}
           className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm disabled:opacity-40"
         >
           {t("common.continue")}
