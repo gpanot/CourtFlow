@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -362,6 +363,14 @@ function UpcomingTab({
   );
 }
 
+// ─── Time options for Schedule picker (half-hour slots 06:00 – 23:00) ─────────
+
+const TIME_OPTIONS: string[] = [];
+for (let h = 6; h <= 23; h++) {
+  TIME_OPTIONS.push(`${String(h).padStart(2, "0")}:00`);
+  if (h < 23) TIME_OPTIONS.push(`${String(h).padStart(2, "0")}:30`);
+}
+
 // ─── Tab: Schedule ────────────────────────────────────────────────────────────
 
 function ScheduleTab({ token, theme }: { token: string; theme: AppColors }) {
@@ -372,6 +381,11 @@ function ScheduleTab({ token, theme }: { token: string; theme: AppColors }) {
   const [saved, setSaved] = useState(false);
   const [showHolidays, setShowHolidays] = useState(false);
   const [newHoliday, setNewHoliday] = useState({ startDate: "", endDate: "", note: "" });
+  const [pickerState, setPickerState] = useState<{
+    day: number;
+    slotIdx: number;
+    field: "startTime" | "endTime";
+  } | null>(null);
   const { t } = useTabletKioskLocale();
 
   useEffect(() => {
@@ -391,12 +405,47 @@ function ScheduleTab({ token, theme }: { token: string; theme: AppColors }) {
     return () => { cancelled = true; };
   }, []);
 
+  // ── Multi-slot helpers (mirrors web CoachAvailabilityEditor) ──
+
+  const slotsForDay = useCallback((day: number) => slots.filter((s) => s.dayOfWeek === day), [slots]);
+
+  const isDayEnabled = useCallback((day: number) => {
+    const ds = slots.filter((s) => s.dayOfWeek === day);
+    return ds.length > 0 && ds.some((s) => s.enabled);
+  }, [slots]);
+
   const toggleDay = useCallback((day: number) => {
-    setSlots((prev) => prev.map((s) => s.dayOfWeek === day ? { ...s, enabled: !s.enabled } : s));
+    const ds = slots.filter((s) => s.dayOfWeek === day);
+    if (ds.length === 0) {
+      setSlots((prev) => [...prev, { dayOfWeek: day, startTime: "08:00", endTime: "20:00", enabled: true }]);
+    } else {
+      const newEnabled = !isDayEnabled(day);
+      setSlots((prev) => prev.map((s) => s.dayOfWeek === day ? { ...s, enabled: newEnabled } : s));
+    }
+  }, [slots, isDayEnabled]);
+
+  const addSlotToDay = useCallback((day: number) => {
+    setSlots((prev) => [...prev, { dayOfWeek: day, startTime: "08:00", endTime: "20:00", enabled: true }]);
   }, []);
 
-  const updateTime = useCallback((day: number, field: "startTime" | "endTime", value: string) => {
-    setSlots((prev) => prev.map((s) => s.dayOfWeek === day ? { ...s, [field]: value } : s));
+  const removeSlot = useCallback((day: number, idxWithinDay: number) => {
+    let counter = 0;
+    setSlots((prev) => prev.filter((s) => {
+      if (s.dayOfWeek !== day) return true;
+      const keep = counter !== idxWithinDay;
+      counter++;
+      return keep;
+    }));
+  }, []);
+
+  const updateSlotTime = useCallback((day: number, idxWithinDay: number, field: "startTime" | "endTime", val: string) => {
+    let counter = 0;
+    setSlots((prev) => prev.map((s) => {
+      if (s.dayOfWeek !== day) return s;
+      const updated = counter === idxWithinDay ? { ...s, [field]: val } : s;
+      counter++;
+      return updated;
+    }));
   }, []);
 
   const handleSave = useCallback(async () => {
@@ -423,46 +472,95 @@ function ScheduleTab({ token, theme }: { token: string; theme: AppColors }) {
     return <View style={styles.centeredPad}><ActivityIndicator color={theme.blue400} /></View>;
   }
 
+  // Time picker modal
+  const activePicker = pickerState;
+  const activeSlots = activePicker ? slotsForDay(activePicker.day) : [];
+  const currentPickerValue = activePicker
+    ? (activeSlots[activePicker.slotIdx]?.[activePicker.field] ?? "08:00")
+    : "08:00";
+
   return (
     <View style={styles.tabContent}>
       <Text style={[styles.scheduleHint, { color: theme.subtle }]}>{t("coachPortalWeeklySchedule")}</Text>
 
-      {/* Weekly slots */}
-      {slots.map((slot) => (
-        <View key={slot.dayOfWeek} style={[styles.slotRow, { borderColor: theme.border, backgroundColor: theme.card }]}>
-          <Switch
-            value={slot.enabled}
-            onValueChange={() => toggleDay(slot.dayOfWeek)}
-            trackColor={{ false: theme.borderLight, true: "#14b8a6" }}
-            thumbColor="#ffffff"
-            style={Platform.OS === "ios" ? { transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] } : undefined}
-          />
-          <Text style={[styles.dayLabel, { color: theme.text }]}>{DAY_SHORT[slot.dayOfWeek]}</Text>
-          {slot.enabled ? (
-            <View style={styles.timeGroup}>
-              <TextInput
-                style={[styles.timeInput, { borderColor: theme.borderLight, backgroundColor: theme.inputBg, color: theme.text }]}
-                value={slot.startTime}
-                onChangeText={(v) => updateTime(slot.dayOfWeek, "startTime", v)}
-                placeholder="08:00"
-                placeholderTextColor={theme.dimmed}
-                keyboardType="numbers-and-punctuation"
+      {/* Weekly slots — one card per day, supporting multiple time ranges */}
+      {DAY_SHORT.map((dayLabel, dayIdx) => {
+        const daySlots = slotsForDay(dayIdx);
+        const enabled = isDayEnabled(dayIdx);
+
+        return (
+          <View key={dayIdx} style={[styles.dayCard, { borderColor: theme.border, backgroundColor: theme.card }]}>
+            {/* Day header row */}
+            <View style={styles.dayCardHeader}>
+              <Switch
+                value={enabled}
+                onValueChange={() => toggleDay(dayIdx)}
+                trackColor={{ false: theme.borderLight, true: "#14b8a6" }}
+                thumbColor="#ffffff"
+                style={Platform.OS === "ios" ? { transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] } : undefined}
               />
-              <Text style={[styles.timeSep, { color: theme.dimmed }]}>–</Text>
-              <TextInput
-                style={[styles.timeInput, { borderColor: theme.borderLight, backgroundColor: theme.inputBg, color: theme.text }]}
-                value={slot.endTime}
-                onChangeText={(v) => updateTime(slot.dayOfWeek, "endTime", v)}
-                placeholder="20:00"
-                placeholderTextColor={theme.dimmed}
-                keyboardType="numbers-and-punctuation"
-              />
+              <Text style={[styles.dayLabel, { color: theme.text }]}>{dayLabel}</Text>
+              {!enabled && (
+                <Text style={[styles.unavailText, { color: theme.subtle }]}>{t("coachPortalUnavailable")}</Text>
+              )}
             </View>
-          ) : (
-            <Text style={[styles.unavailText, { color: theme.subtle }]}>{t("coachPortalUnavailable")}</Text>
-          )}
-        </View>
-      ))}
+
+            {/* Time slots */}
+            {enabled && (
+              <View style={styles.daySlotList}>
+                {daySlots.map((slot, slotIdx) => {
+                  const isLast = slotIdx === daySlots.length - 1;
+                  return (
+                    <View key={slotIdx} style={styles.slotTimeRow}>
+                      {/* Start time picker */}
+                      <TouchableOpacity
+                        style={[styles.timePickerBtn, { borderColor: theme.borderLight, backgroundColor: theme.inputBg }]}
+                        onPress={() => setPickerState({ day: dayIdx, slotIdx, field: "startTime" })}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.timePickerText, { color: theme.text }]}>{slot.startTime}</Text>
+                      </TouchableOpacity>
+                      <Text style={[styles.timeSep, { color: theme.dimmed }]}>–</Text>
+                      {/* End time picker */}
+                      <TouchableOpacity
+                        style={[styles.timePickerBtn, { borderColor: theme.borderLight, backgroundColor: theme.inputBg }]}
+                        onPress={() => setPickerState({ day: dayIdx, slotIdx, field: "endTime" })}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.timePickerText, { color: theme.text }]}>{slot.endTime}</Text>
+                      </TouchableOpacity>
+
+                      {/* + add slot — only on last slot */}
+                      {isLast && (
+                        <TouchableOpacity
+                          style={styles.slotActionBtn}
+                          onPress={() => addSlotToDay(dayIdx)}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Text style={styles.slotAddText}>＋</Text>
+                        </TouchableOpacity>
+                      )}
+
+                      {/* × remove — only when 2+ slots */}
+                      {daySlots.length > 1 && (
+                        <TouchableOpacity
+                          style={styles.slotActionBtn}
+                          onPress={() => removeSlot(dayIdx, slotIdx)}
+                          activeOpacity={0.7}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Text style={styles.slotRemoveText}>✕</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        );
+      })}
 
       {/* Holidays toggle */}
       <TouchableOpacity
@@ -545,6 +643,56 @@ function ScheduleTab({ token, theme }: { token: string; theme: AppColors }) {
           : <><Ionicons name="save-outline" size={18} color="#fff" style={{ marginRight: 8 }} />
             <Text style={styles.saveBtnText}>{saved ? t("coachPortalSavedSuccess") : t("coachPortalSaveAvailability")}</Text></>}
       </TouchableOpacity>
+
+      {/* Time picker bottom sheet */}
+      <Modal
+        visible={!!activePicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPickerState(null)}
+      >
+        <TouchableOpacity
+          style={styles.timePickerBackdrop}
+          activeOpacity={1}
+          onPress={() => setPickerState(null)}
+        />
+        <View style={[styles.timePickerSheet, { backgroundColor: theme.card, borderColor: theme.border }]}>
+          <View style={styles.timePickerHeader}>
+            <Text style={[styles.timePickerTitle, { color: theme.textSecondary }]}>
+              {activePicker?.field === "startTime" ? "Start time" : "End time"}
+            </Text>
+            <TouchableOpacity onPress={() => setPickerState(null)} activeOpacity={0.7}>
+              <Ionicons name="close" size={20} color={theme.subtle} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.timePickerList} showsVerticalScrollIndicator={false}>
+            {TIME_OPTIONS.map((t) => {
+              const selected = t === currentPickerValue;
+              return (
+                <TouchableOpacity
+                  key={t}
+                  style={[
+                    styles.timePickerOption,
+                    selected && { backgroundColor: "rgba(20,184,166,0.15)" },
+                  ]}
+                  onPress={() => {
+                    if (activePicker) {
+                      updateSlotTime(activePicker.day, activePicker.slotIdx, activePicker.field, t);
+                    }
+                    setPickerState(null);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.timePickerOptionText, { color: selected ? "#2dd4bf" : theme.text }]}>
+                    {t}
+                  </Text>
+                  {selected && <Ionicons name="checkmark" size={16} color="#2dd4bf" />}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -821,9 +969,9 @@ const styles = StyleSheet.create({
   },
   avatarBtn: {},
   avatarRing: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     borderWidth: 2,
     borderColor: "rgba(45,212,191,0.4)",
     backgroundColor: "#262626",
@@ -831,8 +979,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     overflow: "hidden",
   },
-  avatarImg: { width: 36, height: 36, borderRadius: 18 },
-  avatarInitials: { fontSize: 13, fontWeight: "700", color: "#2dd4bf" },
+  avatarImg: { width: 48, height: 48, borderRadius: 24 },
+  avatarInitials: { fontSize: 16, fontWeight: "700", color: "#2dd4bf" },
 
   headerText: { flex: 1 },
   portalLabel: { fontSize: 9, fontWeight: "700", color: "#2dd4bf", textTransform: "uppercase", letterSpacing: 1.5 },
@@ -945,6 +1093,79 @@ const styles = StyleSheet.create({
 
   // Schedule
   scheduleHint: { fontSize: 12, lineHeight: 17, marginBottom: 6 },
+  dayCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  dayCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  daySlotList: {
+    paddingLeft: 44,
+    gap: 6,
+  },
+  slotTimeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  timePickerBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    alignItems: "center",
+  },
+  timePickerText: { fontSize: 13, fontWeight: "500" },
+  slotActionBtn: {
+    width: 28,
+    height: 28,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  slotAddText: { fontSize: 16, color: "#2dd4bf", fontWeight: "700" },
+  slotRemoveText: { fontSize: 13, color: "#f87171", fontWeight: "700" },
+  dayLabel: { fontSize: 13, fontWeight: "600", width: 34 },
+  timeSep: { fontSize: 13 },
+  unavailText: { fontSize: 12, flex: 1 },
+
+  // Time picker modal
+  timePickerBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  timePickerSheet: {
+    borderTopWidth: 1,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: 360,
+  },
+  timePickerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  timePickerTitle: { fontSize: 14, fontWeight: "600" },
+  timePickerList: { paddingHorizontal: 8 },
+  timePickerOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    borderRadius: 10,
+  },
+  timePickerOptionText: { fontSize: 15, fontWeight: "500" },
+
+  // legacy — kept for holiday rows
   slotRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -955,7 +1176,6 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 4,
   },
-  dayLabel: { fontSize: 13, fontWeight: "600", width: 34 },
   timeGroup: { flex: 1, flexDirection: "row", alignItems: "center", gap: 6 },
   timeInput: {
     flex: 1,
@@ -966,8 +1186,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: "center",
   },
-  timeSep: { fontSize: 13 },
-  unavailText: { fontSize: 12, flex: 1 },
 
   holidayToggle: {
     flexDirection: "row",
