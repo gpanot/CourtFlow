@@ -630,13 +630,14 @@ export default function VenueHomePage() {
           >
             <button
               onClick={handleBook}
-              className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm shadow-[var(--cm-shadow)]"
+              className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl shadow-[var(--cm-shadow)] flex flex-col items-center gap-0.5"
             >
-              {t("home.bookCourtCta", {
-                court: courtLabel,
-                time: `${firstHour}–${lastEnd}`,
-                price: formatPrice(totalPrice),
-              })}
+              <span className="font-semibold text-sm leading-tight">
+                {t("home.bookNow")} · {formatPrice(totalPrice)}
+              </span>
+              <span className="text-[11px] font-medium opacity-75 leading-tight">
+                {courtLabel} · {selectedDate ? formatDate(selectedDate) : ""} · {firstHour}–{lastEnd}
+              </span>
             </button>
           </div>
         </div>

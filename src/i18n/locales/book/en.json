@@ -176,6 +176,7 @@
     "extendHint": " — tap consecutive slots to extend (max 4h)",
     "ourCoaches": "Our Coaches",
     "bookCourtCta": "Book {{court}} {{time}} — {{price}}",
+    "bookNow": "Book Now",
     "sessionsCompleted": "{{count}} sessions",
     "openPlay": "Open Play Sessions",
     "openPlayFull": "Full",
