@@ -126,7 +126,8 @@ async function main() {
     if (slot) {
       console.log(
         `  Court ${court.courtLabel}: available=${slot.available}` +
-          (slot.reason ? ` reason=${slot.reason}` : "")
+          (slot.block ? ` block=${slot.block.type}` : "") +
+          (slot.schedule ? ` schedule=${slot.schedule.type}` : "")
       );
     }
   }
