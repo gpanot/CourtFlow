@@ -28,6 +28,7 @@ import {
   Calendar,
   Trash2,
   Users,
+  User,
   Settings,
   CalendarDays,
   Save,
@@ -155,6 +156,48 @@ interface OpenPlayRegRecord {
   player: { id: string; name: string; phone: string };
 }
 
+interface CoachLessonRecord {
+  id: string;
+  venueId: string;
+  coachId: string;
+  playerId: string;
+  courtId: string | null;
+  packageId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  status: "confirmed" | "completed" | "cancelled" | "no_show";
+  priceValue: number;
+  playerCount: number | null;
+  note: string | null;
+  paymentStatus: string;
+  proofUrl: string | null;
+  coach: { id: string; name: string };
+  player: { id: string; name: string; phone: string };
+  court: { id: string; label: string } | null;
+  package: { id: string; name: string; lessonType: string; durationMin: number };
+}
+
+const LESSON_STATUS_COLORS: Record<string, string> = {
+  confirmed: "bg-blue-600/20 text-blue-400",
+  completed: "bg-green-600/20 text-green-400",
+  cancelled: "bg-neutral-700/40 text-neutral-400",
+  no_show: "bg-amber-600/20 text-amber-400",
+};
+
+function lessonDurationLabel(startTime: string, endTime: string): string {
+  const mins = (new Date(endTime).getTime() - new Date(startTime).getTime()) / 60000;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h > 0 ? `${h}h${m > 0 ? `${m}m` : ""}` : `${m}m`;
+}
+
+function normalizeLessonPaymentStatus(status: string): string {
+  if (status === "PAID") return "paid";
+  if (status === "UNPAID") return "pending";
+  return status;
+}
+
 /** Return YYYY-MM-DD for a Date, interpreted in the given IANA timezone. */
 function formatDate(d: Date, tz?: string): string {
   if (tz) {
@@ -202,16 +245,20 @@ function fmtPrice(cents: number): string {
   return new Intl.NumberFormat("vi-VN").format(cents);
 }
 
-const BLOCK_LABELS: Record<string, string> = {
-  maintenance: "Maintenance",
-  private_event: "Private Event",
-  private_competition: "Private Competition",
-  open_play: "Open Play",
-  competition: "Competition",
-};
-
 export default function BookingsPage() {
   const { t } = useTranslation("translation", { i18n: adminI18n });
+
+  const getBlockTypeLabel = (type: string) => {
+    const keys: Record<string, string> = {
+      maintenance: "bookings.maintenance",
+      private_event: "bookings.privateEvent",
+      private_competition: "bookings.privateCompetition",
+      open_play: "bookings.openPlay",
+      competition: "bookings.competition",
+    };
+    const key = keys[type];
+    return key ? t(key) : type;
+  };
   const router = useRouter();
   const searchParams = useSearchParams();
   const deepLinkHandled = useRef(false);
@@ -251,7 +298,8 @@ export default function BookingsPage() {
 
   // Open play registrations for the selected date
   const [openPlayRegs, setOpenPlayRegs] = useState<OpenPlayRegRecord[]>([]);
-  const [bookingsListFilter, setBookingsListFilter] = useState<"all" | "booking" | "open_play">("all");
+  const [coachLessons, setCoachLessons] = useState<CoachLessonRecord[]>([]);
+  const [bookingsListFilter, setBookingsListFilter] = useState<"all" | "booking" | "open_play" | "lesson">("all");
 
   // Court block state
   const [courtBlocks, setCourtBlocks] = useState<CourtBlockRecord[]>([]);
@@ -312,6 +360,16 @@ export default function BookingsPage() {
     } catch (e) { console.error(e); }
   }, [selectedVenueId, selectedDate]);
 
+  const fetchCoachLessons = useCallback(async () => {
+    if (!selectedVenueId) return;
+    try {
+      const data = await api.get<CoachLessonRecord[]>(
+        `/api/admin/coach-lessons?venueId=${selectedVenueId}&date=${selectedDate}`
+      );
+      setCoachLessons(data);
+    } catch (e) { console.error(e); }
+  }, [selectedVenueId, selectedDate]);
+
   const fetchVenueDetails = useCallback(async () => {
     if (!selectedVenueId) return;
     try {
@@ -333,11 +391,11 @@ export default function BookingsPage() {
   }, [selectedVenueId]);
 
   useEffect(() => { fetchVenues(); }, [fetchVenues]);
-  useEffect(() => { fetchBookings(); fetchAvailability(); fetchCourtBlocks(); fetchOpenPlayRegs(); }, [fetchBookings, fetchAvailability, fetchCourtBlocks, fetchOpenPlayRegs]);
+  useEffect(() => { fetchBookings(); fetchAvailability(); fetchCourtBlocks(); fetchOpenPlayRegs(); fetchCoachLessons(); }, [fetchBookings, fetchAvailability, fetchCourtBlocks, fetchOpenPlayRegs, fetchCoachLessons]);
   useEffect(() => { setBookingsListFilter("all"); }, [selectedDate]);
   useEffect(() => { fetchVenueDetails(); }, [fetchVenueDetails]);
   useEffect(() => {
-    if (activeTab === "bookings") { fetchAvailability(); fetchCourtBlocks(); fetchOpenPlayRegs(); }
+    if (activeTab === "bookings") { fetchAvailability(); fetchCourtBlocks(); fetchOpenPlayRegs(); fetchCoachLessons(); }
   }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const shiftDate = (days: number) => {
@@ -636,7 +694,7 @@ export default function BookingsPage() {
         <div className="flex gap-1">
         {([
           { key: "bookings" as const, label: t("bookings.title"), icon: Calendar },
-          { key: "list" as const, label: "All Bookings", icon: CalendarDays },
+          { key: "list" as const, label: t("bookings.allBookingsTab"), icon: CalendarDays },
           { key: "settings" as const, label: t("settings.title"), icon: Settings },
           { key: "cancellation" as const, label: t("cancellation.title"), icon: ShieldAlert },
         ]).map((tab) => (
@@ -664,12 +722,6 @@ export default function BookingsPage() {
               <Ban className="h-4 w-4" /> {t("bookings.blockTime")}
             </button>
             <button
-              onClick={() => openStaffModal("open_play")}
-              className="flex items-center gap-1.5 rounded-lg border border-emerald-600/60 bg-emerald-900/20 px-3 py-2 text-sm font-medium text-emerald-200 hover:bg-emerald-900/40"
-            >
-              <Plus className="h-4 w-4" /> Register Open Play
-            </button>
-            <button
               onClick={() => openStaffModal("court")}
               className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-500"
             >
@@ -679,12 +731,6 @@ export default function BookingsPage() {
         )}
         {activeTab === "list" && selectedVenueId && (
           <div className="pb-2 flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => openStaffModal("open_play")}
-              className="flex items-center gap-1.5 rounded-lg border border-emerald-600/60 bg-emerald-900/20 px-3 py-2 text-sm font-medium text-emerald-200 hover:bg-emerald-900/40"
-            >
-              <Plus className="h-4 w-4" /> Register Open Play
-            </button>
             <button
               onClick={() => openStaffModal("court")}
               className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-500"
@@ -830,9 +876,9 @@ export default function BookingsPage() {
           const booking = bookingsByCourtAndTime.get(`${court.courtId}_${slot.startTime}`);
           if (booking) return { type: "booking" as const, label: booking.player.name, sub: fmtPrice(booking.priceValue) };
           const blockInfo = courtSlot?.block;
-          if (blockInfo) return { type: "block" as const, label: blockInfo.title || BLOCK_LABELS[blockInfo.type] || blockInfo.type, sub: blockInfo.type };
+          if (blockInfo) return { type: "block" as const, label: blockInfo.title || getBlockTypeLabel(blockInfo.type), sub: blockInfo.type };
           const schedInfo = courtSlot?.schedule;
-          if (schedInfo) return { type: "schedule" as const, label: schedInfo.title || BLOCK_LABELS[schedInfo.type], sub: schedInfo.type };
+          if (schedInfo) return { type: "schedule" as const, label: schedInfo.title || getBlockTypeLabel(schedInfo.type), sub: schedInfo.type };
           const lessonInfo = courtSlot?.lesson;
           if (lessonInfo) return { type: "lesson" as const, label: lessonInfo.coachName, sub: lessonInfo.playerName };
           if (courtSlot?.available) return { type: "available" as const, label: fmtPrice(courtSlot.priceValue), sub: "" };
@@ -949,6 +995,7 @@ export default function BookingsPage() {
                 const full = bookings.find((x) => x.id === b.id);
                 if (full) openEditModal(full);
               }}
+              blockTypeLabel={getBlockTypeLabel}
             />
           </div>
         </div>
@@ -962,9 +1009,10 @@ export default function BookingsPage() {
           </h3>
           <div className="flex flex-wrap gap-2">
             {([
-              { key: "all" as const, label: "All", count: bookings.length + openPlayRegs.length },
-              { key: "booking" as const, label: "Booking", count: bookings.length },
-              { key: "open_play" as const, label: "Open Play", count: openPlayRegs.length },
+              { key: "all" as const, label: t("bookings.filterAll"), count: bookings.length + openPlayRegs.length + coachLessons.length },
+              { key: "booking" as const, label: t("bookings.filterBooking"), count: bookings.length },
+              { key: "open_play" as const, label: t("bookings.openPlay"), count: openPlayRegs.length },
+              { key: "lesson" as const, label: t("bookings.filterLesson"), count: coachLessons.length },
             ]).map(({ key, label, count }) => (
               <button
                 key={key}
@@ -977,7 +1025,9 @@ export default function BookingsPage() {
                       ? "bg-emerald-600/20 text-emerald-400"
                       : key === "booking"
                         ? "bg-purple-600/20 text-purple-400"
-                        : "bg-neutral-700 text-white"
+                        : key === "lesson"
+                          ? "bg-teal-600/20 text-teal-400"
+                          : "bg-neutral-700 text-white"
                     : "bg-neutral-800 text-neutral-400 hover:bg-neutral-700 hover:text-neutral-200"
                 )}
               >
@@ -989,10 +1039,14 @@ export default function BookingsPage() {
         {(() => {
           const showBookings = bookingsListFilter === "all" || bookingsListFilter === "booking";
           const showOpenPlay = bookingsListFilter === "all" || bookingsListFilter === "open_play";
+          const showLessons = bookingsListFilter === "all" || bookingsListFilter === "lesson";
           const showBlocks = bookingsListFilter === "all";
+          const activeLessons = coachLessons.filter((l) => l.status !== "cancelled");
+          const cancelledLessons = coachLessons.filter((l) => l.status === "cancelled");
           const hasVisibleItems =
             (showBookings && bookings.length > 0) ||
             (showOpenPlay && openPlayRegs.length > 0) ||
+            (showLessons && coachLessons.length > 0) ||
             (showBlocks && courtBlocks.length > 0);
 
           if (!hasVisibleItems) {
@@ -1013,7 +1067,7 @@ export default function BookingsPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     {/* Booking type tag */}
                     <span className="text-[10px] rounded-full px-2 py-0.5 bg-purple-600/20 text-purple-400 font-medium">
-                      Booking
+                      {t("bookings.typeBooking")}
                     </span>
                     <a
                       href={`/admin/courtpass-players?playerId=${b.player.id}`}
@@ -1071,7 +1125,7 @@ export default function BookingsPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     {/* Open Play type tag */}
                     <span className="text-[10px] rounded-full px-2 py-0.5 bg-emerald-600/20 text-emerald-400 font-medium">
-                      Open Play
+                      {t("bookings.typeOpenPlay")}
                     </span>
                     <a
                       href={`/admin/courtpass-players?playerId=${r.player.id}`}
@@ -1114,6 +1168,122 @@ export default function BookingsPage() {
               </div>
             ))}
 
+            {/* Coaching lessons */}
+            {showLessons && activeLessons.map((lesson) => (
+              <div key={lesson.id} className={cn(
+                "flex items-center gap-3 rounded-xl border p-3",
+                lesson.status === "confirmed" && "border-teal-800/30 bg-teal-900/5",
+                lesson.status === "no_show" && "border-amber-800/30 bg-amber-900/10",
+                lesson.status === "completed" && "border-green-800/30 bg-green-900/10",
+              )}>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] rounded-full px-2 py-0.5 bg-teal-600/20 text-teal-400 font-medium">
+                      {t("bookings.typeLesson")}
+                    </span>
+                    <span className="font-medium text-sm">
+                      {formatTime(lesson.startTime, venueTimezone)} – {formatTime(lesson.endTime, venueTimezone)}
+                    </span>
+                    <span className="text-xs text-neutral-500">{lessonDurationLabel(lesson.startTime, lesson.endTime)}</span>
+                    <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", LESSON_STATUS_COLORS[lesson.status])}>
+                      {lesson.status === "no_show" ? t("overview.statusNoShow") :
+                       lesson.status === "confirmed" ? t("overview.statusConfirmed") :
+                       lesson.status === "completed" ? t("overview.statusCompleted") :
+                       lesson.status}
+                    </span>
+                    <span className={cn(
+                      "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                      lesson.package.lessonType === "private" ? "bg-purple-600/20 text-purple-400" : "bg-blue-600/20 text-blue-400"
+                    )}>
+                      {lesson.package.lessonType === "private" ? t("coaching.private") : t("coaching.group")}
+                    </span>
+                    {lesson.status !== "cancelled" && (
+                      <button
+                        onClick={() => setPaymentActionTarget({
+                          type: "lesson",
+                          entityId: lesson.id,
+                          playerName: lesson.player.name,
+                          detail: `${lesson.coach.name}${lesson.court ? ` · ${lesson.court.label}` : ""}`,
+                          date: lesson.date,
+                          startTime: lesson.startTime,
+                          endTime: lesson.endTime,
+                          priceValue: lesson.priceValue,
+                          paymentStatus: lesson.paymentStatus,
+                          paymentProofUrl: lesson.proofUrl,
+                          bookingStatus: lesson.status,
+                        })}
+                        title={t("overview.manageLessonPayment")}
+                      >
+                        <PaymentStatusBadge status={normalizeLessonPaymentStatus(lesson.paymentStatus)} />
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 mt-1 text-xs text-neutral-400 flex-wrap">
+                    <span className="flex items-center gap-1">
+                      <GraduationCap className="h-3 w-3 text-teal-400" />
+                      {lesson.coach.name}
+                    </span>
+                    <a
+                      href={`/admin/courtpass-players?playerId=${lesson.player.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="flex items-center gap-1 hover:text-purple-400 hover:underline transition-colors"
+                    >
+                      <User className="h-3 w-3" />
+                      {lesson.player.name}
+                    </a>
+                    {lesson.court && <span>{lesson.court.label}</span>}
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      {fmtPrice(lesson.priceValue)}
+                    </span>
+                    {lesson.playerCount != null && lesson.package.lessonType === "group" && (
+                      <span className="flex items-center gap-1 text-blue-400">
+                        <Users className="h-3 w-3" />
+                        {lesson.playerCount}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-neutral-500 mt-1">{lesson.package.name}</p>
+                  {lesson.note && <p className="text-xs text-neutral-500 mt-0.5 italic">{lesson.note}</p>}
+                </div>
+                <button
+                  onClick={() => router.push(`/admin/coaching?tab=lessons&date=${selectedDate}`)}
+                  className="rounded-lg p-2 text-neutral-500 hover:bg-neutral-800 hover:text-teal-400 shrink-0"
+                  title={t("coaching.editLesson")}
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+
+            {showLessons && cancelledLessons.map((lesson) => (
+              <div key={lesson.id} className="flex items-center gap-3 rounded-xl border border-neutral-800/50 bg-neutral-900/50 p-3 opacity-60">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] rounded-full px-2 py-0.5 bg-teal-600/20 text-teal-400 font-medium">
+                      {t("bookings.typeLesson")}
+                    </span>
+                    <span className="font-medium text-sm">
+                      {formatTime(lesson.startTime, venueTimezone)} – {formatTime(lesson.endTime, venueTimezone)}
+                    </span>
+                    <span className="flex items-center gap-1 text-xs text-neutral-400">
+                      <GraduationCap className="h-3 w-3" />
+                      {lesson.coach.name}
+                    </span>
+                    <a
+                      href={`/admin/courtpass-players?playerId=${lesson.player.id}`}
+                      className="flex items-center gap-1 text-xs text-neutral-400 hover:text-purple-400 hover:underline"
+                    >
+                      {lesson.player.name}
+                    </a>
+                    <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", LESSON_STATUS_COLORS.cancelled)}>
+                      {t("overview.statusCancelled")}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+
             {showBlocks && courtBlocks.map((bl) => (
               <div key={bl.id} className={cn(
                 "flex items-center gap-3 rounded-xl border p-3",
@@ -1130,9 +1300,9 @@ export default function BookingsPage() {
                     {bl.type === "private_competition" && <Trophy className="h-3.5 w-3.5 text-orange-400" />}
                     {bl.type === "open_play" && <Users className="h-3.5 w-3.5 text-emerald-400" />}
                     {bl.type === "competition" && <Trophy className="h-3.5 w-3.5 text-blue-400" />}
-                    <span className="font-medium">{bl.title || BLOCK_LABELS[bl.type]}</span>
+                    <span className="font-medium">{bl.title || getBlockTypeLabel(bl.type)}</span>
                     <span className="text-[10px] rounded-full px-2 py-0.5 bg-neutral-800 text-neutral-400">
-                      {BLOCK_LABELS[bl.type]}
+                      {getBlockTypeLabel(bl.type)}
                     </span>
                   </div>
                   <div className="flex items-center gap-3 mt-1 text-xs text-neutral-400">
@@ -1170,6 +1340,7 @@ export default function BookingsPage() {
             closeStaffModal();
             await fetchBookings();
             await fetchOpenPlayRegs();
+            await fetchCoachLessons();
             await fetchAvailability();
           }}
         />
@@ -1184,6 +1355,7 @@ export default function BookingsPage() {
             setPaymentActionTarget(null);
             await fetchBookings();
             await fetchOpenPlayRegs();
+            await fetchCoachLessons();
             await fetchAvailability();
           }}
         />
@@ -1312,7 +1484,13 @@ export default function BookingsPage() {
                   blockForm.type === "competition" ? "bg-blue-600 hover:bg-blue-500" :
                   "bg-amber-600 hover:bg-amber-500"
                 )}>
-                {saving ? "Saving..." : blockForm.type === "open_play" ? "Create Open Play" : blockForm.type === "competition" ? "Create Competition" : "Block Time"}
+                {saving
+                  ? t("bookings.saving")
+                  : blockForm.type === "open_play"
+                    ? t("bookings.createOpenPlay")
+                    : blockForm.type === "competition"
+                      ? t("bookings.createCompetition")
+                      : t("bookings.blockTime")}
               </button>
               <button onClick={() => setShowBlockModal(false)}
                 className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700">{t("common.cancel")}</button>

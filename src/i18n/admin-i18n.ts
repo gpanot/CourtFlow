@@ -29,4 +29,9 @@ if (!adminI18n.isInitialized) {
     });
 }
 
+/** BCP-47 locale for date/time formatting in admin UI */
+export function adminLocale(): string {
+  return adminI18n.language?.startsWith("vi") ? "vi-VN" : "en-US";
+}
+
 export default adminI18n;

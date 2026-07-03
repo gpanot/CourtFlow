@@ -33,7 +33,7 @@ import {
   Calendar,
 } from "lucide-react";
 import { hasGroupPlayerPricing, calculateSessionPrice } from "@/lib/coach-package-pricing";
-import { BookingCourtGrid, type CourtSlot } from "@/components/admin/BookingCourtGrid";
+import { BookingCourtGrid, type CourtSlot, type CourtAvailability } from "@/components/admin/BookingCourtGrid";
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
@@ -41,29 +41,6 @@ interface PlayerResult {
   id: string;
   name: string;
   phone: string;
-}
-
-interface AvailSlot {
-  startTime: string;
-  endTime: string;
-  hour: number;
-  priceValue: number;
-  available: boolean;
-  block?: { blockId: string; type: string; title: string | null };
-  schedule?: { entryId: string; type: string; title: string };
-  lesson?: {
-    lessonId: string;
-    coachName: string;
-    playerName: string;
-    lessonType: string;
-    packageName: string;
-  };
-}
-
-interface CourtSlotData {
-  courtId: string;
-  courtLabel: string;
-  slots: AvailSlot[];
 }
 
 interface OpenPlaySession {
@@ -160,6 +137,19 @@ export function StaffBookingModal({
   onCreated,
 }: StaffBookingModalProps) {
   const { t } = useTranslation("translation", { i18n: adminI18n });
+
+  const getBlockTypeLabel = (type: string) => {
+    const keys: Record<string, string> = {
+      maintenance: "bookings.maintenance",
+      private_event: "bookings.privateEvent",
+      private_competition: "bookings.privateCompetition",
+      open_play: "bookings.openPlay",
+      competition: "bookings.competition",
+    };
+    const key = keys[type];
+    return key ? t(key) : type;
+  };
+
   const [mode, setMode] = useState<BookingMode>(initialMode ?? allowModes[0]);
   const [bookDate, setBookDate] = useState(initialDate ?? localDateISO(new Date()));
   const [saving, setSaving] = useState(false);
@@ -167,7 +157,7 @@ export function StaffBookingModal({
   const [venueTimezone, setVenueTimezone] = useState<string | undefined>(undefined);
 
   // Availability (used for court + lesson modes)
-  const [availability, setAvailability] = useState<CourtSlotData[]>([]);
+  const [availability, setAvailability] = useState<CourtAvailability[]>([]);
   const [loadingAvail, setLoadingAvail] = useState(false);
 
   // Selected player
@@ -220,7 +210,7 @@ export function StaffBookingModal({
   const fetchAvailability = useCallback(async (date: string) => {
     setLoadingAvail(true);
     try {
-      const data = await api.get<CourtSlotData[]>(
+      const data = await api.get<CourtAvailability[]>(
         `/api/bookings/availability?venueId=${venueId}&date=${date}`
       );
       setAvailability(data);
@@ -355,7 +345,7 @@ export function StaffBookingModal({
   const coachPackages = selectedCoach?.packages ?? [];
   const selectedPkg = coachPackages.find((p) => p.id === lessonPackageId);
 
-  const toggleSlot = (courtId: string, courtLabel: string, slot: AvailSlot) => {
+  const toggleSlot = (courtId: string, courtLabel: string, slot: CourtSlot) => {
     if (!slot.available) return;
     const maxSlots = mode === "court" ? MAX_COURT_SLOTS : Infinity;
 
@@ -472,7 +462,7 @@ export function StaffBookingModal({
           {/* Header with mode tabs */}
           <div className="px-5 pt-5 pb-3 border-b border-neutral-800 space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold">New Booking</h3>
+              <h3 className="text-lg font-bold">{t("bookings.newBooking")}</h3>
               <button onClick={onClose} className="text-neutral-400 hover:text-white md:hidden">
                 <X className="h-5 w-5" />
               </button>
@@ -850,13 +840,14 @@ export function StaffBookingModal({
                       selectedSlots.length > 0 &&
                       selectedSlots[0].courtId === courtId &&
                       selectedSlots.length >= MAX_COURT_SLOTS;
-                    if (!wouldExceedCap) toggleSlot(courtId, courtLabel, slot as CourtSlot);
+                    if (!wouldExceedCap) toggleSlot(courtId, courtLabel, slot);
                   } else {
-                    toggleSlot(courtId, courtLabel, slot as CourtSlot);
+                    toggleSlot(courtId, courtLabel, slot);
                   }
                 }}
                 compact
                 accentColor={mode === "lesson" ? "teal" : "purple"}
+                blockTypeLabel={getBlockTypeLabel}
               />
             )}
           </div>

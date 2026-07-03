@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTranslation } from "react-i18next";
 import adminI18n from "@/i18n/admin-i18n";
@@ -44,6 +44,8 @@ import {
   PaymentActionModal,
   type PaymentActionTarget,
 } from "@/components/admin/PaymentActionModal";
+import { StaffBookingModal } from "@/components/admin/StaffBookingModal";
+import { BookingCourtGrid, type CourtAvailability, type CourtSlot } from "@/components/admin/BookingCourtGrid";
 
 export const dynamic = "force-dynamic";
 
@@ -125,23 +127,6 @@ interface CourtInfo {
   label: string;
 }
 
-interface AvailSlot {
-  startTime: string;
-  endTime: string;
-  hour: number;
-  priceValue: number;
-  available: boolean;
-  block?: { blockId: string; type: string; title: string | null };
-  schedule?: { entryId: string; type: string; title: string };
-  lesson?: { lessonId: string; coachName: string; playerName: string; lessonType: string; packageName: string };
-}
-
-interface CourtSlotData {
-  courtId: string;
-  courtLabel: string;
-  slots: AvailSlot[];
-}
-
 const vndToDisplay = (v: number) => v;
 const displayToVnd = (d: string) => parseInt(d.replace(/,/g, "") || "0", 10);
 const formatPrice = (n: number) => new Intl.NumberFormat("vi-VN").format(n);
@@ -165,6 +150,13 @@ const STATUS_LABELS: Record<string, string> = {
   no_show: "No Show",
 };
 
+function localDateISO(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 /* ─── Main Page ─── */
 
 export default function CoachingPage() {
@@ -181,6 +173,15 @@ export default function CoachingPage() {
   const [tab, setTab] = useState<"coaches" | "lessons" | "list">(
     ["coaches", "lessons", "list"].includes(initialTab) ? initialTab : "lessons"
   );
+  const [showStaffModal, setShowStaffModal] = useState(false);
+  const [staffModalMode, setStaffModalMode] = useState<"court" | "open_play" | "lesson">("court");
+  const [lessonsSelectedDate, setLessonsSelectedDate] = useState(() => localDateISO(new Date()));
+  const lessonsRefreshRef = useRef<(() => Promise<void>) | null>(null);
+
+  const openStaffModal = (mode: "court" | "open_play" | "lesson" = "court") => {
+    setStaffModalMode(mode);
+    setShowStaffModal(true);
+  };
 
   return (
     <div className="space-y-6">
@@ -221,16 +222,44 @@ export default function CoachingPage() {
             </button>
           ))}
         </div>
+        {tab === "lessons" && selectedVenueId && (
+          <div className="pb-2 flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => openStaffModal("court")}
+              className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-500"
+            >
+              <Plus className="h-4 w-4" /> {t("bookings.newBooking")}
+            </button>
+          </div>
+        )}
       </div>
 
       {selectedVenueId && tab === "coaches" && (
         <CoachesTab venueId={selectedVenueId} />
       )}
       {selectedVenueId && tab === "lessons" && (
-        <LessonsTab venueId={selectedVenueId} />
+        <LessonsTab
+          venueId={selectedVenueId}
+          onSelectedDateChange={setLessonsSelectedDate}
+          lessonsRefreshRef={lessonsRefreshRef}
+        />
       )}
       {selectedVenueId && tab === "list" && (
         <AllLessonsTab venueId={selectedVenueId} initialPaymentFilter={initialPaymentFilter} />
+      )}
+
+      {showStaffModal && selectedVenueId && (
+        <StaffBookingModal
+          venueId={selectedVenueId}
+          initialDate={lessonsSelectedDate}
+          allowModes={["court", "open_play", "lesson"]}
+          initialMode={staffModalMode}
+          onClose={() => setShowStaffModal(false)}
+          onCreated={async () => {
+            setShowStaffModal(false);
+            await lessonsRefreshRef.current?.();
+          }}
+        />
       )}
     </div>
   );
@@ -646,21 +675,33 @@ function formatSlotTime(iso: string, tz?: string): string {
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", ...(tz ? { timeZone: tz } : {}) });
 }
 
-function localDateISO(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function LessonsTab({ venueId }: { venueId: string }) {
+function LessonsTab({
+  venueId,
+  onSelectedDateChange,
+  lessonsRefreshRef,
+}: {
+  venueId: string;
+  onSelectedDateChange?: (date: string) => void;
+  lessonsRefreshRef?: React.MutableRefObject<(() => Promise<void>) | null>;
+}) {
   const { t } = useTranslation("translation", { i18n: adminI18n });
+  const getBlockTypeLabel = (type: string) => {
+    const keys: Record<string, string> = {
+      maintenance: "bookings.maintenance",
+      private_event: "bookings.privateEvent",
+      private_competition: "bookings.privateCompetition",
+      open_play: "bookings.openPlay",
+      competition: "bookings.competition",
+    };
+    const key = keys[type];
+    return key ? t(key) : type;
+  };
   const [venueTimezone, setVenueTimezone] = useState<string | undefined>(undefined);
   const [selectedDate, setSelectedDate] = useState(() => localDateISO(new Date()));
   const [lessons, setLessons] = useState<CoachLesson[]>([]);
   const [coaches, setCoaches] = useState<Coach[]>([]);
   const [players, setPlayers] = useState<Player[]>([]);
-  const [showBookModal, setShowBookModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [editingLesson, setEditingLesson] = useState<CoachLesson | null>(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
@@ -672,7 +713,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
   });
   const [deleting, setDeleting] = useState(false);
 
-  const [availability, setAvailability] = useState<CourtSlotData[]>([]);
+  const [availability, setAvailability] = useState<CourtAvailability[]>([]);
   const [loadingAvail, setLoadingAvail] = useState(false);
   const [bookDate, setBookDate] = useState(() => localDateISO(new Date()));
 
@@ -717,7 +758,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
   const fetchAvailability = useCallback(async (date: string) => {
     setLoadingAvail(true);
     try {
-      const data = await api.get<CourtSlotData[]>(
+      const data = await api.get<CourtAvailability[]>(
         `/api/bookings/availability?venueId=${venueId}&date=${date}`
       );
       setAvailability(data);
@@ -741,10 +782,30 @@ function LessonsTab({ venueId }: { venueId: string }) {
     fetchAvailability(selectedDate);
   }, [selectedDate, fetchAvailability]);
 
-  // Also re-fetch when booking modal opens with a different date
+  // Re-fetch when edit modal uses a different date than the calendar
   useEffect(() => {
-    if (showBookModal && bookDate !== selectedDate) fetchAvailability(bookDate);
-  }, [showBookModal, bookDate, fetchAvailability, selectedDate]);
+    if (showEditModal && bookDate !== selectedDate) fetchAvailability(bookDate);
+  }, [showEditModal, bookDate, fetchAvailability, selectedDate]);
+
+  useEffect(() => {
+    onSelectedDateChange?.(selectedDate);
+  }, [selectedDate, onSelectedDateChange]);
+
+  useEffect(() => {
+    if (!lessonsRefreshRef) return;
+    lessonsRefreshRef.current = async () => {
+      await fetchLessons();
+      await fetchAvailability(selectedDate);
+    };
+  }, [lessonsRefreshRef, fetchLessons, fetchAvailability, selectedDate]);
+
+  const closeEditModal = () => {
+    setShowEditModal(false);
+    setEditingLesson(null);
+    setSelectedSlots([]);
+    setConfirmDelete(false);
+    setErr("");
+  };
 
   // When editing, auto-select the lesson's existing slots once availability loads
   useEffect(() => {
@@ -782,16 +843,6 @@ function LessonsTab({ venueId }: { venueId: string }) {
       ).slice(0, 8)
     : [];
 
-  const openBookModal = () => {
-    setEditingLesson(null);
-    setBookForm({ coachId: "", packageId: "", playerId: "", playerSearch: "", note: "", status: "confirmed", playerCount: 2 });
-    setSelectedSlots([]);
-    setBookDate(selectedDate);
-    setErr("");
-    setConfirmDelete(false);
-    setShowBookModal(true);
-  };
-
   const openEditModal = (lesson: CoachLesson) => {
     setEditingLesson(lesson);
     setBookForm({
@@ -808,7 +859,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
     setSelectedSlots([]);
     setErr("");
     setConfirmDelete(false);
-    setShowBookModal(true);
+    setShowEditModal(true);
   };
 
   const handleDelete = async () => {
@@ -817,7 +868,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
     try {
       await api.delete(`/api/admin/coach-lessons/${editingLesson.id}`);
       await fetchLessons();
-      setShowBookModal(false);
+      closeEditModal();
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -826,10 +877,10 @@ function LessonsTab({ venueId }: { venueId: string }) {
     }
   };
 
-  const isOwnLessonSlot = (slot: AvailSlot) =>
+  const isOwnLessonSlot = (slot: CourtSlot) =>
     editingLesson && slot.lesson?.lessonId === editingLesson.id;
 
-  const toggleSlot = (courtId: string, courtLabel: string, slot: AvailSlot) => {
+  const toggleSlot = (courtId: string, courtLabel: string, slot: CourtSlot) => {
     if (!slot.available && !isOwnLessonSlot(slot)) return;
 
     const alreadySelected = selectedSlots.find((s) => s.courtId === courtId && s.startTime === slot.startTime);
@@ -882,7 +933,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
     selectedSlots.some((s) => s.courtId === courtId && s.startTime === startTime);
 
   const handleBook = async () => {
-    if (!bookForm.coachId || !bookForm.packageId || !bookForm.playerId || selectedSlots.length === 0) {
+    if (!editingLesson || !bookForm.coachId || !bookForm.packageId || !bookForm.playerId || selectedSlots.length === 0) {
       setErr("Coach, package, player, and time slot are required");
       return;
     }
@@ -892,34 +943,19 @@ function LessonsTab({ venueId }: { venueId: string }) {
       const firstSlot = selectedSlots[0];
       const lastSlot = selectedSlots[selectedSlots.length - 1];
 
-      if (editingLesson) {
-        await api.patch(`/api/admin/coach-lessons/${editingLesson.id}`, {
-          coachId: bookForm.coachId,
-          packageId: bookForm.packageId,
-          playerId: bookForm.playerId,
-          courtId: firstSlot.courtId,
-          date: bookDate,
-          startTime: firstSlot.startTime,
-          endTime: lastSlot.endTime,
-          note: bookForm.note || null,
-          status: bookForm.status,
-        });
-      } else {
-        await api.post("/api/admin/coach-lessons", {
-          venueId,
-          coachId: bookForm.coachId,
-          packageId: bookForm.packageId,
-          playerId: bookForm.playerId,
-          courtId: firstSlot.courtId,
-          date: bookDate,
-          startTime: firstSlot.startTime,
-          endTime: lastSlot.endTime,
-          note: bookForm.note || undefined,
-          ...(selectedPkg && selectedPkg.minPlayers != null ? { playerCount: bookForm.playerCount } : {}),
-        });
-      }
+      await api.patch(`/api/admin/coach-lessons/${editingLesson.id}`, {
+        coachId: bookForm.coachId,
+        packageId: bookForm.packageId,
+        playerId: bookForm.playerId,
+        courtId: firstSlot.courtId,
+        date: bookDate,
+        startTime: firstSlot.startTime,
+        endTime: lastSlot.endTime,
+        note: bookForm.note || null,
+        status: bookForm.status,
+      });
       await fetchLessons();
-      setShowBookModal(false);
+      closeEditModal();
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -954,7 +990,6 @@ function LessonsTab({ venueId }: { venueId: string }) {
   const cancelledLessons = lessons.filter((l) => l.status === "cancelled");
 
   const SLOT_H = 40;
-  const ROW_H = 56;
 
   const shiftDate = (days: number) => {
     const d = new Date(selectedDate);
@@ -963,21 +998,6 @@ function LessonsTab({ venueId }: { venueId: string }) {
   };
 
   const calendarSlots = availability.length > 0 ? availability[0].slots : [];
-  const todayInTz = venueTimezone
-    ? new Intl.DateTimeFormat("en-CA", { timeZone: venueTimezone, year: "numeric", month: "2-digit", day: "2-digit" })
-        .format(new Date())
-    : localDateISO(new Date());
-  const isToday = selectedDate === todayInTz;
-  const nowHourInVenueTz = (() => {
-    const now = new Date();
-    if (!venueTimezone) return now.getHours() + now.getMinutes() / 60;
-    const parts = new Intl.DateTimeFormat("en-US", { timeZone: venueTimezone, hour: "numeric", minute: "2-digit", hour12: false }).formatToParts(now);
-    const h = parseInt(parts.find((p) => p.type === "hour")?.value ?? "0", 10);
-    const min = parseInt(parts.find((p) => p.type === "minute")?.value ?? "0", 10);
-    return h + min / 60;
-  })();
-  const firstHour = calendarSlots.length > 0 ? calendarSlots[0].hour : 6;
-  const currentRowOffset = isToday ? (nowHourInVenueTz - firstHour) * ROW_H : -1;
 
   const BLOCK_LABELS: Record<string, string> = {
     maintenance: "Maintenance",
@@ -1027,12 +1047,6 @@ function LessonsTab({ venueId }: { venueId: string }) {
               <TableProperties className="h-3.5 w-3.5" /> {t("bookings.timeView")}
             </button>
           </div>
-          <button
-            onClick={openBookModal}
-            className="flex items-center gap-2 rounded-lg bg-teal-600 px-3 py-2 text-sm font-medium text-white hover:bg-teal-500"
-          >
-            <Plus className="h-4 w-4" /> {t("coaching.bookLesson")}
-          </button>
         </div>
       </div>
 
@@ -1102,126 +1116,13 @@ function LessonsTab({ venueId }: { venueId: string }) {
         </div>
       ) : availability.length > 0 && calendarSlots.length > 0 ? (
         <div className="rounded-xl border border-neutral-800 overflow-hidden">
-          <div className="overflow-auto max-h-[70vh]">
-            <div className="relative" style={{ display: "grid", gridTemplateColumns: `64px repeat(${availability.length}, minmax(140px, 1fr))` }}>
-              <div className="sticky top-0 z-20 border-b border-neutral-700 bg-neutral-900/95 backdrop-blur" />
-              {availability.map((court) => (
-                <div key={court.courtId} className="sticky top-0 z-20 border-b border-l border-neutral-700 bg-neutral-900/95 backdrop-blur px-3 py-2.5 text-center">
-                  <span className="text-sm font-semibold text-white">{court.courtLabel}</span>
-                </div>
-              ))}
-
-              {calendarSlots.map((slot, rowIdx) => {
-                const isLastRow = rowIdx === calendarSlots.length - 1;
-                return [
-                  <div key={`time-${slot.startTime}`}
-                    className={cn("relative border-r border-neutral-800 bg-neutral-950 px-2 flex items-start pt-1", !isLastRow && "border-b border-b-neutral-800/50")}
-                    style={{ height: ROW_H }}>
-                    <span className="text-[11px] font-medium text-neutral-500 leading-none">
-                      {formatSlotTime(slot.startTime, venueTimezone)}
-                    </span>
-                  </div>,
-                  ...availability.map((court) => {
-                    const courtSlot = court.slots[rowIdx];
-                    const lessonInfo = courtSlot?.lesson;
-                    const isLessonStart = lessonInfo && (rowIdx === 0 || !court.slots[rowIdx - 1]?.lesson || court.slots[rowIdx - 1]?.lesson?.lessonId !== lessonInfo.lessonId);
-                    const isLessonContinuation = lessonInfo && !isLessonStart;
-                    let lessonSpan = 1;
-                    if (isLessonStart && lessonInfo) {
-                      for (let k = rowIdx + 1; k < court.slots.length; k++) {
-                        if (court.slots[k]?.lesson?.lessonId === lessonInfo.lessonId) lessonSpan++;
-                        else break;
-                      }
-                    }
-
-                    const blockInfo = courtSlot?.block;
-                    const isBlockStart = blockInfo && (rowIdx === 0 || !court.slots[rowIdx - 1]?.block || court.slots[rowIdx - 1]?.block?.blockId !== blockInfo.blockId);
-                    const isBlockContinuation = blockInfo && !isBlockStart;
-                    let blockSpan = 1;
-                    if (isBlockStart && blockInfo) {
-                      for (let k = rowIdx + 1; k < court.slots.length; k++) {
-                        if (court.slots[k]?.block?.blockId === blockInfo.blockId) blockSpan++;
-                        else break;
-                      }
-                    }
-
-                    const schedInfo = courtSlot?.schedule;
-                    const isSchedStart = schedInfo && (rowIdx === 0 || !court.slots[rowIdx - 1]?.schedule || court.slots[rowIdx - 1]?.schedule?.entryId !== schedInfo.entryId);
-                    const isSchedContinuation = schedInfo && !isSchedStart;
-                    let schedSpan = 1;
-                    if (isSchedStart && schedInfo) {
-                      for (let k = rowIdx + 1; k < court.slots.length; k++) {
-                        if (court.slots[k]?.schedule?.entryId === schedInfo.entryId) schedSpan++;
-                        else break;
-                      }
-                    }
-
-                    return (
-                      <div key={`${court.courtId}-${slot.startTime}`}
-                        className={cn("relative border-l border-neutral-800/40", !isLastRow && !isLessonContinuation && !isBlockContinuation && !isSchedContinuation && "border-b border-b-neutral-800/30")}
-                        style={{ height: ROW_H }}>
-                        {isLessonStart && lessonInfo ? (
-                          <div
-                            className="group absolute inset-x-1 top-1 rounded-lg border bg-teal-600/20 border-teal-500/30 px-2 py-1.5 overflow-hidden flex flex-col justify-center z-[5]"
-                            style={{ height: ROW_H * lessonSpan - 8 }}
-                          >
-                            <div className="flex items-center gap-1">
-                              <GraduationCap className="h-3 w-3 text-teal-400 shrink-0" />
-                              <p className="text-xs font-semibold text-teal-200 truncate">{lessonInfo.coachName}</p>
-                            </div>
-                            <p className="text-[10px] text-teal-400/70 truncate">
-                              {lessonInfo.playerName} — {lessonInfo.lessonType === "private" ? "Private" : "Group"}
-                            </p>
-                            {lessonSpan > 1 && (
-                              <p className="text-[10px] text-teal-400/50 truncate">{lessonInfo.packageName}</p>
-                            )}
-                          </div>
-                        ) : isLessonContinuation ? null : isBlockStart && blockInfo ? (
-                          <div
-                            className={cn(
-                              "absolute inset-x-1 top-1 rounded-lg border px-2 py-1.5 overflow-hidden flex flex-col justify-center z-[5]",
-                              blockInfo.type === "maintenance" && "bg-neutral-600/20 border-neutral-500/30",
-                              blockInfo.type === "open_play" && "bg-emerald-600/20 border-emerald-500/30",
-                              blockInfo.type === "competition" && "bg-blue-600/20 border-blue-500/30",
-                              blockInfo.type !== "maintenance" && blockInfo.type !== "open_play" && blockInfo.type !== "competition" && "bg-amber-600/20 border-amber-500/30",
-                            )}
-                            style={{ height: ROW_H * blockSpan - 8 }}
-                          >
-                            <p className="text-xs font-semibold text-neutral-300 truncate">{blockInfo.title || BLOCK_LABELS[blockInfo.type] || blockInfo.type}</p>
-                          </div>
-                        ) : isBlockContinuation ? null : isSchedStart && schedInfo ? (
-                          <div
-                            className={cn(
-                              "absolute inset-x-1 top-1 rounded-lg border px-2 py-1.5 overflow-hidden flex flex-col justify-center z-[5]",
-                              schedInfo.type === "open_play" && "bg-emerald-600/20 border-emerald-500/30",
-                              schedInfo.type === "competition" && "bg-blue-600/20 border-blue-500/30",
-                            )}
-                            style={{ height: ROW_H * schedSpan - 8 }}
-                          >
-                            <p className={cn("text-xs font-semibold truncate",
-                              schedInfo.type === "open_play" ? "text-emerald-200" : "text-blue-200"
-                            )}>{schedInfo.title || BLOCK_LABELS[schedInfo.type]}</p>
-                          </div>
-                        ) : isSchedContinuation ? null : courtSlot?.available ? (
-                          <div className="absolute inset-x-1 top-1 bottom-1 rounded-lg border border-dashed border-neutral-800/60" />
-                        ) : (
-                          <div className="absolute inset-x-1 top-1 bottom-1 rounded-lg bg-neutral-800/20" />
-                        )}
-                      </div>
-                    );
-                  }),
-                ];
-              })}
-
-              {isToday && currentRowOffset >= 0 && currentRowOffset <= calendarSlots.length * ROW_H && (
-                <div
-                  className="absolute left-0 right-0 z-10 pointer-events-none border-t-2 border-blue-500"
-                  style={{ top: ROW_H + currentRowOffset }}
-                >
-                  <div className="absolute -left-0 -top-1.5 h-3 w-3 rounded-full bg-blue-500" />
-                </div>
-              )}
-            </div>
+          <div className="overflow-auto max-h-[70vh] flex flex-col">
+            <BookingCourtGrid
+              availability={availability}
+              date={selectedDate}
+              timezone={venueTimezone}
+              blockTypeLabel={getBlockTypeLabel}
+            />
           </div>
         </div>
       ) : null}
@@ -1348,9 +1249,9 @@ function LessonsTab({ venueId }: { venueId: string }) {
       )}
       </section>
 
-      {/* Book Lesson — Full-screen split panel */}
-      {showBookModal && (
-        <div className="fixed inset-0 z-50 flex items-stretch bg-black/60" onClick={() => setShowBookModal(false)}>
+      {/* Edit Lesson — full-screen split panel (existing lessons only) */}
+      {showEditModal && editingLesson && (
+        <div className="fixed inset-0 z-50 flex items-stretch bg-black/60" onClick={closeEditModal}>
           <div
             className="flex flex-col md:flex-row w-full max-w-5xl mx-auto my-4 md:my-8 rounded-2xl border border-neutral-700 bg-neutral-900 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
@@ -1358,8 +1259,8 @@ function LessonsTab({ venueId }: { venueId: string }) {
             {/* Left panel — Form fields */}
             <div className="w-full md:w-[340px] shrink-0 border-b md:border-b-0 md:border-r border-neutral-800 p-5 overflow-y-auto">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold">{editingLesson ? t("coaching.editLesson") : t("coaching.bookLesson")}</h3>
-                <button onClick={() => setShowBookModal(false)} className="text-neutral-400 hover:text-white md:hidden">
+                <h3 className="text-lg font-bold">{t("coaching.editLesson")}</h3>
+                <button onClick={closeEditModal} className="text-neutral-400 hover:text-white md:hidden">
                   <X className="h-5 w-5" />
                 </button>
               </div>
@@ -1464,27 +1365,25 @@ function LessonsTab({ venueId }: { venueId: string }) {
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-teal-500 focus:outline-none resize-none"
                 />
 
-                {editingLesson && (
-                  <div>
-                    <label className="mb-1.5 block text-sm text-neutral-400">{t("coaching.status")}</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {(["confirmed", "completed", "no_show", "cancelled"] as const).map((s) => (
-                        <button
-                          key={s}
-                          onClick={() => setBookForm({ ...bookForm, status: s })}
-                          className={cn(
-                            "rounded-lg px-3 py-2 text-sm font-medium transition-colors border",
-                            bookForm.status === s
-                              ? STATUS_COLORS[s] + " border-current"
-                              : "border-neutral-700 bg-neutral-800 text-neutral-400 hover:bg-neutral-700"
-                          )}
-                        >
-                          {STATUS_LABELS[s]}
-                        </button>
-                      ))}
-                    </div>
+                <div>
+                  <label className="mb-1.5 block text-sm text-neutral-400">{t("coaching.status")}</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["confirmed", "completed", "no_show", "cancelled"] as const).map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setBookForm({ ...bookForm, status: s })}
+                        className={cn(
+                          "rounded-lg px-3 py-2 text-sm font-medium transition-colors border",
+                          bookForm.status === s
+                            ? STATUS_COLORS[s] + " border-current"
+                            : "border-neutral-700 bg-neutral-800 text-neutral-400 hover:bg-neutral-700"
+                        )}
+                      >
+                        {STATUS_LABELS[s]}
+                      </button>
+                    ))}
                   </div>
-                )}
+                </div>
 
                 {/* Player count stepper for scalable group packages */}
                 {selectedPkg && hasGroupPlayerPricing(selectedPkg) && (
@@ -1541,11 +1440,10 @@ function LessonsTab({ venueId }: { venueId: string }) {
                   disabled={saving || deleting || !bookForm.coachId || !bookForm.packageId || !bookForm.playerId || selectedSlots.length === 0}
                   className="w-full rounded-xl bg-teal-600 py-3 font-semibold text-white hover:bg-teal-500 disabled:opacity-50"
                 >
-                  {saving ? t("common.saving") : editingLesson ? t("common.save") : t("coaching.bookLesson")}
+                  {saving ? t("common.saving") : t("common.save")}
                 </button>
 
-                {editingLesson && (
-                  confirmDelete ? (
+                {confirmDelete ? (
                     <div className="rounded-xl border border-red-600/40 bg-red-600/10 p-3 space-y-2">
                       <p className="text-sm text-red-400 font-medium text-center">{t("coaching.confirmDelete")}</p>
                       <div className="flex gap-2">
@@ -1572,8 +1470,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
                     >
                       <Trash2 className="h-3.5 w-3.5" /> {t("coaching.deleteLesson")}
                     </button>
-                  )
-                )}
+                  )}
               </div>
             </div>
 
@@ -1593,7 +1490,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
                       : "Click slots to select time"}
                   </span>
                 </div>
-                <button onClick={() => setShowBookModal(false)} className="text-neutral-400 hover:text-white hidden md:block">
+                <button onClick={closeEditModal} className="text-neutral-400 hover:text-white hidden md:block">
                   <X className="h-5 w-5" />
                 </button>
               </div>
@@ -1689,7 +1586,7 @@ function LessonsTab({ venueId }: { venueId: string }) {
         </div>
       )}
 
-      {/* New Player Modal — triggered from Book Lesson form */}
+      {/* New Player Modal — triggered from Edit Lesson form */}
       {showNewPlayerModal && (
         <CoachingNewPlayerModal
           onSuccess={(newPlayer) => {

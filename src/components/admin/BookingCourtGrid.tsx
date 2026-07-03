@@ -91,6 +91,8 @@ export interface BookingCourtGridProps {
   compact?: boolean;
   /** Accent color for selected slots: "purple" | "teal". Default "purple" */
   accentColor?: "purple" | "teal";
+  /** Localized label for block/schedule types (maintenance, open_play, etc.) */
+  blockTypeLabel?: (type: string) => string;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -138,7 +140,7 @@ function formatDateInTz(d: Date, tz?: string): string {
   return `${y}-${m}-${day}`;
 }
 
-const BLOCK_LABELS: Record<string, string> = {
+const DEFAULT_BLOCK_LABELS: Record<string, string> = {
   maintenance: "Maintenance",
   private_event: "Private Event",
   private_competition: "Private Competition",
@@ -158,7 +160,10 @@ export function BookingCourtGrid({
   onBookingClick,
   compact = false,
   accentColor = "purple",
+  blockTypeLabel,
 }: BookingCourtGridProps) {
+  const labelForBlockType = (type: string) =>
+    blockTypeLabel?.(type) ?? DEFAULT_BLOCK_LABELS[type] ?? type;
   const ROW_H = compact ? 44 : 56;
   const allSlotTimes = availability.length > 0 ? availability[0].slots : [];
   const isToday = date === formatDateInTz(new Date(), timezone);
@@ -373,7 +378,7 @@ export function BookingCourtGrid({
                             blockInfo.type === "competition" && "text-blue-200",
                           )}
                         >
-                          {blockInfo.title || BLOCK_LABELS[blockInfo.type] || blockInfo.type}
+                          {blockInfo.title || labelForBlockType(blockInfo.type)}
                         </p>
                       </div>
                       {blockSpan > 1 && (
@@ -387,7 +392,7 @@ export function BookingCourtGrid({
                             blockInfo.type === "competition" && "text-blue-400/60",
                           )}
                         >
-                          {BLOCK_LABELS[blockInfo.type] || blockInfo.type}
+                          {labelForBlockType(blockInfo.type)}
                         </p>
                       )}
                     </div>
@@ -410,7 +415,7 @@ export function BookingCourtGrid({
                             schedInfo.type === "competition" && "text-blue-200",
                           )}
                         >
-                          {schedInfo.title || BLOCK_LABELS[schedInfo.type]}
+                          {schedInfo.title || labelForBlockType(schedInfo.type)}
                         </p>
                       </div>
                     </div>

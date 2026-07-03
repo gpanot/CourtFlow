@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef } from "react";
+import { useTranslation } from "react-i18next";
+import adminI18n from "@/i18n/admin-i18n";
 import { useSessionStore } from "@/stores/session-store";
 import { cn } from "@/lib/cn";
 import { Upload, Image as ImageIcon, Trash2, Undo2, X } from "lucide-react";
@@ -51,6 +53,7 @@ async function uploadFile(file: File): Promise<string> {
 }
 
 export function PaymentConfirmModal({ data, accentColor = "green", onConfirm, onRevert, onClose }: Props) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [form, setForm] = useState({
     amount: String(data.amountValue),
     method: data.paymentMethod || "cash",
@@ -116,7 +119,7 @@ export function PaymentConfirmModal({ data, accentColor = "green", onConfirm, on
   };
 
   const handleRevert = async () => {
-    if (!onRevert || !confirm("Revert this payment to Unpaid?")) return;
+    if (!onRevert || !confirm(t("overview.revertConfirm"))) return;
     setSaving(true);
     try {
       await onRevert(data.entityId);
@@ -138,15 +141,18 @@ export function PaymentConfirmModal({ data, accentColor = "green", onConfirm, on
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-bold">
-              {isPaid ? "Payment Details" : "Record Payment"}
+              {isPaid ? t("overview.paymentDetailsTitle") : t("overview.recordPayment")}
             </h3>
             <p className="text-sm text-neutral-400">
-              For <span className="text-white font-medium">{data.label}</span>
+              {t("overview.paymentForLabel")}{" "}
+              <span className="text-white font-medium">{data.label}</span>
             </p>
           </div>
           <div className="flex items-center gap-2">
             {isPaid && (
-              <span className="rounded-full bg-green-600/20 px-2.5 py-1 text-xs font-medium text-green-400">Paid</span>
+              <span className="rounded-full bg-green-600/20 px-2.5 py-1 text-xs font-medium text-green-400">
+                {t("overview.statusPaid")}
+              </span>
             )}
             <button onClick={close} className="text-neutral-400 hover:text-white">
               <X className="h-5 w-5" />
@@ -157,7 +163,7 @@ export function PaymentConfirmModal({ data, accentColor = "green", onConfirm, on
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-neutral-400">Amount (VND)</label>
+              <label className="text-xs text-neutral-400">{t("overview.amountVnd")}</label>
               <input
                 type="text"
                 inputMode="decimal"
@@ -167,21 +173,21 @@ export function PaymentConfirmModal({ data, accentColor = "green", onConfirm, on
               />
             </div>
             <div>
-              <label className="text-xs text-neutral-400">Method</label>
+              <label className="text-xs text-neutral-400">{t("overview.methodLabel")}</label>
               <select
                 value={form.method}
                 onChange={(e) => setForm({ ...form, method: e.target.value })}
                 className={cn("w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white", focusBorder, "focus:outline-none")}
               >
-                <option value="cash">Cash</option>
-                <option value="bank_transfer">Bank Transfer</option>
-                <option value="other">Other</option>
+                <option value="cash">{t("overview.methodCash")}</option>
+                <option value="bank_transfer">{t("overview.methodBankTransfer")}</option>
+                <option value="other">{t("overview.methodOther")}</option>
               </select>
             </div>
           </div>
 
           <div>
-            <label className="text-xs text-neutral-400">Date</label>
+            <label className="text-xs text-neutral-400">{t("overview.date")}</label>
             <input
               type="date"
               value={form.date}
@@ -191,26 +197,26 @@ export function PaymentConfirmModal({ data, accentColor = "green", onConfirm, on
           </div>
 
           <div>
-            <label className="text-xs text-neutral-400">Proof (QR screenshot, receipt...)</label>
+            <label className="text-xs text-neutral-400">{t("overview.proofLabel")}</label>
             <input ref={fileRef} type="file" accept="image/*" onChange={handleProofSelect} className="hidden" />
             {proofPreview ? (
               <div className="mt-1.5">
                 <div className="relative w-full overflow-hidden rounded-xl border border-neutral-700 bg-neutral-800">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={proofPreview} alt="Payment proof" className="w-full max-h-48 object-contain" />
+                  <img src={proofPreview} alt={t("overview.paymentProof")} className="w-full max-h-48 object-contain" />
                 </div>
                 <div className="mt-1.5 flex gap-2">
                   <button
                     onClick={() => fileRef.current?.click()}
                     className="flex items-center gap-1.5 rounded-lg bg-neutral-800 px-3 py-1.5 text-xs text-neutral-400 hover:text-white transition-colors"
                   >
-                    <Upload className="h-3 w-3" /> Replace
+                    <Upload className="h-3 w-3" /> {t("overview.replaceProof")}
                   </button>
                   <button
                     onClick={removeProof}
                     className="flex items-center gap-1.5 rounded-lg bg-neutral-800 px-3 py-1.5 text-xs text-red-400 hover:text-red-300 transition-colors"
                   >
-                    <Trash2 className="h-3 w-3" /> Remove
+                    <Trash2 className="h-3 w-3" /> {t("overview.removeProof")}
                   </button>
                 </div>
               </div>
@@ -220,16 +226,16 @@ export function PaymentConfirmModal({ data, accentColor = "green", onConfirm, on
                 className="mt-1.5 flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-neutral-700 bg-neutral-800/50 py-6 text-sm text-neutral-500 hover:border-neutral-600 hover:text-neutral-400 transition-colors"
               >
                 <ImageIcon className="h-5 w-5" />
-                Upload proof image
+                {t("overview.uploadProofImage")}
               </button>
             )}
           </div>
 
           <div>
-            <label className="text-xs text-neutral-400">Notes (optional)</label>
+            <label className="text-xs text-neutral-400">{t("overview.notesOptional")}</label>
             <textarea
               value={form.note}
-              placeholder="e.g. Discount applied, paid via QR..."
+              placeholder={t("overview.notesPlaceholder")}
               onChange={(e) => setForm({ ...form, note: e.target.value })}
               rows={2}
               className={cn("w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600", focusBorder, "focus:outline-none resize-none")}
@@ -245,7 +251,7 @@ export function PaymentConfirmModal({ data, accentColor = "green", onConfirm, on
                 disabled={saving || uploading}
                 className="w-full rounded-xl bg-green-600 py-3 font-semibold text-white hover:bg-green-500 disabled:opacity-40"
               >
-                {saving || uploading ? "Saving..." : "Update Payment"}
+                {saving || uploading ? t("common.saving") : t("overview.updatePayment")}
               </button>
               {onRevert && (
                 <button
@@ -253,11 +259,11 @@ export function PaymentConfirmModal({ data, accentColor = "green", onConfirm, on
                   disabled={saving}
                   className="w-full rounded-xl bg-amber-600/15 py-2.5 text-sm font-medium text-amber-400 hover:bg-amber-600/25 flex items-center justify-center gap-2 transition-colors"
                 >
-                  <Undo2 className="h-3.5 w-3.5" /> Revert to Unpaid
+                  <Undo2 className="h-3.5 w-3.5" /> {t("overview.revertToUnpaid")}
                 </button>
               )}
               <button onClick={close} className="w-full rounded-xl bg-neutral-800 py-2.5 text-sm font-medium text-neutral-400 hover:text-white transition-colors">
-                Cancel
+                {t("common.cancel")}
               </button>
             </>
           ) : (
@@ -267,10 +273,10 @@ export function PaymentConfirmModal({ data, accentColor = "green", onConfirm, on
                 disabled={saving || uploading || !form.amount}
                 className="w-full rounded-xl bg-green-600 py-3 font-semibold text-white hover:bg-green-500 disabled:opacity-40"
               >
-                {saving || uploading ? "Saving..." : "Confirm Payment"}
+                {saving || uploading ? t("common.saving") : t("overview.confirmPayment")}
               </button>
               <button onClick={close} className="w-full rounded-xl bg-neutral-800 py-2.5 text-sm font-medium text-neutral-400 hover:text-white transition-colors">
-                Cancel
+                {t("common.cancel")}
               </button>
             </>
           )}

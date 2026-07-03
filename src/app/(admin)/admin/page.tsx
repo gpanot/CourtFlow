@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import adminI18n from "@/i18n/admin-i18n";
+import adminI18n, { adminLocale } from "@/i18n/admin-i18n";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import {
@@ -203,15 +203,15 @@ function fmtPrice(amount: number): string {
 }
 
 function fmtTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString(adminLocale(), { hour: "2-digit", minute: "2-digit" });
 }
 
 function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
+  return new Date(iso).toLocaleDateString(adminLocale(), { month: "short", day: "numeric" });
 }
 
 function fmtReceivedTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString(adminLocale(), { hour: "2-digit", minute: "2-digit" });
 }
 
 function fmtReceivedDate(iso: string): string {
@@ -354,7 +354,7 @@ export default function AdminOverview() {
       playerName: r.playerName,
       playerAvatar: r.playerAvatar,
       playerPhoto: r.playerPhoto,
-      detail: "Open Play",
+      detail: "",
       venueName: r.venueName,
       date: r.date,
       startTime: r.startTime,
@@ -369,12 +369,15 @@ export default function AdminOverview() {
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 12);
 
+  const formatEntryDetail = (entry: RecentEntry) =>
+    entry.kind === "openplay" ? t("overview.typeOpenPlay") : entry.detail;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold md:text-2xl">{t("overview.dashboard")}</h2>
         <p className="text-xs text-neutral-500">
-          {new Date().toLocaleDateString(undefined, {
+          {new Date().toLocaleDateString(adminLocale(), {
             weekday: "long",
             month: "long",
             day: "numeric",
@@ -512,7 +515,7 @@ export default function AdminOverview() {
                 <th className="px-4 py-2.5 text-left font-medium">{t("overview.detail")}</th>
                 <th className="px-4 py-2.5 text-left font-medium">{t("overview.date")}</th>
                 <th className="px-4 py-2.5 text-left font-medium">{t("overview.time")}</th>
-                <th className="px-4 py-2.5 text-left font-medium">Received</th>
+                <th className="px-4 py-2.5 text-left font-medium">{t("overview.received")}</th>
                 <th className="px-4 py-2.5 text-left font-medium">{t("overview.status")}</th>
                 <th className="px-4 py-2.5 text-left font-medium">{t("overview.payment")}</th>
                 <th className="px-4 py-2.5 text-right font-medium">{t("overview.price")}</th>
@@ -535,14 +538,14 @@ export default function AdminOverview() {
                     <button
                       onClick={() => router.push(`/admin/courtpass-players?playerId=${entry.playerId}`)}
                       className="flex items-center gap-2 hover:opacity-75 transition-opacity text-left"
-                      title="View player profile"
+                      title={t("overview.viewPlayerProfile")}
                     >
                       <PlayerAvatarImg photo={entry.playerPhoto} avatar={entry.playerAvatar} size="sm" />
                       <span className="font-medium hover:underline">{entry.playerName}</span>
                     </button>
                   </td>
                   <td className="px-4 py-2.5">
-                    <span className="block text-sm text-neutral-200 leading-snug">{entry.detail}</span>
+                    <span className="block text-sm text-neutral-200 leading-snug">{formatEntryDetail(entry)}</span>
                     <span className="block text-xs text-neutral-500 leading-snug">{entry.venueName}</span>
                   </td>
                   <td className="px-4 py-2.5 text-neutral-400">{fmtDate(entry.date)}</td>
@@ -573,7 +576,7 @@ export default function AdminOverview() {
                           paymentProofUrl: entry.paymentProofUrl,
                           bookingStatus: entry.status,
                         })}
-                        title="Manage booking payment"
+                        title={t("overview.manageBookingPayment")}
                       >
                         <PaymentStatusBadge status={displayPaymentStatus(entry.paymentStatus)} />
                       </button>
@@ -590,13 +593,13 @@ export default function AdminOverview() {
                           startTime: entry.startTime,
                           endTime: entry.endTime,
                           priceValue: entry.priceValue,
-                          paymentStatus: entry.paymentStatus!,
+                          paymentStatus: displayPaymentStatus(entry.paymentStatus),
                           paymentProofUrl: entry.paymentProofUrl,
                           bookingStatus: entry.status,
                         })}
-                        title="Manage lesson payment"
+                        title={t("overview.manageLessonPayment")}
                       >
-                        <PaymentStatusBadge status={entry.paymentStatus} />
+                        <PaymentStatusBadge status={displayPaymentStatus(entry.paymentStatus)} />
                       </button>
                     )}
                     {entry.kind === "openplay" && entry.status !== "cancelled" && (
@@ -605,7 +608,7 @@ export default function AdminOverview() {
                           type: "openplay",
                           entityId: entry.id,
                           playerName: entry.playerName,
-                          detail: "Open Play",
+                          detail: t("overview.typeOpenPlay"),
                           venueName: entry.venueName,
                           date: entry.date,
                           startTime: entry.startTime,
@@ -615,7 +618,7 @@ export default function AdminOverview() {
                           paymentProofUrl: entry.paymentProofUrl,
                           bookingStatus: entry.status,
                         })}
-                        title="Manage open play payment"
+                        title={t("overview.manageOpenPlayPayment")}
                       >
                         <PaymentStatusBadge status={displayPaymentStatus(entry.paymentStatus)} />
                       </button>
@@ -645,7 +648,7 @@ export default function AdminOverview() {
                 <button
                   onClick={() => router.push(`/admin/courtpass-players?playerId=${entry.playerId}`)}
                   className="flex items-center gap-2 hover:opacity-75 transition-opacity text-left"
-                  title="View player profile"
+                  title={t("overview.viewPlayerProfile")}
                 >
                   <PlayerAvatarImg photo={entry.playerPhoto} avatar={entry.playerAvatar} size="sm" />
                   <span className="text-sm font-medium hover:underline">{entry.playerName}</span>
@@ -685,7 +688,7 @@ export default function AdminOverview() {
                       type: "openplay",
                       entityId: entry.id,
                       playerName: entry.playerName,
-                      detail: "Open Play",
+                      detail: t("overview.typeOpenPlay"),
                       venueName: entry.venueName,
                       date: entry.date,
                       startTime: entry.startTime,
@@ -702,12 +705,12 @@ export default function AdminOverview() {
               </div>
               <div className="flex items-start justify-between gap-2 mt-0.5">
                 <div className="text-xs text-neutral-400 leading-snug">
-                  <span className="block">{entry.detail}</span>
+                  <span className="block">{formatEntryDetail(entry)}</span>
                   <span className="block text-neutral-600">{entry.venueName}</span>
                 </div>
                 <div className="text-xs text-neutral-500 text-right leading-snug shrink-0">
                   <span className="block">{fmtDate(entry.date)} · {fmtTime(entry.startTime)}</span>
-                  <span className="block text-neutral-600">rcvd {fmtReceivedTime(entry.createdAt)}</span>
+                  <span className="block text-neutral-600">{t("overview.receivedShort")} {fmtReceivedTime(entry.createdAt)}</span>
                 </div>
                 <span className="text-xs font-medium text-neutral-300 shrink-0 self-center">{fmtPrice(entry.priceValue)}</span>
               </div>
@@ -761,7 +764,7 @@ export default function AdminOverview() {
                           type: "openplay",
                           entityId: r.id,
                           playerName: r.playerName,
-                          detail: "Open Play",
+                          detail: t("overview.typeOpenPlay"),
                           venueName: openPlayDetailGroup.venueName,
                           date: openPlayDetailGroup.startTime,
                           startTime: openPlayDetailGroup.startTime,
