@@ -26,7 +26,8 @@
     "courtpayCheckin": "CourtPay - Điểm danh",
     "logsErrors": "Nhật ký & Lỗi",
     "courtpassPlayers": "Người chơi CourtPass",
-    "organizations": "Tổ chức"
+    "organizations": "Tổ chức",
+    "classPasses": "Thẻ Lớp Học"
   },
   "layout": {
     "adminPanel": "Bảng quản trị",

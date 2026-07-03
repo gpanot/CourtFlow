@@ -7,7 +7,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { applyThemeMode, getStoredThemeMode, setStoredThemeMode, type ThemeMode } from "@/lib/theme-mode";
-import { LayoutDashboard, MapPin, Users, UserCircle, BarChart3, Monitor, Banknote, Crown, CalendarDays, GraduationCap, LogOut, Menu, X, CreditCard, Receipt, ScanFace, Sun, Moon, ChevronLeft, ChevronDown, ChevronRight, ShoppingBag, AlertTriangle, PieChart, ShieldAlert, Wallet, Settings, Building2 } from "lucide-react";
+import { LayoutDashboard, MapPin, Users, UserCircle, BarChart3, Monitor, Banknote, Crown, CalendarDays, GraduationCap, LogOut, Menu, X, CreditCard, Receipt, ScanFace, Sun, Moon, ChevronLeft, ChevronDown, ChevronRight, ShoppingBag, AlertTriangle, PieChart, ShieldAlert, Wallet, Settings, Building2, Ticket } from "lucide-react";
 import { SetupWizardBanner } from "@/components/setup-wizard-banner";
 import { AiChatWidget } from "@/components/admin/AiChatWidget";
 import { AdminBookingNotifications } from "@/components/admin/AdminBookingNotifications";
@@ -36,6 +36,7 @@ const topNavItems: NavItem[] = [
   { href: "/admin/bookings", label: "nav.bookings", icon: CalendarDays },
   { href: "/admin/coaching", label: "nav.coaching", icon: GraduationCap },
   { href: "/admin/memberships", label: "nav.memberships", icon: Crown },
+  { href: "/admin/class-passes", label: "nav.classPasses", icon: Ticket },
   { href: "/admin/courtpass-players", label: "nav.courtpassPlayers", icon: UserCircle },
   { href: "/admin/staff", label: "nav.staff", icon: Users },
   { href: "/admin/venue-analytics", label: "nav.venueAnalytics", icon: PieChart },
