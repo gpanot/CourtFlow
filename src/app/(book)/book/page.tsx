@@ -111,7 +111,6 @@ export default function VenueHomePage() {
   const [loading, setLoading] = useState(true);
   const [bookingType, setBookingType] = useState<BookingType>("court");
   const [debugAccount, setDebugAccount] = useState<Record<string, unknown> | null>(null);
-  const [showDebug, setShowDebug] = useState(false);
 
   // Multi-slot selection: courtId + array of selected slots
   const [selectedCourtId, setSelectedCourtId] = useState<string | null>(null);
@@ -317,31 +316,6 @@ export default function VenueHomePage() {
     <div>
       <BookTabTopBar title={venue?.name ?? t("common.loading")} />
 
-      {/* DEBUG panel — tap venue name to toggle, remove before production */}
-      {debugAccount && (
-        <div className="mx-4 mb-2">
-          <button
-            onClick={() => setShowDebug((v) => !v)}
-            className="text-[10px] text-orange-500 underline"
-          >
-            {showDebug ? "Hide debug" : "[DEBUG] Show booking context"}
-          </button>
-          {showDebug && (
-            <div className="mt-1 p-3 border border-orange-400 rounded-xl bg-orange-50 text-xs font-mono space-y-1">
-              <p className="font-bold text-orange-700">[DEBUG] Book Page</p>
-              <p>country: <span className="text-gray-800">{String((debugAccount as {country?: unknown}).country ?? "null")}</span></p>
-              <p>registrationVenueId: <span className="text-gray-800">{String((debugAccount as {registrationVenueId?: unknown}).registrationVenueId ?? "null")}</span></p>
-              <p>venue (from account): <span className="text-gray-800">{JSON.stringify((debugAccount as {venue?: unknown}).venue ?? null)}</span></p>
-              <p>playerVenueId (context): <span className="text-gray-800">{String((debugAccount as {playerVenueIdFromCtx?: unknown}).playerVenueIdFromCtx ?? "null")}</span></p>
-              <p>filteredVenues ({((debugAccount as {filteredVenues?: unknown[]}).filteredVenues ?? []).length}): {((debugAccount as {filteredVenues?: {name: string}[]}).filteredVenues ?? []).map((v) => v.name).join(", ") || "none"}</p>
-              <p>allVenues ({((debugAccount as {allVenues?: unknown[]}).allVenues ?? []).length}): {((debugAccount as {allVenues?: {name: string}[]}).allVenues ?? []).map((v) => v.name).join(", ") || "none"}</p>
-              {((debugAccount as {filteredVenues?: unknown[]}).filteredVenues ?? []).length !== ((debugAccount as {allVenues?: unknown[]}).allVenues ?? []).length && (
-                <p className="text-orange-700 font-bold">⚠ Country filter active — some venues hidden</p>
-              )}
-            </div>
-          )}
-        </div>
-      )}
 
       <div className="px-4 pb-4">
         <h2 className="text-base font-semibold mb-3">{t("home.whatToBook")}</h2>

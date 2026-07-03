@@ -58,6 +58,7 @@ export default function OnboardingVenuePage() {
     if (!session) return;
     setSaving(venueId);
     setError(null);
+    console.log("[DEBUG venue picker] handleSelect — venueId:", venueId, "session.token:", session.token ? "present" : "missing");
     try {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
@@ -72,9 +73,20 @@ export default function OnboardingVenuePage() {
         body: JSON.stringify({ venueId, venueOnly: true }),
       });
       const data = await res.json();
+      console.log("[DEBUG venue picker] onboarding POST response:", res.status, JSON.stringify(data));
       if (!res.ok) throw new Error(data.error || t("onboarding.errors.saveFailed"));
+
+      // DEBUG: verify the save actually persisted
+      const verifyRes = await fetch("/api/public/account", { headers: { ...(session.token ? { Authorization: `Bearer ${session.token}` } : {}) }, credentials: "include" });
+      const verifyData = await verifyRes.json();
+      console.log("[DEBUG venue picker] account AFTER venue save:", {
+        registrationVenueId: verifyData?.registrationVenueId,
+        venue: verifyData?.venue,
+      });
+
       router.push("/book");
     } catch (e) {
+      console.error("[DEBUG venue picker] handleSelect error:", (e as Error).message);
       setError((e as Error).message);
       setSaving(null);
     }
@@ -119,19 +131,6 @@ export default function OnboardingVenuePage() {
       </button>
       <h1 className="text-xl font-bold mb-1">{t("onboarding.chooseVenue")}</h1>
       <p className="text-sm text-[var(--cm-text-sec)] mb-6">{t("onboarding.chooseVenueSubtitle")}</p>
-
-      {/* DEBUG panel — remove before production */}
-      {debugInfo && (
-        <div className="mb-4 p-3 border border-orange-400 rounded-xl bg-orange-50 text-xs font-mono space-y-1">
-          <p className="font-bold text-orange-700">[DEBUG] Venue Picker</p>
-          <p>Account country: <span className="text-gray-800">{String(debugInfo.account?.country ?? "null")}</span></p>
-          <p>Filtered venues ({debugInfo.filtered.length}): {debugInfo.filtered.map(v => `${v.name} [${v.country ?? "no-country"}]`).join(", ") || "none"}</p>
-          <p>All venues ({debugInfo.all.length}): {debugInfo.all.map(v => `${v.name} [${v.country ?? "no-country"}]`).join(", ") || "none"}</p>
-          {debugInfo.filtered.length !== debugInfo.all.length && (
-            <p className="text-orange-700 font-bold">⚠ Country filter is active — {debugInfo.all.length - debugInfo.filtered.length} venue(s) hidden</p>
-          )}
-        </div>
-      )}
 
       {error && (
         <div className="mb-4 p-3 bg-[var(--cm-red)]/10 text-[var(--cm-red)] text-sm rounded-xl">
