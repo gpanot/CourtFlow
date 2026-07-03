@@ -50,6 +50,7 @@ import {
   type PaymentActionTarget,
 } from "@/components/admin/PaymentActionModal";
 import { StaffBookingModal, type InitialCourtSelection } from "@/components/admin/StaffBookingModal";
+import { BookingCourtGrid, type CourtSlot } from "@/components/admin/BookingCourtGrid";
 
 export const dynamic = "force-dynamic";
 
@@ -228,9 +229,9 @@ export default function BookingsPage() {
   // Unified slot selection state — supports multiple courts
   const [selectedSlots, setSelectedSlots] = useState<Record<string, { courtLabel: string; slots: SlotInfo[] }>>({});
 
-  // Unified staff booking modal (Court + Open Play via StaffBookingModal)
+  // Unified staff booking modal (Court + Open Play + Lesson via StaffBookingModal)
   const [showStaffModal, setShowStaffModal] = useState(false);
-  const [staffModalMode, setStaffModalMode] = useState<"court" | "open_play">("court");
+  const [staffModalMode, setStaffModalMode] = useState<"court" | "open_play" | "lesson">("court");
   const [staffModalInitialSelection, setStaffModalInitialSelection] = useState<InitialCourtSelection | undefined>();
 
   // Edit booking state
@@ -394,7 +395,7 @@ export default function BookingsPage() {
 
   const clearSelection = () => setSelectedSlots({});
 
-  const openStaffModal = (mode: "court" | "open_play", courtSelection?: InitialCourtSelection) => {
+  const openStaffModal = (mode: "court" | "open_play" | "lesson", courtSelection?: InitialCourtSelection) => {
     setStaffModalMode(mode);
     setStaffModalInitialSelection(courtSelection);
     setShowStaffModal(true);
@@ -564,12 +565,14 @@ export default function BookingsPage() {
     if (!blockForm.courtIds.length || !blockForm.startHour || !blockForm.endHour) return;
     setSaving(true);
     try {
-      const date = new Date(selectedDate);
-      date.setHours(0, 0, 0, 0);
-      const startTime = new Date(date);
-      startTime.setHours(parseInt(blockForm.startHour), 0, 0, 0);
-      const endTime = new Date(date);
-      endTime.setHours(parseInt(blockForm.endHour), 0, 0, 0);
+      // Use the YYYY-MM-DD string directly so the API always gets the right calendar date.
+      // Build startTime/endTime from ISO strings with explicit +07:00 offset so they survive
+      // JSON serialisation without drifting to the previous UTC day.
+      const tz = "+07:00";
+      const startHour = parseInt(blockForm.startHour).toString().padStart(2, "0");
+      const endHour = parseInt(blockForm.endHour).toString().padStart(2, "0");
+      const startTime = new Date(`${selectedDate}T${startHour}:00:00${tz}`);
+      const endTime = new Date(`${selectedDate}T${endHour}:00:00${tz}`);
 
       await api.post("/api/admin/court-blocks", {
         venueId: selectedVenueId,
@@ -577,7 +580,7 @@ export default function BookingsPage() {
         title: blockForm.title || undefined,
         note: blockForm.note || undefined,
         courtIds: blockForm.courtIds,
-        date: date.toISOString(),
+        date: selectedDate,
         startTime: startTime.toISOString(),
         endTime: endTime.toISOString(),
       });
@@ -913,245 +916,43 @@ export default function BookingsPage() {
             </div>
           </div>
         );
-      })() : (() => {
-        const ROW_H = 56;
-        const courts = availability;
-        const slots = allSlotTimes;
-        const nowHour = nowHourInTz(venueTimezone);
-        const isToday = selectedDate === formatDate(new Date(), venueTimezone);
-        const firstHour = slots.length > 0 ? slots[0].hour : 6;
-        const currentRowOffset = isToday ? (nowHour - firstHour) * ROW_H : -1;
-
-        return (
-          <div className="rounded-xl border border-neutral-800 overflow-hidden">
-            <div className="overflow-auto max-h-[70vh]">
-              <div className="relative" style={{ display: "grid", gridTemplateColumns: `64px repeat(${courts.length}, minmax(140px, 1fr))` }}>
-                {/* Header row: time column + courts */}
-                <div className="sticky top-0 z-20 border-b border-neutral-700 bg-neutral-900/95 backdrop-blur" />
-                {courts.map((court) => (
-                  <div key={court.courtId} className="sticky top-0 z-20 border-b border-l border-neutral-700 bg-neutral-900/95 backdrop-blur px-3 py-2.5 text-center">
-                    <span className="text-sm font-semibold text-white">{court.courtLabel}</span>
-                  </div>
-                ))}
-
-                {/* Time rows */}
-                {slots.map((slot, rowIdx) => {
-                  const isLastRow = rowIdx === slots.length - 1;
-                  return [
-                    <div key={`time-${slot.startTime}`}
-                      className={cn("relative border-r border-neutral-800 bg-neutral-950 px-2 flex items-start pt-1", !isLastRow && "border-b border-b-neutral-800/50")}
-                      style={{ height: ROW_H }}>
-                      <span className="text-[11px] font-medium text-neutral-500 leading-none">
-                        {formatTime(slot.startTime, venueTimezone)}
-                      </span>
-                    </div>,
-                    ...courts.map((court) => {
-                      const courtSlot = court.slots[rowIdx];
-                      const booking = bookingsByCourtAndTime.get(`${court.courtId}_${slot.startTime}`);
-                      const isFirstSlotOfBooking = booking && booking.startTime === slot.startTime;
-                      const isContinuationSlot = booking && booking.startTime !== slot.startTime;
-                      const bookingSlotSpan = booking ? Math.max(1, Math.round(
-                        (new Date(booking.endTime).getTime() - new Date(booking.startTime).getTime()) / (1000 * 60 * 60)
-                      )) : 1;
-
-                      const blockInfo = courtSlot?.block;
-                      const isBlockStart = blockInfo && (rowIdx === 0 || !court.slots[rowIdx - 1]?.block || court.slots[rowIdx - 1]?.block?.blockId !== blockInfo.blockId);
-                      const isBlockContinuation = blockInfo && !isBlockStart;
-                      let blockSpan = 1;
-                      if (isBlockStart && blockInfo) {
-                        for (let k = rowIdx + 1; k < court.slots.length; k++) {
-                          if (court.slots[k]?.block?.blockId === blockInfo.blockId) blockSpan++;
-                          else break;
-                        }
-                      }
-
-                      const schedInfo = courtSlot?.schedule;
-                      const isSchedStart = schedInfo && (rowIdx === 0 || !court.slots[rowIdx - 1]?.schedule || court.slots[rowIdx - 1]?.schedule?.entryId !== schedInfo.entryId);
-                      const isSchedContinuation = schedInfo && !isSchedStart;
-                      let schedSpan = 1;
-                      if (isSchedStart && schedInfo) {
-                        for (let k = rowIdx + 1; k < court.slots.length; k++) {
-                          if (court.slots[k]?.schedule?.entryId === schedInfo.entryId) schedSpan++;
-                          else break;
-                        }
-                      }
-
-                      const lessonInfo = courtSlot?.lesson;
-                      const isLessonStart = lessonInfo && (rowIdx === 0 || !court.slots[rowIdx - 1]?.lesson || court.slots[rowIdx - 1]?.lesson?.lessonId !== lessonInfo.lessonId);
-                      const isLessonContinuation = lessonInfo && !isLessonStart;
-                      let lessonSpan = 1;
-                      if (isLessonStart && lessonInfo) {
-                        for (let k = rowIdx + 1; k < court.slots.length; k++) {
-                          if (court.slots[k]?.lesson?.lessonId === lessonInfo.lessonId) lessonSpan++;
-                          else break;
-                        }
-                      }
-
-                      return (
-                        <div key={`${court.courtId}-${slot.startTime}`}
-                          className={cn("relative border-l border-neutral-800/40", !isLastRow && !isContinuationSlot && !isBlockContinuation && !isSchedContinuation && !isLessonContinuation && "border-b border-b-neutral-800/30")}
-                          style={{ height: ROW_H }}>
-                          {isFirstSlotOfBooking ? (
-                            <div
-                              onClick={() => booking.status === "confirmed" && openEditModal(booking)}
-                              className={cn(
-                                "group absolute inset-x-1 top-1 rounded-lg border px-2 py-1.5 overflow-hidden flex flex-col justify-center transition-colors z-[5]",
-                                booking.status === "confirmed" && "bg-purple-600/20 border-purple-500/30 cursor-pointer hover:bg-purple-600/30",
-                                booking.status !== "confirmed" && "bg-neutral-800/40 border-neutral-700/30 opacity-50",
-                              )}
-                              style={{ height: ROW_H * bookingSlotSpan - 8 }}
-                            >
-                              <p className="text-xs font-semibold text-purple-200 truncate">{booking.player.name}</p>
-                              <p className="text-[10px] text-purple-400/70">
-                                {formatTime(booking.startTime, venueTimezone)} – {formatTime(booking.endTime, venueTimezone)}
-                              </p>
-                              {bookingSlotSpan > 1 && (
-                                <p className="text-[10px] text-purple-400/50">{fmtPrice(booking.priceValue)}</p>
-                              )}
-                              {booking.status === "confirmed" && (
-                                <div className="absolute right-1 top-1 hidden gap-0.5 group-hover:flex">
-                                  <button onClick={(e) => { e.stopPropagation(); openEditModal(booking); }}
-                                    className="rounded p-0.5 bg-neutral-900/80 text-blue-400 hover:bg-blue-900/50" title="Edit">
-                                    <Pencil className="h-3 w-3" /></button>
-                                  <button onClick={(e) => { e.stopPropagation(); cancelBooking(booking.id); }}
-                                    className="rounded p-0.5 bg-neutral-900/80 text-red-400 hover:bg-red-900/50" title="Cancel">
-                                    <XCircle className="h-3 w-3" /></button>
-                                  <button onClick={(e) => { e.stopPropagation(); markNoShow(booking.id); }}
-                                    className="rounded p-0.5 bg-neutral-900/80 text-amber-400 hover:bg-amber-900/50" title="No-show">
-                                    <AlertTriangle className="h-3 w-3" /></button>
-                                </div>
-                              )}
-                            </div>
-                          ) : isContinuationSlot ? null : isBlockStart && blockInfo ? (
-                            <div
-                              className={cn(
-                                "group absolute inset-x-1 top-1 rounded-lg border px-2 py-1.5 overflow-hidden flex flex-col justify-center z-[5]",
-                                blockInfo.type === "maintenance" && "bg-neutral-600/20 border-neutral-500/30",
-                                blockInfo.type === "private_event" && "bg-amber-600/20 border-amber-500/30",
-                                blockInfo.type === "private_competition" && "bg-orange-600/20 border-orange-500/30",
-                                blockInfo.type === "open_play" && "bg-emerald-600/20 border-emerald-500/30",
-                                blockInfo.type === "competition" && "bg-blue-600/20 border-blue-500/30",
-                              )}
-                              style={{ height: ROW_H * blockSpan - 8 }}
-                            >
-                              <div className="flex items-center gap-1">
-                                {blockInfo.type === "maintenance" && <Wrench className="h-3 w-3 text-neutral-400 shrink-0" />}
-                                {blockInfo.type === "private_event" && <Calendar className="h-3 w-3 text-amber-400 shrink-0" />}
-                                {blockInfo.type === "private_competition" && <Trophy className="h-3 w-3 text-orange-400 shrink-0" />}
-                                {blockInfo.type === "open_play" && <Users className="h-3 w-3 text-emerald-400 shrink-0" />}
-                                {blockInfo.type === "competition" && <Trophy className="h-3 w-3 text-blue-400 shrink-0" />}
-                                <p className={cn(
-                                  "text-xs font-semibold truncate",
-                                  blockInfo.type === "maintenance" && "text-neutral-300",
-                                  blockInfo.type === "private_event" && "text-amber-200",
-                                  blockInfo.type === "private_competition" && "text-orange-200",
-                                  blockInfo.type === "open_play" && "text-emerald-200",
-                                  blockInfo.type === "competition" && "text-blue-200",
-                                )}>
-                                  {blockInfo.title || BLOCK_LABELS[blockInfo.type] || blockInfo.type}
-                                </p>
-                              </div>
-                              {blockSpan > 1 && (
-                                <p className={cn(
-                                  "text-[10px]",
-                                  blockInfo.type === "maintenance" && "text-neutral-500",
-                                  blockInfo.type === "private_event" && "text-amber-400/60",
-                                  blockInfo.type === "private_competition" && "text-orange-400/60",
-                                  blockInfo.type === "open_play" && "text-emerald-400/60",
-                                  blockInfo.type === "competition" && "text-blue-400/60",
-                                )}>
-                                  {BLOCK_LABELS[blockInfo.type] || blockInfo.type}
-                                </p>
-                              )}
-                              <div className="absolute right-1 top-1 hidden group-hover:flex">
-                                <button onClick={() => deleteBlock(blockInfo.blockId)}
-                                  className="rounded p-0.5 bg-neutral-900/80 text-red-400 hover:bg-red-900/50" title="Remove block">
-                                  <Trash2 className="h-3 w-3" /></button>
-                              </div>
-                            </div>
-                          ) : isBlockContinuation ? null : isSchedStart && schedInfo ? (
-                            <div
-                              className={cn(
-                                "absolute inset-x-1 top-1 rounded-lg border px-2 py-1.5 overflow-hidden flex flex-col justify-center z-[5]",
-                                schedInfo.type === "open_play" && "bg-emerald-600/20 border-emerald-500/30",
-                                schedInfo.type === "competition" && "bg-blue-600/20 border-blue-500/30",
-                              )}
-                              style={{ height: ROW_H * schedSpan - 8 }}
-                            >
-                              <div className="flex items-center gap-1">
-                                {schedInfo.type === "open_play" && <Users className="h-3 w-3 text-emerald-400 shrink-0" />}
-                                {schedInfo.type === "competition" && <Trophy className="h-3 w-3 text-blue-400 shrink-0" />}
-                                <p className={cn(
-                                  "text-xs font-semibold truncate",
-                                  schedInfo.type === "open_play" && "text-emerald-200",
-                                  schedInfo.type === "competition" && "text-blue-200",
-                                )}>
-                                  {schedInfo.title || BLOCK_LABELS[schedInfo.type]}
-                                </p>
-                              </div>
-                              {schedSpan > 1 && (
-                                <p className={cn(
-                                  "text-[10px]",
-                                  schedInfo.type === "open_play" && "text-emerald-400/60",
-                                  schedInfo.type === "competition" && "text-blue-400/60",
-                                )}>
-                                  {BLOCK_LABELS[schedInfo.type]}
-                                </p>
-                              )}
-                            </div>
-                          ) : isSchedContinuation ? null : isLessonStart && lessonInfo ? (
-                            <div
-                              className="group absolute inset-x-1 top-1 rounded-lg border bg-teal-600/20 border-teal-500/30 px-2 py-1.5 overflow-hidden flex flex-col justify-center z-[5]"
-                              style={{ height: ROW_H * lessonSpan - 8 }}
-                            >
-                              <div className="flex items-center gap-1">
-                                <GraduationCap className="h-3 w-3 text-teal-400 shrink-0" />
-                                <p className="text-xs font-semibold text-teal-200 truncate">
-                                  {lessonInfo.coachName}
-                                </p>
-                              </div>
-                              <p className="text-[10px] text-teal-400/70 truncate">
-                                {lessonInfo.playerName} — {lessonInfo.lessonType === "private" ? "Private" : "Group"}
-                              </p>
-                              {lessonSpan > 1 && (
-                                <p className="text-[10px] text-teal-400/50 truncate">{lessonInfo.packageName}</p>
-                              )}
-                            </div>
-                          ) : isLessonContinuation ? null : courtSlot?.available ? (
-                            <button
-                              onClick={() => toggleSlotSelection(court, courtSlot)}
-                              className={cn(
-                                "absolute inset-x-1 top-1 bottom-1 rounded-lg border flex items-center justify-center transition-colors",
-                                isSlotSelected(court.courtId, slot.startTime)
-                                  ? "border-purple-500 bg-purple-600/25 text-purple-300 ring-1 ring-purple-500/50"
-                                  : "border-dashed border-neutral-800/60 text-neutral-600 hover:border-purple-500/40 hover:bg-purple-600/5 hover:text-purple-400"
-                              )}
-                            >
-                              <span className="text-[10px]">{fmtPrice(courtSlot.priceValue)}</span>
-                            </button>
-                          ) : (
-                            <div className="absolute inset-x-1 top-1 bottom-1 rounded-lg bg-neutral-800/20" />
-                          )}
-                        </div>
-                      );
-                    }),
-                  ];
-                })}
-
-                {/* Current time indicator */}
-                {isToday && currentRowOffset >= 0 && currentRowOffset <= slots.length * ROW_H && (
-                  <div
-                    className="absolute left-0 right-0 z-10 pointer-events-none border-t-2 border-blue-500"
-                    style={{ top: ROW_H + currentRowOffset }}
-                  >
-                    <div className="absolute -left-0 -top-1.5 h-3 w-3 rounded-full bg-blue-500" />
-                  </div>
-                )}
-              </div>
-            </div>
+      })() : (
+        <div className="rounded-xl border border-neutral-800 overflow-hidden">
+          <div className="overflow-auto max-h-[70vh] flex flex-col">
+            <BookingCourtGrid
+              availability={availability}
+              date={selectedDate}
+              timezone={venueTimezone}
+              bookings={bookings.map((b) => ({
+                id: b.id,
+                courtId: b.courtId,
+                playerId: b.playerId,
+                startTime: b.startTime,
+                endTime: b.endTime,
+                status: b.status,
+                priceValue: b.priceValue,
+                player: b.player,
+              }))}
+              selectedSlots={Object.fromEntries(
+                Object.entries(selectedSlots).map(([cid, entry]) => [
+                  cid,
+                  new Set(entry.slots.map((s) => s.startTime)),
+                ])
+              )}
+              onSlotClick={(courtId, courtLabel, slot) =>
+                toggleSlotSelection(
+                  { courtId, courtLabel, slots: availability.find((c) => c.courtId === courtId)?.slots ?? [] },
+                  slot as CourtSlot,
+                )
+              }
+              onBookingClick={(b) => {
+                const full = bookings.find((x) => x.id === b.id);
+                if (full) openEditModal(full);
+              }}
+            />
           </div>
-        );
-      })()}
+        </div>
+      )}
 
       {/* Bookings List */}
       <section className="space-y-3">
@@ -1356,12 +1157,12 @@ export default function BookingsPage() {
 
       </>}
 
-      {/* Unified Staff Booking Modal (Court + Open Play) */}
+      {/* Unified Staff Booking Modal (Court + Open Play + Lesson) */}
       {showStaffModal && selectedVenueId && (
         <StaffBookingModal
           venueId={selectedVenueId}
           initialDate={selectedDate}
-          allowModes={["court", "open_play"]}
+          allowModes={["court", "open_play", "lesson"]}
           initialMode={staffModalMode}
           initialCourtSelection={staffModalInitialSelection}
           onClose={closeStaffModal}

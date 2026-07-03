@@ -14,7 +14,7 @@
  * The right-panel court-grid is only shown for "lesson" and "court" modes.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import adminI18n from "@/i18n/admin-i18n";
 import { api } from "@/lib/api-client";
@@ -26,7 +26,6 @@ import {
   UserPlus,
   Users,
   CalendarDays,
-  Check,
   Loader2,
   Eye,
   EyeOff,
@@ -34,6 +33,7 @@ import {
   Calendar,
 } from "lucide-react";
 import { hasGroupPlayerPricing, calculateSessionPrice } from "@/lib/coach-package-pricing";
+import { BookingCourtGrid, type CourtSlot } from "@/components/admin/BookingCourtGrid";
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
@@ -133,8 +133,6 @@ function fmtSlotTime(iso: string, tz?: string): string {
 }
 
 const fmtPrice = (n: number) => new Intl.NumberFormat("vi-VN").format(n);
-
-const SLOT_H = 40;
 
 // ─── Mode tab labels ───────────────────────────────────────────────────────────
 
@@ -407,9 +405,6 @@ export function StaffBookingModal({
     }
   };
 
-  const isSlotSelected = (courtId: string, startTime: string) =>
-    selectedSlots.some((s) => s.courtId === courtId && s.startTime === startTime);
-
   const submitLesson = async () => {
     if (!lessonCoachId || !lessonPackageId || !selectedPlayer || selectedSlots.length === 0) {
       setErr("Coach, package, player, and time slot are required");
@@ -453,10 +448,16 @@ export function StaffBookingModal({
     return !lessonCoachId || !lessonPackageId || selectedSlots.length === 0;
   };
 
-  // ─── Court booking grid (shown for lesson mode) ────────────────────────────
+  // ─── Court booking grid (shown for court + lesson modes) ──────────────────
 
   const showGrid = mode === "lesson" || mode === "court";
-  const calendarSlots = availability.length > 0 ? availability[0].slots : [];
+
+  // Derive selectedSlots shape for BookingCourtGrid: Record<courtId, Set<startTime>>
+  const gridSelectedSlots = useMemo<Record<string, Set<string>>>(() => {
+    if (selectedSlots.length === 0) return {};
+    const cid = selectedSlots[0].courtId;
+    return { [cid]: new Set(selectedSlots.map((s) => s.startTime)) };
+  }, [selectedSlots]);
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -802,7 +803,7 @@ export function StaffBookingModal({
         {/* ── Right panel — availability grid ──────────────────────────────── */}
         {showGrid && (
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-            {/* Date picker + label */}
+            {/* Date picker + status label */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-800 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5">
@@ -836,168 +837,27 @@ export function StaffBookingModal({
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Loading availability…
               </div>
-            ) : availability.length === 0 ? (
-              <div className="flex-1 flex items-center justify-center text-sm text-neutral-500">
-                No bookable courts available
-              </div>
-            ) : mode === "court" ? (
-              /* Court mode — same dense time grid as lesson, purple theme */
-              <div className="flex-1 overflow-auto">
-                <div
-                  className="inline-grid min-w-full"
-                  style={{ gridTemplateColumns: `60px repeat(${availability.length}, minmax(90px, 1fr))` }}
-                >
-                  {/* Header */}
-                  <div className="sticky top-0 z-10 bg-neutral-900 border-b border-neutral-800" />
-                  {availability.map((court) => (
-                    <div key={court.courtId} className="sticky top-0 z-10 bg-neutral-900 border-b border-neutral-800 px-2 py-2 text-center">
-                      <span className={cn(
-                        "text-xs font-semibold",
-                        selectedSlots.length > 0 && selectedSlots[0].courtId === court.courtId
-                          ? "text-purple-300"
-                          : "text-neutral-300"
-                      )}>{court.courtLabel}</span>
-                    </div>
-                  ))}
-
-                  {/* Time rows */}
-                  {calendarSlots.map((slot, rowIdx) => {
-                    const isLast = rowIdx === calendarSlots.length - 1;
-                    return [
-                      <div key={`t-${slot.startTime}`}
-                        className={cn("border-r border-neutral-800 px-1.5 flex items-start pt-1 bg-neutral-950", !isLast && "border-b border-b-neutral-800/50")}
-                        style={{ height: SLOT_H }}>
-                        <span className="text-[10px] font-medium text-neutral-500">{fmtSlotTime(slot.startTime, venueTimezone)}</span>
-                      </div>,
-                      ...availability.map((court) => {
-                        const cs = court.slots[rowIdx];
-                        const selected = isSlotSelected(court.courtId, cs.startTime);
-                        const isAvail = cs.available;
-                        const hasLesson = !!cs.lesson;
-                        const hasBlock = !!cs.block;
-                        const hasSchedule = !!cs.schedule;
-                        // Whether adding this slot would exceed the cap
-                        const wouldExceedCap =
-                          !selected &&
-                          selectedSlots.length > 0 &&
-                          selectedSlots[0].courtId === court.courtId &&
-                          selectedSlots.length >= MAX_COURT_SLOTS;
-                        return (
-                          <div key={`${court.courtId}-${cs.startTime}`}
-                            className={cn("relative border-l border-neutral-800/40", !isLast && "border-b border-b-neutral-800/30")}
-                            style={{ height: SLOT_H }}>
-                            {isAvail ? (
-                              <button
-                                onClick={() => !wouldExceedCap && toggleSlot(court.courtId, court.courtLabel, cs)}
-                                disabled={wouldExceedCap}
-                                className={cn(
-                                  "absolute inset-x-0.5 top-0.5 bottom-0.5 rounded flex items-center justify-center transition-colors text-[10px]",
-                                  selected
-                                    ? "border border-purple-500 bg-purple-600/30 text-purple-200 ring-1 ring-purple-500/50"
-                                    : wouldExceedCap
-                                      ? "border border-dashed border-neutral-800/30 text-neutral-800 cursor-not-allowed"
-                                      : "border border-dashed border-neutral-800/60 text-neutral-600 hover:border-purple-500/40 hover:bg-purple-600/5 hover:text-purple-400"
-                                )}
-                              >
-                                {selected ? <Check className="h-3 w-3" /> : null}
-                              </button>
-                            ) : hasLesson && cs.lesson ? (
-                              <div className="absolute inset-x-0.5 top-0.5 bottom-0.5 rounded bg-teal-600/20 border border-teal-500/20 flex items-center px-1.5 overflow-hidden">
-                                <span className="text-[9px] text-teal-400 truncate">{cs.lesson.coachName}</span>
-                              </div>
-                            ) : hasBlock ? (
-                              <div className="absolute inset-x-0.5 top-0.5 bottom-0.5 rounded bg-neutral-700/30 border border-neutral-700/30 flex items-center px-1.5 overflow-hidden">
-                                <span className="text-[9px] text-neutral-500 truncate">{cs.block?.title || "Blocked"}</span>
-                              </div>
-                            ) : hasSchedule ? (
-                              <div className="absolute inset-x-0.5 top-0.5 bottom-0.5 rounded bg-emerald-600/15 border border-emerald-500/20 flex items-center px-1.5 overflow-hidden">
-                                <span className="text-[9px] text-emerald-500 truncate">{cs.schedule?.title || "Scheduled"}</span>
-                              </div>
-                            ) : (
-                              <div className="absolute inset-x-0.5 top-0.5 bottom-0.5 rounded bg-purple-600/15 border border-purple-500/20 flex items-center px-1.5 overflow-hidden">
-                                <span className="text-[9px] text-purple-400 truncate">Booked</span>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      }),
-                    ];
-                  })}
-                </div>
-              </div>
             ) : (
-              /* Lesson mode — dense court-time grid */
-              <div className="flex-1 overflow-auto">
-                <div
-                  className="inline-grid min-w-full"
-                  style={{
-                    gridTemplateColumns: `60px repeat(${availability.length}, minmax(90px, 1fr))`,
-                  }}
-                >
-                  {/* Header */}
-                  <div className="sticky top-0 z-10 bg-neutral-900 border-b border-neutral-800" />
-                  {availability.map((court) => (
-                    <div key={court.courtId} className="sticky top-0 z-10 bg-neutral-900 border-b border-neutral-800 px-2 py-2 text-center">
-                      <span className="text-xs font-semibold text-neutral-300">{court.courtLabel}</span>
-                    </div>
-                  ))}
-
-                  {/* Time rows */}
-                  {calendarSlots.map((slot, rowIdx) => {
-                    const isLast = rowIdx === calendarSlots.length - 1;
-                    return [
-                      <div key={`t-${slot.startTime}`}
-                        className={cn("border-r border-neutral-800 px-1.5 flex items-start pt-1 bg-neutral-950", !isLast && "border-b border-b-neutral-800/50")}
-                        style={{ height: SLOT_H }}>
-                        <span className="text-[10px] font-medium text-neutral-500">{fmtSlotTime(slot.startTime, venueTimezone)}</span>
-                      </div>,
-                      ...availability.map((court) => {
-                        const cs = court.slots[rowIdx];
-                        const selected = isSlotSelected(court.courtId, cs.startTime);
-                        const isAvail = cs.available;
-                        const hasLesson = !!cs.lesson;
-                        const hasBlock = !!cs.block;
-                        const hasSchedule = !!cs.schedule;
-                        return (
-                          <div key={`${court.courtId}-${cs.startTime}`}
-                            className={cn("relative border-l border-neutral-800/40", !isLast && "border-b border-b-neutral-800/30")}
-                            style={{ height: SLOT_H }}>
-                            {isAvail ? (
-                              <button
-                                onClick={() => toggleSlot(court.courtId, court.courtLabel, cs)}
-                                className={cn(
-                                  "absolute inset-x-0.5 top-0.5 bottom-0.5 rounded flex items-center justify-center transition-colors text-[10px]",
-                                  selected
-                                    ? "border border-teal-500 bg-teal-600/30 text-teal-200 ring-1 ring-teal-500/50"
-                                    : "border border-dashed border-neutral-800/60 text-neutral-600 hover:border-teal-500/40 hover:bg-teal-600/5 hover:text-teal-400"
-                                )}
-                              >
-                                {selected ? <Check className="h-3 w-3" /> : null}
-                              </button>
-                            ) : hasLesson && cs.lesson ? (
-                              <div className="absolute inset-x-0.5 top-0.5 bottom-0.5 rounded bg-teal-600/20 border border-teal-500/20 flex items-center px-1.5 overflow-hidden">
-                                <span className="text-[9px] text-teal-400 truncate">{cs.lesson.coachName}</span>
-                              </div>
-                            ) : hasBlock ? (
-                              <div className="absolute inset-x-0.5 top-0.5 bottom-0.5 rounded bg-neutral-700/30 border border-neutral-700/30 flex items-center px-1.5 overflow-hidden">
-                                <span className="text-[9px] text-neutral-500 truncate">{cs.block?.title || "Blocked"}</span>
-                              </div>
-                            ) : hasSchedule ? (
-                              <div className="absolute inset-x-0.5 top-0.5 bottom-0.5 rounded bg-emerald-600/15 border border-emerald-500/20 flex items-center px-1.5 overflow-hidden">
-                                <span className="text-[9px] text-emerald-500 truncate">{cs.schedule?.title || "Scheduled"}</span>
-                              </div>
-                            ) : (
-                              <div className="absolute inset-x-0.5 top-0.5 bottom-0.5 rounded bg-purple-600/15 border border-purple-500/20 flex items-center px-1.5 overflow-hidden">
-                                <span className="text-[9px] text-purple-400 truncate">Booked</span>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      }),
-                    ];
-                  })}
-                </div>
-              </div>
+              <BookingCourtGrid
+                availability={availability}
+                date={bookDate}
+                timezone={venueTimezone}
+                selectedSlots={gridSelectedSlots}
+                onSlotClick={(courtId, courtLabel, slot) => {
+                  if (mode === "court") {
+                    const wouldExceedCap =
+                      !gridSelectedSlots[courtId]?.has(slot.startTime) &&
+                      selectedSlots.length > 0 &&
+                      selectedSlots[0].courtId === courtId &&
+                      selectedSlots.length >= MAX_COURT_SLOTS;
+                    if (!wouldExceedCap) toggleSlot(courtId, courtLabel, slot as CourtSlot);
+                  } else {
+                    toggleSlot(courtId, courtLabel, slot as CourtSlot);
+                  }
+                }}
+                compact
+                accentColor={mode === "lesson" ? "teal" : "purple"}
+              />
             )}
           </div>
         )}

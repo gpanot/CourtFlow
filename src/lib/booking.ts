@@ -281,8 +281,9 @@ export async function getAvailableSlots(
       const slotStart = new Date(slot.startTime).getTime();
       const slotEnd = new Date(slot.endTime).getTime();
 
-      // Block past slots for today
-      const isPast = isToday && slotStart <= now.getTime();
+      // Block past slots for today — only block a slot whose end time has already passed.
+      // A slot starting in the current hour is still bookable (e.g. staff can book 2PM–3PM at 2:03PM).
+      const isPast = isToday && slotEnd <= now.getTime();
 
       const isBooked = existingBookings.some(
         (b) => b.courtId === court.id && slotStart >= b.startTime.getTime() && slotStart < b.endTime.getTime()
