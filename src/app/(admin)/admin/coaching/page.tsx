@@ -28,7 +28,6 @@ import {
   User,
   Search,
   Check,
-  LayoutGrid,
   TableProperties,
   Loader2,
   ZoomIn,
@@ -45,7 +44,8 @@ import {
   type PaymentActionTarget,
 } from "@/components/admin/PaymentActionModal";
 import { StaffBookingModal } from "@/components/admin/StaffBookingModal";
-import { BookingCourtGrid, type CourtAvailability, type CourtSlot } from "@/components/admin/BookingCourtGrid";
+import { type CourtAvailability, type CourtSlot } from "@/components/admin/BookingCourtGrid";
+import { VenueDayPlanner } from "@/components/admin/VenueDayPlanner";
 
 export const dynamic = "force-dynamic";
 
@@ -991,141 +991,19 @@ function LessonsTab({
 
   const SLOT_H = 40;
 
-  const shiftDate = (days: number) => {
-    const d = new Date(selectedDate);
-    d.setDate(d.getDate() + days);
-    setSelectedDate(localDateISO(d));
-  };
-
-  const calendarSlots = availability.length > 0 ? availability[0].slots : [];
-
-  const BLOCK_LABELS: Record<string, string> = {
-    maintenance: "Maintenance",
-    private_event: "Private Event",
-    private_competition: "Private Competition",
-    open_play: "Open Play",
-    competition: "Competition",
-  };
-
   return (
     <div className="space-y-4">
-      {/* Date Navigation — consistent with Bookings page */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <button onClick={() => shiftDate(-1)} className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white">
-          <ChevronLeft className="h-5 w-5" />
-        </button>
-        <input
-          type="date"
-          value={selectedDate}
-          onChange={(e) => setSelectedDate(e.target.value)}
-          className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-teal-500 focus:outline-none"
-        />
-        <button onClick={() => shiftDate(1)} className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white">
-          <ChevronRight className="h-5 w-5" />
-        </button>
-        <button
-          onClick={() => setSelectedDate(localDateISO(new Date()))}
-          className="rounded-lg bg-neutral-800 px-3 py-1.5 text-xs text-neutral-400 hover:text-white"
-        >
-          {t("bookings.today")}
-        </button>
-
-        <div className="ml-auto flex items-center gap-2">
-          <div className="flex items-center rounded-lg border border-neutral-700 overflow-hidden">
-            <button
-              onClick={() => { setViewMode("court"); localStorage.setItem("coaching-view-mode", "court"); }}
-              className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors", viewMode === "court" ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400 hover:text-white")}
-              title="Court View"
-            >
-              <LayoutGrid className="h-3.5 w-3.5" /> {t("bookings.courtView")}
-            </button>
-            <button
-              onClick={() => { setViewMode("time"); localStorage.setItem("coaching-view-mode", "time"); }}
-              className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors border-l border-neutral-700", viewMode === "time" ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400 hover:text-white")}
-              title="Time View"
-            >
-              <TableProperties className="h-3.5 w-3.5" /> {t("bookings.timeView")}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Calendar Grid */}
-      {availability.length > 0 && calendarSlots.length > 0 && viewMode === "time" ? (
-        <div className="rounded-xl border border-neutral-800 overflow-hidden">
-          <div className="overflow-auto max-h-[75vh]">
-            <table className="w-full border-collapse text-[11px]">
-              <thead>
-                <tr>
-                  <th className="sticky top-0 left-0 z-30 bg-neutral-900/95 backdrop-blur border-b border-r border-neutral-700 px-2 py-2 text-left text-xs font-medium text-neutral-500 min-w-[80px]">{t("bookings.court")}</th>
-                  {calendarSlots.map((slot) => (
-                    <th key={slot.startTime} className="sticky top-0 z-20 bg-neutral-900/95 backdrop-blur border-b border-l border-neutral-700 px-1 py-2 text-center font-medium text-neutral-500 min-w-[54px] whitespace-nowrap">
-                      {formatSlotTime(slot.startTime, venueTimezone)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {availability.map((court) => (
-                  <tr key={court.courtId} className="group">
-                    <td className="sticky left-0 z-10 bg-neutral-900 border-r border-neutral-700 px-2 py-1.5 font-semibold text-xs text-white whitespace-nowrap">
-                      {court.courtLabel}
-                    </td>
-                    {calendarSlots.map((slot, slotIdx) => {
-                      const courtSlot = court.slots[slotIdx];
-                      const lessonInfo = courtSlot?.lesson;
-                      const blockInfo = courtSlot?.block;
-                      const schedInfo = courtSlot?.schedule;
-                      const info = lessonInfo
-                        ? { type: "lesson" as const, label: lessonInfo.coachName, sub: lessonInfo.playerName }
-                        : blockInfo
-                          ? { type: "block" as const, label: blockInfo.title || BLOCK_LABELS[blockInfo.type] || blockInfo.type, sub: blockInfo.type }
-                          : schedInfo
-                            ? { type: "schedule" as const, label: schedInfo.title || BLOCK_LABELS[schedInfo.type], sub: schedInfo.type }
-                            : courtSlot?.available
-                              ? { type: "available" as const, label: "", sub: "" }
-                              : { type: "unavailable" as const, label: "", sub: "" };
-                      const innerCls = cn(
-                        "rounded px-1 py-1 text-[10px] leading-tight truncate max-w-[54px]",
-                        info.type === "lesson" && "bg-teal-600/20 text-teal-300 font-medium",
-                        info.type === "block" && info.sub === "open_play" && "bg-emerald-600/20 text-emerald-300",
-                        info.type === "block" && info.sub === "maintenance" && "bg-neutral-600/20 text-neutral-400",
-                        info.type === "block" && info.sub !== "open_play" && info.sub !== "maintenance" && "bg-amber-600/20 text-amber-300",
-                        info.type === "schedule" && info.sub === "open_play" && "bg-emerald-600/20 text-emerald-300",
-                        info.type === "schedule" && info.sub !== "open_play" && "bg-blue-600/20 text-blue-300",
-                        info.type === "available" && "text-neutral-600",
-                        info.type === "unavailable" && "bg-neutral-800/20 text-neutral-700",
-                      );
-                      return (
-                        <td key={slot.startTime} className="border-l border-b border-neutral-800/40 px-0.5 py-0.5 text-center whitespace-nowrap">
-                          {info.type === "unavailable" ? (
-                            <div className={innerCls}>&ndash;</div>
-                          ) : info.type === "available" ? (
-                            <div className="rounded px-1 py-1 text-[10px] text-neutral-600">&ndash;</div>
-                          ) : (
-                            <div className={innerCls} title={info.label}>{info.label}</div>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      ) : availability.length > 0 && calendarSlots.length > 0 ? (
-        <div className="rounded-xl border border-neutral-800 overflow-hidden">
-          <div className="overflow-auto max-h-[70vh] flex flex-col">
-            <BookingCourtGrid
-              availability={availability}
-              date={selectedDate}
-              timezone={venueTimezone}
-              blockTypeLabel={getBlockTypeLabel}
-            />
-          </div>
-        </div>
-      ) : null}
+      <VenueDayPlanner
+        availability={availability}
+        date={selectedDate}
+        onDateChange={setSelectedDate}
+        timezone={venueTimezone}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        viewModeStorageKey="coaching-view-mode"
+        blockTypeLabel={getBlockTypeLabel}
+        emptyHint={t("coaching.noLessons")}
+      />
 
       {/* Lessons List — day detail section */}
       <section className="space-y-3">

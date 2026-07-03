@@ -3,9 +3,9 @@
 /**
  * BookingCourtGrid — reusable court-view availability grid.
  *
- * Used by both:
- *  - admin/bookings/page.tsx  (full-size, with booking edit actions)
- *  - StaffBookingModal          (compact, slot-selection only)
+ * Used by:
+ *  - VenueDayPlanner (Bookings + Coaching day schedule)
+ *  - StaffBookingModal (compact, slot-selection only)
  *
  * Features:
  *  - Shows price on bookable slots
@@ -123,7 +123,7 @@ function nowHourInTz(tz?: string): number {
   return h + min / 60;
 }
 
-function formatDateInTz(d: Date, tz?: string): string {
+export function formatDateInTz(d: Date, tz?: string): string {
   if (tz) {
     const parts = new Intl.DateTimeFormat("en-CA", {
       timeZone: tz,

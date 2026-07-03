@@ -29,13 +29,11 @@ import {
   Trash2,
   Users,
   User,
+  GraduationCap,
   Settings,
   CalendarDays,
   Save,
   ChevronUp,
-  GraduationCap,
-  LayoutGrid,
-  TableProperties,
   ShieldAlert,
   Loader2,
   ZoomIn,
@@ -51,7 +49,8 @@ import {
   type PaymentActionTarget,
 } from "@/components/admin/PaymentActionModal";
 import { StaffBookingModal, type InitialCourtSelection } from "@/components/admin/StaffBookingModal";
-import { BookingCourtGrid, type CourtSlot } from "@/components/admin/BookingCourtGrid";
+import { VenueDayPlanner } from "@/components/admin/VenueDayPlanner";
+import { type CourtSlot } from "@/components/admin/BookingCourtGrid";
 
 export const dynamic = "force-dynamic";
 
@@ -398,12 +397,6 @@ export default function BookingsPage() {
     if (activeTab === "bookings") { fetchAvailability(); fetchCourtBlocks(); fetchOpenPlayRegs(); fetchCoachLessons(); }
   }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const shiftDate = (days: number) => {
-    const d = new Date(selectedDate);
-    d.setDate(d.getDate() + days);
-    setSelectedDate(formatDate(d, venueTimezone));
-  };
-
   const allSlotTimes = availability.length > 0 ? availability[0].slots : [];
 
   const bookingsByCourtAndTime = new Map<string, BookingRecord>();
@@ -419,9 +412,6 @@ export default function BookingsPage() {
       });
     }
   });
-
-  const isSlotSelected = (courtId: string, startTime: string) =>
-    selectedSlots[courtId]?.slots.some((s) => s.startTime === startTime) ?? false;
 
   const toggleSlotSelection = (court: CourtSlotData, slot: SlotInfo) => {
     const isBooked = bookingsByCourtAndTime.has(`${court.courtId}_${slot.startTime}`);
@@ -781,225 +771,82 @@ export default function BookingsPage() {
       )}
 
       {activeTab === "bookings" && <>
-      {/* Date Navigation */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <button onClick={() => shiftDate(-1)} className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white">
-          <ChevronLeft className="h-5 w-5" />
-        </button>
-        <input
-          type="date"
-          value={selectedDate}
-          onChange={(e) => setSelectedDate(e.target.value)}
-          className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
-        />
-        <button onClick={() => shiftDate(1)} className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white">
-          <ChevronRight className="h-5 w-5" />
-        </button>
-        <button
-          onClick={() => setSelectedDate(formatDate(new Date(), venueTimezone))}
-          className="rounded-lg bg-neutral-800 px-3 py-1.5 text-xs text-neutral-400 hover:text-white"
-        >
-          {t("bookings.today")}
-        </button>
-
-        {/* Selection action bar — same row as date nav */}
-        {hasSelection && selectionTimeRange && (
-          <div className="flex items-center gap-2 rounded-2xl border border-purple-500/40 bg-neutral-900/95 backdrop-blur px-3 py-1.5 shadow-lg shadow-purple-900/20 animate-in fade-in duration-150">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-white truncate">
-                {selectionCourtIds.length === 1
-                  ? selectedSlots[selectionCourtIds[0]].courtLabel
-                  : `${selectionCourtIds.length} ${t("bookings.courtsPlural")}`}
-                {" "}— {selectionTotalSlots} {selectionTotalSlots > 1 ? t("bookings.slotsPlural") : t("bookings.slot")}
-              </p>
-              <p className="text-[10px] text-neutral-400">
-                {formatTime(selectionTimeRange.first.startTime, venueTimezone)} – {formatTime(selectionTimeRange.last.endTime, venueTimezone)}
-                {canBookFromSelection && (
-                  <span className="ml-1.5 font-medium text-purple-400">{fmtPrice(selectionTotalPrice)}</span>
-                )}
-              </p>
-            </div>
-            <button
-              onClick={() => openBlockFromSelection()}
-              className="flex items-center gap-1 rounded-lg border border-amber-600/50 bg-amber-600/20 px-2 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-600/30 transition-colors"
-            >
-              <Ban className="h-3.5 w-3.5" /> {t("bookings.block")}
-            </button>
-            <button
-              onClick={openCreateFromSelection}
-              disabled={!canBookFromSelection}
-              className="flex items-center gap-1 rounded-lg bg-purple-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-purple-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-              title={!canBookFromSelection ? t("bookings.consecutiveSlotsHint") : ""}
-            >
-              <Plus className="h-3.5 w-3.5" /> {t("bookings.book")}
-            </button>
-            <button
-              onClick={clearSelection}
-              className="rounded-md p-1 text-neutral-400 hover:bg-neutral-800 hover:text-white transition-colors"
-              title="Clear selection"
-            >
-              <XCircle className="h-3.5 w-3.5" />
-            </button>
-          </div>
+      <VenueDayPlanner
+        availability={availability}
+        date={selectedDate}
+        onDateChange={setSelectedDate}
+        timezone={venueTimezone}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        viewModeStorageKey="bookings-view-mode"
+        bookings={bookings.map((b) => ({
+          id: b.id,
+          courtId: b.courtId,
+          playerId: b.playerId,
+          startTime: b.startTime,
+          endTime: b.endTime,
+          status: b.status,
+          priceValue: b.priceValue,
+          player: b.player,
+        }))}
+        selectedSlots={Object.fromEntries(
+          Object.entries(selectedSlots).map(([cid, entry]) => [
+            cid,
+            new Set(entry.slots.map((s) => s.startTime)),
+          ])
         )}
-
-        <div className="ml-auto flex items-center rounded-lg border border-neutral-700 overflow-hidden">
-          <button
-            onClick={() => { setViewMode("court"); localStorage.setItem("bookings-view-mode", "court"); }}
-            className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors", viewMode === "court" ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400 hover:text-white")}
-            title="Court View"
-          >
-            <LayoutGrid className="h-3.5 w-3.5" /> {t("bookings.courtView")}
-          </button>
-          <button
-            onClick={() => { setViewMode("time"); localStorage.setItem("bookings-view-mode", "time"); }}
-            className={cn("flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors border-l border-neutral-700", viewMode === "time" ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400 hover:text-white")}
-            title="Time View"
-          >
-            <TableProperties className="h-3.5 w-3.5" /> {t("bookings.timeView")}
-          </button>
-        </div>
-      </div>
-
-      {/* Day Planner Grid */}
-      {availability.length === 0 ? (
-        <div className="rounded-xl border border-neutral-800 bg-neutral-900 p-12 text-center">
-          <p className="text-neutral-500">{t("bookings.noBookableCourts")}</p>
-          <p className="text-xs text-neutral-600 mt-1">{t("bookings.enableBookableHint")}</p>
-        </div>
-      ) : viewMode === "time" ? (() => {
-        const courts = availability;
-        const slots = allSlotTimes;
-
-        const getSlotLabel = (court: CourtSlotData, slot: SlotInfo, rowIdx: number) => {
-          const courtSlot = court.slots[rowIdx];
-          const booking = bookingsByCourtAndTime.get(`${court.courtId}_${slot.startTime}`);
-          if (booking) return { type: "booking" as const, label: booking.player.name, sub: fmtPrice(booking.priceValue) };
-          const blockInfo = courtSlot?.block;
-          if (blockInfo) return { type: "block" as const, label: blockInfo.title || getBlockTypeLabel(blockInfo.type), sub: blockInfo.type };
-          const schedInfo = courtSlot?.schedule;
-          if (schedInfo) return { type: "schedule" as const, label: schedInfo.title || getBlockTypeLabel(schedInfo.type), sub: schedInfo.type };
-          const lessonInfo = courtSlot?.lesson;
-          if (lessonInfo) return { type: "lesson" as const, label: lessonInfo.coachName, sub: lessonInfo.playerName };
-          if (courtSlot?.available) return { type: "available" as const, label: fmtPrice(courtSlot.priceValue), sub: "" };
-          return { type: "unavailable" as const, label: "", sub: "" };
-        };
-
-        return (
-          <div className="rounded-xl border border-neutral-800 overflow-hidden">
-            <div className="overflow-auto max-h-[75vh]">
-              <table className="w-full border-collapse text-[11px]">
-                <thead>
-                  <tr>
-                    <th className="sticky top-0 left-0 z-30 bg-neutral-900/95 backdrop-blur border-b border-r border-neutral-700 px-2 py-2 text-left text-xs font-medium text-neutral-500 min-w-[80px]">{t("bookings.court")}</th>
-                    {slots.map((slot) => (
-                      <th key={slot.startTime} className="sticky top-0 z-20 bg-neutral-900/95 backdrop-blur border-b border-l border-neutral-700 px-1 py-2 text-center font-medium text-neutral-500 min-w-[54px] whitespace-nowrap">
-                        {formatTime(slot.startTime, venueTimezone)}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {courts.map((court) => (
-                    <tr key={court.courtId} className="group">
-                      <td className="sticky left-0 z-10 bg-neutral-900 border-r border-neutral-700 px-2 py-1.5 font-semibold text-xs text-white whitespace-nowrap">
-                        {court.courtLabel}
-                      </td>
-                      {slots.map((slot, slotIdx) => {
-                        const info = getSlotLabel(court, slot, slotIdx);
-                        const cellCls = cn(
-                          "border-l border-b border-neutral-800/40 px-0.5 py-0.5 text-center whitespace-nowrap",
-                        );
-                        const innerCls = cn(
-                          "rounded px-1 py-1 text-[10px] leading-tight truncate max-w-[54px]",
-                          info.type === "booking" && "bg-purple-600/20 text-purple-300 font-medium",
-                          info.type === "block" && info.sub === "open_play" && "bg-emerald-600/20 text-emerald-300",
-                          info.type === "block" && info.sub === "maintenance" && "bg-neutral-600/20 text-neutral-400",
-                          info.type === "block" && info.sub !== "open_play" && info.sub !== "maintenance" && "bg-amber-600/20 text-amber-300",
-                          info.type === "schedule" && info.sub === "open_play" && "bg-emerald-600/20 text-emerald-300",
-                          info.type === "schedule" && info.sub !== "open_play" && "bg-blue-600/20 text-blue-300",
-                          info.type === "lesson" && "bg-teal-600/20 text-teal-300",
-                          info.type === "available" && "text-neutral-600",
-                          info.type === "unavailable" && "bg-neutral-800/20 text-neutral-700",
-                        );
-                        return (
-                          <td key={slot.startTime} className={cellCls}>
-                            {info.type === "available" ? (
-                              <button
-                                onClick={() => toggleSlotSelection(court, court.slots[slotIdx])}
-                                className={cn(
-                                  "w-full rounded px-1 py-1 text-[10px] transition-colors",
-                                  isSlotSelected(court.courtId, slot.startTime)
-                                    ? "bg-purple-600/25 text-purple-300 ring-1 ring-purple-500/50"
-                                    : "text-neutral-600 hover:bg-purple-600/10 hover:text-purple-400"
-                                )}
-                              >
-                                {info.label}
-                              </button>
-                            ) : info.type === "unavailable" ? (
-                              <div className={innerCls}>&ndash;</div>
-                            ) : info.type === "booking" ? (
-                              <div
-                                onClick={() => {
-                                  const booking = bookingsByCourtAndTime.get(`${court.courtId}_${slot.startTime}`);
-                                  if (booking?.status === "confirmed") openEditModal(booking);
-                                }}
-                                className={cn(innerCls, "cursor-pointer")}
-                                title={info.label}
-                              >
-                                {info.label}
-                              </div>
-                            ) : (
-                              <div className={innerCls} title={info.label}>{info.label}</div>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        onSlotClick={(courtId, courtLabel, slot) => {
+          const court = availability.find((c) => c.courtId === courtId);
+          if (court) toggleSlotSelection(court, slot);
+        }}
+        onBookingClick={(b) => {
+          const full = bookings.find((x) => x.id === b.id);
+          if (full) openEditModal(full);
+        }}
+        blockTypeLabel={getBlockTypeLabel}
+        toolbarExtra={
+          hasSelection && selectionTimeRange ? (
+            <div className="flex items-center gap-2 rounded-2xl border border-purple-500/40 bg-neutral-900/95 backdrop-blur px-3 py-1.5 shadow-lg shadow-purple-900/20 animate-in fade-in duration-150">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold text-white truncate">
+                  {selectionCourtIds.length === 1
+                    ? selectedSlots[selectionCourtIds[0]].courtLabel
+                    : `${selectionCourtIds.length} ${t("bookings.courtsPlural")}`}
+                  {" "}— {selectionTotalSlots} {selectionTotalSlots > 1 ? t("bookings.slotsPlural") : t("bookings.slot")}
+                </p>
+                <p className="text-[10px] text-neutral-400">
+                  {formatTime(selectionTimeRange.first.startTime, venueTimezone)} – {formatTime(selectionTimeRange.last.endTime, venueTimezone)}
+                  {canBookFromSelection && (
+                    <span className="ml-1.5 font-medium text-purple-400">{fmtPrice(selectionTotalPrice)}</span>
+                  )}
+                </p>
+              </div>
+              <button
+                onClick={() => openBlockFromSelection()}
+                className="flex items-center gap-1 rounded-lg border border-amber-600/50 bg-amber-600/20 px-2 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-600/30 transition-colors"
+              >
+                <Ban className="h-3.5 w-3.5" /> {t("bookings.block")}
+              </button>
+              <button
+                onClick={openCreateFromSelection}
+                disabled={!canBookFromSelection}
+                className="flex items-center gap-1 rounded-lg bg-purple-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-purple-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                title={!canBookFromSelection ? t("bookings.consecutiveSlotsHint") : ""}
+              >
+                <Plus className="h-3.5 w-3.5" /> {t("bookings.book")}
+              </button>
+              <button
+                onClick={clearSelection}
+                className="rounded-md p-1 text-neutral-400 hover:bg-neutral-800 hover:text-white transition-colors"
+                title="Clear selection"
+              >
+                <XCircle className="h-3.5 w-3.5" />
+              </button>
             </div>
-          </div>
-        );
-      })() : (
-        <div className="rounded-xl border border-neutral-800 overflow-hidden">
-          <div className="overflow-auto max-h-[70vh] flex flex-col">
-            <BookingCourtGrid
-              availability={availability}
-              date={selectedDate}
-              timezone={venueTimezone}
-              bookings={bookings.map((b) => ({
-                id: b.id,
-                courtId: b.courtId,
-                playerId: b.playerId,
-                startTime: b.startTime,
-                endTime: b.endTime,
-                status: b.status,
-                priceValue: b.priceValue,
-                player: b.player,
-              }))}
-              selectedSlots={Object.fromEntries(
-                Object.entries(selectedSlots).map(([cid, entry]) => [
-                  cid,
-                  new Set(entry.slots.map((s) => s.startTime)),
-                ])
-              )}
-              onSlotClick={(courtId, courtLabel, slot) =>
-                toggleSlotSelection(
-                  { courtId, courtLabel, slots: availability.find((c) => c.courtId === courtId)?.slots ?? [] },
-                  slot as CourtSlot,
-                )
-              }
-              onBookingClick={(b) => {
-                const full = bookings.find((x) => x.id === b.id);
-                if (full) openEditModal(full);
-              }}
-              blockTypeLabel={getBlockTypeLabel}
-            />
-          </div>
-        </div>
-      )}
+          ) : undefined
+        }
+        emptyHint={t("bookings.enableBookableHint")}
+      />
 
       {/* Bookings List */}
       <section className="space-y-3">
