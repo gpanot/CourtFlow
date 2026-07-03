@@ -206,7 +206,15 @@ export async function createCoachLesson(
   const totalPrice = calculateSessionPrice(pkg, { playerCount, slotCount: slots });
 
   // Three-layer availability check (Google Calendar is layer 4, inside isCoachAvailable)
+  console.log(
+    `[createCoachLesson] coachId=${coachId} dateStr=${dateStr} dateKey=${dateKey}` +
+    ` date.toISO=${date.toISOString()} date.getDay()=${date.getDay()}` +
+    ` startTime=${startTime.toISOString()} endTime=${endTime.toISOString()}` +
+    ` startFrac=${startTime.getHours() + startTime.getMinutes() / 60}` +
+    ` endFrac=${endTime.getHours() + endTime.getMinutes() / 60}`
+  );
   const avail = await isCoachAvailable(coachId, date, startTime, endTime);
+  console.log(`[createCoachLesson] avail=${avail.available} reason=${avail.reason ?? "none"}`);
   if (!avail.available) {
     const next = await findNextAvailableSlot(
       coachId,

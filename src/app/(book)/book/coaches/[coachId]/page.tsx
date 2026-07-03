@@ -220,7 +220,10 @@ export default function CoachProfilePage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || t("coaches.bookingFailed"));
+      if (!res.ok) {
+        console.warn("[coach-booking] 4xx response:", JSON.stringify(data));
+        throw new Error(data.error || t("coaches.bookingFailed"));
+      }
 
       if (data.paidWithCredit) {
         router.push("/book/bookings");
