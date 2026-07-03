@@ -84,7 +84,7 @@ function runTransaction(
       const pass = await tx.classPass.findUnique({
         where: { id: classPassId },
         include: {
-          tier: {
+          passType: {
             select: { sessionsIncluded: true },
           },
         },
@@ -102,7 +102,7 @@ function runTransaction(
       }
 
       // ── Step 2: confirm the pass still has sessions remaining ────────────
-      const sessionsIncluded = pass.tier.sessionsIncluded;
+      const sessionsIncluded = pass.passType.sessionsIncluded;
       if (pass.sessionsUsed >= sessionsIncluded) {
         throw new ClassPassError(
           "Sessions used up this month — no sessions remaining on this pass",

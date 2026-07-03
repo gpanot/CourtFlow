@@ -200,7 +200,7 @@ model Venue {
   playerCoachCredits   PlayerCoachCredit[]
   openPlayRegistrations OpenPlayRegistration[]
   playerNotes           PlayerNote[]
-  classPassTiers        ClassPassTier[]
+  classPassTypes        ClassPassType[]
   classPasses           ClassPass[]
   classInstances        ClassInstance[]
 
@@ -370,7 +370,7 @@ model StaffMember {
   coachAvailabilities   CoachAvailability[]
   coachHolidays         CoachHoliday[]
   linkedPlayers         Player[]  @relation("PlayerCoachLink")
-  classPassTiers        ClassPassTier[]
+  classPassTypes        ClassPassType[]
   classInstances        ClassInstance[]
 
   @@map("staff_members")
@@ -1445,7 +1445,7 @@ model PlayerMagicToken {
 
 /// Defines a recurring class-pass product sold at a venue (e.g. "Beginner Group 12-session pass").
 /// cycleLengthDays is informational only — actual cycle boundaries are calendar-month-aligned in application code.
-model ClassPassTier {
+model ClassPassType {
   id               String   @id @default(cuid())
   venueId          String   @map("venue_id")
   name             String
@@ -1458,23 +1458,23 @@ model ClassPassTier {
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
-  venue        Venue         @relation(fields: [venueId], references: [id])
-  linkedCoach  StaffMember?  @relation(fields: [linkedCoachId], references: [id], onDelete: SetNull)
-  classPasses  ClassPass[]
+  venue          Venue         @relation(fields: [venueId], references: [id])
+  linkedCoach    StaffMember?  @relation(fields: [linkedCoachId], references: [id], onDelete: SetNull)
+  classPasses    ClassPass[]
   classInstances ClassInstance[]
 
   @@index([venueId, isActive])
   @@index([linkedCoachId])
-  @@map("class_pass_tiers")
+  @@map("class_pass_types")
 }
 
-/// A player's subscription to a ClassPassTier for a given cycle.
+/// A player's subscription to a ClassPassType for a given cycle.
 /// A player may hold both a Membership and one or more ClassPass rows at the same venue.
 model ClassPass {
   id                String          @id @default(cuid())
   playerId          String          @map("player_id")
   venueId           String          @map("venue_id")
-  tierId            String          @map("tier_id")
+  passTypeId        String          @map("pass_type_id")
   status            ClassPassStatus @default(active)
   activatedAt       DateTime        @default(now()) @map("activated_at")
   /// Set when activation is deferred (e.g. player purchases in advance).
@@ -1487,13 +1487,13 @@ model ClassPass {
 
   player   Player        @relation(fields: [playerId], references: [id])
   venue    Venue         @relation(fields: [venueId], references: [id])
-  tier     ClassPassTier @relation(fields: [tierId], references: [id])
+  passType ClassPassType @relation(fields: [passTypeId], references: [id])
   payments ClassPassPayment[]
   checkIns ClassCheckIn[]
 
   @@index([playerId, venueId])
   @@index([venueId, status])
-  @@index([tierId])
+  @@index([passTypeId])
   @@map("class_passes")
 }
 
@@ -1527,7 +1527,7 @@ model ClassInstance {
   venueId    String   @map("venue_id")
   coachId    String   @map("coach_id")
   courtId    String?  @map("court_id")
-  tierId     String   @map("tier_id")
+  passTypeId String   @map("pass_type_id")
   startAt    DateTime @map("start_at")
   endAt      DateTime @map("end_at")
   maxPlayers Int      @map("max_players")
@@ -1537,12 +1537,12 @@ model ClassInstance {
   venue     Venue         @relation(fields: [venueId], references: [id])
   coach     StaffMember   @relation(fields: [coachId], references: [id])
   court     Court?        @relation(fields: [courtId], references: [id])
-  tier      ClassPassTier @relation(fields: [tierId], references: [id])
+  passType  ClassPassType @relation(fields: [passTypeId], references: [id])
   checkIns  ClassCheckIn[]
 
   @@index([venueId, startAt])
   @@index([coachId, startAt])
-  @@index([tierId])
+  @@index([passTypeId])
   @@map("class_instances")
 }
 
