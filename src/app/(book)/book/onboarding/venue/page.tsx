@@ -23,6 +23,11 @@ export default function OnboardingVenuePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<{
+    filtered: PortalVenue[];
+    all: PortalVenue[];
+    account: Record<string, unknown> | null;
+  } | null>(null);
 
   useEffect(() => {
     if (status === "loading") return;
@@ -30,12 +35,24 @@ export default function OnboardingVenuePage() {
       router.replace("/book/login");
       return;
     }
-    fetch("/api/public/venues")
-      .then((r) => r.json())
-      .then((data: PortalVenue[]) => setVenues(data))
+    const headers: Record<string, string> = session?.token
+      ? { Authorization: `Bearer ${session.token}` }
+      : {};
+    Promise.all([
+      fetch("/api/public/venues").then((r) => r.json()),
+      fetch("/api/public/venues?allCountries=true").then((r) => r.json()),
+      fetch("/api/public/account", { headers, credentials: "include" }).then((r) => r.json()),
+    ])
+      .then(([filtered, all, account]: [PortalVenue[], PortalVenue[], Record<string, unknown>]) => {
+        setVenues(filtered);
+        setDebugInfo({ filtered, all, account });
+        console.log("[DEBUG venue picker] filtered:", filtered);
+        console.log("[DEBUG venue picker] all:", all);
+        console.log("[DEBUG venue picker] account country:", account?.country);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [status, router]);
+  }, [status, router, session]);
 
   async function handleSelect(venueId: string) {
     if (!session) return;
@@ -102,6 +119,19 @@ export default function OnboardingVenuePage() {
       </button>
       <h1 className="text-xl font-bold mb-1">{t("onboarding.chooseVenue")}</h1>
       <p className="text-sm text-[var(--cm-text-sec)] mb-6">{t("onboarding.chooseVenueSubtitle")}</p>
+
+      {/* DEBUG panel — remove before production */}
+      {debugInfo && (
+        <div className="mb-4 p-3 border border-orange-400 rounded-xl bg-orange-50 text-xs font-mono space-y-1">
+          <p className="font-bold text-orange-700">[DEBUG] Venue Picker</p>
+          <p>Account country: <span className="text-gray-800">{String(debugInfo.account?.country ?? "null")}</span></p>
+          <p>Filtered venues ({debugInfo.filtered.length}): {debugInfo.filtered.map(v => `${v.name} [${v.country ?? "no-country"}]`).join(", ") || "none"}</p>
+          <p>All venues ({debugInfo.all.length}): {debugInfo.all.map(v => `${v.name} [${v.country ?? "no-country"}]`).join(", ") || "none"}</p>
+          {debugInfo.filtered.length !== debugInfo.all.length && (
+            <p className="text-orange-700 font-bold">⚠ Country filter is active — {debugInfo.all.length - debugInfo.filtered.length} venue(s) hidden</p>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="mb-4 p-3 bg-[var(--cm-red)]/10 text-[var(--cm-red)] text-sm rounded-xl">

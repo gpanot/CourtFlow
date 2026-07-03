@@ -102,13 +102,16 @@ export default function VenueHomePage() {
   const router = useRouter();
   const { t } = useTranslation();
   const { formatDate, formatTime, formatPrice } = useBookFormatters();
-  const { venueId: playerVenueId } = usePlayerVenue();
+  const { venueId: playerVenueId, loading: venueLoading } = usePlayerVenue();
+  const venueReady = status !== "authenticated" || !venueLoading;
   const [venue, setVenue] = useState<VenueInfo | null>(null);
   const [grid, setGrid] = useState<CourtSlot[]>([]);
   const [coaches, setCoaches] = useState<Coach[]>([]);
   const [openPlaySessions, setOpenPlaySessions] = useState<OpenPlaySession[]>([]);
   const [loading, setLoading] = useState(true);
   const [bookingType, setBookingType] = useState<BookingType>("court");
+  const [debugAccount, setDebugAccount] = useState<Record<string, unknown> | null>(null);
+  const [showDebug, setShowDebug] = useState(false);
 
   // Multi-slot selection: courtId + array of selected slots
   const [selectedCourtId, setSelectedCourtId] = useState<string | null>(null);
@@ -165,14 +168,41 @@ export default function VenueHomePage() {
   }, [vq, playerVenueId]);
 
   useEffect(() => {
+    if (!venueReady) return;
     const q = playerVenueId ? `?venueId=${playerVenueId}` : "";
     fetch(`/api/public/venue${q}`).then((r) => r.json()).then(setVenue);
     fetch(`/api/public/coaches${q}`).then((r) => r.json()).then((d) => setCoaches(d.slice?.(0, 3) ?? [])).catch(() => {});
-  }, [playerVenueId]);
+  }, [playerVenueId, venueReady]);
+
+  // DEBUG: fetch account info to inspect venue assignment + country
+  useEffect(() => {
+    if (status !== "authenticated") return;
+    Promise.all([
+      fetch("/api/public/account", { credentials: "include" }).then((r) => r.json()),
+      fetch("/api/public/venues", { credentials: "include" }).then((r) => r.json()),
+      fetch("/api/public/venues?allCountries=true").then((r) => r.json()),
+    ])
+      .then(([account, filtered, all]) => {
+        const info = {
+          playerId: account?.id,
+          country: account?.country ?? null,
+          registrationVenueId: account?.registrationVenueId ?? null,
+          venue: account?.venue ?? null,
+          filteredVenues: filtered,
+          allVenues: all,
+          playerVenueIdFromCtx: playerVenueId,
+        };
+        setDebugAccount(info as Record<string, unknown>);
+        console.log("[DEBUG book page] account+venues:", info);
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   useEffect(() => {
-    if (selectedDate) loadGrid(selectedDate);
-  }, [selectedDate, loadGrid]);
+    if (!venueReady || !selectedDate) return;
+    loadGrid(selectedDate);
+  }, [selectedDate, loadGrid, venueReady]);
 
   function isSlotSelected(courtId: string, slot: Slot) {
     return selectedCourtId === courtId && selectedSlots.some((s) => s.startTime === slot.startTime);
@@ -286,6 +316,32 @@ export default function VenueHomePage() {
   return (
     <div>
       <BookTabTopBar title={venue?.name ?? t("common.loading")} />
+
+      {/* DEBUG panel — tap venue name to toggle, remove before production */}
+      {debugAccount && (
+        <div className="mx-4 mb-2">
+          <button
+            onClick={() => setShowDebug((v) => !v)}
+            className="text-[10px] text-orange-500 underline"
+          >
+            {showDebug ? "Hide debug" : "[DEBUG] Show booking context"}
+          </button>
+          {showDebug && (
+            <div className="mt-1 p-3 border border-orange-400 rounded-xl bg-orange-50 text-xs font-mono space-y-1">
+              <p className="font-bold text-orange-700">[DEBUG] Book Page</p>
+              <p>country: <span className="text-gray-800">{String((debugAccount as {country?: unknown}).country ?? "null")}</span></p>
+              <p>registrationVenueId: <span className="text-gray-800">{String((debugAccount as {registrationVenueId?: unknown}).registrationVenueId ?? "null")}</span></p>
+              <p>venue (from account): <span className="text-gray-800">{JSON.stringify((debugAccount as {venue?: unknown}).venue ?? null)}</span></p>
+              <p>playerVenueId (context): <span className="text-gray-800">{String((debugAccount as {playerVenueIdFromCtx?: unknown}).playerVenueIdFromCtx ?? "null")}</span></p>
+              <p>filteredVenues ({((debugAccount as {filteredVenues?: unknown[]}).filteredVenues ?? []).length}): {((debugAccount as {filteredVenues?: {name: string}[]}).filteredVenues ?? []).map((v) => v.name).join(", ") || "none"}</p>
+              <p>allVenues ({((debugAccount as {allVenues?: unknown[]}).allVenues ?? []).length}): {((debugAccount as {allVenues?: {name: string}[]}).allVenues ?? []).map((v) => v.name).join(", ") || "none"}</p>
+              {((debugAccount as {filteredVenues?: unknown[]}).filteredVenues ?? []).length !== ((debugAccount as {allVenues?: unknown[]}).allVenues ?? []).length && (
+                <p className="text-orange-700 font-bold">⚠ Country filter active — some venues hidden</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="px-4 pb-4">
         <h2 className="text-base font-semibold mb-3">{t("home.whatToBook")}</h2>

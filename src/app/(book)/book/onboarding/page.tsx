@@ -112,12 +112,35 @@ function OnboardingContent() {
     }
   }, [status, router]);
 
+  // DEBUG: track venue API responses
+  const [debugVenuesFetch, setDebugVenuesFetch] = useState<{
+    raw: PortalVenue[];
+    filtered: PortalVenue[];
+    timestamp: string;
+    calledFrom: string;
+  } | null>(null);
+  const [debugAccountFetch, setDebugAccountFetch] = useState<Record<string, unknown> | null>(null);
+
   // Fetch a venue ID for the face widget early (even before venue selection step)
   useEffect(() => {
     fetch("/api/public/venues")
       .then((r) => r.json())
       .then((data: PortalVenue[]) => {
         if (data.length > 0) setFaceVenueId(data[0].id);
+        // DEBUG
+        fetch("/api/public/venues?allCountries=true")
+          .then((r) => r.json())
+          .then((all: PortalVenue[]) => {
+            setDebugVenuesFetch({
+              raw: all,
+              filtered: data,
+              timestamp: new Date().toISOString(),
+              calledFrom: "faceVenueId effect",
+            });
+            console.log("[DEBUG onboarding] faceVenueId effect — filtered venues:", data);
+            console.log("[DEBUG onboarding] faceVenueId effect — all venues:", all);
+          })
+          .catch(() => {});
       })
       .catch(() => {});
   }, []);
@@ -129,6 +152,13 @@ function OnboardingContent() {
     fetch("/api/public/account", { headers: authHeader, credentials: "include" })
       .then((r) => r.json())
       .then((profile) => {
+        console.log("[DEBUG onboarding] account profile on mount:", {
+          phone: profile.phone,
+          venue: profile.venue,
+          country: profile.country,
+          playerId: profile.id,
+        });
+        setDebugAccountFetch(profile as Record<string, unknown>);
         const hasRealPhone =
           profile.phone &&
           !profile.phone.startsWith("oauth_") &&
@@ -280,12 +310,25 @@ function OnboardingContent() {
     try {
       const res = await fetch("/api/public/venues");
       const data: PortalVenue[] = await res.json();
+      // DEBUG: also fetch all venues to compare
+      const allRes = await fetch("/api/public/venues?allCountries=true");
+      const allData: PortalVenue[] = await allRes.json();
+      console.log("[DEBUG onboarding] handleProfileContinue — filtered venues:", data);
+      console.log("[DEBUG onboarding] handleProfileContinue — all venues:", allData);
+      setDebugVenuesFetch({
+        raw: allData,
+        filtered: data,
+        timestamp: new Date().toISOString(),
+        calledFrom: "handleProfileContinue",
+      });
       if (data.length === 0) {
         refresh();
         router.push("/book");
       } else if (data.length === 1) {
+        console.log("[DEBUG onboarding] only 1 venue — auto-assigning:", data[0]);
         await saveVenueAndNavigate(data[0].id, phoneToSend, gender, skillLevel);
       } else {
+        console.log("[DEBUG onboarding] multiple venues — navigating to venue picker");
         router.push("/book/onboarding/venue");
       }
     } catch {
@@ -489,6 +532,31 @@ function OnboardingContent() {
               {t("onboarding.noCreateNew")}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* DEBUG panel — remove before production */}
+      {(debugVenuesFetch || debugAccountFetch) && (
+        <div className="mt-8 p-3 border border-orange-400 rounded-xl bg-orange-50 text-xs font-mono space-y-2">
+          <p className="font-bold text-orange-700">[DEBUG] Onboarding — Complete Profile</p>
+          {debugAccountFetch && (
+            <div>
+              <p className="font-semibold text-orange-600">Account on mount:</p>
+              <p>phone: <span className="text-gray-800">{String((debugAccountFetch as {phone?: unknown}).phone ?? "null")}</span></p>
+              <p>country: <span className="text-gray-800">{String((debugAccountFetch as {country?: unknown}).country ?? "null")}</span></p>
+              <p>venue: <span className="text-gray-800">{JSON.stringify((debugAccountFetch as {venue?: unknown}).venue ?? null)}</span></p>
+            </div>
+          )}
+          {debugVenuesFetch && (
+            <div>
+              <p className="font-semibold text-orange-600">Venues ({debugVenuesFetch.calledFrom}) @ {debugVenuesFetch.timestamp.substring(11, 19)}</p>
+              <p>Filtered ({debugVenuesFetch.filtered.length}): {debugVenuesFetch.filtered.map(v => v.name).join(", ") || "none"}</p>
+              <p>All ({debugVenuesFetch.raw.length}): {debugVenuesFetch.raw.map(v => v.name).join(", ") || "none"}</p>
+              {debugVenuesFetch.filtered.length === 1 && (
+                <p className="text-orange-700 font-bold">⚠ Only 1 venue returned — auto-assign will skip venue picker!</p>
+              )}
+            </div>
+          )}
         </div>
       )}
 
