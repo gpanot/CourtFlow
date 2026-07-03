@@ -95,6 +95,19 @@ enum MembershipStatus {
   cancelled
 }
 
+enum ClassPassStatus {
+  active
+  paused
+  expired
+  cancelled
+}
+
+enum ClassPassPaymentStatus {
+  UNPAID
+  PAID
+  OVERDUE
+}
+
 enum MembershipPaymentStatus {
   UNPAID
   PAID
@@ -187,6 +200,9 @@ model Venue {
   playerCoachCredits   PlayerCoachCredit[]
   openPlayRegistrations OpenPlayRegistration[]
   playerNotes           PlayerNote[]
+  classPassTiers        ClassPassTier[]
+  classPasses           ClassPass[]
+  classInstances        ClassInstance[]
 
   @@index([organizationId])
   @@map("venues")
@@ -260,6 +276,7 @@ model Player {
   openPlayRegistrations OpenPlayRegistration[]
   playerNotes           PlayerNote[]
   magicTokens           PlayerMagicToken[]
+  classPasses           ClassPass[]
 
   @@index([registrationVenueId])
   @@index([playerIdentityId])
@@ -353,6 +370,8 @@ model StaffMember {
   coachAvailabilities   CoachAvailability[]
   coachHolidays         CoachHoliday[]
   linkedPlayers         Player[]  @relation("PlayerCoachLink")
+  classPassTiers        ClassPassTier[]
+  classInstances        ClassInstance[]
 
   @@map("staff_members")
 }
@@ -372,6 +391,7 @@ model Court {
   bookings         Booking[]
   coachLessons     CoachLesson[]
   playerRankings   PlayerRanking[]
+  classInstances   ClassInstance[]
 
   @@map("courts")
 }
@@ -1419,4 +1439,125 @@ model PlayerMagicToken {
 
   @@index([playerId])
   @@map("player_magic_tokens")
+}
+
+// ─── Class Pass Module ───────────────────────────────────────
+
+/// Defines a recurring class-pass product sold at a venue (e.g. "Beginner Group 12-session pass").
+/// cycleLengthDays is informational only — actual cycle boundaries are calendar-month-aligned in application code.
+model ClassPassTier {
+  id               String   @id @default(cuid())
+  venueId          String   @map("venue_id")
+  name             String
+  price            Int
+  sessionsIncluded Int      @default(12) @map("sessions_included")
+  /// Informational only. Cycle renewal logic is calendar-month-aligned in application code.
+  cycleLengthDays  Int      @default(30) @map("cycle_length_days")
+  linkedCoachId    String?  @map("linked_coach_id")
+  isActive         Boolean  @default(true) @map("is_active")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  venue        Venue         @relation(fields: [venueId], references: [id])
+  linkedCoach  StaffMember?  @relation(fields: [linkedCoachId], references: [id], onDelete: SetNull)
+  classPasses  ClassPass[]
+  classInstances ClassInstance[]
+
+  @@index([venueId, isActive])
+  @@index([linkedCoachId])
+  @@map("class_pass_tiers")
+}
+
+/// A player's subscription to a ClassPassTier for a given cycle.
+/// A player may hold both a Membership and one or more ClassPass rows at the same venue.
+model ClassPass {
+  id                String          @id @default(cuid())
+  playerId          String          @map("player_id")
+  venueId           String          @map("venue_id")
+  tierId            String          @map("tier_id")
+  status            ClassPassStatus @default(active)
+  activatedAt       DateTime        @default(now()) @map("activated_at")
+  /// Set when activation is deferred (e.g. player purchases in advance).
+  deferredStartDate DateTime?       @map("deferred_start_date")
+  cycleStart        DateTime        @map("cycle_start")
+  cycleEnd          DateTime        @map("cycle_end")
+  sessionsUsed      Int             @default(0) @map("sessions_used")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  player   Player        @relation(fields: [playerId], references: [id])
+  venue    Venue         @relation(fields: [venueId], references: [id])
+  tier     ClassPassTier @relation(fields: [tierId], references: [id])
+  payments ClassPassPayment[]
+  checkIns ClassCheckIn[]
+
+  @@index([playerId, venueId])
+  @@index([venueId, status])
+  @@index([tierId])
+  @@map("class_passes")
+}
+
+/// Monthly/cycle payment record for a ClassPass.
+model ClassPassPayment {
+  id            String                 @id @default(cuid())
+  classPassId   String                 @map("class_pass_id")
+  periodStart   DateTime               @map("period_start")
+  periodEnd     DateTime               @map("period_end")
+  amountValue   Int                    @map("amount_value")
+  status        ClassPassPaymentStatus @default(UNPAID)
+  paymentMethod String?                @map("payment_method")
+  paidAt        DateTime?              @map("paid_at")
+  proofUrl      String?                @map("proof_url")
+  note          String?
+  /// Populated when payment is voided/refunded — records the reason.
+  voidReason    String?                @map("void_reason")
+  createdAt     DateTime               @default(now()) @map("created_at")
+  updatedAt     DateTime               @updatedAt @map("updated_at")
+
+  classPass ClassPass @relation(fields: [classPassId], references: [id], onDelete: Cascade)
+
+  @@index([classPassId])
+  @@index([status])
+  @@map("class_pass_payments")
+}
+
+/// A scheduled occurrence of a class that class-pass holders can check into.
+model ClassInstance {
+  id         String   @id @default(cuid())
+  venueId    String   @map("venue_id")
+  coachId    String   @map("coach_id")
+  courtId    String?  @map("court_id")
+  tierId     String   @map("tier_id")
+  startAt    DateTime @map("start_at")
+  endAt      DateTime @map("end_at")
+  maxPlayers Int      @map("max_players")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  venue     Venue         @relation(fields: [venueId], references: [id])
+  coach     StaffMember   @relation(fields: [coachId], references: [id])
+  court     Court?        @relation(fields: [courtId], references: [id])
+  tier      ClassPassTier @relation(fields: [tierId], references: [id])
+  checkIns  ClassCheckIn[]
+
+  @@index([venueId, startAt])
+  @@index([coachId, startAt])
+  @@index([tierId])
+  @@map("class_instances")
+}
+
+/// Records a class-pass holder's attendance at a specific class instance.
+/// Unique constraint on (classPassId, classInstanceId) prevents double check-in.
+model ClassCheckIn {
+  id              String   @id @default(cuid())
+  classPassId     String   @map("class_pass_id")
+  classInstanceId String   @map("class_instance_id")
+  checkedInAt     DateTime @default(now()) @map("checked_in_at")
+
+  classPass     ClassPass     @relation(fields: [classPassId], references: [id], onDelete: Cascade)
+  classInstance ClassInstance @relation(fields: [classInstanceId], references: [id], onDelete: Cascade)
+
+  @@unique([classPassId, classInstanceId])
+  @@index([classInstanceId])
+  @@map("class_check_ins")
 }
