@@ -1485,7 +1485,7 @@ export default function BookingsPage() {
                   <select value={blockForm.endHour} onChange={(e) => setBlockForm({ ...blockForm, endHour: e.target.value })}
                     className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none">
                     <option value="">{t("bookings.select")}</option>
-                    {allSlotTimes.filter((s) => !blockForm.startHour || s.hour > parseInt(blockForm.startHour)).map((s) => (
+                    {allSlotTimes.filter((s) => !blockForm.startHour || s.hour >= parseInt(blockForm.startHour)).map((s) => (
                       <option key={s.endTime} value={String(s.hour + 1)}>{formatTime(s.endTime, venueTimezone)}</option>
                     ))}
                   </select>

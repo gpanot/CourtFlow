@@ -335,6 +335,20 @@ export async function getAvailableSlots(
 }
 
 /**
+ * Given a pre-fetched court availability matrix (from getAvailableSlots),
+ * returns true if at least one court has an available slot that starts at the
+ * given whole hour.
+ */
+export function isAnyCourtAvailableAtHour(
+  courtMatrix: CourtSlot[],
+  hour: number
+): boolean {
+  return courtMatrix.some((court) =>
+    court.slots.some((slot) => slot.hour === hour && slot.available)
+  );
+}
+
+/**
  * Check if a specific court/date/time slot is available for booking.
  */
 export async function validateBookingConflict(

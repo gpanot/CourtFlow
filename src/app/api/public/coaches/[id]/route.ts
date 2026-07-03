@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { json, error } from "@/lib/api-helpers";
 import { prisma } from "@/lib/db";
 import { resolveVenueId } from "@/lib/venue-config";
-import { getBookingConfig } from "@/lib/booking";
+import { getBookingConfig, getAvailableSlots, isAnyCourtAvailableAtHour } from "@/lib/booking";
 import { isCoachAvailable } from "@/lib/coach-availability";
 import { verifyPlayerToken } from "@/app/api/public/auth/login/route";
 import { parseDateKey } from "@/lib/date";
@@ -133,6 +133,10 @@ export async function GET(
           })
         : [];
 
+      // Fetch court availability once for the day — used to intersect with coach schedule.
+      // A coach slot is only shown as available if the coach is free AND at least one court is free.
+      const courtMatrix = await getAvailableSlots(venueId, date);
+
       availability = [];
       for (let h = config.bookingStartHour; h < config.bookingEndHour; h++) {
         const slotStart = new Date(date);
@@ -158,7 +162,8 @@ export async function GET(
         }
 
         const result = await isCoachAvailable(coachId, date, slotStart, slotEnd);
-        availability.push({ hour: h, available: result.available, bookingStatus: null });
+        const courtFree = isAnyCourtAvailableAtHour(courtMatrix, h);
+        availability.push({ hour: h, available: result.available && courtFree, bookingStatus: null });
       }
     }
 
