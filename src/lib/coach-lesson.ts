@@ -4,6 +4,7 @@ import { getBookingConfig } from "./booking";
 import { generatePaymentRef } from "../modules/courtpay/lib/payment-reference";
 import { buildVietQRUrl } from "./vietqr";
 import { isCoachAvailable, findNextAvailableSlot } from "./coach-availability";
+import { toZonedTime } from "date-fns-tz";
 import { buildLessonEmailContext, sendLessonEventEmails } from "./email/send";
 import { sendCoachLessonPushFromCtx } from "./staff-push";
 import { toDateKey, parseDateKey } from "./date";
@@ -185,8 +186,9 @@ export async function createCoachLesson(
 
   const venue = await prisma.venue.findUniqueOrThrow({
     where: { id: resolvedVenueId },
-    select: { settings: true, bankName: true, bankAccount: true, bankOwnerName: true },
+    select: { settings: true, bankName: true, bankAccount: true, bankOwnerName: true, timezone: true },
   });
+  const venueTimezone = venue.timezone ?? "Asia/Ho_Chi_Minh";
   const config = getBookingConfig(venue.settings as Record<string, unknown>);
 
   const dateKey = dateStr.split("T")[0]; // bare YYYY-MM-DD
@@ -206,14 +208,15 @@ export async function createCoachLesson(
   const totalPrice = calculateSessionPrice(pkg, { playerCount, slotCount: slots });
 
   // Three-layer availability check (Google Calendar is layer 4, inside isCoachAvailable)
+  const zonedStart = toZonedTime(startTime, venueTimezone);
+  const zonedEnd = toZonedTime(endTime, venueTimezone);
   console.log(
-    `[createCoachLesson] coachId=${coachId} dateStr=${dateStr} dateKey=${dateKey}` +
-    ` date.toISO=${date.toISOString()} date.getDay()=${date.getDay()}` +
+    `[createCoachLesson] coachId=${coachId} dateKey=${dateKey}` +
     ` startTime=${startTime.toISOString()} endTime=${endTime.toISOString()}` +
-    ` startFrac=${startTime.getHours() + startTime.getMinutes() / 60}` +
-    ` endFrac=${endTime.getHours() + endTime.getMinutes() / 60}`
+    ` venueLocal=${zonedStart.getHours()}:${String(zonedStart.getMinutes()).padStart(2, "0")}` +
+    `–${zonedEnd.getHours()}:${String(zonedEnd.getMinutes()).padStart(2, "0")} DOW=${zonedStart.getDay()}`
   );
-  const avail = await isCoachAvailable(coachId, date, startTime, endTime);
+  const avail = await isCoachAvailable(coachId, date, startTime, endTime, venueTimezone);
   console.log(`[createCoachLesson] avail=${avail.available} reason=${avail.reason ?? "none"}`);
   if (!avail.available) {
     const next = await findNextAvailableSlot(
@@ -221,7 +224,8 @@ export async function createCoachLesson(
       date,
       pkg.durationMin,
       config.bookingStartHour,
-      config.bookingEndHour
+      config.bookingEndHour,
+      venueTimezone
     );
     throw new CoachLessonError(
       "Coach is not available at this time",

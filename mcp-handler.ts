@@ -28,6 +28,7 @@ import { toDateKey, parseDateKey } from "./src/lib/date";
 import { createPhonePlayer } from "./src/lib/player-signup";
 import { createCoachLesson, getDefaultPackageForCoach } from "./src/lib/coach-lesson";
 import { createMagicLoginToken } from "./src/lib/player-magic-link";
+import { prisma } from "./src/lib/db";
 
 // ---------------------------------------------------------------------------
 // Timezone helper — all times are serialized in Asia/Ho_Chi_Minh (UTC+7).
@@ -86,14 +87,20 @@ function buildMcpServer(): McpServer {
       const startObj = new Date(startTime);
       const endObj = new Date(endTime);
 
-      const avail = await isCoachAvailable(coachId, dateObj, startObj, endObj);
+      const venue = await prisma.venue.findUnique({
+        where: { id: venueId },
+        select: { timezone: true },
+      });
+      const venueTimezone = venue?.timezone ?? "Asia/Ho_Chi_Minh";
+
+      const avail = await isCoachAvailable(coachId, dateObj, startObj, endObj, venueTimezone);
 
       let nextAvailableSlot: { date: string; startTime: string; endTime: string } | null = null;
 
       if (!avail.available) {
         // Derive duration from the requested slot; use 60 min as fallback.
         const durationMin = Math.round((endObj.getTime() - startObj.getTime()) / 60_000) || 60;
-        const next = await findNextAvailableSlot(coachId, dateObj, durationMin);
+        const next = await findNextAvailableSlot(coachId, dateObj, durationMin, 8, 22, venueTimezone);
         if (next) {
           nextAvailableSlot = {
             date: toDateKey(next.date),
@@ -102,11 +109,6 @@ function buildMcpServer(): McpServer {
           };
         }
       }
-
-      // Silence unused-variable warning — venueId is accepted so callers can
-      // pass it for future use (e.g. per-venue booking hours) without breaking
-      // the API contract, but the current lib functions derive hours from DB.
-      void venueId;
 
       const result = {
         available: avail.available,

@@ -3,9 +3,10 @@ import { json, error } from "@/lib/api-helpers";
 import { prisma } from "@/lib/db";
 import { resolveVenueId } from "@/lib/venue-config";
 import { getBookingConfig, getAvailableSlots, isAnyCourtAvailableAtHour } from "@/lib/booking";
-import { isCoachAvailable } from "@/lib/coach-availability";
+import { isCoachAvailable, buildVenueLocalSlot } from "@/lib/coach-availability";
 import { verifyPlayerToken } from "@/app/api/public/auth/login/route";
 import { parseDateKey } from "@/lib/date";
+import { toZonedTime } from "date-fns-tz";
 
 export const dynamic = "force-dynamic";
 
@@ -98,15 +99,23 @@ export async function GET(
 
     if (dateParam) {
       const date = parseDateKey(dateParam);
+      const dateKey = dateParam;
 
       const venue = await prisma.venue.findUniqueOrThrow({
         where: { id: venueId },
-        select: { settings: true },
+        select: { settings: true, timezone: true },
       });
+      const venueTimezone = venue.timezone ?? "Asia/Ho_Chi_Minh";
       const config = getBookingConfig(venue.settings as Record<string, unknown>);
 
       const now = new Date();
-      const isToday = date.toDateString() === now.toDateString();
+      const dateOnly = new Date(dateKey + "T12:00:00+07:00");
+      const zonedDate = toZonedTime(dateOnly, venueTimezone);
+      const zonedNow = toZonedTime(now, venueTimezone);
+      const isToday =
+        zonedDate.getFullYear() === zonedNow.getFullYear() &&
+        zonedDate.getMonth() === zonedNow.getMonth() &&
+        zonedDate.getDate() === zonedNow.getDate();
 
       // Resolve requesting player (optional — no auth required for browsing)
       let requestingPlayerId: string | null = null;
@@ -139,10 +148,8 @@ export async function GET(
 
       availability = [];
       for (let h = config.bookingStartHour; h < config.bookingEndHour; h++) {
-        const slotStart = new Date(date);
-        slotStart.setHours(h, 0, 0, 0);
-        const slotEnd = new Date(slotStart);
-        slotEnd.setMinutes(slotEnd.getMinutes() + 60);
+        const slotStart = buildVenueLocalSlot(dateKey, h, 0, venueTimezone);
+        const slotEnd = new Date(slotStart.getTime() + 60 * 60 * 1000);
 
         // Block past slots on today
         const isPast = isToday && slotStart <= now;
@@ -161,7 +168,7 @@ export async function GET(
           continue;
         }
 
-        const result = await isCoachAvailable(coachId, date, slotStart, slotEnd);
+        const result = await isCoachAvailable(coachId, date, slotStart, slotEnd, venueTimezone);
         const courtFree = isAnyCourtAvailableAtHour(courtMatrix, h);
         availability.push({ hour: h, available: result.available && courtFree, bookingStatus: null });
       }

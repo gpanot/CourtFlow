@@ -1,5 +1,9 @@
 import { prisma } from "./db";
 import { getFreeBusy } from "./google-calendar";
+import { toZonedTime, fromZonedTime } from "date-fns-tz";
+import { toDateKey, parseDateKey } from "./date";
+
+const DEFAULT_VENUE_TIMEZONE = "Asia/Ho_Chi_Minh";
 
 /**
  * Parse a "HH:MM" time string into fractional hours (e.g. "09:30" → 9.5).
@@ -7,6 +11,33 @@ import { getFreeBusy } from "./google-calendar";
 function parseTimeStr(t: string): number {
   const [h, m] = t.split(":").map(Number);
   return h + (m ?? 0) / 60;
+}
+
+/**
+ * Build a UTC instant for a venue-local wall-clock time on a calendar date.
+ * Mirrors generateTimeSlots() in booking.ts — server process TZ is irrelevant.
+ */
+export function buildVenueLocalSlot(
+  dateKey: string,
+  hour: number,
+  minute: number,
+  venueTimezone: string
+): Date {
+  const dateOnly = new Date(dateKey + "T12:00:00+07:00");
+  const zonedStart = toZonedTime(dateOnly, venueTimezone);
+  zonedStart.setHours(hour, minute, 0, 0);
+  return fromZonedTime(zonedStart, venueTimezone);
+}
+
+function venueLocalDayOfWeek(date: Date, venueTimezone: string): number {
+  const dateKey = toDateKey(date);
+  const dateOnly = new Date(dateKey + "T12:00:00+07:00");
+  return toZonedTime(dateOnly, venueTimezone).getDay();
+}
+
+function venueLocalHourFraction(d: Date, venueTimezone: string): number {
+  const zoned = toZonedTime(d, venueTimezone);
+  return zoned.getHours() + zoned.getMinutes() / 60;
 }
 
 export interface AvailabilityResult {
@@ -26,10 +57,13 @@ export async function isCoachAvailable(
   coachId: string,
   date: Date,       // local-midnight date
   startTime: Date,
-  endTime: Date
+  endTime: Date,
+  venueTimezone: string = DEFAULT_VENUE_TIMEZONE
 ): Promise<AvailabilityResult> {
-  const dayOfWeek = date.getDay();
-  const slotLabel = `${startTime.toISOString()} – ${endTime.toISOString()} (DOW=${dayOfWeek})`;
+  const dayOfWeek = venueLocalDayOfWeek(date, venueTimezone);
+  const startFrac = venueLocalHourFraction(startTime, venueTimezone);
+  const endFrac = venueLocalHourFraction(endTime, venueTimezone);
+  const slotLabel = `${startTime.toISOString()} – ${endTime.toISOString()} (DOW=${dayOfWeek} local=${startFrac}-${endFrac})`;
 
   const coach = await prisma.staffMember.findUnique({
     where: { id: coachId },
@@ -54,10 +88,7 @@ export async function isCoachAvailable(
     return { available: false, reason: "outside_schedule" };
   }
 
-  // Layer 1 — weekly availability
-  const startFrac = startTime.getHours() + startTime.getMinutes() / 60;
-  const endFrac = endTime.getHours() + endTime.getMinutes() / 60;
-
+  // Layer 1 — weekly availability (venue-local hours, same as court booking pricing)
   console.log(`[avail] ${slotLabel} | L1: schedules=${JSON.stringify(coach.coachAvailabilities.map(s => `${s.startTime}-${s.endTime}`))} slot=${startFrac}-${endFrac}`);
 
   const inSchedule = coach.coachAvailabilities.some((slot) => {
@@ -168,6 +199,12 @@ export async function findAvailableCoachesForSport(
 ): Promise<CoachAvailabilitySummary[]> {
   const limit = options?.limit ?? 3;
 
+  const venue = await prisma.venue.findUnique({
+    where: { id: venueId },
+    select: { timezone: true },
+  });
+  const venueTimezone = venue?.timezone ?? DEFAULT_VENUE_TIMEZONE;
+
   // Load all active coaches at this venue whose specialties mention the sport
   const coaches = await prisma.staffMember.findMany({
     where: {
@@ -207,16 +244,14 @@ export async function findAvailableCoachesForSport(
     if (options?.date && options?.timeWindow) {
       // Probe each whole-hour slot within the given window
       const { startHour, endHour } = options.timeWindow;
-      const probeDate = new Date(options.date);
-      probeDate.setHours(0, 0, 0, 0);
+      const dateKey = toDateKey(options.date);
+      const probeDate = parseDateKey(dateKey);
 
       for (let h = startHour; h < endHour; h++) {
-        const slotStart = new Date(probeDate);
-        slotStart.setHours(h, 0, 0, 0);
-        const slotEnd = new Date(slotStart);
-        slotEnd.setHours(h + 1, 0, 0, 0);
+        const slotStart = buildVenueLocalSlot(dateKey, h, 0, venueTimezone);
+        const slotEnd = new Date(slotStart.getTime() + 60 * 60 * 1000);
 
-        const avail = await isCoachAvailable(coach.id, probeDate, slotStart, slotEnd);
+        const avail = await isCoachAvailable(coach.id, probeDate, slotStart, slotEnd, venueTimezone);
         if (avail.available) {
           nextAvailableSlot = { date: probeDate, startTime: slotStart, endTime: slotEnd };
           break;
@@ -229,7 +264,14 @@ export async function findAvailableCoachesForSport(
           ? Math.min(...coach.coachPackages.map((p) => p.durationMin))
           : 60;
 
-      nextAvailableSlot = await findNextAvailableSlot(coach.id, today, minDuration);
+      nextAvailableSlot = await findNextAvailableSlot(
+        coach.id,
+        today,
+        minDuration,
+        8,
+        22,
+        venueTimezone
+      );
     }
 
     if (!nextAvailableSlot) continue;
@@ -260,28 +302,28 @@ export async function findNextAvailableSlot(
   fromDate: Date,
   durationMin: number,
   venueBookingStartHour = 8,
-  venueBookingEndHour = 22
+  venueBookingEndHour = 22,
+  venueTimezone: string = DEFAULT_VENUE_TIMEZONE
 ): Promise<{ date: Date; startTime: Date; endTime: Date } | null> {
   const MAX_DAYS = 14;
   const slotStep = durationMin;
 
   for (let d = 0; d < MAX_DAYS; d++) {
-    const candidate = new Date(fromDate);
-    candidate.setDate(candidate.getDate() + d);
-    candidate.setHours(0, 0, 0, 0);
+    const base = new Date(fromDate);
+    base.setDate(base.getDate() + d);
+    const dateKey = toDateKey(base);
+    const candidate = parseDateKey(dateKey);
 
     for (let h = venueBookingStartHour; h < venueBookingEndHour; h += slotStep / 60) {
       const hour = Math.floor(h);
       const minute = Math.round((h % 1) * 60);
 
-      const start = new Date(candidate);
-      start.setHours(hour, minute, 0, 0);
-      const end = new Date(start);
-      end.setMinutes(end.getMinutes() + durationMin);
+      const start = buildVenueLocalSlot(dateKey, hour, minute, venueTimezone);
+      const end = new Date(start.getTime() + durationMin * 60 * 1000);
 
-      if (end.getHours() > venueBookingEndHour) break;
+      if (venueLocalHourFraction(end, venueTimezone) > venueBookingEndHour) break;
 
-      const result = await isCoachAvailable(coachId, candidate, start, end);
+      const result = await isCoachAvailable(coachId, candidate, start, end, venueTimezone);
       if (result.available) {
         return { date: candidate, startTime: start, endTime: end };
       }
