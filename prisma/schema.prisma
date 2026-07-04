@@ -55,7 +55,7 @@ model Venue {
   checkInPlayers        CheckInPlayer[]
   checkInRecords        CheckInRecord[]
   classInstances        ClassInstance[]
-  class_passes          class_passes[]
+  programPasses         ProgramPass[]
   coachLessons          CoachLesson[]
   coachPackages         CoachPackage[]
   courtBlocks           CourtBlock[]
@@ -125,7 +125,7 @@ model Player {
   password_hash         String?
   playerIdentityId      String?                @map("player_identity_id")
   bookings              Booking[]
-  class_passes          class_passes[]
+  programPasses         ProgramPass[]
   coachLessons          CoachLesson[]
   faceAttempts          FaceAttempt[]
   faceRecognitionLogs   FaceRecognitionLog[]
@@ -1263,7 +1263,7 @@ model ProgramPassType {
   createdAt        DateTime        @default(now()) @map("created_at")
   updatedAt        DateTime        @updatedAt @map("updated_at")
   classInstances   ClassInstance[]
-  class_passes     class_passes[]
+  programPasses    ProgramPass[]
   linkedCoach      StaffMember?    @relation(fields: [linkedCoachId], references: [id], map: "class_pass_tiers_linked_coach_id_fkey")
   venue            Venue           @relation(fields: [venueId], references: [id], map: "class_pass_tiers_venue_id_fkey")
 
@@ -1300,64 +1300,65 @@ model ClassInstance {
 /// Unique constraint on (programPassId, classInstanceId) prevents double check-in.
 model ClassCheckIn {
   id              String        @id @default(cuid())
-  class_pass_id   String
+  programPassId   String        @map("class_pass_id")
   classInstanceId String        @map("class_instance_id")
   checkedInAt     DateTime      @default(now()) @map("checked_in_at")
   classInstance   ClassInstance @relation(fields: [classInstanceId], references: [id], onDelete: Cascade)
-  class_passes    class_passes  @relation(fields: [class_pass_id], references: [id], onDelete: Cascade)
+  programPass     ProgramPass   @relation(fields: [programPassId], references: [id], onDelete: Cascade)
 
-  @@unique([class_pass_id, classInstanceId])
+  @@unique([programPassId, classInstanceId])
   @@index([classInstanceId])
   @@map("class_check_ins")
 }
 
-model class_pass_payments {
-  id             String                 @id
-  class_pass_id  String
-  period_start   DateTime
-  period_end     DateTime
-  amount_value   Int
-  status         ClassPassPaymentStatus @default(UNPAID)
-  payment_method String?
-  paid_at        DateTime?
-  proof_url      String?
-  note           String?
-  void_reason    String?
-  created_at     DateTime               @default(now())
-  updated_at     DateTime
-  class_passes   class_passes           @relation(fields: [class_pass_id], references: [id], onDelete: Cascade)
+/// Monthly/cycle payment record for a ProgramPass.
+model ProgramPassPayment {
+  id            String                 @id @default(cuid())
+  programPassId String                 @map("class_pass_id")
+  periodStart   DateTime               @map("period_start")
+  periodEnd     DateTime               @map("period_end")
+  amountValue   Int                    @map("amount_value")
+  status        ClassPassPaymentStatus @default(UNPAID)
+  paymentMethod String?                @map("payment_method")
+  paidAt        DateTime?              @map("paid_at")
+  proofUrl      String?                @map("proof_url")
+  note          String?
+  voidReason    String?                @map("void_reason")
+  createdAt     DateTime               @default(now()) @map("created_at")
+  updatedAt     DateTime               @updatedAt @map("updated_at")
+  programPass   ProgramPass            @relation(fields: [programPassId], references: [id], onDelete: Cascade)
 
-  @@index([class_pass_id])
+  @@index([programPassId])
   @@index([status])
+  @@map("class_pass_payments")
 }
 
-model class_passes {
-  id                  String                @id
-  player_id           String
-  venue_id            String
-  pass_type_id        String
-  status              ClassPassStatus       @default(active)
-  activated_at        DateTime              @default(now())
-  deferred_start_date DateTime?
-  cycle_start         DateTime
-  cycle_end           DateTime
-  sessions_used       Int                   @default(0)
-  created_at          DateTime              @default(now())
-  updated_at          DateTime
-  class_check_ins     ClassCheckIn[]
-  class_pass_payments class_pass_payments[]
-  players             Player                @relation(fields: [player_id], references: [id])
-  program_pass_types  ProgramPassType       @relation(fields: [pass_type_id], references: [id], map: "class_passes_tier_id_fkey")
-  venues              Venue                 @relation(fields: [venue_id], references: [id])
+/// A player's subscription to a ProgramPassType for a given cycle.
+model ProgramPass {
+  id                  String               @id @default(cuid())
+  playerId            String               @map("player_id")
+  venueId             String               @map("venue_id")
+  passTypeId          String               @map("pass_type_id")
+  status              ClassPassStatus      @default(active)
+  activatedAt         DateTime             @default(now()) @map("activated_at")
+  deferredStartDate   DateTime?            @map("deferred_start_date")
+  cycleStart          DateTime             @map("cycle_start")
+  cycleEnd            DateTime             @map("cycle_end")
+  sessionsUsed        Int                  @default(0) @map("sessions_used")
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+  checkIns            ClassCheckIn[]
+  payments            ProgramPassPayment[]
+  player              Player               @relation(fields: [playerId], references: [id])
+  passType            ProgramPassType      @relation(fields: [passTypeId], references: [id], map: "class_passes_tier_id_fkey")
+  venue               Venue                @relation(fields: [venueId], references: [id])
 
-  @@index([player_id, venue_id])
-  @@index([pass_type_id], map: "class_passes_tier_id_idx")
-  @@index([venue_id, status])
+  @@index([playerId, venueId])
+  @@index([passTypeId], map: "class_passes_tier_id_idx")
+  @@index([venueId, status])
+  @@map("class_passes")
 }
 
-model schema_migrations {
-  version String @id @db.VarChar
-}
 
 enum SkillLevel {
   beginner
