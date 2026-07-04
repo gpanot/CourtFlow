@@ -233,6 +233,7 @@ model StaffMember {
   customPrices              PlayerCustomPrice[]
   playerRankings            PlayerRanking[]
   linkedPlayers             Player[]               @relation("PlayerCoachLink")
+  programPassTypeCoaches    ProgramPassTypeCoach[]
   programPassTypes          ProgramPassType[]
   sessions                  Session[]
   authLogs                  StaffAuthLog[]
@@ -1264,6 +1265,7 @@ model ProgramPassType {
   updatedAt        DateTime        @updatedAt @map("updated_at")
   classInstances   ClassInstance[]
   programPasses    ProgramPass[]
+  coaches          ProgramPassTypeCoach[]
   linkedCoach      StaffMember?    @relation(fields: [linkedCoachId], references: [id], map: "class_pass_tiers_linked_coach_id_fkey")
   venue            Venue           @relation(fields: [venueId], references: [id], map: "class_pass_tiers_venue_id_fkey")
 
@@ -1359,6 +1361,19 @@ model ProgramPass {
   @@map("class_passes")
 }
 
+/// Join table linking a ProgramPassType to zero or more coaches.
+model ProgramPassTypeCoach {
+  id         String          @id @default(dbgenerated("(gen_random_uuid())::text"))
+  passTypeId String          @map("pass_type_id")
+  coachId    String          @map("coach_id")
+  createdAt  DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  coach      StaffMember     @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  passType   ProgramPassType @relation(fields: [passTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([passTypeId, coachId])
+  @@index([passTypeId])
+  @@map("program_pass_type_coaches")
+}
 
 enum SkillLevel {
   beginner

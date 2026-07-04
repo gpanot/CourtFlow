@@ -1349,6 +1349,18 @@ CREATE TABLE public.players (
 
 
 --
+-- Name: program_pass_type_coaches; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.program_pass_type_coaches (
+    id text DEFAULT (gen_random_uuid())::text NOT NULL,
+    pass_type_id text NOT NULL,
+    coach_id text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: program_pass_types; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2542,6 +2554,22 @@ ALTER TABLE ONLY public.players
 
 
 --
+-- Name: program_pass_type_coaches program_pass_type_coaches_pass_type_id_coach_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_pass_type_coaches
+    ADD CONSTRAINT program_pass_type_coaches_pass_type_id_coach_id_key UNIQUE (pass_type_id, coach_id);
+
+
+--
+-- Name: program_pass_type_coaches program_pass_type_coaches_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_pass_type_coaches
+    ADD CONSTRAINT program_pass_type_coaches_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: program_pass_types program_pass_types_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3479,6 +3507,13 @@ CREATE INDEX players_player_identity_id_idx ON public.players USING btree (playe
 --
 
 CREATE INDEX players_registration_venue_id_idx ON public.players USING btree (registration_venue_id);
+
+
+--
+-- Name: program_pass_type_coaches_pass_type_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX program_pass_type_coaches_pass_type_id_idx ON public.program_pass_type_coaches USING btree (pass_type_id);
 
 
 --
@@ -4512,6 +4547,22 @@ ALTER TABLE ONLY public.players
 
 
 --
+-- Name: program_pass_type_coaches program_pass_type_coaches_coach_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_pass_type_coaches
+    ADD CONSTRAINT program_pass_type_coaches_coach_id_fkey FOREIGN KEY (coach_id) REFERENCES public.staff_members(id) ON DELETE CASCADE;
+
+
+--
+-- Name: program_pass_type_coaches program_pass_type_coaches_pass_type_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.program_pass_type_coaches
+    ADD CONSTRAINT program_pass_type_coaches_pass_type_id_fkey FOREIGN KEY (pass_type_id) REFERENCES public.program_pass_types(id) ON DELETE CASCADE;
+
+
+--
 -- Name: push_subscriptions push_subscriptions_player_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5020,4 +5071,5 @@ ALTER TABLE ONLY shadow_temp.staff_payments
 
 INSERT INTO public.schema_migrations (version) VALUES
     ('20260704000001'),
-    ('20260704000002');
+    ('20260704000002'),
+    ('20260704000003');
