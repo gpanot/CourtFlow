@@ -323,6 +323,7 @@
     "tapUploadProof": "Chạm để tải lên\nchứng từ thanh toán",
     "waitingAutoConfirm": "Đang chờ xác nhận tự động...",
     "autoConfirmHint": "Thanh toán sẽ được xác minh tự động",
+    "uploadProofInstead": "Tải chứng từ thay thế",
     "uploadHint": "Tải ảnh chụp màn hình thanh toán để gửi",
     "submitting": "Đang gửi...",
     "iHavePaid": "TÔI ĐÃ THANH TOÁN",

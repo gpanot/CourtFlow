@@ -45,6 +45,7 @@ export default function PaymentPage() {
   const [loadError, setLoadError] = useState(false);
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofPreview, setProofPreview] = useState<string | null>(null);
+  const [showProofUpload, setShowProofUpload] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -128,7 +129,7 @@ export default function PaymentPage() {
   }
 
   async function handleProofSubmit() {
-    if (!proofFile && !venueInfo?.autoPayment) return;
+    if (!proofFile && (!venueInfo?.autoPayment || showProofUpload)) return;
     setUploading(true);
     try {
       if (proofFile) {
@@ -209,7 +210,7 @@ export default function PaymentPage() {
     );
   }
 
-  const isAutoPayment = venueInfo?.autoPayment;
+  const isAutoPayment = venueInfo?.autoPayment && !showProofUpload;
 
   let qrUrl: string | null = null;
   if (venueInfo && venueInfo.bankName && venueInfo.bankAccount && booking.paymentRef) {
@@ -311,15 +312,41 @@ export default function PaymentPage() {
             </button>
           )}
 
-          {isAutoPayment && (
+          {venueInfo?.autoPayment && !showProofUpload && (
             <div className="flex-1 border border-[var(--cm-border)] rounded-xl flex flex-col items-center justify-center p-3 min-h-[144px]">
               <svg className="animate-spin h-6 w-6 text-[var(--cm-accent)] mb-2" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
               <p className="text-xs text-[var(--cm-text-sec)] text-center">{t("payment.waitingAutoConfirm")}</p>
-              <p className="text-[10px] text-[var(--cm-text-muted)] mt-1">{t("payment.autoConfirmHint")}</p>
+              <p className="text-[10px] text-[var(--cm-text-muted)] mt-1 text-center">{t("payment.autoConfirmHint")}</p>
+              <button
+                onClick={() => setShowProofUpload(true)}
+                className="text-[10px] text-[var(--cm-accent)] font-medium mt-3 underline underline-offset-2"
+              >
+                {t("payment.uploadProofInstead")}
+              </button>
             </div>
+          )}
+
+          {venueInfo?.autoPayment && showProofUpload && (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="flex-1 border-2 border-dashed border-[var(--cm-border)] rounded-xl flex flex-col items-center justify-center p-3 hover:border-[var(--cm-accent)]/50 transition-colors min-h-[144px]"
+            >
+              {proofPreview ? (
+                <img src={proofPreview} alt="Proof" className="w-full h-full object-contain rounded-lg max-h-[128px]" />
+              ) : (
+                <>
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--cm-text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <path d="m21 15-5-5L5 21" />
+                  </svg>
+                  <p className="text-xs text-[var(--cm-text-muted)] mt-2 text-center whitespace-pre-line">{t("payment.tapUploadProof")}</p>
+                </>
+              )}
+            </button>
           )}
         </div>
         <input
@@ -333,7 +360,7 @@ export default function PaymentPage() {
 
 
       {/* Proof upload hint */}
-      {!isAutoPayment && !proofFile && (
+      {(!venueInfo?.autoPayment || showProofUpload) && !proofFile && (
         <p className="text-xs text-[var(--cm-text-sec)] text-center mb-4">
           {t("payment.uploadHint")}
         </p>
@@ -342,7 +369,7 @@ export default function PaymentPage() {
       {/* Submit button */}
       <button
         onClick={handleProofSubmit}
-        disabled={uploading || (!isAutoPayment && !proofFile)}
+        disabled={uploading || ((!venueInfo?.autoPayment || showProofUpload) && !proofFile)}
         className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-semibold text-sm mb-3 disabled:opacity-40 uppercase tracking-wide"
       >
         {uploading ? t("payment.submitting") : t("payment.iHavePaid")}

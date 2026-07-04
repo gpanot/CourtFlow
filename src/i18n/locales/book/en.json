@@ -323,6 +323,7 @@
     "tapUploadProof": "Tap to upload\npayment proof",
     "waitingAutoConfirm": "Waiting for auto-confirmation...",
     "autoConfirmHint": "Payment will be verified automatically",
+    "uploadProofInstead": "Upload proof instead",
     "uploadHint": "Upload your payment screenshot to enable submit",
     "submitting": "Submitting...",
     "iHavePaid": "I HAVE PAID",
