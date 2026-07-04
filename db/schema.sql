@@ -1344,7 +1344,8 @@ CREATE TABLE public.players (
     coach_staff_id text,
     email text,
     password_hash text,
-    player_identity_id text
+    player_identity_id text,
+    blurred_face_photo_path text
 );
 
 
@@ -5073,4 +5074,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260704000001'),
     ('20260704000002'),
     ('20260704000003'),
-    ('20260704025913');
+    ('20260704025913'),
+    ('20260704042005');

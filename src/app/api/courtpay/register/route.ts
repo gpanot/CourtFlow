@@ -10,6 +10,7 @@ import {
 import { activateSubscription } from "@/modules/courtpay/lib/subscription";
 import { faceRecognitionService } from "@/lib/face-recognition";
 import { persistPlayerCheckInFacePhoto } from "@/lib/persist-player-check-in-photo";
+import { generateAndPersistBlurredFacePhoto } from "@/lib/persist-blurred-face-photo";
 import { COLLECTION_ID, FACE_MATCH_THRESHOLD } from "@/lib/rekognition-config";
 import { saveSignupDuplicatePhoto } from "@/lib/save-signup-duplicate-photo";
 
@@ -238,6 +239,8 @@ export async function POST(req: Request) {
             await persistPlayerCheckInFacePhoto(existingByPhone.id, imageBase64);
           } catch { /* non-critical */ }
           mark("persist_face_photo_existing");
+          // Async, non-blocking: blurred+compressed copy for quality verification.
+          void generateAndPersistBlurredFacePhoto(existingByPhone.id, imageBase64);
         }
       } else {
         const genderVal = gender === "male" || gender === "female" ? gender : "male";
@@ -286,6 +289,8 @@ export async function POST(req: Request) {
           await persistPlayerCheckInFacePhoto(corePlayer.id, imageBase64);
         } catch { /* non-critical */ }
         mark("persist_face_photo_new");
+        // Async, non-blocking: blurred+compressed copy for quality verification.
+        void generateAndPersistBlurredFacePhoto(corePlayer.id, imageBase64);
 
         enqueueStickerJobIfNeeded(corePlayer.id, corePlayer.gender).catch(console.error);
       }

@@ -99,57 +99,59 @@ model PlayerIdentity {
 }
 
 model Player {
-  id                    String                 @id @default(cuid())
-  name                  String
-  phone                 String                 @unique
-  avatar                String                 @default("🏓")
-  skillLevel            SkillLevel             @default(beginner) @map("skill_level")
-  gender                Gender
-  gamePreference        GamePreference         @default(no_preference) @map("game_preference")
-  notificationsEnabled  Boolean                @default(false) @map("notifications_enabled")
-  createdAt             DateTime               @default(now()) @map("created_at")
-  faceSubjectId         String?                @map("face_subject_id")
+  id                      String                 @id @default(cuid())
+  name                    String
+  phone                   String                 @unique
+  avatar                  String                 @default("🏓")
+  skillLevel              SkillLevel             @default(beginner) @map("skill_level")
+  gender                  Gender
+  gamePreference          GamePreference         @default(no_preference) @map("game_preference")
+  notificationsEnabled    Boolean                @default(false) @map("notifications_enabled")
+  createdAt               DateTime               @default(now()) @map("created_at")
+  faceSubjectId           String?                @map("face_subject_id")
   /// Public URL path served from /uploads (e.g. /uploads/players/{id}.jpg) — set on first face check-in enrollment
-  facePhotoPath         String?                @map("face_photo_path")
-  rankingScore          Int                    @default(200) @map("ranking_score")
-  rankingCount          Int                    @default(0) @map("ranking_count")
-  lastRankedAt          DateTime?              @map("last_ranked_at")
+  facePhotoPath           String?                @map("face_photo_path")
+  rankingScore            Int                    @default(200) @map("ranking_score")
+  rankingCount            Int                    @default(0) @map("ranking_count")
+  lastRankedAt            DateTime?              @map("last_ranked_at")
   /// Player-uploaded avatar photo, takes priority over facePhotoPath for display
-  avatarPhotoPath       String?                @map("avatar_photo_path")
-  isWalkIn              Boolean                @default(false) @map("is_walk_in")
-  reclubUserId          Int?                   @map("reclub_user_id")
-  registrationAt        DateTime?              @map("registration_at")
-  registrationVenueId   String?                @map("registration_venue_id")
-  coachStaffId          String?                @map("coach_staff_id")
-  email                 String?                @unique @map("email")
-  password_hash         String?
-  playerIdentityId      String?                @map("player_identity_id")
-  bookings              Booking[]
-  programPasses         ProgramPass[]
-  coachLessons          CoachLesson[]
-  faceAttempts          FaceAttempt[]
-  faceRecognitionLogs   FaceRecognitionLog[]
-  memberships           Membership[]
-  openPlayRegistrations OpenPlayRegistration[]
-  pendingPayments       PendingPayment[]
-  accounts              PlayerAccount[]
-  appAuthLogs           PlayerAppAuthLog[]
-  coachCredits          PlayerCoachCredit[]
-  customPrices          PlayerCustomPrice[]
-  magicTokens           PlayerMagicToken[]
-  playerNotes           PlayerNote[]
-  playerRankings        PlayerRanking[]
-  stickerPacks          PlayerStickerPack[]
-  stickerPhotos         PlayerStickerPhoto[]
-  stickerResults        PlayerStickerResult[]
-  coachStaff            StaffMember?           @relation("PlayerCoachLink", fields: [coachStaffId], references: [id], onUpdate: NoAction)
-  playerIdentity        PlayerIdentity?        @relation(fields: [playerIdentityId], references: [id])
-  registrationVenue     Venue?                 @relation("PlayerRegistrationVenue", fields: [registrationVenueId], references: [id])
-  pushSubscriptions     PushSubscription[]
-  queueEntries          QueueEntry[]
-  signupDuplicateLogs   SignupDuplicateLog[]
-  stickerJobs           StickerJobQueue[]
-  stickerSessions       StickerSession[]
+  avatarPhotoPath         String?                @map("avatar_photo_path")
+  isWalkIn                Boolean                @default(false) @map("is_walk_in")
+  reclubUserId            Int?                   @map("reclub_user_id")
+  registrationAt          DateTime?              @map("registration_at")
+  registrationVenueId     String?                @map("registration_venue_id")
+  coachStaffId            String?                @map("coach_staff_id")
+  email                   String?                @unique @map("email")
+  password_hash           String?
+  playerIdentityId        String?                @map("player_identity_id")
+  /// Blurred + compressed copy of the first-registration check-in photo, generated async after registration for quality verification (served from /uploads/players/blurred/{id}.jpg)
+  blurredFacePhotoPath    String?                @map("blurred_face_photo_path")
+  bookings                Booking[]
+  programPasses           ProgramPass[]
+  coachLessons            CoachLesson[]
+  faceAttempts            FaceAttempt[]
+  faceRecognitionLogs     FaceRecognitionLog[]
+  memberships             Membership[]
+  openPlayRegistrations   OpenPlayRegistration[]
+  pendingPayments         PendingPayment[]
+  accounts                PlayerAccount[]
+  appAuthLogs             PlayerAppAuthLog[]
+  coachCredits            PlayerCoachCredit[]
+  customPrices            PlayerCustomPrice[]
+  magicTokens             PlayerMagicToken[]
+  playerNotes             PlayerNote[]
+  playerRankings          PlayerRanking[]
+  stickerPacks            PlayerStickerPack[]
+  stickerPhotos           PlayerStickerPhoto[]
+  stickerResults          PlayerStickerResult[]
+  coachStaff              StaffMember?           @relation("PlayerCoachLink", fields: [coachStaffId], references: [id], onUpdate: NoAction)
+  playerIdentity          PlayerIdentity?        @relation(fields: [playerIdentityId], references: [id])
+  registrationVenue       Venue?                 @relation("PlayerRegistrationVenue", fields: [registrationVenueId], references: [id])
+  pushSubscriptions       PushSubscription[]
+  queueEntries            QueueEntry[]
+  signupDuplicateLogs     SignupDuplicateLog[]
+  stickerJobs             StickerJobQueue[]
+  stickerSessions         StickerSession[]
 
   @@index([registrationVenueId])
   @@index([playerIdentityId])
@@ -1252,22 +1254,22 @@ model PlayerMagicToken {
 /// Defines a recurring program-pass product sold at a venue (e.g. "Beginner Group 12-session pass").
 /// cycleLengthDays is informational only — actual cycle boundaries are calendar-month-aligned in application code.
 model ProgramPassType {
-  id               String          @id @default(cuid())
-  venueId          String          @map("venue_id")
+  id               String                 @id @default(cuid())
+  venueId          String                 @map("venue_id")
   name             String
   price            Int
-  sessionsIncluded Int             @default(12) @map("sessions_included")
+  sessionsIncluded Int                    @default(12) @map("sessions_included")
   /// Informational only. Cycle renewal logic is calendar-month-aligned in application code.
-  cycleLengthDays  Int             @default(30) @map("cycle_length_days")
-  linkedCoachId    String?         @map("linked_coach_id")
-  isActive         Boolean         @default(true) @map("is_active")
-  createdAt        DateTime        @default(now()) @map("created_at")
-  updatedAt        DateTime        @updatedAt @map("updated_at")
+  cycleLengthDays  Int                    @default(30) @map("cycle_length_days")
+  linkedCoachId    String?                @map("linked_coach_id")
+  isActive         Boolean                @default(true) @map("is_active")
+  createdAt        DateTime               @default(now()) @map("created_at")
+  updatedAt        DateTime               @updatedAt @map("updated_at")
   classInstances   ClassInstance[]
   programPasses    ProgramPass[]
   coaches          ProgramPassTypeCoach[]
-  linkedCoach      StaffMember?    @relation(fields: [linkedCoachId], references: [id], map: "class_pass_tiers_linked_coach_id_fkey")
-  venue            Venue           @relation(fields: [venueId], references: [id], map: "class_pass_tiers_venue_id_fkey")
+  linkedCoach      StaffMember?           @relation(fields: [linkedCoachId], references: [id], map: "class_pass_tiers_linked_coach_id_fkey")
+  venue            Venue                  @relation(fields: [venueId], references: [id], map: "class_pass_tiers_venue_id_fkey")
 
   @@index([linkedCoachId], map: "class_pass_tiers_linked_coach_id_idx")
   @@index([venueId, isActive], map: "class_pass_tiers_venue_id_is_active_idx")
@@ -1337,23 +1339,23 @@ model ProgramPassPayment {
 
 /// A player's subscription to a ProgramPassType for a given cycle.
 model ProgramPass {
-  id                  String               @id @default(cuid())
-  playerId            String               @map("player_id")
-  venueId             String               @map("venue_id")
-  passTypeId          String               @map("pass_type_id")
-  status              ClassPassStatus      @default(active)
-  activatedAt         DateTime             @default(now()) @map("activated_at")
-  deferredStartDate   DateTime?            @map("deferred_start_date")
-  cycleStart          DateTime             @map("cycle_start")
-  cycleEnd            DateTime             @map("cycle_end")
-  sessionsUsed        Int                  @default(0) @map("sessions_used")
-  createdAt           DateTime             @default(now()) @map("created_at")
-  updatedAt           DateTime             @updatedAt @map("updated_at")
-  checkIns            ClassCheckIn[]
-  payments            ProgramPassPayment[]
-  player              Player               @relation(fields: [playerId], references: [id])
-  passType            ProgramPassType      @relation(fields: [passTypeId], references: [id], map: "class_passes_tier_id_fkey")
-  venue               Venue                @relation(fields: [venueId], references: [id])
+  id                String               @id @default(cuid())
+  playerId          String               @map("player_id")
+  venueId           String               @map("venue_id")
+  passTypeId        String               @map("pass_type_id")
+  status            ClassPassStatus      @default(active)
+  activatedAt       DateTime             @default(now()) @map("activated_at")
+  deferredStartDate DateTime?            @map("deferred_start_date")
+  cycleStart        DateTime             @map("cycle_start")
+  cycleEnd          DateTime             @map("cycle_end")
+  sessionsUsed      Int                  @default(0) @map("sessions_used")
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+  checkIns          ClassCheckIn[]
+  payments          ProgramPassPayment[]
+  player            Player               @relation(fields: [playerId], references: [id])
+  passType          ProgramPassType      @relation(fields: [passTypeId], references: [id], map: "class_passes_tier_id_fkey")
+  venue             Venue                @relation(fields: [venueId], references: [id])
 
   @@index([playerId, venueId])
   @@index([passTypeId], map: "class_passes_tier_id_idx")
@@ -1367,12 +1369,16 @@ model ProgramPassTypeCoach {
   passTypeId String          @map("pass_type_id")
   coachId    String          @map("coach_id")
   createdAt  DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
-  coach      StaffMember     @relation(fields: [coachId], references: [id], onDelete: Cascade)
-  passType   ProgramPassType @relation(fields: [passTypeId], references: [id], onDelete: Cascade)
+  coach      StaffMember     @relation(fields: [coachId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  passType   ProgramPassType @relation(fields: [passTypeId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([passTypeId, coachId])
   @@index([passTypeId])
   @@map("program_pass_type_coaches")
+}
+
+model schema_migrations {
+  version String @id @db.VarChar
 }
 
 enum SkillLevel {

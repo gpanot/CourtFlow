@@ -93,6 +93,8 @@ interface PlayerRecord {
   faceSubjectId?: string | null;
   /** First check-in face capture (staff “add with face”), served from /uploads/players */
   facePhotoPath?: string | null;
+  /** Blurred + compressed copy of the check-in photo (async), for quality verification */
+  blurredFacePhotoPath?: string | null;
   avatarPhotoPath?: string | null;
   gender: string;
   skillLevel: string;
@@ -1480,7 +1482,24 @@ function PlayerDetailPanel({
                 </button>
               </div>
               {/* Served from Express/static /uploads — same origin as admin */}
-              <CheckInFacePhotoBlock src={player.facePhotoPath} alt={`${player.name} check-in`} />
+              {player.blurredFacePhotoPath ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <p className="mb-1 text-center text-[10px] font-medium uppercase tracking-wide text-neutral-400">
+                      {t("players.photoEnrolled")}
+                    </p>
+                    <CheckInFacePhotoBlock src={player.facePhotoPath} alt={`${player.name} check-in`} />
+                  </div>
+                  <div>
+                    <p className="mb-1 text-center text-[10px] font-medium uppercase tracking-wide text-neutral-400">
+                      {t("players.photoBlurred")}
+                    </p>
+                    <CheckInFacePhotoBlock src={player.blurredFacePhotoPath} alt={`${player.name} blurred`} />
+                  </div>
+                </div>
+              ) : (
+                <CheckInFacePhotoBlock src={player.facePhotoPath} alt={`${player.name} check-in`} />
+              )}
             </div>
           )}
           {/* Edit form */}

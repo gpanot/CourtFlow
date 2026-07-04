@@ -372,6 +372,7 @@ export async function GET(request: NextRequest) {
         faceSubjectId: player.faceSubjectId,
         isWalkIn: player.isWalkIn,
         facePhotoPath: player.facePhotoPath,
+        blurredFacePhotoPath: player.blurredFacePhotoPath,
         avatarPhotoPath: player.avatarPhotoPath,
         gender: player.gender,
         skillLevel: player.skillLevel,

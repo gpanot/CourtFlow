@@ -1450,6 +1450,8 @@
     "tabProfile": "Profile",
     "tabStickers": "Stickers",
     "checkInPhoto": "Check-in photo (first face registration)",
+    "photoEnrolled": "Enrolled (JPG)",
+    "photoBlurred": "Blurred (compressed)",
     "download": "Download",
     "name": "Name",
     "phone": "Phone",
