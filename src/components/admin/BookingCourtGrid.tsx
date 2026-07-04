@@ -93,6 +93,8 @@ export interface BookingCourtGridProps {
   accentColor?: "purple" | "teal";
   /** Localized label for block/schedule types (maintenance, open_play, etc.) */
   blockTypeLabel?: (type: string) => string;
+  /** When editing a lesson, its slots stay individually selectable instead of a span card */
+  editableLessonId?: string;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -161,6 +163,7 @@ export function BookingCourtGrid({
   compact = false,
   accentColor = "purple",
   blockTypeLabel,
+  editableLessonId,
 }: BookingCourtGridProps) {
   const labelForBlockType = (type: string) =>
     blockTypeLabel?.(type) ?? DEFAULT_BLOCK_LABELS[type] ?? type;
@@ -311,6 +314,11 @@ export function BookingCourtGrid({
                 }
               }
 
+              const isEditableLessonSlot =
+                !!editableLessonId && lessonInfo?.lessonId === editableLessonId;
+              const isLessonStartDisplay = isLessonStart && lessonInfo && !isEditableLessonSlot;
+              const isLessonContinuationDisplay = isLessonContinuation && !isEditableLessonSlot;
+
               return (
                 <div
                   key={`${court.courtId}-${slot.startTime}`}
@@ -320,7 +328,7 @@ export function BookingCourtGrid({
                       !isContinuationSlot &&
                       !isBlockContinuation &&
                       !isSchedContinuation &&
-                      !isLessonContinuation &&
+                      !isLessonContinuationDisplay &&
                       "border-b border-b-neutral-800/30",
                     isPast && "bg-neutral-950/40",
                   )}
@@ -419,7 +427,7 @@ export function BookingCourtGrid({
                         </p>
                       </div>
                     </div>
-                  ) : isSchedContinuation ? null : isLessonStart && lessonInfo ? (
+                  ) : isSchedContinuation ? null : isLessonStartDisplay && lessonInfo ? (
                     <div
                       className="absolute inset-x-1 top-1 rounded-lg border bg-teal-600/20 border-teal-500/30 px-2 py-1.5 overflow-hidden flex flex-col justify-center z-[5]"
                       style={{ height: ROW_H * lessonSpan - 8 }}
@@ -437,10 +445,10 @@ export function BookingCourtGrid({
                         <p className="text-[10px] text-teal-400/50 truncate">{lessonInfo.packageName}</p>
                       )}
                     </div>
-                  ) : isLessonContinuation ? null : isPast ? (
+                  ) : isLessonContinuationDisplay ? null : isPast ? (
                     // Past slot — dark, not clickable
                     <div className="absolute inset-x-1 top-1 bottom-1 rounded-lg bg-neutral-900/60" />
-                  ) : courtSlot?.available ? (
+                  ) : courtSlot?.available || isEditableLessonSlot ? (
                     <button
                       onClick={() => onSlotClick?.(court.courtId, court.courtLabel, courtSlot)}
                       className={cn(

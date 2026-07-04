@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import adminI18n from "@/i18n/admin-i18n";
 import { api } from "@/lib/api-client";
@@ -27,7 +28,6 @@ import {
   Users,
   User,
   Search,
-  Check,
   TableProperties,
   Loader2,
   ZoomIn,
@@ -43,9 +43,12 @@ import {
   PaymentActionModal,
   type PaymentActionTarget,
 } from "@/components/admin/PaymentActionModal";
-import { StaffBookingModal } from "@/components/admin/StaffBookingModal";
-import { type CourtAvailability, type CourtSlot } from "@/components/admin/BookingCourtGrid";
+import { StaffBookingModal, type InitialCourtSelection } from "@/components/admin/StaffBookingModal";
+import { BookingCourtGrid, type CourtAvailability, type CourtSlot, type BookingRecord } from "@/components/admin/BookingCourtGrid";
 import { VenueDayPlanner } from "@/components/admin/VenueDayPlanner";
+import { BookingSelectionBar } from "@/components/admin/BookingSelectionBar";
+import { CourtBlockModal, type CourtBlockFormState } from "@/components/admin/CourtBlockModal";
+import { useBookingSlotSelection } from "@/hooks/useBookingSlotSelection";
 
 export const dynamic = "force-dynamic";
 
@@ -175,12 +178,26 @@ export default function CoachingPage() {
   );
   const [showStaffModal, setShowStaffModal] = useState(false);
   const [staffModalMode, setStaffModalMode] = useState<"court" | "open_play" | "lesson">("court");
+  const [staffModalInitialSelection, setStaffModalInitialSelection] = useState<InitialCourtSelection | undefined>();
+  const [staffModalDate, setStaffModalDate] = useState<string | undefined>();
   const [lessonsSelectedDate, setLessonsSelectedDate] = useState(() => localDateISO(new Date()));
   const lessonsRefreshRef = useRef<(() => Promise<void>) | null>(null);
 
-  const openStaffModal = (mode: "court" | "open_play" | "lesson" = "court") => {
+  const openStaffModal = (
+    mode: "court" | "open_play" | "lesson" = "court",
+    courtSelection?: InitialCourtSelection,
+    date?: string,
+  ) => {
     setStaffModalMode(mode);
+    setStaffModalInitialSelection(courtSelection);
+    setStaffModalDate(date);
     setShowStaffModal(true);
+  };
+
+  const closeStaffModal = () => {
+    setShowStaffModal(false);
+    setStaffModalInitialSelection(undefined);
+    setStaffModalDate(undefined);
   };
 
   return (
@@ -242,6 +259,7 @@ export default function CoachingPage() {
           venueId={selectedVenueId}
           onSelectedDateChange={setLessonsSelectedDate}
           lessonsRefreshRef={lessonsRefreshRef}
+          onBookFromSelection={(selection, date) => openStaffModal("court", selection, date)}
         />
       )}
       {selectedVenueId && tab === "list" && (
@@ -251,12 +269,13 @@ export default function CoachingPage() {
       {showStaffModal && selectedVenueId && (
         <StaffBookingModal
           venueId={selectedVenueId}
-          initialDate={lessonsSelectedDate}
+          initialDate={staffModalDate ?? lessonsSelectedDate}
+          initialCourtSelection={staffModalInitialSelection}
           allowModes={["court", "open_play", "lesson"]}
           initialMode={staffModalMode}
-          onClose={() => setShowStaffModal(false)}
+          onClose={closeStaffModal}
           onCreated={async () => {
-            setShowStaffModal(false);
+            closeStaffModal();
             await lessonsRefreshRef.current?.();
           }}
         />
@@ -376,7 +395,11 @@ function CoachesTab({ venueId }: { venueId: string }) {
           <GraduationCap className="h-10 w-10 text-neutral-600 mx-auto mb-3" />
           <p className="text-neutral-400 mb-2">{t("coaching.noCoaches")}</p>
           <p className="text-sm text-neutral-500">
-            {t("coaching.noCoachesHint")} <span className="text-teal-400">{t("coaching.staffManagement")}</span> {t("coaching.noCoachesHint2")}
+            {t("coaching.noCoachesHint")}{" "}
+            <Link href="/admin/staff" className="text-teal-400 hover:text-teal-300 hover:underline">
+              {t("coaching.staffManagement")}
+            </Link>{" "}
+            {t("coaching.noCoachesHint2")}
           </p>
         </div>
       )}
@@ -679,10 +702,12 @@ function LessonsTab({
   venueId,
   onSelectedDateChange,
   lessonsRefreshRef,
+  onBookFromSelection,
 }: {
   venueId: string;
   onSelectedDateChange?: (date: string) => void;
   lessonsRefreshRef?: React.MutableRefObject<(() => Promise<void>) | null>;
+  onBookFromSelection: (selection: InitialCourtSelection, date: string) => void;
 }) {
   const { t } = useTranslation("translation", { i18n: adminI18n });
   const getBlockTypeLabel = (type: string) => {
@@ -714,6 +739,7 @@ function LessonsTab({
   const [deleting, setDeleting] = useState(false);
 
   const [availability, setAvailability] = useState<CourtAvailability[]>([]);
+  const [courtBookings, setCourtBookings] = useState<BookingRecord[]>([]);
   const [loadingAvail, setLoadingAvail] = useState(false);
   const [bookDate, setBookDate] = useState(() => localDateISO(new Date()));
 
@@ -727,8 +753,11 @@ function LessonsTab({
     playerCount: 2,
   });
 
-  type SelectedSlot = { courtId: string; courtLabel: string; startTime: string; endTime: string; hour: number };
-  const [selectedSlots, setSelectedSlots] = useState<SelectedSlot[]>([]);
+  type EditSelectedSlot = { courtId: string; courtLabel: string; startTime: string; endTime: string; hour: number };
+  const [editSelectedSlots, setEditSelectedSlots] = useState<EditSelectedSlot[]>([]);
+
+  const [showBlockModal, setShowBlockModal] = useState(false);
+  const [blockModalInitial, setBlockModalInitial] = useState<Partial<CourtBlockFormState>>();
 
   useEffect(() => {
     api.get<{ id: string; timezone?: string }[]>("/api/admin/venues")
@@ -769,6 +798,17 @@ function LessonsTab({
     }
   }, [venueId]);
 
+  const fetchCourtBookings = useCallback(async (date: string) => {
+    try {
+      const data = await api.get<BookingRecord[]>(
+        `/api/staff/bookings?venueId=${venueId}&date=${date}`
+      );
+      setCourtBookings(data);
+    } catch {
+      setCourtBookings([]);
+    }
+  }, [venueId]);
+
   useEffect(() => {
     fetchLessons().catch(console.error);
   }, [fetchLessons]);
@@ -777,15 +817,19 @@ function LessonsTab({
     fetchMeta().catch(console.error);
   }, [fetchMeta]);
 
-  // Always fetch availability for the selected date (for the calendar grid)
+  // Always fetch availability + court bookings for the selected date (for the calendar grid)
   useEffect(() => {
     fetchAvailability(selectedDate);
-  }, [selectedDate, fetchAvailability]);
+    fetchCourtBookings(selectedDate);
+  }, [selectedDate, fetchAvailability, fetchCourtBookings]);
 
   // Re-fetch when edit modal uses a different date than the calendar
   useEffect(() => {
-    if (showEditModal && bookDate !== selectedDate) fetchAvailability(bookDate);
-  }, [showEditModal, bookDate, fetchAvailability, selectedDate]);
+    if (showEditModal && bookDate !== selectedDate) {
+      fetchAvailability(bookDate);
+      fetchCourtBookings(bookDate);
+    }
+  }, [showEditModal, bookDate, fetchAvailability, fetchCourtBookings, selectedDate]);
 
   useEffect(() => {
     onSelectedDateChange?.(selectedDate);
@@ -796,13 +840,59 @@ function LessonsTab({
     lessonsRefreshRef.current = async () => {
       await fetchLessons();
       await fetchAvailability(selectedDate);
+      await fetchCourtBookings(selectedDate);
     };
-  }, [lessonsRefreshRef, fetchLessons, fetchAvailability, selectedDate]);
+  }, [lessonsRefreshRef, fetchLessons, fetchAvailability, fetchCourtBookings, selectedDate]);
+
+  const plannerSlotTimes = availability.length > 0 ? availability[0].slots : [];
+
+  const bookingsByCourtAndTime = useMemo(() => {
+    const map = new Map<string, BookingRecord>();
+    courtBookings.forEach((b) => {
+      if (b.status === "confirmed" || b.status === "completed") {
+        const start = new Date(b.startTime).getTime();
+        const end = new Date(b.endTime).getTime();
+        plannerSlotTimes.forEach((slot) => {
+          const st = new Date(slot.startTime).getTime();
+          if (st >= start && st < end) {
+            map.set(`${b.courtId}_${slot.startTime}`, b);
+          }
+        });
+      }
+    });
+    return map;
+  }, [courtBookings, plannerSlotTimes]);
+
+  const gridBookings = useMemo(
+    () =>
+      courtBookings.map((b) => ({
+        id: b.id,
+        courtId: b.courtId,
+        playerId: b.playerId,
+        startTime: b.startTime,
+        endTime: b.endTime,
+        status: b.status,
+        priceValue: b.priceValue,
+        player: b.player,
+      })),
+    [courtBookings],
+  );
+
+  const {
+    selectedSlots: plannerSelectedSlots,
+    toggleSlotSelection,
+    clearSelection: clearPlannerSelection,
+    selectionSummary,
+    gridSelectedSlots,
+  } = useBookingSlotSelection(availability, {
+    isSlotDisabled: (courtId, slot) =>
+      bookingsByCourtAndTime.has(`${courtId}_${slot.startTime}`),
+  });
 
   const closeEditModal = () => {
     setShowEditModal(false);
     setEditingLesson(null);
-    setSelectedSlots([]);
+    setEditSelectedSlots([]);
     setConfirmDelete(false);
     setErr("");
   };
@@ -810,7 +900,7 @@ function LessonsTab({
   // When editing, auto-select the lesson's existing slots once availability loads
   useEffect(() => {
     if (!editingLesson || loadingAvail || availability.length === 0) return;
-    if (selectedSlots.length > 0) return; // already selected by user
+    if (editSelectedSlots.length > 0) return; // already selected by user
 
     const courtId = editingLesson.courtId;
     if (!courtId) return;
@@ -821,15 +911,15 @@ function LessonsTab({
     const lessonStart = new Date(editingLesson.startTime).getTime();
     const lessonEnd = new Date(editingLesson.endTime).getTime();
 
-    const slots: SelectedSlot[] = [];
+    const slots: EditSelectedSlot[] = [];
     for (const s of court.slots) {
       const t = new Date(s.startTime).getTime();
       if (t >= lessonStart && t < lessonEnd) {
         slots.push({ courtId, courtLabel: court.courtLabel, startTime: s.startTime, endTime: s.endTime, hour: s.hour });
       }
     }
-    if (slots.length > 0) setSelectedSlots(slots);
-  }, [editingLesson, loadingAvail, availability, selectedSlots.length]);
+    if (slots.length > 0) setEditSelectedSlots(slots);
+  }, [editingLesson, loadingAvail, availability, editSelectedSlots.length]);
 
   const selectedCoach = coaches.find((c) => c.id === bookForm.coachId);
   const coachPackages = selectedCoach?.packages || [];
@@ -856,7 +946,7 @@ function LessonsTab({
     });
     const lessonDate = localDateISO(new Date(lesson.date));
     setBookDate(lessonDate);
-    setSelectedSlots([]);
+    setEditSelectedSlots([]);
     setErr("");
     setConfirmDelete(false);
     setShowEditModal(true);
@@ -880,40 +970,36 @@ function LessonsTab({
   const isOwnLessonSlot = (slot: CourtSlot) =>
     editingLesson && slot.lesson?.lessonId === editingLesson.id;
 
-  const toggleSlot = (courtId: string, courtLabel: string, slot: CourtSlot) => {
+  const toggleEditSlot = (courtId: string, courtLabel: string, slot: CourtSlot) => {
     if (!slot.available && !isOwnLessonSlot(slot)) return;
 
-    const alreadySelected = selectedSlots.find((s) => s.courtId === courtId && s.startTime === slot.startTime);
+    const alreadySelected = editSelectedSlots.find((s) => s.courtId === courtId && s.startTime === slot.startTime);
 
     if (alreadySelected) {
-      // Clicking a selected slot: remove it and everything after it on this court
       const slotTime = new Date(slot.startTime).getTime();
-      setSelectedSlots(selectedSlots.filter((s) => s.courtId !== courtId || new Date(s.startTime).getTime() < slotTime));
+      setEditSelectedSlots(editSelectedSlots.filter((s) => s.courtId !== courtId || new Date(s.startTime).getTime() < slotTime));
       return;
     }
 
-    // Different court than current selection? Reset and start fresh on new court
-    if (selectedSlots.length > 0 && selectedSlots[0].courtId !== courtId) {
-      setSelectedSlots([{ courtId, courtLabel, startTime: slot.startTime, endTime: slot.endTime, hour: slot.hour }]);
+    if (editSelectedSlots.length > 0 && editSelectedSlots[0].courtId !== courtId) {
+      setEditSelectedSlots([{ courtId, courtLabel, startTime: slot.startTime, endTime: slot.endTime, hour: slot.hour }]);
       return;
     }
 
     const court = availability.find((c) => c.courtId === courtId);
     if (!court) return;
 
-    if (selectedSlots.length === 0) {
-      // First slot selection
-      setSelectedSlots([{ courtId, courtLabel, startTime: slot.startTime, endTime: slot.endTime, hour: slot.hour }]);
+    if (editSelectedSlots.length === 0) {
+      setEditSelectedSlots([{ courtId, courtLabel, startTime: slot.startTime, endTime: slot.endTime, hour: slot.hour }]);
       return;
     }
 
-    // Extend selection: fill the gap between current selection and clicked slot
-    const currentTimes = selectedSlots.map((s) => new Date(s.startTime).getTime());
+    const currentTimes = editSelectedSlots.map((s) => new Date(s.startTime).getTime());
     const clickedTime = new Date(slot.startTime).getTime();
     const minTime = Math.min(...currentTimes, clickedTime);
     const maxTime = Math.max(...currentTimes, clickedTime);
 
-    const newSlots: SelectedSlot[] = [];
+    const newSlots: EditSelectedSlot[] = [];
     let consecutive = true;
     for (const s of court.slots) {
       const t = new Date(s.startTime).getTime();
@@ -925,23 +1011,66 @@ function LessonsTab({
     }
 
     if (consecutive && newSlots.length > 0) {
-      setSelectedSlots(newSlots);
+      setEditSelectedSlots(newSlots);
     }
   };
 
-  const isSlotSelected = (courtId: string, startTime: string) =>
-    selectedSlots.some((s) => s.courtId === courtId && s.startTime === startTime);
+  const editGridSelectedSlots = useMemo(() => {
+    const map: Record<string, Set<string>> = {};
+    for (const s of editSelectedSlots) {
+      if (!map[s.courtId]) map[s.courtId] = new Set();
+      map[s.courtId].add(s.startTime);
+    }
+    return map;
+  }, [editSelectedSlots]);
+
+  const selectionCourtIds = Object.keys(plannerSelectedSlots);
+
+  const openCreateFromSelection = () => {
+    if (!selectionSummary?.canBook) return;
+    const cid = selectionCourtIds[0];
+    const entry = plannerSelectedSlots[cid];
+    const sorted = [...entry.slots].sort(
+      (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
+    );
+    onBookFromSelection(
+      {
+        courtId: cid,
+        courtLabel: entry.courtLabel,
+        slots: sorted.map((s) => ({
+          startTime: s.startTime,
+          endTime: s.endTime,
+          hour: s.hour,
+        })),
+      },
+      selectedDate,
+    );
+    clearPlannerSelection();
+  };
+
+  const openBlockFromSelection = () => {
+    if (!selectionSummary) return;
+    setBlockModalInitial({
+      type: "maintenance",
+      title: "",
+      note: "",
+      courtIds: [...selectionCourtIds],
+      startHour: String(selectionSummary.startHour),
+      endHour: String(selectionSummary.endHour),
+    });
+    setShowBlockModal(true);
+  };
 
   const handleBook = async () => {
-    if (!editingLesson || !bookForm.coachId || !bookForm.packageId || !bookForm.playerId || selectedSlots.length === 0) {
+    if (!editingLesson || !bookForm.coachId || !bookForm.packageId || !bookForm.playerId || editSelectedSlots.length === 0) {
       setErr("Coach, package, player, and time slot are required");
       return;
     }
     setSaving(true);
     setErr("");
     try {
-      const firstSlot = selectedSlots[0];
-      const lastSlot = selectedSlots[selectedSlots.length - 1];
+      const firstSlot = editSelectedSlots[0];
+      const lastSlot = editSelectedSlots[editSelectedSlots.length - 1];
 
       await api.patch(`/api/admin/coach-lessons/${editingLesson.id}`, {
         coachId: bookForm.coachId,
@@ -989,8 +1118,6 @@ function LessonsTab({
   const activeLessons = lessons.filter((l) => l.status !== "cancelled");
   const cancelledLessons = lessons.filter((l) => l.status === "cancelled");
 
-  const SLOT_H = 40;
-
   return (
     <div className="space-y-4">
       <VenueDayPlanner
@@ -1001,8 +1128,42 @@ function LessonsTab({
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         viewModeStorageKey="coaching-view-mode"
+        bookings={gridBookings}
         blockTypeLabel={getBlockTypeLabel}
+        selectedSlots={gridSelectedSlots}
+        onSlotClick={(courtId, _courtLabel, slot) => {
+          const court = availability.find((c) => c.courtId === courtId);
+          if (court) toggleSlotSelection(court, slot);
+        }}
+        toolbarExtra={
+          <BookingSelectionBar
+            summary={selectionSummary}
+            timezone={venueTimezone}
+            onBlock={openBlockFromSelection}
+            onBook={openCreateFromSelection}
+            onClear={clearPlannerSelection}
+          />
+        }
         emptyHint={t("coaching.noLessons")}
+      />
+
+      <CourtBlockModal
+        open={showBlockModal}
+        onClose={() => {
+          setShowBlockModal(false);
+          clearPlannerSelection();
+        }}
+        venueId={venueId}
+        date={selectedDate}
+        timezone={venueTimezone}
+        availability={availability}
+        initialForm={blockModalInitial}
+        onCreated={async () => {
+          await fetchAvailability(selectedDate);
+          await fetchCourtBookings(selectedDate);
+          await fetchLessons();
+          clearPlannerSelection();
+        }}
       />
 
       {/* Lessons List — day detail section */}
@@ -1150,7 +1311,7 @@ function LessonsTab({
                   <label className="mb-1.5 block text-sm text-neutral-400">{t("coaching.coach")}</label>
                   <select
                     value={bookForm.coachId}
-                    onChange={(e) => { setBookForm({ ...bookForm, coachId: e.target.value, packageId: "" }); setSelectedSlots([]); }}
+                    onChange={(e) => { setBookForm({ ...bookForm, coachId: e.target.value, packageId: "" }); setEditSelectedSlots([]); }}
                     className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-sm text-white focus:border-teal-500 focus:outline-none"
                   >
                     <option value="">{t("coaching.selectCoach")}</option>
@@ -1168,7 +1329,7 @@ function LessonsTab({
                     ) : (
                       <select
                         value={bookForm.packageId}
-                        onChange={(e) => { setBookForm({ ...bookForm, packageId: e.target.value }); setSelectedSlots([]); }}
+                        onChange={(e) => { setBookForm({ ...bookForm, packageId: e.target.value }); setEditSelectedSlots([]); }}
                         className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-sm text-white focus:border-teal-500 focus:outline-none"
                       >
                         <option value="">{t("coaching.selectPackage")}</option>
@@ -1291,22 +1452,22 @@ function LessonsTab({
                 )}
 
                 {/* Selection summary */}
-                {selectedSlots.length > 0 && (
+                {editSelectedSlots.length > 0 && (
                   <div className="rounded-lg border border-teal-600/40 bg-teal-600/10 p-3">
                     <p className="text-xs text-teal-400 font-medium mb-1">
-                      {t("coaching.slotsSelected", { count: selectedSlots.length })}
+                      {t("coaching.slotsSelected", { count: editSelectedSlots.length })}
                     </p>
-                    <p className="text-sm font-semibold">{selectedSlots[0].courtLabel}</p>
+                    <p className="text-sm font-semibold">{editSelectedSlots[0].courtLabel}</p>
                     <p className="text-xs text-neutral-400">
-                      {formatSlotTime(selectedSlots[0].startTime, venueTimezone)} – {formatSlotTime(selectedSlots[selectedSlots.length - 1].endTime, venueTimezone)}
-                      {" · "}{selectedSlots.length}h
+                      {formatSlotTime(editSelectedSlots[0].startTime, venueTimezone)} – {formatSlotTime(editSelectedSlots[editSelectedSlots.length - 1].endTime, venueTimezone)}
+                      {" · "}{editSelectedSlots.length}h
                     </p>
                     {selectedPkg && (
                       <p className="text-xs text-teal-400 mt-1">
                         {formatPrice(vndToDisplay(
                           hasGroupPlayerPricing(selectedPkg)
-                            ? calculateSessionPrice(selectedPkg, { playerCount: bookForm.playerCount, slotCount: selectedSlots.length })
-                            : Math.round((selectedPkg.priceValue / selectedPkg.durationMin) * selectedSlots.length * 60)
+                            ? calculateSessionPrice(selectedPkg, { playerCount: bookForm.playerCount, slotCount: editSelectedSlots.length })
+                            : Math.round((selectedPkg.priceValue / selectedPkg.durationMin) * editSelectedSlots.length * 60)
                         ))} VND
                       </p>
                     )}
@@ -1315,7 +1476,7 @@ function LessonsTab({
 
                 <button
                   onClick={handleBook}
-                  disabled={saving || deleting || !bookForm.coachId || !bookForm.packageId || !bookForm.playerId || selectedSlots.length === 0}
+                  disabled={saving || deleting || !bookForm.coachId || !bookForm.packageId || !bookForm.playerId || editSelectedSlots.length === 0}
                   className="w-full rounded-xl bg-teal-600 py-3 font-semibold text-white hover:bg-teal-500 disabled:opacity-50"
                 >
                   {saving ? t("common.saving") : t("common.save")}
@@ -1359,12 +1520,12 @@ function LessonsTab({
                   <input
                     type="date"
                     value={bookDate}
-                    onChange={(e) => { setBookDate(e.target.value); setSelectedSlots([]); }}
+                    onChange={(e) => { setBookDate(e.target.value); setEditSelectedSlots([]); }}
                     className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-white focus:border-teal-500 focus:outline-none"
                   />
                   <span className="text-xs text-neutral-500">
-                    {selectedSlots.length > 0
-                      ? `${selectedSlots.length} slot${selectedSlots.length > 1 ? "s" : ""} selected (${selectedSlots.length}h)`
+                    {editSelectedSlots.length > 0
+                      ? `${editSelectedSlots.length} slot${editSelectedSlots.length > 1 ? "s" : ""} selected (${editSelectedSlots.length}h)`
                       : "Click slots to select time"}
                   </span>
                 </div>
@@ -1383,80 +1544,18 @@ function LessonsTab({
                 </div>
               ) : (
                 <div className="flex-1 overflow-auto">
-                  <div
-                    className="inline-grid min-w-full"
-                    style={{
-                      gridTemplateColumns: `60px repeat(${availability.length}, minmax(90px, 1fr))`,
-                    }}
-                  >
-                    {/* Header row */}
-                    <div className="sticky top-0 z-10 bg-neutral-900 border-b border-neutral-800" />
-                    {availability.map((court) => (
-                      <div key={court.courtId}
-                        className="sticky top-0 z-10 bg-neutral-900 border-b border-neutral-800 px-2 py-2 text-center">
-                        <span className="text-xs font-semibold text-neutral-300">{court.courtLabel}</span>
-                      </div>
-                    ))}
-
-                    {/* Time rows */}
-                    {(availability[0]?.slots || []).map((slot, rowIdx) => {
-                      const isLast = rowIdx === availability[0].slots.length - 1;
-                      return [
-                        <div key={`t-${slot.startTime}`}
-                          className={cn("border-r border-neutral-800 px-1.5 flex items-start pt-1 bg-neutral-950", !isLast && "border-b border-b-neutral-800/50")}
-                          style={{ height: SLOT_H }}>
-                          <span className="text-[10px] font-medium text-neutral-500">{formatSlotTime(slot.startTime, venueTimezone)}</span>
-                        </div>,
-                        ...availability.map((court) => {
-                          const cs = court.slots[rowIdx];
-                          const selected = isSlotSelected(court.courtId, cs.startTime);
-                          const ownLesson = editingLesson && cs.lesson?.lessonId === editingLesson.id;
-                          const isAvail = cs.available || ownLesson;
-                          const hasBlock = !!cs.block;
-                          const hasSchedule = !!cs.schedule;
-                          const hasLesson = !!cs.lesson && !ownLesson;
-
-                          return (
-                            <div key={`${court.courtId}-${cs.startTime}`}
-                              className={cn("relative border-l border-neutral-800/40", !isLast && "border-b border-b-neutral-800/30")}
-                              style={{ height: SLOT_H }}>
-                              {isAvail ? (
-                                <button
-                                  onClick={() => toggleSlot(court.courtId, court.courtLabel, cs)}
-                                  className={cn(
-                                    "absolute inset-x-0.5 top-0.5 bottom-0.5 rounded flex items-center justify-center transition-colors text-[10px]",
-                                    selected
-                                      ? "border border-teal-500 bg-teal-600/30 text-teal-200 ring-1 ring-teal-500/50"
-                                      : ownLesson
-                                        ? "border border-dashed border-teal-600/40 bg-teal-600/10 text-teal-500 hover:border-teal-500/60 hover:bg-teal-600/20"
-                                        : "border border-dashed border-neutral-800/60 text-neutral-600 hover:border-teal-500/40 hover:bg-teal-600/5 hover:text-teal-400"
-                                  )}
-                                >
-                                  {selected ? <Check className="h-3 w-3" /> : null}
-                                </button>
-                              ) : hasLesson && cs.lesson ? (
-                                <div className="absolute inset-x-0.5 top-0.5 bottom-0.5 rounded bg-teal-600/20 border border-teal-500/20 flex items-center px-1.5 overflow-hidden">
-                                  <span className="text-[9px] text-teal-400 truncate">{cs.lesson.coachName}</span>
-                                </div>
-                              ) : hasBlock ? (
-                                <div className="absolute inset-x-0.5 top-0.5 bottom-0.5 rounded bg-neutral-700/30 border border-neutral-700/30 flex items-center px-1.5 overflow-hidden">
-                                  <span className="text-[9px] text-neutral-500 truncate">{cs.block?.title || "Blocked"}</span>
-                                </div>
-                              ) : hasSchedule ? (
-                                <div className="absolute inset-x-0.5 top-0.5 bottom-0.5 rounded bg-emerald-600/15 border border-emerald-500/20 flex items-center px-1.5 overflow-hidden">
-                                  <span className="text-[9px] text-emerald-500 truncate">{cs.schedule?.title || "Scheduled"}</span>
-                                </div>
-                              ) : (
-                                <div className="absolute inset-x-0.5 top-0.5 bottom-0.5 rounded bg-purple-600/15 border border-purple-500/20 flex items-center px-1.5 overflow-hidden">
-                                  <span className="text-[9px] text-purple-400 truncate">{t("coaching.slotBooked")}</span>
-                                </div>
-                              )}
-                            </div>
-                          );
-                        }),
-                      ];
-                    })}
-                  </div>
+                  <BookingCourtGrid
+                    availability={availability}
+                    date={bookDate}
+                    timezone={venueTimezone}
+                    bookings={gridBookings}
+                    selectedSlots={editGridSelectedSlots}
+                    onSlotClick={toggleEditSlot}
+                    blockTypeLabel={getBlockTypeLabel}
+                    editableLessonId={editingLesson.id}
+                    compact
+                    accentColor="teal"
+                  />
                 </div>
               )}
             </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import adminI18n from "@/i18n/admin-i18n";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -17,7 +17,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
-  XCircle,
   AlertTriangle,
   Search,
   Clock,
@@ -51,6 +50,11 @@ import {
 import { StaffBookingModal, type InitialCourtSelection } from "@/components/admin/StaffBookingModal";
 import { VenueDayPlanner } from "@/components/admin/VenueDayPlanner";
 import { type CourtSlot } from "@/components/admin/BookingCourtGrid";
+import {
+  BookingSelectionBar,
+} from "@/components/admin/BookingSelectionBar";
+import { CourtBlockModal, type CourtBlockFormState } from "@/components/admin/CourtBlockModal";
+import { useBookingSlotSelection } from "@/hooks/useBookingSlotSelection";
 
 export const dynamic = "force-dynamic";
 
@@ -272,9 +276,6 @@ export default function BookingsPage() {
   const [bookings, setBookings] = useState<BookingRecord[]>([]);
   const [availability, setAvailability] = useState<CourtSlotData[]>([]);
 
-  // Unified slot selection state — supports multiple courts
-  const [selectedSlots, setSelectedSlots] = useState<Record<string, { courtLabel: string; slots: SlotInfo[] }>>({});
-
   // Unified staff booking modal (Court + Open Play + Lesson via StaffBookingModal)
   const [showStaffModal, setShowStaffModal] = useState(false);
   const [staffModalMode, setStaffModalMode] = useState<"court" | "open_play" | "lesson">("court");
@@ -303,14 +304,7 @@ export default function BookingsPage() {
   // Court block state
   const [courtBlocks, setCourtBlocks] = useState<CourtBlockRecord[]>([]);
   const [showBlockModal, setShowBlockModal] = useState(false);
-  const [blockForm, setBlockForm] = useState({
-    type: "maintenance" as string,
-    title: "",
-    note: "",
-    courtIds: [] as string[],
-    startHour: "",
-    endHour: "",
-  });
+  const [blockModalInitial, setBlockModalInitial] = useState<Partial<CourtBlockFormState>>();
 
   const fetchVenues = useCallback(async () => {
     try {
@@ -399,49 +393,33 @@ export default function BookingsPage() {
 
   const allSlotTimes = availability.length > 0 ? availability[0].slots : [];
 
-  const bookingsByCourtAndTime = new Map<string, BookingRecord>();
-  bookings.forEach((b) => {
-    if (b.status === "confirmed" || b.status === "completed") {
-      const start = new Date(b.startTime).getTime();
-      const end = new Date(b.endTime).getTime();
-      allSlotTimes.forEach((slot) => {
-        const st = new Date(slot.startTime).getTime();
-        if (st >= start && st < end) {
-          bookingsByCourtAndTime.set(`${b.courtId}_${slot.startTime}`, b);
-        }
-      });
-    }
-  });
-
-  const toggleSlotSelection = (court: CourtSlotData, slot: SlotInfo) => {
-    const isBooked = bookingsByCourtAndTime.has(`${court.courtId}_${slot.startTime}`);
-    if (isBooked || !slot.available) return;
-
-    setSelectedSlots((prev) => {
-      const existing = prev[court.courtId];
-      if (!existing) {
-        return { ...prev, [court.courtId]: { courtLabel: court.courtLabel, slots: [slot] } };
+  const bookingsByCourtAndTime = useMemo(() => {
+    const map = new Map<string, BookingRecord>();
+    bookings.forEach((b) => {
+      if (b.status === "confirmed" || b.status === "completed") {
+        const start = new Date(b.startTime).getTime();
+        const end = new Date(b.endTime).getTime();
+        allSlotTimes.forEach((slot) => {
+          const st = new Date(slot.startTime).getTime();
+          if (st >= start && st < end) {
+            map.set(`${b.courtId}_${slot.startTime}`, b);
+          }
+        });
       }
-
-      const already = existing.slots.find((s) => s.startTime === slot.startTime);
-      if (already) {
-        const remaining = existing.slots.filter((s) => s.startTime !== slot.startTime);
-        if (remaining.length === 0) {
-          const next = { ...prev };
-          delete next[court.courtId];
-          return next;
-        }
-        return { ...prev, [court.courtId]: { ...existing, slots: remaining } };
-      }
-
-      const newSlots = [...existing.slots, slot].sort(
-        (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
-      );
-      return { ...prev, [court.courtId]: { ...existing, slots: newSlots } };
     });
-  };
+    return map;
+  }, [bookings, allSlotTimes]);
 
-  const clearSelection = () => setSelectedSlots({});
+  const {
+    selectedSlots,
+    toggleSlotSelection,
+    clearSelection,
+    selectionSummary,
+    gridSelectedSlots,
+  } = useBookingSlotSelection(availability, {
+    isSlotDisabled: (courtId, slot) =>
+      bookingsByCourtAndTime.has(`${courtId}_${slot.startTime}`),
+  });
 
   const openStaffModal = (mode: "court" | "open_play" | "lesson", courtSelection?: InitialCourtSelection) => {
     setStaffModalMode(mode);
@@ -456,36 +434,9 @@ export default function BookingsPage() {
   };
 
   const selectionCourtIds = Object.keys(selectedSlots);
-  const selectionTotalSlots = selectionCourtIds.reduce((sum, cid) => sum + selectedSlots[cid].slots.length, 0);
-  const hasSelection = selectionTotalSlots > 0;
-
-  const selectionTimeRange = (() => {
-    const allSelected: SlotInfo[] = [];
-    selectionCourtIds.forEach((cid) => allSelected.push(...selectedSlots[cid].slots));
-    if (allSelected.length === 0) return null;
-    allSelected.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-    return { first: allSelected[0], last: allSelected[allSelected.length - 1] };
-  })();
-
-  const selectionTotalPrice = selectionCourtIds.reduce(
-    (sum, cid) => sum + selectedSlots[cid].slots.reduce((s, sl) => s + sl.priceValue, 0), 0
-  );
-
-  const canBookFromSelection = (() => {
-    if (selectionCourtIds.length !== 1) return false;
-    const cid = selectionCourtIds[0];
-    const slots = selectedSlots[cid].slots;
-    if (slots.length === 0) return false;
-    const courtData = availability.find((c) => c.courtId === cid);
-    if (!courtData) return false;
-    const indices = slots
-      .map((s) => courtData.slots.findIndex((cs) => cs.startTime === s.startTime))
-      .sort((a, b) => a - b);
-    return indices.every((v, i) => i === 0 || v === indices[i - 1] + 1);
-  })();
 
   const openCreateFromSelection = () => {
-    if (!canBookFromSelection) return;
+    if (!selectionSummary?.canBook) return;
     const cid = selectionCourtIds[0];
     const entry = selectedSlots[cid];
     const sorted = [...entry.slots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
@@ -501,17 +452,14 @@ export default function BookingsPage() {
   };
 
   const openBlockFromSelection = (presetType?: string) => {
-    if (!hasSelection || !selectionTimeRange) return;
-    const startHour = selectionTimeRange.first.hour;
-    const lastSlotEnd = new Date(selectionTimeRange.last.endTime);
-    const endHour = lastSlotEnd.getHours();
-    setBlockForm({
+    if (!selectionSummary) return;
+    setBlockModalInitial({
       type: presetType || "maintenance",
       title: "",
       note: "",
       courtIds: [...selectionCourtIds],
-      startHour: String(startHour),
-      endHour: String(endHour),
+      startHour: String(selectionSummary.startHour),
+      endHour: String(selectionSummary.endHour),
     });
     setShowBlockModal(true);
   };
@@ -605,38 +553,15 @@ export default function BookingsPage() {
   };
 
   const openBlockModal = (presetType?: string) => {
-    setBlockForm({ type: presetType || "maintenance", title: "", note: "", courtIds: [], startHour: "", endHour: "" });
+    setBlockModalInitial({
+      type: presetType || "maintenance",
+      title: "",
+      note: "",
+      courtIds: [],
+      startHour: "",
+      endHour: "",
+    });
     setShowBlockModal(true);
-  };
-
-  const createBlock = async () => {
-    if (!blockForm.courtIds.length || !blockForm.startHour || !blockForm.endHour) return;
-    setSaving(true);
-    try {
-      // Use the YYYY-MM-DD string directly so the API always gets the right calendar date.
-      // Build startTime/endTime from ISO strings with explicit +07:00 offset so they survive
-      // JSON serialisation without drifting to the previous UTC day.
-      const tz = "+07:00";
-      const startHour = parseInt(blockForm.startHour).toString().padStart(2, "0");
-      const endHour = parseInt(blockForm.endHour).toString().padStart(2, "0");
-      const startTime = new Date(`${selectedDate}T${startHour}:00:00${tz}`);
-      const endTime = new Date(`${selectedDate}T${endHour}:00:00${tz}`);
-
-      await api.post("/api/admin/court-blocks", {
-        venueId: selectedVenueId,
-        type: blockForm.type,
-        title: blockForm.title || undefined,
-        note: blockForm.note || undefined,
-        courtIds: blockForm.courtIds,
-        date: selectedDate,
-        startTime: startTime.toISOString(),
-        endTime: endTime.toISOString(),
-      });
-      setShowBlockModal(false);
-      await fetchAvailability();
-      await fetchCourtBlocks();
-    } catch (e) { alert((e as Error).message); }
-    finally { setSaving(false); }
   };
 
   const deleteBlock = async (id: string) => {
@@ -646,15 +571,6 @@ export default function BookingsPage() {
       await fetchAvailability();
       await fetchCourtBlocks();
     } catch (e) { alert((e as Error).message); }
-  };
-
-  const toggleBlockCourt = (courtId: string) => {
-    setBlockForm((prev) => ({
-      ...prev,
-      courtIds: prev.courtIds.includes(courtId)
-        ? prev.courtIds.filter((id) => id !== courtId)
-        : [...prev.courtIds, courtId],
-    }));
   };
 
   const availableSlotsForCourt = (courtId: string, excludeStartTime?: string): SlotInfo[] => {
@@ -789,12 +705,7 @@ export default function BookingsPage() {
           priceValue: b.priceValue,
           player: b.player,
         }))}
-        selectedSlots={Object.fromEntries(
-          Object.entries(selectedSlots).map(([cid, entry]) => [
-            cid,
-            new Set(entry.slots.map((s) => s.startTime)),
-          ])
-        )}
+        selectedSlots={gridSelectedSlots}
         onSlotClick={(courtId, courtLabel, slot) => {
           const court = availability.find((c) => c.courtId === courtId);
           if (court) toggleSlotSelection(court, slot);
@@ -805,45 +716,13 @@ export default function BookingsPage() {
         }}
         blockTypeLabel={getBlockTypeLabel}
         toolbarExtra={
-          hasSelection && selectionTimeRange ? (
-            <div className="flex items-center gap-2 rounded-2xl border border-purple-500/40 bg-neutral-900/95 backdrop-blur px-3 py-1.5 shadow-lg shadow-purple-900/20 animate-in fade-in duration-150">
-              <div className="min-w-0">
-                <p className="text-xs font-semibold text-white truncate">
-                  {selectionCourtIds.length === 1
-                    ? selectedSlots[selectionCourtIds[0]].courtLabel
-                    : `${selectionCourtIds.length} ${t("bookings.courtsPlural")}`}
-                  {" "}— {selectionTotalSlots} {selectionTotalSlots > 1 ? t("bookings.slotsPlural") : t("bookings.slot")}
-                </p>
-                <p className="text-[10px] text-neutral-400">
-                  {formatTime(selectionTimeRange.first.startTime, venueTimezone)} – {formatTime(selectionTimeRange.last.endTime, venueTimezone)}
-                  {canBookFromSelection && (
-                    <span className="ml-1.5 font-medium text-purple-400">{fmtPrice(selectionTotalPrice)}</span>
-                  )}
-                </p>
-              </div>
-              <button
-                onClick={() => openBlockFromSelection()}
-                className="flex items-center gap-1 rounded-lg border border-amber-600/50 bg-amber-600/20 px-2 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-600/30 transition-colors"
-              >
-                <Ban className="h-3.5 w-3.5" /> {t("bookings.block")}
-              </button>
-              <button
-                onClick={openCreateFromSelection}
-                disabled={!canBookFromSelection}
-                className="flex items-center gap-1 rounded-lg bg-purple-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-purple-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                title={!canBookFromSelection ? t("bookings.consecutiveSlotsHint") : ""}
-              >
-                <Plus className="h-3.5 w-3.5" /> {t("bookings.book")}
-              </button>
-              <button
-                onClick={clearSelection}
-                className="rounded-md p-1 text-neutral-400 hover:bg-neutral-800 hover:text-white transition-colors"
-                title="Clear selection"
-              >
-                <XCircle className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ) : undefined
+          <BookingSelectionBar
+            summary={selectionSummary}
+            timezone={venueTimezone}
+            onBlock={() => openBlockFromSelection()}
+            onBook={openCreateFromSelection}
+            onClear={clearSelection}
+          />
         }
         emptyHint={t("bookings.enableBookableHint")}
       />
@@ -1228,123 +1107,23 @@ export default function BookingsPage() {
         />
       )}
 
-      {/* Block Time Modal */}
-      {showBlockModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => setShowBlockModal(false)}>
-          <div className="w-full max-w-md mx-4 rounded-2xl border border-neutral-700 bg-neutral-900 p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-lg font-bold flex items-center gap-2">
-              {blockForm.type === "open_play" ? <Users className="h-5 w-5 text-emerald-400" /> :
-               blockForm.type === "competition" ? <Trophy className="h-5 w-5 text-blue-400" /> :
-               <Ban className="h-5 w-5 text-neutral-400" />}
-              {blockForm.type === "open_play" ? t("bookings.scheduleOpenPlay") :
-               blockForm.type === "competition" ? t("bookings.scheduleCompetition") :
-               t("bookings.blockCourtTime")}
-            </h3>
-            <p className="text-xs text-neutral-500">
-              {new Date(selectedDate + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
-            </p>
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs text-neutral-400">{t("bookings.type")}</label>
-                <select value={blockForm.type} onChange={(e) => setBlockForm({ ...blockForm, type: e.target.value })}
-                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none">
-                  <option value="open_play">{t("bookings.openPlay")}</option>
-                  <option value="competition">{t("bookings.competition")}</option>
-                  <option value="private_event">{t("bookings.privateEvent")}</option>
-                  <option value="private_competition">{t("bookings.privateCompetition")}</option>
-                  <option value="maintenance">{t("bookings.maintenance")}</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs text-neutral-400">{t("bookings.titleOptional")}</label>
-                <input type="text" value={blockForm.title}
-                  onChange={(e) => setBlockForm({ ...blockForm, title: e.target.value })}
-                  placeholder={blockForm.type === "maintenance" ? t("bookings.courtResurfacingPlaceholder") : t("bookings.teamBuildingPlaceholder")}
-                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none" />
-              </div>
-
-              <div>
-                <label className="text-xs text-neutral-400 mb-1.5 block">{t("bookings.courts")}</label>
-                <div className="flex flex-wrap gap-2">
-                  {availability.map((c) => (
-                    <button key={c.courtId} onClick={() => toggleBlockCourt(c.courtId)}
-                      className={cn(
-                        "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
-                        blockForm.courtIds.includes(c.courtId)
-                          ? "border-amber-500 bg-amber-600/20 text-amber-300"
-                          : "border-neutral-700 bg-neutral-800 text-neutral-400 hover:border-neutral-600"
-                      )}>
-                      {c.courtLabel}
-                    </button>
-                  ))}
-                  {availability.length > 1 && (
-                    <button
-                      onClick={() => setBlockForm({ ...blockForm, courtIds: blockForm.courtIds.length === availability.length ? [] : availability.map((c) => c.courtId) })}
-                      className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-xs text-neutral-500 hover:text-white transition-colors">
-                      {blockForm.courtIds.length === availability.length ? t("common.deselectAll") : t("common.selectAll")}
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-neutral-400">{t("bookings.startHour")}</label>
-                  <select value={blockForm.startHour} onChange={(e) => setBlockForm({ ...blockForm, startHour: e.target.value })}
-                    className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none">
-                    <option value="">{t("bookings.select")}</option>
-                    {allSlotTimes.map((s) => (
-                      <option key={s.startTime} value={String(s.hour)}>{formatTime(s.startTime, venueTimezone)}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-neutral-400">{t("bookings.endHour")}</label>
-                  <select value={blockForm.endHour} onChange={(e) => setBlockForm({ ...blockForm, endHour: e.target.value })}
-                    className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none">
-                    <option value="">{t("bookings.select")}</option>
-                    {allSlotTimes.filter((s) => !blockForm.startHour || s.hour >= parseInt(blockForm.startHour)).map((s) => (
-                      <option key={s.endTime} value={String(s.hour + 1)}>{formatTime(s.endTime, venueTimezone)}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="text-xs text-neutral-400">{t("bookings.notesOptional")}</label>
-                <textarea value={blockForm.note}
-                  onChange={(e) => setBlockForm({ ...blockForm, note: e.target.value })}
-                  placeholder={t("bookings.additionalDetails")}
-                  rows={2}
-                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none resize-none" />
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button onClick={createBlock}
-                disabled={saving || !blockForm.courtIds.length || !blockForm.startHour || !blockForm.endHour}
-                className={cn(
-                  "flex-1 rounded-xl py-3 font-semibold text-white disabled:opacity-40",
-                  blockForm.type === "open_play" ? "bg-emerald-600 hover:bg-emerald-500" :
-                  blockForm.type === "competition" ? "bg-blue-600 hover:bg-blue-500" :
-                  "bg-amber-600 hover:bg-amber-500"
-                )}>
-                {saving
-                  ? t("bookings.saving")
-                  : blockForm.type === "open_play"
-                    ? t("bookings.createOpenPlay")
-                    : blockForm.type === "competition"
-                      ? t("bookings.createCompetition")
-                      : t("bookings.blockTime")}
-              </button>
-              <button onClick={() => setShowBlockModal(false)}
-                className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700">{t("common.cancel")}</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CourtBlockModal
+        open={showBlockModal}
+        onClose={() => {
+          setShowBlockModal(false);
+          clearSelection();
+        }}
+        venueId={selectedVenueId}
+        date={selectedDate}
+        timezone={venueTimezone}
+        availability={availability}
+        initialForm={blockModalInitial}
+        onCreated={async () => {
+          await fetchAvailability();
+          await fetchCourtBlocks();
+          clearSelection();
+        }}
+      />
 
       
     </div>
