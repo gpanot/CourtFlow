@@ -19,7 +19,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 # Install dbmate + psql for schema migrations at container startup
 RUN apk add --no-cache curl postgresql-client && \
-    curl -fsSL -o /usr/local/bin/dbmate https://github.com/amacneil/dbmate/releases/latest/download/dbmate-linux-musl-amd64 && \
+    curl -fsSL -o /usr/local/bin/dbmate https://github.com/amacneil/dbmate/releases/download/v2.33.0/dbmate-linux-amd64 && \
     chmod +x /usr/local/bin/dbmate
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
