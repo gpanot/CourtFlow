@@ -1,5 +1,5 @@
 ---
-description: Railway deployment rules for Dockerfile, Prisma migrations, lock files, and cache
+description: Railway deployment rules for Dockerfile, dbmate migrations, lock files, and cache
 alwaysApply: true
 ---
 
@@ -9,27 +9,24 @@ alwaysApply: true
 - The CMD in Dockerfile is the source of truth for what runs at startup — not package.json start script
 - Always check Dockerfile CMD before assuming package.json start script controls deployment
 - The correct CMD is:
-  CMD ["sh", "-c", "npx prisma migrate deploy && mkdir -p /app/uploads/players /app/uploads/players/avatars && node server.js"]
+  CMD ["sh", "-c", "mkdir -p /app/uploads/players /app/uploads/players/avatars /app/uploads/coaches/photos /app/uploads/proofs /app/uploads/manual-invoices /app/uploads/payment-proofs && dbmate migrate && node server.js"]
 
-## Prisma Migration Rules — Strict
+## Migration Rules — dbmate only
 
-- **NEVER** use `prisma db push` on any environment — it bypasses the migration system
-- **NEVER** add columns to the Prisma schema without immediately running: `npx prisma migrate dev --name <description>`
-- **NEVER** create a temp API endpoint to run SQL — that is a last resort only when the migration system is broken
+- **NEVER** use `prisma migrate dev`, `prisma migrate deploy`, `prisma migrate reset`, `prisma migrate resolve`, or `prisma db push` — all replaced by dbmate
 - The correct flow for any schema change is:
-  1. Edit `prisma/schema.prisma`
-  2. Run: `npx prisma migrate dev --name <description>`
-  3. Commit both `schema.prisma` and the new migration folder together
-  4. Push — Railway runs `prisma migrate deploy` automatically on startup
-- If you see schema changes without a corresponding folder in `prisma/migrations/`, that means `prisma db push` was used — always fix this by creating a proper migration immediately
+  1. `npm run db:new <description>` — creates a new SQL migration file in `db/migrations/`
+  2. Write SQL in the `-- migrate:up` block; add a `-- migrate:down` reversal
+  3. `npm run db:migrate` — applies locally
+  4. `npm run db:pull` + `npx prisma generate` — syncs `schema.prisma` and regenerates the Prisma Client
+  5. Commit migration SQL, `schema.prisma`, `db/schema.sql`, and application code together
+  6. Push — Railway runs `dbmate migrate` automatically at container startup
 
-### Production & Troubleshooting
+### Production troubleshooting
 
-- Never run `prisma migrate dev` in production
-- If a migration fails in Railway, it must be resolved with `prisma migrate resolve --rolled-back <migration_name>` from inside Railway's network
-- Railway internal URL `postgres.railway.internal` is NOT reachable from local machine
-- To fix a failed migration from outside Railway, use a temporary API endpoint that runs the resolve command only as a last resort — then delete it immediately after
-- Always make migration SQL idempotent with `IF NOT EXISTS` on CREATE TABLE and `DO $$ BEGIN ... EXCEPTION WHEN duplicate_object THEN NULL; END $$` on CREATE TYPE
+- If `dbmate migrate` fails on Railway, inspect logs to find the failing SQL
+- Fix the migration SQL, push again — dbmate retries any unapplied migration on next startup
+- Never run raw DDL directly against the production DB outside a migration file
 
 ## Lock File
 - Always run npm install locally after adding any package to package.json
