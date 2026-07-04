@@ -16,8 +16,42 @@ import { saveSignupDuplicatePhoto } from "@/lib/save-signup-duplicate-photo";
 
 export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
+  // ── TEMP timing instrumentation (monitoring only, no behavior change) ───────
+  // Logs elapsed ms per step so we can see where the post-form registration
+  // latency (payment screen appears) is spent. Filter logs by "[register][timing]".
+  const _t0 = Date.now();
+  let _tPrev = _t0;
+  const _steps: Array<{ step: string; ms: number }> = [];
+  const mark = (step: string, extra?: Record<string, unknown>) => {
+    const now = Date.now();
+    const stepMs = now - _tPrev;
+    _steps.push({ step, ms: stepMs });
+    console.info("[courtpay/register][timing]", {
+      step,
+      stepMs,
+      totalMs: now - _t0,
+      ...(extra ?? {}),
+    });
+    _tPrev = now;
+  };
+  // Consolidated one-line summary emitted after account creation succeeds,
+  // right before the payment screen is returned. Filter logs by "[timing][SUMMARY]".
+  const summarize = (outcome: string) => {
+    const totalMs = Date.now() - _t0;
+    const awsMs = _steps
+      .filter((s) => s.step.startsWith("aws_"))
+      .reduce((sum, s) => sum + s.ms, 0);
+    console.info("[courtpay/register][timing][SUMMARY]", {
+      outcome,
+      totalMs,
+      awsMs,
+      nonAwsMs: totalMs - awsMs,
+      steps: Object.fromEntries(_steps.map((s) => [s.step, s.ms])),
+    });
+  };
   try {
     const body = await req.json();
+    mark("body_parsed");
     const {
       venueCode,
       name,
@@ -57,6 +91,7 @@ export async function POST(req: Request) {
     const venue = await prisma.venue.findFirst({
       where: { id: venueCode, active: true },
     });
+    mark("venue_lookup");
     if (!venue) {
       return NextResponse.json({ error: "Venue not found" }, { status: 404 });
     }
@@ -112,6 +147,8 @@ export async function POST(req: Request) {
       );
     }
 
+    mark("existing_checkin_guard");
+
     // If face image provided, also create/link a Player record for face recognition
     if (imageBase64?.trim()) {
       console.info("[courtpay/register][enroll-flow] aws_check_start", {
@@ -120,6 +157,7 @@ export async function POST(req: Request) {
         imageBytes: Buffer.byteLength(imageBase64, "base64"),
       });
       const faceCheck = await faceRecognitionService.recognizeFace(imageBase64);
+      mark("aws_recognizeFace", { resultType: faceCheck.resultType });
       console.info("[courtpay/register][enroll-flow] aws_check_result", {
         resultType: faceCheck.resultType,
         matchedPlayerId: faceCheck.playerId ?? null,
@@ -164,6 +202,7 @@ export async function POST(req: Request) {
             where: { phone: phoneNorm },
           })
         : null;
+      mark("player_lookup_by_phone", { found: Boolean(existingByPhone) });
 
       if (existingByPhone) {
         if (reclubUserId && !existingByPhone.reclubUserId) {
@@ -179,6 +218,7 @@ export async function POST(req: Request) {
             imageBase64,
             existingByPhone.id
           );
+          mark("aws_enrollFace_existing", { enrolled: enrollExisting.success === true });
           console.info("[courtpay/register][enroll-flow] enrollment_final_result", {
             playerId: existingByPhone.id,
             source: "existing_player_by_phone",
@@ -197,6 +237,7 @@ export async function POST(req: Request) {
           try {
             await persistPlayerCheckInFacePhoto(existingByPhone.id, imageBase64);
           } catch { /* non-critical */ }
+          mark("persist_face_photo_existing");
         }
       } else {
         const genderVal = gender === "male" || gender === "female" ? gender : "male";
@@ -214,12 +255,14 @@ export async function POST(req: Request) {
             ...(reclubUserId ? { reclubUserId } : {}),
           },
         });
+        mark("player_create_new");
         console.log("[courtpay/register] Enrolling face in collection", {
           collectionId: COLLECTION_ID,
           playerId: corePlayer.id,
           source: "new_core_player",
         });
         const enrollment = await faceRecognitionService.enrollFace(imageBase64, corePlayer.id);
+        mark("aws_enrollFace_new", { enrolled: enrollment.success === true });
         console.info("[courtpay/register][enroll-flow] enrollment_final_result", {
           playerId: corePlayer.id,
           source: "new_core_player",
@@ -242,6 +285,7 @@ export async function POST(req: Request) {
         try {
           await persistPlayerCheckInFacePhoto(corePlayer.id, imageBase64);
         } catch { /* non-critical */ }
+        mark("persist_face_photo_new");
 
         enqueueStickerJobIfNeeded(corePlayer.id, corePlayer.gender).catch(console.error);
       }
@@ -254,6 +298,7 @@ export async function POST(req: Request) {
       gender,
       skillLevel,
     });
+    mark("registerPlayer");
 
     if (packageId) {
       const pkg = await prisma.subscriptionPackage.findFirst({
@@ -270,6 +315,7 @@ export async function POST(req: Request) {
         type: "subscription",
         packageId,
       });
+      mark("createCheckInPayment_package");
 
       await activateSubscription(
         player.id,
@@ -277,7 +323,9 @@ export async function POST(req: Request) {
         venue.id,
         payment.paymentRef
       );
+      mark("activateSubscription");
 
+      summarize("package");
       return NextResponse.json({
         playerId: player.id,
         playerName: player.name,
@@ -290,6 +338,7 @@ export async function POST(req: Request) {
       where: { venueId: venue.id, status: "open" },
       select: { id: true, sessionFee: true, staffId: true },
     });
+    mark("open_session_lookup");
     const settings = venue.settings as Record<string, unknown>;
     let sessionFee =
       openSession?.sessionFee ?? (settings?.sessionFee as number) ?? 0;
@@ -310,6 +359,7 @@ export async function POST(req: Request) {
         }
       }
     }
+    mark("discount_lookup");
 
     if (sessionFee > 0) {
       const headCount = clampSessionPartyHeadCount(headCountRaw ?? 1);
@@ -320,7 +370,9 @@ export async function POST(req: Request) {
         type: "checkin",
         partyCount: headCount,
       });
+      mark("createCheckInPayment_session");
 
+      summarize("session");
       return NextResponse.json({
         playerId: player.id,
         playerName: player.name,
@@ -336,6 +388,7 @@ export async function POST(req: Request) {
         source: "cash",
       },
     });
+    summarize("free_session");
 
     return NextResponse.json({
       playerId: player.id,

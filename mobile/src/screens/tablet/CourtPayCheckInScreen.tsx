@@ -944,6 +944,8 @@ export function CourtPayCheckInScreen({
     });
     setLoading(true);
     setError("");
+    // TEMP timing (monitoring only): end-to-end register request as seen by the client.
+    const _submitT0 = Date.now();
     try {
       const reg = await api.post<{
         playerId?: string;
@@ -973,6 +975,7 @@ export function CourtPayCheckInScreen({
         playerId: reg.playerId ?? null,
         checkedIn: reg.checkedIn === true,
         hasPendingPayment: Boolean(reg.pendingPaymentId),
+        elapsedMs: Date.now() - _submitT0,
       });
 
       setRegisterPhotoQualityFailures(0);
@@ -1014,7 +1017,10 @@ export function CourtPayCheckInScreen({
         setStep("confirmed");
       }
     } catch (err) {
-      console.warn("[CourtPay][Registration][Flow] register_submit_failed", err);
+      console.warn("[CourtPay][Registration][Flow] register_submit_failed", {
+        elapsedMs: Date.now() - _submitT0,
+        error: err instanceof Error ? err.message : String(err),
+      });
       if (err instanceof Error && err.message === "already_checked_in") {
         setConfirmedSubInfo(null);
         setConfirmMessage(t("alreadyCheckedInMsg", { name: name.trim() }));

@@ -487,9 +487,14 @@ class FaceRecognitionService {
         playerId,
         reason: result.error ?? "quality_error",
       });
+      const _tRmbg = Date.now();
       const cleanedBase64 = await removeBackgroundFromBase64(
         normalizeEnrollmentBase64(imageBase64)
       );
+      console.info("[Rekognition][timing] enroll.removeBackground(FapiHub)", {
+        ms: Date.now() - _tRmbg,
+        succeeded: Boolean(cleanedBase64),
+      });
       if (cleanedBase64) {
         console.info("[Rekognition][EnrollFlow] remove_background_call_success", {
           playerId,
@@ -537,7 +542,12 @@ class FaceRecognitionService {
     imageBase64: string,
     playerId: string
   ): Promise<FaceEnrollmentResult> {
+    const _tQuality = Date.now();
     const quality = await this.assertEnrollmentPhotoQuality(imageBase64);
+    console.info("[Rekognition][timing] enroll.qualityGate(DetectFaces)", {
+      ms: Date.now() - _tQuality,
+      pass: quality.pass,
+    });
     if (!quality.pass) {
       return {
         success: false,
@@ -547,8 +557,11 @@ class FaceRecognitionService {
     }
 
     try {
+      const _tEnsure = Date.now();
       await this.ensureCollection();
+      console.info("[Rekognition][timing] enroll.ensureCollection", { ms: Date.now() - _tEnsure });
 
+      const _tIndex = Date.now();
       const response = await rekognition!.send(
         new IndexFacesCommand({
           CollectionId: COLLECTION_ID,
@@ -559,6 +572,7 @@ class FaceRecognitionService {
           DetectionAttributes: [],
         })
       );
+      console.info("[Rekognition][timing] enroll.indexFaces", { ms: Date.now() - _tIndex });
 
       const faceRecord = response.FaceRecords?.[0]?.Face;
       console.log("[Rekognition] IndexFaces response:", {
@@ -629,7 +643,9 @@ class FaceRecognitionService {
     }
 
     try {
+      const _tEnsure = Date.now();
       await this.ensureCollection();
+      console.info("[Rekognition][timing] recognizeFace.ensureCollection", { ms: Date.now() - _tEnsure });
 
       const imageBytes = base64ToBytes(imageBase64);
 
@@ -638,6 +654,7 @@ class FaceRecognitionService {
       const orphanFaceIdsToSkip: string[] = [];
 
       for (let attempt = 0; attempt <= MAX_ORPHAN_RETRIES; attempt++) {
+        const _tSearch = Date.now();
         const response = await rekognition!.send(
           new SearchFacesByImageCommand({
             CollectionId: COLLECTION_ID,
@@ -647,6 +664,11 @@ class FaceRecognitionService {
             QualityFilter: "AUTO",
           })
         );
+        console.info("[Rekognition][timing] recognizeFace.searchFacesByImage", {
+          ms: Date.now() - _tSearch,
+          attempt,
+          imageBytes: imageBytes.byteLength,
+        });
 
         const allMatches = response.FaceMatches ?? [];
         const topRawSimilarity = allMatches[0]?.Similarity ?? null;
