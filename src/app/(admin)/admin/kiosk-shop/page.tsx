@@ -217,8 +217,10 @@ function StickerExplorerTab({ token }: { token: string }) {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((r) => r.json())
-      .then((data: ExplorerPack[]) => setPacks(data ?? []))
-      .catch(() => {})
+      // Guard against error responses (e.g. 500 { error }) so a failed request
+      // never stores a non-array and crashes the whole page on `.filter`.
+      .then((data: unknown) => setPacks(Array.isArray(data) ? (data as ExplorerPack[]) : []))
+      .catch(() => setPacks([]))
       .finally(() => setLoading(false));
   }, [token]);
 
@@ -839,8 +841,8 @@ function TemplatesSection({ token }: { token: string }) {
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok) return;
-        const data = (await res.json()) as StickerTemplateRow[];
-        setTemplates(data);
+        const data = (await res.json()) as unknown;
+        setTemplates(Array.isArray(data) ? (data as StickerTemplateRow[]) : []);
       } catch {
         // silent
       } finally {
@@ -964,8 +966,15 @@ function StickerStatsTab({ token }: { token: string }) {
   useEffect(() => {
     fetch("/api/admin/sticker-stats", { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => r.json())
-      .then((d: StickerStats) => setStats(d))
-      .catch(() => {})
+      // Only accept a well-formed stats object; error responses fall through to null.
+      .then((d: unknown) =>
+        setStats(
+          d && typeof d === "object" && typeof (d as StickerStats).scansTotal === "number"
+            ? (d as StickerStats)
+            : null,
+        ),
+      )
+      .catch(() => setStats(null))
       .finally(() => setLoading(false));
   }, [token]);
 

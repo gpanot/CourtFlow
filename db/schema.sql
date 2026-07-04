@@ -5072,4 +5072,5 @@ ALTER TABLE ONLY shadow_temp.staff_payments
 INSERT INTO public.schema_migrations (version) VALUES
     ('20260704000001'),
     ('20260704000002'),
-    ('20260704000003');
+    ('20260704000003'),
+    ('20260704025913');
