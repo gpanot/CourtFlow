@@ -328,26 +328,6 @@ export default function PaymentPage() {
               </button>
             </div>
           )}
-
-          {venueInfo?.autoPayment && showProofUpload && (
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="flex-1 border-2 border-dashed border-[var(--cm-border)] rounded-xl flex flex-col items-center justify-center p-3 hover:border-[var(--cm-accent)]/50 transition-colors min-h-[144px]"
-            >
-              {proofPreview ? (
-                <img src={proofPreview} alt="Proof" className="w-full h-full object-contain rounded-lg max-h-[128px]" />
-              ) : (
-                <>
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--cm-text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="3" width="18" height="18" rx="2" />
-                    <circle cx="8.5" cy="8.5" r="1.5" />
-                    <path d="m21 15-5-5L5 21" />
-                  </svg>
-                  <p className="text-xs text-[var(--cm-text-muted)] mt-2 text-center whitespace-pre-line">{t("payment.tapUploadProof")}</p>
-                </>
-              )}
-            </button>
-          )}
         </div>
         <input
           ref={fileInputRef}

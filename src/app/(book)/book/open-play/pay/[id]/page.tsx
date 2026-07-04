@@ -50,6 +50,7 @@ export default function OpenPlayPaymentPage() {
   const [loadError, setLoadError] = useState(false);
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofPreview, setProofPreview] = useState<string | null>(null);
+  const [showProofUpload, setShowProofUpload] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -130,7 +131,7 @@ export default function OpenPlayPaymentPage() {
   }
 
   async function handleProofSubmit() {
-    if (!proofFile && !venueInfo?.autoPayment) return;
+    if (!proofFile && (!venueInfo?.autoPayment || showProofUpload)) return;
     setUploading(true);
     try {
       if (proofFile) {
@@ -211,7 +212,7 @@ export default function OpenPlayPaymentPage() {
     );
   }
 
-  const isAutoPayment = venueInfo?.autoPayment;
+  const isAutoPayment = venueInfo?.autoPayment && !showProofUpload;
   const minutes = Math.floor(secondsLeft / 60);
   const secs = secondsLeft % 60;
 
@@ -282,13 +283,20 @@ export default function OpenPlayPaymentPage() {
             </button>
           )}
 
-          {isAutoPayment && (
+          {venueInfo?.autoPayment && !showProofUpload && (
             <div className="flex-1 border border-[var(--cm-border)] rounded-xl flex flex-col items-center justify-center p-3 min-h-[144px]">
               <svg className="animate-spin h-6 w-6 text-[var(--cm-accent)] mb-2" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
               <p className="text-xs text-[var(--cm-text-sec)] text-center">{t("payment.waitingAutoConfirm")}</p>
+              <p className="text-[10px] text-[var(--cm-text-muted)] mt-1 text-center">{t("payment.autoConfirmHint")}</p>
+              <button
+                onClick={() => setShowProofUpload(true)}
+                className="text-[10px] text-[var(--cm-accent)] font-medium mt-3 underline underline-offset-2"
+              >
+                {t("payment.uploadProofInstead")}
+              </button>
             </div>
           )}
         </div>
@@ -305,7 +313,7 @@ export default function OpenPlayPaymentPage() {
 
       <button
         onClick={handleProofSubmit}
-        disabled={uploading || (!isAutoPayment && !proofFile)}
+        disabled={uploading || ((!venueInfo?.autoPayment || showProofUpload) && !proofFile)}
         className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-semibold text-sm mb-3 disabled:opacity-40 uppercase tracking-wide"
       >
         {uploading ? t("payment.submitting") : t("payment.iHavePaid")}
