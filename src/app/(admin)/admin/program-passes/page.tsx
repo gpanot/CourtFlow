@@ -90,6 +90,8 @@ interface PlayerResult {
   name: string;
   phone: string;
   avatar?: string;
+  avatarPhotoPath?: string | null;
+  facePhotoPath?: string | null;
 }
 
 interface ClassInstance {
@@ -670,12 +672,22 @@ function ActivateModal({
 
   const selectedPassType = passTypes.find((pt) => pt.id === passTypeId);
 
-  // Auto cycle start: first of current month if ≤15th, else first of next month
+  // Cycle start options: first of the current month through 6 months later (7 options),
+  // so staff can pre-sell a future program start (e.g. the August cycle).
   const today = new Date();
-  const cycleStartDate = today.getDate() <= 15
-    ? new Date(today.getFullYear(), today.getMonth(), 1)
-    : new Date(today.getFullYear(), today.getMonth() + 1, 1);
-  const cycleStartStr = cycleStartDate.toLocaleDateString("sv-SE"); // YYYY-MM-DD
+  const monthOptions = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+    return {
+      value: d.toLocaleDateString("sv-SE"), // YYYY-MM-01
+      label: d.toLocaleDateString("en-US", { month: "long", year: "numeric" }),
+    };
+  });
+  // Default: current month if on/before the 15th, else next month.
+  const [cycleStartStr, setCycleStartStr] = useState(() => {
+    const t = new Date();
+    const idx = t.getDate() <= 15 ? 0 : 1;
+    return new Date(t.getFullYear(), t.getMonth() + idx, 1).toLocaleDateString("sv-SE");
+  });
 
   useEffect(() => {
     if (playerSearch.length < 2) { setPlayerResults([]); return; }
@@ -742,22 +754,29 @@ function ActivateModal({
             {searching && <p className="text-xs text-neutral-500">Searching…</p>}
             {playerResults.length > 0 && !selectedPlayer && (
               <div className="max-h-48 overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-800">
-                {playerResults.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => { setSelectedPlayer(p); setPlayerSearch(p.name); setPlayerResults([]); }}
-                    className="flex w-full items-center gap-3 px-3 py-2.5 text-sm hover:bg-neutral-700 text-left"
-                  >
-                    {p.avatar && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={p.avatar} alt="" className="h-7 w-7 rounded-full object-cover bg-neutral-700 shrink-0" />
-                    )}
-                    <div>
-                      <span className="font-medium">{p.name}</span>
-                      <p className="text-xs text-neutral-500">{p.phone}</p>
-                    </div>
-                  </button>
-                ))}
+                {playerResults.map((p) => {
+                  const photo = p.avatarPhotoPath ?? p.facePhotoPath;
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => { setSelectedPlayer(p); setPlayerSearch(p.name); setPlayerResults([]); }}
+                      className="flex w-full items-center gap-3 px-3 py-2.5 text-sm hover:bg-neutral-700 text-left"
+                    >
+                      {photo ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={photo} alt="" className="h-8 w-8 rounded-full object-cover bg-neutral-700 shrink-0" />
+                      ) : (
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-neutral-700 text-base shrink-0">
+                          {p.avatar || "🏓"}
+                        </span>
+                      )}
+                      <div>
+                        <span className="font-medium">{p.name}</span>
+                        <p className="text-xs text-neutral-500">{p.phone}</p>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
             {selectedPlayer && (
@@ -792,9 +811,11 @@ function ActivateModal({
 
             <div>
               <label className="text-xs text-neutral-400 mb-1 block">Cycle start</label>
-              <p className="text-sm text-white px-3 py-2 rounded-lg bg-neutral-800 border border-neutral-700">
-                {new Date(cycleStartStr + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
-              </p>
+              <select value={cycleStartStr} onChange={(e) => setCycleStartStr(e.target.value)} className={inputCls}>
+                {monthOptions.map((m) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
             </div>
 
             <label className="flex items-center gap-2 cursor-pointer select-none">
