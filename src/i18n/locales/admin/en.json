@@ -27,7 +27,7 @@
     "logsErrors": "Logs & Errors",
     "courtpassPlayers": "CourtPass Players",
     "organizations": "Organizations",
-    "classPasses": "Class Passes"
+    "programPasses": "Program Passes"
   },
   "layout": {
     "adminPanel": "Admin Panel",

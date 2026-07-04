@@ -36,7 +36,7 @@ const topNavItems: NavItem[] = [
   { href: "/admin/bookings", label: "nav.bookings", icon: CalendarDays },
   { href: "/admin/coaching", label: "nav.coaching", icon: GraduationCap },
   { href: "/admin/memberships", label: "nav.memberships", icon: Crown },
-  { href: "/admin/class-passes", label: "nav.classPasses", icon: Ticket },
+  { href: "/admin/program-passes", label: "nav.programPasses", icon: Ticket },
   { href: "/admin/courtpass-players", label: "nav.courtpassPlayers", icon: UserCircle },
   { href: "/admin/staff", label: "nav.staff", icon: Users },
   { href: "/admin/venue-analytics", label: "nav.venueAnalytics", icon: PieChart },

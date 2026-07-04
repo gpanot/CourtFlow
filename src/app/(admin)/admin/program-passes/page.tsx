@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 const ERROR_MESSAGES: Record<string, { title: string; detail: string; color: string }> = {
   PASS_NOT_ACTIVE: {
     title: "Pass not active",
-    detail: "This class pass is paused, expired, or cancelled. Only active passes can be used.",
+    detail: "This program pass is paused, expired, or cancelled. Only active passes can be used.",
     color: "text-amber-400",
   },
   SESSIONS_EXHAUSTED: {
@@ -31,7 +31,7 @@ const ERROR_MESSAGES: Record<string, { title: string; detail: string; color: str
   },
   PASS_NOT_FOUND: {
     title: "Pass not found",
-    detail: "No class pass found with this ID. Check the ID and try again.",
+    detail: "No program pass found with this ID. Check the ID and try again.",
     color: "text-red-400",
   },
   INSTANCE_NOT_FOUND: {
@@ -50,14 +50,14 @@ type CheckInResult =
   | { ok: true; checkInId: string; sessionsUsed: number; sessionsIncluded: number }
   | { ok: false; code: string; message: string };
 
-export default function ClassPassesPage() {
-  const [classPassId, setClassPassId] = useState("");
+export default function ProgramPassesPage() {
+  const [programPassId, setProgramPassId] = useState("");
   const [classInstanceId, setClassInstanceId] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CheckInResult | null>(null);
 
   const handleCheckIn = async () => {
-    const pid = classPassId.trim();
+    const pid = programPassId.trim();
     const iid = classInstanceId.trim();
     if (!pid || !iid) return;
 
@@ -66,8 +66,8 @@ export default function ClassPassesPage() {
 
     try {
       const data = await api.post<{ checkInId: string; sessionsUsed: number; sessionsIncluded: number }>(
-        "/api/admin/class-passes/check-in",
-        { classPassId: pid, classInstanceId: iid }
+        "/api/admin/program-passes/check-in",
+        { programPassId: pid, classInstanceId: iid }
       );
       setResult({ ok: true, ...data });
     } catch (e) {
@@ -97,9 +97,9 @@ export default function ClassPassesPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-8">
       <div>
-        <h2 className="text-xl font-bold md:text-2xl">Class Passes</h2>
+        <h2 className="text-xl font-bold md:text-2xl">Program Passes</h2>
         <p className="mt-1 text-sm text-neutral-500">
-          Staff-side manual check-in for class-pass holders. Full class management UI will be added in Phase 2.
+          Staff-side manual check-in for program-pass holders. Full class management UI will be added in Phase 2.
         </p>
       </div>
 
@@ -113,13 +113,13 @@ export default function ClassPassesPage() {
         <div className="space-y-3">
           <div>
             <label className="mb-1 block text-xs font-medium text-neutral-400">
-              Class Pass ID
+              Program Pass ID
             </label>
             <input
               type="text"
-              placeholder="cuid of the ClassPass row"
-              value={classPassId}
-              onChange={(e) => { setClassPassId(e.target.value); setResult(null); }}
+              placeholder="cuid of the ProgramPass row"
+              value={programPassId}
+              onChange={(e) => { setProgramPassId(e.target.value); setResult(null); }}
               className={inputCls}
               autoComplete="off"
               spellCheck={false}
@@ -144,7 +144,7 @@ export default function ClassPassesPage() {
 
         <button
           onClick={handleCheckIn}
-          disabled={loading || !classPassId.trim() || !classInstanceId.trim()}
+          disabled={loading || !programPassId.trim() || !classInstanceId.trim()}
           className={cn(
             "flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition-colors",
             "bg-purple-600 text-white hover:bg-purple-500",
@@ -209,7 +209,7 @@ export default function ClassPassesPage() {
       {/* ── Placeholder ─────────────────────────────────────────────────── */}
       <div className="rounded-2xl border border-dashed border-neutral-700 bg-neutral-900/40 p-8 text-center">
         <Users className="mx-auto mb-3 h-8 w-8 text-neutral-600" />
-        <p className="text-sm font-medium text-neutral-500">Class Pass management UI</p>
+        <p className="text-sm font-medium text-neutral-500">Program Pass management UI</p>
         <p className="mt-1 text-xs text-neutral-600">
           Tier management, pass activation, payment recording, and class scheduling will be built here in Phase 2.
         </p>

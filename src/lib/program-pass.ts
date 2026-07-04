@@ -4,7 +4,7 @@ import { prisma } from "./db";
 // ─── Typed error codes ────────────────────────────────────────────────────────
 // Callers catch these to display distinct UI messages.
 
-export class ClassPassError extends Error {
+export class ProgramPassError extends Error {
   constructor(
     message: string,
     public readonly code:
@@ -17,27 +17,27 @@ export class ClassPassError extends Error {
       | "TRANSACTION_CONFLICT"
   ) {
     super(message);
-    this.name = "ClassPassError";
+    this.name = "ProgramPassError";
   }
 }
 
 /**
- * Record a staff-initiated check-in for a class-pass holder attending a class
+ * Record a staff-initiated check-in for a program-pass holder attending a class
  * instance.
  *
  * All six steps run inside a single serialisable Prisma transaction so that
  * the capacity count and the row creation cannot race under concurrent
  * requests (same pattern as createOpenPlayRegistration).
  *
- * Throws ClassPassError with a distinct `code` for each failure path so the
+ * Throws ProgramPassError with a distinct `code` for each failure path so the
  * caller can surface the right UI message without string-matching.
  */
 export async function checkInToClassInstance(
-  classPassId: string,
+  programPassId: string,
   classInstanceId: string
 ): Promise<{ checkInId: string; sessionsUsed: number; sessionsIncluded: number }> {
   try {
-    return await runTransaction(classPassId, classInstanceId);
+    return await runTransaction(programPassId, classInstanceId);
   } catch (err) {
     if (err instanceof Prisma.PrismaClientKnownRequestError) {
       // P2002 — unique constraint: the DB-level dedup caught a race that slipped
@@ -45,10 +45,10 @@ export async function checkInToClassInstance(
       if (
         err.code === "P2002" &&
         Array.isArray(err.meta?.target) &&
-        (err.meta.target as string[]).includes("class_pass_id") &&
+        (err.meta.target as string[]).includes("program_pass_id") &&
         (err.meta.target as string[]).includes("class_instance_id")
       ) {
-        throw new ClassPassError(
+        throw new ProgramPassError(
           "This player is already checked in to this class",
           "ALREADY_CHECKED_IN"
         );
@@ -57,13 +57,13 @@ export async function checkInToClassInstance(
       // P2034 — serialization failure: retry once, then give up with a distinct code.
       if (err.code === "P2034") {
         try {
-          return await runTransaction(classPassId, classInstanceId);
+          return await runTransaction(programPassId, classInstanceId);
         } catch (retryErr) {
           if (
             retryErr instanceof Prisma.PrismaClientKnownRequestError &&
             retryErr.code === "P2034"
           ) {
-            throw new ClassPassError("Please try again", "TRANSACTION_CONFLICT");
+            throw new ProgramPassError("Please try again", "TRANSACTION_CONFLICT");
           }
           throw retryErr;
         }
@@ -75,14 +75,14 @@ export async function checkInToClassInstance(
 
 /** Inner transaction — extracted so the wrapper can call it for the retry. */
 function runTransaction(
-  classPassId: string,
+  programPassId: string,
   classInstanceId: string
 ): Promise<{ checkInId: string; sessionsUsed: number; sessionsIncluded: number }> {
   return prisma.$transaction(
     async (tx) => {
       // ── Step 1: load the pass and confirm it is active ───────────────────
-      const pass = await tx.classPass.findUnique({
-        where: { id: classPassId },
+      const pass = await tx.programPass.findUnique({
+        where: { id: programPassId },
         include: {
           passType: {
             select: { sessionsIncluded: true },
@@ -91,12 +91,12 @@ function runTransaction(
       });
 
       if (!pass) {
-        throw new ClassPassError("Class pass not found", "PASS_NOT_FOUND");
+        throw new ProgramPassError("Program pass not found", "PASS_NOT_FOUND");
       }
 
       if (pass.status !== "active") {
-        throw new ClassPassError(
-          `Class pass is ${pass.status} — only active passes can be used`,
+        throw new ProgramPassError(
+          `Program pass is ${pass.status} — only active passes can be used`,
           "PASS_NOT_ACTIVE"
         );
       }
@@ -104,7 +104,7 @@ function runTransaction(
       // ── Step 2: confirm the pass still has sessions remaining ────────────
       const sessionsIncluded = pass.passType.sessionsIncluded;
       if (pass.sessionsUsed >= sessionsIncluded) {
-        throw new ClassPassError(
+        throw new ProgramPassError(
           "Sessions used up this month — no sessions remaining on this pass",
           "SESSIONS_EXHAUSTED"
         );
@@ -117,7 +117,7 @@ function runTransaction(
       });
 
       if (!instance) {
-        throw new ClassPassError("Class instance not found", "INSTANCE_NOT_FOUND");
+        throw new ProgramPassError("Class instance not found", "INSTANCE_NOT_FOUND");
       }
 
       // Count inside the transaction to prevent race conditions
@@ -127,7 +127,7 @@ function runTransaction(
 
       if (checkedInCount >= instance.maxPlayers) {
         // Distinct code so Phase 2 waitlist logic can hook in here
-        throw new ClassPassError(
+        throw new ProgramPassError(
           "Class is full — maximum players already checked in",
           "CLASS_FULL"
         );
@@ -136,12 +136,12 @@ function runTransaction(
       // ── Step 4: dedup — no existing check-in for this pass + instance ────
       const existing = await tx.classCheckIn.findUnique({
         where: {
-          classPassId_classInstanceId: { classPassId, classInstanceId },
+          programPassId_classInstanceId: { programPassId, classInstanceId },
         },
       });
 
       if (existing) {
-        throw new ClassPassError(
+        throw new ProgramPassError(
           "Already checked in — this pass was already used for this class",
           "ALREADY_CHECKED_IN"
         );
@@ -149,12 +149,12 @@ function runTransaction(
 
       // ── Step 5: create the ClassCheckIn row ──────────────────────────────
       const checkIn = await tx.classCheckIn.create({
-        data: { classPassId, classInstanceId },
+        data: { programPassId, classInstanceId },
       });
 
       // ── Step 6: increment sessionsUsed on the pass ───────────────────────
-      const updatedPass = await tx.classPass.update({
-        where: { id: classPassId },
+      const updatedPass = await tx.programPass.update({
+        where: { id: programPassId },
         data: { sessionsUsed: { increment: 1 } },
         select: { sessionsUsed: true },
       });

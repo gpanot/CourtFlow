@@ -8,6 +8,1357 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Organization {
+  id            String   @id @default(cuid())
+  name          String
+  slug          String   @unique
+  country       String
+  paymentRegion String   @default("SEA") @map("payment_region")
+  currency      String   @default("VND")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  venues        Venue[]
+
+  @@map("organizations")
+}
+
+model Venue {
+  id                    String                 @id @default(cuid())
+  name                  String
+  location              String?
+  settings              Json                   @default("{}")
+  active                Boolean                @default(true)
+  expectedMaxPlayers    Int?                   @map("expected_max_players")
+  playFrequency         String?                @map("play_frequency")
+  playTypes             String[]               @default([]) @map("play_types")
+  painPoints            String[]               @default([]) @map("pain_points")
+  createdAt             DateTime               @default(now()) @map("created_at")
+  logoUrl               String?                @map("logo_url")
+  tvText                String?                @map("tv_text")
+  bankAccount           String?                @map("bank_account")
+  bankName              String?                @map("bank_name")
+  bankOwnerName         String?                @map("bank_owner_name")
+  billingStatus         String                 @default("active") @map("billing_status")
+  ownerId               String?                @map("owner_id")
+  slug                  String?                @unique
+  portalEnabled         Boolean                @default(false) @map("portal_enabled")
+  contactPhone          String?                @map("contact_phone")
+  contactWhatsApp       String?                @map("contact_whatsapp")
+  contactZalo           String?                @map("contact_zalo")
+  contactLine           String?                @map("contact_line")
+  timezone              String                 @default("Asia/Ho_Chi_Minh") @map("timezone")
+  organizationId        String?                @map("organization_id")
+  sportType             String                 @default("pickleball") @map("sport_type")
+  auditLogs             AuditLog[]
+  billingInvoices       BillingInvoice[]
+  bookings              Booking[]
+  checkInPlayers        CheckInPlayer[]
+  checkInRecords        CheckInRecord[]
+  classInstances        ClassInstance[]
+  class_passes          class_passes[]
+  coachLessons          CoachLesson[]
+  coachPackages         CoachPackage[]
+  courtBlocks           CourtBlock[]
+  courts                Court[]
+  faceRecognitionLogs   FaceRecognitionLog[]
+  manualBillingInvoices ManualBillingInvoice[]
+  membershipTiers       MembershipTier[]
+  memberships           Membership[]
+  openPlayRegistrations OpenPlayRegistration[]
+  pendingPayments       PendingPayment[]
+  playerCoachCredits    PlayerCoachCredit[]
+  playerNotes           PlayerNote[]
+  registeredPlayers     Player[]               @relation("PlayerRegistrationVenue")
+  programPassTypes      ProgramPassType[]
+  sessions              Session[]
+  signupDuplicateLogs   SignupDuplicateLog[]
+  staffAssignments      StaffVenueAssignment[]
+  subscriptionPackages  SubscriptionPackage[]
+  billingRate           VenueBillingRate?
+  organization          Organization?          @relation(fields: [organizationId], references: [id])
+  owner                 StaffMember?           @relation("VenueOwner", fields: [ownerId], references: [id])
+
+  @@index([organizationId])
+  @@map("venues")
+}
+
+/// Unified identity record that can link a web-portal Player and/or a CourtPay CheckInPlayer to the same real person.
+model PlayerIdentity {
+  id             String          @id @default(cuid())
+  name           String
+  email          String?         @unique
+  phone          String?
+  skillLevel     String?         @map("skill_level")
+  gender         String?
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  checkInPlayers CheckInPlayer[]
+  players        Player[]
+
+  @@map("player_identities")
+}
+
+model Player {
+  id                    String                 @id @default(cuid())
+  name                  String
+  phone                 String                 @unique
+  avatar                String                 @default("🏓")
+  skillLevel            SkillLevel             @default(beginner) @map("skill_level")
+  gender                Gender
+  gamePreference        GamePreference         @default(no_preference) @map("game_preference")
+  notificationsEnabled  Boolean                @default(false) @map("notifications_enabled")
+  createdAt             DateTime               @default(now()) @map("created_at")
+  faceSubjectId         String?                @map("face_subject_id")
+  /// Public URL path served from /uploads (e.g. /uploads/players/{id}.jpg) — set on first face check-in enrollment
+  facePhotoPath         String?                @map("face_photo_path")
+  rankingScore          Int                    @default(200) @map("ranking_score")
+  rankingCount          Int                    @default(0) @map("ranking_count")
+  lastRankedAt          DateTime?              @map("last_ranked_at")
+  /// Player-uploaded avatar photo, takes priority over facePhotoPath for display
+  avatarPhotoPath       String?                @map("avatar_photo_path")
+  isWalkIn              Boolean                @default(false) @map("is_walk_in")
+  reclubUserId          Int?                   @map("reclub_user_id")
+  registrationAt        DateTime?              @map("registration_at")
+  registrationVenueId   String?                @map("registration_venue_id")
+  coachStaffId          String?                @map("coach_staff_id")
+  email                 String?                @unique @map("email")
+  password_hash         String?
+  playerIdentityId      String?                @map("player_identity_id")
+  bookings              Booking[]
+  class_passes          class_passes[]
+  coachLessons          CoachLesson[]
+  faceAttempts          FaceAttempt[]
+  faceRecognitionLogs   FaceRecognitionLog[]
+  memberships           Membership[]
+  openPlayRegistrations OpenPlayRegistration[]
+  pendingPayments       PendingPayment[]
+  accounts              PlayerAccount[]
+  appAuthLogs           PlayerAppAuthLog[]
+  coachCredits          PlayerCoachCredit[]
+  customPrices          PlayerCustomPrice[]
+  magicTokens           PlayerMagicToken[]
+  playerNotes           PlayerNote[]
+  playerRankings        PlayerRanking[]
+  stickerPacks          PlayerStickerPack[]
+  stickerPhotos         PlayerStickerPhoto[]
+  stickerResults        PlayerStickerResult[]
+  coachStaff            StaffMember?           @relation("PlayerCoachLink", fields: [coachStaffId], references: [id], onUpdate: NoAction)
+  playerIdentity        PlayerIdentity?        @relation(fields: [playerIdentityId], references: [id])
+  registrationVenue     Venue?                 @relation("PlayerRegistrationVenue", fields: [registrationVenueId], references: [id])
+  pushSubscriptions     PushSubscription[]
+  queueEntries          QueueEntry[]
+  signupDuplicateLogs   SignupDuplicateLog[]
+  stickerJobs           StickerJobQueue[]
+  stickerSessions       StickerSession[]
+
+  @@index([registrationVenueId])
+  @@index([playerIdentityId])
+  @@index([coachStaffId])
+  @@map("players")
+}
+
+model PlayerAppAuthLog {
+  id        String              @id @default(cuid())
+  playerId  String              @map("player_id")
+  method    PlayerAppAuthMethod
+  sessionId String?             @map("session_id")
+  createdAt DateTime            @default(now()) @map("created_at")
+  player    Player              @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([playerId, createdAt])
+  @@map("player_app_auth_logs")
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  playerId  String   @map("player_id")
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now()) @map("created_at")
+  player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@map("push_subscriptions")
+}
+
+/// Staff–venue membership with per-venue PWA app access (CourtFlow vs CourtPay).
+model StaffVenueAssignment {
+  id        String      @id @default(cuid())
+  staffId   String      @map("staff_id")
+  venueId   String      @map("venue_id")
+  appAccess String[]    @default(["courtflow"]) @map("app_access")
+  staff     StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  venue     Venue       @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, venueId])
+  @@index([staffId])
+  @@index([venueId])
+  @@map("staff_venue_assignments")
+}
+
+model StaffMember {
+  id                        String                 @id @default(cuid())
+  name                      String
+  phone                     String                 @unique
+  email                     String?                @unique
+  role                      StaffRole              @default(staff)
+  passwordHash              String                 @map("password_hash")
+  onboardingCompleted       Boolean                @default(false) @map("onboarding_completed")
+  createdAt                 DateTime               @default(now()) @map("created_at")
+  coachBio                  String?                @map("coach_bio")
+  coachPhoto                String?                @map("coach_photo")
+  isCoach                   Boolean                @default(false) @map("is_coach")
+  pushNotificationsEnabled  Boolean                @default(false) @map("push_notifications_enabled")
+  /// Default Reclub club (group) for session roster — staff-level, not per-venue.
+  reclubGroupId             Int?                   @map("reclub_group_id")
+  coachDupr                 String?                @map("coach_dupr")
+  coachGender               String?                @map("coach_gender")
+  coachLanguages            String[]               @default([]) @map("coach_languages")
+  coachSpecialties          String[]               @default([]) @map("coach_specialties")
+  coachFocusLevels          String[]               @default([]) @map("coach_focus_levels")
+  coachYearsExperience      String?                @map("coach_years_experience")
+  coachGroupSizes           String[]               @default([]) @map("coach_group_sizes")
+  googleRefreshToken        String?                @map("google_refresh_token")
+  googleCalendarId          String?                @map("google_calendar_id")
+  calendarSyncEnabled       Boolean                @default(false) @map("calendar_sync_enabled")
+  creditPackageValidityDays Int                    @default(90) @map("credit_package_validity_days")
+  auditLogs                 AuditLog[]
+  classInstances            ClassInstance[]
+  coachAvailabilities       CoachAvailability[]
+  coachHolidays             CoachHoliday[]
+  coachLessons              CoachLesson[]
+  coachPackages             CoachPackage[]
+  faceRecognitionLogs       FaceRecognitionLog[]
+  coachCredits              PlayerCoachCredit[]
+  customPrices              PlayerCustomPrice[]
+  playerRankings            PlayerRanking[]
+  linkedPlayers             Player[]               @relation("PlayerCoachLink")
+  programPassTypes          ProgramPassType[]
+  sessions                  Session[]
+  authLogs                  StaffAuthLog[]
+  paidPayments              StaffPayment[]         @relation("PaidByStaff")
+  payments                  StaffPayment[]         @relation("StaffPayments")
+  pushTokens                StaffPushToken[]
+  venueAssignments          StaffVenueAssignment[]
+  ownedVenues               Venue[]                @relation("VenueOwner")
+
+  @@map("staff_members")
+}
+
+model Court {
+  id                         String            @id @default(cuid())
+  venueId                    String            @map("venue_id")
+  label                      String
+  status                     CourtStatus       @default(idle)
+  activeInSession            Boolean           @default(false) @map("active_in_session")
+  isBookable                 Boolean           @default(false) @map("is_bookable")
+  /// * After staff restores from maintenance/stand-by, assignments skip warmup until next maintenance.
+  skipWarmupAfterMaintenance Boolean           @default(false) @map("skip_warmup_after_maintenance")
+  bookings                   Booking[]
+  classInstances             ClassInstance[]
+  coachLessons               CoachLesson[]
+  courtAssignments           CourtAssignment[]
+  venue                      Venue             @relation(fields: [venueId], references: [id])
+  playerRankings             PlayerRanking[]
+
+  @@map("courts")
+}
+
+model Session {
+  id                  String            @id @default(cuid())
+  venueId             String            @map("venue_id")
+  date                DateTime          @default(now())
+  openedAt            DateTime          @default(now()) @map("opened_at")
+  closedAt            DateTime?         @map("closed_at")
+  status              SessionStatus     @default(open)
+  gameTypeMix         Json?             @map("game_type_mix")
+  maxPlayers          Int?              @map("max_players")
+  staffId             String?           @map("staff_id")
+  warmupMode          String            @default("manual") @map("warmup_mode")
+  title               String?
+  type                SessionType       @default(open_play)
+  /// After the first real game starts, no new warm-up courts/assignments for this session.
+  introWarmupComplete Boolean           @default(false) @map("intro_warmup_complete")
+  sessionFee          Int               @default(0) @map("session_fee")
+  reclubEventName     String?           @map("reclub_event_name")
+  reclubReferenceCode String?           @map("reclub_reference_code")
+  reclubRoster        Json?             @map("reclub_roster")
+  reclubSnapshot      Json?             @map("reclub_snapshot")
+  /// Device model/name of the staff phone that opened this session (e.g. "iPhone 15 Pro").
+  openedOnDevice      String?           @map("opened_on_device")
+  courtAssignments    CourtAssignment[]
+  pendingPayments     PendingPayment[]
+  playerGroups        PlayerGroup[]
+  playerRankings      PlayerRanking[]
+  queueEntries        QueueEntry[]
+  staff               StaffMember?      @relation(fields: [staffId], references: [id])
+  venue               Venue             @relation(fields: [venueId], references: [id])
+
+  @@map("sessions")
+}
+
+model QueueEntry {
+  id                    String         @id @default(cuid())
+  sessionId             String         @map("session_id")
+  playerId              String         @map("player_id")
+  groupId               String?        @map("group_id")
+  joinedAt              DateTime       @default(now()) @map("joined_at")
+  status                QueueStatus    @default(waiting)
+  breakUntil            DateTime?      @map("break_until")
+  totalPlayMinutesToday Int            @default(0) @map("total_play_minutes_today")
+  gamePreference        GamePreference @default(no_preference) @map("game_preference")
+  queueNumber           Int?           @map("queue_number")
+  group                 PlayerGroup?   @relation(fields: [groupId], references: [id])
+  player                Player         @relation(fields: [playerId], references: [id])
+  session               Session        @relation(fields: [sessionId], references: [id])
+
+  @@unique([sessionId, playerId])
+  @@map("queue_entries")
+}
+
+model PlayerGroup {
+  id           String       @id @default(cuid())
+  sessionId    String       @map("session_id")
+  code         String
+  status       GroupStatus  @default(forming)
+  createdAt    DateTime     @default(now()) @map("created_at")
+  session      Session      @relation(fields: [sessionId], references: [id])
+  queueEntries QueueEntry[]
+
+  @@unique([sessionId, code])
+  @@map("player_groups")
+}
+
+model CourtAssignment {
+  id        String    @id @default(cuid())
+  courtId   String    @map("court_id")
+  sessionId String    @map("session_id")
+  playerIds String[]  @map("player_ids")
+  groupIds  String[]  @map("group_ids")
+  gameType  GameType  @default(mixed) @map("game_type")
+  isWarmup  Boolean   @default(false) @map("is_warmup")
+  startedAt DateTime  @default(now()) @map("started_at")
+  endedAt   DateTime? @map("ended_at")
+  endedBy   String?   @map("ended_by")
+  court     Court     @relation(fields: [courtId], references: [id])
+  session   Session   @relation(fields: [sessionId], references: [id])
+
+  @@map("court_assignments")
+}
+
+model PlayerRanking {
+  id         String      @id @default(cuid())
+  playerId   String      @map("player_id")
+  courtId    String      @map("court_id")
+  sessionId  String      @map("session_id")
+  staffId    String      @map("staff_id")
+  position   Int
+  scoreDelta Int         @map("score_delta")
+  createdAt  DateTime    @default(now()) @map("created_at")
+  court      Court       @relation(fields: [courtId], references: [id], onDelete: Cascade)
+  player     Player      @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  session    Session     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  staff      StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, courtId])
+  @@index([sessionId, courtId, createdAt])
+  @@map("player_rankings")
+}
+
+model AuditLog {
+  id        String       @id @default(cuid())
+  venueId   String       @map("venue_id")
+  staffId   String?      @map("staff_id")
+  action    String
+  targetId  String?      @map("target_id")
+  reason    String?
+  metadata  Json?
+  createdAt DateTime     @default(now()) @map("created_at")
+  staff     StaffMember? @relation(fields: [staffId], references: [id])
+  venue     Venue        @relation(fields: [venueId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model StaffPayment {
+  id            String        @id @default(cuid())
+  staffId       String        @map("staff_id")
+  weekStart     DateTime      @map("week_start")
+  totalHours    Decimal       @map("total_hours") @db.Decimal(6, 1)
+  amount        Decimal?      @db.Decimal(10, 0)
+  paymentMethod String?       @map("payment_method")
+  status        PaymentStatus @default(UNPAID)
+  paidAt        DateTime?     @map("paid_at")
+  paidDate      DateTime?     @map("paid_date")
+  paidById      String?       @map("paid_by_id")
+  note          String?
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  paidBy        StaffMember?  @relation("PaidByStaff", fields: [paidById], references: [id])
+  staff         StaffMember   @relation("StaffPayments", fields: [staffId], references: [id])
+
+  @@unique([staffId, weekStart])
+  @@index([weekStart])
+  @@index([staffId])
+  @@map("staff_payments")
+}
+
+model MembershipTier {
+  id               String       @id @default(cuid())
+  venueId          String       @map("venue_id")
+  sortOrder        Int          @map("sort_order")
+  name             String
+  priceValue       Int          @map("price_value")
+  sessionsIncluded Int?         @map("sessions_included")
+  showBadge        Boolean      @default(false) @map("show_badge")
+  isActive         Boolean      @default(true) @map("is_active")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  perks            Json         @default("[]")
+  venue            Venue        @relation(fields: [venueId], references: [id])
+  memberships      Membership[]
+
+  @@unique([venueId, sortOrder])
+  @@map("membership_tiers")
+}
+
+model Membership {
+  id           String              @id @default(cuid())
+  playerId     String              @map("player_id")
+  venueId      String              @map("venue_id")
+  tierId       String              @map("tier_id")
+  status       MembershipStatus    @default(active)
+  activatedAt  DateTime            @default(now()) @map("activated_at")
+  renewalDate  DateTime            @map("renewal_date")
+  sessionsUsed Int                 @default(0) @map("sessions_used")
+  createdAt    DateTime            @default(now()) @map("created_at")
+  updatedAt    DateTime            @updatedAt @map("updated_at")
+  payments     MembershipPayment[]
+  player       Player              @relation(fields: [playerId], references: [id])
+  tier         MembershipTier      @relation(fields: [tierId], references: [id])
+  venue        Venue               @relation(fields: [venueId], references: [id])
+
+  @@unique([playerId, venueId])
+  @@index([venueId])
+  @@index([tierId])
+  @@map("memberships")
+}
+
+model MembershipPayment {
+  id            String                  @id @default(cuid())
+  membershipId  String                  @map("membership_id")
+  periodStart   DateTime                @map("period_start")
+  periodEnd     DateTime                @map("period_end")
+  amountValue   Int                     @map("amount_value")
+  status        MembershipPaymentStatus @default(UNPAID)
+  paidAt        DateTime?               @map("paid_at")
+  paymentMethod String?                 @map("payment_method")
+  note          String?
+  createdAt     DateTime                @default(now()) @map("created_at")
+  proofUrl      String?                 @map("proof_url")
+  membership    Membership              @relation(fields: [membershipId], references: [id])
+
+  @@index([membershipId])
+  @@index([status])
+  @@map("membership_payments")
+}
+
+model CourtBlock {
+  id        String         @id @default(cuid())
+  venueId   String         @map("venue_id")
+  type      CourtBlockType
+  title     String?
+  note      String?
+  courtIds  String[]       @map("court_ids")
+  date      DateTime       @db.Date
+  startTime DateTime       @map("start_time")
+  endTime   DateTime       @map("end_time")
+  createdBy String?        @map("created_by")
+  createdAt DateTime       @default(now()) @map("created_at")
+  venue     Venue          @relation(fields: [venueId], references: [id])
+
+  @@index([venueId, date])
+  @@map("court_blocks")
+}
+
+model Booking {
+  id              String        @id @default(cuid())
+  courtId         String        @map("court_id")
+  venueId         String        @map("venue_id")
+  playerId        String        @map("player_id")
+  date            DateTime      @db.Date
+  startTime       DateTime      @map("start_time")
+  endTime         DateTime      @map("end_time")
+  status          BookingStatus @default(confirmed)
+  priceValue      Int           @map("price_value")
+  coPlayerIds     String[]      @map("co_player_ids")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  cancelledAt     DateTime?     @map("cancelled_at")
+  paymentStatus   String?       @map("payment_status")
+  paymentProofUrl String?       @map("payment_proof_url")
+  holdExpiresAt   DateTime?     @map("hold_expires_at")
+  paymentRef      String?       @unique @map("payment_ref")
+  rejectedAt      DateTime?     @map("rejected_at")
+  rejectedBy      String?       @map("rejected_by")
+  rejectionReason String?       @map("rejection_reason")
+  court           Court         @relation(fields: [courtId], references: [id])
+  player          Player        @relation(fields: [playerId], references: [id])
+  venue           Venue         @relation(fields: [venueId], references: [id])
+
+  @@unique([courtId, date, startTime])
+  @@index([venueId, date])
+  @@index([playerId])
+  @@map("bookings")
+}
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  phone     String
+  code      String
+  expiresAt DateTime @map("expires_at")
+  verified  Boolean  @default(false)
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("otp_codes")
+}
+
+model CoachPackage {
+  id                       String              @id @default(cuid())
+  coachId                  String              @map("coach_id")
+  venueId                  String              @map("venue_id")
+  name                     String
+  description              String?
+  lessonType               LessonType          @map("lesson_type")
+  durationMin              Int                 @map("duration_min")
+  priceValue               Int                 @map("price_value")
+  sessionsIncluded         Int                 @default(1) @map("sessions_included")
+  active                   Boolean             @default(true)
+  sortOrder                Int                 @default(0) @map("sort_order")
+  createdAt                DateTime            @default(now()) @map("created_at")
+  minPlayers               Int?                @map("min_players")
+  maxPlayers               Int?                @map("max_players")
+  pricePerAdditionalPlayer Int?                @map("price_per_additional_player")
+  lessons                  CoachLesson[]
+  coach                    StaffMember         @relation(fields: [coachId], references: [id])
+  venue                    Venue               @relation(fields: [venueId], references: [id])
+  credits                  PlayerCoachCredit[]
+
+  @@index([coachId])
+  @@index([venueId])
+  @@map("coach_packages")
+}
+
+model CoachLesson {
+  id              String            @id @default(cuid())
+  venueId         String            @map("venue_id")
+  coachId         String            @map("coach_id")
+  playerId        String            @map("player_id")
+  courtId         String?           @map("court_id")
+  packageId       String            @map("package_id")
+  date            DateTime          @db.Date
+  startTime       DateTime          @map("start_time")
+  endTime         DateTime          @map("end_time")
+  status          CoachLessonStatus @default(confirmed)
+  priceValue      Int               @map("price_value")
+  note            String?
+  createdAt       DateTime          @default(now()) @map("created_at")
+  cancelledAt     DateTime?         @map("cancelled_at")
+  paidAt          DateTime?         @map("paid_at")
+  paymentMethod   String?           @map("payment_method")
+  paymentNote     String?           @map("payment_note")
+  proofUrl        String?           @map("proof_url")
+  paymentStatus   String            @default("UNPAID") @map("payment_status")
+  playerCount     Int?              @map("player_count")
+  paymentRef      String?           @unique @map("payment_ref")
+  rejectedAt      DateTime?         @map("rejected_at")
+  rejectedBy      String?           @map("rejected_by")
+  rejectionReason String?           @map("rejection_reason")
+  googleEventId   String?           @map("google_event_id")
+  coach           StaffMember       @relation(fields: [coachId], references: [id])
+  court           Court?            @relation(fields: [courtId], references: [id])
+  package         CoachPackage      @relation(fields: [packageId], references: [id])
+  player          Player            @relation(fields: [playerId], references: [id])
+  venue           Venue             @relation(fields: [venueId], references: [id])
+
+  @@index([venueId, date])
+  @@index([coachId, date])
+  @@index([playerId])
+  @@map("coach_lessons")
+}
+
+model CoachAvailability {
+  id        String      @id @default(cuid())
+  coachId   String      @map("coach_id")
+  dayOfWeek Int         @map("day_of_week")
+  startTime String      @map("start_time")
+  endTime   String      @map("end_time")
+  enabled   Boolean     @default(true)
+  coach     StaffMember @relation(fields: [coachId], references: [id], onDelete: Cascade)
+
+  @@index([coachId])
+  @@map("coach_availabilities")
+}
+
+model CoachHoliday {
+  id        String      @id @default(cuid())
+  coachId   String      @map("coach_id")
+  startDate DateTime    @map("start_date") @db.Date
+  endDate   DateTime    @map("end_date") @db.Date
+  note      String?
+  coach     StaffMember @relation(fields: [coachId], references: [id], onDelete: Cascade)
+
+  @@index([coachId])
+  @@map("coach_holidays")
+}
+
+model FaceAttempt {
+  id                  String   @id @default(cuid())
+  eventId             String   @map("event_id")
+  matchedPlayerId     String?  @map("matched_player_id")
+  resultType          String   @map("result_type")
+  confidence          Float?
+  imageUrl            String?  @map("image_url")
+  createdNewPlayer    Boolean  @default(false) @map("created_new_player")
+  hostReviewed        Boolean  @default(false) @map("host_reviewed")
+  queueNumberAssigned Int?     @map("queue_number_assigned")
+  kioskDeviceId       String?  @map("kiosk_device_id")
+  createdAt           DateTime @default(now()) @map("created_at")
+  /// Staff kiosk: phone used when check-in is confirmed via phone fallback (digits-normalized lookup).
+  phoneNumber         String?  @map("phone_number")
+  matchedPlayer       Player?  @relation(fields: [matchedPlayerId], references: [id])
+
+  @@index([eventId])
+  @@index([createdAt])
+  @@map("face_attempts")
+}
+
+/// Live check-in / venue face recognition attempts (SearchFacesByImage scores for threshold tuning).
+model FaceRecognitionLog {
+  id              String       @id @default(cuid())
+  venueId         String       @map("venue_id")
+  playerId        String?      @map("player_id")
+  staffId         String?      @map("staff_id")
+  similarityScore Float?       @map("similarity_score")
+  threshold       Float        @map("threshold")
+  passed          Boolean
+  createdAt       DateTime     @default(now()) @map("created_at")
+  player          Player?      @relation(fields: [playerId], references: [id])
+  staff           StaffMember? @relation(fields: [staffId], references: [id])
+  venue           Venue        @relation(fields: [venueId], references: [id], onDelete: Cascade)
+
+  @@index([venueId, createdAt])
+  @@map("face_recognition_logs")
+}
+
+model PendingPayment {
+  id                   String         @id @default(cuid())
+  venueId              String         @map("venue_id")
+  sessionId            String?        @map("session_id")
+  playerId             String?        @map("player_id")
+  amount               Int
+  paymentMethod        String         @default("vietqr") @map("payment_method")
+  type                 String
+  status               String         @default("pending")
+  createdAt            DateTime       @default(now()) @map("created_at")
+  expiresAt            DateTime       @map("expires_at")
+  confirmedAt          DateTime?      @map("confirmed_at")
+  confirmedBy          String?        @map("confirmed_by")
+  checkInPlayerId      String?        @map("check_in_player_id")
+  paymentRef           String?        @unique @map("payment_ref")
+  cancelReason         String?        @map("cancel_reason")
+  cancelledAt          DateTime?      @map("cancelled_at")
+  /// Session check-in: number of people covered by this payment (1–4). Default 1.
+  partyCount           Int            @default(1) @map("party_count")
+  /// Snapshot of payer display name for stable UI label.
+  groupPaidByName      String?        @map("group_paid_by_name")
+  /// Optional: this payment is covered by another payer's grouped payment.
+  groupPaidByPaymentId String?        @map("group_paid_by_payment_id")
+  /// Device model/name of the staff phone that manually confirmed this payment (e.g. "iPhone 15 Pro").
+  confirmedOnDevice    String?        @map("confirmed_on_device")
+  checkInPlayer        CheckInPlayer? @relation(fields: [checkInPlayerId], references: [id])
+  player               Player?        @relation(fields: [playerId], references: [id])
+  session              Session?       @relation(fields: [sessionId], references: [id])
+  venue                Venue          @relation(fields: [venueId], references: [id])
+
+  @@index([venueId, status])
+  @@index([sessionId])
+  @@index([paymentRef])
+  @@index([groupPaidByPaymentId])
+  @@map("pending_payments")
+}
+
+model KioskDevice {
+  id        String   @id @default(cuid())
+  name      String
+  location  String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("kiosk_devices")
+}
+
+model CheckInPlayer {
+  id               String               @id @default(cuid())
+  venueId          String               @map("venue_id")
+  name             String
+  phone            String
+  gender           String?
+  skillLevel       String?              @map("skill_level")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  playerIdentityId String?              @map("player_identity_id")
+  playerIdentity   PlayerIdentity?      @relation(fields: [playerIdentityId], references: [id])
+  venue            Venue                @relation(fields: [venueId], references: [id])
+  checkIns         CheckInRecord[]
+  payments         PendingPayment[]
+  subscriptions    PlayerSubscription[]
+
+  @@unique([phone, venueId])
+  @@index([venueId])
+  @@index([playerIdentityId])
+  @@map("check_in_players")
+}
+
+model SubscriptionPackage {
+  id            String               @id @default(cuid())
+  venueId       String               @map("venue_id")
+  name          String
+  sessions      Int?
+  durationDays  Int                  @map("duration_days")
+  price         Int
+  perks         String?
+  isActive      Boolean              @default(true) @map("is_active")
+  createdAt     DateTime             @default(now()) @map("created_at")
+  updatedAt     DateTime             @updatedAt @map("updated_at")
+  discountPct   Int?                 @map("discount_pct")
+  isBestChoice  Boolean              @default(false) @map("is_best_choice")
+  showInCheckIn Boolean              @default(true) @map("show_in_check_in")
+  isFreePass    Boolean              @default(false) @map("is_free_pass")
+  subscriptions PlayerSubscription[]
+  venue         Venue                @relation(fields: [venueId], references: [id])
+
+  @@index([venueId, isActive])
+  @@map("subscription_packages")
+}
+
+model PlayerSubscription {
+  id                String              @id @default(cuid())
+  playerId          String              @map("player_id")
+  packageId         String              @map("package_id")
+  venueId           String              @map("venue_id")
+  status            SubscriptionStatus  @default(active)
+  sessionsRemaining Int?                @map("sessions_remaining")
+  activatedAt       DateTime            @default(now()) @map("activated_at")
+  expiresAt         DateTime            @map("expires_at")
+  paymentRef        String?             @map("payment_ref")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+  package           SubscriptionPackage @relation(fields: [packageId], references: [id])
+  player            CheckInPlayer       @relation(fields: [playerId], references: [id])
+  usages            SubscriptionUsage[]
+
+  @@index([playerId, status])
+  @@index([venueId, status])
+  @@map("player_subscriptions")
+}
+
+model SubscriptionUsage {
+  id             String             @id @default(cuid())
+  subscriptionId String             @map("subscription_id")
+  checkedInAt    DateTime           @default(now()) @map("checked_in_at")
+  subscription   PlayerSubscription @relation(fields: [subscriptionId], references: [id])
+
+  @@index([subscriptionId])
+  @@map("subscription_usages")
+}
+
+model StaffPushToken {
+  id         String      @id @default(cuid())
+  staffId    String      @map("staff_id")
+  /// Null for coach-only accounts that never select a venue.
+  venueId    String?     @map("venue_id")
+  token      String
+  platform   String      @default("android")
+  deviceId   String?     @map("device_id")
+  active     Boolean     @default(true)
+  lastSeenAt DateTime    @default(now()) @map("last_seen_at")
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
+  staff      StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, token])
+  @@index([venueId, active])
+  @@map("staff_push_tokens")
+}
+
+model CheckInRecord {
+  id          String        @id @default(cuid())
+  playerId    String        @map("player_id")
+  venueId     String        @map("venue_id")
+  checkedInAt DateTime      @default(now()) @map("checked_in_at")
+  paymentId   String?       @map("payment_id")
+  source      String
+  player      CheckInPlayer @relation(fields: [playerId], references: [id])
+  venue       Venue         @relation(fields: [venueId], references: [id])
+
+  @@index([venueId, checkedInAt])
+  @@index([playerId])
+  @@map("check_in_records")
+}
+
+model BillingConfig {
+  id                String   @id @default("default")
+  bankBin           String   @default("") @map("bank_bin")
+  bankAccount       String   @default("") @map("bank_account")
+  bankOwner         String   @default("") @map("bank_owner")
+  defaultBaseRate   Int      @default(5000) @map("default_base_rate")
+  defaultSubAddon   Int      @default(1000) @map("default_sub_addon")
+  defaultSepayAddon Int      @default(1000) @map("default_sepay_addon")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  paymentGateway    String   @default("payos") @map("payment_gateway")
+  /// Email address to notify when a client submits payment proof
+  notificationEmail String?  @map("notification_email")
+
+  @@map("billing_config")
+}
+
+model VenueBillingRate {
+  id                 String    @id @default(cuid())
+  venueId            String    @unique @map("venue_id")
+  baseRatePerCheckin Int       @default(5000) @map("base_rate_per_checkin")
+  subscriptionAddon  Int       @default(1000) @map("subscription_addon")
+  sepayAddon         Int       @default(1000) @map("sepay_addon")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  /// Free flags per component — when true that component costs 0 on the weekly invoice
+  isFreeBase         Boolean   @default(false) @map("is_free_base")
+  isFreeSubAddon     Boolean   @default(false) @map("is_free_sub_addon")
+  isFreeSepayAddon   Boolean   @default(false) @map("is_free_sepay_addon")
+  /// "per_payment" (default) = weekly invoice per CourtPay payment; "monthly" = flat monthly rate
+  billingModel       String    @default("per_payment") @map("billing_model")
+  /// Flat monthly fee in VND — only used when billingModel = "monthly"
+  monthlyRate        Int       @default(0) @map("monthly_rate")
+  /// Date billing started under the monthly model — used to pro-rate the first invoice
+  monthlyPeriodStart DateTime? @map("monthly_period_start")
+  /// Optional end date for the monthly subscription — null means no expiry
+  monthlyEndDate     DateTime? @map("monthly_end_date")
+  /// "active" | "cancelled" | "inactive"
+  monthlyStatus      String    @default("inactive") @map("monthly_status")
+  venue              Venue     @relation(fields: [venueId], references: [id])
+
+  @@map("venue_billing_rates")
+}
+
+model BillingInvoice {
+  id                   String            @id @default(cuid())
+  venueId              String            @map("venue_id")
+  weekStartDate        DateTime          @map("week_start_date")
+  weekEndDate          DateTime          @map("week_end_date")
+  totalCheckins        Int               @default(0) @map("total_checkins")
+  subscriptionCheckins Int               @default(0) @map("subscription_checkins")
+  sepayCheckins        Int               @default(0) @map("sepay_checkins")
+  baseAmount           Int               @default(0) @map("base_amount")
+  subscriptionAmount   Int               @default(0) @map("subscription_amount")
+  sepayAmount          Int               @default(0) @map("sepay_amount")
+  totalAmount          Int               @default(0) @map("total_amount")
+  status               String            @default("pending")
+  paymentRef           String?           @unique @map("payment_ref")
+  paidAt               DateTime?         @map("paid_at")
+  confirmedBy          String?           @map("confirmed_by")
+  createdAt            DateTime          @default(now()) @map("created_at")
+  updatedAt            DateTime          @updatedAt @map("updated_at")
+  comment              String?           @map("comment")
+  paidAmount           Int?              @map("paid_amount")
+  payosOrderCode       String?           @unique @map("payos_order_code")
+  /// "weekly" (default, per_payment model) | "monthly"
+  invoiceType          String            @default("weekly") @map("invoice_type")
+  venue                Venue             @relation(fields: [venueId], references: [id])
+  lineItems            BillingLineItem[]
+
+  @@unique([venueId, weekStartDate])
+  @@index([venueId, status])
+  @@map("billing_invoices")
+}
+
+model BillingLineItem {
+  id                String         @id @default(cuid())
+  invoiceId         String         @map("invoice_id")
+  checkInRecordId   String         @map("check_in_record_id")
+  playerId          String         @map("player_id")
+  checkedInAt       DateTime       @map("checked_in_at")
+  baseRate          Int            @map("base_rate")
+  subscriptionAddon Int            @default(0) @map("subscription_addon")
+  sepayAddon        Int            @default(0) @map("sepay_addon")
+  lineTotal         Int            @map("line_total")
+  invoice           BillingInvoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
+  @@map("billing_line_items")
+}
+
+/// Manually-created invoices used when a venue's billingModel = "manual"
+model ManualBillingInvoice {
+  id               String    @id @default(cuid())
+  venueId          String    @map("venue_id")
+  amount           Int
+  dueDate          DateTime  @map("due_date")
+  /// "pending" | "pending_review" | "paid" | "overdue"
+  status           String    @default("pending")
+  pdfUrl           String?   @map("pdf_url")
+  paidAt           DateTime? @map("paid_at")
+  paidMethod       String?   @map("paid_method")
+  paidRef          String?   @map("paid_ref")
+  notes            String?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @default(now()) @updatedAt @map("updated_at")
+  /// Client-submitted payment proof fields
+  proofUrl         String?   @map("proof_url")
+  proofSubmittedAt DateTime? @map("proof_submitted_at")
+  proofMethod      String?   @map("proof_method")
+  proofRef         String?   @map("proof_ref")
+  venue            Venue     @relation(fields: [venueId], references: [id])
+
+  @@index([venueId, status])
+  @@map("manual_billing_invoices")
+}
+
+model PlayerCustomPrice {
+  id           String      @id @default(cuid())
+  playerId     String      @map("player_id")
+  staffId      String      @map("staff_id")
+  discountType String      @map("discount_type")
+  customFee    Int?        @map("custom_fee")
+  discountPct  Int?        @map("discount_pct")
+  note         String?
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+  player       Player      @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  staff        StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, staffId])
+  @@map("player_custom_prices")
+}
+
+model PlayerStickerPhoto {
+  id        String   @id @default(cuid())
+  playerId  String   @map("player_id")
+  imageUrl  String   @map("image_url")
+  slotIndex Int      @map("slot_index")
+  createdAt DateTime @default(now()) @map("created_at")
+  player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([playerId, slotIndex])
+  @@map("player_sticker_photos")
+}
+
+model PlayerStickerResult {
+  id                    String              @id @default(cuid())
+  playerId              String              @map("player_id")
+  imageUrl              String              @map("image_url")
+  prompt                String
+  model                 String              @default("gpt-image-1")
+  size                  String              @default("1024x1024")
+  costUsd               Decimal             @default(0.04) @map("cost_usd") @db.Decimal(6, 4)
+  generationTimeSeconds Decimal?            @map("generation_time_seconds") @db.Decimal(6, 2)
+  createdAt             DateTime            @default(now()) @map("created_at")
+  updatedAt             DateTime            @updatedAt @map("updated_at")
+  stickerPacks          PlayerStickerPack[]
+  player                Player              @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([playerId])
+  @@map("player_sticker_results")
+}
+
+model PlayerStickerPack {
+  id             String              @id @default(cuid())
+  playerId       String              @map("player_id")
+  resultId       String              @map("result_id")
+  sticker1Url    String?             @map("sticker_1_url")
+  sticker2Url    String?             @map("sticker_2_url")
+  sticker3Url    String?             @map("sticker_3_url")
+  sticker4Url    String?             @map("sticker_4_url")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+  isPaid         Boolean             @default(false) @map("is_paid")
+  paidAt         DateTime?           @map("paid_at")
+  paymentCode    String?             @unique @map("payment_code")
+  payosOrderCode String?             @unique @map("payos_order_code")
+  howToCardUrl   String?             @map("how_to_card_url")
+  player         Player              @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  result         PlayerStickerResult @relation(fields: [resultId], references: [id], onDelete: Cascade)
+
+  @@index([playerId])
+  @@map("player_sticker_packs")
+}
+
+model StickerPaymentLog {
+  id             String   @id @default(cuid())
+  payosOrderCode String   @unique @map("payos_order_code")
+  paymentCode    String   @map("payment_code")
+  transferAmount Int      @map("transfer_amount")
+  content        String   @default("")
+  processedAt    DateTime @default(now()) @map("processed_at")
+
+  @@map("sticker_payment_logs")
+}
+
+model StickerSession {
+  id        String   @id @default(cuid())
+  playerId  String   @map("player_id")
+  token     String   @unique @default(cuid())
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@map("sticker_sessions")
+}
+
+model KioskSettings {
+  id              String   @id @default("global")
+  stickerPrice    Int      @default(30000) @map("sticker_price")
+  bankBin         String   @default("") @map("bank_bin")
+  bankAccount     String   @default("") @map("bank_account")
+  bankOwnerName   String   @default("") @map("bank_owner_name")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  /// Chroma key tolerance for background removal (default 65, original default 40)
+  chromaTolerance Int      @default(65) @map("chroma_tolerance")
+  /// Gaussian feather radius for chroma key edges (default 0.8, original default 1.5)
+  featherRadius   Float    @default(0.8) @map("feather_radius")
+
+  @@map("kiosk_settings")
+}
+
+/// Logs face duplicate detections during player sign-up for review in the admin panel.
+model SignupDuplicateLog {
+  id                 String    @id @default(cuid())
+  /// The photo submitted by the new person trying to sign up (stored as a file path or base64 data URL).
+  newPlayerPhotoPath String?   @map("new_player_photo_path")
+  /// The name submitted by the person trying to sign up (if provided).
+  newPlayerName      String?   @map("new_player_name")
+  /// The phone submitted by the person trying to sign up (if provided).
+  newPlayerPhone     String?   @map("new_player_phone")
+  /// The existing player that AWS Rekognition matched against.
+  matchedPlayerId    String    @map("matched_player_id")
+  /// AWS Rekognition similarity score (0–100).
+  similarityScore    Float?    @map("similarity_score")
+  /// The AWS Rekognition threshold used at the time of the check.
+  threshold          Float?    @map("threshold")
+  /// AWS FaceId returned for the matched existing player's face.
+  awsFaceId          String?   @map("aws_face_id")
+  /// Raw AWS Rekognition response details (JSON).
+  awsDetail          Json?     @map("aws_detail")
+  /// Source surface: "kiosk" | "courtpay".
+  source             String    @default("unknown")
+  /// Venue where the duplicate was detected.
+  venueId            String?   @map("venue_id")
+  /// Whether an admin has reviewed and resolved this entry.
+  reviewed           Boolean   @default(false)
+  reviewedAt         DateTime? @map("reviewed_at")
+  reviewNote         String?   @map("review_note")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  matchedPlayer      Player    @relation(fields: [matchedPlayerId], references: [id], onDelete: Cascade)
+  venue              Venue?    @relation(fields: [venueId], references: [id])
+
+  @@index([createdAt])
+  @@index([matchedPlayerId])
+  @@index([venueId])
+  @@map("signup_duplicate_logs")
+}
+
+model StickerTemplate {
+  id           String   @id @default(cuid())
+  name         String
+  malePrompt   String   @map("male_prompt")
+  femalePrompt String   @map("female_prompt")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("sticker_templates")
+}
+
+model StickerJobQueue {
+  id        String   @id @default(cuid())
+  playerId  String   @map("player_id")
+  /// pending | processing | done | failed
+  status    String   @default("pending")
+  attempts  Int      @default(0)
+  error     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@map("sticker_job_queue")
+}
+
+model StaffAuthLog {
+  id                    String       @id @default(cuid())
+  staffId               String?      @map("staff_id")
+  action                String
+  phone                 String?
+  ipAddress             String?      @map("ip_address")
+  country               String?
+  city                  String?
+  userAgent             String?      @map("user_agent")
+  createdAt             DateTime     @default(now()) @map("created_at")
+  fingerprintId         String?      @map("fingerprint_id")
+  fingerprintConfidence Float?       @map("fingerprint_confidence")
+  isVpn                 Boolean?     @map("is_vpn")
+  isThreat              Boolean?     @map("is_threat")
+  staff                 StaffMember? @relation(fields: [staffId], references: [id])
+
+  @@index([staffId])
+  @@index([createdAt])
+  @@index([fingerprintId])
+  @@map("staff_auth_logs")
+}
+
+model PlayerAccount {
+  id                String   @id @default(cuid())
+  playerId          String   @map("player_id")
+  provider          String
+  providerAccountId String   @map("provider_account_id")
+  email             String?
+  name              String?
+  image             String?
+  passwordHash      String?  @map("password_hash")
+  emailVerified     Boolean  @default(false) @map("email_verified")
+  createdAt         DateTime @default(now()) @map("created_at")
+  country           String?
+  player            Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([playerId])
+  @@map("player_accounts")
+}
+
+model PlayerCoachCredit {
+  id            String              @id @default(cuid())
+  playerId      String              @map("player_id")
+  coachId       String              @map("coach_id")
+  venueId       String              @map("venue_id")
+  packageId     String              @map("package_id")
+  totalSessions Int                 @map("total_sessions")
+  usedSessions  Int                 @default(0) @map("used_sessions")
+  priceValue    Int                 @map("price_value")
+  paymentRef    String?             @unique @map("payment_ref")
+  paymentStatus String              @default("pending") @map("payment_status")
+  proofUrl      String?             @map("proof_url")
+  confirmedBy   String?             @map("confirmed_by")
+  confirmedAt   DateTime?           @map("confirmed_at")
+  expiresAt     DateTime            @map("expires_at")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+  transactions  CreditTransaction[]
+  coach         StaffMember         @relation(fields: [coachId], references: [id])
+  package       CoachPackage        @relation(fields: [packageId], references: [id])
+  player        Player              @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  venue         Venue               @relation(fields: [venueId], references: [id])
+
+  @@index([playerId, coachId])
+  @@index([venueId])
+  @@map("player_coach_credits")
+}
+
+model OpenPlayRegistration {
+  id              String    @id @default(cuid())
+  venueId         String    @map("venue_id")
+  scheduleEntryId String    @map("schedule_entry_id")
+  date            DateTime  @map("date") @db.Date
+  startTime       DateTime  @map("start_time")
+  endTime         DateTime  @map("end_time")
+  playerId        String    @map("player_id")
+  priceValue      Int       @map("price_value")
+  paymentStatus   String    @default("pending") @map("payment_status")
+  holdExpiresAt   DateTime? @map("hold_expires_at")
+  paymentProofUrl String?   @map("payment_proof_url")
+  paymentRef      String?   @unique @map("payment_ref")
+  status          String    @default("confirmed") @map("status")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  cancelledAt     DateTime? @map("cancelled_at")
+  rejectedAt      DateTime? @map("rejected_at")
+  rejectedBy      String?   @map("rejected_by")
+  rejectionReason String?   @map("rejection_reason")
+  player          Player    @relation(fields: [playerId], references: [id])
+  venue           Venue     @relation(fields: [venueId], references: [id])
+
+  @@unique([scheduleEntryId, date, playerId])
+  @@index([scheduleEntryId, date])
+  @@index([venueId, date])
+  @@index([playerId])
+  @@map("open_play_registrations")
+}
+
+model PlayerNote {
+  id        String   @id @default(cuid())
+  playerId  String   @map("player_id")
+  venueId   String   @map("venue_id")
+  content   String
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by")
+  player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  venue     Venue    @relation(fields: [venueId], references: [id])
+
+  @@unique([playerId, venueId])
+  @@index([venueId])
+  @@map("player_notes")
+}
+
+model EmailLog {
+  id              String   @id @default(cuid())
+  playerId        String   @map("player_id")
+  bookingType     String   @map("booking_type")
+  bookingId       String   @map("booking_id")
+  emailType       String   @map("email_type")
+  resendMessageId String?  @map("resend_message_id")
+  sentAt          DateTime @default(now()) @map("sent_at")
+  status          String   @default("sent")
+  recipientRole   String   @default("student") @map("recipient_role")
+
+  @@index([bookingId, emailType])
+  @@map("email_logs")
+}
+
+model CreditTransaction {
+  id        String            @id @default(cuid())
+  creditId  String            @map("credit_id")
+  lessonId  String?           @map("lesson_id")
+  amount    Int
+  reason    String
+  createdAt DateTime          @default(now()) @map("created_at")
+  credit    PlayerCoachCredit @relation(fields: [creditId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([creditId])
+  @@map("credit_transactions")
+}
+
+/// One-time login tokens for players whose accounts were created by the
+/// booking agent (no password known to the player). Each token may be
+/// consumed exactly once; subsequent visits return a 410 Gone response.
+model PlayerMagicToken {
+  id        String    @id @default(cuid())
+  playerId  String    @map("player_id")
+  /// jti (JWT ID) stored so we can look up the token without embedding secrets
+  jti       String    @unique @map("jti")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  player    Player    @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@index([playerId])
+  @@map("player_magic_tokens")
+}
+
+/// Defines a recurring program-pass product sold at a venue (e.g. "Beginner Group 12-session pass").
+/// cycleLengthDays is informational only — actual cycle boundaries are calendar-month-aligned in application code.
+model ProgramPassType {
+  id               String          @id @default(cuid())
+  venueId          String          @map("venue_id")
+  name             String
+  price            Int
+  sessionsIncluded Int             @default(12) @map("sessions_included")
+  /// Informational only. Cycle renewal logic is calendar-month-aligned in application code.
+  cycleLengthDays  Int             @default(30) @map("cycle_length_days")
+  linkedCoachId    String?         @map("linked_coach_id")
+  isActive         Boolean         @default(true) @map("is_active")
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+  classInstances   ClassInstance[]
+  class_passes     class_passes[]
+  linkedCoach      StaffMember?    @relation(fields: [linkedCoachId], references: [id], map: "class_pass_tiers_linked_coach_id_fkey")
+  venue            Venue           @relation(fields: [venueId], references: [id], map: "class_pass_tiers_venue_id_fkey")
+
+  @@index([linkedCoachId], map: "class_pass_tiers_linked_coach_id_idx")
+  @@index([venueId, isActive], map: "class_pass_tiers_venue_id_is_active_idx")
+  @@map("program_pass_types")
+}
+
+/// A scheduled occurrence of a class that program-pass holders can check into.
+model ClassInstance {
+  id         String          @id @default(cuid())
+  venueId    String          @map("venue_id")
+  coachId    String          @map("coach_id")
+  courtId    String?         @map("court_id")
+  passTypeId String          @map("pass_type_id")
+  startAt    DateTime        @map("start_at")
+  endAt      DateTime        @map("end_at")
+  maxPlayers Int             @map("max_players")
+  createdAt  DateTime        @default(now()) @map("created_at")
+  updatedAt  DateTime        @updatedAt @map("updated_at")
+  checkIns   ClassCheckIn[]
+  coach      StaffMember     @relation(fields: [coachId], references: [id])
+  court      Court?          @relation(fields: [courtId], references: [id])
+  passType   ProgramPassType @relation(fields: [passTypeId], references: [id], map: "class_instances_tier_id_fkey")
+  venue      Venue           @relation(fields: [venueId], references: [id])
+
+  @@index([venueId, startAt])
+  @@index([coachId, startAt])
+  @@index([passTypeId], map: "class_instances_tier_id_idx")
+  @@map("class_instances")
+}
+
+/// Records a program-pass holder's attendance at a specific class instance.
+/// Unique constraint on (programPassId, classInstanceId) prevents double check-in.
+model ClassCheckIn {
+  id              String        @id @default(cuid())
+  class_pass_id   String
+  classInstanceId String        @map("class_instance_id")
+  checkedInAt     DateTime      @default(now()) @map("checked_in_at")
+  classInstance   ClassInstance @relation(fields: [classInstanceId], references: [id], onDelete: Cascade)
+  class_passes    class_passes  @relation(fields: [class_pass_id], references: [id], onDelete: Cascade)
+
+  @@unique([class_pass_id, classInstanceId])
+  @@index([classInstanceId])
+  @@map("class_check_ins")
+}
+
+model class_pass_payments {
+  id             String                 @id
+  class_pass_id  String
+  period_start   DateTime
+  period_end     DateTime
+  amount_value   Int
+  status         ClassPassPaymentStatus @default(UNPAID)
+  payment_method String?
+  paid_at        DateTime?
+  proof_url      String?
+  note           String?
+  void_reason    String?
+  created_at     DateTime               @default(now())
+  updated_at     DateTime
+  class_passes   class_passes           @relation(fields: [class_pass_id], references: [id], onDelete: Cascade)
+
+  @@index([class_pass_id])
+  @@index([status])
+}
+
+model class_passes {
+  id                  String                @id
+  player_id           String
+  venue_id            String
+  pass_type_id        String
+  status              ClassPassStatus       @default(active)
+  activated_at        DateTime              @default(now())
+  deferred_start_date DateTime?
+  cycle_start         DateTime
+  cycle_end           DateTime
+  sessions_used       Int                   @default(0)
+  created_at          DateTime              @default(now())
+  updated_at          DateTime
+  class_check_ins     ClassCheckIn[]
+  class_pass_payments class_pass_payments[]
+  players             Player                @relation(fields: [player_id], references: [id])
+  program_pass_types  ProgramPassType       @relation(fields: [pass_type_id], references: [id], map: "class_passes_tier_id_fkey")
+  venues              Venue                 @relation(fields: [venue_id], references: [id])
+
+  @@index([player_id, venue_id])
+  @@index([pass_type_id], map: "class_passes_tier_id_idx")
+  @@index([venue_id, status])
+}
+
+model schema_migrations {
+  version String @id @db.VarChar
+}
+
 enum SkillLevel {
   beginner
   intermediate
@@ -95,19 +1446,6 @@ enum MembershipStatus {
   cancelled
 }
 
-enum ClassPassStatus {
-  active
-  paused
-  expired
-  cancelled
-}
-
-enum ClassPassPaymentStatus {
-  UNPAID
-  PAID
-  OVERDUE
-}
-
 enum MembershipPaymentStatus {
   UNPAID
   PAID
@@ -128,1436 +1466,28 @@ enum SubscriptionStatus {
   cancelled
 }
 
-model Organization {
-  id            String   @id @default(cuid())
-  name          String
-  slug          String   @unique
-  country       String
-  paymentRegion String   @default("SEA") @map("payment_region")
-  currency      String   @default("VND")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-
-  venues Venue[]
-
-  @@map("organizations")
-}
-
-model Venue {
-  id                 String    @id @default(cuid())
-  name               String
-  slug               String?   @unique
-  location           String?
-  settings           Json      @default("{}")
-  active             Boolean   @default(true)
-  portalEnabled      Boolean   @default(false) @map("portal_enabled")
-  expectedMaxPlayers Int?      @map("expected_max_players")
-  playFrequency      String?   @map("play_frequency")
-  playTypes          String[]  @default([]) @map("play_types")
-  painPoints         String[]  @default([]) @map("pain_points")
-  logoUrl            String?   @map("logo_url")
-  tvText             String?   @map("tv_text")
-  bankName           String?   @map("bank_name")
-  bankAccount        String?   @map("bank_account")
-  bankOwnerName      String?   @map("bank_owner_name")
-  contactPhone       String?   @map("contact_phone")
-  contactWhatsApp    String?   @map("contact_whatsapp")
-  contactZalo        String?   @map("contact_zalo")
-  contactLine        String?   @map("contact_line")
-  createdAt          DateTime  @default(now()) @map("created_at")
-
-  billingStatus String @default("active") @map("billing_status")
-  timezone      String @default("Asia/Ho_Chi_Minh") @map("timezone")
-
-  organizationId String? @map("organization_id")
-  sportType      String  @default("pickleball") @map("sport_type")
-
-  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-
-  ownerId String? @map("owner_id")
-  owner   StaffMember? @relation("VenueOwner", fields: [ownerId], references: [id], onDelete: SetNull)
-
-  courts               Court[]
-  sessions             Session[]
-  staffAssignments     StaffVenueAssignment[]
-  auditLogs            AuditLog[]
-  membershipTiers      MembershipTier[]
-  memberships          Membership[]
-  bookings             Booking[]
-  courtBlocks          CourtBlock[]
-  coachPackages        CoachPackage[]
-  coachLessons         CoachLesson[]
-  pendingPayments      PendingPayment[]
-  checkInPlayers       CheckInPlayer[]
-  subscriptionPackages SubscriptionPackage[]
-  checkInRecords       CheckInRecord[]
-  billingRate            VenueBillingRate?
-  billingInvoices        BillingInvoice[]
-  manualBillingInvoices  ManualBillingInvoice[]
-  faceRecognitionLogs  FaceRecognitionLog[]
-  registeredPlayers    Player[]             @relation("PlayerRegistrationVenue")
-  signupDuplicateLogs  SignupDuplicateLog[]
-  playerCoachCredits   PlayerCoachCredit[]
-  openPlayRegistrations OpenPlayRegistration[]
-  playerNotes           PlayerNote[]
-  classPassTypes        ClassPassType[]
-  classPasses           ClassPass[]
-  classInstances        ClassInstance[]
-
-  @@index([organizationId])
-  @@map("venues")
-}
-
-/// Unified identity record that can link a web-portal Player and/or a CourtPay CheckInPlayer to the same real person.
-model PlayerIdentity {
-  id         String    @id @default(cuid())
-  name       String
-  email      String?   @unique
-  phone      String?
-  skillLevel String?   @map("skill_level")
-  gender     String?
-  createdAt  DateTime  @default(now()) @map("created_at")
-  updatedAt  DateTime  @updatedAt @map("updated_at")
-
-  players        Player[]
-  checkInPlayers CheckInPlayer[]
-
-  @@map("player_identities")
-}
-
-model Player {
-  id                    String         @id @default(cuid())
-  name                  String
-  phone                 String         @unique
-  email                 String?        @map("email")
-  avatar                String         @default("🏓")
-  skillLevel            SkillLevel     @default(beginner) @map("skill_level")
-  gender                Gender
-  gamePreference        GamePreference @default(no_preference) @map("game_preference")
-  notificationsEnabled  Boolean        @default(false) @map("notifications_enabled")
-  faceSubjectId         String?        @map("face_subject_id")
-  isWalkIn              Boolean        @default(false) @map("is_walk_in")
-  /// Public URL path served from /uploads (e.g. /uploads/players/{id}.jpg) — set on first face check-in enrollment
-  facePhotoPath         String?        @map("face_photo_path")
-  /// Player-uploaded avatar photo, takes priority over facePhotoPath for display
-  avatarPhotoPath       String?        @map("avatar_photo_path")
-  rankingScore          Int            @default(200) @map("ranking_score")
-  rankingCount          Int            @default(0) @map("ranking_count")
-  lastRankedAt          DateTime?      @map("last_ranked_at")
-  createdAt             DateTime       @default(now()) @map("created_at")
-  registrationAt        DateTime?      @map("registration_at")
-  registrationVenueId   String?        @map("registration_venue_id")
-  reclubUserId          Int?           @map("reclub_user_id")
-  playerIdentityId      String?        @map("player_identity_id")
-  coachStaffId          String?        @map("coach_staff_id")
-
-  playerIdentity      PlayerIdentity?  @relation(fields: [playerIdentityId], references: [id], onDelete: SetNull)
-  coachStaff          StaffMember?     @relation("PlayerCoachLink", fields: [coachStaffId], references: [id], onDelete: SetNull)
-  queueEntries        QueueEntry[]
-  playerRankings      PlayerRanking[]
-  pushSubscriptions   PushSubscription[]
-  memberships         Membership[]
-  bookings            Booking[]
-  coachLessons        CoachLesson[]
-  registrationVenue   Venue?           @relation("PlayerRegistrationVenue", fields: [registrationVenueId], references: [id])
-  faceAttempts          FaceAttempt[]
-  appAuthLogs           PlayerAppAuthLog[]
-  pendingPayments       PendingPayment[]
-  faceRecognitionLogs   FaceRecognitionLog[]
-  customPrices          PlayerCustomPrice[]
-  stickerPhotos         PlayerStickerPhoto[]
-  stickerResults        PlayerStickerResult[]
-  stickerPacks          PlayerStickerPack[]
-  stickerSessions       StickerSession[]
-  signupDuplicateLogs   SignupDuplicateLog[]
-  stickerJobs           StickerJobQueue[]
-  accounts              PlayerAccount[]
-  coachCredits          PlayerCoachCredit[]
-  openPlayRegistrations OpenPlayRegistration[]
-  playerNotes           PlayerNote[]
-  magicTokens           PlayerMagicToken[]
-  classPasses           ClassPass[]
-
-  @@index([registrationVenueId])
-  @@index([playerIdentityId])
-  @@index([coachStaffId])
-  @@map("players")
-}
-
-model PlayerAppAuthLog {
-  id        String              @id @default(cuid())
-  playerId  String              @map("player_id")
-  method    PlayerAppAuthMethod
-  sessionId String?             @map("session_id")
-  createdAt DateTime            @default(now()) @map("created_at")
-
-  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
-
-  @@index([playerId, createdAt])
-  @@map("player_app_auth_logs")
-}
-
-model PushSubscription {
-  id        String   @id @default(cuid())
-  playerId  String   @map("player_id")
-  endpoint  String   @unique
-  p256dh    String
-  auth      String
-  createdAt DateTime @default(now()) @map("created_at")
-
-  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
-
-  @@map("push_subscriptions")
-}
-
-/// Staff–venue membership with per-venue PWA app access (CourtFlow vs CourtPay).
-model StaffVenueAssignment {
-  id        String   @id @default(cuid())
-  staffId   String   @map("staff_id")
-  venueId   String   @map("venue_id")
-  appAccess String[] @default(["courtpay"]) @map("app_access")
-
-  staff StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
-  venue Venue       @relation(fields: [venueId], references: [id], onDelete: Cascade)
-
-  @@unique([staffId, venueId])
-  @@map("staff_venue_assignments")
-}
-
-model StaffMember {
-  id                  String    @id @default(cuid())
-  name                String
-  phone               String    @unique
-  email               String?   @unique
-  role                StaffRole @default(staff)
-  passwordHash        String    @map("password_hash")
-  onboardingCompleted Boolean   @default(false) @map("onboarding_completed")
-  isCoach             Boolean   @default(false) @map("is_coach")
-  coachBio            String?   @map("coach_bio")
-  coachPhoto          String?   @map("coach_photo")
-  coachDupr           String?   @map("coach_dupr")
-  coachGender         String?   @map("coach_gender")
-  coachLanguages      String[]  @default([]) @map("coach_languages")
-  coachSpecialties    String[]  @default([]) @map("coach_specialties")
-  coachFocusLevels    String[]  @default([]) @map("coach_focus_levels")
-  coachYearsExperience String?  @map("coach_years_experience")
-  coachGroupSizes     String[]  @default([]) @map("coach_group_sizes")
-  createdAt           DateTime  @default(now()) @map("created_at")
-
-  pushNotificationsEnabled Boolean @default(false) @map("push_notifications_enabled")
-  /// Default Reclub club (group) for session roster — staff-level, not per-venue.
-  reclubGroupId Int? @map("reclub_group_id")
-
-  googleRefreshToken        String?  @map("google_refresh_token")
-  googleCalendarId          String?  @map("google_calendar_id")
-  calendarSyncEnabled       Boolean  @default(false) @map("calendar_sync_enabled")
-  creditPackageValidityDays Int      @default(90) @map("credit_package_validity_days")
-
-  venueAssignments StaffVenueAssignment[]
-  auditLogs        AuditLog[]
-  sessions      Session[]
-  payments      StaffPayment[]  @relation("StaffPayments")
-  paidPayments  StaffPayment[]  @relation("PaidByStaff")
-  coachPackages CoachPackage[]
-  coachLessons  CoachLesson[]
-  playerRankings PlayerRanking[]
-  pushTokens            StaffPushToken[]
-  faceRecognitionLogs   FaceRecognitionLog[]
-  customPrices          PlayerCustomPrice[]
-  authLogs              StaffAuthLog[]
-  ownedVenues           Venue[]  @relation("VenueOwner")
-  coachCredits          PlayerCoachCredit[]
-  coachAvailabilities   CoachAvailability[]
-  coachHolidays         CoachHoliday[]
-  linkedPlayers         Player[]  @relation("PlayerCoachLink")
-  classPassTypes        ClassPassType[]
-  classInstances        ClassInstance[]
-
-  @@map("staff_members")
-}
-
-model Court {
-  id              String      @id @default(cuid())
-  venueId         String      @map("venue_id")
-  label           String
-  status          CourtStatus @default(idle)
-  activeInSession Boolean     @default(false) @map("active_in_session")
-  isBookable      Boolean     @default(false) @map("is_bookable")
-  /** After staff restores from maintenance/stand-by, assignments skip warmup until next maintenance. */
-  skipWarmupAfterMaintenance Boolean @default(false) @map("skip_warmup_after_maintenance")
-
-  venue            Venue              @relation(fields: [venueId], references: [id])
-  courtAssignments CourtAssignment[]
-  bookings         Booking[]
-  coachLessons     CoachLesson[]
-  playerRankings   PlayerRanking[]
-  classInstances   ClassInstance[]
-
-  @@map("courts")
-}
-
-model Session {
-  id           String        @id @default(cuid())
-  venueId      String        @map("venue_id")
-  staffId      String?       @map("staff_id")
-  date         DateTime      @default(now())
-  openedAt     DateTime      @default(now()) @map("opened_at")
-  closedAt     DateTime?     @map("closed_at")
-  status       SessionStatus @default(open)
-  type         SessionType   @default(open_play)
-  title        String?
-  gameTypeMix  Json?         @map("game_type_mix")
-  warmupMode   String        @default("manual") @map("warmup_mode")
-  /// After the first real game starts, no new warm-up courts/assignments for this session.
-  introWarmupComplete Boolean @default(false) @map("intro_warmup_complete")
-  maxPlayers   Int?          @map("max_players")
-  sessionFee   Int           @default(0) @map("session_fee")
-  reclubReferenceCode String? @map("reclub_reference_code")
-  reclubEventName     String? @map("reclub_event_name")
-  reclubRoster        Json?   @map("reclub_roster")
-  reclubSnapshot      Json?   @map("reclub_snapshot")
-  /// Device model/name of the staff phone that opened this session (e.g. "iPhone 15 Pro").
-  openedOnDevice      String? @map("opened_on_device")
-
-  venue            Venue              @relation(fields: [venueId], references: [id])
-  staff            StaffMember?       @relation(fields: [staffId], references: [id])
-  queueEntries     QueueEntry[]
-  playerGroups     PlayerGroup[]
-  courtAssignments CourtAssignment[]
-  playerRankings   PlayerRanking[]
-  pendingPayments  PendingPayment[]
-
-  @@map("sessions")
-}
-
-model QueueEntry {
-  id                    String         @id @default(cuid())
-  sessionId             String         @map("session_id")
-  playerId              String         @map("player_id")
-  groupId               String?        @map("group_id")
-  joinedAt              DateTime       @default(now()) @map("joined_at")
-  status                QueueStatus    @default(waiting)
-  breakUntil            DateTime?      @map("break_until")
-  totalPlayMinutesToday Int            @default(0) @map("total_play_minutes_today")
-  gamePreference        GamePreference @default(no_preference) @map("game_preference")
-  queueNumber           Int?           @map("queue_number")
-
-  session Session      @relation(fields: [sessionId], references: [id])
-  player  Player       @relation(fields: [playerId], references: [id])
-  group   PlayerGroup? @relation(fields: [groupId], references: [id])
-
-  @@unique([sessionId, playerId])
-  @@map("queue_entries")
-}
-
-model PlayerGroup {
-  id        String      @id @default(cuid())
-  sessionId String      @map("session_id")
-  code      String
-  status    GroupStatus  @default(forming)
-  createdAt DateTime    @default(now()) @map("created_at")
-
-  session      Session      @relation(fields: [sessionId], references: [id])
-  queueEntries QueueEntry[]
-
-  @@unique([sessionId, code])
-  @@map("player_groups")
-}
-
-model CourtAssignment {
-  id        String    @id @default(cuid())
-  courtId   String    @map("court_id")
-  sessionId String    @map("session_id")
-  playerIds String[]  @map("player_ids")
-  groupIds  String[]  @map("group_ids")
-  gameType  GameType  @default(mixed) @map("game_type")
-  isWarmup  Boolean   @default(false) @map("is_warmup")
-  startedAt DateTime  @default(now()) @map("started_at")
-  endedAt   DateTime? @map("ended_at")
-  endedBy   String?   @map("ended_by")
-
-  court   Court   @relation(fields: [courtId], references: [id])
-  session Session @relation(fields: [sessionId], references: [id])
-
-  @@map("court_assignments")
-}
-
-model PlayerRanking {
-  id         String   @id @default(cuid())
-  playerId   String   @map("player_id")
-  courtId    String   @map("court_id")
-  sessionId  String   @map("session_id")
-  staffId    String   @map("staff_id")
-  position   Int
-  scoreDelta Int      @map("score_delta")
-  createdAt  DateTime @default(now()) @map("created_at")
-
-  player  Player      @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  court   Court       @relation(fields: [courtId], references: [id], onDelete: Cascade)
-  session Session     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  staff   StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
-
-  @@index([sessionId, courtId])
-  @@index([sessionId, courtId, createdAt])
-  @@map("player_rankings")
-}
-
-model AuditLog {
-  id        String   @id @default(cuid())
-  venueId   String   @map("venue_id")
-  staffId   String?  @map("staff_id")
-  action    String
-  targetId  String?  @map("target_id")
-  reason    String?
-  metadata  Json?
-  createdAt DateTime @default(now()) @map("created_at")
-
-  venue Venue        @relation(fields: [venueId], references: [id])
-  staff StaffMember? @relation(fields: [staffId], references: [id])
-
-  @@map("audit_logs")
-}
-
-model StaffPayment {
-  id        String        @id @default(cuid())
-  staffId   String        @map("staff_id")
-  weekStart DateTime      @map("week_start")
-  totalHours Decimal      @db.Decimal(6, 1) @map("total_hours")
-  amount        Decimal?      @db.Decimal(10, 0)
-  paymentMethod String?       @map("payment_method")
-  status        PaymentStatus @default(UNPAID)
-  paidAt    DateTime?     @map("paid_at")
-  paidDate  DateTime?     @map("paid_date")
-  paidById  String?       @map("paid_by_id")
-  note      String?
-  createdAt DateTime      @default(now()) @map("created_at")
-  updatedAt DateTime      @updatedAt @map("updated_at")
-
-  staff  StaffMember  @relation("StaffPayments", fields: [staffId], references: [id])
-  paidBy StaffMember? @relation("PaidByStaff", fields: [paidById], references: [id])
-
-  @@unique([staffId, weekStart])
-  @@index([weekStart])
-  @@index([staffId])
-  @@map("staff_payments")
-}
-
-model MembershipTier {
-  id               String   @id @default(cuid())
-  venueId          String   @map("venue_id")
-  sortOrder        Int      @map("sort_order")
-  name             String
-  priceValue       Int      @map("price_value")
-  sessionsIncluded Int?     @map("sessions_included")
-  showBadge        Boolean  @default(false) @map("show_badge")
-  perks            Json     @default("[]")
-  isActive         Boolean  @default(true) @map("is_active")
-  createdAt        DateTime @default(now()) @map("created_at")
-
-  venue       Venue        @relation(fields: [venueId], references: [id])
-  memberships Membership[]
-
-  @@unique([venueId, sortOrder])
-  @@map("membership_tiers")
-}
-
-model Membership {
-  id           String           @id @default(cuid())
-  playerId     String           @map("player_id")
-  venueId      String           @map("venue_id")
-  tierId       String           @map("tier_id")
-  status       MembershipStatus @default(active)
-  activatedAt  DateTime         @default(now()) @map("activated_at")
-  renewalDate  DateTime         @map("renewal_date")
-  sessionsUsed Int              @default(0) @map("sessions_used")
-  createdAt    DateTime         @default(now()) @map("created_at")
-  updatedAt    DateTime         @updatedAt @map("updated_at")
-
-  player   Player              @relation(fields: [playerId], references: [id])
-  venue    Venue               @relation(fields: [venueId], references: [id])
-  tier     MembershipTier      @relation(fields: [tierId], references: [id])
-  payments MembershipPayment[]
-
-  @@unique([playerId, venueId])
-  @@index([venueId])
-  @@index([tierId])
-  @@map("memberships")
-}
-
-model MembershipPayment {
-  id            String                  @id @default(cuid())
-  membershipId  String                  @map("membership_id")
-  periodStart   DateTime                @map("period_start")
-  periodEnd     DateTime                @map("period_end")
-  amountValue   Int                     @map("amount_value")
-  status        MembershipPaymentStatus @default(UNPAID)
-  paidAt        DateTime?               @map("paid_at")
-  paymentMethod String?                 @map("payment_method")
-  proofUrl      String?                 @map("proof_url")
-  note          String?
-  createdAt     DateTime                @default(now()) @map("created_at")
-
-  membership Membership @relation(fields: [membershipId], references: [id])
-
-  @@index([membershipId])
-  @@index([status])
-  @@map("membership_payments")
-}
-
-model CourtBlock {
-  id        String         @id @default(cuid())
-  venueId   String         @map("venue_id")
-  type      CourtBlockType
-  title     String?
-  note      String?
-  courtIds  String[]       @map("court_ids")
-  date      DateTime       @db.Date
-  startTime DateTime       @map("start_time")
-  endTime   DateTime       @map("end_time")
-  createdBy String?        @map("created_by")
-  createdAt DateTime       @default(now()) @map("created_at")
-
-  venue Venue @relation(fields: [venueId], references: [id])
-
-  @@index([venueId, date])
-  @@map("court_blocks")
-}
-
-model Booking {
-  id              String        @id @default(cuid())
-  courtId         String        @map("court_id")
-  venueId         String        @map("venue_id")
-  playerId        String        @map("player_id")
-  date            DateTime      @db.Date
-  startTime       DateTime      @map("start_time")
-  endTime         DateTime      @map("end_time")
-  status          BookingStatus @default(confirmed)
-  priceValue      Int           @map("price_value")
-  coPlayerIds     String[]      @map("co_player_ids")
-  paymentStatus   String?       @map("payment_status")
-  holdExpiresAt   DateTime?     @map("hold_expires_at")
-  paymentProofUrl String?       @map("payment_proof_url")
-  paymentRef      String?       @unique @map("payment_ref")
-  createdAt       DateTime      @default(now()) @map("created_at")
-  cancelledAt     DateTime?     @map("cancelled_at")
-  rejectedAt      DateTime?     @map("rejected_at")
-  rejectedBy      String?       @map("rejected_by")
-  rejectionReason String?       @map("rejection_reason")
-
-  court  Court  @relation(fields: [courtId], references: [id])
-  venue  Venue  @relation(fields: [venueId], references: [id])
-  player Player @relation(fields: [playerId], references: [id])
-
-  @@index([venueId, date])
-  @@index([playerId])
-  @@map("bookings")
-}
-
-model OtpCode {
-  id        String   @id @default(cuid())
-  phone     String
-  code      String
-  expiresAt DateTime @map("expires_at")
-  verified  Boolean  @default(false)
-  attempts  Int      @default(0)
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@map("otp_codes")
-}
-
 enum LessonType {
   private
   group
 }
 
 enum CoachLessonStatus {
-  pending_approval
   confirmed
   completed
   cancelled
   no_show
+  pending_approval
 }
 
-model CoachPackage {
-  id                       String     @id @default(cuid())
-  coachId                  String     @map("coach_id")
-  venueId                  String     @map("venue_id")
-  name                     String
-  description              String?
-  lessonType               LessonType @map("lesson_type")
-  durationMin              Int        @map("duration_min")
-  priceValue               Int        @map("price_value")
-  sessionsIncluded         Int        @default(1) @map("sessions_included")
-  minPlayers               Int?       @map("min_players")
-  maxPlayers               Int?       @map("max_players")
-  pricePerAdditionalPlayer Int?       @map("price_per_additional_player")
-  active                   Boolean    @default(true)
-  sortOrder                Int        @default(0) @map("sort_order")
-  createdAt                DateTime   @default(now()) @map("created_at")
-
-  coach   StaffMember   @relation(fields: [coachId], references: [id])
-  venue   Venue         @relation(fields: [venueId], references: [id])
-  lessons CoachLesson[]
-  credits PlayerCoachCredit[]
-
-  @@index([coachId])
-  @@index([venueId])
-  @@map("coach_packages")
+enum ClassPassPaymentStatus {
+  UNPAID
+  PAID
+  OVERDUE
 }
 
-model CoachLesson {
-  id            String            @id @default(cuid())
-  venueId       String            @map("venue_id")
-  coachId       String            @map("coach_id")
-  playerId      String            @map("player_id")
-  courtId       String?           @map("court_id")
-  packageId     String            @map("package_id")
-  date          DateTime          @db.Date
-  startTime     DateTime          @map("start_time")
-  endTime       DateTime          @map("end_time")
-  status        CoachLessonStatus @default(confirmed)
-  priceValue    Int               @map("price_value")
-  playerCount   Int?              @map("player_count")
-  note          String?
-  paymentStatus   String            @default("UNPAID") @map("payment_status")
-  paidAt          DateTime?         @map("paid_at")
-  paymentMethod   String?           @map("payment_method")
-  proofUrl        String?           @map("proof_url")
-  paymentNote     String?           @map("payment_note")
-  paymentRef      String?           @unique @map("payment_ref")
-  googleEventId   String?           @map("google_event_id")
-  createdAt       DateTime          @default(now()) @map("created_at")
-  cancelledAt     DateTime?         @map("cancelled_at")
-  rejectedAt      DateTime?         @map("rejected_at")
-  rejectedBy      String?           @map("rejected_by")
-  rejectionReason String?           @map("rejection_reason")
-
-  venue   Venue        @relation(fields: [venueId], references: [id])
-  coach   StaffMember  @relation(fields: [coachId], references: [id])
-  player  Player       @relation(fields: [playerId], references: [id])
-  court   Court?       @relation(fields: [courtId], references: [id])
-  package CoachPackage @relation(fields: [packageId], references: [id])
-
-  @@index([venueId, date])
-  @@index([coachId, date])
-  @@index([playerId])
-  @@map("coach_lessons")
-}
-
-model CoachAvailability {
-  id        String  @id @default(cuid())
-  coachId   String  @map("coach_id")
-  dayOfWeek Int     @map("day_of_week")
-  startTime String  @map("start_time")
-  endTime   String  @map("end_time")
-  enabled   Boolean @default(true)
-
-  coach StaffMember @relation(fields: [coachId], references: [id], onDelete: Cascade)
-
-  @@index([coachId])
-  @@map("coach_availabilities")
-}
-
-model CoachHoliday {
-  id        String   @id @default(cuid())
-  coachId   String   @map("coach_id")
-  startDate DateTime @map("start_date") @db.Date
-  endDate   DateTime @map("end_date") @db.Date
-  note      String?
-
-  coach StaffMember @relation(fields: [coachId], references: [id], onDelete: Cascade)
-
-  @@index([coachId])
-  @@map("coach_holidays")
-}
-
-model FaceAttempt {
-  id                  String   @id @default(cuid())
-  eventId             String   @map("event_id")
-  matchedPlayerId     String?  @map("matched_player_id")
-  resultType          String   @map("result_type")
-  /// Staff kiosk: phone used when check-in is confirmed via phone fallback (digits-normalized lookup).
-  phoneNumber         String?  @map("phone_number")
-  confidence          Float?
-  imageUrl            String?  @map("image_url")
-  createdNewPlayer    Boolean @default(false) @map("created_new_player")
-  hostReviewed        Boolean @default(false) @map("host_reviewed")
-  queueNumberAssigned Int?     @map("queue_number_assigned")
-  kioskDeviceId       String?  @map("kiosk_device_id")
-  createdAt           DateTime @default(now()) @map("created_at")
-
-  matchedPlayer Player? @relation(fields: [matchedPlayerId], references: [id])
-
-  @@index([eventId])
-  @@index([createdAt])
-  @@map("face_attempts")
-}
-
-/// Live check-in / venue face recognition attempts (SearchFacesByImage scores for threshold tuning).
-model FaceRecognitionLog {
-  id              String   @id @default(cuid())
-  venueId         String   @map("venue_id")
-  playerId        String?  @map("player_id")
-  staffId         String?  @map("staff_id")
-  similarityScore Float?   @map("similarity_score")
-  threshold       Float    @map("threshold")
-  passed          Boolean
-  createdAt       DateTime @default(now()) @map("created_at")
-
-  venue  Venue         @relation(fields: [venueId], references: [id], onDelete: Cascade)
-  player Player?       @relation(fields: [playerId], references: [id], onDelete: SetNull)
-  staff  StaffMember?  @relation(fields: [staffId], references: [id], onDelete: SetNull)
-
-  @@index([venueId, createdAt])
-  @@map("face_recognition_logs")
-}
-
-model PendingPayment {
-  id              String    @id @default(cuid())
-  venueId         String    @map("venue_id")
-  sessionId       String?   @map("session_id")
-  playerId        String?   @map("player_id")
-  checkInPlayerId String?   @map("check_in_player_id")
-  paymentRef      String?   @unique @map("payment_ref")
-  amount          Int
-  /// Session check-in: number of people covered by this payment (1–4). Default 1.
-  partyCount      Int       @default(1) @map("party_count")
-  paymentMethod   String    @default("vietqr") @map("payment_method")
-  type            String    // "checkin" | "registration" | "subscription"
-  status          String    @default("pending") // "pending" | "confirmed" | "cancelled" | "expired"
-  createdAt       DateTime  @default(now()) @map("created_at")
-  expiresAt       DateTime  @map("expires_at")
-  confirmedAt       DateTime? @map("confirmed_at")
-  confirmedBy       String?   @map("confirmed_by")
-  /// Device model/name of the staff phone that manually confirmed this payment (e.g. "iPhone 15 Pro").
-  confirmedOnDevice String?   @map("confirmed_on_device")
-  /// Optional: this payment is covered by another payer's grouped payment.
-  groupPaidByPaymentId String? @map("group_paid_by_payment_id")
-  /// Snapshot of payer display name for stable UI label.
-  groupPaidByName      String? @map("group_paid_by_name")
-  cancelReason    String?   @map("cancel_reason") // "refunded" | "mistake" — set when a confirmed payment is voided
-  cancelledAt     DateTime? @map("cancelled_at")
-
-  venue         Venue          @relation(fields: [venueId], references: [id])
-  session       Session?       @relation(fields: [sessionId], references: [id])
-  player        Player?        @relation(fields: [playerId], references: [id])
-  checkInPlayer CheckInPlayer? @relation(fields: [checkInPlayerId], references: [id])
-
-  @@index([venueId, status])
-  @@index([sessionId])
-  @@index([paymentRef])
-  @@map("pending_payments")
-}
-
-model KioskDevice {
-  id       String  @id @default(cuid())
-  name     String
-  location String?
-  active   Boolean @default(true)
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@map("kiosk_devices")
-}
-
-// ─── CourtPay Module ─────────────────────────────────────────
-
-model CheckInPlayer {
-  id               String   @id @default(cuid())
-  venueId          String   @map("venue_id")
-  name             String
-  phone            String
-  gender           String?
-  skillLevel       String?  @map("skill_level")
-  createdAt        DateTime @default(now()) @map("created_at")
-  playerIdentityId String?  @map("player_identity_id")
-
-  playerIdentity PlayerIdentity?      @relation(fields: [playerIdentityId], references: [id], onDelete: SetNull)
-  venue         Venue                @relation(fields: [venueId], references: [id])
-  subscriptions PlayerSubscription[]
-  payments      PendingPayment[]
-  checkIns      CheckInRecord[]
-
-  @@unique([phone, venueId])
-  @@index([venueId])
-  @@index([playerIdentityId])
-  @@map("check_in_players")
-}
-
-model SubscriptionPackage {
-  id           String   @id @default(cuid())
-  venueId      String   @map("venue_id")
-  name         String
-  sessions     Int?
-  durationDays Int      @map("duration_days")
-  price        Int
-  perks        String?
-  isActive        Boolean  @default(true) @map("is_active")
-  showInCheckIn   Boolean  @default(true) @map("show_in_check_in")
-  discountPct     Int?     @map("discount_pct")
-  isBestChoice    Boolean  @default(false) @map("is_best_choice")
-  isFreePass      Boolean  @default(false) @map("is_free_pass")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-
-  venue         Venue                @relation(fields: [venueId], references: [id])
-  subscriptions PlayerSubscription[]
-
-  @@index([venueId, isActive])
-  @@map("subscription_packages")
-}
-
-model PlayerSubscription {
-  id                String             @id @default(cuid())
-  playerId          String             @map("player_id")
-  packageId         String             @map("package_id")
-  venueId           String             @map("venue_id")
-  status            SubscriptionStatus @default(active)
-  sessionsRemaining Int?               @map("sessions_remaining")
-  activatedAt       DateTime           @default(now()) @map("activated_at")
-  expiresAt         DateTime           @map("expires_at")
-  paymentRef        String?            @map("payment_ref")
-  createdAt         DateTime           @default(now()) @map("created_at")
-  updatedAt         DateTime           @updatedAt @map("updated_at")
-
-  player  CheckInPlayer       @relation(fields: [playerId], references: [id])
-  package SubscriptionPackage @relation(fields: [packageId], references: [id])
-  usages  SubscriptionUsage[]
-
-  @@index([playerId, status])
-  @@index([venueId, status])
-  @@map("player_subscriptions")
-}
-
-model SubscriptionUsage {
-  id             String   @id @default(cuid())
-  subscriptionId String   @map("subscription_id")
-  checkedInAt    DateTime @default(now()) @map("checked_in_at")
-
-  subscription PlayerSubscription @relation(fields: [subscriptionId], references: [id])
-
-  @@index([subscriptionId])
-  @@map("subscription_usages")
-}
-
-model StaffPushToken {
-  id         String   @id @default(cuid())
-  staffId    String   @map("staff_id")
-  /// Null for coach-only accounts that never select a venue.
-  venueId    String?  @map("venue_id")
-  token      String
-  platform   String   @default("android")
-  deviceId   String?  @map("device_id")
-  active     Boolean  @default(true)
-  lastSeenAt DateTime @default(now()) @map("last_seen_at")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
-
-  staff StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
-
-  @@unique([staffId, token])
-  @@index([venueId, active])
-  @@map("staff_push_tokens")
-}
-
-model CheckInRecord {
-  id          String   @id @default(cuid())
-  playerId    String   @map("player_id")
-  venueId     String   @map("venue_id")
-  checkedInAt DateTime @default(now()) @map("checked_in_at")
-  paymentId   String?  @map("payment_id")
-  source      String   // "vietqr" | "cash" | "subscription"
-
-  player CheckInPlayer @relation(fields: [playerId], references: [id])
-  venue  Venue         @relation(fields: [venueId], references: [id])
-
-  @@index([venueId, checkedInAt])
-  @@index([playerId])
-  @@map("check_in_records")
-}
-
-// ─── Billing Module ─────────────────────────────────────────
-
-model BillingConfig {
-  id                  String   @id @default("default")
-  bankBin             String   @default("") @map("bank_bin")
-  bankAccount         String   @default("") @map("bank_account")
-  bankOwner           String   @default("") @map("bank_owner")
-  defaultBaseRate     Int      @default(5000) @map("default_base_rate")
-  defaultSubAddon     Int      @default(1000) @map("default_sub_addon")
-  defaultSepayAddon   Int      @default(1000) @map("default_sepay_addon")
-  paymentGateway      String   @default("payos") @map("payment_gateway")
-  /// Email address to notify when a client submits payment proof
-  notificationEmail   String?  @map("notification_email")
-  updatedAt           DateTime @updatedAt @map("updated_at")
-
-  @@map("billing_config")
-}
-
-model VenueBillingRate {
-  id                 String    @id @default(cuid())
-  venueId            String    @unique @map("venue_id")
-  baseRatePerCheckin Int       @default(5000) @map("base_rate_per_checkin")
-  subscriptionAddon  Int       @default(1000) @map("subscription_addon")
-  sepayAddon         Int       @default(1000) @map("sepay_addon")
-  /// Free flags per component — when true that component costs 0 on the weekly invoice
-  isFreeBase         Boolean   @default(false) @map("is_free_base")
-  isFreeSubAddon     Boolean   @default(false) @map("is_free_sub_addon")
-  isFreeSepayAddon   Boolean   @default(false) @map("is_free_sepay_addon")
-  /// "per_payment" (default) = weekly invoice per CourtPay payment; "monthly" = flat monthly rate
-  billingModel       String    @default("per_payment") @map("billing_model")
-  /// Flat monthly fee in VND — only used when billingModel = "monthly"
-  monthlyRate        Int       @default(0) @map("monthly_rate")
-  /// Date billing started under the monthly model — used to pro-rate the first invoice
-  monthlyPeriodStart DateTime? @map("monthly_period_start")
-  /// Optional end date for the monthly subscription — null means no expiry
-  monthlyEndDate     DateTime? @map("monthly_end_date")
-  /// "active" | "cancelled" | "inactive"
-  monthlyStatus      String    @default("inactive") @map("monthly_status")
-  createdAt          DateTime  @default(now()) @map("created_at")
-  updatedAt          DateTime  @updatedAt @map("updated_at")
-
-  venue Venue @relation(fields: [venueId], references: [id])
-
-  @@map("venue_billing_rates")
-}
-
-model BillingInvoice {
-  id                   String    @id @default(cuid())
-  venueId              String    @map("venue_id")
-  weekStartDate        DateTime  @map("week_start_date")
-  weekEndDate          DateTime  @map("week_end_date")
-  totalCheckins        Int       @default(0) @map("total_checkins")
-  subscriptionCheckins Int       @default(0) @map("subscription_checkins")
-  sepayCheckins        Int       @default(0) @map("sepay_checkins")
-  baseAmount           Int       @default(0) @map("base_amount")
-  subscriptionAmount   Int       @default(0) @map("subscription_amount")
-  sepayAmount          Int       @default(0) @map("sepay_amount")
-  totalAmount          Int       @default(0) @map("total_amount")
-  status               String    @default("pending") // "pending" | "paid" | "overdue"
-  /// "weekly" (default, per_payment model) | "monthly"
-  invoiceType          String    @default("weekly") @map("invoice_type")
-  paymentRef           String?   @unique @map("payment_ref")
-  paidAt               DateTime? @map("paid_at")
-  confirmedBy          String?   @map("confirmed_by") // "sepay" | "manual_admin" | "payos" | "payos_admin" | "sepay_admin" | "free_tier"
-  paidAmount           Int?      @map("paid_amount")
-  comment              String?   @map("comment")
-  payosOrderCode       String?   @unique @map("payos_order_code")
-  createdAt            DateTime  @default(now()) @map("created_at")
-  updatedAt            DateTime  @updatedAt @map("updated_at")
-
-  venue     Venue             @relation(fields: [venueId], references: [id])
-  lineItems BillingLineItem[]
-
-  @@unique([venueId, weekStartDate])
-  @@index([venueId, status])
-  @@map("billing_invoices")
-}
-
-model BillingLineItem {
-  id              String   @id @default(cuid())
-  invoiceId       String   @map("invoice_id")
-  checkInRecordId String   @map("check_in_record_id")
-  playerId        String   @map("player_id")
-  checkedInAt     DateTime @map("checked_in_at")
-  baseRate        Int      @map("base_rate")
-  subscriptionAddon Int    @default(0) @map("subscription_addon")
-  sepayAddon      Int      @default(0) @map("sepay_addon")
-  lineTotal       Int      @map("line_total")
-
-  invoice BillingInvoice @relation(fields: [invoiceId], references: [id])
-
-  @@index([invoiceId])
-  @@map("billing_line_items")
-}
-
-/// Manually-created invoices used when a venue's billingModel = "manual"
-model ManualBillingInvoice {
-  id        String    @id @default(cuid())
-  venueId   String    @map("venue_id")
-  amount    Int
-  dueDate   DateTime  @map("due_date")
-  /// "pending" | "pending_review" | "paid" | "overdue"
-  status    String    @default("pending")
-  pdfUrl    String?   @map("pdf_url")
-  paidAt    DateTime? @map("paid_at")
-  paidMethod String?  @map("paid_method")
-  paidRef   String?   @map("paid_ref")
-  notes     String?
-  /// Client-submitted payment proof fields
-  proofUrl         String?   @map("proof_url")
-  proofSubmittedAt DateTime? @map("proof_submitted_at")
-  proofMethod      String?   @map("proof_method")
-  proofRef         String?   @map("proof_ref")
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-
-  venue Venue @relation(fields: [venueId], references: [id])
-
-  @@index([venueId, status])
-  @@map("manual_billing_invoices")
-}
-
-model PlayerCustomPrice {
-  id           String   @id @default(cuid())
-  playerId     String   @map("player_id")
-  staffId      String   @map("staff_id")
-  discountType String   @map("discount_type")
-  customFee    Int?     @map("custom_fee")
-  discountPct  Int?     @map("discount_pct")
-  note         String?
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-
-  player Player      @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  staff  StaffMember @relation(fields: [staffId], references: [id], onDelete: Cascade)
-
-  @@unique([playerId, staffId])
-  @@map("player_custom_prices")
-}
-
-// ─── AI Sticker Generation ─────────────────────────────────────────
-
-model PlayerStickerPhoto {
-  id        String   @id @default(cuid())
-  playerId  String   @map("player_id")
-  imageUrl  String   @map("image_url")
-  slotIndex Int      @map("slot_index")
-  createdAt DateTime @default(now()) @map("created_at")
-
-  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
-
-  @@unique([playerId, slotIndex])
-  @@map("player_sticker_photos")
-}
-
-model PlayerStickerResult {
-  id                    String   @id @default(cuid())
-  playerId              String   @map("player_id")
-  imageUrl              String   @map("image_url")
-  prompt                String
-  model                 String   @default("gpt-image-1")
-  size                  String   @default("1024x1024")
-  costUsd               Decimal  @default(0.04) @map("cost_usd") @db.Decimal(6, 4)
-  generationTimeSeconds Decimal? @map("generation_time_seconds") @db.Decimal(6, 2)
-  createdAt             DateTime @default(now()) @map("created_at")
-  updatedAt             DateTime @updatedAt @map("updated_at")
-
-  player       Player              @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  stickerPacks PlayerStickerPack[]
-
-  @@index([playerId])
-  @@map("player_sticker_results")
-}
-
-model PlayerStickerPack {
-  id               String    @id @default(cuid())
-  playerId         String    @map("player_id")
-  resultId         String    @map("result_id")
-  sticker1Url      String?   @map("sticker_1_url")
-  sticker2Url      String?   @map("sticker_2_url")
-  sticker3Url      String?   @map("sticker_3_url")
-  sticker4Url      String?   @map("sticker_4_url")
-  isPaid           Boolean   @default(false) @map("is_paid")
-  paidAt           DateTime? @map("paid_at")
-  paymentCode      String?   @unique @map("payment_code")
-  payosOrderCode   String?   @unique @map("payos_order_code")
-  howToCardUrl     String?   @map("how_to_card_url")
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
-
-  player Player              @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  result PlayerStickerResult @relation(fields: [resultId], references: [id], onDelete: Cascade)
-
-  @@index([playerId])
-  @@map("player_sticker_packs")
-}
-
-model StickerPaymentLog {
-  id             String   @id @default(cuid())
-  payosOrderCode String   @unique @map("payos_order_code")
-  paymentCode    String   @map("payment_code")
-  transferAmount Int      @map("transfer_amount")
-  content        String   @default("")
-  processedAt    DateTime @default(now()) @map("processed_at")
-
-  @@map("sticker_payment_logs")
-}
-
-model StickerSession {
-  id        String   @id @default(cuid())
-  playerId  String   @map("player_id")
-  token     String   @unique @default(cuid())
-  expiresAt DateTime @map("expires_at")
-  createdAt DateTime @default(now()) @map("created_at")
-  player    Player   @relation(fields: [playerId], references: [id], onDelete: Cascade)
-
-  @@map("sticker_sessions")
-}
-
-model KioskSettings {
-  id              String   @id @default("global")
-  stickerPrice    Int      @default(30000) @map("sticker_price")
-  bankBin         String   @default("") @map("bank_bin")
-  bankAccount     String   @default("") @map("bank_account")
-  bankOwnerName   String   @default("") @map("bank_owner_name")
-  /// Chroma key tolerance for background removal (default 65, original default 40)
-  chromaTolerance Int      @default(65) @map("chroma_tolerance")
-  /// Gaussian feather radius for chroma key edges (default 0.8, original default 1.5)
-  featherRadius   Float    @default(0.8) @map("feather_radius")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-
-  @@map("kiosk_settings")
-}
-
-/// Logs face duplicate detections during player sign-up for review in the admin panel.
-model SignupDuplicateLog {
-  id                  String   @id @default(cuid())
-  /// The photo submitted by the new person trying to sign up (stored as a file path or base64 data URL).
-  newPlayerPhotoPath  String?  @map("new_player_photo_path")
-  /// The name submitted by the person trying to sign up (if provided).
-  newPlayerName       String?  @map("new_player_name")
-  /// The phone submitted by the person trying to sign up (if provided).
-  newPlayerPhone      String?  @map("new_player_phone")
-  /// The existing player that AWS Rekognition matched against.
-  matchedPlayerId     String   @map("matched_player_id")
-  /// AWS Rekognition similarity score (0–100).
-  similarityScore     Float?   @map("similarity_score")
-  /// The AWS Rekognition threshold used at the time of the check.
-  threshold           Float?   @map("threshold")
-  /// AWS FaceId returned for the matched existing player's face.
-  awsFaceId           String?  @map("aws_face_id")
-  /// Raw AWS Rekognition response details (JSON).
-  awsDetail           Json?    @map("aws_detail")
-  /// Source surface: "kiosk" | "courtpay".
-  source              String   @default("unknown")
-  /// Venue where the duplicate was detected.
-  venueId             String?  @map("venue_id")
-  /// Whether an admin has reviewed and resolved this entry.
-  reviewed            Boolean  @default(false)
-  reviewedAt          DateTime? @map("reviewed_at")
-  reviewNote          String?   @map("review_note")
-  createdAt           DateTime @default(now()) @map("created_at")
-
-  matchedPlayer Player  @relation(fields: [matchedPlayerId], references: [id], onDelete: Cascade)
-  venue         Venue?  @relation(fields: [venueId], references: [id], onDelete: SetNull)
-
-  @@index([createdAt])
-  @@index([matchedPlayerId])
-  @@index([venueId])
-  @@map("signup_duplicate_logs")
-}
-
-model StickerTemplate {
-  id           String   @id @default(cuid())
-  name         String
-  malePrompt   String   @map("male_prompt") @db.Text
-  femalePrompt String   @map("female_prompt") @db.Text
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-
-  @@map("sticker_templates")
-}
-
-model StickerJobQueue {
-  id        String   @id @default(cuid())
-  playerId  String   @map("player_id")
-  /// pending | processing | done | failed
-  status    String   @default("pending")
-  attempts  Int      @default(0)
-  error     String?
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
-
-  @@index([status, createdAt])
-  @@map("sticker_job_queue")
-}
-
-model StaffAuthLog {
-  id                    String   @id @default(cuid())
-  staffId               String?  @map("staff_id")
-  action                String
-  phone                 String?
-  ipAddress             String?  @map("ip_address")
-  country               String?
-  city                  String?
-  userAgent             String?  @map("user_agent")
-  fingerprintId         String?  @map("fingerprint_id")
-  fingerprintConfidence Float?   @map("fingerprint_confidence")
-  isVpn                 Boolean? @map("is_vpn")
-  isThreat              Boolean? @map("is_threat")
-  createdAt             DateTime @default(now()) @map("created_at")
-
-  staff StaffMember? @relation(fields: [staffId], references: [id], onDelete: SetNull)
-
-  @@index([staffId])
-  @@index([createdAt])
-  @@index([fingerprintId])
-  @@map("staff_auth_logs")
-}
-
-// ─── Player Booking Portal ─────────────────────────────────────
-
-model PlayerAccount {
-  id                String    @id @default(cuid())
-  playerId          String    @map("player_id")
-  provider          String
-  providerAccountId String    @map("provider_account_id")
-  email             String?
-  name              String?
-  image             String?
-  passwordHash      String?   @map("password_hash")
-  emailVerified     Boolean   @default(false) @map("email_verified")
-  country           String?
-  createdAt         DateTime  @default(now()) @map("created_at")
-
-  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-  @@index([playerId])
-  @@map("player_accounts")
-}
-
-model PlayerCoachCredit {
-  id            String    @id @default(cuid())
-  playerId      String    @map("player_id")
-  coachId       String    @map("coach_id")
-  venueId       String    @map("venue_id")
-  packageId     String    @map("package_id")
-  totalSessions Int       @map("total_sessions")
-  usedSessions  Int       @default(0) @map("used_sessions")
-  priceValue    Int       @map("price_value")
-  paymentRef    String?   @unique @map("payment_ref")
-  paymentStatus String    @default("pending") @map("payment_status")
-  proofUrl      String?   @map("proof_url")
-  confirmedBy   String?   @map("confirmed_by")
-  confirmedAt   DateTime? @map("confirmed_at")
-  expiresAt     DateTime  @map("expires_at")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-
-  player       Player              @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  coach        StaffMember         @relation(fields: [coachId], references: [id])
-  venue        Venue               @relation(fields: [venueId], references: [id])
-  package      CoachPackage        @relation(fields: [packageId], references: [id])
-  transactions CreditTransaction[]
-
-  @@index([playerId, coachId])
-  @@index([venueId])
-  @@map("player_coach_credits")
-}
-
-model OpenPlayRegistration {
-  id               String    @id @default(cuid())
-  venueId          String    @map("venue_id")
-  scheduleEntryId  String    @map("schedule_entry_id")
-  date             DateTime  @db.Date @map("date")
-  startTime        DateTime  @map("start_time")
-  endTime          DateTime  @map("end_time")
-  playerId         String    @map("player_id")
-  priceValue       Int       @map("price_value")
-  paymentStatus    String    @default("pending") @map("payment_status")
-  holdExpiresAt    DateTime? @map("hold_expires_at")
-  paymentProofUrl  String?   @map("payment_proof_url")
-  paymentRef       String?   @unique @map("payment_ref")
-  status           String    @default("confirmed") @map("status")
-  createdAt        DateTime  @default(now()) @map("created_at")
-  cancelledAt      DateTime? @map("cancelled_at")
-  rejectedAt       DateTime? @map("rejected_at")
-  rejectedBy       String?   @map("rejected_by")
-  rejectionReason  String?   @map("rejection_reason")
-
-  venue  Venue  @relation(fields: [venueId], references: [id])
-  player Player @relation(fields: [playerId], references: [id])
-
-  @@unique([scheduleEntryId, date, playerId])
-  @@index([scheduleEntryId, date])
-  @@index([venueId, date])
-  @@index([playerId])
-  @@map("open_play_registrations")
-}
-
-model PlayerNote {
-  id        String   @id @default(cuid())
-  playerId  String   @map("player_id")
-  venueId   String   @map("venue_id")
-  content   String   @db.Text
-  updatedAt DateTime @updatedAt @map("updated_at")
-  updatedBy String?  @map("updated_by")
-
-  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
-  venue  Venue  @relation(fields: [venueId], references: [id])
-
-  @@unique([playerId, venueId])
-  @@index([venueId])
-  @@map("player_notes")
-}
-
-model EmailLog {
-  id              String   @id @default(cuid())
-  playerId        String   @map("player_id")
-  bookingType     String   @map("booking_type")
-  bookingId       String   @map("booking_id")
-  emailType       String   @map("email_type")
-  recipientRole   String   @default("student") @map("recipient_role")
-  resendMessageId String?  @map("resend_message_id")
-  sentAt          DateTime @default(now()) @map("sent_at")
-  status          String   @default("sent")
-
-  @@index([bookingId, emailType])
-  @@map("email_logs")
-}
-
-model CreditTransaction {
-  id        String   @id @default(cuid())
-  creditId  String   @map("credit_id")
-  lessonId  String?  @map("lesson_id")
-  amount    Int
-  reason    String
-  createdAt DateTime @default(now()) @map("created_at")
-
-  credit PlayerCoachCredit @relation(fields: [creditId], references: [id], onDelete: Cascade)
-
-  @@index([creditId])
-  @@map("credit_transactions")
-}
-
-/// One-time login tokens for players whose accounts were created by the
-/// booking agent (no password known to the player). Each token may be
-/// consumed exactly once; subsequent visits return a 410 Gone response.
-model PlayerMagicToken {
-  id        String    @id @default(cuid())
-  playerId  String    @map("player_id")
-  /// jti (JWT ID) stored so we can look up the token without embedding secrets
-  jti       String    @unique @map("jti")
-  expiresAt DateTime  @map("expires_at")
-  usedAt    DateTime? @map("used_at")
-  createdAt DateTime  @default(now()) @map("created_at")
-
-  player Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
-
-  @@index([playerId])
-  @@map("player_magic_tokens")
-}
-
-// ─── Class Pass Module ───────────────────────────────────────
-
-/// Defines a recurring class-pass product sold at a venue (e.g. "Beginner Group 12-session pass").
-/// cycleLengthDays is informational only — actual cycle boundaries are calendar-month-aligned in application code.
-model ClassPassType {
-  id               String   @id @default(cuid())
-  venueId          String   @map("venue_id")
-  name             String
-  price            Int
-  sessionsIncluded Int      @default(12) @map("sessions_included")
-  /// Informational only. Cycle renewal logic is calendar-month-aligned in application code.
-  cycleLengthDays  Int      @default(30) @map("cycle_length_days")
-  linkedCoachId    String?  @map("linked_coach_id")
-  isActive         Boolean  @default(true) @map("is_active")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
-
-  venue          Venue         @relation(fields: [venueId], references: [id])
-  linkedCoach    StaffMember?  @relation(fields: [linkedCoachId], references: [id], onDelete: SetNull)
-  classPasses    ClassPass[]
-  classInstances ClassInstance[]
-
-  @@index([venueId, isActive])
-  @@index([linkedCoachId])
-  @@map("class_pass_types")
-}
-
-/// A player's subscription to a ClassPassType for a given cycle.
-/// A player may hold both a Membership and one or more ClassPass rows at the same venue.
-model ClassPass {
-  id                String          @id @default(cuid())
-  playerId          String          @map("player_id")
-  venueId           String          @map("venue_id")
-  passTypeId        String          @map("pass_type_id")
-  status            ClassPassStatus @default(active)
-  activatedAt       DateTime        @default(now()) @map("activated_at")
-  /// Set when activation is deferred (e.g. player purchases in advance).
-  deferredStartDate DateTime?       @map("deferred_start_date")
-  cycleStart        DateTime        @map("cycle_start")
-  cycleEnd          DateTime        @map("cycle_end")
-  sessionsUsed      Int             @default(0) @map("sessions_used")
-  createdAt         DateTime        @default(now()) @map("created_at")
-  updatedAt         DateTime        @updatedAt @map("updated_at")
-
-  player   Player        @relation(fields: [playerId], references: [id])
-  venue    Venue         @relation(fields: [venueId], references: [id])
-  passType ClassPassType @relation(fields: [passTypeId], references: [id])
-  payments ClassPassPayment[]
-  checkIns ClassCheckIn[]
-
-  @@index([playerId, venueId])
-  @@index([venueId, status])
-  @@index([passTypeId])
-  @@map("class_passes")
-}
-
-/// Monthly/cycle payment record for a ClassPass.
-model ClassPassPayment {
-  id            String                 @id @default(cuid())
-  classPassId   String                 @map("class_pass_id")
-  periodStart   DateTime               @map("period_start")
-  periodEnd     DateTime               @map("period_end")
-  amountValue   Int                    @map("amount_value")
-  status        ClassPassPaymentStatus @default(UNPAID)
-  paymentMethod String?                @map("payment_method")
-  paidAt        DateTime?              @map("paid_at")
-  proofUrl      String?                @map("proof_url")
-  note          String?
-  /// Populated when payment is voided/refunded — records the reason.
-  voidReason    String?                @map("void_reason")
-  createdAt     DateTime               @default(now()) @map("created_at")
-  updatedAt     DateTime               @updatedAt @map("updated_at")
-
-  classPass ClassPass @relation(fields: [classPassId], references: [id], onDelete: Cascade)
-
-  @@index([classPassId])
-  @@index([status])
-  @@map("class_pass_payments")
-}
-
-/// A scheduled occurrence of a class that class-pass holders can check into.
-model ClassInstance {
-  id         String   @id @default(cuid())
-  venueId    String   @map("venue_id")
-  coachId    String   @map("coach_id")
-  courtId    String?  @map("court_id")
-  passTypeId String   @map("pass_type_id")
-  startAt    DateTime @map("start_at")
-  endAt      DateTime @map("end_at")
-  maxPlayers Int      @map("max_players")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
-
-  venue     Venue         @relation(fields: [venueId], references: [id])
-  coach     StaffMember   @relation(fields: [coachId], references: [id])
-  court     Court?        @relation(fields: [courtId], references: [id])
-  passType  ClassPassType @relation(fields: [passTypeId], references: [id])
-  checkIns  ClassCheckIn[]
-
-  @@index([venueId, startAt])
-  @@index([coachId, startAt])
-  @@index([passTypeId])
-  @@map("class_instances")
-}
-
-/// Records a class-pass holder's attendance at a specific class instance.
-/// Unique constraint on (classPassId, classInstanceId) prevents double check-in.
-model ClassCheckIn {
-  id              String   @id @default(cuid())
-  classPassId     String   @map("class_pass_id")
-  classInstanceId String   @map("class_instance_id")
-  checkedInAt     DateTime @default(now()) @map("checked_in_at")
-
-  classPass     ClassPass     @relation(fields: [classPassId], references: [id], onDelete: Cascade)
-  classInstance ClassInstance @relation(fields: [classInstanceId], references: [id], onDelete: Cascade)
-
-  @@unique([classPassId, classInstanceId])
-  @@index([classInstanceId])
-  @@map("class_check_ins")
+enum ClassPassStatus {
+  active
+  paused
+  expired
+  cancelled
 }

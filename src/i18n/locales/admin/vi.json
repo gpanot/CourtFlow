@@ -27,7 +27,7 @@
     "logsErrors": "Nhật ký & Lỗi",
     "courtpassPlayers": "Người chơi CourtPass",
     "organizations": "Tổ chức",
-    "classPasses": "Thẻ Lớp Học"
+    "programPasses": "Thẻ Chương Trình"
   },
   "layout": {
     "adminPanel": "Bảng quản trị",
