@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
     if (!venueId) return error("venueId is required");
     if (!dateStr) return error("date is required");
 
-    const date = new Date(dateStr);
+    const date = new Date(dateStr.split("T")[0] + "T12:00:00+07:00");
     const slots = await getAvailableSlots(venueId, date);
 
     return json(slots);

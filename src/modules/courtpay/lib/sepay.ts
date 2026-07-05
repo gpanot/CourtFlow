@@ -102,6 +102,42 @@ async function handlePortalBookingPayment(
   payload: SepayWebhookPayload,
   ref: string
 ): Promise<{ matched: boolean; paymentId?: string }> {
+  // Try group booking first (group holds the paymentRef)
+  const group = await prisma.bookingGroup.findFirst({ where: { paymentRef: ref } });
+  if (group) {
+    if (group.paymentStatus !== "pending") return { matched: false };
+    if (payload.transferAmount < group.totalPriceValue) return { matched: false };
+    if (!(await checkVenueAutoPayment(group.venueId))) return { matched: false };
+
+    await prisma.$transaction([
+      prisma.bookingGroup.update({
+        where: { id: group.id },
+        data: { paymentStatus: "paid", holdExpiresAt: null },
+      }),
+      prisma.booking.updateMany({
+        where: { bookingGroupId: group.id },
+        data: { paymentStatus: "paid", holdExpiresAt: null },
+      }),
+    ]);
+
+    const player = await prisma.player.findUnique({
+      where: { id: group.playerId },
+      select: { name: true, email: true },
+    });
+    if (player?.email) {
+      await sendBookingEmail({
+        to: player.email,
+        playerName: player.name,
+        bookingType: "court",
+        emailType: "auto_confirmed",
+        details: {},
+      });
+    }
+
+    return { matched: true, paymentId: group.id };
+  }
+
+  // Fall back to single-court booking
   const booking = await prisma.booking.findFirst({ where: { paymentRef: ref } });
   if (!booking || booking.paymentStatus !== "pending") return { matched: false };
   if (payload.transferAmount < booking.priceValue) return { matched: false };

@@ -79,17 +79,29 @@ export default function BookingDetailPage() {
   const endTime = new Date(booking.endTime as string);
   const court = booking.court as { label: string };
   const isCancelled = booking.status === "cancelled";
-  const paymentStatus = booking.paymentStatus as string | null;
-  const paymentRef = booking.paymentRef as string | null | undefined;
+  const siblingBookings = (booking.siblingBookings as { id: string; court: { label: string }; priceValue: number }[] | undefined) ?? [];
+  const isGroup = siblingBookings.length > 0;
+  // For group bookings use the group-level fields; fall back to single-booking fields
+  const effectivePaymentStatus = (isGroup
+    ? (booking.groupPaymentStatus as string | null)
+    : (booking.paymentStatus as string | null)) ?? null;
+  const effectivePaymentRef = isGroup
+    ? (booking.groupPaymentRef as string | null | undefined)
+    : (booking.paymentRef as string | null | undefined);
+  const effectiveTotalPrice = isGroup
+    ? ((booking.groupTotalPrice as number | null) ?? (booking.priceValue as number))
+    : (booking.priceValue as number);
+  // kept for ProgressStepper (which uses the same effective status)
+  const paymentStatus = effectivePaymentStatus;
   const paymentProofUrl = resolveUploadUrl(booking.paymentProofUrl as string | null | undefined);
   const priceValue = booking.priceValue as number;
   const bookingDate = booking.date as string;
-  const paymentInfo = resolvePaymentInfo(paymentStatus);
-  const paid = isPaid(paymentStatus ?? "");
+  const paymentInfo = resolvePaymentInfo(effectivePaymentStatus);
+  const paid = isPaid(effectivePaymentStatus ?? "");
 
   const helpMessage = venueContact
     ? t("bookingDetail.helpMessage", {
-        ref: String(booking.paymentRef || id).slice(0, 20),
+        ref: String(effectivePaymentRef || id).slice(0, 20),
         venue: venueContact.name,
       })
     : "";
@@ -112,18 +124,31 @@ export default function BookingDetailPage() {
 
       {/* Booking details card */}
       <div className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-4 space-y-2">
-        <Row label={t("common.court")} value={court.label} />
+        {isGroup ? (
+          /* Group booking: one row per court (name → price), then total */
+          <>
+            <Row label={court.label} value={formatPrice(priceValue)} />
+            {siblingBookings.map((sb) => (
+              <Row key={sb.id} label={sb.court.label} value={formatPrice(sb.priceValue)} />
+            ))}
+            <div className="border-t border-[var(--cm-border)] pt-2">
+              <Row label={t("common.total")} value={formatPrice(effectiveTotalPrice)} valueClass="font-semibold text-[var(--cm-accent)]" />
+            </div>
+          </>
+        ) : (
+          <Row label={t("common.court")} value={court.label} />
+        )}
         <Row label={t("common.date")} value={formatDateField(bookingDate)} />
         <Row label={t("common.time")} value={`${formatTime(startTime)} – ${formatTime(endTime)}`} />
-        <Row label={t("common.price")} value={formatPrice(priceValue)} />
+        {!isGroup && <Row label={t("common.price")} value={formatPrice(priceValue)} />}
         {isCancelled && <Row label={t("common.status")} value={t("bookings.cancelled")} />}
         <Row
           label={t("common.payment")}
           value={isCancelled ? "—" : t(paymentInfo.labelKey)}
           valueClass={isCancelled ? "" : paymentInfo.color}
         />
-        {paymentRef && !isCancelled && (
-          <Row label={t("common.paymentRef")} value={paymentRef} valueClass="font-mono text-xs" />
+        {effectivePaymentRef && !isCancelled && (
+          <Row label={t("common.paymentRef")} value={effectivePaymentRef} valueClass="font-mono text-xs" />
         )}
       </div>
 
@@ -141,9 +166,15 @@ export default function BookingDetailPage() {
         </p>
       )}
 
-      {!isCancelled && paymentStatus === "pending" && (
+      {!isCancelled && effectivePaymentStatus === "pending" && (
         <button
-          onClick={() => router.push(`/book/pay/${id}`)}
+          onClick={() =>
+            router.push(
+              isGroup
+                ? `/book/pay/group/${booking.bookingGroupId as string}`
+                : `/book/pay/${id}`
+            )
+          }
           className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm mb-3"
         >
           {t("bookingDetail.completePayment")}
@@ -169,6 +200,7 @@ export default function BookingDetailPage() {
           onConfirm={handleCancel}
           onDismiss={() => setShowConfirm(false)}
           cancelling={cancelling}
+          bodyOverride={isGroup ? t("bookings.groupCancelConfirm") : undefined}
         />
       )}
     </div>

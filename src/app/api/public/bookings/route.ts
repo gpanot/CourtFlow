@@ -171,7 +171,31 @@ export async function GET(request: NextRequest) {
       orderBy: { startTime: "desc" },
     });
 
-    return json(bookings.map((b) => ({ ...b, date: toDateKey(b.date) })));
+    // Batch-fetch booking group info for any grouped bookings
+    const groupIds = [...new Set(
+      bookings.map((b) => (b as typeof b & { bookingGroupId?: string | null }).bookingGroupId).filter(Boolean)
+    )] as string[];
+    const groups = groupIds.length
+      ? await prisma.bookingGroup.findMany({
+          where: { id: { in: groupIds } },
+          select: { id: true, paymentStatus: true, totalPriceValue: true, paymentRef: true },
+        })
+      : [];
+    const groupMap = new Map(groups.map((g) => [g.id, g]));
+
+    return json(
+      bookings.map((b) => {
+        const bid = b as typeof b & { bookingGroupId?: string | null };
+        const group = bid.bookingGroupId ? groupMap.get(bid.bookingGroupId) : null;
+        return {
+          ...b,
+          date: toDateKey(b.date),
+          groupPaymentStatus: group?.paymentStatus ?? null,
+          groupTotalPrice: group?.totalPriceValue ?? null,
+          groupPaymentRef: group?.paymentRef ?? null,
+        };
+      })
+    );
   } catch (e) {
     const msg = (e as Error).message;
     if (msg === "Authentication required") return error(msg, 401);

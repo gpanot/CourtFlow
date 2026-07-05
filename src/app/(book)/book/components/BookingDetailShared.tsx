@@ -278,17 +278,19 @@ export function CancelConfirmModal({
   onConfirm,
   onDismiss,
   cancelling,
+  bodyOverride,
 }: {
   onConfirm: () => void;
   onDismiss: () => void;
   cancelling: boolean;
+  bodyOverride?: string;
 }) {
   const { t } = useTranslation();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--cm-overlay)] px-6">
       <div className="bg-[var(--cm-sheet-bg)] border border-[var(--cm-border)] rounded-2xl p-6 w-full max-w-sm">
         <h3 className="font-bold mb-2">{t("bookingDetail.cancelConfirmTitle")}</h3>
-        <p className="text-sm text-[var(--cm-text-sec)] mb-4">{t("bookingDetail.cancelConfirmBody")}</p>
+        <p className="text-sm text-[var(--cm-text-sec)] mb-4">{bodyOverride ?? t("bookingDetail.cancelConfirmBody")}</p>
         <div className="flex gap-3">
           <button
             onClick={onDismiss}

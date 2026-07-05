@@ -25,24 +25,50 @@ export async function PATCH(
     //  - "proof_submitted" → player-portal flow (staff approves submitted proof)
     //  - null / "pending"  → staff walk-in / direct cash recording
     const allowedStatuses = [null, "pending", "proof_submitted"];
-    if (!allowedStatuses.includes(booking.paymentStatus)) {
+    const effectiveStatus = booking.bookingGroupId
+      ? null // group bookings: always allow (group may have different status)
+      : booking.paymentStatus;
+    if (!booking.bookingGroupId && !allowedStatuses.includes(effectiveStatus)) {
       return error(
         `Cannot approve: payment status is "${booking.paymentStatus}"`,
         400
       );
     }
 
-    const updated = await prisma.booking.update({
+    if (booking.bookingGroupId) {
+      // Group booking: update all courts + the group record atomically
+      await prisma.$transaction(async (tx) => {
+        await tx.booking.updateMany({
+          where: { bookingGroupId: booking.bookingGroupId! },
+          data: { paymentStatus: "paid" },
+        });
+        if (body.proofUrl !== undefined) {
+          await tx.booking.update({ where: { id }, data: { paymentProofUrl: body.proofUrl } });
+        }
+        await tx.bookingGroup.update({
+          where: { id: booking.bookingGroupId! },
+          data: { paymentStatus: "paid" },
+        });
+      });
+    } else {
+      await prisma.booking.update({
+        where: { id },
+        data: {
+          paymentStatus: "paid",
+          ...(body.proofUrl !== undefined ? { paymentProofUrl: body.proofUrl } : {}),
+        },
+      });
+    }
+
+    // Re-fetch with relations for the response and email
+    const updated = await prisma.booking.findUnique({
       where: { id },
-      data: {
-        paymentStatus: "paid",
-        ...(body.proofUrl !== undefined ? { paymentProofUrl: body.proofUrl } : {}),
-      },
       include: { court: { select: { label: true } }, player: { select: { name: true, email: true } } },
     });
+    if (!updated) return error("Booking not found after update", 500);
 
-    // Send confirmation email for portal-flow approvals (proof was submitted)
-    if (booking.paymentStatus === "proof_submitted" && updated.player.email) {
+    // Send confirmation email
+    if (updated.player.email) {
       await sendBookingEmail({
         to: updated.player.email,
         playerName: updated.player.name,

@@ -246,6 +246,8 @@
   },
   "confirm": {
     "title": "Tóm tắt đặt sân",
+    "courtCount": "{{count}} sân ({{labels}})",
+    "pricePerCourt": "Giá từng sân",
     "duration": "{{hours}}h ({{count}} khung giờ)",
     "duration_other": "{{hours}}h ({{count}} khung giờ)",
     "freeCancellation": "Hủy miễn phí trước 24h so với giờ bắt đầu.",
@@ -270,6 +272,9 @@
     "emptyFilter": "Không có mục nào.",
     "emptySessions": "Chưa có buổi HLV. Hãy đặt buổi học để bắt đầu!",
     "cancelled": "Đã hủy",
+    "groupBooking": "Đặt nhóm",
+    "courtsBooked": "sân",
+    "groupCancelConfirm": "Hủy toàn bộ đặt sân nhóm? Tất cả các sân sẽ bị hủy.",
     "status": {
       "pending": "Chờ thanh toán",
       "proof_submitted": "Đang xác minh",

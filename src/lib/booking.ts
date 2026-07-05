@@ -46,6 +46,10 @@ export interface BookingConfig {
   defaultDurationMinutes: number;
   /** Maximum booking duration in minutes. Default 480 (8h). */
   maxDurationMinutes: number;
+  /** Allow players to book multiple courts in one group booking. Default true. */
+  allowMultiCourtBookings: boolean;
+  /** Maximum number of courts per group booking. Default 4. */
+  maxCourtsPerBooking: number;
 }
 
 export const DEFAULT_BOOKING_CONFIG: BookingConfig = {
@@ -58,6 +62,8 @@ export const DEFAULT_BOOKING_CONFIG: BookingConfig = {
   allow30MinBookings: false,
   defaultDurationMinutes: 60,
   maxDurationMinutes: 480,
+  allowMultiCourtBookings: true,
+  maxCourtsPerBooking: 4,
 };
 
 export interface ScheduleEntry {
@@ -173,6 +179,8 @@ export function getBookingConfig(venueSettings: Record<string, unknown>): Bookin
     allow30MinBookings: (raw.allow30MinBookings as boolean) ?? DEFAULT_BOOKING_CONFIG.allow30MinBookings,
     defaultDurationMinutes: (raw.defaultDurationMinutes as number) ?? DEFAULT_BOOKING_CONFIG.defaultDurationMinutes,
     maxDurationMinutes: (raw.maxDurationMinutes as number) ?? DEFAULT_BOOKING_CONFIG.maxDurationMinutes,
+    allowMultiCourtBookings: (raw.allowMultiCourtBookings as boolean) ?? DEFAULT_BOOKING_CONFIG.allowMultiCourtBookings,
+    maxCourtsPerBooking: (raw.maxCourtsPerBooking as number) ?? DEFAULT_BOOKING_CONFIG.maxCourtsPerBooking,
   };
 }
 
@@ -581,6 +589,86 @@ export async function validateBookingConflict(
     },
   });
   return existing === null;
+}
+
+// ─── Multi-court booking helpers ──────────────────────────────────────────────
+
+export interface MultiCourtEntry {
+  courtId: string;
+  startTime: string; // ISO string
+  slotCount: number;
+}
+
+export interface GroupPriceResult {
+  total: number;
+  perCourt: { courtId: string; priceValue: number }[];
+}
+
+/**
+ * Validate a multi-court booking request.
+ *
+ * Rules:
+ *  - At least 2 courts (if only 1, use the normal single-court path).
+ *  - All courts share the same startTime and slotCount (aligned windows).
+ *  - Per-court slotCount passes validateBookingDuration.
+ *  - court count <= config.maxCourtsPerBooking.
+ *  - No duplicate courtIds.
+ */
+export function validateMultiCourtBooking(
+  courts: MultiCourtEntry[],
+  config: BookingConfig,
+  context: BookingContext,
+): { valid: boolean; error?: string } {
+  if (courts.length < 2) {
+    return { valid: false, error: "Multi-court booking requires at least 2 courts" };
+  }
+  if (courts.length > config.maxCourtsPerBooking) {
+    return { valid: false, error: `Maximum ${config.maxCourtsPerBooking} courts per group booking` };
+  }
+
+  const uniqueIds = new Set(courts.map((c) => c.courtId));
+  if (uniqueIds.size !== courts.length) {
+    return { valid: false, error: "Duplicate courts in group booking" };
+  }
+
+  const refStart = courts[0].startTime;
+  const refSlotCount = courts[0].slotCount;
+  for (const c of courts) {
+    if (c.startTime !== refStart) {
+      return { valid: false, error: "All courts in a group booking must share the same start time" };
+    }
+    if (c.slotCount !== refSlotCount) {
+      return { valid: false, error: "All courts in a group booking must have the same duration" };
+    }
+    const durationCheck = validateBookingDuration(config, c.slotCount, context);
+    if (!durationCheck.valid) return durationCheck;
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Resolve the price for each court in a group booking and return the combined total.
+ * Each court is priced independently using resolveBookingPrice.
+ */
+export function resolveGroupBookingPrice(
+  config: BookingConfig,
+  courts: MultiCourtEntry[],
+  venueTimezone: string,
+): GroupPriceResult {
+  const perCourt = courts.map((c) => ({
+    courtId: c.courtId,
+    priceValue: resolveBookingPrice(
+      config,
+      new Date(c.startTime),
+      c.slotCount * GRID_GRANULARITY_MINUTES,
+      venueTimezone,
+    ),
+  }));
+  return {
+    total: perCourt.reduce((sum, c) => sum + c.priceValue, 0),
+    perCourt,
+  };
 }
 
 // ─── Cancellation policy ───────────────────────────────────────────────────────

@@ -483,7 +483,7 @@ function NewBookingModal({
   onClose: () => void;
 }) {
   const { t } = useTranslation("translation", { i18n: adminI18n });
-  const [courtId, setCourtId] = useState(courts[0]?.id ?? "");
+  const [selectedCourtIds, setSelectedCourtIds] = useState<string[]>([courts[0]?.id ?? ""]);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   // startTime stored as "HH:MM" (e.g. "08:00", "08:30")
   const [startTime, setStartTime] = useState("08:00");
@@ -500,21 +500,38 @@ function NewBookingModal({
     if (h < 23) timeOptions.push(`${h.toString().padStart(2, "0")}:30`);
   }
 
+  const toggleCourt = (cid: string) => {
+    setSelectedCourtIds((prev) =>
+      prev.includes(cid) ? (prev.length > 1 ? prev.filter((c) => c !== cid) : prev) : [...prev, cid]
+    );
+  };
+
   async function submit() {
     setSaving(true);
     setErr("");
     try {
-      const [hh, mm] = startTime.split(":").map(Number);
       const d = new Date(`${date}T${startTime.padStart(5, "0")}:00+07:00`);
-      void hh; void mm;
-      await api.post("/api/staff/bookings", {
-        courtId,
-        venueId,
-        playerId,
-        date,
-        startTime: d.toISOString(),
-        slotCount,
-      });
+      if (selectedCourtIds.length > 1) {
+        await api.post("/api/staff/bookings/batch", {
+          venueId,
+          playerId,
+          date,
+          courts: selectedCourtIds.map((cid) => ({
+            courtId: cid,
+            startTime: d.toISOString(),
+            slotCount,
+          })),
+        });
+      } else {
+        await api.post("/api/staff/bookings", {
+          courtId: selectedCourtIds[0],
+          venueId,
+          playerId,
+          date,
+          startTime: d.toISOString(),
+          slotCount,
+        });
+      }
       onSuccess();
       onClose();
     } catch (e) {
@@ -529,15 +546,25 @@ function NewBookingModal({
       <div className="space-y-4">
         <div>
           <label className="mb-1 block text-xs text-neutral-400">{t("courtpassPlayers.courtLabel")}</label>
-          <select
-            value={courtId}
-            onChange={(e) => setCourtId(e.target.value)}
-            className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
-          >
+          <div className="flex flex-wrap gap-2">
             {courts.map((c) => (
-              <option key={c.id} value={c.id}>{c.label}</option>
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => toggleCourt(c.id)}
+                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                  selectedCourtIds.includes(c.id)
+                    ? "border-purple-500 bg-purple-600/20 text-purple-300"
+                    : "border-neutral-700 bg-neutral-800 text-neutral-300 hover:border-neutral-600"
+                }`}
+              >
+                {c.label}
+              </button>
             ))}
-          </select>
+          </div>
+          {selectedCourtIds.length > 1 && (
+            <p className="mt-1 text-[11px] text-purple-400">{selectedCourtIds.length} courts — group booking</p>
+          )}
         </div>
 
         <div>
@@ -596,7 +623,7 @@ function NewBookingModal({
         <div className="flex gap-2 pt-1">
           <button
             onClick={submit}
-            disabled={saving || !courtId}
+            disabled={saving || !selectedCourtIds[0]}
             className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-purple-600 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-50"
           >
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}

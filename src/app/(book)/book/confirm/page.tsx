@@ -20,8 +20,14 @@ function ConfirmContent() {
   const [error, setError] = useState<string | null>(null);
   const [courtLabel, setCourtLabel] = useState<string | null>(null);
   const [slotPrices, setSlotPrices] = useState<{ hour: number; price: number }[]>([]);
+  const [courtBreakdowns, setCourtBreakdowns] = useState<
+    { courtId: string; courtLabel: string; total: number }[]
+  >([]);
 
   const courtId = searchParams.get("courtId") || "";
+  const courtIdsParam = searchParams.get("courtIds"); // comma-separated; present for multi-court
+  const courtIds: string[] = courtIdsParam ? courtIdsParam.split(",").filter(Boolean) : [courtId];
+  const isMultiCourt = courtIds.length > 1;
   const dateStr = searchParams.get("date") || "";
   const startTimeStr = searchParams.get("startTime") || "";
   const slotCount = Math.min(Math.max(parseInt(searchParams.get("slotCount") || "2", 10), 1), 32);
@@ -61,9 +67,32 @@ function ConfirmContent() {
     fetch(`/api/public/availability?date=${dateStr}${vq}`)
       .then((r) => r.json())
       .then((courts: { courtId: string; courtLabel: string; slots: { startTime: string; hour: number; priceValue: number }[] }[]) => {
+        if (isMultiCourt) {
+          const breakdowns = courtIds.map((cid) => {
+            const court = courts.find((c) => c.courtId === cid);
+            let total = 0;
+            for (const st of slotTimes) {
+              const matched = court?.slots.find((s) => s.startTime === st.start.toISOString());
+              if (matched) total += matched.priceValue;
+            }
+            return {
+              courtId: cid,
+              courtLabel: court?.courtLabel ?? cid,
+              total,
+            };
+          });
+          setCourtBreakdowns(breakdowns);
+          setCourtLabel(
+            t("confirm.courtCount", { count: courtIds.length, labels: breakdowns.map((b) => b.courtLabel).join(", ") })
+          );
+          setSlotPrices([]);
+          return;
+        }
+
         const c = courts.find((c) => c.courtId === courtId);
         if (c) {
           setCourtLabel(c.courtLabel);
+          setCourtBreakdowns([]);
           const prices: { hour: number; price: number }[] = [];
           for (const st of slotTimes) {
             const matched = c.slots.find((s) => s.startTime === st.start.toISOString());
@@ -73,36 +102,58 @@ function ConfirmContent() {
         }
       })
       .catch(() => {});
-  }, [courtId, dateStr, playerVenueId, slotTimes]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courtId, courtIds, dateStr, playerVenueId, slotTimes, isMultiCourt]);
 
   async function handleConfirm() {
     setCreating(true);
     setError(null);
     try {
-      const res = await portalFetch("/api/public/bookings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          courtId,
-          date: dateStr,
-          startTime: startTimeStr,
-          slotCount,
-          venueId: playerVenueId || undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || t("confirm.bookingFailed"));
-      router.replace(`/book/pay/${data.booking.id}`);
+      if (isMultiCourt) {
+        const res = await portalFetch("/api/public/bookings/batch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            courtIds,
+            date: dateStr,
+            startTime: startTimeStr,
+            slotCount,
+            venueId: playerVenueId || undefined,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || t("confirm.bookingFailed"));
+        router.replace(`/book/pay/group/${data.group.id}`);
+      } else {
+        const res = await portalFetch("/api/public/bookings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            courtId,
+            date: dateStr,
+            startTime: startTimeStr,
+            slotCount,
+            venueId: playerVenueId || undefined,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || t("confirm.bookingFailed"));
+        router.replace(`/book/pay/${data.booking.id}`);
+      }
     } catch (e) {
       setError((e as Error).message);
       setCreating(false);
     }
   }
 
-  // Use live per-slot prices when the availability grid has loaded; fall back to URL param.
-  const totalPrice = slotPrices.length > 0
+  const singleCourtPrice = slotPrices.length > 0
     ? slotPrices.reduce((sum, sp) => sum + sp.price, 0)
     : urlPrice;
+  const totalPrice = isMultiCourt
+    ? (courtBreakdowns.length > 0
+        ? courtBreakdowns.reduce((sum, c) => sum + c.total, 0)
+        : urlPrice)
+    : singleCourtPrice;
 
   const fmtTime = (d: Date) => formatTime(d);
 
@@ -130,7 +181,23 @@ function ConfirmContent() {
         <Row label={t("common.time")} value={`${fmtTime(startTime)} – ${fmtTime(overallEnd)}`} />
         <Row label={t("common.duration")} value={fmtDuration(durationMinutes)} />
 
-        {slotPrices.length > 1 && (
+        {isMultiCourt && courtBreakdowns.length > 0 && (
+          <div className="border-t border-[var(--cm-border)] pt-2 mt-2 space-y-1">
+            <p className="text-[10px] uppercase tracking-wide text-[var(--cm-text-muted)] mb-1">
+              {t("confirm.pricePerCourt")}
+            </p>
+            {courtBreakdowns.map((c) => (
+              <div key={c.courtId} className="flex justify-between text-xs text-[var(--cm-text-sec)]">
+                <span>
+                  {t("common.court")} {c.courtLabel} · {fmtTime(startTime)}–{fmtTime(overallEnd)}
+                </span>
+                <span>{formatPrice(c.total)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!isMultiCourt && slotPrices.length > 1 && (
           <div className="border-t border-[var(--cm-border)] pt-2 mt-2 space-y-1">
             {slotPrices.map((sp, i) => (
               <div key={i} className="flex justify-between text-xs text-[var(--cm-text-sec)]">

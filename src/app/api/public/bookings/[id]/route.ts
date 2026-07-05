@@ -24,7 +24,39 @@ export async function GET(
 
     const cancellation = await checkCancellationPolicy(booking);
 
-    return json({ ...booking, date: toDateKey(booking.date), cancellation });
+    // If this booking belongs to a group, include sibling courts and group payment state
+    let siblingBookings: { id: string; court: { label: string }; priceValue: number }[] = [];
+    let groupPaymentStatus: string | null = null;
+    let groupPaymentRef: string | null = null;
+    let groupTotalPrice: number | null = null;
+    if (booking.bookingGroupId) {
+      const siblings = await prisma.booking.findMany({
+        where: { bookingGroupId: booking.bookingGroupId, id: { not: id }, playerId },
+        include: { court: { select: { label: true } } },
+      });
+      siblingBookings = siblings.map((s) => ({
+        id: s.id,
+        court: s.court,
+        priceValue: s.priceValue,
+      }));
+      const group = await prisma.bookingGroup.findUnique({
+        where: { id: booking.bookingGroupId },
+        select: { paymentStatus: true, totalPriceValue: true, paymentRef: true },
+      });
+      groupPaymentStatus = group?.paymentStatus ?? null;
+      groupPaymentRef = group?.paymentRef ?? null;
+      groupTotalPrice = group?.totalPriceValue ?? null;
+    }
+
+    return json({
+      ...booking,
+      date: toDateKey(booking.date),
+      cancellation,
+      siblingBookings,
+      groupPaymentRef,
+      groupTotalPrice,
+      groupPaymentStatus,
+    });
   } catch (e) {
     const msg = (e as Error).message;
     if (msg === "Authentication required") return error(msg, 401);
@@ -46,10 +78,84 @@ export async function DELETE(
     if (!booking) return error("Booking not found", 404);
     if (booking.status === "cancelled") return error("Already cancelled", 400);
 
-    // If the booking is still in the unpaid hold phase (no proof submitted, no payment),
-    // soft-record it so the slot is freed (partial unique index allows it) and the
-    // drop is visible in analytics.  Use expired_hold when the client timer fired;
-    // use hard-delete only when the player explicitly hits Cancel.
+    // If this booking belongs to a group, cancel the entire group atomically
+    if (booking.bookingGroupId) {
+      const group = await prisma.bookingGroup.findUnique({
+        where: { id: booking.bookingGroupId },
+        include: { bookings: { where: { playerId } } },
+      });
+      if (!group) return error("Group booking not found", 404);
+
+      const isUnpaidHold =
+        group.paymentStatus === "pending" && group.holdExpiresAt !== null;
+
+      if (isUnpaidHold) {
+        const reason = request.nextUrl.searchParams.get("reason");
+        if (reason === "expired_hold") {
+          const now = new Date();
+          await prisma.$transaction([
+            prisma.booking.updateMany({
+              where: { bookingGroupId: group.id },
+              data: { status: "expired_hold", paymentStatus: "expired", holdExpiresAt: null, cancelledAt: now },
+            }),
+            prisma.bookingGroup.update({
+              where: { id: group.id },
+              data: { status: "expired_hold", paymentStatus: "expired", holdExpiresAt: null, cancelledAt: now },
+            }),
+          ]);
+        } else {
+          // Player manually cancelled unpaid hold — hard-delete bookings, soft-cancel group
+          await prisma.$transaction([
+            prisma.booking.deleteMany({ where: { bookingGroupId: group.id } }),
+            prisma.bookingGroup.update({
+              where: { id: group.id },
+              data: { status: "cancelled", cancelledAt: new Date() },
+            }),
+          ]);
+        }
+        return json({ success: true });
+      }
+
+      // Paid group — apply cancellation policy
+      const policy = await checkCancellationPolicy(booking);
+      if (!policy.canCancel) {
+        return error(
+          `Cancellation window has passed. Must cancel at least ${policy.cancellationHours}h before start.`,
+          403
+        );
+      }
+
+      const now = new Date();
+      await prisma.$transaction([
+        prisma.booking.updateMany({
+          where: { bookingGroupId: group.id },
+          data: { status: "cancelled", cancelledAt: now },
+        }),
+        prisma.bookingGroup.update({
+          where: { id: group.id },
+          data: { status: "cancelled", cancelledAt: now },
+        }),
+      ]);
+
+      const player = await prisma.player.findUnique({
+        where: { id: playerId },
+        select: { name: true, email: true },
+      });
+      if (player?.email) {
+        await sendBookingEmail({
+          to: player.email,
+          playerName: player.name,
+          bookingType: "court",
+          emailType: "cancelled",
+          details: {},
+        });
+      }
+
+      return json({ success: true });
+    }
+
+    // ── Single-court booking (no group) — existing behaviour unchanged ──────
+
     const isUnpaidHold =
       booking.paymentStatus === "pending" &&
       booking.holdExpiresAt !== null;
@@ -57,7 +163,6 @@ export async function DELETE(
     if (isUnpaidHold) {
       const reason = request.nextUrl.searchParams.get("reason");
       if (reason === "expired_hold") {
-        // Client timer fired — soft-record so staff can see the drop
         await prisma.booking.update({
           where: { id },
           data: {
@@ -69,12 +174,10 @@ export async function DELETE(
         });
         return json({ success: true });
       }
-      // Player manually cancelled → hard-delete to free slot immediately
       await prisma.booking.delete({ where: { id } });
       return json({ success: true });
     }
 
-    // Paid / proof-submitted bookings go through the normal cancellation policy.
     const policy = await checkCancellationPolicy(booking);
     if (!policy.canCancel) {
       return error(

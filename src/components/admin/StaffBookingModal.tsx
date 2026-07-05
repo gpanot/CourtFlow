@@ -30,10 +30,11 @@ import {
   Eye,
   EyeOff,
   GraduationCap,
-  Calendar,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { hasGroupPlayerPricing, calculateSessionPrice } from "@/lib/coach-package-pricing";
-import { BookingCourtGrid, type CourtSlot, type CourtAvailability, type BookingRecord } from "@/components/admin/BookingCourtGrid";
+import { BookingCourtGrid, formatDateInTz, type CourtSlot, type CourtAvailability, type BookingRecord } from "@/components/admin/BookingCourtGrid";
 import { BookingStatusBadge } from "@/components/admin/EditBookingModal";
 import {
   cellsPerLesson,
@@ -85,6 +86,8 @@ export interface InitialCourtSelection {
   courtId: string;
   courtLabel: string;
   slots: { startTime: string; endTime: string; hour: number }[];
+  /** Additional courts pre-selected for a multi-court group booking */
+  additionalCourts?: { courtId: string; courtLabel: string }[];
 }
 
 /** When set, modal opens in edit mode for an existing court booking. */
@@ -217,6 +220,23 @@ export function StaffBookingModal({
   const [bookDate, setBookDate] = useState(
     editDateKey ?? initialDate ?? localDateISO(new Date()),
   );
+
+  const changeBookDate = (nextDate: string) => {
+    setBookDate(nextDate);
+    setSelectedSlots([]);
+    setSelectedCourtId("");
+    setAdditionalCourtIds([]);
+  };
+
+  const shiftBookDate = (days: number) => {
+    const d = new Date(bookDate + "T12:00:00");
+    d.setDate(d.getDate() + days);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    changeBookDate(`${y}-${m}-${day}`);
+  };
+
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [venueTimezone, setVenueTimezone] = useState<string | undefined>(undefined);
@@ -250,12 +270,18 @@ export function StaffBookingModal({
 
   // Court mode state
   const [selectedCourtId, setSelectedCourtId] = useState(initialCourtSelection?.courtId ?? "");
+  // Additional courts for group bookings — single source of truth for both
+  // the pre-selection (from grid) and manual in-modal additions.
+  const [additionalCourtIds, setAdditionalCourtIds] = useState<string[]>(
+    () => initialCourtSelection?.additionalCourts?.map((c) => c.courtId) ?? []
+  );
 
   useEffect(() => {
     if (!initialCourtSelection) return;
     const { courtId, courtLabel, slots } = initialCourtSelection;
     setSelectedCourtId(courtId);
     setSelectedSlots(slots.map((s) => ({ courtId, courtLabel, ...s })));
+    setAdditionalCourtIds(initialCourtSelection.additionalCourts?.map((c) => c.courtId) ?? []);
   }, [initialCourtSelection]);
 
   // Open play mode state
@@ -464,6 +490,18 @@ export function StaffBookingModal({
           startTime: first.startTime,
           slotCount: selectedSlots.length,
         });
+      } else if (additionalCourtIds.length > 0) {
+        // Multi-court group booking (from grid pre-selection OR in-modal court additions)
+        await api.post("/api/staff/bookings/batch", {
+          venueId,
+          playerId: selectedPlayer.id,
+          date: bookDate,
+          courts: [first.courtId, ...additionalCourtIds].map((cid) => ({
+            courtId: cid,
+            startTime: first.startTime,
+            slotCount: selectedSlots.length,
+          })),
+        });
       } else {
         await api.post("/api/staff/bookings", {
           courtId: first.courtId,
@@ -537,11 +575,11 @@ export function StaffBookingModal({
       return;
     }
 
-    // Different court → reset to these slots
+    // Different court → reset to these slots and clear additional courts
     if (selectedSlots.length > 0 && selectedSlots[0].courtId !== courtId) {
       const newSel = slotsArr.map((s) => ({ courtId, courtLabel, startTime: s.startTime, endTime: s.endTime, hour: s.hour }));
       setSelectedSlots(newSel);
-      if (mode === "court") setSelectedCourtId(courtId);
+      if (mode === "court") { setSelectedCourtId(courtId); setAdditionalCourtIds([]); }
       return;
     }
 
@@ -667,12 +705,32 @@ export function StaffBookingModal({
 
   const showGrid = mode === "lesson" || mode === "court";
 
+  // Courts that can be added to a group — available in the same time window, not already selected
+  const addableCourts = useMemo(() => {
+    if (selectedSlots.length === 0 || !selectedCourtId || mode !== "court" || isCourtEditMode) return [];
+    const sortedSel = [...selectedSlots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+    const winStart = sortedSel[0].startTime;
+    const winEnd = sortedSel[sortedSel.length - 1].endTime;
+    return gridAvailability.filter((c) => {
+      if (c.courtId === selectedCourtId) return false;
+      if (additionalCourtIds.includes(c.courtId)) return false;
+      const windowSlots = c.slots.filter((s) => s.startTime >= winStart && s.endTime <= winEnd);
+      return windowSlots.length === selectedSlots.length && windowSlots.every((s) => s.available);
+    });
+  }, [selectedSlots, selectedCourtId, additionalCourtIds, gridAvailability, mode, isCourtEditMode]);
+
   // Derive selectedSlots shape for BookingCourtGrid: Record<courtId, Set<startTime>>
+  // For group bookings all courts share the same time window.
   const gridSelectedSlots = useMemo<Record<string, Set<string>>>(() => {
     if (selectedSlots.length === 0) return {};
     const cid = selectedSlots[0].courtId;
-    return { [cid]: new Set(selectedSlots.map((s) => s.startTime)) };
-  }, [selectedSlots]);
+    const timeSet = new Set(selectedSlots.map((s) => s.startTime));
+    const result: Record<string, Set<string>> = { [cid]: timeSet };
+    for (const acId of additionalCourtIds) {
+      result[acId] = timeSet;
+    }
+    return result;
+  }, [selectedSlots, additionalCourtIds]);
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -763,21 +821,79 @@ export function StaffBookingModal({
                         <X className="h-3.5 w-3.5" />
                       </button>
                     </div>
-                    <p className="text-sm font-semibold text-white">{selectedSlots[0].courtLabel}</p>
+                    {/* Court list — primary + any additional courts (read-only) */}
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <span className="rounded-full bg-purple-700/70 border border-purple-500/50 px-2 py-0.5 text-[11px] font-medium text-purple-100">
+                        {selectedSlots[0].courtLabel}
+                      </span>
+                      {additionalCourtIds.map((cid) => {
+                        const label = gridAvailability.find((c) => c.courtId === cid)?.courtLabel ?? cid;
+                        return (
+                          <span key={cid} className="rounded-full bg-purple-800/50 border border-purple-600/40 px-2 py-0.5 text-[11px] font-medium text-purple-200">
+                            {label}
+                          </span>
+                        );
+                      })}
+                    </div>
                     <p className="text-xs text-neutral-300">
                       {fmtSlotTime(selectedSlots[0].startTime, venueTimezone)}
                       {" – "}
                       {fmtSlotTime(selectedSlots[selectedSlots.length - 1].endTime, venueTimezone)}
                     </p>
-                    {courtSelectionPrice > 0 && (
-                      <p className="text-xs text-purple-400 font-medium pt-0.5">
-                        {fmtPrice(courtSelectionPrice)} VND
-                      </p>
-                    )}
+                    {courtSelectionPrice > 0 && (() => {
+                      const totalCourts = 1 + additionalCourtIds.length;
+                      const total = courtSelectionPrice * totalCourts;
+                      return totalCourts > 1 ? (
+                        <div className="flex items-baseline gap-1.5 pt-0.5">
+                          <span className="text-xs text-neutral-500">{fmtPrice(courtSelectionPrice)} × {totalCourts} =</span>
+                          <span className="text-sm font-semibold text-purple-300">{fmtPrice(total)} VND</span>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-purple-400 font-medium pt-0.5">
+                          {fmtPrice(courtSelectionPrice)} VND
+                        </p>
+                      );
+                    })()}
                   </div>
                 ) : (
                   <div className="rounded-lg border border-dashed border-neutral-700 p-4 text-center">
                     <p className="text-xs text-neutral-600">No time selected yet</p>
+                  </div>
+                )}
+
+                {/* Add-court action — outside the summary card */}
+                {!isCourtEditMode && addableCourts.length > 0 && selectedSlots.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] text-neutral-500">Add court:</span>
+                    {addableCourts.map((c) => (
+                      <button
+                        key={c.courtId}
+                        type="button"
+                        onClick={() => setAdditionalCourtIds((ids) => [...ids, c.courtId])}
+                        className="rounded-full border border-dashed border-purple-600/50 bg-purple-900/20 px-2.5 py-0.5 text-[11px] text-purple-400 hover:bg-purple-600/20 hover:border-purple-500 transition-colors"
+                      >
+                        + {c.courtLabel}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {/* Remove additional court action */}
+                {!isCourtEditMode && additionalCourtIds.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[10px] text-neutral-500">Remove:</span>
+                    {additionalCourtIds.map((cid) => {
+                      const label = gridAvailability.find((c) => c.courtId === cid)?.courtLabel ?? cid;
+                      return (
+                        <button
+                          key={cid}
+                          type="button"
+                          onClick={() => setAdditionalCourtIds((ids) => ids.filter((id) => id !== cid))}
+                          className="flex items-center gap-0.5 rounded-full border border-red-800/50 bg-red-900/10 px-2 py-0.5 text-[11px] text-red-400 hover:bg-red-900/25 transition-colors"
+                        >
+                          {label} <X className="h-2.5 w-2.5 ml-0.5" />
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </>
@@ -1082,20 +1198,34 @@ export function StaffBookingModal({
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             {/* Date picker + status label */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-800 shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-1.5 rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5">
-                  <Calendar className="h-3.5 w-3.5 text-neutral-400" />
-                  <input
-                    type="date"
-                    value={bookDate}
-                    onChange={(e) => {
-                      setBookDate(e.target.value);
-                      setSelectedSlots([]);
-                      setSelectedCourtId("");
-                    }}
-                    className="bg-transparent text-sm text-white focus:outline-none"
-                  />
-                </div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => shiftBookDate(-1)}
+                  className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <input
+                  type="date"
+                  value={bookDate}
+                  onChange={(e) => changeBookDate(e.target.value)}
+                  className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => shiftBookDate(1)}
+                  className="rounded-lg p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => changeBookDate(formatDateInTz(new Date(), venueTimezone))}
+                  className="rounded-lg bg-neutral-800 px-3 py-1.5 text-xs text-neutral-400 hover:text-white"
+                >
+                  {t("bookings.today")}
+                </button>
                 <span className="text-xs text-neutral-500">
                   {selectedSlots.length > 0
                     ? mode === "lesson" && selectedPkg

@@ -57,6 +57,7 @@ interface RecentBooking {
   playerAvatar: string;
   playerPhoto: string | null;
   courtLabel: string;
+  allCourtLabels: string[];
   venueName: string;
   date: string;
   startTime: string;
@@ -67,6 +68,8 @@ interface RecentBooking {
   holdExpiresAt: string | null;
   priceValue: number;
   createdAt: string;
+  bookingGroupId: string | null;
+  isGroup: boolean;
 }
 
 interface RecentLesson {
@@ -327,7 +330,10 @@ export default function AdminOverview() {
       playerPhone: b.playerPhone,
       playerAvatar: b.playerAvatar,
       playerPhoto: b.playerPhoto,
-      detail: b.courtLabel,
+      // For group bookings show all courts e.g. "2, 3, 4 (Group)"
+      detail: b.isGroup
+        ? `${(b.allCourtLabels ?? [b.courtLabel]).join(", ")} (${t("overview.group")})`
+        : b.courtLabel,
       venueName: b.venueName,
       date: b.date,
       startTime: b.startTime,
