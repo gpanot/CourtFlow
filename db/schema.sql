@@ -1254,6 +1254,20 @@ CREATE TABLE public.player_notes (
 
 
 --
+-- Name: player_password_reset_tokens; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.player_password_reset_tokens (
+    id text NOT NULL,
+    player_id text NOT NULL,
+    jti text NOT NULL,
+    expires_at timestamp(3) without time zone NOT NULL,
+    used_at timestamp(3) without time zone,
+    created_at timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+--
 -- Name: player_rankings; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -2540,6 +2554,22 @@ ALTER TABLE ONLY public.player_notes
 
 
 --
+-- Name: player_password_reset_tokens player_password_reset_tokens_jti_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.player_password_reset_tokens
+    ADD CONSTRAINT player_password_reset_tokens_jti_key UNIQUE (jti);
+
+
+--
+-- Name: player_password_reset_tokens player_password_reset_tokens_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.player_password_reset_tokens
+    ADD CONSTRAINT player_password_reset_tokens_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: player_rankings player_rankings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -3486,6 +3516,13 @@ CREATE UNIQUE INDEX player_notes_player_id_venue_id_key ON public.player_notes U
 --
 
 CREATE INDEX player_notes_venue_id_idx ON public.player_notes USING btree (venue_id);
+
+
+--
+-- Name: player_password_reset_tokens_player_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX player_password_reset_tokens_player_id_idx ON public.player_password_reset_tokens USING btree (player_id);
 
 
 --
@@ -4537,6 +4574,14 @@ ALTER TABLE ONLY public.player_notes
 
 
 --
+-- Name: player_password_reset_tokens player_password_reset_tokens_player_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.player_password_reset_tokens
+    ADD CONSTRAINT player_password_reset_tokens_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(id) ON DELETE CASCADE;
+
+
+--
 -- Name: player_rankings player_rankings_court_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -5172,4 +5217,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260705050420'),
     ('20260705050540'),
     ('20260705122627'),
+    ('20260705231856'),
     ('20260706055400');

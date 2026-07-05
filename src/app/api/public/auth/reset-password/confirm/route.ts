@@ -34,7 +34,12 @@ export async function POST(request: NextRequest) {
       data: { passwordHash },
     });
 
-    return json({ ok: true });
+    const account = await prisma.playerAccount.findFirst({
+      where: { playerId, provider: "credentials" },
+      select: { providerAccountId: true },
+    });
+
+    return json({ ok: true, email: account?.providerAccountId ?? null });
   } catch (e) {
     console.error("[reset-password/confirm] error:", (e as Error).message);
     return error("Something went wrong. Please try again.", 500);

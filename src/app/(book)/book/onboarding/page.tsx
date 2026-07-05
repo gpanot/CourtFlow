@@ -96,6 +96,7 @@ function OnboardingContent() {
   } | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [initialCheckDone, setInitialCheckDone] = useState(false);
+  const [profileChecking, setProfileChecking] = useState(true);
   // First available venue ID, fetched on mount so the face widget has a venueId even before onboarding completes
   const [faceVenueId, setFaceVenueId] = useState<string | null>(null);
 
@@ -133,6 +134,7 @@ function OnboardingContent() {
   useEffect(() => {
     if (status !== "authenticated" || initialCheckDone) return;
     setInitialCheckDone(true);
+    setProfileChecking(true);
     fetch("/api/public/account", { headers: authHeader, credentials: "include" })
       .then((r) => r.json())
       .then((profile) => {
@@ -181,7 +183,8 @@ function OnboardingContent() {
           }
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setProfileChecking(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, initialCheckDone]);
 
@@ -388,6 +391,14 @@ function OnboardingContent() {
   }
 
   if (status === "loading") {
+    return (
+      <div className="flex items-center justify-center min-h-dvh text-[var(--cm-text-muted)]">
+        {t("common.loading")}
+      </div>
+    );
+  }
+
+  if (status === "authenticated" && profileChecking) {
     return (
       <div className="flex items-center justify-center min-h-dvh text-[var(--cm-text-muted)]">
         {t("common.loading")}

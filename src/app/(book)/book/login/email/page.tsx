@@ -7,6 +7,7 @@ import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { setPlayerToken, getPlayerFromToken } from "@/lib/player-token";
+import { consumeResetLoginPrefill } from "../../lib/reset-login-prefill";
 import { BookLanguageMenu } from "../../components/BookLanguageMenu";
 
 function EmailLoginContent() {
@@ -27,14 +28,26 @@ function EmailLoginContent() {
   const [suEmail, setSuEmail] = useState("");
   const [suPassword, setSuPassword] = useState("");
 
+  const passwordReset = searchParams.get("passwordReset") === "1";
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const token = getPlayerFromToken();
-    if (token) { router.replace(callbackUrl); return; }
+    if (token && !passwordReset) { router.replace(callbackUrl); return; }
     if (!localStorage.getItem("intro_seen")) {
       router.replace("/book/intro");
     }
-  }, [router, callbackUrl]);
+  }, [router, callbackUrl, passwordReset]);
+
+  useEffect(() => {
+    if (!passwordReset) return;
+    const prefill = consumeResetLoginPrefill();
+    if (prefill) {
+      setSiEmail(prefill.email);
+      setSiPassword(prefill.password);
+      setTab("signin");
+    }
+  }, [passwordReset]);
 
   function switchTab(nextTab: "signin" | "signup") {
     setTab(nextTab);
@@ -165,6 +178,11 @@ function EmailLoginContent() {
             {success}
           </div>
         )}
+        {passwordReset && !success && (
+          <div className="w-full mb-4 p-3 bg-[var(--cm-green)]/10 text-[var(--cm-green)] text-sm rounded-xl text-center">
+            {t("resetPassword.loginAfterReset")}
+          </div>
+        )}
 
         {tab === "signin" ? (
           <div className="space-y-3">
@@ -193,6 +211,14 @@ function EmailLoginContent() {
             >
               {loading === "email-signin" ? <Spinner /> : t("login.signIn")}
             </button>
+            <div className="text-center pt-1">
+              <Link
+                href="/book/reset-password"
+                className="text-xs text-[var(--cm-text-sec)] hover:text-[var(--cm-text)] transition-colors underline"
+              >
+                {t("resetPassword.forgotPassword")}
+              </Link>
+            </div>
           </div>
         ) : (
           <div className="space-y-3">

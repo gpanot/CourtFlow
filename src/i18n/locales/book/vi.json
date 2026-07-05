@@ -150,6 +150,7 @@
     "setPassword": "Đặt mật khẩu mới",
     "successTitle": "Mật khẩu đã được cập nhật!",
     "successBody": "Mật khẩu của bạn đã được thay đổi. Đang chuyển hướng đến trang đăng nhập…",
+    "loginAfterReset": "Mật khẩu đã được cập nhật. Vui lòng đăng nhập bằng mật khẩu mới.",
     "requestNew": "Yêu cầu liên kết mới",
     "errors": {
       "emailRequired": "Vui lòng nhập địa chỉ email.",

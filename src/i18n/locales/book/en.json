@@ -150,6 +150,7 @@
     "setPassword": "Set new password",
     "successTitle": "Password updated!",
     "successBody": "Your password has been changed. Redirecting you to sign in…",
+    "loginAfterReset": "Password updated. Please sign in with your new password.",
     "requestNew": "Request a new link",
     "errors": {
       "emailRequired": "Please enter your email address.",
