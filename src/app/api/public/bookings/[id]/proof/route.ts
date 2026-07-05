@@ -47,10 +47,28 @@ export async function POST(
       proofUrl = (body as { proofUrl?: string }).proofUrl || "pending_proof";
     }
 
-    await prisma.booking.update({
-      where: { id },
-      data: { paymentStatus: "proof_submitted", paymentProofUrl: proofUrl, holdExpiresAt: null },
-    });
+    // If this booking belongs to a group, update all siblings + the group record
+    if (booking.bookingGroupId) {
+      await prisma.$transaction([
+        prisma.booking.updateMany({
+          where: { bookingGroupId: booking.bookingGroupId },
+          data: { paymentStatus: "proof_submitted", holdExpiresAt: null },
+        }),
+        prisma.booking.update({
+          where: { id },
+          data: { paymentStatus: "proof_submitted", paymentProofUrl: proofUrl, holdExpiresAt: null },
+        }),
+        prisma.bookingGroup.update({
+          where: { id: booking.bookingGroupId },
+          data: { paymentStatus: "proof_submitted", holdExpiresAt: null },
+        }),
+      ]);
+    } else {
+      await prisma.booking.update({
+        where: { id },
+        data: { paymentStatus: "proof_submitted", paymentProofUrl: proofUrl, holdExpiresAt: null },
+      });
+    }
 
     const player = await prisma.player.findUnique({
       where: { id: playerId },

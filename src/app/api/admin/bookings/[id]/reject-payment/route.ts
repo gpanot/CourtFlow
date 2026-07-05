@@ -17,23 +17,42 @@ export async function PATCH(
 
     const booking = await prisma.booking.findUnique({ where: { id } });
     if (!booking) return error("Booking not found", 404);
-    if (booking.paymentStatus !== "proof_submitted") {
-      return error(`Cannot reject: payment status is "${booking.paymentStatus}", expected "proof_submitted"`, 400);
+
+    // For group bookings check the group-level status; otherwise check the booking itself
+    const checkStatus = booking.bookingGroupId
+      ? (await prisma.bookingGroup.findUnique({ where: { id: booking.bookingGroupId }, select: { paymentStatus: true } }))?.paymentStatus
+      : booking.paymentStatus;
+    if (checkStatus !== "proof_submitted") {
+      return error(`Cannot reject: payment status is "${checkStatus}", expected "proof_submitted"`, 400);
     }
 
-    const updated = await prisma.booking.update({
+    const now = new Date();
+
+    if (booking.bookingGroupId) {
+      // Group booking: reject all courts + the group record atomically
+      await prisma.$transaction(async (tx) => {
+        await tx.booking.updateMany({
+          where: { bookingGroupId: booking.bookingGroupId! },
+          data: { paymentStatus: "rejected", rejectedAt: now, rejectedBy: auth.id, rejectionReason: reason ?? null },
+        });
+        await tx.bookingGroup.update({
+          where: { id: booking.bookingGroupId! },
+          data: { paymentStatus: "rejected" },
+        });
+      });
+    } else {
+      await prisma.booking.update({
+        where: { id },
+        data: { paymentStatus: "rejected", rejectedAt: now, rejectedBy: auth.id, rejectionReason: reason ?? null },
+      });
+    }
+
+    // Re-fetch with relations for response and email
+    const updated = await prisma.booking.findUnique({
       where: { id },
-      data: {
-        paymentStatus: "rejected",
-        rejectedAt: new Date(),
-        rejectedBy: auth.id,
-        rejectionReason: reason ?? null,
-      },
-      include: {
-        court: { select: { label: true } },
-        player: { select: { name: true, email: true } },
-      },
+      include: { court: { select: { label: true } }, player: { select: { name: true, email: true } } },
     });
+    if (!updated) return error("Booking not found after update", 500);
 
     if (updated.player.email) {
       await sendBookingEmail({

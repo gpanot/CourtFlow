@@ -200,6 +200,7 @@ export default function BookingDetailPage() {
           onConfirm={handleCancel}
           onDismiss={() => setShowConfirm(false)}
           cancelling={cancelling}
+          bodyOverride={isGroup ? t("bookings.groupCancelConfirm") : undefined}
         />
       )}
     </div>
