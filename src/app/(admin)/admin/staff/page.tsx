@@ -501,10 +501,13 @@ export default function StaffPage() {
                       const vname = venues.find((x) => x.id === vid)?.name ?? vid;
                       const apps = form.venueAppAccess[vid] ?? ["courtpay"];
                       const courtflowDisabled = callerRole !== "superadmin";
+                      // manager/superadmin always have admin access — show locked chip
+                      const isManagerOrAbove = form.role === "manager" || form.role === "superadmin";
                       return (
                         <div key={vid} className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-3">
                           <p className="mb-2 text-xs font-medium text-neutral-300">{t("staff.venueLabel")}: {vname}</p>
                           <div className="flex flex-wrap gap-2">
+                            {/* CourtFlow — superadmin only */}
                             <button
                               type="button"
                               onClick={() => !courtflowDisabled && toggleVenueApp(vid, "courtflow")}
@@ -521,6 +524,7 @@ export default function StaffPage() {
                               {apps.includes("courtflow") && <Check className="h-3 w-3" />}
                               CourtFlow
                             </button>
+                            {/* CourtPay */}
                             <button
                               type="button"
                               onClick={() => toggleVenueApp(vid, "courtpay")}
@@ -534,7 +538,31 @@ export default function StaffPage() {
                               {apps.includes("courtpay") && <Check className="h-3 w-3" />}
                               CourtPay
                             </button>
+                            {/* Courtpass (Admin) — locked-on for manager/superadmin, togglable for staff */}
+                            {isManagerOrAbove ? (
+                              <span className="flex items-center gap-1.5 rounded-lg border border-purple-500 bg-purple-600/20 px-3 py-1.5 text-sm text-purple-300 opacity-70 cursor-default select-none">
+                                <Check className="h-3 w-3" />
+                                Courtpass (Admin)
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => toggleVenueApp(vid, "admin")}
+                                className={cn(
+                                  "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors",
+                                  apps.includes("admin")
+                                    ? "border-purple-500 bg-purple-600/20 text-purple-300"
+                                    : "border-neutral-700 text-neutral-400 hover:border-neutral-500"
+                                )}
+                              >
+                                {apps.includes("admin") && <Check className="h-3 w-3" />}
+                                Courtpass (Admin)
+                              </button>
+                            )}
                           </div>
+                          {isManagerOrAbove && (
+                            <p className="mt-1.5 text-[10px] text-neutral-600">Admin panel access is always granted to managers.</p>
+                          )}
                         </div>
                       );
                     })}

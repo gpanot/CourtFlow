@@ -16,6 +16,7 @@ import { StaffAppPicker } from "@/components/staff-app-picker";
 import {
   clientIdAllowedForAppAccess,
   mapAppAccessKindToClientId,
+  pwaAccessKinds,
   readStoredRuntimeClientId,
 } from "@/config/clients";
 import { useSetStaffClientId } from "@/config/use-client-config";
@@ -162,10 +163,13 @@ export default function StaffPage() {
 
   const proceedToVenue = useCallback(
     (v: StaffVenue) => {
-      const access: StaffAppAccessKind[] =
+      const rawAccess: StaffAppAccessKind[] =
         v.appAccess && v.appAccess.length > 0 ? v.appAccess : ["courtflow"];
-      if (access.length === 1) {
-        setStaffClientId(mapAppAccessKindToClientId(access[0]));
+      // Filter out "admin" — it's a separate portal, not a PWA client choice.
+      const access = pwaAccessKinds(rawAccess);
+      const pwaAccess = access.length > 0 ? access : (["courtflow"] as StaffAppAccessKind[]);
+      if (pwaAccess.length === 1) {
+        setStaffClientId(mapAppAccessKindToClientId(pwaAccess[0]));
         if (staffId) clientResolvedForKeyRef.current = `${staffId}:${v.id}`;
         setAuth({ venueId: v.id });
         setPendingVenues(null);
@@ -175,7 +179,7 @@ export default function StaffPage() {
       }
       // Must set venueId so the authenticated branch renders; otherwise we fall through to login UI.
       setAuth({ venueId: v.id });
-      setPendingAppPickVenue({ ...v, appAccess: access });
+      setPendingAppPickVenue({ ...v, appAccess: pwaAccess });
       setPendingVenues(null);
       setShowRoleChoice(false);
       setClientBootstrapDone(true);
@@ -207,8 +211,11 @@ export default function StaffPage() {
           setClientBootstrapDone(true);
           return;
         }
-        const access: StaffAppAccessKind[] =
+        const rawAccess: StaffAppAccessKind[] =
           v.appAccess && v.appAccess.length > 0 ? v.appAccess : ["courtflow"];
+        // Filter out "admin" — it's handled separately via the /admin route.
+        const pwaA = pwaAccessKinds(rawAccess);
+        const access: StaffAppAccessKind[] = pwaA.length > 0 ? pwaA : ["courtflow"];
         if (access.length === 1) {
           setStaffClientId(mapAppAccessKindToClientId(access[0]));
           if (staffId && venueId) clientResolvedForKeyRef.current = `${staffId}:${venueId}`;
@@ -547,7 +554,8 @@ export default function StaffPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {(role === "superadmin" || role === "manager") && (
+              {(role === "superadmin" || role === "manager" ||
+                (role === "staff" && loginVenues.some((v) => venueAccessList(v).includes("admin")))) && (
                 <button
                   onClick={() => {
                     freshLoginChoiceRef.current = false;
@@ -596,8 +604,10 @@ export default function StaffPage() {
                   if (venueId) {
                     const v = loginVenues.find((x) => x.id === venueId);
                     if (v) {
-                      const access: StaffAppAccessKind[] =
+                      const rawA: StaffAppAccessKind[] =
                         v.appAccess && v.appAccess.length > 0 ? v.appAccess : ["courtflow"];
+                      const pwaA = pwaAccessKinds(rawA);
+                      const access: StaffAppAccessKind[] = pwaA.length > 0 ? pwaA : ["courtflow"];
                       if (access.length === 1) {
                         setStaffClientId(mapAppAccessKindToClientId(access[0]));
                         if (staffId) clientResolvedForKeyRef.current = `${staffId}:${venueId}`;

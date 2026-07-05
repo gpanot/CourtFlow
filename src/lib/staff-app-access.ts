@@ -1,7 +1,7 @@
 /** Values stored per staff–venue assignment and returned to clients. */
-export type StaffAppAccessKind = "courtflow" | "courtpay";
+export type StaffAppAccessKind = "courtflow" | "courtpay" | "admin";
 
-const ALLOWED = new Set<StaffAppAccessKind>(["courtflow", "courtpay"]);
+const ALLOWED = new Set<StaffAppAccessKind>(["courtflow", "courtpay", "admin"]);
 
 export function normalizeAppAccess(raw: string[] | undefined | null): StaffAppAccessKind[] {
   const list = (raw ?? [])
@@ -10,6 +10,11 @@ export function normalizeAppAccess(raw: string[] | undefined | null): StaffAppAc
   const dedup = [...new Set(list)];
   if (dedup.length === 0) return ["courtpay"];
   return dedup;
+}
+
+/** Returns true when the given access list grants admin panel access. */
+export function hasAdminPanelAccess(access: StaffAppAccessKind[]): boolean {
+  return access.includes("admin");
 }
 
 export type StaffVenueWithAppAccess = {

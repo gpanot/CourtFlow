@@ -101,8 +101,17 @@ function getFilteredNav(
   return { topNavItems: filteredTop, navSections: filteredSections, allNavItems: allItems };
 }
 
+/** True when this role always has admin access regardless of appAccess. */
 const isAdminRole = (r: string | null): r is "superadmin" | "manager" =>
   r === "superadmin" || r === "manager";
+
+/** Returns true if the user may enter the admin panel. */
+function canAccessAdmin(role: string | null, staffAdminGranted: boolean | null): boolean {
+  if (isAdminRole(role)) return true;
+  // staff with admin appAccess — only grant when staff-me confirms it (null = still loading)
+  if (role === "staff" && staffAdminGranted === true) return true;
+  return false;
+}
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { token, role, onboardingCompleted, clearAuth, staffPhone, staffName } = useSessionStore();
@@ -119,6 +128,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   });
   // App access flags derived from the manager's venue assignments (superadmins always have both)
   const [appAccess, setAppAccess] = useState({ hasCourtflow: true, hasCourtpay: true });
+  // null = loading (only relevant for staff role); true/false = resolved
+  const [staffAdminGranted, setStaffAdminGranted] = useState<boolean | null>(
+    isAdminRole(role) ? true : null
+  );
 
   useEffect(() => {
     if (!token || role === "superadmin") return;
@@ -127,14 +140,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     })
       .then((r) => r.ok ? r.json() : null)
       .then((data: { venues?: { appAccess?: string[] }[] } | null) => {
-        if (!data?.venues) return;
+        if (!data?.venues) {
+          if (role === "staff") setStaffAdminGranted(false);
+          return;
+        }
         const allAccess = data.venues.flatMap((v) => v.appAccess ?? []);
         setAppAccess({
           hasCourtflow: allAccess.includes("courtflow"),
           hasCourtpay: allAccess.includes("courtpay"),
         });
+        if (role === "staff") {
+          setStaffAdminGranted(allAccess.includes("admin"));
+        }
       })
-      .catch(() => {});
+      .catch(() => {
+        if (role === "staff") setStaffAdminGranted(false);
+      });
   }, [token, role]);
 
   const { topNavItems: visibleTopItems, navSections: visibleSections, allNavItems: visibleAllItems } = getFilteredNav(role ?? "", appAccess);
@@ -153,6 +174,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       router.replace("/onboarding");
     }
   }, [token, role, onboardingCompleted, router]);
+
+  // Keep staffAdminGranted in sync when role changes (e.g. after role promotion without re-login)
+  useEffect(() => {
+    if (isAdminRole(role)) setStaffAdminGranted(true);
+  }, [role]);
 
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -186,11 +212,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     if (!hydrated) return;
-    if (!token || !isAdminRole(role)) {
-      router.prefetch("/staff");
-      router.replace("/staff");
-    }
-  }, [hydrated, token, role, router]);
+    // For staff role: wait until staffAdminGranted is resolved before redirecting
+    if (!token) { router.replace("/staff"); return; }
+    if (role === "staff" && staffAdminGranted === false) { router.replace("/staff"); return; }
+    if (role !== "staff" && !isAdminRole(role)) { router.replace("/staff"); return; }
+  }, [hydrated, token, role, staffAdminGranted, router]);
 
   if (!hydrated) {
     return (
@@ -200,7 +226,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  if (!token || !isAdminRole(role)) {
+  if (!token || !canAccessAdmin(role, staffAdminGranted)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-neutral-950">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-neutral-700 border-t-neutral-400" />
@@ -216,7 +242,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       <aside className="hidden md:flex md:flex-col w-56 shrink-0 border-r border-neutral-800 h-dvh sticky top-0 overflow-y-auto p-4">
         <div className="mb-6">
           <div className="flex items-center justify-between gap-2">
-            <h1 className="text-lg font-bold text-purple-500">{role === "manager" ? t("layout.managerPanel") : t("layout.adminPanel")}</h1>
+            <h1 className="text-lg font-bold text-purple-500">{role === "manager" ? t("layout.managerPanel") : role === "staff" ? t("layout.adminPanel") : t("layout.adminPanel")}</h1>
             <div className="flex items-center gap-1">
               <button
                 type="button"

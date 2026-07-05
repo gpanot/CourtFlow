@@ -82,6 +82,15 @@ export function mapAppAccessKindToClientId(kind: StaffAppAccessKind): ClientId {
   return kind === "courtpay" ? "courtpay_client2" : "courtflow_default";
 }
 
+/**
+ * Filter out "admin" from an access list before using it for PWA client selection.
+ * "admin" routes to the /admin panel (not a PWA client), so it must never be passed
+ * to mapAppAccessKindToClientId.
+ */
+export function pwaAccessKinds(access: StaffAppAccessKind[]): Exclude<StaffAppAccessKind, "admin">[] {
+  return access.filter((k): k is Exclude<StaffAppAccessKind, "admin"> => k !== "admin");
+}
+
 export function clientIdAllowedForAppAccess(clientId: ClientId, access: StaffAppAccessKind[]): boolean {
   const allowed = new Set(access.map(mapAppAccessKindToClientId));
   return allowed.has(clientId);
