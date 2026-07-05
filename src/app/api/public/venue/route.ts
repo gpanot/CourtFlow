@@ -51,6 +51,8 @@ export async function GET(request: NextRequest) {
         allow30MinBookings: config.allow30MinBookings,
         defaultDurationMinutes: config.defaultDurationMinutes,
         maxDurationMinutes: config.maxDurationMinutes,
+        allowMultiCourtBookings: config.allowMultiCourtBookings,
+        maxCourtsPerBooking: config.maxCourtsPerBooking,
       },
       bankName: venue.bankName,
       bankAccount: venue.bankAccount,

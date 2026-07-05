@@ -259,6 +259,9 @@
     "emptyFilter": "ไม่มีรายการ",
     "emptySessions": "ยังไม่มีเซสชันโค้ช จองเซสชันเพื่อเริ่มต้น!",
     "cancelled": "ยกเลิกแล้ว",
+    "groupBooking": "จองกลุ่ม",
+    "courtsBooked": "คอร์ต",
+    "groupCancelConfirm": "ยกเลิกการจองกลุ่มทั้งหมด? คอร์ตทั้งหมดจะถูกยกเลิก",
     "status": {
       "pending": "รอชำระเงิน",
       "proof_submitted": "กำลังตรวจสอบ",

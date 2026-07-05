@@ -270,6 +270,9 @@
     "emptyFilter": "Nothing here.",
     "emptySessions": "No coach sessions yet. Book a session to get started!",
     "cancelled": "Cancelled",
+    "groupBooking": "Group booking",
+    "courtsBooked": "courts",
+    "groupCancelConfirm": "Cancel the entire group booking? All courts will be cancelled.",
     "status": {
       "pending": "Pending",
       "proof_submitted": "Verifying",

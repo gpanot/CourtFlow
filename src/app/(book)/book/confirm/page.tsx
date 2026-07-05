@@ -22,6 +22,9 @@ function ConfirmContent() {
   const [slotPrices, setSlotPrices] = useState<{ hour: number; price: number }[]>([]);
 
   const courtId = searchParams.get("courtId") || "";
+  const courtIdsParam = searchParams.get("courtIds"); // comma-separated; present for multi-court
+  const courtIds: string[] = courtIdsParam ? courtIdsParam.split(",").filter(Boolean) : [courtId];
+  const isMultiCourt = courtIds.length > 1;
   const dateStr = searchParams.get("date") || "";
   const startTimeStr = searchParams.get("startTime") || "";
   const slotCount = Math.min(Math.max(parseInt(searchParams.get("slotCount") || "2", 10), 1), 32);
@@ -63,7 +66,12 @@ function ConfirmContent() {
       .then((courts: { courtId: string; courtLabel: string; slots: { startTime: string; hour: number; priceValue: number }[] }[]) => {
         const c = courts.find((c) => c.courtId === courtId);
         if (c) {
-          setCourtLabel(c.courtLabel);
+          if (isMultiCourt) {
+            const labels = courtIds.map((cid) => courts.find((ct) => ct.courtId === cid)?.courtLabel ?? cid).join(", ");
+            setCourtLabel(labels);
+          } else {
+            setCourtLabel(c.courtLabel);
+          }
           const prices: { hour: number; price: number }[] = [];
           for (const st of slotTimes) {
             const matched = c.slots.find((s) => s.startTime === st.start.toISOString());
@@ -73,26 +81,44 @@ function ConfirmContent() {
         }
       })
       .catch(() => {});
-  }, [courtId, dateStr, playerVenueId, slotTimes]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courtId, dateStr, playerVenueId, slotTimes, isMultiCourt]);
 
   async function handleConfirm() {
     setCreating(true);
     setError(null);
     try {
-      const res = await portalFetch("/api/public/bookings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          courtId,
-          date: dateStr,
-          startTime: startTimeStr,
-          slotCount,
-          venueId: playerVenueId || undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || t("confirm.bookingFailed"));
-      router.replace(`/book/pay/${data.booking.id}`);
+      if (isMultiCourt) {
+        const res = await portalFetch("/api/public/bookings/batch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            courtIds,
+            date: dateStr,
+            startTime: startTimeStr,
+            slotCount,
+            venueId: playerVenueId || undefined,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || t("confirm.bookingFailed"));
+        router.replace(`/book/pay/group/${data.group.id}`);
+      } else {
+        const res = await portalFetch("/api/public/bookings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            courtId,
+            date: dateStr,
+            startTime: startTimeStr,
+            slotCount,
+            venueId: playerVenueId || undefined,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || t("confirm.bookingFailed"));
+        router.replace(`/book/pay/${data.booking.id}`);
+      }
     } catch (e) {
       setError((e as Error).message);
       setCreating(false);
@@ -100,9 +126,11 @@ function ConfirmContent() {
   }
 
   // Use live per-slot prices when the availability grid has loaded; fall back to URL param.
-  const totalPrice = slotPrices.length > 0
+  const singleCourtPrice = slotPrices.length > 0
     ? slotPrices.reduce((sum, sp) => sum + sp.price, 0)
     : urlPrice;
+  // For multi-court: multiply per-court price by the number of courts
+  const totalPrice = isMultiCourt ? singleCourtPrice * courtIds.length : singleCourtPrice;
 
   const fmtTime = (d: Date) => formatTime(d);
 

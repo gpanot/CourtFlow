@@ -577,6 +577,27 @@ CREATE TABLE public.billing_line_items (
 
 
 --
+-- Name: booking_groups; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.booking_groups (
+    id text NOT NULL,
+    venue_id text NOT NULL,
+    player_id text NOT NULL,
+    date date NOT NULL,
+    start_time timestamp without time zone NOT NULL,
+    end_time timestamp without time zone NOT NULL,
+    total_price_value integer DEFAULT 0 NOT NULL,
+    payment_ref text,
+    payment_status text,
+    hold_expires_at timestamp without time zone,
+    status text DEFAULT 'confirmed'::text NOT NULL,
+    created_at timestamp without time zone DEFAULT now() NOT NULL,
+    cancelled_at timestamp without time zone
+);
+
+
+--
 -- Name: bookings; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -599,7 +620,8 @@ CREATE TABLE public.bookings (
     payment_ref text,
     rejected_at timestamp(3) without time zone,
     rejected_by text,
-    rejection_reason text
+    rejection_reason text,
+    booking_group_id text
 );
 
 
@@ -2213,6 +2235,22 @@ ALTER TABLE ONLY public.billing_line_items
 
 
 --
+-- Name: booking_groups booking_groups_payment_ref_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.booking_groups
+    ADD CONSTRAINT booking_groups_payment_ref_key UNIQUE (payment_ref);
+
+
+--
+-- Name: booking_groups booking_groups_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.booking_groups
+    ADD CONSTRAINT booking_groups_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: bookings bookings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2960,10 +2998,38 @@ CREATE INDEX billing_line_items_invoice_id_idx ON public.billing_line_items USIN
 
 
 --
+-- Name: booking_groups_payment_ref; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX booking_groups_payment_ref ON public.booking_groups USING btree (payment_ref) WHERE (payment_ref IS NOT NULL);
+
+
+--
+-- Name: booking_groups_player; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX booking_groups_player ON public.booking_groups USING btree (player_id);
+
+
+--
+-- Name: booking_groups_venue_date; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX booking_groups_venue_date ON public.booking_groups USING btree (venue_id, date);
+
+
+--
 -- Name: bookings_active_slot_unique; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE UNIQUE INDEX bookings_active_slot_unique ON public.bookings USING btree (court_id, date, start_time) WHERE (status = ANY (ARRAY['confirmed'::public."BookingStatus", 'completed'::public."BookingStatus", 'no_show'::public."BookingStatus"]));
+
+
+--
+-- Name: bookings_booking_group_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX bookings_booking_group_id ON public.bookings USING btree (booking_group_id) WHERE (booking_group_id IS NOT NULL);
 
 
 --
@@ -3955,6 +4021,30 @@ ALTER TABLE ONLY public.billing_invoices
 
 ALTER TABLE ONLY public.billing_line_items
     ADD CONSTRAINT billing_line_items_invoice_id_fkey FOREIGN KEY (invoice_id) REFERENCES public.billing_invoices(id) ON UPDATE CASCADE ON DELETE RESTRICT;
+
+
+--
+-- Name: booking_groups booking_groups_player_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.booking_groups
+    ADD CONSTRAINT booking_groups_player_id_fkey FOREIGN KEY (player_id) REFERENCES public.players(id);
+
+
+--
+-- Name: booking_groups booking_groups_venue_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.booking_groups
+    ADD CONSTRAINT booking_groups_venue_id_fkey FOREIGN KEY (venue_id) REFERENCES public.venues(id);
+
+
+--
+-- Name: bookings bookings_booking_group_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bookings
+    ADD CONSTRAINT bookings_booking_group_id_fkey FOREIGN KEY (booking_group_id) REFERENCES public.booking_groups(id);
 
 
 --
@@ -5079,4 +5169,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260704025913'),
     ('20260704042005'),
     ('20260705050420'),
-    ('20260705050540');
+    ('20260705050540'),
+    ('20260705122627');

@@ -58,6 +58,8 @@ interface VenueInfo {
     defaultPriceValue: number;
     allow30MinBookings?: boolean;
     maxDurationMinutes?: number;
+    allowMultiCourtBookings?: boolean;
+    maxCourtsPerBooking?: number;
   };
 }
 
@@ -124,9 +126,12 @@ export default function VenueHomePage() {
   const [openPlaySessions, setOpenPlaySessions] = useState<OpenPlaySession[]>([]);
   const [loading, setLoading] = useState(true);
   const [bookingType, setBookingType] = useState<BookingType>("court");
-  // Multi-slot selection: courtId + array of selected slots
+  // Single-court selection (primary court)
   const [selectedCourtId, setSelectedCourtId] = useState<string | null>(null);
   const [selectedSlots, setSelectedSlots] = useState<Slot[]>([]);
+  // Multi-court selection: additional courts with the same time window
+  // Map of courtId → slots array (each entry has the same window as primary court)
+  const [additionalCourtIds, setAdditionalCourtIds] = useState<string[]>([]);
 
   const [openPlayModal, setOpenPlayModal] = useState<OpenPlaySession | null>(null);
 
@@ -153,6 +158,7 @@ export default function VenueHomePage() {
     setLoading(true);
     setSelectedCourtId(null);
     setSelectedSlots([]);
+    setAdditionalCourtIds([]);
     try {
       const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
       const res = await fetch(`/api/public/availability?date=${dateStr}${vq}`);
@@ -202,7 +208,45 @@ export default function VenueHomePage() {
   }
 
   function isSlotSelected(courtId: string, slot: Slot) {
-    return selectedCourtId === courtId && selectedSlots.some((s) => s.startTime === slot.startTime);
+    if (selectedCourtId === courtId) {
+      return selectedSlots.some((s) => s.startTime === slot.startTime);
+    }
+    // Highlight same time window on additional courts
+    if (additionalCourtIds.includes(courtId) && selectedSlots.length > 0) {
+      const sortedSel = [...selectedSlots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+      const winStart = sortedSel[0].startTime;
+      const winEnd = sortedSel[sortedSel.length - 1].endTime;
+      return slot.startTime >= winStart && slot.endTime <= winEnd;
+    }
+    return false;
+  }
+
+  const allowMultiCourt = venue?.bookingConfig?.allowMultiCourtBookings ?? true;
+  const maxCourts = venue?.bookingConfig?.maxCourtsPerBooking ?? 4;
+
+  /** Returns true if all slots in the current time window are available on the given court. */
+  function courtWindowAvailable(additionalCourtId: string): boolean {
+    if (sortedSelected.length === 0) return false;
+    const courtData = grid.find((c) => c.courtId === additionalCourtId);
+    if (!courtData) return false;
+    const winStart = sortedSelected[0].startTime;
+    const winEnd = sortedSelected[sortedSelected.length - 1].endTime;
+    const windowSlots = courtData.slots.filter(
+      (s) => s.startTime >= winStart && s.endTime <= winEnd
+    );
+    return windowSlots.length === sortedSelected.length && windowSlots.every((s) => s.available);
+  }
+
+  function toggleAdditionalCourt(courtId: string) {
+    if (!allowMultiCourt || sortedSelected.length === 0 || !selectedCourtId) return;
+    if (courtId === selectedCourtId) return;
+    if (additionalCourtIds.includes(courtId)) {
+      setAdditionalCourtIds(additionalCourtIds.filter((c) => c !== courtId));
+    } else {
+      if (1 + additionalCourtIds.length >= maxCourts) return;
+      if (!courtWindowAvailable(courtId)) return;
+      setAdditionalCourtIds([...additionalCourtIds, courtId]);
+    }
   }
 
   function areConsecutive(slots: Slot[]) {
@@ -219,10 +263,11 @@ export default function VenueHomePage() {
   function toggleSlot(courtId: string, slot: Slot) {
     if (!slot.available) return;
 
-    // Switching courts -> reset
+    // Switching courts -> reset everything including additional courts
     if (selectedCourtId && selectedCourtId !== courtId) {
       setSelectedCourtId(courtId);
       setSelectedSlots([slot]);
+      setAdditionalCourtIds([]);
       return;
     }
 
@@ -289,13 +334,20 @@ export default function VenueHomePage() {
     const first = sortedSelected[0];
     if (!selectedDate) return;
     const localDate = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
+
+    const allCourtIds = [selectedCourtId!, ...additionalCourtIds];
+    const multiTotal = totalPrice * allCourtIds.length;
+
     const params = new URLSearchParams({
       courtId: selectedCourtId!,
       date: localDate,
       startTime: first.startTime,
       slotCount: String(sortedSelected.length),
-      price: String(totalPrice),
+      price: String(additionalCourtIds.length > 0 ? multiTotal : totalPrice),
     });
+    if (additionalCourtIds.length > 0) {
+      params.set("courtIds", allCourtIds.join(","));
+    }
     router.push(`/book/confirm?${params.toString()}`);
   }
 
@@ -410,7 +462,38 @@ export default function VenueHomePage() {
                     {grid.map((court) => (
                       <tr key={court.courtId} className="border-t border-[var(--cm-border)]">
                         <td className="sticky left-0 bg-[var(--cm-bg)] z-10 px-3 py-2 font-medium">
-                          {court.courtLabel}
+                          <div className="flex items-center gap-1.5">
+                            <span>{court.courtLabel}</span>
+                            {/* Multi-court toggle — shown when a time window is already selected on another court */}
+                            {allowMultiCourt && court.courtId !== selectedCourtId && sortedSelected.length > 0 && (
+                              (() => {
+                                const isAdded = additionalCourtIds.includes(court.courtId);
+                                const canAdd = isAdded || courtWindowAvailable(court.courtId);
+                                const atMax = !isAdded && 1 + additionalCourtIds.length >= maxCourts;
+                                return (
+                                  <button
+                                    onClick={() => toggleAdditionalCourt(court.courtId)}
+                                    disabled={!isAdded && (!canAdd || atMax)}
+                                    className={`rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold transition-colors ${
+                                      isAdded
+                                        ? "bg-[var(--cm-accent)] text-black"
+                                        : !canAdd || atMax
+                                        ? "bg-[var(--cm-bg-surface)] text-[var(--cm-text-muted)] cursor-not-allowed opacity-40"
+                                        : "bg-[var(--cm-bg-card)] text-[var(--cm-text-sec)] border border-[var(--cm-border)] hover:border-[var(--cm-accent)]"
+                                    }`}
+                                    title={
+                                      isAdded ? "Remove from group"
+                                      : atMax ? `Max ${maxCourts} courts`
+                                      : !canAdd ? "Not available in this time window"
+                                      : "Add to group"
+                                    }
+                                  >
+                                    {isAdded ? "−" : "+"}
+                                  </button>
+                                );
+                              })()
+                            )}
+                          </div>
                         </td>
                         {court.slots.map((slot, slotIdx) => {
                           const isSel = isSlotSelected(court.courtId, slot);
@@ -693,10 +776,15 @@ export default function VenueHomePage() {
               }`}
             >
               <span className="font-semibold text-sm leading-tight">
-                {canBook ? `${t("home.bookNow")} · ${formatPrice(totalPrice)}` : `Min. ${fmtDuration(minCells * GRID_GRANULARITY_MINUTES)}`}
+                {canBook
+                  ? `${t("home.bookNow")} · ${formatPrice(additionalCourtIds.length > 0 ? totalPrice * (1 + additionalCourtIds.length) : totalPrice)}`
+                  : `Min. ${fmtDuration(minCells * GRID_GRANULARITY_MINUTES)}`}
               </span>
               <span className="text-[11px] font-medium opacity-75 leading-tight">
-                {courtLabel} · {selectedDate ? formatDate(selectedDate) : ""} · {fmtDuration(selectionDurationMin)} · {firstSlotStart}–{lastSlotEnd}
+                {additionalCourtIds.length > 0
+                  ? `${1 + additionalCourtIds.length} courts · `
+                  : `${courtLabel} · `}
+                {selectedDate ? formatDate(selectedDate) : ""} · {fmtDuration(selectionDurationMin)} · {firstSlotStart}–{lastSlotEnd}
               </span>
             </button>
           </div>

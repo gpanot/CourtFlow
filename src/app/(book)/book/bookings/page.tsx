@@ -22,6 +22,7 @@ interface BookingItem {
   priceValue: number;
   status: string;
   paymentStatus: string | null;
+  bookingGroupId: string | null;
   court: { label: string };
   venue: { name: string };
 }
@@ -429,7 +430,7 @@ export default function MyBookingsPage() {
                         href={`/book/bookings/${b.id}`}
                         icon={<span className="text-base">📅</span>}
                         title={`${formatDateField(b.date)} · ${formatTime(b.startTime)} – ${formatTime(b.endTime)}`}
-                        subtitle={b.court.label}
+                        subtitle={b.bookingGroupId ? `${b.court.label} · ${t("bookings.groupBooking", { defaultValue: "Group booking" })}` : b.court.label}
                         venueName={b.venue.name}
                         price={b.priceValue}
                         paymentStatus={b.paymentStatus}
@@ -454,7 +455,7 @@ export default function MyBookingsPage() {
                   href={`/book/bookings/${b.id}`}
                   icon={<span className="text-base">📅</span>}
                   title={`${formatDateField(b.date)} · ${formatTime(b.startTime)} – ${formatTime(b.endTime)}`}
-                  subtitle={b.court.label}
+                  subtitle={b.bookingGroupId ? `${b.court.label} · ${t("bookings.groupBooking", { defaultValue: "Group booking" })}` : b.court.label}
                   venueName={b.venue.name}
                   price={b.priceValue}
                   paymentStatus={b.paymentStatus}

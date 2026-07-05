@@ -101,6 +101,8 @@ export async function POST(request: NextRequest) {
             defaultPriceValue: 0,
             pricingRules: [],
             cancellationHours: 24,
+            allowMultiCourtBookings: true,
+            maxCourtsPerBooking: 4,
           },
           membershipConfig: {
             contactWhatsApp: null,

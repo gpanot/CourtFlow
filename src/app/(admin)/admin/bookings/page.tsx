@@ -47,6 +47,7 @@ import {
   type PaymentActionTarget,
 } from "@/components/admin/PaymentActionModal";
 import { StaffBookingModal, type InitialCourtSelection, type EditCourtBooking, type EditLessonBooking } from "@/components/admin/StaffBookingModal";
+import { EditGroupBookingModal } from "@/components/admin/EditGroupBookingModal";
 import { VenueDayPlanner } from "@/components/admin/VenueDayPlanner";
 import { type CourtSlot } from "@/components/admin/BookingCourtGrid";
 import {
@@ -90,6 +91,7 @@ interface BookingRecord {
   priceValue: number;
   coPlayerIds: string[];
   cancelledAt: string | null;
+  bookingGroupId: string | null;
   court: { id: string; label: string };
   player: { id: string; name: string; phone: string; avatar?: string };
 }
@@ -282,6 +284,9 @@ export default function BookingsPage() {
   const [editBookingTarget, setEditBookingTarget] = useState<EditCourtBooking | null>(null);
   const [editLessonTarget, setEditLessonTarget] = useState<EditLessonBooking | null>(null);
 
+  // Group booking edit modal
+  const [editGroupId, setEditGroupId] = useState<string | null>(null);
+
   const [paymentActionTarget, setPaymentActionTarget] = useState<PaymentActionTarget | null>(null);
 
   const [activeTab, setActiveTab] = useState<"bookings" | "list" | "settings" | "cancellation">("bookings");
@@ -445,6 +450,11 @@ export default function BookingsPage() {
   });
 
   const openEditModal = (booking: BookingRecord) => {
+    if (booking.bookingGroupId) {
+      // Multi-court group booking — open the group edit modal
+      setEditGroupId(booking.bookingGroupId);
+      return;
+    }
     setEditLessonTarget(null);
     setEditBookingTarget(bookingToEditTarget(booking));
     setStaffModalInitialSelection(undefined);
@@ -478,18 +488,40 @@ export default function BookingsPage() {
 
   const openCreateFromSelection = () => {
     if (!selectionSummary?.canBook) return;
-    const cid = selectionCourtIds[0];
-    const entry = selectedSlots[cid];
-    const sorted = [...entry.slots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-    openStaffModal("court", {
-      courtId: cid,
-      courtLabel: entry.courtLabel,
-      slots: sorted.map((s) => ({
-        startTime: s.startTime,
-        endTime: s.endTime,
-        hour: s.hour,
-      })),
-    });
+
+    if (selectionCourtIds.length === 1) {
+      // Single-court path (unchanged)
+      const cid = selectionCourtIds[0];
+      const entry = selectedSlots[cid];
+      const sorted = [...entry.slots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+      openStaffModal("court", {
+        courtId: cid,
+        courtLabel: entry.courtLabel,
+        slots: sorted.map((s) => ({
+          startTime: s.startTime,
+          endTime: s.endTime,
+          hour: s.hour,
+        })),
+      });
+    } else {
+      // Multi-court group booking — pass all courts
+      const firstCid = selectionCourtIds[0];
+      const firstEntry = selectedSlots[firstCid];
+      const sorted = [...firstEntry.slots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+      openStaffModal("court", {
+        courtId: firstCid,
+        courtLabel: firstEntry.courtLabel,
+        slots: sorted.map((s) => ({
+          startTime: s.startTime,
+          endTime: s.endTime,
+          hour: s.hour,
+        })),
+        additionalCourts: selectionCourtIds.slice(1).map((cid) => ({
+          courtId: cid,
+          courtLabel: selectedSlots[cid].courtLabel,
+        })),
+      });
+    }
   };
 
   const openBlockFromSelection = (presetType?: string) => {
@@ -1137,6 +1169,21 @@ export default function BookingsPage() {
         }}
       />
 
+      {/* Group booking edit modal */}
+      {editGroupId && (
+        <EditGroupBookingModal
+          groupId={editGroupId}
+          venueId={selectedVenueId}
+          courts={availability.map((c) => ({ id: c.courtId, label: c.courtLabel }))}
+          onClose={() => setEditGroupId(null)}
+          onSaved={async () => {
+            setEditGroupId(null);
+            await fetchBookings();
+            await fetchAvailability();
+          }}
+        />
+      )}
+
       
     </div>
   );
@@ -1158,6 +1205,8 @@ function GeneralSettingsSection({
   const [allow30Min, setAllow30Min] = useState(parsed.allow30MinBookings);
   const [defaultDuration, setDefaultDuration] = useState(parsed.defaultDurationMinutes);
   const [maxDuration, setMaxDuration] = useState(parsed.maxDurationMinutes);
+  const [allowMultiCourt, setAllowMultiCourt] = useState(parsed.allowMultiCourtBookings);
+  const [maxCourts, setMaxCourts] = useState(parsed.maxCourtsPerBooking);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
 
@@ -1166,6 +1215,8 @@ function GeneralSettingsSection({
     setAllow30Min(p.allow30MinBookings);
     setDefaultDuration(p.defaultDurationMinutes);
     setMaxDuration(p.maxDurationMinutes);
+    setAllowMultiCourt(p.allowMultiCourtBookings);
+    setMaxCourts(p.maxCourtsPerBooking);
     setDirty(false);
   }, [settings]);
 
@@ -1178,6 +1229,8 @@ function GeneralSettingsSection({
         allow30MinBookings: allow30Min,
         defaultDurationMinutes: defaultDuration,
         maxDurationMinutes: maxDuration,
+        allowMultiCourtBookings: allowMultiCourt,
+        maxCourtsPerBooking: maxCourts,
       });
       setDirty(false);
       await onRefresh();
@@ -1209,6 +1262,38 @@ function GeneralSettingsSection({
           <span className="text-xs text-neutral-300">{t("bookings.allow30MinBookings")}</span>
         </label>
         <p className="text-[10px] text-neutral-500">{t("bookings.allow30MinBookingsHint")}</p>
+
+        {/* Allow multi-court group bookings toggle */}
+        <label className="flex items-center gap-3 cursor-pointer pt-1">
+          <button
+            role="switch"
+            aria-checked={allowMultiCourt}
+            onClick={() => { setAllowMultiCourt(!allowMultiCourt); setDirty(true); }}
+            className={cn(
+              "relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none",
+              allowMultiCourt ? "bg-purple-600" : "bg-neutral-600"
+            )}
+          >
+            <span className={cn("pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform", allowMultiCourt ? "translate-x-4" : "translate-x-0")} />
+          </button>
+          <span className="text-xs text-neutral-300">{t("bookings.allowMultiCourtBookings")}</span>
+        </label>
+        <p className="text-[10px] text-neutral-500">{t("bookings.allowMultiCourtBookingsHint")}</p>
+        {allowMultiCourt && (
+          <div className="pt-1">
+            <label className="text-[10px] text-neutral-500 block mb-1">{t("bookings.maxCourtsPerBooking")}</label>
+            <select
+              value={maxCourts}
+              onChange={(e) => { setMaxCourts(Number(e.target.value)); setDirty(true); }}
+              className={inputCls}
+            >
+              {[2, 3, 4, 6, 8].map((n) => (
+                <option key={n} value={n}>{n} {t("bookings.courts", { defaultValue: "courts" })}</option>
+              ))}
+            </select>
+            <p className="text-[10px] text-neutral-500 mt-0.5">{t("bookings.maxCourtsPerBookingHint")}</p>
+          </div>
+        )}
 
         {/* Duration fields */}
         <div className="grid grid-cols-2 gap-3 pt-1">
@@ -1296,6 +1381,8 @@ function parseCfg(settings: VenueSettings) {
     allow30MinBookings: (raw.allow30MinBookings as boolean) ?? false,
     defaultDurationMinutes: (raw.defaultDurationMinutes as number) ?? 60,
     maxDurationMinutes: (raw.maxDurationMinutes as number) ?? 480,
+    allowMultiCourtBookings: (raw.allowMultiCourtBookings as boolean) ?? true,
+    maxCourtsPerBooking: (raw.maxCourtsPerBooking as number) ?? 4,
   };
 }
 

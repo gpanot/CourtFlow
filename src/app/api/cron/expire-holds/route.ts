@@ -81,6 +81,42 @@ export async function GET(request: NextRequest) {
     `;
     const expiredLessons = { count: expiredLessonsResult };
 
+    // Soft-expire pending booking_groups holds and cascade to their child bookings
+    const expiredGroupsList = await prisma.bookingGroup.findMany({
+      where: {
+        paymentStatus: "pending",
+        holdExpiresAt: { lt: now },
+        status: "confirmed",
+      },
+      select: { id: true },
+    });
+
+    let expiredGroups = { count: 0 };
+    let expiredGroupBookings = { count: 0 };
+    if (expiredGroupsList.length > 0) {
+      const expiredGroupIds = expiredGroupsList.map((g) => g.id);
+      [expiredGroups, expiredGroupBookings] = await prisma.$transaction([
+        prisma.bookingGroup.updateMany({
+          where: { id: { in: expiredGroupIds } },
+          data: {
+            status: "expired_hold",
+            paymentStatus: "expired",
+            holdExpiresAt: null,
+            cancelledAt: now,
+          },
+        }),
+        prisma.booking.updateMany({
+          where: { bookingGroupId: { in: expiredGroupIds } },
+          data: {
+            status: "expired_hold",
+            paymentStatus: "expired",
+            holdExpiresAt: null,
+            cancelledAt: now,
+          },
+        }),
+      ]);
+    }
+
     // Clean up any stale "expired" paymentStatus bookings left by the old hard-delete
     // approach that somehow survived (defensive cleanup).
     const cleanedStale = await prisma.booking.deleteMany({
@@ -94,6 +130,8 @@ export async function GET(request: NextRequest) {
       expiredBookings: expiredBookings.count,
       expiredOpenPlay: expiredOpenPlay.count,
       expiredLessons: expiredLessons.count,
+      expiredGroups: expiredGroups.count,
+      expiredGroupBookings: expiredGroupBookings.count,
       cleanedStale: cleanedStale.count,
       checkedAt: now.toISOString(),
     });

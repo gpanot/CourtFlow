@@ -270,6 +270,9 @@
     "emptyFilter": "Không có mục nào.",
     "emptySessions": "Chưa có buổi HLV. Hãy đặt buổi học để bắt đầu!",
     "cancelled": "Đã hủy",
+    "groupBooking": "Đặt nhóm",
+    "courtsBooked": "sân",
+    "groupCancelConfirm": "Hủy toàn bộ đặt sân nhóm? Tất cả các sân sẽ bị hủy.",
     "status": {
       "pending": "Chờ thanh toán",
       "proof_submitted": "Đang xác minh",

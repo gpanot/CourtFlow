@@ -81,16 +81,35 @@ export function computeBookingSelectionSummary(
     0,
   );
 
+  // canBook requires every selected court to have consecutive cells AND all courts
+  // must share the same start/end time window (for multi-court group booking).
   let canBook = false;
-  if (courtIds.length === 1) {
-    const cid = courtIds[0];
-    const slots = selectedSlots[cid].slots;
-    const courtData = availability.find((c) => c.courtId === cid);
-    if (courtData && slots.length > 0) {
+  if (courtIds.length >= 1) {
+    const courtStartTimes: string[] = [];
+    const courtEndTimes: string[] = [];
+    let allConsecutive = true;
+
+    for (const cid of courtIds) {
+      const slots = selectedSlots[cid].slots;
+      const courtData = availability.find((c) => c.courtId === cid);
+      if (!courtData || slots.length === 0) { allConsecutive = false; break; }
+
       const indices = slots
         .map((s) => courtData.slots.findIndex((cs) => cs.startTime === s.startTime))
         .sort((a, b) => a - b);
-      canBook = indices.every((v, i) => i === 0 || v === indices[i - 1] + 1);
+      const consecutive = indices.every((v, i) => i === 0 || v === indices[i - 1] + 1);
+      if (!consecutive) { allConsecutive = false; break; }
+
+      const sortedSlots = [...slots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+      courtStartTimes.push(sortedSlots[0].startTime);
+      courtEndTimes.push(sortedSlots[sortedSlots.length - 1].endTime);
+    }
+
+    if (allConsecutive) {
+      // For multi-court: all courts must share the same time window
+      const uniqueStart = new Set(courtStartTimes);
+      const uniqueEnd = new Set(courtEndTimes);
+      canBook = uniqueStart.size === 1 && uniqueEnd.size === 1;
     }
   }
 

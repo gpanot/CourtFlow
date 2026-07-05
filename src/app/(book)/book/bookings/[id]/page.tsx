@@ -113,6 +113,10 @@ export default function BookingDetailPage() {
       {/* Booking details card */}
       <div className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-4 mb-4 space-y-2">
         <Row label={t("common.court")} value={court.label} />
+        {/* Show sibling courts if this is a group booking */}
+        {(booking.siblingBookings as { id: string; court: { label: string }; priceValue: number }[] | undefined)?.map((sb) => (
+          <Row key={sb.id} label="" value={`+ ${sb.court.label} (${formatPrice(sb.priceValue)})`} valueClass="text-[var(--cm-text-sec)]" />
+        ))}
         <Row label={t("common.date")} value={formatDateField(bookingDate)} />
         <Row label={t("common.time")} value={`${formatTime(startTime)} – ${formatTime(endTime)}`} />
         <Row label={t("common.price")} value={formatPrice(priceValue)} />
