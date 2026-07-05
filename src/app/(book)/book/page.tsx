@@ -224,17 +224,18 @@ export default function VenueHomePage() {
   const allowMultiCourt = venue?.bookingConfig?.allowMultiCourtBookings ?? true;
   const maxCourts = venue?.bookingConfig?.maxCourtsPerBooking ?? 4;
 
-  /** Returns true if all slots in the current time window are available on the given court. */
+  /** Returns true if every slot in the selected time window has a matching available slot on the given court. */
   function courtWindowAvailable(additionalCourtId: string): boolean {
     if (sortedSelected.length === 0) return false;
     const courtData = grid.find((c) => c.courtId === additionalCourtId);
     if (!courtData) return false;
-    const winStart = sortedSelected[0].startTime;
-    const winEnd = sortedSelected[sortedSelected.length - 1].endTime;
-    const windowSlots = courtData.slots.filter(
-      (s) => s.startTime >= winStart && s.endTime <= winEnd
-    );
-    return windowSlots.length === sortedSelected.length && windowSlots.every((s) => s.available);
+    // Build a lookup of startTime → slot for the additional court
+    const slotMap = new Map(courtData.slots.map((s) => [s.startTime, s]));
+    // Every selected slot must have a corresponding available slot on the other court
+    return sortedSelected.every((sel) => {
+      const match = slotMap.get(sel.startTime);
+      return match !== undefined && match.available;
+    });
   }
 
   function toggleAdditionalCourt(courtId: string) {
