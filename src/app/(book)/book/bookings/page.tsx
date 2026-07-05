@@ -23,8 +23,25 @@ interface BookingItem {
   status: string;
   paymentStatus: string | null;
   bookingGroupId: string | null;
+  groupPaymentStatus: string | null;
+  groupTotalPrice: number | null;
   court: { label: string };
   venue: { name: string };
+}
+
+/** A booking item after collapsing group siblings into one entry */
+interface CollapsedBookingItem {
+  id: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  totalPrice: number;
+  status: string;
+  effectivePaymentStatus: string | null;
+  bookingGroupId: string | null;
+  courtLabels: string[];
+  venue: { name: string };
+  isGroup: boolean;
 }
 
 interface LessonItem {
@@ -239,6 +256,48 @@ function BookingRow({
   );
 }
 
+/** Collapses individual bookings that share a bookingGroupId into a single entry */
+function collapseGroupBookings(items: BookingItem[]): CollapsedBookingItem[] {
+  const seenGroups = new Set<string>();
+  const result: CollapsedBookingItem[] = [];
+  for (const b of items) {
+    if (b.bookingGroupId) {
+      if (seenGroups.has(b.bookingGroupId)) continue;
+      seenGroups.add(b.bookingGroupId);
+      const siblings = items.filter((x) => x.bookingGroupId === b.bookingGroupId && x.id !== b.id);
+      const total = b.groupTotalPrice ?? b.priceValue * (1 + siblings.length);
+      result.push({
+        id: b.id,
+        date: b.date,
+        startTime: b.startTime,
+        endTime: b.endTime,
+        totalPrice: total,
+        status: b.status,
+        effectivePaymentStatus: b.groupPaymentStatus ?? b.paymentStatus,
+        bookingGroupId: b.bookingGroupId,
+        courtLabels: [b.court.label, ...siblings.map((s) => s.court.label)],
+        venue: b.venue,
+        isGroup: true,
+      });
+    } else {
+      result.push({
+        id: b.id,
+        date: b.date,
+        startTime: b.startTime,
+        endTime: b.endTime,
+        totalPrice: b.priceValue,
+        status: b.status,
+        effectivePaymentStatus: b.paymentStatus,
+        bookingGroupId: null,
+        courtLabels: [b.court.label],
+        venue: b.venue,
+        isGroup: false,
+      });
+    }
+  }
+  return result;
+}
+
 export default function MyBookingsPage() {
   const { status } = usePlayerSession();
   const router = useRouter();
@@ -291,11 +350,12 @@ export default function MyBookingsPage() {
 
   const now = new Date();
 
-  // ── Courts ────────────────────────────────────────────────────────────────
-  const upcomingBookings = bookings
+  // ── Courts (collapse group bookings first) ────────────────────────────────
+  const collapsedBookings = collapseGroupBookings(bookings);
+  const upcomingBookings = collapsedBookings
     .filter((b) => new Date(b.startTime) >= now && b.status !== "cancelled")
     .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
-  const pastBookings = bookings
+  const pastBookings = collapsedBookings
     .filter((b) => new Date(b.startTime) < now || b.status === "cancelled")
     .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
 
@@ -407,14 +467,16 @@ export default function MyBookingsPage() {
                 {nextUpCourt && (
                   <NextUpHeroCard
                     href={`/book/bookings/${nextUpCourt.id}`}
-                    title={nextUpCourt.court.label}
-                    subtitle=""
+                    title={nextUpCourt.isGroup
+                      ? nextUpCourt.courtLabels.join(", ")
+                      : nextUpCourt.courtLabels[0]}
+                    subtitle={nextUpCourt.isGroup ? t("bookings.groupBooking", { defaultValue: "Group booking" }) : ""}
                     venueName={nextUpCourt.venue.name}
                     startTime={nextUpCourt.startTime}
                     endTime={nextUpCourt.endTime}
                     date={nextUpCourt.date}
-                    price={nextUpCourt.priceValue}
-                    paymentStatus={nextUpCourt.paymentStatus}
+                    price={nextUpCourt.totalPrice}
+                    paymentStatus={nextUpCourt.effectivePaymentStatus}
                     formatDateField={formatDateField}
                     formatTime={formatTime}
                     formatPrice={formatPrice}
@@ -430,10 +492,12 @@ export default function MyBookingsPage() {
                         href={`/book/bookings/${b.id}`}
                         icon={<span className="text-base">📅</span>}
                         title={`${formatDateField(b.date)} · ${formatTime(b.startTime)} – ${formatTime(b.endTime)}`}
-                        subtitle={b.bookingGroupId ? `${b.court.label} · ${t("bookings.groupBooking", { defaultValue: "Group booking" })}` : b.court.label}
+                        subtitle={b.isGroup
+                          ? `${b.courtLabels.join(", ")} · ${t("bookings.groupBooking", { defaultValue: "Group booking" })}`
+                          : b.courtLabels[0]}
                         venueName={b.venue.name}
-                        price={b.priceValue}
-                        paymentStatus={b.paymentStatus}
+                        price={b.totalPrice}
+                        paymentStatus={b.effectivePaymentStatus}
                         bookingStatus={b.status}
                         dimmed={false}
                         formatPrice={formatPrice}
@@ -455,10 +519,12 @@ export default function MyBookingsPage() {
                   href={`/book/bookings/${b.id}`}
                   icon={<span className="text-base">📅</span>}
                   title={`${formatDateField(b.date)} · ${formatTime(b.startTime)} – ${formatTime(b.endTime)}`}
-                  subtitle={b.bookingGroupId ? `${b.court.label} · ${t("bookings.groupBooking", { defaultValue: "Group booking" })}` : b.court.label}
+                  subtitle={b.isGroup
+                    ? `${b.courtLabels.join(", ")} · ${t("bookings.groupBooking", { defaultValue: "Group booking" })}`
+                    : b.courtLabels[0]}
                   venueName={b.venue.name}
-                  price={b.priceValue}
-                  paymentStatus={b.paymentStatus}
+                  price={b.totalPrice}
+                  paymentStatus={b.effectivePaymentStatus}
                   bookingStatus={b.status}
                   dimmed={false}
                   formatPrice={formatPrice}

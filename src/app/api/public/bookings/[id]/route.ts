@@ -27,6 +27,8 @@ export async function GET(
     // If this booking belongs to a group, include sibling courts and group payment state
     let siblingBookings: { id: string; court: { label: string }; priceValue: number }[] = [];
     let groupPaymentStatus: string | null = null;
+    let groupPaymentRef: string | null = null;
+    let groupTotalPrice: number | null = null;
     if (booking.bookingGroupId) {
       const siblings = await prisma.booking.findMany({
         where: { bookingGroupId: booking.bookingGroupId, id: { not: id }, playerId },
@@ -39,9 +41,11 @@ export async function GET(
       }));
       const group = await prisma.bookingGroup.findUnique({
         where: { id: booking.bookingGroupId },
-        select: { paymentStatus: true, totalPriceValue: true },
+        select: { paymentStatus: true, totalPriceValue: true, paymentRef: true },
       });
       groupPaymentStatus = group?.paymentStatus ?? null;
+      groupPaymentRef = group?.paymentRef ?? null;
+      groupTotalPrice = group?.totalPriceValue ?? null;
     }
 
     return json({
@@ -49,6 +53,8 @@ export async function GET(
       date: toDateKey(booking.date),
       cancellation,
       siblingBookings,
+      groupPaymentRef,
+      groupTotalPrice,
       groupPaymentStatus,
     });
   } catch (e) {

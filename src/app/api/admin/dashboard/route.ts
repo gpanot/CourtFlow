@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
       prisma.booking.count({
         where: { ...bookingWhere, date: { gte: weekStart, lte: weekEnd }, status: "no_show" },
       }),
-      // Recent bookings (latest 10) — include expired_hold so staff can see payment drop-offs
+      // Recent bookings (latest 20 — deduped to 10 after collapsing group siblings)
       prisma.booking.findMany({
         where: {
           venueId: { in: venueIds },
@@ -128,9 +128,10 @@ export async function GET(request: NextRequest) {
           player: { select: { name: true, phone: true, avatar: true, avatarPhotoPath: true, facePhotoPath: true } },
           court: { select: { label: true } },
           venue: { select: { name: true } },
+          bookingGroup: { select: { id: true, paymentStatus: true, totalPriceValue: true, paymentRef: true } },
         },
         orderBy: { createdAt: "desc" },
-        take: 10,
+        take: 20,
       }),
       // Active memberships
       prisma.membership.count({
@@ -305,31 +306,81 @@ export async function GET(request: NextRequest) {
         unpaidCount: unpaidLessons.length,
         unpaidAmount: unpaidLessons.reduce((s, l) => s + l.priceValue, 0),
       },
-      recentBookings: recentBookings.map((b) => ({
-        id: b.id,
-        venueId: b.venueId,
-        playerId: b.playerId,
-        playerName: b.player.name,
-        playerPhone: b.player.phone,
-        playerAvatar: b.player.avatar,
-        playerPhoto: b.player.avatarPhotoPath || b.player.facePhotoPath || null,
-        courtLabel: b.court.label,
-        venueName: b.venue.name,
-        date: b.date,
-        startTime: b.startTime,
-        endTime: b.endTime,
-        status: b.status,
-        paymentStatus: b.paymentStatus,
-        paymentProofUrl: b.paymentProofUrl,
-        holdExpiresAt: resolveHoldExpiresAt({
-          paymentStatus: b.paymentStatus,
-          holdExpiresAt: b.holdExpiresAt,
-          createdAt: b.createdAt,
-          kind: "booking",
-        })?.toISOString() ?? null,
-        priceValue: b.priceValue,
-        createdAt: b.createdAt,
-      })),
+      recentBookings: (() => {
+        // Collapse group bookings: keep the first occurrence per bookingGroupId, aggregate court labels
+        const seenGroups = new Set<string>();
+        const collapsed: Array<{
+          id: string; venueId: string; playerId: string;
+          playerName: string; playerPhone: string; playerAvatar: string; playerPhoto: string | null;
+          courtLabel: string; allCourtLabels: string[];
+          venueName: string; date: Date; startTime: Date; endTime: Date;
+          status: string; paymentStatus: string | null; paymentProofUrl: string | null;
+          holdExpiresAt: Date | null; priceValue: number; createdAt: Date;
+          bookingGroupId: string | null; groupPaymentStatus: string | null; groupTotalPrice: number | null;
+          isGroup: boolean;
+        }> = [];
+
+        for (const b of recentBookings) {
+          const bid = b as typeof b & { bookingGroupId?: string | null; bookingGroup?: { id: string; paymentStatus: string; totalPriceValue: number; paymentRef: string } | null };
+          if (bid.bookingGroupId) {
+            if (seenGroups.has(bid.bookingGroupId)) continue;
+            seenGroups.add(bid.bookingGroupId);
+            // Collect all court labels from siblings in this same batch
+            const siblingLabels = recentBookings
+              .filter((s) => (s as typeof s & { bookingGroupId?: string | null }).bookingGroupId === bid.bookingGroupId && s.id !== b.id)
+              .map((s) => s.court.label);
+            collapsed.push({
+              id: b.id, venueId: b.venueId, playerId: b.playerId,
+              playerName: b.player.name, playerPhone: b.player.phone,
+              playerAvatar: b.player.avatar, playerPhoto: b.player.avatarPhotoPath || b.player.facePhotoPath || null,
+              courtLabel: b.court.label,
+              allCourtLabels: [b.court.label, ...siblingLabels],
+              venueName: b.venue.name, date: b.date, startTime: b.startTime, endTime: b.endTime,
+              status: b.status,
+              paymentStatus: bid.bookingGroup?.paymentStatus ?? b.paymentStatus,
+              paymentProofUrl: b.paymentProofUrl,
+              holdExpiresAt: b.holdExpiresAt,
+              priceValue: bid.bookingGroup?.totalPriceValue ?? b.priceValue,
+              createdAt: b.createdAt,
+              bookingGroupId: bid.bookingGroupId,
+              groupPaymentStatus: bid.bookingGroup?.paymentStatus ?? null,
+              groupTotalPrice: bid.bookingGroup?.totalPriceValue ?? null,
+              isGroup: true,
+            });
+          } else {
+            collapsed.push({
+              id: b.id, venueId: b.venueId, playerId: b.playerId,
+              playerName: b.player.name, playerPhone: b.player.phone,
+              playerAvatar: b.player.avatar, playerPhoto: b.player.avatarPhotoPath || b.player.facePhotoPath || null,
+              courtLabel: b.court.label,
+              allCourtLabels: [b.court.label],
+              venueName: b.venue.name, date: b.date, startTime: b.startTime, endTime: b.endTime,
+              status: b.status, paymentStatus: b.paymentStatus, paymentProofUrl: b.paymentProofUrl,
+              holdExpiresAt: b.holdExpiresAt,
+              priceValue: b.priceValue, createdAt: b.createdAt,
+              bookingGroupId: null, groupPaymentStatus: null, groupTotalPrice: null,
+              isGroup: false,
+            });
+          }
+        }
+
+        return collapsed.slice(0, 10).map((b) => ({
+          id: b.id, venueId: b.venueId, playerId: b.playerId,
+          playerName: b.playerName, playerPhone: b.playerPhone,
+          playerAvatar: b.playerAvatar, playerPhoto: b.playerPhoto,
+          courtLabel: b.courtLabel,
+          allCourtLabels: b.allCourtLabels,
+          venueName: b.venueName, date: b.date, startTime: b.startTime, endTime: b.endTime,
+          status: b.status, paymentStatus: b.paymentStatus, paymentProofUrl: b.paymentProofUrl,
+          holdExpiresAt: resolveHoldExpiresAt({
+            paymentStatus: b.paymentStatus, holdExpiresAt: b.holdExpiresAt,
+            createdAt: b.createdAt, kind: "booking",
+          })?.toISOString() ?? null,
+          priceValue: b.priceValue, createdAt: b.createdAt,
+          bookingGroupId: b.bookingGroupId,
+          isGroup: b.isGroup,
+        }));
+      })(),
       recentLessons: recentLessons.map((l) => ({
         id: l.id,
         venueId: l.venueId,

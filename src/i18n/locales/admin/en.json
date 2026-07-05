@@ -151,6 +151,7 @@
     "typeLesson": "Lesson",
     "typeOpenPlay": "Open Play",
     "typeBooking": "Booking",
+    "group": "Group",
     "openPlay": "Open Play",
     "openPlayToday": "Open Play Today",
     "noOpenPlayToday": "No open play sessions today.",
