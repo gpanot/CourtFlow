@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
-import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/auth";
 import { assertVenueAccess } from "@/lib/venue-scope";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +18,7 @@ export async function PATCH(
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    const auth = requireManagerOrSuperAdmin(request.headers);
+    const auth = await await requireAdminAccess(request.headers);
     const { sessionId } = await params;
 
     const session = await prisma.session.findUnique({
@@ -80,7 +80,7 @@ export async function DELETE(
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    const auth = requireManagerOrSuperAdmin(request.headers);
+    const auth = await await requireAdminAccess(request.headers);
     const { sessionId } = await params;
 
     const session = await prisma.session.findUnique({

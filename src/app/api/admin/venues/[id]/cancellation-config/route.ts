@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody, notFound } from "@/lib/api-helpers";
-import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/auth";
 import { assertVenueAccess } from "@/lib/venue-scope";
 
 export const dynamic = "force-dynamic";
@@ -23,7 +23,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = requireManagerOrSuperAdmin(request.headers);
+    const auth = await await requireAdminAccess(request.headers);
     const { id } = await params;
     await assertVenueAccess(auth, id);
     const body = await parseBody<Partial<CancellationPolicy>>(request);
@@ -65,7 +65,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = requireManagerOrSuperAdmin(request.headers);
+    const auth = await await requireAdminAccess(request.headers);
     const { id } = await params;
     await assertVenueAccess(auth, id);
 

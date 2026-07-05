@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
-import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +13,7 @@ const PAYMENT_REGION_MAP: Record<string, string> = {
 
 export async function GET(request: NextRequest) {
   try {
-    requireManagerOrSuperAdmin(request.headers);
+    await requireAdminAccess(request.headers);
 
     const orgs = await prisma.organization.findMany({
       select: {
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    requireManagerOrSuperAdmin(request.headers);
+    await requireAdminAccess(request.headers);
 
     const body = await parseBody<{
       name: string;

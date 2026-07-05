@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 import { json, error } from "@/lib/api-helpers";
-import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
@@ -10,7 +10,7 @@ const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 
 export async function POST(request: NextRequest) {
   try {
-    requireManagerOrSuperAdmin(request.headers);
+    await requireAdminAccess(request.headers);
 
     const formData = await request.formData();
     const file = formData.get("file") as File | null;

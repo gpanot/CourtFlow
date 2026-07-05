@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { prisma } from "./db";
+import { normalizeAppAccess } from "./staff-app-access";
 
 const JWT_SECRET = process.env.JWT_SECRET || "courtflow-dev-secret-change-in-production";
 const JWT_EXPIRES_IN = "30d";
@@ -119,6 +120,28 @@ export function requireManagerOrSuperAdmin(headers: Headers): JwtPayload {
     throw new Error("Manager or super admin access required");
   }
   return payload;
+}
+
+/**
+ * Async guard for all /api/admin/* routes.
+ * Passes for: manager, superadmin, OR staff with "admin" appAccess on any venue.
+ */
+export async function requireAdminAccess(headers: Headers): Promise<JwtPayload> {
+  const payload = requireAuth(headers);
+  if (payload.role === "manager" || payload.role === "superadmin") {
+    return payload;
+  }
+  if (payload.role === "staff") {
+    const assignments = await prisma.staffVenueAssignment.findMany({
+      where: { staffId: payload.id },
+      select: { appAccess: true },
+    });
+    const allAccess = assignments.flatMap((a) => normalizeAppAccess(a.appAccess));
+    if (allAccess.includes("admin")) {
+      return payload;
+    }
+  }
+  throw new Error("Manager or super admin access required");
 }
 
 export function requireSuperAdmin(headers: Headers): JwtPayload {

@@ -138,6 +138,27 @@
     },
     "accountCreated": "Account created! Please sign in."
   },
+  "resetPassword": {
+    "forgotPassword": "Forgot password?",
+    "title": "Reset password",
+    "subtitle": "Enter your email address and we'll send you a link to reset your password.",
+    "sendLink": "Send reset link",
+    "sentTitle": "Check your inbox",
+    "sentBody": "If an account with that email exists, we've sent a password reset link. It expires in 15 minutes.",
+    "newPasswordTitle": "Set new password",
+    "newPasswordSubtitle": "Choose a strong password for your account.",
+    "setPassword": "Set new password",
+    "successTitle": "Password updated!",
+    "successBody": "Your password has been changed. Redirecting you to sign in…",
+    "requestNew": "Request a new link",
+    "errors": {
+      "emailRequired": "Please enter your email address.",
+      "sendFailed": "Failed to send email. Please try again.",
+      "invalidLink": "This link is invalid. Please request a new one.",
+      "linkExpired": "This link has expired or was already used. Please request a new one.",
+      "resetFailed": "Failed to reset password. Please try again."
+    }
+  },
   "onboarding": {
     "completeProfile": "Complete your profile",
     "profileSubtitle": "Just a few details to get started",

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
-import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/auth";
 import { assertVenueAccess } from "@/lib/venue-scope";
 import { buildVietQRUrl } from "@/lib/vietqr";
 import { generatePaymentRef } from "@/modules/courtpay/lib/payment-reference";
@@ -22,7 +22,7 @@ function readVenueFlags(settings: unknown): { autoPaymentEnabled: boolean; sepay
  */
 export async function POST(request: NextRequest) {
   try {
-    const auth = requireManagerOrSuperAdmin(request.headers);
+    const auth = await await requireAdminAccess(request.headers);
     const body = await parseBody<{ venueId: string; amount?: number }>(request);
     const venueId = body.venueId?.trim();
     const amount = Number.isFinite(body.amount) ? Math.max(1000, Math.floor(body.amount!)) : 1000;
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
-    const auth = requireManagerOrSuperAdmin(request.headers);
+    const auth = await await requireAdminAccess(request.headers);
     const venueId = request.nextUrl.searchParams.get("venueId")?.trim();
     const pendingPaymentId = request.nextUrl.searchParams.get("pendingPaymentId")?.trim();
 

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
-import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +10,7 @@ export async function GET(
   { params }: { params: Promise<{ coachId: string }> }
 ) {
   try {
-    requireManagerOrSuperAdmin(request.headers);
+    await requireAdminAccess(request.headers);
     const { coachId } = await params;
 
     const coach = await prisma.staffMember.findUnique({
@@ -54,7 +54,7 @@ export async function PUT(
   { params }: { params: Promise<{ coachId: string }> }
 ) {
   try {
-    requireManagerOrSuperAdmin(request.headers);
+    await requireAdminAccess(request.headers);
     const { coachId } = await params;
 
     const body = await parseBody<{

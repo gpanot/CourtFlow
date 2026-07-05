@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/auth";
 import { getAuthorizedVenueIds } from "@/lib/venue-scope";
 import { sendBillingProofNotification } from "@/lib/email/send";
 
@@ -15,7 +15,7 @@ type Params = { params: Promise<{ invoiceId: string }> };
  */
 export async function POST(req: NextRequest, { params }: Params) {
   try {
-    const auth = requireManagerOrSuperAdmin(req.headers);
+    const auth = await await requireAdminAccess(req.headers);
     const { invoiceId } = await params;
 
     const body = await req.json() as {

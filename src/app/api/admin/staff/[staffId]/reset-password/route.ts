@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
-import { requireManagerOrSuperAdmin, hashPassword } from "@/lib/auth";
+import { requireAdminAccess, hashPassword } from "@/lib/auth";
 import { getAuthorizedVenueIds } from "@/lib/venue-scope";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ export async function POST(
   { params }: { params: Promise<{ staffId: string }> }
 ) {
   try {
-    const auth = requireManagerOrSuperAdmin(request.headers);
+    const auth = await await requireAdminAccess(request.headers);
     const { staffId } = await params;
     const { newPassword } = await parseBody<{ newPassword: string }>(request);
 

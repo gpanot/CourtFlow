@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
-import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/auth";
 import bcrypt from "bcryptjs";
 
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ export async function PATCH(
   { params }: { params: Promise<{ playerId: string }> }
 ) {
   try {
-    requireManagerOrSuperAdmin(request.headers);
+    await requireAdminAccess(request.headers);
     const { playerId } = await params;
 
     const body = await request.json() as {

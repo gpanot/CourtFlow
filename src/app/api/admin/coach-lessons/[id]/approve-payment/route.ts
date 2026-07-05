@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
-import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/auth";
 import { buildLessonEmailContext, sendLessonEventEmails } from "@/lib/email/send";
 import { sendCoachLessonPushFromCtx } from "@/lib/staff-push";
 import { createCalendarEvent } from "@/lib/google-calendar";
@@ -13,7 +13,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = requireManagerOrSuperAdmin(request.headers);
+    const auth = await await requireAdminAccess(request.headers);
     const { id } = await params;
 
     const [lesson, approver] = await Promise.all([

@@ -1,12 +1,12 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
-import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   try {
-    requireManagerOrSuperAdmin(request.headers);
+    await requireAdminAccess(request.headers);
     const url = request.nextUrl;
     const venueId = url.searchParams.get("venueId");
     const dateStr = url.searchParams.get("date");
@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const admin = requireManagerOrSuperAdmin(request.headers);
+    const admin = await requireAdminAccess(request.headers);
     const body = await parseBody<{
       venueId: string;
       type: "private_competition" | "private_event" | "maintenance";

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireSuperAdmin, requireManagerOrSuperAdmin } from "@/lib/auth";
+import { requireSuperAdmin, requireAdminAccess } from "@/lib/auth";
 import { parseBody } from "@/lib/api-helpers";
 import { assertVenueAccess } from "@/lib/venue-scope";
 
@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(req: NextRequest) {
   try {
-    const auth = requireManagerOrSuperAdmin(req.headers);
+    const auth = await await requireAdminAccess(req.headers);
     const body = await parseBody<{
       venueId: string;
       openedAt: string;

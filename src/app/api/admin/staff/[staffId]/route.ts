@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
-import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/auth";
 import { normalizeAppAccess, staffAssignmentsToVenues } from "@/lib/staff-app-access";
 import { getAuthorizedVenueIds } from "@/lib/venue-scope";
 
@@ -11,7 +11,7 @@ export async function PATCH(
   { params }: { params: Promise<{ staffId: string }> }
 ) {
   try {
-    const auth = requireManagerOrSuperAdmin(request.headers);
+    const auth = await await requireAdminAccess(request.headers);
     const { staffId } = await params;
     const body = await parseBody<{
       name?: string;
@@ -155,7 +155,7 @@ export async function DELETE(
   { params }: { params: Promise<{ staffId: string }> }
 ) {
   try {
-    const auth = requireManagerOrSuperAdmin(request.headers);
+    const auth = await await requireAdminAccess(request.headers);
     const { staffId } = await params;
 
     const existing = await prisma.staffMember.findUnique({

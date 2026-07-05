@@ -138,6 +138,27 @@
     },
     "accountCreated": "Tài khoản đã tạo! Vui lòng đăng nhập."
   },
+  "resetPassword": {
+    "forgotPassword": "Quên mật khẩu?",
+    "title": "Đặt lại mật khẩu",
+    "subtitle": "Nhập địa chỉ email và chúng tôi sẽ gửi liên kết đặt lại mật khẩu cho bạn.",
+    "sendLink": "Gửi liên kết đặt lại",
+    "sentTitle": "Kiểm tra hộp thư",
+    "sentBody": "Nếu tài khoản với email đó tồn tại, chúng tôi đã gửi liên kết đặt lại mật khẩu. Liên kết hết hạn sau 15 phút.",
+    "newPasswordTitle": "Đặt mật khẩu mới",
+    "newPasswordSubtitle": "Chọn mật khẩu mạnh cho tài khoản của bạn.",
+    "setPassword": "Đặt mật khẩu mới",
+    "successTitle": "Mật khẩu đã được cập nhật!",
+    "successBody": "Mật khẩu của bạn đã được thay đổi. Đang chuyển hướng đến trang đăng nhập…",
+    "requestNew": "Yêu cầu liên kết mới",
+    "errors": {
+      "emailRequired": "Vui lòng nhập địa chỉ email.",
+      "sendFailed": "Gửi email thất bại. Vui lòng thử lại.",
+      "invalidLink": "Liên kết không hợp lệ. Vui lòng yêu cầu liên kết mới.",
+      "linkExpired": "Liên kết đã hết hạn hoặc đã được sử dụng. Vui lòng yêu cầu liên kết mới.",
+      "resetFailed": "Đặt lại mật khẩu thất bại. Vui lòng thử lại."
+    }
+  },
   "onboarding": {
     "completeProfile": "Hoàn thiện hồ sơ",
     "profileSubtitle": "Chỉ vài thông tin để bắt đầu",

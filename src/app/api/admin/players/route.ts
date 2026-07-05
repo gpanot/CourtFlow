@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import type { SkillLevel } from "@prisma/client";
 import { initialRankingScoreForSkillLevel } from "@/lib/ranking";
 import { json, error, parseBody } from "@/lib/api-helpers";
-import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/auth";
 import { getAuthorizedVenueIds } from "@/lib/venue-scope";
 import { enqueueStickerJobIfNeeded } from "@/lib/sticker-queue";
 import bcrypt from "bcryptjs";
@@ -130,7 +130,7 @@ async function getAdminPlayersStats(now: Date, venueIds: string[] | null): Promi
 
 export async function GET(request: NextRequest) {
   try {
-    const auth = requireManagerOrSuperAdmin(request.headers);
+    const auth = await await requireAdminAccess(request.headers);
     const authorizedVenueIds = auth.role === "manager" ? await getAuthorizedVenueIds(auth) : null;
 
     const url = request.nextUrl;
@@ -431,7 +431,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    requireManagerOrSuperAdmin(request.headers);
+    await requireAdminAccess(request.headers);
     const body = await parseBody<{
       name: string;
       phone: string;

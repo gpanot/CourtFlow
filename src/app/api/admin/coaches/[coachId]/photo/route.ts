@@ -3,7 +3,7 @@ import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { prisma } from "@/lib/db";
 import { json, error } from "@/lib/api-helpers";
-import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 const COACHES_DIR = path.join(process.cwd(), "uploads", "coaches", "photos");
@@ -14,7 +14,7 @@ export async function POST(
   { params }: { params: Promise<{ coachId: string }> }
 ) {
   try {
-    requireManagerOrSuperAdmin(request.headers);
+    await requireAdminAccess(request.headers);
     const { coachId } = await params;
 
     const coach = await prisma.staffMember.findUnique({

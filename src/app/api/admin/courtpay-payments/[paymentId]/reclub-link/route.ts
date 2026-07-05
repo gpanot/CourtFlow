@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/auth";
 import { parseBody } from "@/lib/api-helpers";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export async function GET(
   { params }: { params: Promise<{ paymentId: string }> }
 ) {
   try {
-    requireManagerOrSuperAdmin(req.headers);
+    await requireAdminAccess(req.headers);
     const { paymentId } = await params;
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search")?.trim() ?? "";
@@ -132,7 +132,7 @@ export async function PATCH(
   { params }: { params: Promise<{ paymentId: string }> }
 ) {
   try {
-    requireManagerOrSuperAdmin(req.headers);
+    await requireAdminAccess(req.headers);
     const { paymentId } = await params;
     const body = await parseBody<{ action: "link" | "unlink"; reclubUserId?: number }>(req);
 

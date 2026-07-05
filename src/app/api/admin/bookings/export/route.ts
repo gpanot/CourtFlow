@@ -5,7 +5,7 @@
  * Query params: venueId, dateFrom, dateTo, status, paymentStatus, search
  */
 import { NextRequest, NextResponse } from "next/server";
-import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +28,7 @@ function csvEscape(val: string | number | null | undefined): string {
 
 export async function GET(request: NextRequest) {
   try {
-    requireManagerOrSuperAdmin(request.headers);
+    await requireAdminAccess(request.headers);
   } catch {
     return NextResponse.json({ error: "Authentication required" }, { status: 401 });
   }

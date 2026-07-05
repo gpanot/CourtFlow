@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/auth";
 import { parseBody } from "@/lib/api-helpers";
 import { assertVenueAccess } from "@/lib/venue-scope";
 
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(req: NextRequest) {
   try {
-    requireManagerOrSuperAdmin(req.headers);
+    await requireAdminAccess(req.headers);
     const { searchParams } = new URL(req.url);
     const venueId = searchParams.get("venueId") ?? "";
     const search = searchParams.get("search")?.trim() ?? "";
@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
-    const auth = requireManagerOrSuperAdmin(req.headers);
+    const auth = await await requireAdminAccess(req.headers);
     const body = await parseBody<{
       sessionId: string;
       venueId: string;

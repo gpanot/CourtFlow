@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { json, error, parseBody } from "@/lib/api-helpers";
-import { requireManagerOrSuperAdmin } from "@/lib/auth";
+import { requireAdminAccess } from "@/lib/auth";
 import { assertVenueAccess } from "@/lib/venue-scope";
 import { createOpenPlayRegistration } from "@/lib/open-play";
 import { parseDateKey } from "@/lib/date";
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(request: NextRequest) {
   try {
-    const auth = requireManagerOrSuperAdmin(request.headers);
+    const auth = await await requireAdminAccess(request.headers);
     const body = await parseBody<{
       venueId: string;
       scheduleEntryId: string;
