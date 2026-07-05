@@ -26,13 +26,19 @@ function ConfirmContent() {
 
   const courtId = searchParams.get("courtId") || "";
   const courtIdsParam = searchParams.get("courtIds"); // comma-separated; present for multi-court
-  const courtIds: string[] = courtIdsParam ? courtIdsParam.split(",").filter(Boolean) : [courtId];
-  const isMultiCourt = courtIds.length > 1;
   const dateStr = searchParams.get("date") || "";
   const startTimeStr = searchParams.get("startTime") || "";
   const slotCount = Math.min(Math.max(parseInt(searchParams.get("slotCount") || "2", 10), 1), 32);
   const urlPrice = parseInt(searchParams.get("price") || "0", 10);
   const durationMinutes = slotCount * 30;
+
+  // Stable references — must be memoised to avoid infinite effect loops
+  const courtIds = useMemo<string[]>(
+    () => (courtIdsParam ? courtIdsParam.split(",").filter(Boolean) : [courtId]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [courtIdsParam, courtId]
+  );
+  const isMultiCourt = courtIds.length > 1;
 
   // Parse YYYY-MM-DD as local midnight (T00:00:00 without Z → local time, not UTC)
   const date = dateStr.match(/^\d{4}-\d{2}-\d{2}$/)
