@@ -32,6 +32,20 @@ export async function PUT(
       return error("Start hour must be before end hour", 400);
     }
 
+    if (
+      updatedConfig.maxDurationMinutes != null &&
+      (updatedConfig.maxDurationMinutes < 30 || updatedConfig.maxDurationMinutes % 30 !== 0)
+    ) {
+      return error("maxDurationMinutes must be a multiple of 30 and at least 30", 400);
+    }
+
+    if (
+      updatedConfig.defaultDurationMinutes != null &&
+      updatedConfig.defaultDurationMinutes % 30 !== 0
+    ) {
+      return error("defaultDurationMinutes must be a multiple of 30", 400);
+    }
+
     const updatedSettings = { ...settings, bookingConfig: updatedConfig } as Record<string, unknown>;
 
     const updated = await prisma.venue.update({

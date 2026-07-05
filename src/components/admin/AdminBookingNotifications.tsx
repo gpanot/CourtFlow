@@ -11,6 +11,10 @@ import {
   ADMIN_DASHBOARD_POLL_MS,
   dispatchAdminDashboardRefresh,
 } from "@/lib/admin-dashboard-events";
+import {
+  playAssignmentAttentionSound,
+  primeAssignmentSoundAudio,
+} from "@/lib/assignment-attention-sound";
 
 const POLL_MS = ADMIN_DASHBOARD_POLL_MS;
 const PAID_DISMISS_MS = 5_000;
@@ -87,6 +91,7 @@ export function AdminBookingNotifications() {
       const items = await api.get<BookingNotification[]>("/api/admin/bookings/notifications");
 
       let hasNewActivity = false;
+      let hasNewProofSubmitted = false;
 
       for (const item of items) {
         if (item.paymentStatus !== "paid" && item.paymentStatus !== "proof_submitted") continue;
@@ -100,6 +105,7 @@ export function AdminBookingNotifications() {
         hasNewActivity = true;
 
         const variant = item.paymentStatus as "paid" | "proof_submitted";
+        if (variant === "proof_submitted") hasNewProofSubmitted = true;
         const time = new Date(item.startTime).toLocaleTimeString([], {
           hour: "2-digit",
           minute: "2-digit",
@@ -137,6 +143,10 @@ export function AdminBookingNotifications() {
         dispatchAdminDashboardRefresh();
       }
 
+      if (hasNewProofSubmitted) {
+        void playAssignmentAttentionSound();
+      }
+
       initializedRef.current = true;
     } catch {
       // Ignore transient poll errors
@@ -148,6 +158,17 @@ export function AdminBookingNotifications() {
     const interval = setInterval(() => void poll(), POLL_MS);
     return () => clearInterval(interval);
   }, [poll]);
+
+  // Unlock audio after first user gesture (browser autoplay policy).
+  useEffect(() => {
+    const unlock = () => void primeAssignmentSoundAudio();
+    window.addEventListener("pointerdown", unlock, { passive: true });
+    window.addEventListener("keydown", unlock, { passive: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
 
   useEffect(() => {
     return () => {

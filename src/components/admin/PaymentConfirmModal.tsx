@@ -35,6 +35,16 @@ interface Props {
   onClose: () => void;
 }
 
+function formatAmountDisplay(value: number): string {
+  return value.toLocaleString("en-US");
+}
+
+function formatAmountInput(raw: string): string {
+  const digits = raw.replace(/[^0-9]/g, "");
+  if (!digits) return "";
+  return parseInt(digits, 10).toLocaleString("en-US");
+}
+
 async function uploadFile(file: File): Promise<string> {
   const fd = new FormData();
   fd.append("file", file);
@@ -55,7 +65,7 @@ async function uploadFile(file: File): Promise<string> {
 export function PaymentConfirmModal({ data, accentColor = "green", onConfirm, onRevert, onClose }: Props) {
   const { t } = useTranslation("translation", { i18n: adminI18n });
   const [form, setForm] = useState({
-    amount: String(data.amountValue),
+    amount: data.amountValue ? formatAmountDisplay(data.amountValue) : "",
     method: data.paymentMethod || "cash",
     date: (() => {
       const d = data.paidAt ? new Date(data.paidAt) : new Date();
@@ -166,9 +176,9 @@ export function PaymentConfirmModal({ data, accentColor = "green", onConfirm, on
               <label className="text-xs text-neutral-400">{t("overview.amountVnd")}</label>
               <input
                 type="text"
-                inputMode="decimal"
+                inputMode="numeric"
                 value={form.amount}
-                onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                onChange={(e) => setForm({ ...form, amount: formatAmountInput(e.target.value) })}
                 className={cn("w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white", focusBorder, "focus:outline-none")}
               />
             </div>
@@ -180,6 +190,7 @@ export function PaymentConfirmModal({ data, accentColor = "green", onConfirm, on
                 className={cn("w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white", focusBorder, "focus:outline-none")}
               >
                 <option value="cash">{t("overview.methodCash")}</option>
+                <option value="vietqr">{t("overview.methodQR")}</option>
                 <option value="bank_transfer">{t("overview.methodBankTransfer")}</option>
                 <option value="other">{t("overview.methodOther")}</option>
               </select>

@@ -43,8 +43,8 @@ import {
   PaymentActionModal,
   type PaymentActionTarget,
 } from "@/components/admin/PaymentActionModal";
-import { StaffBookingModal, type InitialCourtSelection } from "@/components/admin/StaffBookingModal";
-import { BookingCourtGrid, type CourtAvailability, type CourtSlot, type BookingRecord } from "@/components/admin/BookingCourtGrid";
+import { StaffBookingModal, type InitialCourtSelection, type EditLessonBooking } from "@/components/admin/StaffBookingModal";
+import { type CourtAvailability, type BookingRecord } from "@/components/admin/BookingCourtGrid";
 import { VenueDayPlanner } from "@/components/admin/VenueDayPlanner";
 import { BookingSelectionBar } from "@/components/admin/BookingSelectionBar";
 import { CourtBlockModal, type CourtBlockFormState } from "@/components/admin/CourtBlockModal";
@@ -133,6 +133,13 @@ interface CourtInfo {
 const vndToDisplay = (v: number) => v;
 const displayToVnd = (d: string) => parseInt(d.replace(/[^0-9]/g, "") || "0", 10);
 const formatPrice = (n: number) => new Intl.NumberFormat("vi-VN").format(n);
+
+function fmtLessonDuration(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (m === 0) return h > 0 ? `${h}h` : `${minutes}m`;
+  return h > 0 ? `${h}h${m}` : `${minutes}m`;
+}
 const parseFormattedPrice = (raw: string) => {
   const digits = raw.replace(/[^0-9]/g, "");
   if (!digits) return "";
@@ -192,6 +199,7 @@ export default function CoachingPage() {
   const [staffModalMode, setStaffModalMode] = useState<"court" | "open_play" | "lesson">("court");
   const [staffModalInitialSelection, setStaffModalInitialSelection] = useState<InitialCourtSelection | undefined>();
   const [staffModalDate, setStaffModalDate] = useState<string | undefined>();
+  const [editLessonTarget, setEditLessonTarget] = useState<EditLessonBooking | null>(null);
   const [lessonsSelectedDate, setLessonsSelectedDate] = useState(() => localDateISO(new Date()));
   const lessonsRefreshRef = useRef<(() => Promise<void>) | null>(null);
 
@@ -200,6 +208,7 @@ export default function CoachingPage() {
     courtSelection?: InitialCourtSelection,
     date?: string,
   ) => {
+    setEditLessonTarget(null);
     setStaffModalMode(mode);
     setStaffModalInitialSelection(courtSelection);
     setStaffModalDate(date);
@@ -210,6 +219,33 @@ export default function CoachingPage() {
     setShowStaffModal(false);
     setStaffModalInitialSelection(undefined);
     setStaffModalDate(undefined);
+    setEditLessonTarget(null);
+  };
+
+  const openEditLesson = (lesson: CoachLesson) => {
+    if (!lesson.courtId) return;
+    setEditLessonTarget({
+      id: lesson.id,
+      courtId: lesson.courtId,
+      courtLabel: lesson.court?.label ?? "",
+      date: lesson.date.split("T")[0],
+      startTime: lesson.startTime,
+      endTime: lesson.endTime,
+      status: lesson.status,
+      coachId: lesson.coachId,
+      packageId: lesson.packageId,
+      playerCount: lesson.playerCount,
+      note: lesson.note,
+      player: {
+        id: lesson.player.id,
+        name: lesson.player.name,
+        phone: lesson.player.phone,
+      },
+    });
+    setStaffModalMode("lesson");
+    setStaffModalInitialSelection(undefined);
+    setStaffModalDate(lesson.date.split("T")[0]);
+    setShowStaffModal(true);
   };
 
   return (
@@ -272,6 +308,7 @@ export default function CoachingPage() {
           onSelectedDateChange={setLessonsSelectedDate}
           lessonsRefreshRef={lessonsRefreshRef}
           onBookFromSelection={(selection, date) => openStaffModal("court", selection, date)}
+          onEditLesson={openEditLesson}
         />
       )}
       {selectedVenueId && tab === "list" && (
@@ -285,6 +322,7 @@ export default function CoachingPage() {
           initialCourtSelection={staffModalInitialSelection}
           allowModes={["court", "open_play", "lesson"]}
           initialMode={staffModalMode}
+          editLesson={editLessonTarget ?? undefined}
           onClose={closeStaffModal}
           onCreated={async () => {
             closeStaffModal();
@@ -308,7 +346,7 @@ function CoachesTab({ venueId }: { venueId: string }) {
     name: "",
     description: "",
     lessonType: "private" as "private" | "group",
-    durationHours: "1",
+    durationMin: "60",
     priceInDollars: "",
     sessionsIncluded: "1",
     minPlayers: "2",
@@ -329,7 +367,7 @@ function CoachesTab({ venueId }: { venueId: string }) {
   }, [fetchCoaches]);
 
   const openCreatePkg = (coachId: string) => {
-    setPkgForm({ name: "", description: "", lessonType: "private", durationHours: "1", priceInDollars: "", sessionsIncluded: "1", minPlayers: "2", maxPlayers: "8", pricePerAdditionalPlayer: "" });
+    setPkgForm({ name: "", description: "", lessonType: "private", durationMin: "60", priceInDollars: "", sessionsIncluded: "1", minPlayers: "2", maxPlayers: "8", pricePerAdditionalPlayer: "" });
     setErr("");
     setPkgModal({ mode: "create", coachId });
   };
@@ -339,7 +377,7 @@ function CoachesTab({ venueId }: { venueId: string }) {
       name: pkg.name,
       description: pkg.description || "",
       lessonType: pkg.lessonType,
-      durationHours: String(pkg.durationMin / 60),
+      durationMin: String(pkg.durationMin),
       priceInDollars: formatPrice(vndToDisplay(pkg.priceValue)),
       sessionsIncluded: String(pkg.sessionsIncluded),
       minPlayers: pkg.minPlayers != null ? String(pkg.minPlayers) : "2",
@@ -376,7 +414,7 @@ function CoachesTab({ venueId }: { venueId: string }) {
         name: pkgForm.name,
         description: pkgForm.description || null,
         lessonType: pkgForm.lessonType,
-        durationMin: (parseInt(pkgForm.durationHours) || 1) * 60,
+        durationMin: parseInt(pkgForm.durationMin) || 60,
         priceValue: displayToVnd(pkgForm.priceInDollars),
         sessionsIncluded: 1,
         ...(isGroupPricing
@@ -549,7 +587,7 @@ function CoachesTab({ venueId }: { venueId: string }) {
                           </span>
                         </div>
                         <div className="flex items-center gap-3 mt-1 text-xs text-neutral-500 flex-wrap">
-                          <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{pkg.durationMin / 60}h</span>
+                          <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{fmtLessonDuration(pkg.durationMin)}</span>
                           {pkg.lessonType === "group" && pkg.minPlayers != null ? (
                             <span className="flex items-center gap-1">
                               <DollarSign className="h-3 w-3" />
@@ -637,13 +675,17 @@ function CoachesTab({ venueId }: { venueId: string }) {
                 <div>
                   <label className="mb-1.5 block text-sm text-neutral-400">{t("coaching.durationHours")}</label>
                   <select
-                    value={pkgForm.durationHours}
-                    onChange={(e) => setPkgForm({ ...pkgForm, durationHours: e.target.value })}
+                    value={pkgForm.durationMin}
+                    onChange={(e) => setPkgForm({ ...pkgForm, durationMin: e.target.value })}
                     className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-white focus:border-teal-500 focus:outline-none"
                   >
-                    {Array.from({ length: 20 }, (_, i) => i + 1).map((h) => (
-                      <option key={h} value={String(h)}>{h}h</option>
-                    ))}
+                    <option value="30">30 min</option>
+                    <option value="60">60 min (1h)</option>
+                    <option value="90">90 min (1h30)</option>
+                    <option value="120">120 min (2h)</option>
+                    <option value="150">150 min (2h30)</option>
+                    <option value="180">180 min (3h)</option>
+                    <option value="240">240 min (4h)</option>
                   </select>
                 </div>
               </div>
@@ -768,21 +810,19 @@ function CoachesTab({ venueId }: { venueId: string }) {
 
 /* ─── Tab 2: Lessons ─── */
 
-function formatSlotTime(iso: string, tz?: string): string {
-  const d = new Date(iso);
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", ...(tz ? { timeZone: tz } : {}) });
-}
 
 function LessonsTab({
   venueId,
   onSelectedDateChange,
   lessonsRefreshRef,
   onBookFromSelection,
+  onEditLesson,
 }: {
   venueId: string;
   onSelectedDateChange?: (date: string) => void;
   lessonsRefreshRef?: React.MutableRefObject<(() => Promise<void>) | null>;
   onBookFromSelection: (selection: InitialCourtSelection, date: string) => void;
+  onEditLesson: (lesson: CoachLesson) => void;
 }) {
   const { t } = useTranslation("translation", { i18n: adminI18n });
   const getBlockTypeLabel = (type: string) => {
@@ -799,40 +839,14 @@ function LessonsTab({
   const [venueTimezone, setVenueTimezone] = useState<string | undefined>(undefined);
   const [selectedDate, setSelectedDate] = useState(() => localDateISO(new Date()));
   const [lessons, setLessons] = useState<CoachLesson[]>([]);
-  const [coaches, setCoaches] = useState<Coach[]>([]);
-  const [players, setPlayers] = useState<Player[]>([]);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editingLesson, setEditingLesson] = useState<CoachLesson | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState("");
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [showNewPlayerModal, setShowNewPlayerModal] = useState(false);
   const [viewMode, setViewMode] = useState<"court" | "time">(() => {
     if (typeof window === "undefined") return "court";
     return (localStorage.getItem("coaching-view-mode") as "court" | "time") || "court";
   });
-  const [deleting, setDeleting] = useState(false);
-
-  const [availability, setAvailability] = useState<CourtAvailability[]>([]);
-  const [courtBookings, setCourtBookings] = useState<BookingRecord[]>([]);
-  const [loadingAvail, setLoadingAvail] = useState(false);
-  const [bookDate, setBookDate] = useState(() => localDateISO(new Date()));
-
-  const [bookForm, setBookForm] = useState({
-    coachId: "",
-    packageId: "",
-    playerId: "",
-    playerSearch: "",
-    note: "",
-    status: "confirmed" as string,
-    playerCount: 2,
-  });
-
-  type EditSelectedSlot = { courtId: string; courtLabel: string; startTime: string; endTime: string; hour: number };
-  const [editSelectedSlots, setEditSelectedSlots] = useState<EditSelectedSlot[]>([]);
-
   const [showBlockModal, setShowBlockModal] = useState(false);
   const [blockModalInitial, setBlockModalInitial] = useState<Partial<CourtBlockFormState>>();
+  const [availability, setAvailability] = useState<CourtAvailability[]>([]);
+  const [courtBookings, setCourtBookings] = useState<BookingRecord[]>([]);
 
   useEffect(() => {
     api.get<{ id: string; timezone?: string }[]>("/api/admin/venues")
@@ -850,17 +864,7 @@ function LessonsTab({
     setLessons(l);
   }, [venueId, selectedDate]);
 
-  const fetchMeta = useCallback(async () => {
-    const [c, pRes] = await Promise.all([
-      api.get<Coach[]>(`/api/admin/coaches?venueId=${venueId}`),
-      api.get<{ players: Player[] }>("/api/admin/players"),
-    ]);
-    setCoaches(c);
-    setPlayers(pRes.players || []);
-  }, [venueId]);
-
   const fetchAvailability = useCallback(async (date: string) => {
-    setLoadingAvail(true);
     try {
       const data = await api.get<CourtAvailability[]>(
         `/api/bookings/availability?venueId=${venueId}&date=${date}`
@@ -868,8 +872,6 @@ function LessonsTab({
       setAvailability(data);
     } catch {
       setAvailability([]);
-    } finally {
-      setLoadingAvail(false);
     }
   }, [venueId]);
 
@@ -888,23 +890,11 @@ function LessonsTab({
     fetchLessons().catch(console.error);
   }, [fetchLessons]);
 
-  useEffect(() => {
-    fetchMeta().catch(console.error);
-  }, [fetchMeta]);
-
   // Always fetch availability + court bookings for the selected date (for the calendar grid)
   useEffect(() => {
     fetchAvailability(selectedDate);
     fetchCourtBookings(selectedDate);
   }, [selectedDate, fetchAvailability, fetchCourtBookings]);
-
-  // Re-fetch when edit modal uses a different date than the calendar
-  useEffect(() => {
-    if (showEditModal && bookDate !== selectedDate) {
-      fetchAvailability(bookDate);
-      fetchCourtBookings(bookDate);
-    }
-  }, [showEditModal, bookDate, fetchAvailability, fetchCourtBookings, selectedDate]);
 
   useEffect(() => {
     onSelectedDateChange?.(selectedDate);
@@ -964,141 +954,6 @@ function LessonsTab({
       bookingsByCourtAndTime.has(`${courtId}_${slot.startTime}`),
   });
 
-  const closeEditModal = () => {
-    setShowEditModal(false);
-    setEditingLesson(null);
-    setEditSelectedSlots([]);
-    setConfirmDelete(false);
-    setErr("");
-  };
-
-  // When editing, auto-select the lesson's existing slots once availability loads
-  useEffect(() => {
-    if (!editingLesson || loadingAvail || availability.length === 0) return;
-    if (editSelectedSlots.length > 0) return; // already selected by user
-
-    const courtId = editingLesson.courtId;
-    if (!courtId) return;
-
-    const court = availability.find((c) => c.courtId === courtId);
-    if (!court) return;
-
-    const lessonStart = new Date(editingLesson.startTime).getTime();
-    const lessonEnd = new Date(editingLesson.endTime).getTime();
-
-    const slots: EditSelectedSlot[] = [];
-    for (const s of court.slots) {
-      const t = new Date(s.startTime).getTime();
-      if (t >= lessonStart && t < lessonEnd) {
-        slots.push({ courtId, courtLabel: court.courtLabel, startTime: s.startTime, endTime: s.endTime, hour: s.hour });
-      }
-    }
-    if (slots.length > 0) setEditSelectedSlots(slots);
-  }, [editingLesson, loadingAvail, availability, editSelectedSlots.length]);
-
-  const selectedCoach = coaches.find((c) => c.id === bookForm.coachId);
-  const coachPackages = selectedCoach?.packages || [];
-  const selectedPkg = coachPackages.find((p) => p.id === bookForm.packageId);
-
-  const filteredPlayers = bookForm.playerSearch.length >= 2
-    ? players.filter(
-        (p) =>
-          p.name.toLowerCase().includes(bookForm.playerSearch.toLowerCase()) ||
-          p.phone.includes(bookForm.playerSearch)
-      ).slice(0, 8)
-    : [];
-
-  const openEditModal = (lesson: CoachLesson) => {
-    setEditingLesson(lesson);
-    setBookForm({
-      coachId: lesson.coachId,
-      packageId: lesson.packageId,
-      playerId: lesson.playerId,
-      playerSearch: "",
-      note: lesson.note || "",
-      status: lesson.status,
-      playerCount: lesson.playerCount ?? 2,
-    });
-    const lessonDate = localDateISO(new Date(lesson.date));
-    setBookDate(lessonDate);
-    setEditSelectedSlots([]);
-    setErr("");
-    setConfirmDelete(false);
-    setShowEditModal(true);
-  };
-
-  const handleDelete = async () => {
-    if (!editingLesson) return;
-    setDeleting(true);
-    try {
-      await api.delete(`/api/admin/coach-lessons/${editingLesson.id}`);
-      await fetchLessons();
-      closeEditModal();
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setDeleting(false);
-      setConfirmDelete(false);
-    }
-  };
-
-  const isOwnLessonSlot = (slot: CourtSlot) =>
-    editingLesson && slot.lesson?.lessonId === editingLesson.id;
-
-  const toggleEditSlot = (courtId: string, courtLabel: string, slot: CourtSlot) => {
-    if (!slot.available && !isOwnLessonSlot(slot)) return;
-
-    const alreadySelected = editSelectedSlots.find((s) => s.courtId === courtId && s.startTime === slot.startTime);
-
-    if (alreadySelected) {
-      const slotTime = new Date(slot.startTime).getTime();
-      setEditSelectedSlots(editSelectedSlots.filter((s) => s.courtId !== courtId || new Date(s.startTime).getTime() < slotTime));
-      return;
-    }
-
-    if (editSelectedSlots.length > 0 && editSelectedSlots[0].courtId !== courtId) {
-      setEditSelectedSlots([{ courtId, courtLabel, startTime: slot.startTime, endTime: slot.endTime, hour: slot.hour }]);
-      return;
-    }
-
-    const court = availability.find((c) => c.courtId === courtId);
-    if (!court) return;
-
-    if (editSelectedSlots.length === 0) {
-      setEditSelectedSlots([{ courtId, courtLabel, startTime: slot.startTime, endTime: slot.endTime, hour: slot.hour }]);
-      return;
-    }
-
-    const currentTimes = editSelectedSlots.map((s) => new Date(s.startTime).getTime());
-    const clickedTime = new Date(slot.startTime).getTime();
-    const minTime = Math.min(...currentTimes, clickedTime);
-    const maxTime = Math.max(...currentTimes, clickedTime);
-
-    const newSlots: EditSelectedSlot[] = [];
-    let consecutive = true;
-    for (const s of court.slots) {
-      const t = new Date(s.startTime).getTime();
-      if (t < minTime) continue;
-      if (t > maxTime) break;
-      const canSelect = s.available || (editingLesson && s.lesson?.lessonId === editingLesson.id);
-      if (!canSelect) { consecutive = false; break; }
-      newSlots.push({ courtId, courtLabel, startTime: s.startTime, endTime: s.endTime, hour: s.hour });
-    }
-
-    if (consecutive && newSlots.length > 0) {
-      setEditSelectedSlots(newSlots);
-    }
-  };
-
-  const editGridSelectedSlots = useMemo(() => {
-    const map: Record<string, Set<string>> = {};
-    for (const s of editSelectedSlots) {
-      if (!map[s.courtId]) map[s.courtId] = new Set();
-      map[s.courtId].add(s.startTime);
-    }
-    return map;
-  }, [editSelectedSlots]);
-
   const selectionCourtIds = Object.keys(plannerSelectedSlots);
 
   const openCreateFromSelection = () => {
@@ -1136,37 +991,6 @@ function LessonsTab({
     setShowBlockModal(true);
   };
 
-  const handleBook = async () => {
-    if (!editingLesson || !bookForm.coachId || !bookForm.packageId || !bookForm.playerId || editSelectedSlots.length === 0) {
-      setErr("Coach, package, player, and time slot are required");
-      return;
-    }
-    setSaving(true);
-    setErr("");
-    try {
-      const firstSlot = editSelectedSlots[0];
-      const lastSlot = editSelectedSlots[editSelectedSlots.length - 1];
-
-      await api.patch(`/api/admin/coach-lessons/${editingLesson.id}`, {
-        coachId: bookForm.coachId,
-        packageId: bookForm.packageId,
-        playerId: bookForm.playerId,
-        courtId: firstSlot.courtId,
-        date: bookDate,
-        startTime: firstSlot.startTime,
-        endTime: lastSlot.endTime,
-        note: bookForm.note || null,
-        status: bookForm.status,
-      });
-      await fetchLessons();
-      closeEditModal();
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
   const fmtTime = (iso: string) => {
     const d = new Date(iso);
     return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", ...(venueTimezone ? { timeZone: venueTimezone } : {}) });
@@ -1179,6 +1003,7 @@ function LessonsTab({
       type: "lesson",
       entityId: lesson.id,
       playerName: lesson.player.name,
+      playerPhone: lesson.player.phone,
       detail: lesson.coach.name,
       date: lesson.date,
       startTime: lesson.startTime,
@@ -1210,6 +1035,11 @@ function LessonsTab({
           const court = availability.find((c) => c.courtId === courtId);
           if (court) toggleSlotSelection(court, slot);
         }}
+        onLessonClick={(lessonId) => {
+          const lesson = lessons.find((l) => l.id === lessonId);
+          if (lesson) onEditLesson(lesson);
+        }}
+        accentColor="teal"
         toolbarExtra={
           <BookingSelectionBar
             summary={selectionSummary}
@@ -1327,7 +1157,7 @@ function LessonsTab({
               </div>
 
               <button
-                onClick={() => openEditModal(lesson)}
+                onClick={() => onEditLesson(lesson)}
                 className="rounded-lg p-2 text-neutral-500 hover:bg-neutral-800 hover:text-teal-400 shrink-0"
                 title="Edit Lesson"
               >
@@ -1363,292 +1193,6 @@ function LessonsTab({
       )}
       </section>
 
-      {/* Edit Lesson — full-screen split panel (existing lessons only) */}
-      {showEditModal && editingLesson && (
-        <div className="fixed inset-0 z-50 flex items-stretch bg-black/60" onClick={closeEditModal}>
-          <div
-            className="flex flex-col md:flex-row w-full max-w-5xl mx-auto my-4 md:my-8 rounded-2xl border border-neutral-700 bg-neutral-900 overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Left panel — Form fields */}
-            <div className="w-full md:w-[340px] shrink-0 border-b md:border-b-0 md:border-r border-neutral-800 p-5 overflow-y-auto">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold">{t("coaching.editLesson")}</h3>
-                <button onClick={closeEditModal} className="text-neutral-400 hover:text-white md:hidden">
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              {err && <p className="mb-3 rounded-lg bg-red-900/30 p-2 text-sm text-red-400">{err}</p>}
-
-              <div className="space-y-3">
-                <div>
-                  <label className="mb-1.5 block text-sm text-neutral-400">{t("coaching.coach")}</label>
-                  <select
-                    value={bookForm.coachId}
-                    onChange={(e) => { setBookForm({ ...bookForm, coachId: e.target.value, packageId: "" }); setEditSelectedSlots([]); }}
-                    className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-sm text-white focus:border-teal-500 focus:outline-none"
-                  >
-                    <option value="">{t("coaching.selectCoach")}</option>
-                    {coaches.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {bookForm.coachId && (
-                  <div>
-                    <label className="mb-1.5 block text-sm text-neutral-400">{t("coaching.packageLabel")}</label>
-                    {coachPackages.length === 0 ? (
-                      <p className="text-sm text-neutral-500">{t("coaching.noPackagesForCoach")}</p>
-                    ) : (
-                      <select
-                        value={bookForm.packageId}
-                        onChange={(e) => { setBookForm({ ...bookForm, packageId: e.target.value }); setEditSelectedSlots([]); }}
-                        className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-sm text-white focus:border-teal-500 focus:outline-none"
-                      >
-                        <option value="">{t("coaching.selectPackage")}</option>
-                        {coachPackages.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name} — {formatPrice(vndToDisplay(p.priceValue))} VND ({p.durationMin / 60}h)
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-                )}
-
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-sm text-neutral-400">{t("coaching.player")}</label>
-                    <button
-                      type="button"
-                      onClick={() => setShowNewPlayerModal(true)}
-                      className="flex items-center gap-1 rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-300 hover:border-teal-500 hover:text-teal-300 transition-colors"
-                    >
-                      <UserPlus className="h-3.5 w-3.5" />
-                      New player
-                    </button>
-                  </div>
-                  {bookForm.playerId ? (
-                    <div className="flex items-center gap-2 rounded-lg border border-teal-600 bg-teal-600/10 px-3 py-2">
-                      <User className="h-4 w-4 text-teal-400" />
-                      <span className="flex-1 text-sm">
-                        {players.find((p) => p.id === bookForm.playerId)?.name || "Selected"}
-                      </span>
-                      <button onClick={() => setBookForm({ ...bookForm, playerId: "", playerSearch: "" })} className="text-neutral-400 hover:text-white">
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="relative">
-                      <div className="flex items-center gap-2 rounded-lg border border-neutral-700 bg-neutral-800 px-3">
-                        <Search className="h-4 w-4 text-neutral-500" />
-                        <input
-                          type="text"
-                          placeholder={t("coaching.searchPlayerPlaceholder")}
-                          value={bookForm.playerSearch}
-                          onChange={(e) => setBookForm({ ...bookForm, playerSearch: e.target.value })}
-                          className="w-full bg-transparent py-2 text-sm text-white placeholder:text-neutral-500 focus:outline-none"
-                        />
-                      </div>
-                      {filteredPlayers.length > 0 && (
-                        <div className="absolute inset-x-0 top-full z-10 mt-1 rounded-lg border border-neutral-700 bg-neutral-800 py-1 shadow-lg max-h-40 overflow-y-auto">
-                          {filteredPlayers.map((p) => (
-                            <button
-                              key={p.id}
-                              onClick={() => setBookForm({ ...bookForm, playerId: p.id, playerSearch: "" })}
-                              className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-neutral-700"
-                            >
-                              <User className="h-3.5 w-3.5 text-neutral-500" />
-                              <span>{p.name}</span>
-                              <span className="text-neutral-500 ml-auto text-xs">{p.phone}</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <textarea
-                  placeholder={t("coaching.noteOptional")}
-                  value={bookForm.note}
-                  onChange={(e) => setBookForm({ ...bookForm, note: e.target.value })}
-                  rows={2}
-                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-teal-500 focus:outline-none resize-none"
-                />
-
-                <div>
-                  <label className="mb-1.5 block text-sm text-neutral-400">{t("coaching.status")}</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {(["confirmed", "completed", "no_show", "cancelled"] as const).map((s) => (
-                      <button
-                        key={s}
-                        onClick={() => setBookForm({ ...bookForm, status: s })}
-                        className={cn(
-                          "rounded-lg px-3 py-2 text-sm font-medium transition-colors border",
-                          bookForm.status === s
-                            ? STATUS_COLORS[s] + " border-current"
-                            : "border-neutral-700 bg-neutral-800 text-neutral-400 hover:bg-neutral-700"
-                        )}
-                      >
-                        {STATUS_LABELS[s]}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Player count stepper for scalable group packages */}
-                {selectedPkg && hasGroupPlayerPricing(selectedPkg) && (
-                  <div>
-                    <label className="mb-1.5 block text-sm text-neutral-400">{t("coaching.playersCount", { count: bookForm.playerCount })}</label>
-                    <div className="flex gap-2 flex-wrap">
-                      {Array.from(
-                        { length: (selectedPkg.maxPlayers ?? 8) - (selectedPkg.minPlayers ?? 2) + 1 },
-                        (_, i) => (selectedPkg.minPlayers ?? 2) + i
-                      ).map((n) => (
-                        <button
-                          key={n}
-                          type="button"
-                          onClick={() => setBookForm({ ...bookForm, playerCount: n })}
-                          className={cn(
-                            "rounded-lg px-3 py-1.5 text-sm font-medium border transition-colors",
-                            bookForm.playerCount === n
-                              ? "bg-teal-600 text-white border-teal-500"
-                              : "border-neutral-700 bg-neutral-800 text-neutral-400 hover:bg-neutral-700"
-                          )}
-                        >
-                          {n}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Selection summary */}
-                {editSelectedSlots.length > 0 && (
-                  <div className="rounded-lg border border-teal-600/40 bg-teal-600/10 p-3">
-                    <p className="text-xs text-teal-400 font-medium mb-1">
-                      {t("coaching.slotsSelected", { count: editSelectedSlots.length })}
-                    </p>
-                    <p className="text-sm font-semibold">{editSelectedSlots[0].courtLabel}</p>
-                    <p className="text-xs text-neutral-400">
-                      {formatSlotTime(editSelectedSlots[0].startTime, venueTimezone)} – {formatSlotTime(editSelectedSlots[editSelectedSlots.length - 1].endTime, venueTimezone)}
-                      {" · "}{editSelectedSlots.length}h
-                    </p>
-                    {selectedPkg && (
-                      <p className="text-xs text-teal-400 mt-1">
-                        {formatPrice(vndToDisplay(
-                          hasGroupPlayerPricing(selectedPkg)
-                            ? calculateSessionPrice(selectedPkg, { playerCount: bookForm.playerCount, slotCount: editSelectedSlots.length })
-                            : Math.round((selectedPkg.priceValue / selectedPkg.durationMin) * editSelectedSlots.length * 60)
-                        ))} VND
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                <button
-                  onClick={handleBook}
-                  disabled={saving || deleting || !bookForm.coachId || !bookForm.packageId || !bookForm.playerId || editSelectedSlots.length === 0}
-                  className="w-full rounded-xl bg-teal-600 py-3 font-semibold text-white hover:bg-teal-500 disabled:opacity-50"
-                >
-                  {saving ? t("common.saving") : t("common.save")}
-                </button>
-
-                {confirmDelete ? (
-                    <div className="rounded-xl border border-red-600/40 bg-red-600/10 p-3 space-y-2">
-                      <p className="text-sm text-red-400 font-medium text-center">{t("coaching.confirmDelete")}</p>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={handleDelete}
-                          disabled={deleting}
-                          className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50"
-                        >
-                          {deleting ? t("coaching.deleting") : t("coaching.yesDelete")}
-                        </button>
-                        <button
-                          onClick={() => setConfirmDelete(false)}
-                          disabled={deleting}
-                          className="flex-1 rounded-lg bg-neutral-800 py-2 text-sm font-medium text-neutral-400 hover:text-white"
-                        >
-                          {t("common.cancel")}
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setConfirmDelete(true)}
-                      className="w-full rounded-xl bg-red-600/10 py-2.5 text-sm font-medium text-red-400 hover:bg-red-600/20 flex items-center justify-center gap-2 transition-colors"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" /> {t("coaching.deleteLesson")}
-                    </button>
-                  )}
-              </div>
-            </div>
-
-            {/* Right panel — Availability grid */}
-            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-800 shrink-0">
-                <div className="flex items-center gap-3">
-                  <input
-                    type="date"
-                    value={bookDate}
-                    onChange={(e) => { setBookDate(e.target.value); setEditSelectedSlots([]); }}
-                    className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-1.5 text-sm text-white focus:border-teal-500 focus:outline-none"
-                  />
-                  <span className="text-xs text-neutral-500">
-                    {editSelectedSlots.length > 0
-                      ? `${editSelectedSlots.length} slot${editSelectedSlots.length > 1 ? "s" : ""} selected (${editSelectedSlots.length}h)`
-                      : "Click slots to select time"}
-                  </span>
-                </div>
-                <button onClick={closeEditModal} className="text-neutral-400 hover:text-white hidden md:block">
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              {loadingAvail ? (
-                <div className="flex-1 flex items-center justify-center">
-                  <p className="text-sm text-neutral-500">{t("coaching.loadingAvailability")}</p>
-                </div>
-              ) : availability.length === 0 ? (
-                <div className="flex-1 flex items-center justify-center">
-                  <p className="text-sm text-neutral-500">{t("bookings.noBookableCourts")}</p>
-                </div>
-              ) : (
-                <div className="flex-1 overflow-auto">
-                  <BookingCourtGrid
-                    availability={availability}
-                    date={bookDate}
-                    timezone={venueTimezone}
-                    bookings={gridBookings}
-                    selectedSlots={editGridSelectedSlots}
-                    onSlotClick={toggleEditSlot}
-                    blockTypeLabel={getBlockTypeLabel}
-                    editableLessonId={editingLesson.id}
-                    compact
-                    accentColor="teal"
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* New Player Modal — triggered from Edit Lesson form */}
-      {showNewPlayerModal && (
-        <CoachingNewPlayerModal
-          onSuccess={(newPlayer) => {
-            setPlayers((prev) => [...prev, newPlayer]);
-            setBookForm((f) => ({ ...f, playerId: newPlayer.id, playerSearch: "" }));
-            setShowNewPlayerModal(false);
-          }}
-          onClose={() => setShowNewPlayerModal(false)}
-        />
-      )}
 
       {/* Payment Action Modal */}
       {paymentActionTarget && (
@@ -1661,204 +1205,6 @@ function LessonsTab({
           }}
         />
       )}
-    </div>
-  );
-}
-
-// ─── Coaching New Player Modal ────────────────────────────────────────────────
-
-function CoachingNewPlayerModal({
-  onSuccess,
-  onClose,
-}: {
-  onSuccess: (player: Player) => void;
-  onClose: () => void;
-}) {
-  const { t } = useTranslation("translation", { i18n: adminI18n });
-  const [form, setForm] = useState({
-    name: "",
-    phone: "",
-    email: "",
-    password: "",
-    gender: "male" as "male" | "female",
-    skillLevel: "beginner" as "beginner" | "intermediate" | "advanced" | "pro",
-  });
-  const [showPassword, setShowPassword] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState("");
-
-  const update = (field: string, value: string) =>
-    setForm((f) => ({ ...f, [field]: value }));
-
-  async function submit() {
-    if (!form.name.trim()) { setErr("Name is required"); return; }
-    if (!form.phone.trim()) { setErr("Phone number is required"); return; }
-    if (!form.email.trim()) { setErr("Email is required"); return; }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) { setErr("Invalid email address"); return; }
-    if (!form.password) { setErr("Password is required"); return; }
-    if (form.password.length < 8) { setErr("Password must be at least 8 characters"); return; }
-    setSaving(true);
-    setErr("");
-    try {
-      const player = await api.post<{ id: string; name: string; phone: string }>("/api/admin/players", {
-        name: form.name.trim(),
-        phone: form.phone.trim(),
-        email: form.email.trim().toLowerCase(),
-        password: form.password,
-        gender: form.gender,
-        skillLevel: form.skillLevel,
-      });
-      onSuccess({ id: player.id, name: player.name, phone: player.phone });
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  const SKILL_LEVELS = [
-    { value: "beginner", label: "Beginner" },
-    { value: "intermediate", label: "Intermediate" },
-    { value: "advanced", label: "Advanced" },
-    { value: "pro", label: "Pro" },
-  ];
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-md rounded-2xl border border-neutral-700 bg-neutral-900 shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between border-b border-neutral-800 px-5 py-4">
-          <h3 className="flex items-center gap-2 text-base font-semibold text-white">
-            <UserPlus className="h-4 w-4 text-teal-400" />
-            Add player
-          </h3>
-          <button onClick={onClose} className="rounded-lg p-1 text-neutral-400 hover:text-white hover:bg-neutral-800">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
-          <div>
-            <label className="mb-1 block text-xs font-medium text-neutral-300">
-              Full name <span className="text-red-400">*</span>
-            </label>
-            <input
-              type="text"
-              value={form.name}
-              onChange={(e) => update("name", e.target.value)}
-              placeholder="e.g. Nguyen Van An"
-              className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-teal-500 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-neutral-300">
-              Phone number <span className="text-red-400">*</span>
-            </label>
-            <input
-              type="tel"
-              value={form.phone}
-              onChange={(e) => update("phone", e.target.value)}
-              placeholder="e.g. 0912345678"
-              className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-teal-500 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-neutral-300">
-              Email <span className="text-red-400">*</span>
-            </label>
-            <input
-              type="email"
-              value={form.email}
-              onChange={(e) => update("email", e.target.value)}
-              placeholder="e.g. player@email.com"
-              className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-teal-500 focus:outline-none"
-            />
-            <p className="mt-1 text-[11px] text-neutral-500">Used to log in to the player portal</p>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-neutral-300">
-              Password <span className="text-red-400">*</span>
-            </label>
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                value={form.password}
-                onChange={(e) => update("password", e.target.value)}
-                placeholder="Min. 8 characters"
-                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 pr-9 text-sm text-white placeholder:text-neutral-600 focus:border-teal-500 focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300"
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-            <p className="mt-1 text-[11px] text-neutral-500">Share this with the player so they can log in</p>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-neutral-300">Gender</label>
-            <div className="flex gap-2">
-              {(["male", "female"] as const).map((g) => (
-                <button
-                  key={g}
-                  type="button"
-                  onClick={() => update("gender", g)}
-                  className={cn(
-                    "flex-1 rounded-lg border py-2 text-sm font-medium transition-colors capitalize",
-                    form.gender === g
-                      ? "border-teal-500 bg-teal-600/20 text-teal-300"
-                      : "border-neutral-700 bg-neutral-800 text-neutral-400 hover:border-neutral-600 hover:text-white"
-                  )}
-                >
-                  {g === "male" ? t("players.male") : t("players.female")}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-neutral-300">Skill level</label>
-            <div className="grid grid-cols-2 gap-2">
-              {SKILL_LEVELS.map((s) => (
-                <button
-                  key={s.value}
-                  type="button"
-                  onClick={() => update("skillLevel", s.value)}
-                  className={cn(
-                    "rounded-lg border py-2 text-sm font-medium transition-colors",
-                    form.skillLevel === s.value
-                      ? "border-teal-500 bg-teal-600/20 text-teal-300"
-                      : "border-neutral-700 bg-neutral-800 text-neutral-400 hover:border-neutral-600 hover:text-white"
-                  )}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          {err && (
-            <p className="rounded-lg border border-red-800/50 bg-red-900/20 px-3 py-2 text-xs text-red-300">
-              {err}
-            </p>
-          )}
-          <div className="flex gap-2 pt-1">
-            <button
-              onClick={submit}
-              disabled={saving}
-              className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-teal-600 py-2.5 text-sm font-medium text-white hover:bg-teal-500 disabled:opacity-50"
-            >
-              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-              {saving ? t("common.creating") : "Add player"}
-            </button>
-            <button
-              onClick={onClose}
-              className="rounded-lg border border-neutral-700 px-4 py-2.5 text-sm text-neutral-400 hover:text-white hover:bg-neutral-800"
-            >
-              {t("common.cancel")}
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -2002,6 +1348,7 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
       type: "lesson",
       entityId: row.id,
       playerName: row.player.name,
+      playerPhone: row.player.phone,
       detail: row.coach.name,
       date: row.startTime,
       startTime: row.startTime,

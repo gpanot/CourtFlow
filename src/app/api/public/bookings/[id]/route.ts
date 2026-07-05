@@ -47,12 +47,29 @@ export async function DELETE(
     if (booking.status === "cancelled") return error("Already cancelled", 400);
 
     // If the booking is still in the unpaid hold phase (no proof submitted, no payment),
-    // hard-delete it so the slot is immediately freed for other players.
+    // soft-record it so the slot is freed (partial unique index allows it) and the
+    // drop is visible in analytics.  Use expired_hold when the client timer fired;
+    // use hard-delete only when the player explicitly hits Cancel.
     const isUnpaidHold =
       booking.paymentStatus === "pending" &&
       booking.holdExpiresAt !== null;
 
     if (isUnpaidHold) {
+      const reason = request.nextUrl.searchParams.get("reason");
+      if (reason === "expired_hold") {
+        // Client timer fired — soft-record so staff can see the drop
+        await prisma.booking.update({
+          where: { id },
+          data: {
+            status: "expired_hold",
+            paymentStatus: "expired",
+            holdExpiresAt: null,
+            cancelledAt: new Date(),
+          },
+        });
+        return json({ success: true });
+      }
+      // Player manually cancelled → hard-delete to free slot immediately
       await prisma.booking.delete({ where: { id } });
       return json({ success: true });
     }

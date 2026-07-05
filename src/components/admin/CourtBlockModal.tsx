@@ -3,6 +3,9 @@
 /**
  * CourtBlockModal — create a court block / open play / competition on selected courts.
  * Shared by Bookings and Coaching day planners.
+ *
+ * startHour / endHour fields are ISO strings (slot.startTime / slot.endTime).
+ * Legacy integer-hour values are accepted and silently ignored.
  */
 
 import { useEffect, useState } from "react";
@@ -18,7 +21,9 @@ export interface CourtBlockFormState {
   title: string;
   note: string;
   courtIds: string[];
+  /** ISO string for start — e.g. slot.startTime */
   startHour: string;
+  /** ISO string for end — e.g. last selected slot.endTime */
   endHour: string;
 }
 
@@ -32,6 +37,10 @@ export interface CourtBlockModalProps {
   /** Pre-fill form when opened from grid selection */
   initialForm?: Partial<CourtBlockFormState>;
   onCreated: () => void;
+  /** When set, the modal is in edit mode for this block ID */
+  editBlockId?: string;
+  /** Called after successful delete */
+  onDeleted?: () => void;
 }
 
 const DEFAULT_FORM: CourtBlockFormState = {
@@ -60,18 +69,26 @@ export function CourtBlockModal({
   availability,
   initialForm,
   onCreated,
+  editBlockId,
+  onDeleted,
 }: CourtBlockModalProps) {
   const { t } = useTranslation("translation", { i18n: adminI18n });
   const [form, setForm] = useState<CourtBlockFormState>(DEFAULT_FORM);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const isEdit = !!editBlockId;
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) { setConfirmDelete(false); return; }
     setForm({ ...DEFAULT_FORM, ...initialForm });
+    setConfirmDelete(false);
   }, [open, initialForm]);
 
   if (!open) return null;
 
+  // All unique slot start times across courts (use first court as reference)
   const allSlotTimes = availability.length > 0 ? availability[0].slots : [];
 
   const toggleCourt = (courtId: string) => {
@@ -83,26 +100,41 @@ export function CourtBlockModal({
     }));
   };
 
-  const createBlock = async () => {
+  function resolveTimeIso(value: string): string {
+    if (value.includes("T") || value.includes("Z")) return value;
+    const tz = "+07:00";
+    const h = parseInt(value).toString().padStart(2, "0");
+    return new Date(`${date}T${h}:00:00${tz}`).toISOString();
+  }
+
+  const saveBlock = async () => {
     if (!form.courtIds.length || !form.startHour || !form.endHour) return;
     setSaving(true);
     try {
-      const tz = "+07:00";
-      const startHour = parseInt(form.startHour).toString().padStart(2, "0");
-      const endHour = parseInt(form.endHour).toString().padStart(2, "0");
-      const startTime = new Date(`${date}T${startHour}:00:00${tz}`);
-      const endTime = new Date(`${date}T${endHour}:00:00${tz}`);
+      const startTimeIso = resolveTimeIso(form.startHour);
+      const endTimeIso = resolveTimeIso(form.endHour);
 
-      await api.post("/api/admin/court-blocks", {
-        venueId,
-        type: form.type,
-        title: form.title || undefined,
-        note: form.note || undefined,
-        courtIds: form.courtIds,
-        date,
-        startTime: startTime.toISOString(),
-        endTime: endTime.toISOString(),
-      });
+      if (isEdit) {
+        await api.patch(`/api/admin/court-blocks/${editBlockId}`, {
+          type: form.type,
+          title: form.title || null,
+          note: form.note || null,
+          courtIds: form.courtIds,
+          startTime: startTimeIso,
+          endTime: endTimeIso,
+        });
+      } else {
+        await api.post("/api/admin/court-blocks", {
+          venueId,
+          type: form.type,
+          title: form.title || undefined,
+          note: form.note || undefined,
+          courtIds: form.courtIds,
+          date,
+          startTime: startTimeIso,
+          endTime: endTimeIso,
+        });
+      }
       onClose();
       onCreated();
     } catch (e) {
@@ -112,26 +144,55 @@ export function CourtBlockModal({
     }
   };
 
+  const deleteBlock = async () => {
+    if (!editBlockId) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/api/admin/court-blocks/${editBlockId}`);
+      onClose();
+      onDeleted?.();
+      onCreated();
+    } catch (e) {
+      alert((e as Error).message);
+    } finally {
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
       <div
         className="w-full max-w-md mx-4 rounded-2xl border border-neutral-700 bg-neutral-900 p-6 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-lg font-bold flex items-center gap-2">
-          {form.type === "open_play" ? (
-            <Users className="h-5 w-5 text-emerald-400" />
-          ) : form.type === "competition" ? (
-            <Trophy className="h-5 w-5 text-blue-400" />
-          ) : (
-            <Ban className="h-5 w-5 text-neutral-400" />
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-bold flex items-center gap-2">
+            {form.type === "open_play" ? (
+              <Users className="h-5 w-5 text-emerald-400" />
+            ) : form.type === "competition" ? (
+              <Trophy className="h-5 w-5 text-blue-400" />
+            ) : (
+              <Ban className="h-5 w-5 text-neutral-400" />
+            )}
+            {isEdit
+              ? t("bookings.editBlock")
+              : form.type === "open_play"
+                ? t("bookings.scheduleOpenPlay")
+                : form.type === "competition"
+                  ? t("bookings.scheduleCompetition")
+                  : t("bookings.blockCourtTime")}
+          </h3>
+          {isEdit && !confirmDelete && (
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              className="rounded-lg px-3 py-1.5 text-xs font-medium text-red-400 border border-red-500/30 hover:bg-red-600/20 transition-colors"
+            >
+              {t("common.delete")}
+            </button>
           )}
-          {form.type === "open_play"
-            ? t("bookings.scheduleOpenPlay")
-            : form.type === "competition"
-              ? t("bookings.scheduleCompetition")
-              : t("bookings.blockCourtTime")}
-        </h3>
+        </div>
         <p className="text-xs text-neutral-500">
           {new Date(date + "T00:00:00").toLocaleDateString(undefined, {
             weekday: "long",
@@ -221,7 +282,7 @@ export function CourtBlockModal({
               >
                 <option value="">{t("bookings.select")}</option>
                 {allSlotTimes.map((s) => (
-                  <option key={s.startTime} value={String(s.hour)}>
+                  <option key={s.startTime} value={s.startTime}>
                     {formatTime(s.startTime, timezone)}
                   </option>
                 ))}
@@ -236,9 +297,9 @@ export function CourtBlockModal({
               >
                 <option value="">{t("bookings.select")}</option>
                 {allSlotTimes
-                  .filter((s) => !form.startHour || s.hour >= parseInt(form.startHour))
+                  .filter((s) => !form.startHour || new Date(s.startTime).getTime() >= new Date(form.startHour).getTime())
                   .map((s) => (
-                    <option key={s.endTime} value={String(s.hour + 1)}>
+                    <option key={s.endTime} value={s.endTime}>
                       {formatTime(s.endTime, timezone)}
                     </option>
                   ))}
@@ -258,36 +319,63 @@ export function CourtBlockModal({
           </div>
         </div>
 
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={createBlock}
-            disabled={saving || !form.courtIds.length || !form.startHour || !form.endHour}
-            className={cn(
-              "flex-1 rounded-xl py-3 font-semibold text-white disabled:opacity-40",
-              form.type === "open_play"
-                ? "bg-emerald-600 hover:bg-emerald-500"
-                : form.type === "competition"
-                  ? "bg-blue-600 hover:bg-blue-500"
-                  : "bg-amber-600 hover:bg-amber-500",
-            )}
-          >
-            {saving
-              ? t("bookings.saving")
-              : form.type === "open_play"
-                ? t("bookings.createOpenPlay")
-                : form.type === "competition"
-                  ? t("bookings.createCompetition")
-                  : t("bookings.blockTime")}
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
-          >
-            {t("common.cancel")}
-          </button>
-        </div>
+        {confirmDelete ? (
+          <div className="rounded-xl border border-red-500/30 bg-red-600/10 p-4 space-y-3">
+            <p className="text-sm font-medium text-red-300">
+              {t("bookings.confirmDeleteBlock")}
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={deleteBlock}
+                disabled={deleting}
+                className="flex-1 rounded-xl bg-red-600 hover:bg-red-500 py-2.5 font-semibold text-white disabled:opacity-40"
+              >
+                {deleting ? t("common.deleting") : t("common.confirmDelete")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(false)}
+                className="flex-1 rounded-xl bg-neutral-800 py-2.5 font-medium text-neutral-300 hover:bg-neutral-700"
+              >
+                {t("common.cancel")}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={saveBlock}
+              disabled={saving || !form.courtIds.length || !form.startHour || !form.endHour}
+              className={cn(
+                "flex-1 rounded-xl py-3 font-semibold text-white disabled:opacity-40",
+                form.type === "open_play"
+                  ? "bg-emerald-600 hover:bg-emerald-500"
+                  : form.type === "competition"
+                    ? "bg-blue-600 hover:bg-blue-500"
+                    : "bg-amber-600 hover:bg-amber-500",
+              )}
+            >
+              {saving
+                ? t("bookings.saving")
+                : isEdit
+                  ? t("common.saveChanges")
+                  : form.type === "open_play"
+                    ? t("bookings.createOpenPlay")
+                    : form.type === "competition"
+                      ? t("bookings.createCompetition")
+                      : t("bookings.blockTime")}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 rounded-xl bg-neutral-800 py-3 font-medium text-neutral-300 hover:bg-neutral-700"
+            >
+              {t("common.cancel")}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

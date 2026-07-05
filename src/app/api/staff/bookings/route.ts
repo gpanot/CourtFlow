@@ -2,10 +2,15 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
-import { getBookingConfig, resolveSlotPrice } from "@/lib/booking";
-import { toZonedTime } from "date-fns-tz";
+import {
+  getBookingConfig,
+  resolveBookingPrice,
+  validateBookingDuration,
+  GRID_GRANULARITY_MINUTES,
+} from "@/lib/booking";
 
 export const dynamic = "force-dynamic";
+
 export async function GET(request: NextRequest) {
   try {
     requireStaff(request.headers);
@@ -21,9 +26,8 @@ export async function GET(request: NextRequest) {
       where: {
         venueId,
         date,
-        // Include all except expired pending-payment holds (not yet cleaned up by cron).
-        // Written as OR because NOT with compound AND doesn't handle SQL NULLs correctly
-        // — rows with null paymentStatus or null holdExpiresAt must be explicitly included.
+        // Only active bookings for the grid — cancelled/expired_hold free the slot
+        status: { in: ["confirmed", "completed", "no_show"] },
         OR: [
           { paymentStatus: { not: "pending" } },
           { paymentStatus: null },
@@ -69,26 +73,40 @@ export async function POST(request: NextRequest) {
     const venueTimezone = venue.timezone ?? "Asia/Ho_Chi_Minh";
     const config = getBookingConfig(venue.settings as Record<string, unknown>);
 
-    const slots = Math.max(1, Math.min(body.slotCount || 1, 12));
-    const date = new Date(body.date.split("T")[0]);
-    const startTime = new Date(body.startTime);
-    const endTime = new Date(startTime.getTime() + config.slotDurationMinutes * slots * 60 * 1000);
+    // slotCount is now in 30-min cells; staff have no minimum constraint
+    const maxCells = Math.floor(config.maxDurationMinutes / GRID_GRANULARITY_MINUTES);
+    const slotCount = Math.min(Math.max(body.slotCount || 2, 1), maxCells);
 
-    const zonedStart = toZonedTime(startTime, venueTimezone);
-    const localDayOfWeek = zonedStart.getDay();
-    let totalPrice = 0;
-    for (let i = 0; i < slots; i++) {
-      const slotStart = new Date(startTime.getTime() + config.slotDurationMinutes * i * 60 * 1000);
-      const zonedSlot = toZonedTime(slotStart, venueTimezone);
-      totalPrice += resolveSlotPrice(config, localDayOfWeek, zonedSlot.getHours());
-    }
+    const durationCheck = validateBookingDuration(config, slotCount, "staff");
+    if (!durationCheck.valid) return error(durationCheck.error!, 400);
+
+    const dateKey = body.date.split("T")[0];
+    const dateForWrite = new Date(dateKey + "T12:00:00+07:00");
+    const date = new Date(dateKey);
+    const startTime = new Date(body.startTime);
+    const durationMinutes = slotCount * GRID_GRANULARITY_MINUTES;
+    const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
+
+    const totalPrice = resolveBookingPrice(config, startTime, durationMinutes, venueTimezone);
+
+    // Full span conflict check
+    const conflicting = await prisma.booking.findFirst({
+      where: {
+        courtId: body.courtId,
+        date,
+        status: { in: ["confirmed", "completed"] },
+        startTime: { lt: endTime },
+        endTime: { gt: startTime },
+      },
+    });
+    if (conflicting) return error("Slot no longer available — pick another.", 409);
 
     const booking = await prisma.booking.create({
       data: {
         courtId: body.courtId,
         venueId: body.venueId,
         playerId: body.playerId,
-        date,
+        date: dateForWrite,
         startTime,
         endTime,
         status: "confirmed",

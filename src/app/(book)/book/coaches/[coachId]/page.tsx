@@ -12,6 +12,53 @@ import { useTranslation } from "react-i18next";
 import { useBookFormatters } from "../../lib/useBookFormatters";
 import { toDateKey } from "@/lib/date";
 import { hasGroupPlayerPricing, calculateSessionPrice } from "@/lib/coach-package-pricing";
+import { cellsPerLesson, validateLessonSelection, lessonSessionCount } from "@/lib/lesson-slot-selection";
+import { GRID_GRANULARITY_MINUTES } from "@/lib/booking";
+
+function getSessionBlockSlots(
+  slotStartIso: string,
+  pkgDurationMin: number,
+  slots: AvailSlot[],
+): string[] | null {
+  const blockSize = cellsPerLesson({ durationMin: pkgDurationMin });
+  const sorted = [...slots].sort(
+    (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
+  );
+  const idx = sorted.findIndex((s) => s.startTime === slotStartIso);
+  if (idx === -1) return null;
+
+  const block: string[] = [];
+  const stepMs = GRID_GRANULARITY_MINUTES * 60 * 1000;
+  for (let i = 0; i < blockSize; i++) {
+    const s = sorted[idx + i];
+    if (!s?.available) return null;
+    if (i > 0 && new Date(s.startTime).getTime() - new Date(block[i - 1]).getTime() !== stepMs) {
+      return null;
+    }
+    block.push(s.startTime);
+  }
+  return block;
+}
+
+function findSessionBlockContaining(
+  selected: string[],
+  slotStartIso: string,
+  pkgDurationMin: number,
+): string[] | null {
+  const blockSize = cellsPerLesson({ durationMin: pkgDurationMin });
+  const sorted = [...selected].sort();
+  for (let i = 0; i < sorted.length; i += blockSize) {
+    const block = sorted.slice(i, i + blockSize);
+    if (block.length === blockSize && block.includes(slotStartIso)) return block;
+  }
+  return null;
+}
+
+function sessionEndIso(firstSlotOfSession: string, pkgDurationMin: number): string {
+  return new Date(
+    new Date(firstSlotOfSession).getTime() + pkgDurationMin * 60 * 1000,
+  ).toISOString();
+}
 
 interface Package {
   id: string;
@@ -27,6 +74,9 @@ interface Package {
 }
 
 interface AvailSlot {
+  startTime: string; // ISO datetime
+  endTime: string;   // ISO datetime
+  /** Floor hour — kept for backward compat display */
   hour: number;
   available: boolean;
   bookingStatus: string | null; // "confirmed" | "pending_approval" | null
@@ -56,8 +106,15 @@ interface OtherCoach {
   startingPrice: number;
 }
 
-function formatHour(h: number) {
-  return `${h.toString().padStart(2, "0")}:00`;
+function formatSlotTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function fmtDuration(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (m === 0) return `${h}h`;
+  return h > 0 ? `${h}h${m}` : `${m}m`;
 }
 
 function formatPackageDuration(durationMin: number): string {
@@ -76,15 +133,17 @@ export default function CoachProfilePage() {
   const [coachError, setCoachError] = useState(false);
   const [selectedPkg, setSelectedPkg] = useState<Package | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [selectedHours, setSelectedHours] = useState<number[]>([]);
+  // selectedSlots: ISO startTime strings of consecutive session-start slots
+  const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
   const [availability, setAvailability] = useState<AvailSlot[]>([]);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
   const [booking, setBooking] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
+  const [selectionError, setSelectionError] = useState<string | null>(null);
   const [step, setStep] = useState<"profile" | "booking" | "summary">("profile");
   const [otherCoaches, setOtherCoaches] = useState<OtherCoach[]>([]);
   const [playerCount, setPlayerCount] = useState<number>(2);
-  const MAX_COACH_SLOTS = 4;
+  const MAX_COACH_SESSIONS = 4;
 
   // Computed client-side only to avoid SSR/hydration date mismatch
   const [dates, setDates] = useState<Date[]>([]);
@@ -159,21 +218,35 @@ export default function CoachProfilePage() {
     if (selectedDate) loadAvailability(selectedDate);
   }, [selectedDate, loadAvailability]);
 
-  function toggleHour(hour: number) {
-    setSelectedHours((prev) => {
-      if (prev.includes(hour)) {
-        // Deselecting: remove this hour and everything after it (keep consecutive from start)
-        const idx = prev.indexOf(hour);
-        return prev.slice(0, idx);
+  function toggleSlot(slotStartIso: string, pkgDurationMin: number) {
+    setSelectionError(null);
+    const blockSize = cellsPerLesson({ durationMin: pkgDurationMin });
+
+    setSelectedSlots((prev) => {
+      const existingBlock = findSessionBlockContaining(prev, slotStartIso, pkgDurationMin);
+      if (existingBlock) {
+        return prev.filter((t) => !existingBlock.includes(t));
       }
-      // Adding: only allow consecutive
-      const sorted = [...prev, hour].sort((a, b) => a - b);
-      // Check all consecutive
-      for (let i = 1; i < sorted.length; i++) {
-        if (sorted[i] !== sorted[i - 1] + 1) return prev; // not consecutive, ignore
+
+      const newBlock = getSessionBlockSlots(slotStartIso, pkgDurationMin, availability);
+      if (!newBlock) return prev;
+
+      if (prev.some((t) => newBlock.includes(t))) return prev;
+
+      const merged = [...prev, ...newBlock].sort();
+      const sessionCount = lessonSessionCount(merged.length, { durationMin: pkgDurationMin });
+      if (sessionCount > MAX_COACH_SESSIONS) return prev;
+
+      if (prev.length > 0) {
+        const sortedPrev = [...prev].sort();
+        const lastSessionStart = sortedPrev[sortedPrev.length - blockSize];
+        const lastSessionEndMs =
+          new Date(lastSessionStart).getTime() + pkgDurationMin * 60 * 1000;
+        const firstNewMs = new Date(newBlock[0]).getTime();
+        if (firstNewMs !== lastSessionEndMs) return prev;
       }
-      if (sorted.length > MAX_COACH_SLOTS) return prev;
-      return sorted;
+
+      return merged;
     });
   }
 
@@ -184,24 +257,29 @@ export default function CoachProfilePage() {
     }
     setSelectedPkg(pkg);
     setSelectedDate(dates[0]);
-    setSelectedHours([]);
+    setSelectedSlots([]);
     setPlayerCount(pkg.minPlayers ?? 2);
     setStep("booking");
   }
 
   function goToSummary() {
-    if (selectedHours.length === 0 || !selectedDate || !selectedPkg) return;
+    if (selectedSlots.length === 0 || !selectedDate || !selectedPkg) return;
+    const validation = validateLessonSelection(selectedPkg, selectedSlots.length);
+    if (!validation.valid) {
+      setSelectionError(validation.errorMsg ?? "Please select a valid number of time slots.");
+      return;
+    }
+    setSelectionError(null);
     setStep("summary");
   }
 
   async function confirmBooking(payWithCredit?: boolean, creditId?: string) {
-    if (!selectedPkg || !selectedDate || selectedHours.length === 0) return;
+    if (!selectedPkg || !selectedDate || selectedSlots.length === 0) return;
     setBooking(true);
     setBookingError(null);
 
-    const startHour = Math.min(...selectedHours);
-    const startTime = new Date(selectedDate);
-    startTime.setHours(startHour, 0, 0, 0);
+    const sortedSlots = [...selectedSlots].sort();
+    const startTimeIso = sortedSlots[0];
 
     try {
       const res = await portalFetch("/api/public/coach-sessions", {
@@ -211,8 +289,9 @@ export default function CoachProfilePage() {
           coachId,
           packageId: selectedPkg.id,
           date: toDateKey(selectedDate),
-          startTime: startTime.toISOString(),
-          slotCount: selectedHours.length,
+          startTime: startTimeIso,
+          // slotCount = number of complete sessions (not 30-min cells)
+          slotCount: lessonSessionCount(selectedSlots.length, selectedPkg),
           payWithCredit,
           creditId,
           venueId: playerVenueId || undefined,
@@ -267,13 +346,21 @@ export default function CoachProfilePage() {
     }`;
 
   if (step === "booking" && selectedPkg) {
-    const slotDurationH = Math.ceil(selectedPkg.durationMin / 60);
-    const startHour = selectedHours.length > 0 ? Math.min(...selectedHours) : null;
-    const endHour = selectedHours.length > 0 ? Math.max(...selectedHours) + slotDurationH : null;
+    const sortedSelected = [...selectedSlots].sort();
+    const blockSize = cellsPerLesson(selectedPkg);
+    const firstSlotStart = sortedSelected.length > 0 ? sortedSelected[0] : null;
+    const lastSessionStart =
+      sortedSelected.length > 0 ? sortedSelected[sortedSelected.length - blockSize] : null;
+    const endIso = lastSessionStart
+      ? sessionEndIso(lastSessionStart, selectedPkg.durationMin)
+      : null;
     const isGroupPkg = hasGroupPlayerPricing(selectedPkg);
+    const sessionCount = selectedSlots.length > 0
+      ? lessonSessionCount(selectedSlots.length, selectedPkg)
+      : 0;
     const totalSlotPrice = isGroupPkg
-      ? calculateSessionPrice(selectedPkg, { playerCount, slotCount: Math.max(1, selectedHours.length) })
-      : selectedPkg.priceValue * selectedHours.length;
+      ? calculateSessionPrice(selectedPkg, { playerCount, slotCount: sessionCount })
+      : selectedPkg.priceValue * sessionCount;
 
     return (
       <div className="px-6 pt-8 pb-8">
@@ -282,7 +369,7 @@ export default function CoachProfilePage() {
         </button>
         <h2 className="text-lg font-bold mb-1">{t("coaches.bookWith", { name: coach.name })}</h2>
         <p className="text-sm text-[var(--cm-text-sec)] mb-4">
-          {selectedPkg.name} · {formatPackageDuration(selectedPkg.durationMin)}
+          {selectedPkg.name} · {fmtDuration(selectedPkg.durationMin)} per session
         </p>
 
         {/* Player count stepper for scalable group packages */}
@@ -316,7 +403,7 @@ export default function CoachProfilePage() {
           {dates.map((d) => (
             <button
               key={d.toISOString()}
-              onClick={() => { setSelectedDate(d); setSelectedHours([]); }}
+              onClick={() => { setSelectedDate(d); setSelectedSlots([]); }}
               className={chipCls(selectedDate?.toDateString() === d.toDateString())}
             >
               {formatDate(d)}
@@ -327,8 +414,8 @@ export default function CoachProfilePage() {
         <div className="flex items-center justify-between mb-2">
           <label className="text-sm font-medium">{t("coaches.availableTimes")}</label>
           <span className="text-xs text-[var(--cm-text-muted)]">
-            {selectedHours.length > 0
-              ? `${selectedHours.length}/${MAX_COACH_SLOTS} ${t("common.selected")}`
+            {sessionCount > 0
+              ? `${sessionCount}/${MAX_COACH_SESSIONS} ${t("common.selected")}`
               : t("coaches.selectUpTo4Slots")}
           </span>
         </div>
@@ -343,24 +430,24 @@ export default function CoachProfilePage() {
         ) : (
           <div className="grid grid-cols-3 gap-2 mb-4">
             {availability.map((slot) => {
-              const isSel = selectedHours.includes(slot.hour);
+              const isSel = selectedSlots.includes(slot.startTime);
 
               // ── My booking on this slot ──────────────────────────────────────
               if (slot.bookingStatus === "confirmed") {
                 return (
-                  <div key={slot.hour}
+                  <div key={slot.startTime}
                     className="flex flex-col items-center justify-center gap-0.5 rounded-xl border border-teal-500/30 bg-teal-500/10 py-2.5 cursor-default select-none">
                     <span className="text-[10px] font-bold uppercase tracking-wide text-teal-400">Confirmed</span>
-                    <span className="text-xs text-teal-500/70">{formatHour(slot.hour)}</span>
+                    <span className="text-xs text-teal-500/70">{formatSlotTime(slot.startTime)}</span>
                   </div>
                 );
               }
               if (slot.bookingStatus === "pending_approval") {
                 return (
-                  <div key={slot.hour}
+                  <div key={slot.startTime}
                     className="flex flex-col items-center justify-center gap-0.5 rounded-xl border border-amber-500/30 bg-amber-500/10 py-2.5 cursor-default select-none">
                     <span className="text-[10px] font-bold uppercase tracking-wide text-amber-400">Pending</span>
-                    <span className="text-xs text-amber-500/70">{formatHour(slot.hour)}</span>
+                    <span className="text-xs text-amber-500/70">{formatSlotTime(slot.startTime)}</span>
                   </div>
                 );
               }
@@ -368,30 +455,36 @@ export default function CoachProfilePage() {
               // ── Blocked (booked by someone else / unavailable) ───────────────
               if (!slot.available) {
                 return (
-                  <div key={slot.hour}
+                  <div key={slot.startTime}
                     className="rounded-xl border border-transparent bg-[var(--cm-bg-surface)] py-2.5 cursor-not-allowed" />
                 );
               }
 
-              // ── Consecutive check ────────────────────────────────────────────
+              // ── Consecutive session check ────────────────────────────────────
+              const blockSize = cellsPerLesson(selectedPkg);
+              const sessionBlock = getSessionBlockSlots(slot.startTime, selectedPkg.durationMin, availability);
               const wouldBeConsecutive = (() => {
                 if (isSel) return true;
-                if (selectedHours.length === 0) return true;
-                const sorted = [...selectedHours, slot.hour].sort((a, b) => a - b);
-                for (let i = 1; i < sorted.length; i++) {
-                  if (sorted[i] !== sorted[i - 1] + 1) return false;
-                }
-                return true;
+                if (!sessionBlock) return false;
+                if (selectedSlots.length === 0) return true;
+                const sortedPrev = [...selectedSlots].sort();
+                const lastSessionStart = sortedPrev[sortedPrev.length - blockSize];
+                const lastSessionEndMs =
+                  new Date(lastSessionStart).getTime() + selectedPkg.durationMin * 60 * 1000;
+                return new Date(sessionBlock[0]).getTime() === lastSessionEndMs;
               })();
-              const atMax = !isSel && selectedHours.length >= MAX_COACH_SLOTS;
-              const softDisabled = atMax || (!isSel && !wouldBeConsecutive);
+              const currentSessions = selectedSlots.length > 0
+                ? lessonSessionCount(selectedSlots.length, selectedPkg)
+                : 0;
+              const atMax = !isSel && currentSessions >= MAX_COACH_SESSIONS;
+              const softDisabled = atMax || (!isSel && !wouldBeConsecutive) || (!isSel && !sessionBlock);
 
               // ── Available ────────────────────────────────────────────────────
               return (
                 <button
-                  key={slot.hour}
+                  key={slot.startTime}
                   disabled={softDisabled}
-                  onClick={() => toggleHour(slot.hour)}
+                  onClick={() => toggleSlot(slot.startTime, selectedPkg.durationMin)}
                   className={`py-2.5 rounded-xl text-sm font-medium border transition-colors ${
                     isSel
                       ? "bg-[var(--cm-accent)] text-black border-[var(--cm-accent)]"
@@ -400,22 +493,22 @@ export default function CoachProfilePage() {
                       : "bg-[var(--cm-bg-card)] text-[var(--cm-text-sec)] border-[var(--cm-border)]"
                   }`}
                 >
-                  {formatHour(slot.hour)}
+                  {formatSlotTime(slot.startTime)}
                 </button>
               );
             })}
           </div>
         )}
 
-        {selectedHours.length > 0 && selectedDate && startHour !== null && endHour !== null && (
+        {selectedSlots.length > 0 && selectedDate && firstSlotStart && endIso && (
           <div className="bg-[var(--cm-bg-card)] border border-[var(--cm-border)] rounded-xl p-3 mb-4 text-sm">
             <p className="font-medium">
-              {formatDate(selectedDate)} · {formatHour(startHour)}–{formatHour(endHour)}
+              {formatDate(selectedDate)} · {formatSlotTime(firstSlotStart)}–{formatSlotTime(endIso)}
             </p>
             <p className="text-[var(--cm-text-sec)] text-xs mt-0.5">{t("coaches.courtAutoAssigned")}</p>
             <p className="text-[var(--cm-accent)] text-xs font-medium mt-0.5">
               {t("coaches.estimatedTotal")}: {formatPrice(totalSlotPrice)}
-              {selectedHours.length > 1 && !isGroupPkg && ` (${selectedHours.length} × ${formatPrice(selectedPkg.priceValue)})`}
+              {sessionCount > 1 && !isGroupPkg && ` (${sessionCount} × ${formatPrice(selectedPkg.priceValue)})`}
             </p>
             {isGroupPkg && playerCount > 0 && (
               <p className="text-[var(--cm-text-sec)] text-xs mt-0.5">
@@ -425,9 +518,12 @@ export default function CoachProfilePage() {
           </div>
         )}
 
+        {selectionError && (
+          <p className="text-[var(--cm-red)] text-xs text-center -mt-1">{selectionError}</p>
+        )}
         <button
           onClick={goToSummary}
-          disabled={selectedHours.length === 0 || availabilityLoading}
+          disabled={selectedSlots.length === 0 || availabilityLoading}
           className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl font-medium text-sm disabled:opacity-40"
         >
           {t("common.continue")}
@@ -436,13 +532,13 @@ export default function CoachProfilePage() {
     );
   }
 
-  if (step === "summary" && selectedPkg && selectedDate && selectedHours.length > 0) {
+  if (step === "summary" && selectedPkg && selectedDate && selectedSlots.length > 0) {
     return (
       <CoachSessionSummary
         coach={coach}
         pkg={selectedPkg}
         date={selectedDate}
-        hours={selectedHours}
+        slots={selectedSlots}
         playerCount={playerCount}
         booking={booking}
         bookingError={bookingError}
@@ -719,7 +815,7 @@ function CoachSessionSummary({
   coach,
   pkg,
   date,
-  hours,
+  slots,
   playerCount,
   booking: isBooking,
   bookingError,
@@ -729,7 +825,7 @@ function CoachSessionSummary({
   coach: CoachProfile;
   pkg: Package;
   date: Date;
-  hours: number[];
+  slots: string[];
   playerCount: number;
   booking: boolean;
   bookingError: string | null;
@@ -738,14 +834,17 @@ function CoachSessionSummary({
 }) {
   const { t } = useTranslation();
   const { formatDate, formatPrice } = useBookFormatters();
-  const sortedHours = [...hours].sort((a, b) => a - b);
-  const startHour = sortedHours[0];
-  const slotDurationH = Math.ceil(pkg.durationMin / 60);
-  const endHour = sortedHours[sortedHours.length - 1] + slotDurationH;
+  const sortedSlots = [...slots].sort();
+  const blockSize = cellsPerLesson(pkg);
+  const startIso = sortedSlots[0];
+  const lastSessionStart = sortedSlots[sortedSlots.length - blockSize];
+  const endIso = sessionEndIso(lastSessionStart, pkg.durationMin);
   const isGroupPkg = hasGroupPlayerPricing(pkg);
+  // slots are 30-min cells; convert to session count before pricing
+  const summarySessionCount = lessonSessionCount(slots.length, pkg);
   const totalPrice = isGroupPkg
-    ? calculateSessionPrice(pkg, { playerCount, slotCount: hours.length })
-    : pkg.priceValue * hours.length;
+    ? calculateSessionPrice(pkg, { playerCount, slotCount: summarySessionCount })
+    : pkg.priceValue * summarySessionCount;
   const [credits, setCredits] = useState<{ id: string; remaining: number }[]>([]);
 
   useEffect(() => {
@@ -790,22 +889,22 @@ function CoachSessionSummary({
         <Row label={t("common.coach")} value={coach.name} />
         <Row label={t("common.package")} value={pkg.name} />
         <Row label={t("common.date")} value={formatDate(date)} />
-        <Row label={t("common.time")} value={`${formatHour(startHour)} – ${formatHour(endHour)}`} />
+        <Row label={t("common.time")} value={`${formatSlotTime(startIso)} – ${formatSlotTime(endIso)}`} />
         {isGroupPkg && (
           <Row label={t("coaches.playersRow")} value={String(playerCount)} />
         )}
-        {!isGroupPkg && hours.length > 1 && (
-          <Row label={t("coaches.slots")} value={`${hours.length} × ${formatPrice(pkg.priceValue)}`} />
+        {!isGroupPkg && summarySessionCount > 1 && (
+          <Row label={t("coaches.slots")} value={`${summarySessionCount} × ${formatPrice(pkg.priceValue)}`} />
         )}
         <Row label={t("common.court")} value={t("common.autoAssigned")} />
         {isGroupPkg && (
           <>
             <div className="border-t border-[var(--cm-border)] pt-2 mt-2 space-y-1">
-              <Row label={t("coaches.basePriceLine", { count: pkg.minPlayers })} value={`${formatPrice(basePerSlot)}${hours.length > 1 ? ` × ${hours.length}` : ""}`} />
+              <Row label={t("coaches.basePriceLine", { count: pkg.minPlayers })} value={`${formatPrice(basePerSlot)}${summarySessionCount > 1 ? ` × ${summarySessionCount}` : ""}`} />
               {extraPlayers > 0 && (
                 <Row
                   label={t("coaches.additionalPlayersLine", { count: extraPlayers, price: formatPrice(pkg.pricePerAdditionalPlayer ?? 0) })}
-                  value={`${formatPrice(extraPerSlot)}${hours.length > 1 ? ` × ${hours.length}` : ""}`}
+                  value={`${formatPrice(extraPerSlot)}${summarySessionCount > 1 ? ` × ${summarySessionCount}` : ""}`}
                 />
               )}
             </div>

@@ -5,8 +5,13 @@ import { requirePortalAuth } from "@/lib/portal-auth";
 import { toDateKey, parseDateKey } from "@/lib/date";
 import { getPortalVenueId } from "@/lib/venue-config";
 
-import { getBookingConfig, resolveSlotPrice } from "@/lib/booking";
-import { toZonedTime } from "date-fns-tz";
+import {
+  getBookingConfig,
+  resolveBookingPrice,
+  validateBookingDuration,
+  intervalsOverlap,
+  GRID_GRANULARITY_MINUTES,
+} from "@/lib/booking";
 import { generatePaymentRef } from "@/modules/courtpay/lib/payment-reference";
 import { buildVietQRUrl } from "@/lib/vietqr";
 
@@ -18,7 +23,13 @@ export async function POST(request: NextRequest) {
   try {
     const { playerId } = await requirePortalAuth(request);
     const body = await request.json();
-    const { courtId, date: dateStr, startTime: startTimeStr, venueId: bodyVenueId, slotCount: rawSlotCount } = body as {
+    const {
+      courtId,
+      date: dateStr,
+      startTime: startTimeStr,
+      venueId: bodyVenueId,
+      slotCount: rawSlotCount,
+    } = body as {
       courtId: string;
       date: string;
       startTime: string;
@@ -26,7 +37,6 @@ export async function POST(request: NextRequest) {
       slotCount?: number;
     };
     const venueId = bodyVenueId || getPortalVenueId();
-    const slotCount = Math.min(Math.max(rawSlotCount || 1, 1), 4);
 
     const court = await prisma.court.findFirst({
       where: { id: courtId, venueId, isBookable: true },
@@ -40,41 +50,51 @@ export async function POST(request: NextRequest) {
     const venueTimezone = venue.timezone ?? "Asia/Ho_Chi_Minh";
     const config = getBookingConfig(venue.settings as Record<string, unknown>);
 
-    const dateKey = dateStr.split("T")[0]; // bare YYYY-MM-DD
-    const date = parseDateKey(dateKey);    // local-midnight Date — used for conflict WHERE queries
-    // Noon local time → UTC is always same calendar day regardless of offset.
+    // slotCount is now in 30-min cells
+    const maxCells = Math.floor(config.maxDurationMinutes / GRID_GRANULARITY_MINUTES);
+    const slotCount = Math.min(Math.max(rawSlotCount || 2, 1), maxCells);
+
+    const durationCheck = validateBookingDuration(config, slotCount, "player");
+    if (!durationCheck.valid) return error(durationCheck.error!, 400);
+
+    const dateKey = dateStr.split("T")[0];
+    const date = parseDateKey(dateKey);
     const dateForWrite = new Date(dateKey + "T12:00:00+07:00");
     const startTime = new Date(startTimeStr);
-    const endTime = new Date(startTime.getTime() + config.slotDurationMinutes * slotCount * 60 * 1000);
+    const durationMs = slotCount * GRID_GRANULARITY_MINUTES * 60 * 1000;
+    const endTime = new Date(startTime.getTime() + durationMs);
 
-    // Use venue-local day-of-week and hour for pricing — independent of server TZ
-    const zonedStart = toZonedTime(startTime, venueTimezone);
-    const localDayOfWeek = zonedStart.getDay();
-    let totalPrice = 0;
-    for (let i = 0; i < slotCount; i++) {
-      const slotStart = new Date(startTime.getTime() + config.slotDurationMinutes * i * 60 * 1000);
-      const zonedSlotStart = toZonedTime(slotStart, venueTimezone);
-      totalPrice += resolveSlotPrice(config, localDayOfWeek, zonedSlotStart.getHours());
-    }
+    const totalPrice = resolveBookingPrice(config, startTime, slotCount * GRID_GRANULARITY_MINUTES, venueTimezone);
 
     const paymentRef = await generatePaymentRef("booking");
     const holdExpiresAt = new Date(Date.now() + HOLD_MINUTES * 60 * 1000);
 
     try {
       const booking = await prisma.$transaction(async (tx) => {
-        // Clear expired holds for all slots in the range
-        for (let i = 0; i < slotCount; i++) {
-          const slotStart = new Date(startTime);
-          slotStart.setMinutes(slotStart.getMinutes() + config.slotDurationMinutes * i);
-          await tx.booking.deleteMany({
-            where: {
-              courtId,
-              date,
-              startTime: slotStart,
-              paymentStatus: "pending",
-              holdExpiresAt: { lt: new Date() },
-            },
-          });
+        // Clear expired holds that overlap the requested span
+        await tx.booking.deleteMany({
+          where: {
+            courtId,
+            date,
+            paymentStatus: "pending",
+            holdExpiresAt: { lt: new Date() },
+            startTime: { lt: endTime },
+            endTime: { gt: startTime },
+          },
+        });
+
+        // Full-span overlap check inside the transaction
+        const conflicting = await tx.booking.findFirst({
+          where: {
+            courtId,
+            date,
+            status: { in: ["confirmed", "completed"] },
+            startTime: { lt: endTime },
+            endTime: { gt: startTime },
+          },
+        });
+        if (conflicting) {
+          throw new Error("CONFLICT");
         }
 
         return tx.booking.create({
@@ -120,7 +140,7 @@ export async function POST(request: NextRequest) {
         201
       );
     } catch (e) {
-      if ((e as { code?: string }).code === "P2002") {
+      if ((e as Error).message === "CONFLICT" || (e as { code?: string }).code === "P2002") {
         return error("Slot no longer available — pick another.", 409);
       }
       throw e;

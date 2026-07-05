@@ -90,7 +90,7 @@ export default function LessonPaymentPage() {
       setSecondsLeft(left);
       if (left <= 0) {
         if (timerRef.current) clearInterval(timerRef.current);
-        portalFetch(`/api/public/coach-sessions/${id}`, { method: "DELETE" }).catch(() => {});
+        portalFetch(`/api/public/coach-sessions/${id}?reason=expired_hold`, { method: "DELETE" }).catch(() => {});
       }
     };
     tick();

@@ -157,6 +157,7 @@ export function PaymentStatusBadge({ status }: { status: string }) {
     pending: { cls: "bg-yellow-600/20 text-yellow-400", key: "overview.paymentPending" },
     proof_submitted: { cls: "bg-orange-600/20 text-orange-400 animate-pulse", key: "overview.statusProofSubmitted" },
     paid: { cls: "bg-green-600/20 text-green-400", key: "overview.statusPaid" },
+    expired: { cls: "bg-neutral-600/20 text-neutral-400", key: "overview.statusExpiredHold" },
   };
   const info = map[normalized] ?? { cls: "bg-neutral-600/20 text-neutral-400", key: "" };
   return (

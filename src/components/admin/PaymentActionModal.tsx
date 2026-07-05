@@ -17,6 +17,7 @@ export interface PaymentActionTarget {
   type: "booking" | "lesson" | "openplay";
   entityId: string;
   playerName: string;
+  playerPhone?: string | null;
   playerAvatar?: string;
   playerPhoto?: string | null;
   detail: string;
@@ -218,6 +219,9 @@ export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
           <div className="flex items-center gap-3 px-5 py-4 border-b border-neutral-800">
             <div className="flex-1">
               <p className="font-semibold text-white">{target.playerName}</p>
+              {target.playerPhone && (
+                <p className="text-xs text-neutral-400 mt-0.5">{target.playerPhone}</p>
+              )}
               {target.detail && (
                 <p className="text-xs text-neutral-500 mt-0.5">{target.detail}</p>
               )}

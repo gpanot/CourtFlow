@@ -2,8 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody, notFound } from "@/lib/api-helpers";
 import { requireStaff } from "@/lib/auth";
-import { getBookingConfig, resolveSlotPrice } from "@/lib/booking";
-import { toZonedTime } from "date-fns-tz";
+import { getBookingConfig, resolveBookingPrice } from "@/lib/booking";
 import { sendBookingEmail } from "@/lib/email/send";
 
 export const dynamic = "force-dynamic";
@@ -43,6 +42,8 @@ export async function PATCH(
       courtId?: string;
       date?: string;
       startTime?: string;
+      /** Number of 30-min grid cells — when provided, updates duration (not just start). */
+      slotCount?: number;
     }>(request);
 
     const existing = await prisma.booking.findUnique({ where: { id } });
@@ -56,7 +57,6 @@ export async function PATCH(
         return error(`Cannot update a booking with status '${existing.status}'`, 400);
       }
 
-      // Enforce cancellation policy when cancelling
       if (body.status === "cancelled") {
         const venue = await prisma.venue.findUnique({
           where: { id: existing.venueId },
@@ -72,7 +72,6 @@ export async function PATCH(
         const partialCancelHours = policy.partialCancelHours ?? 12;
         const freeCancelHours = policy.freeCancelHours ?? 24;
 
-        // Compute hours until booking start using local time (Asia/Saigon — server TZ)
         const now = new Date();
         const hoursUntilStart = (existing.startTime.getTime() - now.getTime()) / (1000 * 60 * 60);
 
@@ -110,9 +109,7 @@ export async function PATCH(
 
       const booking = await prisma.booking.update({
         where: { id },
-        data: {
-          status: body.status,
-        },
+        data: { status: body.status },
         include: {
           court: { select: { id: true, label: true } },
           player: { select: { id: true, name: true, phone: true } },
@@ -129,7 +126,7 @@ export async function PATCH(
     const dateStr = body.date;
     const startTimeStr = body.startTime;
 
-    if (!dateStr && !startTimeStr && !body.courtId) {
+    if (!dateStr && !startTimeStr && !body.courtId && body.slotCount === undefined) {
       return error("Nothing to update", 400);
     }
 
@@ -145,33 +142,44 @@ export async function PATCH(
     const venueTimezone = venue.timezone ?? "Asia/Ho_Chi_Minh";
     const config = getBookingConfig(venue.settings as Record<string, unknown>);
 
-    const date = dateStr ? new Date(dateStr.split("T")[0]) : existing.date;
-
+    // dateForQuery: local midnight — correct for WHERE date comparisons via Prisma
+    // dateForWrite: noon local (T12:00:00+07:00) — avoids UTC-shift bug on Prisma @db.Date writes
+    const dateKey = dateStr ? dateStr.split("T")[0] : null;
+    const dateForQuery = dateKey ? new Date(dateKey) : existing.date;
+    const dateForWrite = dateKey ? new Date(dateKey + "T12:00:00+07:00") : existing.date;
     const startTime = startTimeStr ? new Date(startTimeStr) : existing.startTime;
-    const endTime = new Date(startTime.getTime() + config.slotDurationMinutes * 60 * 1000);
 
+    // Use slotCount when staff changes duration; otherwise preserve original duration.
+    const durationMinutes =
+      body.slotCount != null && body.slotCount > 0
+        ? body.slotCount * 30
+        : (existing.endTime.getTime() - existing.startTime.getTime()) / 60000;
+    const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
+
+    // Overlap check — exclude this booking from the check
     const conflict = await prisma.booking.findFirst({
       where: {
         id: { not: id },
         courtId,
-        date,
-        startTime,
+        date: dateForQuery,
         status: { in: ["confirmed", "completed"] },
+        startTime: { lt: endTime },
+        endTime: { gt: startTime },
       },
     });
     if (conflict) return error("That slot is already booked", 409);
 
-    const zonedStart = toZonedTime(startTime, venueTimezone);
-    const slotPrice = resolveSlotPrice(config, zonedStart.getDay(), zonedStart.getHours());
+    // Reprice for the full preserved duration at the new start time
+    const newPrice = resolveBookingPrice(config, startTime, durationMinutes, venueTimezone);
 
     const booking = await prisma.booking.update({
       where: { id },
       data: {
         courtId,
-        date,
+        date: dateForWrite,
         startTime,
         endTime,
-        priceValue: slotPrice,
+        priceValue: newPrice,
       },
       include: {
         court: { select: { id: true, label: true } },

@@ -48,9 +48,14 @@ export async function DELETE(
       return error("Cannot cancel a paid registration. Please contact the venue.", 400);
     }
 
+    const reason = request.nextUrl.searchParams.get("reason");
+    const isExpiredHold = reason === "expired_hold" && reg.paymentStatus === "pending";
+
     await prisma.openPlayRegistration.update({
       where: { id },
-      data: { status: "cancelled", cancelledAt: new Date() },
+      data: isExpiredHold
+        ? { status: "expired_hold", paymentStatus: "expired", holdExpiresAt: null, expiredAt: new Date() }
+        : { status: "cancelled", cancelledAt: new Date() },
     });
 
     const player = await prisma.player.findUnique({

@@ -19,6 +19,7 @@ export interface BookingTimeGridProps {
   selectedSlots?: Record<string, Set<string>>;
   onSlotClick?: (courtId: string, courtLabel: string, slot: CourtSlot) => void;
   onBookingClick?: (booking: BookingRecord) => void;
+  onLessonClick?: (lessonId: string) => void;
   blockTypeLabel?: (type: string) => string;
   courtColumnLabel: string;
 }
@@ -47,7 +48,7 @@ type CellInfo =
   | { type: "booking"; label: string; sub: string; booking?: BookingRecord }
   | { type: "block"; label: string; sub: string }
   | { type: "schedule"; label: string; sub: string }
-  | { type: "lesson"; label: string; sub: string }
+  | { type: "lesson"; label: string; sub: string; lessonId: string }
   | { type: "available"; label: string; sub: string }
   | { type: "unavailable"; label: string; sub: string };
 
@@ -58,6 +59,7 @@ export function BookingTimeGrid({
   selectedSlots = {},
   onSlotClick,
   onBookingClick,
+  onLessonClick,
   blockTypeLabel,
   courtColumnLabel,
 }: BookingTimeGridProps) {
@@ -106,7 +108,7 @@ export function BookingTimeGrid({
     }
     const lessonInfo = courtSlot?.lesson;
     if (lessonInfo) {
-      return { type: "lesson", label: lessonInfo.coachName, sub: lessonInfo.playerName };
+      return { type: "lesson", label: lessonInfo.coachName, sub: lessonInfo.playerName, lessonId: lessonInfo.lessonId };
     }
     if (courtSlot?.available) {
       return { type: "available", label: fmtPrice(courtSlot.priceValue), sub: "" };
@@ -183,6 +185,14 @@ export function BookingTimeGrid({
                           onClick={() => {
                             if (info.booking?.status === "confirmed") onBookingClick(info.booking);
                           }}
+                          className={cn(innerCls, "cursor-pointer")}
+                          title={info.label}
+                        >
+                          {info.label}
+                        </div>
+                      ) : info.type === "lesson" && onLessonClick ? (
+                        <div
+                          onClick={() => onLessonClick(info.lessonId)}
                           className={cn(innerCls, "cursor-pointer")}
                           title={info.label}
                         >

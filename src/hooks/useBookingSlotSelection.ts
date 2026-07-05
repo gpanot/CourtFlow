@@ -23,19 +23,32 @@ export function useBookingSlotSelection(
   const [selectedSlots, setSelectedSlots] = useState<SlotSelectionState>({});
   const isSlotDisabled = options?.isSlotDisabled;
 
+  /**
+   * Toggle one or more slots atomically.
+   * Pass `slots` as an array when you want multiple cells selected in one update
+   * (e.g. 1h-view clicks always send [slot, slot+30min]).
+   * De-selection: if the first slot is already selected, all provided slots are removed.
+   */
   const toggleSlotSelection = useCallback(
-    (court: CourtAvailability, slot: CourtSlot) => {
-      if (!slot.available || isSlotDisabled?.(court.courtId, slot)) return;
+    (court: CourtAvailability, slots: CourtSlot | CourtSlot[]) => {
+      const slotsArr = Array.isArray(slots) ? slots : [slots];
+      const primarySlot = slotsArr[0];
+      if (!primarySlot.available || isSlotDisabled?.(court.courtId, primarySlot)) return;
 
       setSelectedSlots((prev) => {
         const existing = prev[court.courtId];
         if (!existing) {
-          return { ...prev, [court.courtId]: { courtLabel: court.courtLabel, slots: [slot] } };
+          // Nothing selected yet — add all provided slots
+          const validSlots = slotsArr.filter((s) => s.available && !isSlotDisabled?.(court.courtId, s));
+          if (validSlots.length === 0) return prev;
+          return { ...prev, [court.courtId]: { courtLabel: court.courtLabel, slots: validSlots } };
         }
 
-        const already = existing.slots.find((s) => s.startTime === slot.startTime);
-        if (already) {
-          const remaining = existing.slots.filter((s) => s.startTime !== slot.startTime);
+        const alreadySelected = existing.slots.find((s) => s.startTime === primarySlot.startTime);
+        if (alreadySelected) {
+          // De-select: remove all provided slots
+          const timesToRemove = new Set(slotsArr.map((s) => s.startTime));
+          const remaining = existing.slots.filter((s) => !timesToRemove.has(s.startTime));
           if (remaining.length === 0) {
             const next = { ...prev };
             delete next[court.courtId];
@@ -44,7 +57,9 @@ export function useBookingSlotSelection(
           return { ...prev, [court.courtId]: { ...existing, slots: remaining } };
         }
 
-        const newSlots = [...existing.slots, slot].sort(
+        // Add all provided slots, sort by time
+        const validNew = slotsArr.filter((s) => s.available && !isSlotDisabled?.(court.courtId, s));
+        const newSlots = [...existing.slots, ...validNew].sort(
           (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
         );
         return { ...prev, [court.courtId]: { ...existing, slots: newSlots } };

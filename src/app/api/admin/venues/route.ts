@@ -93,6 +93,9 @@ export async function POST(request: NextRequest) {
           defaultCourtType: "mixed",
           bookingConfig: {
             slotDurationMinutes: 60,
+            allow30MinBookings: false,
+            defaultDurationMinutes: 60,
+            maxDurationMinutes: 480,
             bookingStartHour: 8,
             bookingEndHour: 22,
             defaultPriceValue: 0,

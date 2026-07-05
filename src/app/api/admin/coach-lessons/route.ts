@@ -159,6 +159,15 @@ export async function POST(request: NextRequest) {
       ? new Date(body.endTime)
       : new Date(startTime.getTime() + pkg.durationMin * 60 * 1000);
 
+    // Validate duration is a non-zero multiple of pkg.durationMin
+    const durationMinCheck = (endTime.getTime() - startTime.getTime()) / (60 * 1000);
+    if (durationMinCheck <= 0 || durationMinCheck % pkg.durationMin !== 0) {
+      return error(
+        `Lesson duration (${durationMinCheck} min) must be a positive multiple of the package duration (${pkg.durationMin} min)`,
+        400
+      );
+    }
+
     const conflict = await prisma.coachLesson.findFirst({
       where: {
         coachId: body.coachId,
@@ -194,13 +203,12 @@ export async function POST(request: NextRequest) {
       if (bookingConflict) return error("Court is already booked at this time", 409);
     }
 
-    const durationMs = endTime.getTime() - startTime.getTime();
-    const durationMin = durationMs / (60 * 1000);
-    const slotCount = Math.round(durationMin / pkg.durationMin) || 1;
+    // durationMinCheck already validated above — reuse it
+    const slotCount = durationMinCheck / pkg.durationMin;
 
     const priceValue = hasGroupPlayerPricing(pkg)
       ? calculateSessionPrice(pkg, { playerCount: body.playerCount, slotCount })
-      : Math.round((pkg.priceValue / pkg.durationMin) * durationMin);
+      : Math.round((pkg.priceValue / pkg.durationMin) * durationMinCheck);
 
     const lesson = await prisma.coachLesson.create({
       data: {

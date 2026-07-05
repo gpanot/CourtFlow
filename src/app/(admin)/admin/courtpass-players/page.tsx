@@ -485,18 +485,28 @@ function NewBookingModal({
   const { t } = useTranslation("translation", { i18n: adminI18n });
   const [courtId, setCourtId] = useState(courts[0]?.id ?? "");
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [startHour, setStartHour] = useState(8);
-  const [slotCount, setSlotCount] = useState(1);
+  // startTime stored as "HH:MM" (e.g. "08:00", "08:30")
+  const [startTime, setStartTime] = useState("08:00");
+  // slotCount is now in 30-min cells
+  const [slotCount, setSlotCount] = useState(2);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+
+  // Generate HH:MM options in 30-min steps from 06:00 to 23:30
+  const timeOptions: string[] = [];
+  for (let h = 6; h <= 23; h++) {
+    timeOptions.push(`${h.toString().padStart(2, "0")}:00`);
+    if (h < 23) timeOptions.push(`${h.toString().padStart(2, "0")}:30`);
+  }
 
   async function submit() {
     setSaving(true);
     setErr("");
     try {
-      const d = new Date(date);
-      d.setHours(startHour, 0, 0, 0);
+      const [hh, mm] = startTime.split(":").map(Number);
+      const d = new Date(`${date}T${startTime.padStart(5, "0")}:00+07:00`);
+      void hh; void mm;
       await api.post("/api/staff/bookings", {
         courtId,
         venueId,
@@ -544,12 +554,12 @@ function NewBookingModal({
           <div>
             <label className="mb-1 block text-xs text-neutral-400">{t("courtpassPlayers.startTimeLabel")}</label>
             <select
-              value={startHour}
-              onChange={(e) => setStartHour(Number(e.target.value))}
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
               className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
             >
-              {Array.from({ length: 16 }, (_, i) => i + 6).map((h) => (
-                <option key={h} value={h}>{h}:00</option>
+              {timeOptions.map((tm) => (
+                <option key={tm} value={tm}>{tm}</option>
               ))}
             </select>
           </div>
@@ -560,9 +570,13 @@ function NewBookingModal({
               onChange={(e) => setSlotCount(Number(e.target.value))}
               className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
             >
-              {[1, 2, 3, 4].map((n) => (
-                <option key={n} value={n}>{n} {n > 1 ? t("courtpassPlayers.slotPlural") : t("courtpassPlayers.slotSingular")}</option>
-              ))}
+              {[1, 2, 3, 4, 5, 6, 8].map((n) => {
+                const mins = n * 30;
+                const h = Math.floor(mins / 60);
+                const m = mins % 60;
+                const label = m === 0 ? `${h}h` : `${h}h${m}`;
+                return <option key={n} value={n}>{label}</option>;
+              })}
             </select>
           </div>
         </div>

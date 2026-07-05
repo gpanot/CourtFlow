@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { json, error } from "@/lib/api-helpers";
 import { prisma } from "@/lib/db";
 import { resolveVenueId } from "@/lib/venue-config";
-import { getBookingConfig, getAvailableSlots, isAnyCourtAvailableAtHour } from "@/lib/booking";
+import { getBookingConfig, getAvailableSlots, GRID_GRANULARITY_MINUTES, intervalsOverlap } from "@/lib/booking";
 import { isCoachAvailable, buildVenueLocalSlot } from "@/lib/coach-availability";
 import { verifyPlayerToken } from "@/app/api/public/auth/login/route";
 import { parseDateKey } from "@/lib/date";
@@ -95,7 +95,10 @@ export async function GET(
 
     if (!coach) return error("Coach not found", 404);
 
-    let availability: { hour: number; available: boolean; bookingStatus: string | null }[] = [];
+    // availability now returns 30-min aligned slots with ISO startTime/endTime.
+    // Each slot represents a potential session start; availability is checked for
+    // the coach's free/busy at that 30-min aligned start, not the full booking span.
+    let availability: { startTime: string; endTime: string; hour: number; available: boolean; bookingStatus: string | null }[] = [];
 
     if (dateParam) {
       const date = parseDateKey(dateParam);
@@ -143,34 +146,62 @@ export async function GET(
         : [];
 
       // Fetch court availability once for the day — used to intersect with coach schedule.
-      // A coach slot is only shown as available if the coach is free AND at least one court is free.
       const courtMatrix = await getAvailableSlots(venueId, date);
 
       availability = [];
-      for (let h = config.bookingStartHour; h < config.bookingEndHour; h++) {
-        const slotStart = buildVenueLocalSlot(dateKey, h, 0, venueTimezone);
-        const slotEnd = new Date(slotStart.getTime() + 60 * 60 * 1000);
+      const totalMinutes = (config.bookingEndHour - config.bookingStartHour) * 60;
+      const cellCount = Math.floor(totalMinutes / GRID_GRANULARITY_MINUTES);
+
+      for (let c = 0; c < cellCount; c++) {
+        const slotStart = buildVenueLocalSlot(
+          dateKey,
+          config.bookingStartHour + Math.floor((c * GRID_GRANULARITY_MINUTES) / 60),
+          (c * GRID_GRANULARITY_MINUTES) % 60,
+          venueTimezone
+        );
+        const slotEnd = new Date(slotStart.getTime() + GRID_GRANULARITY_MINUTES * 60 * 1000);
+
+        const hour = Math.floor(config.bookingStartHour + (c * GRID_GRANULARITY_MINUTES) / 60);
 
         // Block past slots on today
         const isPast = isToday && slotStart <= now;
-
         if (isPast) {
-          availability.push({ hour: h, available: false, bookingStatus: null });
+          availability.push({ startTime: slotStart.toISOString(), endTime: slotEnd.toISOString(), hour, available: false, bookingStatus: null });
           continue;
         }
 
-        // Check if this player already has a booking covering this slot
-        const playerBooking = existingLessons.find(
-          (l) => new Date(l.startTime) <= slotStart && new Date(l.endTime) > slotStart
+        // Check if this player already has a booking overlapping this 30-min cell
+        const playerBooking = existingLessons.find((l) =>
+          intervalsOverlap(
+            slotStart.getTime(),
+            slotEnd.getTime(),
+            new Date(l.startTime).getTime(),
+            new Date(l.endTime).getTime()
+          )
         );
         if (playerBooking) {
-          availability.push({ hour: h, available: false, bookingStatus: playerBooking.status });
+          availability.push({ startTime: slotStart.toISOString(), endTime: slotEnd.toISOString(), hour, available: false, bookingStatus: playerBooking.status });
           continue;
         }
 
+        // Check coach availability for the single 30-min window
         const result = await isCoachAvailable(coachId, date, slotStart, slotEnd, venueTimezone);
-        const courtFree = isAnyCourtAvailableAtHour(courtMatrix, h);
-        availability.push({ hour: h, available: result.available && courtFree, bookingStatus: null });
+
+        // Check if at least one court has no conflict in this 30-min cell
+        const anyCourt = courtMatrix.some((courtRow) =>
+          courtRow.slots.some(
+            (s) =>
+              s.available &&
+              intervalsOverlap(
+                slotStart.getTime(),
+                slotEnd.getTime(),
+                new Date(s.startTime).getTime(),
+                new Date(s.endTime).getTime()
+              )
+          )
+        );
+
+        availability.push({ startTime: slotStart.toISOString(), endTime: slotEnd.toISOString(), hour, available: result.available && anyCourt, bookingStatus: null });
       }
     }
 

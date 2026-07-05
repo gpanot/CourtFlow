@@ -56,6 +56,8 @@ interface VenueInfo {
   bookingConfig: {
     pricingRules: { dayOfWeek: number; startHour: number; endHour: number; priceValue: number }[];
     defaultPriceValue: number;
+    allow30MinBookings?: boolean;
+    maxDurationMinutes?: number;
   };
 }
 
@@ -66,12 +68,24 @@ interface Coach {
   startingPrice: number;
 }
 
-const MAX_SLOTS = 4;
+const GRID_GRANULARITY_MINUTES = 30;
+const DEFAULT_MAX_SLOTS = 16; // 8h default — server enforces the real limit
 
 type BookingType = "court" | "open_play";
 
-function formatHour(h: number) {
-  return `${h.toString().padStart(2, "0")}:00`;
+function formatSlotTime(iso: string, tz?: string): string {
+  return new Date(iso).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    ...(tz ? { timeZone: tz } : {}),
+  });
+}
+
+function fmtDuration(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (m === 0) return `${h}h`;
+  return h > 0 ? `${h}h${m}` : `${m}m`;
 }
 
 function sessionDurationHours(startTime: string, endTime: string): number {
@@ -110,8 +124,6 @@ export default function VenueHomePage() {
   const [openPlaySessions, setOpenPlaySessions] = useState<OpenPlaySession[]>([]);
   const [loading, setLoading] = useState(true);
   const [bookingType, setBookingType] = useState<BookingType>("court");
-  const [debugAccount, setDebugAccount] = useState<Record<string, unknown> | null>(null);
-
   // Multi-slot selection: courtId + array of selected slots
   const [selectedCourtId, setSelectedCourtId] = useState<string | null>(null);
   const [selectedSlots, setSelectedSlots] = useState<Slot[]>([]);
@@ -173,35 +185,21 @@ export default function VenueHomePage() {
     fetch(`/api/public/coaches${q}`).then((r) => r.json()).then((d) => setCoaches(d.slice?.(0, 3) ?? [])).catch(() => {});
   }, [playerVenueId, venueReady]);
 
-  // DEBUG: fetch account info to inspect venue assignment + country
-  useEffect(() => {
-    if (status !== "authenticated") return;
-    Promise.all([
-      fetch("/api/public/account", { credentials: "include" }).then((r) => r.json()),
-      fetch("/api/public/venues", { credentials: "include" }).then((r) => r.json()),
-      fetch("/api/public/venues?allCountries=true").then((r) => r.json()),
-    ])
-      .then(([account, filtered, all]) => {
-        const info = {
-          playerId: account?.id,
-          country: account?.country ?? null,
-          registrationVenueId: account?.registrationVenueId ?? null,
-          venue: account?.venue ?? null,
-          filteredVenues: filtered,
-          allVenues: all,
-          playerVenueIdFromCtx: playerVenueId,
-        };
-        setDebugAccount(info as Record<string, unknown>);
-        console.log("[DEBUG book page] account+venues:", info);
-      })
-      .catch(() => {});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
-
   useEffect(() => {
     if (!venueReady || !selectedDate) return;
     loadGrid(selectedDate);
   }, [selectedDate, loadGrid, venueReady]);
+
+  // A 30-min slot with no adjacent available slot is functionally unavailable
+  // when 30-min bookings are not allowed (the default).
+  function isLonelySlot(courtSlots: Slot[], slotIndex: number): boolean {
+    if (allow30Min) return false;
+    const slot = courtSlots[slotIndex];
+    if (!slot.available) return false;
+    const prevAvailable = slotIndex > 0 && courtSlots[slotIndex - 1].available;
+    const nextAvailable = slotIndex < courtSlots.length - 1 && courtSlots[slotIndex + 1].available;
+    return !prevAvailable && !nextAvailable;
+  }
 
   function isSlotSelected(courtId: string, slot: Slot) {
     return selectedCourtId === courtId && selectedSlots.some((s) => s.startTime === slot.startTime);
@@ -240,13 +238,31 @@ export default function VenueHomePage() {
       if (remaining.length === 0) {
         setSelectedCourtId(null);
         setSelectedSlots([]);
-      } else {
+      } else if (areConsecutive(remaining)) {
         setSelectedSlots(remaining);
+      } else {
+        // De-selecting a middle slot broke consecutiveness.
+        // Keep only the contiguous head (slots before the removed one).
+        const sorted = [...remaining].sort(
+          (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+        );
+        const head: typeof sorted = [sorted[0]];
+        for (let i = 1; i < sorted.length; i++) {
+          if (new Date(sorted[i].startTime).getTime() === new Date(head[head.length - 1].endTime).getTime()) {
+            head.push(sorted[i]);
+          } else {
+            break;
+          }
+        }
+        setSelectedSlots(head);
       }
       return;
     }
 
-    if (selectedSlots.length >= MAX_SLOTS) return;
+    const maxSlots = venue?.bookingConfig?.maxDurationMinutes
+      ? Math.floor(venue.bookingConfig.maxDurationMinutes / GRID_GRANULARITY_MINUTES)
+      : DEFAULT_MAX_SLOTS;
+    if (selectedSlots.length >= maxSlots) return;
 
     const candidate = [...selectedSlots, slot];
     if (areConsecutive(candidate)) {
@@ -266,6 +282,10 @@ export default function VenueHomePage() {
       router.push(`/book/login?callbackUrl=/book`);
       return;
     }
+    // Enforce minimum duration for players
+    const allow30Min = venue?.bookingConfig?.allow30MinBookings ?? false;
+    const minCells = allow30Min ? 1 : 2;
+    if (sortedSelected.length < minCells) return;
     const first = sortedSelected[0];
     if (!selectedDate) return;
     const localDate = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`;
@@ -307,10 +327,12 @@ export default function VenueHomePage() {
   const courtLabel = hasSelection
     ? grid.find((c) => c.courtId === selectedCourtId)?.courtLabel ?? ""
     : "";
-  const firstHour = sortedSelected.length > 0 ? formatHour(sortedSelected[0].hour) : "";
-  const lastEnd = sortedSelected.length > 0
-    ? formatHour(new Date(sortedSelected[sortedSelected.length - 1].endTime).getHours())
-    : "";
+  const firstSlotStart = sortedSelected.length > 0 ? formatSlotTime(sortedSelected[0].startTime) : "";
+  const lastSlotEnd = sortedSelected.length > 0 ? formatSlotTime(sortedSelected[sortedSelected.length - 1].endTime) : "";
+  const selectionDurationMin = sortedSelected.length * GRID_GRANULARITY_MINUTES;
+  const allow30Min = venue?.bookingConfig?.allow30MinBookings ?? false;
+  const minCells = allow30Min ? 1 : 2;
+  const canBook = sortedSelected.length >= minCells;
 
   return (
     <div>
@@ -379,7 +401,7 @@ export default function VenueHomePage() {
                       </th>
                       {grid[0]?.slots.map((s) => (
                         <th key={s.startTime} className="px-2 py-2 text-center font-medium text-[var(--cm-text-sec)] min-w-[48px]">
-                          {formatHour(s.hour)}
+                          {formatSlotTime(s.startTime)}
                         </th>
                       ))}
                     </tr>
@@ -390,22 +412,27 @@ export default function VenueHomePage() {
                         <td className="sticky left-0 bg-[var(--cm-bg)] z-10 px-3 py-2 font-medium">
                           {court.courtLabel}
                         </td>
-                        {court.slots.map((slot) => {
+                        {court.slots.map((slot, slotIdx) => {
                           const isSel = isSlotSelected(court.courtId, slot);
+                          const isLonely = isLonelySlot(court.slots, slotIdx);
+                          const effectivelyUnavailable = !slot.available || isLonely;
                           return (
                             <td key={slot.startTime} className="px-1 py-1 text-center">
                               <button
-                                onClick={() => toggleSlot(court.courtId, slot)}
-                                disabled={!slot.available}
+                                onClick={() => !effectivelyUnavailable && toggleSlot(court.courtId, slot)}
+                                disabled={effectivelyUnavailable}
+                                title={isLonely ? "Min. 1 h booking — no adjacent slot available" : undefined}
                                 className={`w-10 h-8 rounded-lg text-[10px] font-medium transition-colors ${
                                   isSel
                                     ? "bg-[var(--cm-accent)] text-black"
-                                    : slot.available
-                                    ? "bg-[var(--cm-green)]/15 text-[var(--cm-green)] hover:bg-[var(--cm-green)]/25"
-                                    : "bg-[var(--cm-bg-surface)] text-[var(--cm-text-muted)] cursor-not-allowed"
+                                    : !slot.available
+                                    ? "bg-[var(--cm-bg-surface)] text-[var(--cm-text-muted)] cursor-not-allowed"
+                                    : isLonely
+                                    ? "bg-[var(--cm-bg-surface)] text-[var(--cm-text-muted)] cursor-not-allowed opacity-50"
+                                    : "bg-[var(--cm-green)]/15 text-[var(--cm-green)] hover:bg-[var(--cm-green)]/25"
                                 }`}
                               >
-                                {slot.available ? formatHour(slot.hour) : "—"}
+                                {!slot.available || isLonely ? "—" : formatSlotTime(slot.startTime)}
                               </button>
                             </td>
                           );
@@ -422,8 +449,8 @@ export default function VenueHomePage() {
               </div>
               {hasSelection && (
                 <p className="text-xs text-[var(--cm-text-sec)] mt-2">
-                  {t("home.slotsSelected", { count: sortedSelected.length })}
-                  {sortedSelected.length < MAX_SLOTS && t("home.extendHint")}
+                  {fmtDuration(selectionDurationMin)} selected
+                  {!canBook && ` — minimum ${fmtDuration(minCells * GRID_GRANULARITY_MINUTES)}`}
                 </p>
               )}
             </>
@@ -660,13 +687,16 @@ export default function VenueHomePage() {
           >
             <button
               onClick={handleBook}
-              className="w-full py-3 bg-[var(--cm-accent)] text-black rounded-xl shadow-[var(--cm-shadow)] flex flex-col items-center gap-0.5"
+              disabled={!canBook}
+              className={`w-full py-3 rounded-xl shadow-[var(--cm-shadow)] flex flex-col items-center gap-0.5 transition-opacity ${
+                canBook ? "bg-[var(--cm-accent)] text-black" : "bg-[var(--cm-bg-surface)] text-[var(--cm-text-muted)] opacity-60 cursor-not-allowed"
+              }`}
             >
               <span className="font-semibold text-sm leading-tight">
-                {t("home.bookNow")} · {formatPrice(totalPrice)}
+                {canBook ? `${t("home.bookNow")} · ${formatPrice(totalPrice)}` : `Min. ${fmtDuration(minCells * GRID_GRANULARITY_MINUTES)}`}
               </span>
               <span className="text-[11px] font-medium opacity-75 leading-tight">
-                {courtLabel} · {selectedDate ? formatDate(selectedDate) : ""} · {firstHour}–{lastEnd}
+                {courtLabel} · {selectedDate ? formatDate(selectedDate) : ""} · {fmtDuration(selectionDurationMin)} · {firstSlotStart}–{lastSlotEnd}
               </span>
             </button>
           </div>

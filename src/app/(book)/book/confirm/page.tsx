@@ -24,8 +24,9 @@ function ConfirmContent() {
   const courtId = searchParams.get("courtId") || "";
   const dateStr = searchParams.get("date") || "";
   const startTimeStr = searchParams.get("startTime") || "";
-  const slotCount = Math.min(Math.max(parseInt(searchParams.get("slotCount") || "1", 10), 1), 4);
-  const totalPrice = parseInt(searchParams.get("price") || "0", 10);
+  const slotCount = Math.min(Math.max(parseInt(searchParams.get("slotCount") || "2", 10), 1), 32);
+  const urlPrice = parseInt(searchParams.get("price") || "0", 10);
+  const durationMinutes = slotCount * 30;
 
   // Parse YYYY-MM-DD as local midnight (T00:00:00 without Z → local time, not UTC)
   const date = dateStr.match(/^\d{4}-\d{2}-\d{2}$/)
@@ -37,9 +38,9 @@ function ConfirmContent() {
     const times: { start: Date; end: Date }[] = [];
     for (let i = 0; i < slotCount; i++) {
       const s = new Date(startTime);
-      s.setMinutes(s.getMinutes() + 60 * i);
+      s.setMinutes(s.getMinutes() + 30 * i);
       const e = new Date(s);
-      e.setMinutes(e.getMinutes() + 60);
+      e.setMinutes(e.getMinutes() + 30);
       times.push({ start: s, end: e });
     }
     return times;
@@ -98,7 +99,19 @@ function ConfirmContent() {
     }
   }
 
+  // Use live per-slot prices when the availability grid has loaded; fall back to URL param.
+  const totalPrice = slotPrices.length > 0
+    ? slotPrices.reduce((sum, sp) => sum + sp.price, 0)
+    : urlPrice;
+
   const fmtTime = (d: Date) => formatTime(d);
+
+  function fmtDuration(minutes: number): string {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    if (m === 0) return `${h}h`;
+    return h > 0 ? `${h}h${m}` : `${m}m`;
+  }
 
   return (
     <div className="px-6 pt-12 pb-8">
@@ -115,13 +128,13 @@ function ConfirmContent() {
         <Row label={t("common.court")} value={courtLabel || "..."} />
         <Row label={t("common.date")} value={formatDateField(dateStr)} />
         <Row label={t("common.time")} value={`${fmtTime(startTime)} – ${fmtTime(overallEnd)}`} />
-        <Row label={t("common.duration")} value={t("confirm.duration", { hours: slotCount, count: slotCount })} />
+        <Row label={t("common.duration")} value={fmtDuration(durationMinutes)} />
 
         {slotPrices.length > 1 && (
           <div className="border-t border-[var(--cm-border)] pt-2 mt-2 space-y-1">
             {slotPrices.map((sp, i) => (
               <div key={i} className="flex justify-between text-xs text-[var(--cm-text-sec)]">
-                <span>{courtLabel}, {sp.hour.toString().padStart(2, "0")}:00</span>
+                <span>{courtLabel}, {formatTime(slotTimes[i].start)}</span>
                 <span>{formatPrice(sp.price)}</span>
               </div>
             ))}

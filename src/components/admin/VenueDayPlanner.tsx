@@ -4,7 +4,7 @@
  * VenueDayPlanner — shared date toolbar + court/time grid for Bookings & Coaching.
  */
 
-import { type ReactNode } from "react";
+import React, { type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import adminI18n from "@/i18n/admin-i18n";
 import { cn } from "@/lib/cn";
@@ -31,6 +31,8 @@ export interface VenueDayPlannerProps {
   selectedSlots?: Record<string, Set<string>>;
   onSlotClick?: (courtId: string, courtLabel: string, slot: CourtSlot) => void;
   onBookingClick?: (booking: BookingRecord) => void;
+  onBlockClick?: (blockId: string) => void;
+  onLessonClick?: (lessonId: string) => void;
   blockTypeLabel?: (type: string) => string;
   accentColor?: "purple" | "teal";
   /** Extra controls shown in the date toolbar row (e.g. selection action bar) */
@@ -51,6 +53,8 @@ export function VenueDayPlanner({
   selectedSlots,
   onSlotClick,
   onBookingClick,
+  onBlockClick,
+  onLessonClick,
   blockTypeLabel,
   accentColor = "purple",
   toolbarExtra,
@@ -75,10 +79,53 @@ export function VenueDayPlanner({
     }
   };
 
+  const granularityKey = `${viewModeStorageKey}-granularity`;
+  const [slotGranularity, setSlotGranularity] = React.useState<"30min" | "1h">(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem(granularityKey);
+      if (stored === "30min" || stored === "1h") return stored;
+    }
+    return "1h";
+  });
+
+  const setGranularity = (g: "30min" | "1h") => {
+    setSlotGranularity(g);
+    if (typeof window !== "undefined") {
+      localStorage.setItem(granularityKey, g);
+    }
+  };
+
   const focusRing =
     accentColor === "teal" ? "focus:border-teal-500" : "focus:border-purple-500";
 
   const hasSlots = availability.length > 0 && availability[0].slots.length > 0;
+
+  /**
+   * In 1h view each displayed row = 2 × 30-min cells.
+   * Expand a single-slot click into [slot, slot+30min] so the caller receives
+   * both cells in one interaction.
+   */
+  const handleSlotClick = React.useCallback(
+    (courtId: string, courtLabel: string, slot: CourtSlot) => {
+      if (!onSlotClick) return;
+      if (slotGranularity === "1h") {
+        const court = availability.find((c) => c.courtId === courtId);
+        if (court) {
+          const idx = court.slots.findIndex((s) => s.startTime === slot.startTime);
+          if (idx !== -1 && idx + 1 < court.slots.length) {
+            const next = court.slots[idx + 1];
+            // Call onSlotClick for both slots — functional updater in the hook ensures
+            // the second call sees state after the first
+            onSlotClick(courtId, courtLabel, slot);
+            onSlotClick(courtId, courtLabel, next);
+            return;
+          }
+        }
+      }
+      onSlotClick(courtId, courtLabel, slot);
+    },
+    [onSlotClick, slotGranularity, availability],
+  );
 
   return (
     <div className="space-y-4">
@@ -116,29 +163,60 @@ export function VenueDayPlanner({
 
         {toolbarExtra}
 
-        <div className="ml-auto flex items-center rounded-lg border border-neutral-700 overflow-hidden">
-          <button
-            type="button"
-            onClick={() => setViewMode("court")}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors",
-              viewMode === "court" ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400 hover:text-white",
-            )}
-            title={t("bookings.courtView")}
-          >
-            <LayoutGrid className="h-3.5 w-3.5" /> {t("bookings.courtView")}
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("time")}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors border-l border-neutral-700",
-              viewMode === "time" ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400 hover:text-white",
-            )}
-            title={t("bookings.timeView")}
-          >
-            <TableProperties className="h-3.5 w-3.5" /> {t("bookings.timeView")}
-          </button>
+        <div className="ml-auto flex items-center gap-2">
+          {/* Granularity toggle — only relevant in court view */}
+          {viewMode === "court" && (
+            <div className="flex items-center rounded-lg border border-neutral-700 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setGranularity("1h")}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-medium transition-colors",
+                  slotGranularity === "1h" ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400 hover:text-white",
+                )}
+                title={t("bookings.view1h")}
+              >
+                {t("bookings.view1h")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setGranularity("30min")}
+                className={cn(
+                  "px-3 py-1.5 text-xs font-medium transition-colors border-l border-neutral-700",
+                  slotGranularity === "30min" ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400 hover:text-white",
+                )}
+                title={t("bookings.view30min")}
+              >
+                {t("bookings.view30min")}
+              </button>
+            </div>
+          )}
+
+          {/* View mode toggle */}
+          <div className="flex items-center rounded-lg border border-neutral-700 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setViewMode("court")}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors",
+                viewMode === "court" ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400 hover:text-white",
+              )}
+              title={t("bookings.courtView")}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" /> {t("bookings.courtView")}
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("time")}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors border-l border-neutral-700",
+                viewMode === "time" ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400 hover:text-white",
+              )}
+              title={t("bookings.timeView")}
+            >
+              <TableProperties className="h-3.5 w-3.5" /> {t("bookings.timeView")}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -156,6 +234,7 @@ export function VenueDayPlanner({
           onSlotClick={onSlotClick}
           onBookingClick={onBookingClick}
           blockTypeLabel={blockTypeLabel}
+          onLessonClick={onLessonClick}
           courtColumnLabel={t("bookings.court")}
         />
       ) : (
@@ -167,10 +246,13 @@ export function VenueDayPlanner({
               timezone={timezone}
               bookings={bookings}
               selectedSlots={selectedSlots}
-              onSlotClick={onSlotClick}
+              onSlotClick={handleSlotClick}
               onBookingClick={onBookingClick}
+              onBlockClick={onBlockClick}
+              onLessonClick={onLessonClick}
               blockTypeLabel={blockTypeLabel}
               accentColor={accentColor}
+              displayGranularity={slotGranularity}
             />
           </div>
         </div>

@@ -87,6 +87,10 @@ export interface BookingCourtGridProps {
   onSlotClick?: (courtId: string, courtLabel: string, slot: CourtSlot) => void;
   /** Called when a booking card is clicked */
   onBookingClick?: (booking: BookingRecord) => void;
+  /** Called when a court block card is clicked */
+  onBlockClick?: (blockId: string) => void;
+  /** Called when a coach lesson card is clicked */
+  onLessonClick?: (lessonId: string) => void;
   /** Reduce row height for modal use */
   compact?: boolean;
   /** Accent color for selected slots: "purple" | "teal". Default "purple" */
@@ -95,6 +99,12 @@ export interface BookingCourtGridProps {
   blockTypeLabel?: (type: string) => string;
   /** When editing a lesson, its slots stay individually selectable instead of a span card */
   editableLessonId?: string;
+  /**
+   * Grid row density:
+   *  "30min" (default) — one row per 30-min slot (full granularity).
+   *  "1h"              — one row per whole hour (hides :30 rows, compact view).
+   */
+  displayGranularity?: "30min" | "1h";
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
@@ -109,6 +119,53 @@ function formatTime(iso: string, tz?: string): string {
 
 function fmtPrice(n: number): string {
   return new Intl.NumberFormat("vi-VN").format(n);
+}
+
+function floorToHourMs(ms: number): number {
+  const d = new Date(ms);
+  d.setMinutes(0, 0, 0);
+  return d.getTime();
+}
+
+function intervalsOverlap(aStart: number, aEnd: number, bStart: number, bEnd: number): boolean {
+  return aStart < bEnd && aEnd > bStart;
+}
+
+/** Hour rows spanned by an event (e.g. 12:30–1:30 → 2 rows in 1h view). */
+function hourRowsSpanned(startMs: number, endMs: number): number {
+  const firstRowMs = floorToHourMs(startMs);
+  return Math.max(1, Math.ceil((endMs - firstRowMs) / (60 * 60 * 1000)));
+}
+
+/** True when this hour row should render the event card (not a continuation row). */
+function isFirstHourRowForEvent(rowStartMs: number, eventStartMs: number, eventEndMs: number): boolean {
+  const rowEndMs = rowStartMs + 60 * 60 * 1000;
+  if (eventStartMs >= rowStartMs && eventStartMs < rowEndMs) return true;
+  if (eventStartMs < rowStartMs && intervalsOverlap(eventStartMs, eventEndMs, rowStartMs, rowEndMs)) {
+    return floorToHourMs(eventStartMs) === rowStartMs;
+  }
+  return false;
+}
+
+function sortedSlotsWith<T>(
+  court: CourtAvailability,
+  pick: (s: CourtSlot) => T | undefined,
+  match: (item: T) => boolean,
+): CourtSlot[] {
+  return court.slots
+    .filter((s) => {
+      const v = pick(s);
+      return v !== undefined && match(v);
+    })
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+}
+
+function slotRangeMs(slots: CourtSlot[]): { startMs: number; endMs: number } | null {
+  if (slots.length === 0) return null;
+  return {
+    startMs: new Date(slots[0].startTime).getTime(),
+    endMs: new Date(slots[slots.length - 1].endTime).getTime(),
+  };
 }
 
 function nowHourInTz(tz?: string): number {
@@ -160,19 +217,32 @@ export function BookingCourtGrid({
   selectedSlots = {},
   onSlotClick,
   onBookingClick,
+  onBlockClick,
+  onLessonClick,
   compact = false,
   accentColor = "purple",
   blockTypeLabel,
   editableLessonId,
+  displayGranularity = "30min",
 }: BookingCourtGridProps) {
   const labelForBlockType = (type: string) =>
     blockTypeLabel?.(type) ?? DEFAULT_BLOCK_LABELS[type] ?? type;
   const ROW_H = compact ? 44 : 56;
-  const allSlotTimes = availability.length > 0 ? availability[0].slots : [];
+  const rawSlotTimes = availability.length > 0 ? availability[0].slots : [];
+  // In 1h mode, show only whole-hour rows (minutes === 0); 30min mode shows all rows.
+  const allSlotTimes =
+    displayGranularity === "1h"
+      ? rawSlotTimes.filter((s) => new Date(s.startTime).getMinutes() === 0)
+      : rawSlotTimes;
   const isToday = date === formatDateInTz(new Date(), timezone);
   const nowHour = nowHourInTz(timezone);
   const firstHour = allSlotTimes.length > 0 ? allSlotTimes[0].hour : 6;
-  const currentRowOffset = isToday ? (nowHour - firstHour) * ROW_H : -1;
+  // In 1h mode each row represents 1 hour; in 30min mode each row is 30 min (2 rows/hour).
+  const currentRowOffset = isToday
+    ? displayGranularity === "1h"
+      ? (nowHour - firstHour) * ROW_H
+      : (nowHour - firstHour) * 2 * ROW_H
+    : -1;
 
   // Index bookings by courtId_startTime for fast lookup
   const bookingsByKey = new Map<string, BookingRecord>();
@@ -230,6 +300,10 @@ export function BookingCourtGrid({
           // A slot starting in the current hour is still bookable (e.g. book 2PM–3PM at 2:03PM).
           const isPast = isToday && new Date(slot.endTime).getTime() <= Date.now();
 
+          // In 1h mode, allSlotTimes is filtered so rowIdx no longer aligns with court.slots.
+          // Look up the courtSlot by startTime to stay correct in both modes.
+          const minutesPerRow = displayGranularity === "1h" ? 60 : 30;
+
           return [
             // Time label column
             <div
@@ -253,64 +327,219 @@ export function BookingCourtGrid({
 
             // Court columns for this row
             ...availability.map((court) => {
-              const courtSlot = court.slots[rowIdx];
+              // Look up courtSlot by startTime so rowIdx alignment is always correct.
+              const courtSlot = court.slots.find((s) => s.startTime === slot.startTime);
+              const rawSlotIdx = court.slots.findIndex((s) => s.startTime === slot.startTime);
+              const rowStartMs = new Date(slot.startTime).getTime();
+              const rowEndMs = rowStartMs + minutesPerRow * 60 * 1000;
 
               // Booking span logic
-              const booking = bookingsByKey.get(`${court.courtId}_${slot.startTime}`);
-              const isFirstSlotOfBooking = booking && booking.startTime === slot.startTime;
-              const isContinuationSlot = booking && booking.startTime !== slot.startTime;
-              const bookingSlotSpan = booking
+              let booking = bookingsByKey.get(`${court.courtId}_${slot.startTime}`);
+              let isFirstSlotOfBooking = booking && booking.startTime === slot.startTime;
+              let isContinuationSlot = booking && booking.startTime !== slot.startTime;
+              let bookingSlotSpan = booking
                 ? Math.max(1, Math.round(
                     (new Date(booking.endTime).getTime() - new Date(booking.startTime).getTime()) /
-                      (1000 * 60 * 60),
+                      (1000 * minutesPerRow * 60),
                   ))
                 : 1;
 
               // Block span logic
-              const blockInfo = courtSlot?.block;
-              const isBlockStart =
+              let blockInfo = courtSlot?.block;
+              const prevCourtSlot = rawSlotIdx > 0 ? court.slots[rawSlotIdx - 1] : undefined;
+              let isBlockStart =
                 blockInfo &&
-                (rowIdx === 0 ||
-                  !court.slots[rowIdx - 1]?.block ||
-                  court.slots[rowIdx - 1]?.block?.blockId !== blockInfo.blockId);
-              const isBlockContinuation = blockInfo && !isBlockStart;
+                (rawSlotIdx === 0 ||
+                  !prevCourtSlot?.block ||
+                  prevCourtSlot?.block?.blockId !== blockInfo.blockId);
+              let isBlockContinuation = blockInfo && !isBlockStart;
               let blockSpan = 1;
               if (isBlockStart && blockInfo) {
-                for (let k = rowIdx + 1; k < court.slots.length; k++) {
+                for (let k = rawSlotIdx + 1; k < court.slots.length; k++) {
                   if (court.slots[k]?.block?.blockId === blockInfo.blockId) blockSpan++;
                   else break;
                 }
+                if (displayGranularity === "1h") blockSpan = Math.ceil(blockSpan / 2);
               }
 
               // Schedule span logic
-              const schedInfo = courtSlot?.schedule;
-              const isSchedStart =
+              let schedInfo = courtSlot?.schedule;
+              let isSchedStart =
                 schedInfo &&
-                (rowIdx === 0 ||
-                  !court.slots[rowIdx - 1]?.schedule ||
-                  court.slots[rowIdx - 1]?.schedule?.entryId !== schedInfo.entryId);
-              const isSchedContinuation = schedInfo && !isSchedStart;
+                (rawSlotIdx === 0 ||
+                  !prevCourtSlot?.schedule ||
+                  prevCourtSlot?.schedule?.entryId !== schedInfo.entryId);
+              let isSchedContinuation = schedInfo && !isSchedStart;
               let schedSpan = 1;
               if (isSchedStart && schedInfo) {
-                for (let k = rowIdx + 1; k < court.slots.length; k++) {
+                for (let k = rawSlotIdx + 1; k < court.slots.length; k++) {
                   if (court.slots[k]?.schedule?.entryId === schedInfo.entryId) schedSpan++;
                   else break;
                 }
+                if (displayGranularity === "1h") schedSpan = Math.ceil(schedSpan / 2);
               }
 
               // Lesson span logic
-              const lessonInfo = courtSlot?.lesson;
-              const isLessonStart =
+              let lessonInfo = courtSlot?.lesson;
+              let isLessonStart =
                 lessonInfo &&
-                (rowIdx === 0 ||
-                  !court.slots[rowIdx - 1]?.lesson ||
-                  court.slots[rowIdx - 1]?.lesson?.lessonId !== lessonInfo.lessonId);
-              const isLessonContinuation = lessonInfo && !isLessonStart;
+                (rawSlotIdx === 0 ||
+                  !prevCourtSlot?.lesson ||
+                  prevCourtSlot?.lesson?.lessonId !== lessonInfo.lessonId);
+              let isLessonContinuation = lessonInfo && !isLessonStart;
               let lessonSpan = 1;
               if (isLessonStart && lessonInfo) {
-                for (let k = rowIdx + 1; k < court.slots.length; k++) {
+                for (let k = rawSlotIdx + 1; k < court.slots.length; k++) {
                   if (court.slots[k]?.lesson?.lessonId === lessonInfo.lessonId) lessonSpan++;
                   else break;
+                }
+                if (displayGranularity === "1h") lessonSpan = Math.ceil(lessonSpan / 2);
+              }
+
+              // In 1h view, events may start at :30 — use hour-overlap instead of exact slot match.
+              if (displayGranularity === "1h") {
+                const hourBooking = bookings.find((bk) => {
+                  if (bk.courtId !== court.courtId) return false;
+                  const st = new Date(bk.startTime).getTime();
+                  const en = new Date(bk.endTime).getTime();
+                  return (
+                    intervalsOverlap(st, en, rowStartMs, rowEndMs) &&
+                    isFirstHourRowForEvent(rowStartMs, st, en)
+                  );
+                });
+                booking = hourBooking;
+                isFirstSlotOfBooking = !!hourBooking;
+                isContinuationSlot = bookings.some((bk) => {
+                  if (bk.courtId !== court.courtId) return false;
+                  const st = new Date(bk.startTime).getTime();
+                  const en = new Date(bk.endTime).getTime();
+                  return (
+                    intervalsOverlap(st, en, rowStartMs, rowEndMs) &&
+                    !isFirstHourRowForEvent(rowStartMs, st, en)
+                  );
+                });
+                bookingSlotSpan = hourBooking
+                  ? hourRowsSpanned(
+                      new Date(hourBooking.startTime).getTime(),
+                      new Date(hourBooking.endTime).getTime(),
+                    )
+                  : 1;
+
+                const overlappingLessonSlot = court.slots.find((s) => {
+                  if (!s.lesson) return false;
+                  const st = new Date(s.startTime).getTime();
+                  const en = new Date(s.endTime).getTime();
+                  return intervalsOverlap(st, en, rowStartMs, rowEndMs);
+                });
+                const overlappingLessonId = overlappingLessonSlot?.lesson?.lessonId;
+                if (overlappingLessonId) {
+                  const lessonSlots = sortedSlotsWith(
+                    court,
+                    (s) => s.lesson,
+                    (l) => l.lessonId === overlappingLessonId,
+                  );
+                  const range = slotRangeMs(lessonSlots);
+                  if (range) {
+                    lessonInfo = lessonSlots[0].lesson;
+                    const isFirst = isFirstHourRowForEvent(rowStartMs, range.startMs, range.endMs);
+                    isLessonStart = isFirst;
+                    isLessonContinuation = !isFirst;
+                    lessonSpan = hourRowsSpanned(range.startMs, range.endMs);
+                  }
+                } else {
+                  lessonInfo = undefined;
+                  isLessonStart = false;
+                  isLessonContinuation = false;
+                  lessonSpan = 1;
+                }
+
+                const overlappingBlockSlot = court.slots.find((s) => {
+                  if (!s.block) return false;
+                  const st = new Date(s.startTime).getTime();
+                  const en = new Date(s.endTime).getTime();
+                  return intervalsOverlap(st, en, rowStartMs, rowEndMs);
+                });
+                const overlappingBlockId = overlappingBlockSlot?.block?.blockId;
+                if (overlappingBlockId) {
+                  const blockSlots = sortedSlotsWith(
+                    court,
+                    (s) => s.block,
+                    (b) => b.blockId === overlappingBlockId,
+                  );
+                  const range = slotRangeMs(blockSlots);
+                  if (range) {
+                    blockInfo = blockSlots[0].block;
+                    const isFirst = isFirstHourRowForEvent(rowStartMs, range.startMs, range.endMs);
+                    isBlockStart = isFirst;
+                    isBlockContinuation = !isFirst;
+                    blockSpan = hourRowsSpanned(range.startMs, range.endMs);
+                  }
+                } else {
+                  blockInfo = undefined;
+                  isBlockStart = false;
+                  isBlockContinuation = false;
+                  blockSpan = 1;
+                }
+
+                const overlappingSchedSlot = court.slots.find((s) => {
+                  if (!s.schedule) return false;
+                  const st = new Date(s.startTime).getTime();
+                  const en = new Date(s.endTime).getTime();
+                  return intervalsOverlap(st, en, rowStartMs, rowEndMs);
+                });
+                const overlappingSchedId = overlappingSchedSlot?.schedule?.entryId;
+                if (overlappingSchedId) {
+                  const schedSlots = sortedSlotsWith(
+                    court,
+                    (s) => s.schedule,
+                    (sc) => sc.entryId === overlappingSchedId,
+                  );
+                  const range = slotRangeMs(schedSlots);
+                  if (range) {
+                    schedInfo = schedSlots[0].schedule;
+                    const isFirst = isFirstHourRowForEvent(rowStartMs, range.startMs, range.endMs);
+                    isSchedStart = isFirst;
+                    isSchedContinuation = !isFirst;
+                    schedSpan = hourRowsSpanned(range.startMs, range.endMs);
+                  }
+                } else {
+                  schedInfo = undefined;
+                  isSchedStart = false;
+                  isSchedContinuation = false;
+                  schedSpan = 1;
+                }
+              }
+
+              let lessonStartTime: string | undefined;
+              let lessonEndTime: string | undefined;
+              let lessonPadTopPct = 0;
+              let lessonPadBottomPct = 0;
+              if (lessonInfo && isLessonStart) {
+                const lessonSlots = sortedSlotsWith(
+                  court,
+                  (s) => s.lesson,
+                  (l) => l.lessonId === lessonInfo.lessonId,
+                );
+                if (lessonSlots.length > 0) {
+                  lessonStartTime = lessonSlots[0].startTime;
+                  lessonEndTime = lessonSlots[lessonSlots.length - 1].endTime;
+                  if (displayGranularity === "1h") {
+                    const lessonStartMs = new Date(lessonStartTime).getTime();
+                    const lessonEndMs = new Date(lessonEndTime).getTime();
+                    const cardStartMs = rowStartMs;
+                    const cardEndMs = cardStartMs + lessonSpan * 60 * 60 * 1000;
+                    const totalMs = cardEndMs - cardStartMs;
+                    if (totalMs > 0) {
+                      lessonPadTopPct = Math.max(
+                        0,
+                        Math.min(100, ((lessonStartMs - cardStartMs) / totalMs) * 100),
+                      );
+                      lessonPadBottomPct = Math.max(
+                        0,
+                        Math.min(100, ((cardEndMs - lessonEndMs) / totalMs) * 100),
+                      );
+                    }
+                  }
                 }
               }
 
@@ -318,6 +547,11 @@ export function BookingCourtGrid({
                 !!editableLessonId && lessonInfo?.lessonId === editableLessonId;
               const isLessonStartDisplay = isLessonStart && lessonInfo && !isEditableLessonSlot;
               const isLessonContinuationDisplay = isLessonContinuation && !isEditableLessonSlot;
+
+              // Hour row occupied by an event card rendered on a prior row
+              const hourRowOccupiedByOverlay =
+                displayGranularity === "1h" &&
+                (isContinuationSlot || isBlockContinuation || isSchedContinuation || isLessonContinuationDisplay);
 
               return (
                 <div
@@ -329,12 +563,13 @@ export function BookingCourtGrid({
                       !isBlockContinuation &&
                       !isSchedContinuation &&
                       !isLessonContinuationDisplay &&
+                      !hourRowOccupiedByOverlay &&
                       "border-b border-b-neutral-800/30",
                     isPast && "bg-neutral-950/40",
                   )}
                   style={{ height: ROW_H }}
                 >
-                  {isFirstSlotOfBooking ? (
+                  {isFirstSlotOfBooking && booking ? (
                     <div
                       onClick={() => booking.status === "confirmed" && onBookingClick?.(booking)}
                       className={cn(
@@ -360,6 +595,10 @@ export function BookingCourtGrid({
                     </div>
                   ) : isContinuationSlot ? null : isBlockStart && blockInfo ? (
                     <div
+                      role={onBlockClick ? "button" : undefined}
+                      tabIndex={onBlockClick ? 0 : undefined}
+                      onClick={onBlockClick ? () => onBlockClick(blockInfo.blockId) : undefined}
+                      onKeyDown={onBlockClick ? (e) => { if (e.key === "Enter" || e.key === " ") onBlockClick(blockInfo.blockId); } : undefined}
                       className={cn(
                         "absolute inset-x-1 top-1 rounded-lg border px-2 py-1.5 overflow-hidden flex flex-col justify-center z-[5]",
                         blockInfo.type === "maintenance" && "bg-neutral-600/20 border-neutral-500/30",
@@ -367,6 +606,7 @@ export function BookingCourtGrid({
                         blockInfo.type === "private_competition" && "bg-orange-600/20 border-orange-500/30",
                         blockInfo.type === "open_play" && "bg-emerald-600/20 border-emerald-500/30",
                         blockInfo.type === "competition" && "bg-blue-600/20 border-blue-500/30",
+                        onBlockClick && "cursor-pointer hover:brightness-125 transition-[filter]",
                       )}
                       style={{ height: ROW_H * blockSpan - 8 }}
                     >
@@ -428,29 +668,92 @@ export function BookingCourtGrid({
                       </div>
                     </div>
                   ) : isSchedContinuation ? null : isLessonStartDisplay && lessonInfo ? (
-                    <div
-                      className="absolute inset-x-1 top-1 rounded-lg border bg-teal-600/20 border-teal-500/30 px-2 py-1.5 overflow-hidden flex flex-col justify-center z-[5]"
-                      style={{ height: ROW_H * lessonSpan - 8 }}
-                    >
-                      <div className="flex items-center gap-1">
-                        <GraduationCap className="h-3 w-3 text-teal-400 shrink-0" />
-                        <p className="text-xs font-semibold text-teal-200 truncate">
-                          {lessonInfo.coachName}
-                        </p>
-                      </div>
-                      <p className="text-[10px] text-teal-400/70 truncate">
-                        {lessonInfo.playerName} — {lessonInfo.lessonType === "private" ? "Private" : "Group"}
-                      </p>
-                      {lessonSpan > 1 && (
-                        <p className="text-[10px] text-teal-400/50 truncate">{lessonInfo.packageName}</p>
-                      )}
-                    </div>
+                    (() => {
+                      const hasPartialPadding = lessonPadTopPct > 0 || lessonPadBottomPct > 0;
+                      const lessonCardClasses = cn(
+                        "flex flex-col justify-center px-2 overflow-hidden",
+                        "rounded-lg border bg-teal-600/20 border-teal-500/30",
+                        onLessonClick && "cursor-pointer hover:bg-teal-600/30 transition-colors",
+                      );
+                      const lessonContent = (
+                        <>
+                          <div className="flex items-center gap-1">
+                            <GraduationCap className="h-3 w-3 text-teal-400 shrink-0" />
+                            <p className="text-xs font-semibold text-teal-200 truncate">
+                              {lessonInfo.coachName}
+                            </p>
+                          </div>
+                          {lessonStartTime && lessonEndTime && (
+                            <p className="text-[10px] text-teal-400/70">
+                              {formatTime(lessonStartTime, timezone)} –{" "}
+                              {formatTime(lessonEndTime, timezone)}
+                            </p>
+                          )}
+                          <p className="text-[10px] text-teal-400/70 truncate">
+                            {lessonInfo.playerName} — {lessonInfo.lessonType === "private" ? "Private" : "Group"}
+                          </p>
+                          {lessonSpan > 1 && !hasPartialPadding && (
+                            <p className="text-[10px] text-teal-400/50 truncate">{lessonInfo.packageName}</p>
+                          )}
+                        </>
+                      );
+
+                      return (
+                        <div
+                          role={onLessonClick ? "button" : undefined}
+                          tabIndex={onLessonClick ? 0 : undefined}
+                          onClick={onLessonClick ? () => onLessonClick(lessonInfo.lessonId) : undefined}
+                          onKeyDown={
+                            onLessonClick
+                              ? (e) => {
+                                  if (e.key === "Enter" || e.key === " ") onLessonClick(lessonInfo.lessonId);
+                                }
+                              : undefined
+                          }
+                          className="absolute inset-x-1 top-1 z-[5]"
+                          style={{ height: ROW_H * lessonSpan - 8 }}
+                        >
+                          {hasPartialPadding ? (
+                            <>
+                              {lessonPadTopPct > 0 && (
+                                <div
+                                  aria-hidden
+                                  className="absolute inset-x-0 top-0 rounded-lg border border-dashed border-neutral-700/40 bg-neutral-900/30"
+                                  style={{ height: `calc(${lessonPadTopPct}% - 2px)` }}
+                                />
+                              )}
+                              {lessonPadBottomPct > 0 && (
+                                <div
+                                  aria-hidden
+                                  className="absolute inset-x-0 bottom-0 rounded-lg border border-dashed border-neutral-700/40 bg-neutral-900/30"
+                                  style={{ height: `calc(${lessonPadBottomPct}% - 2px)` }}
+                                />
+                              )}
+                              <div
+                                className={lessonCardClasses}
+                                style={{
+                                  position: "absolute",
+                                  left: 0,
+                                  right: 0,
+                                  top: `${lessonPadTopPct}%`,
+                                  bottom: `${lessonPadBottomPct}%`,
+                                }}
+                              >
+                                {lessonContent}
+                              </div>
+                            </>
+                          ) : (
+                            <div className={cn(lessonCardClasses, "h-full")}>{lessonContent}</div>
+                          )}
+                        </div>
+                      );
+                    })()
                   ) : isLessonContinuationDisplay ? null : isPast ? (
                     // Past slot — dark, not clickable
                     <div className="absolute inset-x-1 top-1 bottom-1 rounded-lg bg-neutral-900/60" />
                   ) : courtSlot?.available || isEditableLessonSlot ? (
                     <button
-                      onClick={() => onSlotClick?.(court.courtId, court.courtLabel, courtSlot)}
+                      onClick={() => onSlotClick?.(court.courtId, court.courtLabel, courtSlot!)}
                       className={cn(
                         "absolute inset-x-1 top-1 bottom-1 rounded-lg border flex flex-col items-center justify-center gap-0.5 transition-colors",
                         isSlotSelected(court.courtId, slot.startTime)
@@ -459,10 +762,14 @@ export function BookingCourtGrid({
                       )}
                     >
                       <span className="text-[10px] font-medium leading-none">
-                        {fmtPrice(courtSlot.priceValue)}
+                        {fmtPrice(
+                          displayGranularity === "1h"
+                            ? courtSlot!.priceValue * 2
+                            : courtSlot!.priceValue
+                        )}
                       </span>
                     </button>
-                  ) : (
+                  ) : hourRowOccupiedByOverlay ? null : (
                     <div className="absolute inset-x-1 top-1 bottom-1 rounded-lg bg-neutral-800/20" />
                   )}
                 </div>

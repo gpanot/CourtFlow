@@ -9,7 +9,6 @@ import { useSessionStore } from "@/stores/session-store";
 import { cn } from "@/lib/cn";
 import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
 import {
-  EditBookingModal,
   BookingStatusBadge,
   PaymentStatusBadge,
 } from "@/components/admin/EditBookingModal";
@@ -47,7 +46,7 @@ import {
   PaymentActionModal,
   type PaymentActionTarget,
 } from "@/components/admin/PaymentActionModal";
-import { StaffBookingModal, type InitialCourtSelection } from "@/components/admin/StaffBookingModal";
+import { StaffBookingModal, type InitialCourtSelection, type EditCourtBooking, type EditLessonBooking } from "@/components/admin/StaffBookingModal";
 import { VenueDayPlanner } from "@/components/admin/VenueDayPlanner";
 import { type CourtSlot } from "@/components/admin/BookingCourtGrid";
 import {
@@ -280,12 +279,8 @@ export default function BookingsPage() {
   const [showStaffModal, setShowStaffModal] = useState(false);
   const [staffModalMode, setStaffModalMode] = useState<"court" | "open_play" | "lesson">("court");
   const [staffModalInitialSelection, setStaffModalInitialSelection] = useState<InitialCourtSelection | undefined>();
-
-  // Edit booking state
-  const [editBooking, setEditBooking] = useState<BookingRecord | null>(null);
-  const [editCourtId, setEditCourtId] = useState("");
-  const [editSlotTime, setEditSlotTime] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [editBookingTarget, setEditBookingTarget] = useState<EditCourtBooking | null>(null);
+  const [editLessonTarget, setEditLessonTarget] = useState<EditLessonBooking | null>(null);
 
   const [paymentActionTarget, setPaymentActionTarget] = useState<PaymentActionTarget | null>(null);
 
@@ -305,6 +300,7 @@ export default function BookingsPage() {
   const [courtBlocks, setCourtBlocks] = useState<CourtBlockRecord[]>([]);
   const [showBlockModal, setShowBlockModal] = useState(false);
   const [blockModalInitial, setBlockModalInitial] = useState<Partial<CourtBlockFormState>>();
+  const [editBlockId, setEditBlockId] = useState<string | undefined>();
 
   const fetchVenues = useCallback(async () => {
     try {
@@ -422,6 +418,8 @@ export default function BookingsPage() {
   });
 
   const openStaffModal = (mode: "court" | "open_play" | "lesson", courtSelection?: InitialCourtSelection) => {
+    setEditBookingTarget(null);
+    setEditLessonTarget(null);
     setStaffModalMode(mode);
     setStaffModalInitialSelection(courtSelection);
     setShowStaffModal(true);
@@ -430,7 +428,50 @@ export default function BookingsPage() {
   const closeStaffModal = () => {
     setShowStaffModal(false);
     setStaffModalInitialSelection(undefined);
+    setEditBookingTarget(null);
+    setEditLessonTarget(null);
     clearSelection();
+  };
+
+  const bookingToEditTarget = (booking: BookingRecord): EditCourtBooking => ({
+    id: booking.id,
+    courtId: booking.courtId,
+    courtLabel: booking.court.label,
+    date: booking.date,
+    startTime: booking.startTime,
+    endTime: booking.endTime,
+    status: booking.status,
+    player: { id: booking.player.id, name: booking.player.name, phone: booking.player.phone },
+  });
+
+  const openEditModal = (booking: BookingRecord) => {
+    setEditLessonTarget(null);
+    setEditBookingTarget(bookingToEditTarget(booking));
+    setStaffModalInitialSelection(undefined);
+    setStaffModalMode("court");
+    setShowStaffModal(true);
+  };
+
+  const openEditLesson = (lesson: CoachLessonRecord) => {
+    if (!lesson.courtId) return;
+    setEditBookingTarget(null);
+    setEditLessonTarget({
+      id: lesson.id,
+      courtId: lesson.courtId,
+      courtLabel: lesson.court?.label ?? "",
+      date: lesson.date.split("T")[0],
+      startTime: lesson.startTime,
+      endTime: lesson.endTime,
+      status: lesson.status,
+      coachId: lesson.coachId,
+      packageId: lesson.packageId,
+      playerCount: lesson.playerCount,
+      note: lesson.note,
+      player: { id: lesson.player.id, name: lesson.player.name, phone: lesson.player.phone },
+    });
+    setStaffModalInitialSelection(undefined);
+    setStaffModalMode("lesson");
+    setShowStaffModal(true);
   };
 
   const selectionCourtIds = Object.keys(selectedSlots);
@@ -453,32 +494,16 @@ export default function BookingsPage() {
 
   const openBlockFromSelection = (presetType?: string) => {
     if (!selectionSummary) return;
+    setEditBlockId(undefined);
     setBlockModalInitial({
       type: presetType || "maintenance",
       title: "",
       note: "",
       courtIds: [...selectionCourtIds],
-      startHour: String(selectionSummary.startHour),
-      endHour: String(selectionSummary.endHour),
+      startHour: selectionSummary.startTime,
+      endHour: selectionSummary.endTime,
     });
     setShowBlockModal(true);
-  };
-
-  const getSlotPrice = (courtId: string, startTime: string): number | null => {
-    const court = availability.find((c) => c.courtId === courtId);
-    if (!court) return null;
-    const slot = court.slots.find((s) => s.startTime === startTime);
-    return slot?.priceValue ?? null;
-  };
-
-  const openEditModal = (booking: BookingRecord) => {
-    setEditBooking(booking);
-    setEditCourtId(booking.courtId);
-    setEditSlotTime(booking.startTime);
-  };
-
-  const closeEditModal = () => {
-    setEditBooking(null);
   };
 
   useEffect(() => {
@@ -504,9 +529,7 @@ export default function BookingsPage() {
         if (cancelled || deepLinkHandled.current) return;
         deepLinkHandled.current = true;
         setActiveTab("bookings");
-        setEditBooking(booking);
-        setEditCourtId(booking.courtId);
-        setEditSlotTime(booking.startTime);
+        openEditModal(booking);
         router.replace("/admin/bookings", { scroll: false });
       })
       .catch(() => {});
@@ -515,24 +538,6 @@ export default function BookingsPage() {
       cancelled = true;
     };
   }, [searchParams, selectedVenueId, selectedDate, setSelectedVenueId, router]);
-
-  const saveEdit = async () => {
-    if (!editBooking) return;
-    const changed = editCourtId !== editBooking.courtId || editSlotTime !== editBooking.startTime;
-    if (!changed) { closeEditModal(); return; }
-    setSaving(true);
-    try {
-      await api.patch(`/api/staff/bookings/${editBooking.id}`, {
-        courtId: editCourtId,
-        date: selectedDate,
-        startTime: editSlotTime,
-      });
-      closeEditModal();
-      await fetchBookings();
-      await fetchAvailability();
-    } catch (e) { alert((e as Error).message); }
-    finally { setSaving(false); }
-  };
 
   const cancelBooking = async (id: string) => {
     if (!confirm("Cancel this booking?")) return;
@@ -553,6 +558,7 @@ export default function BookingsPage() {
   };
 
   const openBlockModal = (presetType?: string) => {
+    setEditBlockId(undefined);
     setBlockModalInitial({
       type: presetType || "maintenance",
       title: "",
@@ -564,6 +570,21 @@ export default function BookingsPage() {
     setShowBlockModal(true);
   };
 
+  const openEditBlock = (blockId: string) => {
+    const block = courtBlocks.find((b) => b.id === blockId);
+    if (!block) return;
+    setEditBlockId(blockId);
+    setBlockModalInitial({
+      type: block.type,
+      title: block.title ?? "",
+      note: block.note ?? "",
+      courtIds: block.courtIds,
+      startHour: block.startTime,
+      endHour: block.endTime,
+    });
+    setShowBlockModal(true);
+  };
+
   const deleteBlock = async (id: string) => {
     if (!confirm("Remove this court block?")) return;
     try {
@@ -571,17 +592,6 @@ export default function BookingsPage() {
       await fetchAvailability();
       await fetchCourtBlocks();
     } catch (e) { alert((e as Error).message); }
-  };
-
-  const availableSlotsForCourt = (courtId: string, excludeStartTime?: string): SlotInfo[] => {
-    const court = availability.find((c) => c.courtId === courtId);
-    if (!court) return [];
-    return court.slots.filter((s) => {
-      if (!s.available && s.startTime !== excludeStartTime) return false;
-      const booked = bookingsByCourtAndTime.has(`${courtId}_${s.startTime}`);
-      if (booked && s.startTime !== excludeStartTime) return false;
-      return true;
-    });
   };
 
   return (
@@ -664,6 +674,11 @@ export default function BookingsPage() {
             showBookable
             readOnly
           />
+          <GeneralSettingsSection
+            venueId={selectedVenueId}
+            settings={venueDetails.settings}
+            onRefresh={fetchVenueDetails}
+          />
           <BookingConfigSection
             venueId={selectedVenueId}
             settings={venueDetails.settings}
@@ -713,6 +728,11 @@ export default function BookingsPage() {
         onBookingClick={(b) => {
           const full = bookings.find((x) => x.id === b.id);
           if (full) openEditModal(full);
+        }}
+        onBlockClick={openEditBlock}
+        onLessonClick={(lessonId) => {
+          const lesson = coachLessons.find((l) => l.id === lessonId);
+          if (lesson) openEditLesson(lesson);
         }}
         blockTypeLabel={getBlockTypeLabel}
         toolbarExtra={
@@ -810,6 +830,7 @@ export default function BookingsPage() {
                           type: "booking",
                           entityId: b.id,
                           playerName: b.player.name,
+                          playerPhone: b.player.phone,
                           detail: b.court.label,
                           date: b.date,
                           startTime: b.startTime,
@@ -868,6 +889,7 @@ export default function BookingsPage() {
                           type: "openplay",
                           entityId: r.id,
                           playerName: r.player.name,
+                          playerPhone: r.player.phone,
                           detail: "Open Play",
                           date: r.date,
                           startTime: r.startTime,
@@ -929,6 +951,7 @@ export default function BookingsPage() {
                           type: "lesson",
                           entityId: lesson.id,
                           playerName: lesson.player.name,
+                          playerPhone: lesson.player.phone,
                           detail: `${lesson.coach.name}${lesson.court ? ` · ${lesson.court.label}` : ""}`,
                           date: lesson.date,
                           startTime: lesson.startTime,
@@ -1058,9 +1081,11 @@ export default function BookingsPage() {
         <StaffBookingModal
           venueId={selectedVenueId}
           initialDate={selectedDate}
-          allowModes={["court", "open_play", "lesson"]}
+          allowModes={editBookingTarget ? ["court"] : editLessonTarget ? ["lesson"] : ["court", "open_play", "lesson"]}
           initialMode={staffModalMode}
           initialCourtSelection={staffModalInitialSelection}
+          editBooking={editBookingTarget ?? undefined}
+          editLesson={editLessonTarget ?? undefined}
           onClose={closeStaffModal}
           onCreated={async () => {
             closeStaffModal();
@@ -1087,30 +1112,11 @@ export default function BookingsPage() {
         />
       )}
 
-      {/* Edit Booking Modal */}
-      {editBooking && (
-        <EditBookingModal
-          booking={editBooking}
-          availability={availability}
-          editCourtId={editCourtId}
-          editSlotTime={editSlotTime}
-          saving={saving}
-          onCourtChange={(id) => { setEditCourtId(id); setEditSlotTime(""); }}
-          onSlotChange={setEditSlotTime}
-          onSave={saveEdit}
-          onClose={closeEditModal}
-          getSlotPrice={getSlotPrice}
-          availableSlotsForCourt={availableSlotsForCourt}
-          formatTime={formatTime}
-          formatPrice={fmtPrice}
-          t={t}
-        />
-      )}
-
       <CourtBlockModal
         open={showBlockModal}
         onClose={() => {
           setShowBlockModal(false);
+          setEditBlockId(undefined);
           clearSelection();
         }}
         venueId={selectedVenueId}
@@ -1118,14 +1124,133 @@ export default function BookingsPage() {
         timezone={venueTimezone}
         availability={availability}
         initialForm={blockModalInitial}
+        editBlockId={editBlockId}
         onCreated={async () => {
           await fetchAvailability();
           await fetchCourtBlocks();
           clearSelection();
         }}
+        onDeleted={async () => {
+          setEditBlockId(undefined);
+          await fetchAvailability();
+          await fetchCourtBlocks();
+        }}
       />
 
       
+    </div>
+  );
+}
+
+/* ───────── General Settings ───────── */
+
+function GeneralSettingsSection({
+  venueId,
+  settings,
+  onRefresh,
+}: {
+  venueId: string;
+  settings: VenueSettings;
+  onRefresh: () => void;
+}) {
+  const { t } = useTranslation("translation", { i18n: adminI18n });
+  const parsed = parseCfg(settings);
+  const [allow30Min, setAllow30Min] = useState(parsed.allow30MinBookings);
+  const [defaultDuration, setDefaultDuration] = useState(parsed.defaultDurationMinutes);
+  const [maxDuration, setMaxDuration] = useState(parsed.maxDurationMinutes);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+
+  useEffect(() => {
+    const p = parseCfg(settings);
+    setAllow30Min(p.allow30MinBookings);
+    setDefaultDuration(p.defaultDurationMinutes);
+    setMaxDuration(p.maxDurationMinutes);
+    setDirty(false);
+  }, [settings]);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const full = parseCfg(settings);
+      await api.put(`/api/admin/venues/${venueId}/booking-config`, {
+        ...full,
+        allow30MinBookings: allow30Min,
+        defaultDurationMinutes: defaultDuration,
+        maxDurationMinutes: maxDuration,
+      });
+      setDirty(false);
+      await onRefresh();
+    } catch (e) { alert((e as Error).message); }
+    finally { setSaving(false); }
+  };
+
+  const inputCls = "w-full rounded border border-neutral-700 bg-neutral-800 px-2 py-1.5 text-xs text-white focus:border-purple-500 focus:outline-none";
+
+  return (
+    <div className="space-y-4">
+      <h4 className="flex items-center gap-2 text-sm font-medium text-neutral-400 uppercase tracking-wider">
+        <Settings className="h-4 w-4" /> {t("bookings.generalSettings")}
+      </h4>
+      <div className="rounded-lg border border-neutral-800 bg-neutral-800/30 p-3 space-y-3">
+        {/* Allow 30-min bookings toggle */}
+        <label className="flex items-center gap-3 cursor-pointer">
+          <button
+            role="switch"
+            aria-checked={allow30Min}
+            onClick={() => { setAllow30Min(!allow30Min); setDirty(true); }}
+            className={cn(
+              "relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors focus:outline-none",
+              allow30Min ? "bg-purple-600" : "bg-neutral-600"
+            )}
+          >
+            <span className={cn("pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow transition-transform", allow30Min ? "translate-x-4" : "translate-x-0")} />
+          </button>
+          <span className="text-xs text-neutral-300">{t("bookings.allow30MinBookings")}</span>
+        </label>
+        <p className="text-[10px] text-neutral-500">{t("bookings.allow30MinBookingsHint")}</p>
+
+        {/* Duration fields */}
+        <div className="grid grid-cols-2 gap-3 pt-1">
+          <div>
+            <label className="text-[10px] text-neutral-500 block mb-1">{t("bookings.defaultDurationMin")}</label>
+            <select
+              value={defaultDuration}
+              onChange={(e) => { setDefaultDuration(Number(e.target.value)); setDirty(true); }}
+              className={inputCls}
+            >
+              {allow30Min && <option value={30}>30 min</option>}
+              <option value={60}>60 min (1h)</option>
+              <option value={90}>90 min (1h30)</option>
+              <option value={120}>120 min (2h)</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] text-neutral-500 block mb-1">{t("bookings.maxDurationMin")}</label>
+            <select
+              value={maxDuration}
+              onChange={(e) => { setMaxDuration(Number(e.target.value)); setDirty(true); }}
+              className={inputCls}
+            >
+              <option value={60}>60 min (1h)</option>
+              <option value={120}>120 min (2h)</option>
+              <option value={180}>180 min (3h)</option>
+              <option value={240}>240 min (4h)</option>
+              <option value={360}>360 min (6h)</option>
+              <option value={480}>480 min (8h)</option>
+            </select>
+          </div>
+        </div>
+        {dirty && (
+          <button
+            onClick={save}
+            disabled={saving}
+            className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-purple-500 disabled:opacity-40"
+          >
+            <Save className="h-3 w-3" /> {saving ? t("common.saving") : t("common.save")}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -1168,6 +1293,9 @@ function parseCfg(settings: VenueSettings) {
       0,
     pricingRules,
     cancellationHours: (raw.cancellationHours as number) ?? 24,
+    allow30MinBookings: (raw.allow30MinBookings as boolean) ?? false,
+    defaultDurationMinutes: (raw.defaultDurationMinutes as number) ?? 60,
+    maxDurationMinutes: (raw.maxDurationMinutes as number) ?? 480,
   };
 }
 
@@ -1296,11 +1424,7 @@ function BookingConfigSection({
       <div className="space-y-4">
         <div className="space-y-3 rounded-lg border border-neutral-800 bg-neutral-800/30 p-3">
           <p className="text-xs font-medium text-neutral-300">{t("bookings.general")}</p>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-            <div>
-              <label className="text-[10px] text-neutral-500">{t("bookings.slotMin")}</label>
-              <input type="number" value={bCfg.slotDurationMinutes} onChange={(e) => { setBCfg({ ...bCfg, slotDurationMinutes: Number(e.target.value) }); setDirty(true); }} className={inputCls} />
-            </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <div>
               <label className="text-[10px] text-neutral-500">{t("bookings.openHour")}</label>
               <input type="number" min={0} max={23} value={bCfg.bookingStartHour} onChange={(e) => { setBCfg({ ...bCfg, bookingStartHour: Number(e.target.value) }); setDirty(true); }} className={inputCls} />
@@ -2060,6 +2184,7 @@ function AllBookingsTab({
                             type: "booking",
                             entityId: row.id,
                             playerName: row.player.name,
+                            playerPhone: row.player.phone,
                             detail: row.court.label,
                             date: row.startTime,
                             startTime: row.startTime,

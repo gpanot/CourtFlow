@@ -14,7 +14,7 @@
  * The right-panel court-grid is only shown for "lesson" and "court" modes.
  */
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import adminI18n from "@/i18n/admin-i18n";
 import { api } from "@/lib/api-client";
@@ -33,7 +33,15 @@ import {
   Calendar,
 } from "lucide-react";
 import { hasGroupPlayerPricing, calculateSessionPrice } from "@/lib/coach-package-pricing";
-import { BookingCourtGrid, type CourtSlot, type CourtAvailability } from "@/components/admin/BookingCourtGrid";
+import { BookingCourtGrid, type CourtSlot, type CourtAvailability, type BookingRecord } from "@/components/admin/BookingCourtGrid";
+import { BookingStatusBadge } from "@/components/admin/EditBookingModal";
+import {
+  cellsPerLesson,
+  lessonSessionCount,
+  validateLessonSelection,
+  fmtLessonDuration,
+  fmtLessonSummary,
+} from "@/lib/lesson-slot-selection";
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
@@ -79,6 +87,34 @@ export interface InitialCourtSelection {
   slots: { startTime: string; endTime: string; hour: number }[];
 }
 
+/** When set, modal opens in edit mode for an existing court booking. */
+export interface EditCourtBooking {
+  id: string;
+  courtId: string;
+  courtLabel: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+  player: PlayerResult;
+}
+
+/** When set, modal opens in edit mode for an existing coach lesson. */
+export interface EditLessonBooking {
+  id: string;
+  courtId: string;
+  courtLabel: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+  coachId: string;
+  packageId: string;
+  playerCount: number | null;
+  note: string | null;
+  player: PlayerResult;
+}
+
 export interface StaffBookingModalProps {
   venueId: string;
   initialDate?: string;
@@ -88,6 +124,10 @@ export interface StaffBookingModalProps {
   initialMode?: BookingMode;
   /** Pre-select court slots when opening from the bookings grid. */
   initialCourtSelection?: InitialCourtSelection;
+  /** Edit an existing court booking (court mode only). */
+  editBooking?: EditCourtBooking;
+  /** Edit an existing coach lesson (lesson mode only). */
+  editLesson?: EditLessonBooking;
   onClose: () => void;
   onCreated: () => void;
 }
@@ -111,6 +151,9 @@ function fmtSlotTime(iso: string, tz?: string): string {
 
 const fmtPrice = (n: number) => new Intl.NumberFormat("vi-VN").format(n);
 
+// Re-export for local usage throughout this component
+const fmtDuration = fmtLessonDuration;
+
 // ─── Mode tab labels ───────────────────────────────────────────────────────────
 
 const MODE_LABELS: Record<BookingMode, string> = {
@@ -127,16 +170,33 @@ const MODE_ICONS: Record<BookingMode, React.ComponentType<{ className?: string }
 
 // ─── Main component ────────────────────────────────────────────────────────────
 
+const LESSON_STATUS_LABELS: Record<string, string> = {
+  confirmed: "Confirmed",
+  completed: "Completed",
+  cancelled: "Cancelled",
+  no_show: "No Show",
+};
+
 export function StaffBookingModal({
   venueId,
   initialDate,
   allowModes = ["court", "open_play", "lesson"],
   initialMode,
   initialCourtSelection,
+  editBooking,
+  editLesson,
   onClose,
   onCreated,
 }: StaffBookingModalProps) {
   const { t } = useTranslation("translation", { i18n: adminI18n });
+  const isCourtEditMode = !!editBooking;
+  const isLessonEditMode = !!editLesson;
+  const isEditMode = isCourtEditMode || isLessonEditMode;
+  const effectiveAllowModes: BookingMode[] = isCourtEditMode
+    ? ["court"]
+    : isLessonEditMode
+      ? ["lesson"]
+      : allowModes;
 
   const getBlockTypeLabel = (type: string) => {
     const keys: Record<string, string> = {
@@ -150,8 +210,13 @@ export function StaffBookingModal({
     return key ? t(key) : type;
   };
 
-  const [mode, setMode] = useState<BookingMode>(initialMode ?? allowModes[0]);
-  const [bookDate, setBookDate] = useState(initialDate ?? localDateISO(new Date()));
+  const [mode, setMode] = useState<BookingMode>(
+    isCourtEditMode ? "court" : isLessonEditMode ? "lesson" : (initialMode ?? allowModes[0]),
+  );
+  const editDateKey = (editBooking?.date ?? editLesson?.date)?.split("T")[0];
+  const [bookDate, setBookDate] = useState(
+    editDateKey ?? initialDate ?? localDateISO(new Date()),
+  );
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [venueTimezone, setVenueTimezone] = useState<string | undefined>(undefined);
@@ -159,13 +224,29 @@ export function StaffBookingModal({
   // Availability (used for court + lesson modes)
   const [availability, setAvailability] = useState<CourtAvailability[]>([]);
   const [loadingAvail, setLoadingAvail] = useState(false);
+  const [gridBookings, setGridBookings] = useState<BookingRecord[]>([]);
 
   // Selected player
-  const [selectedPlayer, setSelectedPlayer] = useState<PlayerResult | null>(null);
+  const [selectedPlayer, setSelectedPlayer] = useState<PlayerResult | null>(
+    editBooking?.player ?? editLesson?.player ?? null,
+  );
   const [playerSearch, setPlayerSearch] = useState("");
   const [playerResults, setPlayerResults] = useState<PlayerResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [showNewPlayerModal, setShowNewPlayerModal] = useState(false);
+
+  // Grid granularity toggle — uses the same localStorage key as VenueDayPlanner
+  // (viewModeStorageKey="bookings-view-mode" → key = "bookings-view-mode-granularity")
+  const GRANULARITY_KEY = "bookings-view-mode-granularity";
+  const [gridGranularity, setGridGranularity] = useState<"30min" | "1h">(() => {
+    if (typeof window === "undefined") return "1h";
+    const stored = localStorage.getItem(GRANULARITY_KEY);
+    return stored === "30min" || stored === "1h" ? stored : "1h";
+  });
+  const toggleGranularity = (g: "30min" | "1h") => {
+    setGridGranularity(g);
+    if (typeof window !== "undefined") localStorage.setItem(GRANULARITY_KEY, g);
+  };
 
   // Court mode state
   const [selectedCourtId, setSelectedCourtId] = useState(initialCourtSelection?.courtId ?? "");
@@ -184,10 +265,11 @@ export function StaffBookingModal({
 
   // Lesson mode state
   const [coaches, setCoaches] = useState<Coach[]>([]);
-  const [lessonCoachId, setLessonCoachId] = useState("");
-  const [lessonPackageId, setLessonPackageId] = useState("");
-  const [lessonNote, setLessonNote] = useState("");
-  const [lessonPlayerCount, setLessonPlayerCount] = useState(2);
+  const [lessonCoachId, setLessonCoachId] = useState(editLesson?.coachId ?? "");
+  const [lessonPackageId, setLessonPackageId] = useState(editLesson?.packageId ?? "");
+  const [lessonNote, setLessonNote] = useState(editLesson?.note ?? "");
+  const [lessonPlayerCount, setLessonPlayerCount] = useState(editLesson?.playerCount ?? 2);
+  const [lessonStatus, setLessonStatus] = useState(editLesson?.status ?? "confirmed");
 
   type SelectedSlot = { courtId: string; courtLabel: string; startTime: string; endTime: string; hour: number };
   const [selectedSlots, setSelectedSlots] = useState<SelectedSlot[]>(() => {
@@ -206,16 +288,19 @@ export function StaffBookingModal({
       .catch(() => {});
   }, [venueId]);
 
-  // Fetch availability for court + lesson modes
+  // Fetch availability + existing bookings for court + lesson modes
   const fetchAvailability = useCallback(async (date: string) => {
     setLoadingAvail(true);
     try {
-      const data = await api.get<CourtAvailability[]>(
-        `/api/bookings/availability?venueId=${venueId}&date=${date}`
-      );
-      setAvailability(data);
+      const [availData, bookingsData] = await Promise.all([
+        api.get<CourtAvailability[]>(`/api/bookings/availability?venueId=${venueId}&date=${date}`),
+        api.get<BookingRecord[]>(`/api/staff/bookings?venueId=${venueId}&date=${date}`),
+      ]);
+      setAvailability(availData);
+      setGridBookings(bookingsData);
     } catch {
       setAvailability([]);
+      setGridBookings([]);
     } finally {
       setLoadingAvail(false);
     }
@@ -224,6 +309,72 @@ export function StaffBookingModal({
   useEffect(() => {
     if (mode !== "open_play") fetchAvailability(bookDate);
   }, [bookDate, fetchAvailability, mode]);
+
+  // When editing, pre-select all 30-min cells covered by the booking/lesson once availability loads.
+  const editSlotsInitFor = useRef<string | null>(null);
+  useEffect(() => {
+    const target = editBooking ?? editLesson;
+    if (!target) {
+      editSlotsInitFor.current = null;
+      return;
+    }
+    if (editSlotsInitFor.current === target.id || availability.length === 0) return;
+    const court = availability.find((c) => c.courtId === target.courtId);
+    if (!court) return;
+    const startMs = new Date(target.startTime).getTime();
+    const endMs = new Date(target.endTime).getTime();
+    const slots = court.slots
+      .filter((s) => {
+        const t = new Date(s.startTime).getTime();
+        return t >= startMs && t < endMs;
+      })
+      .map((s) => ({
+        courtId: target.courtId,
+        courtLabel: target.courtLabel,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        hour: s.hour,
+      }));
+    if (slots.length > 0) {
+      setSelectedCourtId(target.courtId);
+      setSelectedSlots(slots);
+      editSlotsInitFor.current = target.id;
+    }
+  }, [editBooking, editLesson, availability]);
+
+  /** In edit mode, release the booking/lesson's own cells so staff can re-select them. */
+  const gridAvailability = useMemo((): CourtAvailability[] => {
+    const target = editBooking ?? editLesson;
+    if (!target) return availability;
+    const editDate = target.date.split("T")[0];
+    if (bookDate !== editDate) return availability;
+    const startMs = new Date(target.startTime).getTime();
+    const endMs = new Date(target.endTime).getTime();
+    return availability.map((court) => ({
+      ...court,
+      slots: court.slots.map((slot) => {
+        if (court.courtId !== target.courtId) return slot;
+        const t = new Date(slot.startTime).getTime();
+        if (t >= startMs && t < endMs) return { ...slot, available: true };
+        return slot;
+      }),
+    }));
+  }, [availability, editBooking, editLesson, bookDate]);
+
+  const isSlotSelectable = useCallback(
+    (courtId: string, slot: CourtSlot): boolean => {
+      if (slot.available) return true;
+      const target = editBooking ?? editLesson;
+      if (!target) return false;
+      const editDate = target.date.split("T")[0];
+      if (bookDate !== editDate || courtId !== target.courtId) return false;
+      const t = new Date(slot.startTime).getTime();
+      const startMs = new Date(target.startTime).getTime();
+      const endMs = new Date(target.endTime).getTime();
+      return t >= startMs && t < endMs;
+    },
+    [editBooking, editLesson, bookDate],
+  );
 
   // Fetch open play sessions
   const fetchOpenPlay = useCallback(async (date: string) => {
@@ -246,12 +397,12 @@ export function StaffBookingModal({
 
   // Fetch coaches for lesson mode
   useEffect(() => {
-    if (mode === "lesson" && coaches.length === 0) {
+    if ((mode === "lesson" || editLesson) && coaches.length === 0) {
       api.get<Coach[]>(`/api/admin/coaches?venueId=${venueId}`)
         .then(setCoaches)
         .catch(() => {});
     }
-  }, [mode, venueId, coaches.length]);
+  }, [mode, editLesson, venueId, coaches.length]);
 
   // Player search
   const searchPlayers = useCallback(async (q: string) => {
@@ -286,7 +437,8 @@ export function StaffBookingModal({
 
   // ─── Court booking ─────────────────────────────────────────────────────────
 
-  const MAX_COURT_SLOTS = 4;
+  // Max selectable 30-min cells — derived from venue config (default 8 h = 16 cells)
+  const MAX_COURT_SLOTS = 16; // default; no venue config here, server enforces the real limit
 
   // Total price across all selected court slots
   const courtSelectionPrice = selectedSlots.reduce((sum, s) => {
@@ -305,14 +457,35 @@ export function StaffBookingModal({
     setErr("");
     try {
       const first = selectedSlots[0];
-      await api.post("/api/staff/bookings", {
-        courtId: first.courtId,
-        venueId,
-        playerId: selectedPlayer.id,
-        date: bookDate,
-        startTime: first.startTime,
-        slotCount: selectedSlots.length,
-      });
+      if (isCourtEditMode && editBooking) {
+        await api.patch(`/api/staff/bookings/${editBooking.id}`, {
+          courtId: first.courtId,
+          date: bookDate,
+          startTime: first.startTime,
+          slotCount: selectedSlots.length,
+        });
+      } else {
+        await api.post("/api/staff/bookings", {
+          courtId: first.courtId,
+          venueId,
+          playerId: selectedPlayer.id,
+          date: bookDate,
+          startTime: first.startTime,
+          slotCount: selectedSlots.length,
+        });
+      }
+      onCreated();
+    } catch (e) { setErr((e as Error).message); }
+    finally { setSaving(false); }
+  };
+
+  const cancelEditBooking = async () => {
+    if (!editBooking) return;
+    if (!confirm(t("overview.cancelBookingQuestion"))) return;
+    setSaving(true);
+    setErr("");
+    try {
+      await api.patch(`/api/staff/bookings/${editBooking.id}`, { status: "cancelled" });
       onCreated();
     } catch (e) { setErr((e as Error).message); }
     finally { setSaving(false); }
@@ -345,39 +518,48 @@ export function StaffBookingModal({
   const coachPackages = selectedCoach?.packages ?? [];
   const selectedPkg = coachPackages.find((p) => p.id === lessonPackageId);
 
-  const toggleSlot = (courtId: string, courtLabel: string, slot: CourtSlot) => {
-    if (!slot.available) return;
+  /**
+   * Toggle slots atomically. `slots` can be a single slot or an array
+   * (used when gridGranularity === "1h" to select 2 cells at once, or
+   * when lesson mode snaps to `cellsPerLesson` cells).
+   */
+  const toggleSlot = (courtId: string, courtLabel: string, slots: CourtSlot | CourtSlot[]) => {
+    const slotsArr = Array.isArray(slots) ? slots : [slots];
+    const primarySlot = slotsArr[0];
+    if (!isSlotSelectable(courtId, primarySlot)) return;
     const maxSlots = mode === "court" ? MAX_COURT_SLOTS : Infinity;
 
-    const already = selectedSlots.find((s) => s.courtId === courtId && s.startTime === slot.startTime);
+    const already = selectedSlots.find((s) => s.courtId === courtId && s.startTime === primarySlot.startTime);
     if (already) {
       // Clicking a selected slot: deselect it and everything after it on this court
-      const slotTime = new Date(slot.startTime).getTime();
+      const slotTime = new Date(primarySlot.startTime).getTime();
       setSelectedSlots(selectedSlots.filter((s) => s.courtId !== courtId || new Date(s.startTime).getTime() < slotTime));
       return;
     }
 
-    // Different court → reset selection on that court
+    // Different court → reset to these slots
     if (selectedSlots.length > 0 && selectedSlots[0].courtId !== courtId) {
-      setSelectedSlots([{ courtId, courtLabel, startTime: slot.startTime, endTime: slot.endTime, hour: slot.hour }]);
+      const newSel = slotsArr.map((s) => ({ courtId, courtLabel, startTime: s.startTime, endTime: s.endTime, hour: s.hour }));
+      setSelectedSlots(newSel);
       if (mode === "court") setSelectedCourtId(courtId);
       return;
     }
 
-    const court = availability.find((c) => c.courtId === courtId);
+    const court = gridAvailability.find((c) => c.courtId === courtId);
     if (!court) return;
 
     if (selectedSlots.length === 0) {
-      setSelectedSlots([{ courtId, courtLabel, startTime: slot.startTime, endTime: slot.endTime, hour: slot.hour }]);
+      const newSel = slotsArr.map((s) => ({ courtId, courtLabel, startTime: s.startTime, endTime: s.endTime, hour: s.hour }));
+      setSelectedSlots(newSel);
       if (mode === "court") setSelectedCourtId(courtId);
       return;
     }
 
-    // Extend selection: fill contiguous range between first selected and clicked slot
+    // Extend selection: fill contiguous range from first selected to last of slotsArr
+    const lastSlot = slotsArr[slotsArr.length - 1];
     const currentTimes = selectedSlots.map((s) => new Date(s.startTime).getTime());
-    const clickedTime = new Date(slot.startTime).getTime();
-    const minTime = Math.min(...currentTimes, clickedTime);
-    const maxTime = Math.max(...currentTimes, clickedTime);
+    const minTime = Math.min(...currentTimes, new Date(primarySlot.startTime).getTime());
+    const maxTime = Math.max(...currentTimes, new Date(lastSlot.startTime).getTime());
 
     const newSlots: SelectedSlot[] = [];
     let consecutive = true;
@@ -385,7 +567,7 @@ export function StaffBookingModal({
       const t = new Date(s.startTime).getTime();
       if (t < minTime) continue;
       if (t > maxTime) break;
-      if (!s.available) { consecutive = false; break; }
+      if (!isSlotSelectable(courtId, s)) { consecutive = false; break; }
       newSlots.push({ courtId, courtLabel, startTime: s.startTime, endTime: s.endTime, hour: s.hour });
     }
 
@@ -400,23 +582,66 @@ export function StaffBookingModal({
       setErr("Coach, package, player, and time slot are required");
       return;
     }
+
+    // Validate that the selected cells are a whole multiple of pkg.durationMin
+    if (selectedPkg) {
+      const validation = validateLessonSelection(selectedPkg, selectedSlots.length);
+      if (!validation.valid) {
+        setErr(validation.errorMsg ?? "Invalid slot selection.");
+        return;
+      }
+    }
+
     setSaving(true);
     setErr("");
     try {
       const first = selectedSlots[0];
       const last = selectedSlots[selectedSlots.length - 1];
-      await api.post("/api/admin/coach-lessons", {
-        venueId,
-        coachId: lessonCoachId,
-        packageId: lessonPackageId,
-        playerId: selectedPlayer.id,
-        courtId: first.courtId,
-        date: bookDate,
-        startTime: first.startTime,
-        endTime: last.endTime,
-        note: lessonNote || undefined,
-        ...(selectedPkg && hasGroupPlayerPricing(selectedPkg) ? { playerCount: lessonPlayerCount } : {}),
-      });
+      const endTime = selectedPkg
+        ? new Date(
+            new Date(first.startTime).getTime() +
+              lessonSessionCount(selectedSlots.length, selectedPkg) * selectedPkg.durationMin * 60 * 1000,
+          ).toISOString()
+        : last.endTime;
+
+      if (isLessonEditMode && editLesson) {
+        await api.patch(`/api/admin/coach-lessons/${editLesson.id}`, {
+          coachId: lessonCoachId,
+          packageId: lessonPackageId,
+          playerId: selectedPlayer!.id,
+          courtId: first.courtId,
+          date: bookDate,
+          startTime: first.startTime,
+          endTime,
+          note: lessonNote || null,
+          status: lessonStatus as "confirmed" | "completed" | "cancelled" | "no_show",
+        });
+      } else {
+        await api.post("/api/admin/coach-lessons", {
+          venueId,
+          coachId: lessonCoachId,
+          packageId: lessonPackageId,
+          playerId: selectedPlayer!.id,
+          courtId: first.courtId,
+          date: bookDate,
+          startTime: first.startTime,
+          endTime,
+          note: lessonNote || undefined,
+          ...(selectedPkg && hasGroupPlayerPricing(selectedPkg) ? { playerCount: lessonPlayerCount } : {}),
+        });
+      }
+      onCreated();
+    } catch (e) { setErr((e as Error).message); }
+    finally { setSaving(false); }
+  };
+
+  const cancelEditLesson = async () => {
+    if (!editLesson) return;
+    if (!confirm(t("coaching.deleteLesson") + "?")) return;
+    setSaving(true);
+    setErr("");
+    try {
+      await api.delete(`/api/admin/coach-lessons/${editLesson.id}`);
       onCreated();
     } catch (e) { setErr((e as Error).message); }
     finally { setSaving(false); }
@@ -462,16 +687,27 @@ export function StaffBookingModal({
           {/* Header with mode tabs */}
           <div className="px-5 pt-5 pb-3 border-b border-neutral-800 space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold">{t("bookings.newBooking")}</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-bold">
+                  {isLessonEditMode
+                    ? t("coaching.editLesson")
+                    : isCourtEditMode
+                      ? t("bookings.editBooking")
+                      : t("bookings.newBooking")}
+                </h3>
+                {isEditMode && (editBooking || editLesson) && (
+                  <BookingStatusBadge status={(editBooking ?? editLesson)!.status} />
+                )}
+              </div>
               <button onClick={onClose} className="text-neutral-400 hover:text-white md:hidden">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             {/* Mode tabs */}
-            {allowModes.length > 1 && (
+            {effectiveAllowModes.length > 1 && (
               <div className="flex rounded-lg border border-neutral-700 overflow-hidden">
-                {allowModes.map((m) => {
+                {effectiveAllowModes.map((m) => {
                   const Icon = MODE_ICONS[m];
                   return (
                     <button
@@ -479,7 +715,7 @@ export function StaffBookingModal({
                       onClick={() => switchMode(m)}
                       className={cn(
                         "flex-1 flex items-center justify-center gap-1.5 px-2 py-2 text-xs font-medium transition-colors",
-                        m !== allowModes[0] && "border-l border-neutral-700",
+                        m !== effectiveAllowModes[0] && "border-l border-neutral-700",
                         mode === m
                           ? m === "lesson"
                             ? "bg-teal-600 text-white"
@@ -517,7 +753,7 @@ export function StaffBookingModal({
                   <div className="rounded-lg border border-purple-600/40 bg-purple-600/10 p-3 space-y-0.5">
                     <div className="flex items-center justify-between">
                       <p className="text-xs text-purple-400 font-medium">
-                        {selectedSlots.length} slot{selectedSlots.length > 1 ? "s" : ""} · {selectedSlots.length}h
+                        {selectedSlots.length} slot{selectedSlots.length > 1 ? "s" : ""} · {fmtDuration(selectedSlots.length * 30)}
                       </p>
                       <button
                         type="button"
@@ -631,7 +867,7 @@ export function StaffBookingModal({
                         <option value="">{t("coaching.selectPackage")}</option>
                         {coachPackages.map((p) => (
                           <option key={p.id} value={p.id}>
-                            {p.name} — {fmtPrice(p.priceValue)} VND ({p.durationMin / 60}h)
+                            {p.name} — {fmtPrice(p.priceValue)} VND ({fmtDuration(p.durationMin)})
                           </option>
                         ))}
                       </select>
@@ -677,11 +913,36 @@ export function StaffBookingModal({
                   className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-teal-500 focus:outline-none resize-none"
                 />
 
+                {isLessonEditMode && (
+                  <div>
+                    <label className="mb-1.5 block text-sm text-neutral-400">{t("coaching.status")}</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(["confirmed", "completed", "no_show", "cancelled"] as const).map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setLessonStatus(s)}
+                          className={cn(
+                            "rounded-lg px-3 py-2 text-sm font-medium transition-colors border",
+                            lessonStatus === s
+                              ? "border-teal-500 bg-teal-600/20 text-teal-300"
+                              : "border-neutral-700 bg-neutral-800 text-neutral-400 hover:bg-neutral-700",
+                          )}
+                        >
+                          {LESSON_STATUS_LABELS[s]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Slot summary */}
                 {selectedSlots.length > 0 && (
                   <div className="rounded-lg border border-teal-600/40 bg-teal-600/10 p-3">
                     <p className="text-xs text-teal-400 font-medium mb-1">
-                      {selectedSlots.length} slot{selectedSlots.length > 1 ? "s" : ""} selected ({selectedSlots.length}h)
+                      {selectedPkg
+                        ? fmtLessonSummary(selectedSlots.length, selectedPkg)
+                        : `${selectedSlots.length} slot${selectedSlots.length > 1 ? "s" : ""} selected (${fmtDuration(selectedSlots.length * 30)})`}
                     </p>
                     <p className="text-sm font-semibold">{selectedSlots[0].courtLabel}</p>
                     <p className="text-xs text-neutral-400">
@@ -692,7 +953,7 @@ export function StaffBookingModal({
                         {fmtPrice(
                           hasGroupPlayerPricing(selectedPkg)
                             ? calculateSessionPrice(selectedPkg, { playerCount: lessonPlayerCount, slotCount: selectedSlots.length })
-                            : Math.round((selectedPkg.priceValue / selectedPkg.durationMin) * selectedSlots.length * 60)
+                            : selectedPkg.priceValue
                         )} VND
                       </p>
                     )}
@@ -701,20 +962,22 @@ export function StaffBookingModal({
               </>
             )}
 
-            {/* ── PLAYER SEARCH (all modes) ───────────────────────────────── */}
+            {/* ── PLAYER (create: search; edit: read-only) ─────────────────── */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-sm text-neutral-400">
                   {t("bookings.player")}
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setShowNewPlayerModal(true)}
-                  className="flex items-center gap-1 rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-300 hover:border-purple-500 hover:text-purple-300 transition-colors"
-                >
-                  <UserPlus className="h-3.5 w-3.5" />
-                  New player
-                </button>
+                {!isEditMode && (
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPlayerModal(true)}
+                    className="flex items-center gap-1 rounded-lg border border-neutral-700 bg-neutral-800 px-2.5 py-1 text-xs font-medium text-neutral-300 hover:border-purple-500 hover:text-purple-300 transition-colors"
+                  >
+                    <UserPlus className="h-3.5 w-3.5" />
+                    New player
+                  </button>
+                )}
               </div>
 
               {selectedPlayer ? (
@@ -725,14 +988,16 @@ export function StaffBookingModal({
                   <User className={cn("h-4 w-4", mode === "lesson" ? "text-teal-400" : mode === "open_play" ? "text-emerald-400" : "text-purple-400")} />
                   <span className="flex-1 text-sm">{selectedPlayer.name}</span>
                   <span className="text-xs text-neutral-500">{selectedPlayer.phone}</span>
-                  <button
-                    onClick={() => { setSelectedPlayer(null); setPlayerSearch(""); }}
-                    className="text-neutral-400 hover:text-white"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+                  {!isEditMode && (
+                    <button
+                      onClick={() => { setSelectedPlayer(null); setPlayerSearch(""); }}
+                      className="text-neutral-400 hover:text-white"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
-              ) : (
+              ) : !isEditMode ? (
                 <div className="relative">
                   <div className="flex items-center gap-2 rounded-lg border border-neutral-700 bg-neutral-800 px-3">
                     <Search className="h-4 w-4 text-neutral-500 shrink-0" />
@@ -761,7 +1026,7 @@ export function StaffBookingModal({
                     </div>
                   )}
                 </div>
-              )}
+              ) : null}
             </div>
           </div>
 
@@ -780,13 +1045,35 @@ export function StaffBookingModal({
               )}
             >
               {saving
-                ? "Saving…"
-                : mode === "lesson"
-                  ? t("coaching.bookLesson")
-                  : mode === "open_play"
-                    ? "Register for Open Play"
-                    : t("bookings.book")}
+                ? t("common.saving")
+                : isEditMode
+                  ? t("common.save")
+                  : mode === "lesson"
+                    ? t("coaching.bookLesson")
+                    : mode === "open_play"
+                      ? "Register for Open Play"
+                      : t("bookings.book")}
             </button>
+            {isCourtEditMode && editBooking?.status === "confirmed" && (
+              <button
+                type="button"
+                onClick={cancelEditBooking}
+                disabled={saving}
+                className="w-full rounded-xl border border-red-500/40 py-2.5 text-sm font-medium text-red-400 hover:bg-red-600/10 disabled:opacity-40"
+              >
+                {t("overview.cancelBookingAction")}
+              </button>
+            )}
+            {isLessonEditMode && editLesson && editLesson.status !== "cancelled" && (
+              <button
+                type="button"
+                onClick={cancelEditLesson}
+                disabled={saving}
+                className="w-full rounded-xl border border-red-500/40 py-2.5 text-sm font-medium text-red-400 hover:bg-red-600/10 disabled:opacity-40"
+              >
+                {t("coaching.deleteLesson")}
+              </button>
+            )}
           </div>
         </div>
 
@@ -811,15 +1098,32 @@ export function StaffBookingModal({
                 </div>
                 <span className="text-xs text-neutral-500">
                   {selectedSlots.length > 0
-                    ? `${selectedSlots.length} slot${selectedSlots.length > 1 ? "s" : ""} selected (${selectedSlots.length}h)`
-                    : mode === "court"
-                      ? `Click slots to select (max ${MAX_COURT_SLOTS})`
-                      : "Click slots to select time"}
+                    ? mode === "lesson" && selectedPkg
+                      ? fmtLessonSummary(selectedSlots.length, selectedPkg)
+                      : `${selectedSlots.length} slot${selectedSlots.length > 1 ? "s" : ""} selected (${fmtDuration(selectedSlots.length * 30)})`
+                    : "Click slots to select time"}
                 </span>
               </div>
-              <button onClick={onClose} className="text-neutral-400 hover:text-white hidden md:block">
-                <X className="h-5 w-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Granularity toggle — mirrors VenueDayPlanner */}
+                <div className="flex rounded-lg overflow-hidden border border-neutral-700 text-xs">
+                  <button
+                    onClick={() => toggleGranularity("1h")}
+                    className={`px-2 py-1 ${gridGranularity === "1h" ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400 hover:text-white"}`}
+                  >
+                    1h
+                  </button>
+                  <button
+                    onClick={() => toggleGranularity("30min")}
+                    className={`px-2 py-1 ${gridGranularity === "30min" ? "bg-purple-600 text-white" : "bg-neutral-800 text-neutral-400 hover:text-white"}`}
+                  >
+                    30min
+                  </button>
+                </div>
+                <button onClick={onClose} className="text-neutral-400 hover:text-white hidden md:block">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
 
             {loadingAvail ? (
@@ -829,25 +1133,48 @@ export function StaffBookingModal({
               </div>
             ) : (
               <BookingCourtGrid
-                availability={availability}
+                availability={gridAvailability}
                 date={bookDate}
                 timezone={venueTimezone}
+                bookings={gridBookings}
                 selectedSlots={gridSelectedSlots}
+                displayGranularity={gridGranularity}
                 onSlotClick={(courtId, courtLabel, slot) => {
+                  const court = gridAvailability.find((c) => c.courtId === courtId);
+
+                  // Build the array of cells this click represents:
+                  // - Court / 1h view: 2 cells (1h)
+                  // - Lesson mode: cellsPerLesson cells (snaps to package duration)
+                  // - Otherwise: 1 cell (30min)
+                  let slotsToSelect: CourtSlot[] = [slot];
+                  if (court) {
+                    const clickedIdx = court.slots.findIndex((s) => s.startTime === slot.startTime);
+                    const cellCount =
+                      mode === "lesson" && selectedPkg
+                        ? cellsPerLesson(selectedPkg)
+                        : gridGranularity === "1h" ? 2 : 1;
+                    if (cellCount > 1 && clickedIdx !== -1) {
+                      const extra = court.slots.slice(clickedIdx, clickedIdx + cellCount);
+                      if (extra.length === cellCount) slotsToSelect = extra;
+                    }
+                  }
+
                   if (mode === "court") {
+                    const addCount = slotsToSelect.filter((s) => !gridSelectedSlots[courtId]?.has(s.startTime)).length;
                     const wouldExceedCap =
-                      !gridSelectedSlots[courtId]?.has(slot.startTime) &&
+                      addCount > 0 &&
                       selectedSlots.length > 0 &&
                       selectedSlots[0].courtId === courtId &&
-                      selectedSlots.length >= MAX_COURT_SLOTS;
-                    if (!wouldExceedCap) toggleSlot(courtId, courtLabel, slot);
+                      selectedSlots.length + addCount > MAX_COURT_SLOTS;
+                    if (!wouldExceedCap) toggleSlot(courtId, courtLabel, slotsToSelect);
                   } else {
-                    toggleSlot(courtId, courtLabel, slot);
+                    toggleSlot(courtId, courtLabel, slotsToSelect);
                   }
                 }}
                 compact
                 accentColor={mode === "lesson" ? "teal" : "purple"}
                 blockTypeLabel={getBlockTypeLabel}
+                editableLessonId={editLesson?.id}
               />
             )}
           </div>
@@ -861,17 +1188,19 @@ export function StaffBookingModal({
         )}
       </div>
 
-      {/* New Player modal */}
+      {/* New Player modal — stopPropagation prevents outer backdrop from closing StaffBookingModal */}
       {showNewPlayerModal && (
-        <NewPlayerModal
-          onSuccess={(p) => {
-            setSelectedPlayer(p);
-            setPlayerSearch("");
-            setPlayerResults([]);
-            setShowNewPlayerModal(false);
-          }}
-          onClose={() => setShowNewPlayerModal(false)}
-        />
+        <div onClick={(e) => e.stopPropagation()}>
+          <NewPlayerModal
+            onSuccess={(p) => {
+              setSelectedPlayer(p);
+              setPlayerSearch("");
+              setPlayerResults([]);
+              setShowNewPlayerModal(false);
+            }}
+            onClose={() => setShowNewPlayerModal(false)}
+          />
+        </div>
       )}
     </div>
   );

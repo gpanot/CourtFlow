@@ -5,9 +5,25 @@ import { parseDateKey, toDateKey } from "./date";
 
 export const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
 
+// ─── Grid constant ─────────────────────────────────────────────────────────────
+/**
+ * Internal scheduling granularity — fixed at 30 minutes.
+ * This is NOT configurable per venue. It is the smallest unit of time used for
+ * slot generation, conflict checks, and span calculations.
+ *
+ * Bookable durations are multiples of this value:
+ *   - Min court (player): 60 min (2 cells) unless allow30MinBookings is enabled
+ *   - Min court (staff):  30 min (1 cell) — no restriction
+ *   - Min coach lesson:   60 min (always; coach packages define durationMin)
+ */
+export const GRID_GRANULARITY_MINUTES = 30;
+
+// ─── Types ─────────────────────────────────────────────────────────────────────
+
 /**
  * A pricing rule for a specific day-of-week + hour range.
  * dayOfWeek: 0=Sunday … 6=Saturday (JS Date.getDay() convention).
+ * Prices are per full hour; half-hour slots are priced at 0.5× the hourly rate.
  */
 export interface PricingRule {
   dayOfWeek: number;
@@ -17,12 +33,19 @@ export interface PricingRule {
 }
 
 export interface BookingConfig {
+  /** @deprecated Grid is always 30 min. Kept for backward-compat JSON parsing only. */
   slotDurationMinutes: number;
   bookingStartHour: number;
   bookingEndHour: number;
   defaultPriceValue: number;
   pricingRules: PricingRule[];
   cancellationHours: number;
+  /** Allow bookings shorter than 1 hour (1 cell = 30 min). Default false. */
+  allow30MinBookings: boolean;
+  /** Minimum booking duration in minutes for players. 60 (default) or 30 when allow30Min is on. */
+  defaultDurationMinutes: number;
+  /** Maximum booking duration in minutes. Default 480 (8h). */
+  maxDurationMinutes: number;
 }
 
 export const DEFAULT_BOOKING_CONFIG: BookingConfig = {
@@ -32,6 +55,9 @@ export const DEFAULT_BOOKING_CONFIG: BookingConfig = {
   defaultPriceValue: 0,
   pricingRules: [],
   cancellationHours: 24,
+  allow30MinBookings: false,
+  defaultDurationMinutes: 60,
+  maxDurationMinutes: 480,
 };
 
 export interface ScheduleEntry {
@@ -80,7 +106,12 @@ export const DEFAULT_MEMBERSHIP_CONFIG: MembershipConfig = {
 export interface TimeSlot {
   startTime: string;
   endTime: string;
+  /** Floor hour of the slot start — used for pricing bucket lookup. */
   hour: number;
+  /**
+   * Price for this 30-min cell = 0.5 × hourlyRate(startHour).
+   * Sum selected cell priceValues to get booking total — matches resolveBookingPrice().
+   */
   priceValue: number;
 }
 
@@ -110,6 +141,8 @@ export interface CourtSlot {
   slots: (TimeSlot & { available: boolean; block?: SlotBlockInfo; schedule?: SlotScheduleInfo; lesson?: SlotLessonInfo })[];
 }
 
+// ─── Config helpers ────────────────────────────────────────────────────────────
+
 export function getBookingConfig(venueSettings: Record<string, unknown>): BookingConfig {
   const raw = venueSettings?.bookingConfig as Record<string, unknown> | undefined;
   if (!raw) return DEFAULT_BOOKING_CONFIG;
@@ -137,6 +170,9 @@ export function getBookingConfig(venueSettings: Record<string, unknown>): Bookin
       DEFAULT_BOOKING_CONFIG.defaultPriceValue,
     pricingRules,
     cancellationHours: (raw.cancellationHours as number) ?? DEFAULT_BOOKING_CONFIG.cancellationHours,
+    allow30MinBookings: (raw.allow30MinBookings as boolean) ?? DEFAULT_BOOKING_CONFIG.allow30MinBookings,
+    defaultDurationMinutes: (raw.defaultDurationMinutes as number) ?? DEFAULT_BOOKING_CONFIG.defaultDurationMinutes,
+    maxDurationMinutes: (raw.maxDurationMinutes as number) ?? DEFAULT_BOOKING_CONFIG.maxDurationMinutes,
   };
 }
 
@@ -145,8 +181,10 @@ export function getMembershipConfig(venueSettings: Record<string, unknown>): Mem
   return { ...DEFAULT_MEMBERSHIP_CONFIG, ...cfg };
 }
 
+// ─── Pricing ───────────────────────────────────────────────────────────────────
+
 /**
- * Resolve the price for a slot given the day of week and hour.
+ * Resolve the hourly price for a given day-of-week + hour bucket.
  * Matches the first pricing rule whose range covers `hour`.
  * Falls back to defaultPriceValue if no rule matches.
  */
@@ -160,40 +198,181 @@ export function resolveSlotPrice(config: BookingConfig, dayOfWeek: number, hour:
 }
 
 /**
- * Generate time slots for a given local-midnight date using the venue's local timezone.
- * All hour arithmetic is done in venue-local time so the server's process TZ is irrelevant.
+ * Compute the total price for a booking spanning [startTime, startTime + durationMinutes).
+ *
+ * Pricing rule (half-hour bands):
+ *   Each 30-min cell costs 0.5 × hourlyRate(cellStartHour).
+ *   Example: 18:00–19:30 with 100k@18h + 200k@19h
+ *     → 100k (18:00–19:00) + 0.5×200k (19:00–19:30) = 200k total
+ *
+ * This function is the server-side source of truth for booking prices.
+ * Client-side priceValue on TimeSlot cells (= 0.5 × hourlyRate) should sum to the same result.
+ */
+export function resolveBookingPrice(
+  config: BookingConfig,
+  startTime: Date,
+  durationMinutes: number,
+  venueTimezone: string
+): number {
+  const cells = durationMinutes / GRID_GRANULARITY_MINUTES;
+  let total = 0;
+  for (let i = 0; i < cells; i++) {
+    const cellStart = new Date(startTime.getTime() + i * GRID_GRANULARITY_MINUTES * 60 * 1000);
+    const zonedCell = toZonedTime(cellStart, venueTimezone);
+    const dayOfWeek = zonedCell.getDay();
+    const hour = zonedCell.getHours();
+    total += resolveSlotPrice(config, dayOfWeek, hour) / 2;
+  }
+  return Math.round(total);
+}
+
+// ─── Overlap helper ────────────────────────────────────────────────────────────
+
+/**
+ * Returns true when two half-open intervals [aStart, aEnd) and [bStart, bEnd) overlap.
+ */
+export function intervalsOverlap(aStart: number, aEnd: number, bStart: number, bEnd: number): boolean {
+  return aStart < bEnd && aEnd > bStart;
+}
+
+// ─── Start-time validation ─────────────────────────────────────────────────────
+
+/**
+ * A valid grid start time has local minutes of exactly 0 or 30.
+ * Rejects :15, :45 etc. which would create misaligned 30-min slots.
+ */
+export function isValidGridStartTime(startTime: Date, venueTimezone: string): boolean {
+  const zoned = toZonedTime(startTime, venueTimezone);
+  const min = zoned.getMinutes();
+  return min === 0 || min === 30;
+}
+
+// ─── Duration validation ───────────────────────────────────────────────────────
+
+export type BookingContext = "player" | "staff";
+
+/**
+ * Validate the number of 30-min grid cells selected.
+ *
+ * Player rules:
+ *   - min 2 cells (60 min) by default
+ *   - min 1 cell (30 min) if config.allow30MinBookings
+ *   - max maxDurationMinutes / 30
+ *
+ * Staff rules:
+ *   - min 1 cell (no restriction)
+ *   - max maxDurationMinutes / 30
+ */
+export function validateBookingDuration(
+  config: BookingConfig,
+  gridCellCount: number,
+  context: BookingContext
+): { valid: boolean; error?: string } {
+  const maxCells = Math.floor(config.maxDurationMinutes / GRID_GRANULARITY_MINUTES);
+  const minCells = context === "player" && !config.allow30MinBookings ? 2 : 1;
+
+  if (gridCellCount < minCells) {
+    const minMin = minCells * GRID_GRANULARITY_MINUTES;
+    return { valid: false, error: `Minimum booking duration is ${minMin} minutes` };
+  }
+  if (gridCellCount > maxCells) {
+    return { valid: false, error: `Maximum booking duration is ${config.maxDurationMinutes} minutes` };
+  }
+  return { valid: true };
+}
+
+// ─── Slot generation ───────────────────────────────────────────────────────────
+
+/**
+ * Generate 30-min time slots for a given local-midnight date.
+ *
+ * Grid granularity is always GRID_GRANULARITY_MINUTES (30).
+ * Each cell priceValue = 0.5 × hourlyRate so summing cells equals resolveBookingPrice().
+ * No slot is emitted when the cell would extend past bookingEndHour.
  */
 function generateTimeSlots(localMidnight: Date, config: BookingConfig, venueTimezone: string): TimeSlot[] {
-  // Convert the local midnight to the venue's local representation
   const zonedDate = toZonedTime(localMidnight, venueTimezone);
   const dayOfWeek = zonedDate.getDay();
   const slots: TimeSlot[] = [];
 
-  for (let hour = config.bookingStartHour; hour < config.bookingEndHour; hour += config.slotDurationMinutes / 60) {
-    const floorHour = Math.floor(hour);
-    const minutes = Math.round((hour % 1) * 60);
+  const endMs = (() => {
+    const z = toZonedTime(localMidnight, venueTimezone);
+    z.setHours(config.bookingEndHour, 0, 0, 0);
+    return fromZonedTime(z, venueTimezone).getTime();
+  })();
 
-    // Build a local-time wall-clock date in the venue's timezone, then convert to UTC
+  let cellIndex = 0;
+  while (true) {
+    const totalMinutes = config.bookingStartHour * 60 + cellIndex * GRID_GRANULARITY_MINUTES;
+    const cellHour = Math.floor(totalMinutes / 60);
+    const cellMin = totalMinutes % 60;
+
     const zonedStart = toZonedTime(localMidnight, venueTimezone);
-    zonedStart.setHours(floorHour, minutes, 0, 0);
+    zonedStart.setHours(cellHour, cellMin, 0, 0);
     const start = fromZonedTime(zonedStart, venueTimezone);
+    const end = new Date(start.getTime() + GRID_GRANULARITY_MINUTES * 60 * 1000);
 
-    const end = new Date(start.getTime() + config.slotDurationMinutes * 60 * 1000);
+    // Stop when the cell's END reaches or exceeds close time
+    if (end.getTime() > endMs) break;
+
+    const hourlyRate = resolveSlotPrice(config, dayOfWeek, cellHour);
 
     slots.push({
       startTime: start.toISOString(),
       endTime: end.toISOString(),
-      hour: floorHour,
-      priceValue: resolveSlotPrice(config, dayOfWeek, floorHour),
+      hour: cellHour,
+      priceValue: Math.round(hourlyRate / 2),
     });
+
+    cellIndex++;
   }
+
   return slots;
 }
 
+// ─── Consecutive span helper ───────────────────────────────────────────────────
+
+/**
+ * Find the index of the first available run of `cellCount` consecutive slots
+ * starting at `startIndex` in a slot array.
+ * Returns the starting index of the run, or -1 if no such run exists.
+ */
+export function findConsecutiveAvailableSpan(
+  slots: { startTime: string; endTime: string; available: boolean }[],
+  startIndex: number,
+  cellCount: number
+): number {
+  for (let i = startIndex; i <= slots.length - cellCount; i++) {
+    if (!slots[i].available) continue;
+    let ok = true;
+    for (let j = 1; j < cellCount; j++) {
+      if (
+        !slots[i + j].available ||
+        slots[i + j].startTime !== slots[i + j - 1].endTime
+      ) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) return i;
+  }
+  return -1;
+}
+
+// ─── Availability query ────────────────────────────────────────────────────────
+
 /**
  * Get available booking slots for a venue on a given date.
- * Returns a matrix of courts x time slots with availability and price.
+ * Returns a matrix of courts × time slots with availability and price.
  * All time calculations use the venue's stored timezone — server process TZ is irrelevant.
+ *
+ * Slots are always 30-min cells (GRID_GRANULARITY_MINUTES).
+ * Availability rules:
+ *   - Bookings: any overlap with existing confirmed/completed booking blocks the cell
+ *   - Court blocks: any overlap blocks the cell
+ *   - Schedule (open play/competition): hourly config; any overlap of the cell with
+ *     the schedule window blocks it
+ *   - Coach lessons: any overlap blocks the cell
  */
 export async function getAvailableSlots(
   venueId: string,
@@ -215,8 +394,6 @@ export async function getAvailableSlots(
   });
 
   // Noon local (UTC+7) → 05:00 UTC → same calendar date as what is stored.
-  // Prisma queries on @db.Date columns compare the UTC date portion, so using
-  // local midnight (17:00 UTC the previous day) would miss every record.
   const dateKey = toDateKey(date);
   const dateOnly = new Date(dateKey + "T12:00:00+07:00");
 
@@ -257,17 +434,27 @@ export async function getAvailableSlots(
     },
   });
 
-  // Generate slots using the venue's timezone — completely process-TZ-independent
+  // Generate 30-min slots
   const timeSlots = generateTimeSlots(dateOnly, config, venueTimezone);
 
-  // Day-of-week in venue local time
+  // Build schedule windows as timestamp ranges for any-overlap check
   const zonedDate = toZonedTime(dateOnly, venueTimezone);
   const dayOfWeek = zonedDate.getDay();
   const daySchedule = schedule.entries.filter((e) => e.daysOfWeek.includes(dayOfWeek));
 
-  // isPast: compare absolute timestamps — no timezone needed
+  const scheduleWindows = daySchedule.map((entry) => {
+    const startZ = toZonedTime(dateOnly, venueTimezone);
+    startZ.setHours(entry.startHour, 0, 0, 0);
+    const endZ = toZonedTime(dateOnly, venueTimezone);
+    endZ.setHours(entry.endHour, 0, 0, 0);
+    return {
+      entry,
+      startMs: fromZonedTime(startZ, venueTimezone).getTime(),
+      endMs: fromZonedTime(endZ, venueTimezone).getTime(),
+    };
+  });
+
   const now = new Date();
-  // isToday: compare date in venue's local timezone
   const zonedNow = toZonedTime(now, venueTimezone);
   const isToday =
     zonedDate.getFullYear() === zonedNow.getFullYear() &&
@@ -281,43 +468,45 @@ export async function getAvailableSlots(
       const slotStart = new Date(slot.startTime).getTime();
       const slotEnd = new Date(slot.endTime).getTime();
 
-      // Block past slots for today — only block a slot whose end time has already passed.
-      // A slot starting in the current hour is still bookable (e.g. staff can book 2PM–3PM at 2:03PM).
+      // Block past slots — only block when end time has passed
       const isPast = isToday && slotEnd <= now.getTime();
 
+      // Booking overlap: any existing booking whose window overlaps this cell
       const isBooked = existingBookings.some(
-        (b) => b.courtId === court.id && slotStart >= b.startTime.getTime() && slotStart < b.endTime.getTime()
+        (b) =>
+          b.courtId === court.id &&
+          intervalsOverlap(slotStart, slotEnd, b.startTime.getTime(), b.endTime.getTime())
       );
 
+      // Court block overlap (timestamp-based, already correct)
       const matchingBlock = courtBlocks.find(
         (bl) =>
           bl.courtIds.includes(court.id) &&
-          slotStart < bl.endTime.getTime() &&
-          slotEnd > bl.startTime.getTime()
+          intervalsOverlap(slotStart, slotEnd, bl.startTime.getTime(), bl.endTime.getTime())
       );
 
-      const matchingSchedule = daySchedule.find(
-        (entry) =>
-          entry.courtIds.includes(court.id) &&
-          slot.hour >= entry.startHour &&
-          slot.hour < entry.endHour
+      // Schedule overlap: any overlap of the 30-min cell with the hourly schedule window
+      const matchingScheduleWindow = scheduleWindows.find(
+        (sw) =>
+          sw.entry.courtIds.includes(court.id) &&
+          intervalsOverlap(slotStart, slotEnd, sw.startMs, sw.endMs)
       );
 
+      // Coach lesson overlap (timestamp-based, already correct)
       const matchingLesson = coachLessons.find(
         (l) =>
           l.courtId === court.id &&
-          slotStart < l.endTime.getTime() &&
-          slotEnd > l.startTime.getTime()
+          intervalsOverlap(slotStart, slotEnd, l.startTime.getTime(), l.endTime.getTime())
       );
 
       return {
         ...slot,
-        available: !isPast && !isBooked && !matchingBlock && !matchingSchedule && !matchingLesson,
+        available: !isPast && !isBooked && !matchingBlock && !matchingScheduleWindow && !matchingLesson,
         ...(matchingBlock
           ? { block: { blockId: matchingBlock.id, type: matchingBlock.type, title: matchingBlock.title } }
           : {}),
-        ...(matchingSchedule && !matchingBlock
-          ? { schedule: { entryId: matchingSchedule.id, type: matchingSchedule.type, title: matchingSchedule.title } }
+        ...(matchingScheduleWindow && !matchingBlock
+          ? { schedule: { entryId: matchingScheduleWindow.entry.id, type: matchingScheduleWindow.entry.type, title: matchingScheduleWindow.entry.title } }
           : {}),
         ...(matchingLesson
           ? {
@@ -335,10 +524,12 @@ export async function getAvailableSlots(
   }));
 }
 
+// ─── Availability helpers ──────────────────────────────────────────────────────
+
 /**
- * Given a pre-fetched court availability matrix (from getAvailableSlots),
- * returns true if at least one court has an available slot that starts at the
- * given whole hour.
+ * Given a pre-fetched court availability matrix, returns true if at least one
+ * court has an available slot that starts at the given whole hour.
+ * Used by the coach availability probe (Phase 8).
  */
 export function isAnyCourtAvailableAtHour(
   courtMatrix: CourtSlot[],
@@ -350,23 +541,49 @@ export function isAnyCourtAvailableAtHour(
 }
 
 /**
- * Check if a specific court/date/time slot is available for booking.
+ * Returns true if at least one court has N consecutive available 30-min cells
+ * starting at startTime.
+ */
+export function isAnyCourtAvailableForDuration(
+  courtMatrix: CourtSlot[],
+  startTimeIso: string,
+  durationMinutes: number
+): boolean {
+  const cells = Math.ceil(durationMinutes / GRID_GRANULARITY_MINUTES);
+  return courtMatrix.some((court) => {
+    const startIdx = court.slots.findIndex((s) => s.startTime === startTimeIso);
+    if (startIdx === -1) return false;
+    return findConsecutiveAvailableSpan(court.slots, startIdx, cells) === startIdx;
+  });
+}
+
+// ─── Conflict validation (write path) ─────────────────────────────────────────
+
+/**
+ * Check whether a court is free for a booking spanning [startTime, endTime).
+ * Returns true (no conflict) if no confirmed/completed booking overlaps the window.
+ *
+ * Note: call this inside the booking transaction to prevent TOCTOU races.
  */
 export async function validateBookingConflict(
   courtId: string,
   date: Date,
-  startTime: Date
+  startTime: Date,
+  endTime: Date
 ): Promise<boolean> {
   const existing = await prisma.booking.findFirst({
     where: {
       courtId,
       date,
-      startTime,
       status: { in: ["confirmed", "completed"] },
+      startTime: { lt: endTime },
+      endTime: { gt: startTime },
     },
   });
   return existing === null;
 }
+
+// ─── Cancellation policy ───────────────────────────────────────────────────────
 
 export interface CancellationResult {
   canCancel: boolean;

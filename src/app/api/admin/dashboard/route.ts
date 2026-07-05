@@ -4,6 +4,7 @@ import { json, error } from "@/lib/api-helpers";
 import { requireManagerOrSuperAdmin } from "@/lib/auth";
 import { getAuthorizedVenueIds } from "@/lib/venue-scope";
 import { resolveOpenPlaySessions } from "@/lib/open-play";
+import { resolveHoldExpiresAt } from "@/lib/payment-hold";
 
 export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
@@ -91,7 +92,7 @@ export async function GET(request: NextRequest) {
       prisma.booking.findMany({
         where: { ...bookingWhere, date: { gte: todayStart, lte: todayEnd }, startTime: { gt: now }, status: "confirmed" },
         include: {
-          player: { select: { name: true, avatar: true, avatarPhotoPath: true, facePhotoPath: true } },
+          player: { select: { name: true, phone: true, avatar: true, avatarPhotoPath: true, facePhotoPath: true } },
           court: { select: { label: true } },
           venue: { select: { name: true } },
         },
@@ -110,11 +111,21 @@ export async function GET(request: NextRequest) {
       prisma.booking.count({
         where: { ...bookingWhere, date: { gte: weekStart, lte: weekEnd }, status: "no_show" },
       }),
-      // Recent bookings (latest 8)
+      // Recent bookings (latest 10) — include expired_hold so staff can see payment drop-offs
       prisma.booking.findMany({
-        where: bookingWhere,
+        where: {
+          venueId: { in: venueIds },
+          OR: [
+            // Normal confirmed/completed/cancelled/no_show bookings
+            { status: { in: ["confirmed", "completed", "cancelled", "no_show"] } },
+            // Expired hold records — always show for analytics
+            { status: "expired_hold" },
+            // Active pending-payment holds (timer still running) — status is confirmed, paymentStatus is pending
+            { paymentStatus: "pending", holdExpiresAt: { gte: now } },
+          ],
+        },
         include: {
-          player: { select: { name: true, avatar: true, avatarPhotoPath: true, facePhotoPath: true } },
+          player: { select: { name: true, phone: true, avatar: true, avatarPhotoPath: true, facePhotoPath: true } },
           court: { select: { label: true } },
           venue: { select: { name: true } },
         },
@@ -202,7 +213,7 @@ export async function GET(request: NextRequest) {
         where: { venueId: { in: venueIds } },
         include: {
           coach: { select: { name: true } },
-          player: { select: { name: true, avatar: true, avatarPhotoPath: true, facePhotoPath: true } },
+          player: { select: { name: true, phone: true, avatar: true, avatarPhotoPath: true, facePhotoPath: true } },
           court: { select: { label: true } },
           venue: { select: { name: true } },
         },
@@ -216,7 +227,7 @@ export async function GET(request: NextRequest) {
           date: { gte: todayStart, lte: todayEnd },
         },
         include: {
-          player: { select: { name: true, avatar: true, avatarPhotoPath: true, facePhotoPath: true } },
+          player: { select: { name: true, phone: true, avatar: true, avatarPhotoPath: true, facePhotoPath: true } },
           venue: { select: { name: true } },
         },
         orderBy: { startTime: "asc" },
@@ -225,7 +236,7 @@ export async function GET(request: NextRequest) {
       prisma.openPlayRegistration.findMany({
         where: { venueId: { in: venueIds } },
         include: {
-          player: { select: { name: true, avatar: true, avatarPhotoPath: true, facePhotoPath: true } },
+          player: { select: { name: true, phone: true, avatar: true, avatarPhotoPath: true, facePhotoPath: true } },
           venue: { select: { name: true } },
         },
         orderBy: { createdAt: "desc" },
@@ -299,6 +310,7 @@ export async function GET(request: NextRequest) {
         venueId: b.venueId,
         playerId: b.playerId,
         playerName: b.player.name,
+        playerPhone: b.player.phone,
         playerAvatar: b.player.avatar,
         playerPhoto: b.player.avatarPhotoPath || b.player.facePhotoPath || null,
         courtLabel: b.court.label,
@@ -309,6 +321,12 @@ export async function GET(request: NextRequest) {
         status: b.status,
         paymentStatus: b.paymentStatus,
         paymentProofUrl: b.paymentProofUrl,
+        holdExpiresAt: resolveHoldExpiresAt({
+          paymentStatus: b.paymentStatus,
+          holdExpiresAt: b.holdExpiresAt,
+          createdAt: b.createdAt,
+          kind: "booking",
+        })?.toISOString() ?? null,
         priceValue: b.priceValue,
         createdAt: b.createdAt,
       })),
@@ -317,6 +335,7 @@ export async function GET(request: NextRequest) {
         venueId: l.venueId,
         playerId: l.playerId,
         playerName: l.player.name,
+        playerPhone: l.player.phone,
         playerAvatar: l.player.avatar,
         playerPhoto: l.player.avatarPhotoPath || l.player.facePhotoPath || null,
         coachName: l.coach.name,
@@ -328,6 +347,12 @@ export async function GET(request: NextRequest) {
         status: l.status,
         paymentStatus: l.paymentStatus,
         proofUrl: l.proofUrl ?? null,
+        holdExpiresAt: resolveHoldExpiresAt({
+          paymentStatus: l.paymentStatus,
+          holdExpiresAt: null,
+          createdAt: l.createdAt,
+          kind: "lesson",
+        })?.toISOString() ?? null,
         priceValue: l.priceValue,
         createdAt: l.createdAt,
       })),
@@ -363,6 +388,7 @@ export async function GET(request: NextRequest) {
             registrations: regs.map((r) => ({
               id: r.id,
               playerName: r.player.name,
+              playerPhone: r.player.phone,
               playerAvatar: r.player.avatar,
               playerPhoto: r.player.avatarPhotoPath || r.player.facePhotoPath || null,
               paymentStatus: r.paymentStatus,
@@ -377,6 +403,7 @@ export async function GET(request: NextRequest) {
         venueId: r.venueId,
         playerId: r.playerId,
         playerName: r.player.name,
+        playerPhone: r.player.phone,
         playerAvatar: r.player.avatar,
         playerPhoto: r.player.avatarPhotoPath || r.player.facePhotoPath || null,
         venueName: r.venue.name,
@@ -386,6 +413,12 @@ export async function GET(request: NextRequest) {
         status: r.status,
         paymentStatus: r.paymentStatus,
         paymentProofUrl: r.paymentProofUrl ?? null,
+        holdExpiresAt: resolveHoldExpiresAt({
+          paymentStatus: r.paymentStatus,
+          holdExpiresAt: r.holdExpiresAt,
+          createdAt: r.createdAt,
+          kind: "openplay",
+        })?.toISOString() ?? null,
         priceValue: r.priceValue,
         createdAt: r.createdAt,
       })),

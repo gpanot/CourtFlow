@@ -7,12 +7,17 @@ export const dynamic = "force-dynamic";
 /**
  * GET /api/cron/expire-holds
  *
- * Hard-deletes all bookings and open-play registrations whose payment hold
- * has expired (holdExpiresAt < now and paymentStatus still "pending").
- * Hard-deleting (not soft-cancelling) immediately frees the slot for re-booking.
+ * Soft-expires all bookings, open-play registrations, and coach lessons whose
+ * payment hold has timed out (holdExpiresAt < now and paymentStatus still "pending").
  *
- * Also handles any lingering "cancelled" bookings that were soft-cancelled by
- * an old version of this route — they are cleaned up so the admin view stays tidy.
+ * Bookings: status → expired_hold, paymentStatus → expired, holdExpiresAt → null
+ *   The partial unique index allows re-booking the same slot after expiry.
+ *
+ * Open-play: status → expired_hold, paymentStatus → expired, holdExpiresAt → null
+ *   expiredAt is set so we know when the hold lapsed.
+ *
+ * Coach lessons: status → cancelled, paymentStatus → expired, cancelledAt → now
+ *   (CoachLessonStatus has no expired_hold value — cancelled is the closest terminal)
  *
  * Should run every minute via Railway Cron:
  *   Schedule: * * * * *
@@ -32,24 +37,52 @@ export async function GET(request: NextRequest) {
   const now = new Date();
 
   try {
-    // Hard-delete expired pending booking holds (frees the slot immediately)
-    const deletedBookings = await prisma.booking.deleteMany({
+    // Soft-expire pending booking holds
+    const expiredBookings = await prisma.booking.updateMany({
       where: {
         paymentStatus: "pending",
         holdExpiresAt: { lt: now },
         status: "confirmed",
       },
+      data: {
+        status: "expired_hold",
+        paymentStatus: "expired",
+        holdExpiresAt: null,
+        cancelledAt: now,
+      },
     });
 
-    // Hard-delete expired pending open-play registration holds
-    const deletedOpenPlay = await prisma.openPlayRegistration.deleteMany({
+    // Soft-expire pending open-play registration holds
+    const expiredOpenPlay = await prisma.openPlayRegistration.updateMany({
       where: {
         paymentStatus: "pending",
         holdExpiresAt: { lt: now },
       },
+      data: {
+        status: "expired_hold",
+        paymentStatus: "expired",
+        holdExpiresAt: null,
+        expiredAt: now,
+      },
     });
 
-    // Clean up any stale "expired" status bookings left by the old soft-cancel approach
+    // Soft-expire pending coach lesson holds (derived hold: createdAt + 5 min).
+    // coach_lessons.created_at is `timestamp without time zone` (stored in local/server tz),
+    // so we use a raw SQL comparison with CURRENT_TIMESTAMP (also no tz) to avoid
+    // timezone drift when Node.js passes a UTC Date to Prisma's typed query.
+    const expiredLessonsResult = await prisma.$executeRaw`
+      UPDATE coach_lessons
+      SET status = 'cancelled',
+          payment_status = 'expired',
+          cancelled_at = NOW()
+      WHERE payment_status = 'pending'
+        AND status = 'confirmed'
+        AND created_at < CURRENT_TIMESTAMP - INTERVAL '5 minutes'
+    `;
+    const expiredLessons = { count: expiredLessonsResult };
+
+    // Clean up any stale "expired" paymentStatus bookings left by the old hard-delete
+    // approach that somehow survived (defensive cleanup).
     const cleanedStale = await prisma.booking.deleteMany({
       where: {
         paymentStatus: "expired",
@@ -58,8 +91,9 @@ export async function GET(request: NextRequest) {
     });
 
     return json({
-      deletedBookings: deletedBookings.count,
-      deletedOpenPlay: deletedOpenPlay.count,
+      expiredBookings: expiredBookings.count,
+      expiredOpenPlay: expiredOpenPlay.count,
+      expiredLessons: expiredLessons.count,
       cleanedStale: cleanedStale.count,
       checkedAt: now.toISOString(),
     });

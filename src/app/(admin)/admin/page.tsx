@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { PaymentStatusBadge } from "@/components/admin/EditBookingModal";
+import { DashboardPaymentCell } from "@/components/admin/DashboardPaymentCell";
 import {
   PaymentActionModal,
   type PaymentActionTarget,
@@ -52,6 +53,7 @@ interface RecentBooking {
   venueId: string;
   playerId: string;
   playerName: string;
+  playerPhone: string;
   playerAvatar: string;
   playerPhoto: string | null;
   courtLabel: string;
@@ -62,6 +64,7 @@ interface RecentBooking {
   status: string;
   paymentStatus: string | null;
   paymentProofUrl: string | null;
+  holdExpiresAt: string | null;
   priceValue: number;
   createdAt: string;
 }
@@ -71,6 +74,7 @@ interface RecentLesson {
   venueId: string;
   playerId: string;
   playerName: string;
+  playerPhone: string;
   playerAvatar: string;
   playerPhoto: string | null;
   coachName: string;
@@ -82,6 +86,7 @@ interface RecentLesson {
   status: string;
   paymentStatus: string;
   proofUrl: string | null;
+  holdExpiresAt: string | null;
   priceValue: number;
   createdAt: string;
 }
@@ -91,6 +96,7 @@ interface RecentOpenPlay {
   venueId: string;
   playerId: string;
   playerName: string;
+  playerPhone: string;
   playerAvatar: string;
   playerPhoto: string | null;
   venueName: string;
@@ -100,6 +106,7 @@ interface RecentOpenPlay {
   status: string;
   paymentStatus: string;
   paymentProofUrl: string | null;
+  holdExpiresAt: string | null;
   priceValue: number;
   createdAt: string;
 }
@@ -107,6 +114,7 @@ interface RecentOpenPlay {
 interface OpenPlayTodayRegistration {
   id: string;
   playerName: string;
+  playerPhone: string;
   playerAvatar: string;
   playerPhoto: string | null;
   paymentStatus: string;
@@ -131,6 +139,7 @@ interface RecentEntry {
   venueId: string | null;
   playerId: string;
   playerName: string;
+  playerPhone: string;
   playerAvatar: string;
   playerPhoto: string | null;
   detail: string;
@@ -141,6 +150,7 @@ interface RecentEntry {
   status: string;
   paymentStatus: string | null;
   paymentProofUrl: string | null;
+  holdExpiresAt: string | null;
   priceValue: number;
   createdAt: string;
 }
@@ -314,6 +324,7 @@ export default function AdminOverview() {
       venueId: b.venueId,
       playerId: b.playerId,
       playerName: b.playerName,
+      playerPhone: b.playerPhone,
       playerAvatar: b.playerAvatar,
       playerPhoto: b.playerPhoto,
       detail: b.courtLabel,
@@ -324,6 +335,7 @@ export default function AdminOverview() {
       status: b.status,
       paymentStatus: b.paymentStatus ?? null,
       paymentProofUrl: b.paymentProofUrl ?? null,
+      holdExpiresAt: b.holdExpiresAt ?? null,
       priceValue: b.priceValue,
       createdAt: b.createdAt,
     })),
@@ -333,6 +345,7 @@ export default function AdminOverview() {
       venueId: l.venueId,
       playerId: l.playerId,
       playerName: l.playerName,
+      playerPhone: l.playerPhone,
       playerAvatar: l.playerAvatar,
       playerPhoto: l.playerPhoto,
       detail: l.coachName + (l.courtLabel ? ` · ${l.courtLabel}` : ""),
@@ -343,6 +356,7 @@ export default function AdminOverview() {
       status: l.status,
       paymentStatus: l.paymentStatus ?? null,
       paymentProofUrl: l.proofUrl ?? null,
+      holdExpiresAt: l.holdExpiresAt ?? null,
       priceValue: l.priceValue,
       createdAt: l.createdAt,
     })),
@@ -352,6 +366,7 @@ export default function AdminOverview() {
       venueId: r.venueId,
       playerId: r.playerId,
       playerName: r.playerName,
+      playerPhone: r.playerPhone,
       playerAvatar: r.playerAvatar,
       playerPhoto: r.playerPhoto,
       detail: "",
@@ -362,6 +377,7 @@ export default function AdminOverview() {
       status: r.status,
       paymentStatus: r.paymentStatus,
       paymentProofUrl: r.paymentProofUrl ?? null,
+      holdExpiresAt: r.holdExpiresAt ?? null,
       priceValue: r.priceValue,
       createdAt: r.createdAt,
     })),
@@ -560,68 +576,27 @@ export default function AdminOverview() {
                     <BookingStatusBadge status={entry.status} />
                   </td>
                   <td className="px-4 py-2.5">
-                    {entry.kind === "booking" && entry.status !== "cancelled" && (
-                      <button
-                        onClick={() => setPaymentActionTarget({
-                          type: "booking",
-                          entityId: entry.id,
+                    {(entry.kind === "booking" || entry.kind === "lesson" || entry.kind === "openplay") && (
+                      <DashboardPaymentCell
+                        kind={entry.kind}
+                        entry={{
+                          id: entry.id,
+                          status: entry.status,
+                          paymentStatus: entry.paymentStatus,
+                          paymentProofUrl: entry.paymentProofUrl,
+                          holdExpiresAt: entry.holdExpiresAt,
+                          createdAt: entry.createdAt,
                           playerName: entry.playerName,
-                          detail: entry.detail,
+                          playerPhone: entry.playerPhone,
                           venueName: entry.venueName,
                           date: entry.date,
                           startTime: entry.startTime,
                           endTime: entry.endTime,
                           priceValue: entry.priceValue,
-                          paymentStatus: displayPaymentStatus(entry.paymentStatus),
-                          paymentProofUrl: entry.paymentProofUrl,
-                          bookingStatus: entry.status,
-                        })}
-                        title={t("overview.manageBookingPayment")}
-                      >
-                        <PaymentStatusBadge status={displayPaymentStatus(entry.paymentStatus)} />
-                      </button>
-                    )}
-                    {entry.kind === "lesson" && entry.paymentStatus && (
-                      <button
-                        onClick={() => setPaymentActionTarget({
-                          type: "lesson",
-                          entityId: entry.id,
-                          playerName: entry.playerName,
-                          detail: entry.detail,
-                          venueName: entry.venueName,
-                          date: entry.date,
-                          startTime: entry.startTime,
-                          endTime: entry.endTime,
-                          priceValue: entry.priceValue,
-                          paymentStatus: displayPaymentStatus(entry.paymentStatus),
-                          paymentProofUrl: entry.paymentProofUrl,
-                          bookingStatus: entry.status,
-                        })}
-                        title={t("overview.manageLessonPayment")}
-                      >
-                        <PaymentStatusBadge status={displayPaymentStatus(entry.paymentStatus)} />
-                      </button>
-                    )}
-                    {entry.kind === "openplay" && entry.status !== "cancelled" && (
-                      <button
-                        onClick={() => setPaymentActionTarget({
-                          type: "openplay",
-                          entityId: entry.id,
-                          playerName: entry.playerName,
-                          detail: t("overview.typeOpenPlay"),
-                          venueName: entry.venueName,
-                          date: entry.date,
-                          startTime: entry.startTime,
-                          endTime: entry.endTime,
-                          priceValue: entry.priceValue,
-                          paymentStatus: displayPaymentStatus(entry.paymentStatus),
-                          paymentProofUrl: entry.paymentProofUrl,
-                          bookingStatus: entry.status,
-                        })}
-                        title={t("overview.manageOpenPlayPayment")}
-                      >
-                        <PaymentStatusBadge status={displayPaymentStatus(entry.paymentStatus)} />
-                      </button>
+                          detail: entry.kind === "openplay" ? t("overview.typeOpenPlay") : entry.detail,
+                        }}
+                        onManage={setPaymentActionTarget}
+                      />
                     )}
                   </td>
                   <td className="px-4 py-2.5 text-right font-medium">
@@ -663,43 +638,27 @@ export default function AdminOverview() {
                     {entry.kind === "lesson" ? t("overview.typeLesson") : entry.kind === "openplay" ? t("overview.typeOpenPlay") : t("overview.typeBooking")}
                   </span>
                   <BookingStatusBadge status={entry.status} />
-                  {entry.kind === "booking" && entry.status !== "cancelled" && (
-                    <button
-                      onClick={() => setPaymentActionTarget({
-                        type: "booking",
-                        entityId: entry.id,
+                  {(entry.kind === "booking" || entry.kind === "lesson" || entry.kind === "openplay") && (
+                    <DashboardPaymentCell
+                      kind={entry.kind}
+                      entry={{
+                        id: entry.id,
+                        status: entry.status,
+                        paymentStatus: entry.paymentStatus,
+                        paymentProofUrl: entry.paymentProofUrl,
+                        holdExpiresAt: entry.holdExpiresAt,
+                        createdAt: entry.createdAt,
                         playerName: entry.playerName,
-                        detail: entry.detail,
+                        playerPhone: entry.playerPhone,
                         venueName: entry.venueName,
                         date: entry.date,
                         startTime: entry.startTime,
                         endTime: entry.endTime,
                         priceValue: entry.priceValue,
-                        paymentStatus: displayPaymentStatus(entry.paymentStatus),
-                        paymentProofUrl: entry.paymentProofUrl,
-                        bookingStatus: entry.status,
-                      })}
-                    >
-                      <PaymentStatusBadge status={displayPaymentStatus(entry.paymentStatus)} />
-                    </button>
-                  )}
-                  {entry.kind === "openplay" && entry.status !== "cancelled" && (
-                    <button onClick={() => setPaymentActionTarget({
-                      type: "openplay",
-                      entityId: entry.id,
-                      playerName: entry.playerName,
-                      detail: t("overview.typeOpenPlay"),
-                      venueName: entry.venueName,
-                      date: entry.date,
-                      startTime: entry.startTime,
-                      endTime: entry.endTime,
-                      priceValue: entry.priceValue,
-                      paymentStatus: displayPaymentStatus(entry.paymentStatus),
-                      paymentProofUrl: entry.paymentProofUrl,
-                      bookingStatus: entry.status,
-                    })}>
-                      <PaymentStatusBadge status={displayPaymentStatus(entry.paymentStatus)} />
-                    </button>
+                        detail: entry.kind === "openplay" ? t("overview.typeOpenPlay") : entry.detail,
+                      }}
+                      onManage={setPaymentActionTarget}
+                    />
                   )}
                 </div>
               </div>
@@ -764,6 +723,7 @@ export default function AdminOverview() {
                           type: "openplay",
                           entityId: r.id,
                           playerName: r.playerName,
+                          playerPhone: r.playerPhone,
                           detail: t("overview.typeOpenPlay"),
                           venueName: openPlayDetailGroup.venueName,
                           date: openPlayDetailGroup.startTime,
@@ -1161,6 +1121,7 @@ function BookingStatusBadge({ status }: { status: string }) {
     status === "cancelled" ? t("overview.statusCancelled") :
     status === "completed" ? t("overview.statusCompleted") :
     status === "pending_approval" ? t("overview.statusPendingApproval") :
+    status === "expired_hold" ? t("overview.statusExpiredHold") :
     status;
   return (
     <span
@@ -1171,6 +1132,7 @@ function BookingStatusBadge({ status }: { status: string }) {
         status === "completed" && "bg-blue-600/20 text-blue-400",
         status === "no_show" && "bg-amber-600/20 text-amber-400",
         status === "pending_approval" && "bg-yellow-600/20 text-yellow-400",
+        status === "expired_hold" && "bg-neutral-600/20 text-neutral-400",
       )}
     >
       {label}

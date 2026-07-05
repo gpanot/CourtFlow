@@ -68,33 +68,41 @@ export async function POST(
 
     // Credit refund logic
     if (lesson.paymentMethod === "credit") {
-      // Find the most recent paid credit for this player+coach pair that still has capacity
-      const credit = await prisma.playerCoachCredit.findFirst({
-        where: {
-          playerId,
-          coachId: lesson.coachId,
-          paymentStatus: "paid",
-          expiresAt: { gt: new Date() },
-          usedSessions: { gt: 0 },
-        },
-        orderBy: { createdAt: "desc" },
+      // Find the exact credit that funded this lesson via the audit trail.
+      // CreditTransaction.lessonId links the booking transaction to the credit.
+      const bookingTx = await prisma.creditTransaction.findFirst({
+        where: { lessonId: lesson.id, reason: "booked" },
+        select: { creditId: true },
       });
 
-      if (credit) {
-        await prisma.$transaction([
-          prisma.playerCoachCredit.update({
-            where: { id: credit.id },
-            data: { usedSessions: { decrement: 1 } },
-          }),
-          prisma.creditTransaction.create({
-            data: {
-              creditId: credit.id,
-              lessonId: lesson.id,
-              amount: 1,
-              reason: "cancelled_refund",
-            },
-          }),
-        ]);
+      if (bookingTx) {
+        // Verify the credit is still valid (not expired) before refunding
+        const credit = await prisma.playerCoachCredit.findFirst({
+          where: {
+            id: bookingTx.creditId,
+            paymentStatus: "paid",
+            expiresAt: { gt: new Date() },
+            usedSessions: { gt: 0 },
+          },
+          select: { id: true },
+        });
+
+        if (credit) {
+          await prisma.$transaction([
+            prisma.playerCoachCredit.update({
+              where: { id: credit.id },
+              data: { usedSessions: { decrement: 1 } },
+            }),
+            prisma.creditTransaction.create({
+              data: {
+                creditId: credit.id,
+                lessonId: lesson.id,
+                amount: 1,
+                reason: "cancelled_refund",
+              },
+            }),
+          ]);
+        }
       }
     }
 

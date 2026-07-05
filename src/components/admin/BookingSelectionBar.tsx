@@ -16,6 +16,7 @@ import {
   type CourtAvailability,
   type CourtSlot,
 } from "@/components/admin/BookingCourtGrid";
+import { fmtLessonDuration } from "@/lib/lesson-slot-selection";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -137,9 +138,6 @@ export function BookingSelectionBar({
       ? summary.singleCourtLabel
       : `${summary.courtCount} ${t("bookings.courtsPlural")}`;
 
-  const slotLabel =
-    summary.slotCount > 1 ? t("bookings.slotsPlural") : t("bookings.slot");
-
   return (
     <div
       className={cn(
@@ -149,7 +147,7 @@ export function BookingSelectionBar({
     >
       <div className="min-w-0">
         <p className="text-xs font-semibold text-white truncate">
-          {title} — {summary.slotCount} {slotLabel}
+          {title} — {fmtLessonDuration(summary.slotCount * 30)}
         </p>
         <p className="text-[10px] text-neutral-400">
           {formatTime(summary.startTime, timezone)} – {formatTime(summary.endTime, timezone)}

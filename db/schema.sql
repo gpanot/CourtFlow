@@ -44,7 +44,8 @@ CREATE TYPE public."BookingStatus" AS ENUM (
     'confirmed',
     'cancelled',
     'completed',
-    'no_show'
+    'no_show',
+    'expired_hold'
 );
 
 
@@ -1035,7 +1036,8 @@ CREATE TABLE public.open_play_registrations (
     cancelled_at timestamp(3) without time zone,
     rejected_at timestamp(3) without time zone,
     rejected_by text,
-    rejection_reason text
+    rejection_reason text,
+    expired_at timestamp with time zone
 );
 
 
@@ -2958,10 +2960,10 @@ CREATE INDEX billing_line_items_invoice_id_idx ON public.billing_line_items USIN
 
 
 --
--- Name: bookings_court_id_date_start_time_key; Type: INDEX; Schema: public; Owner: -
+-- Name: bookings_active_slot_unique; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX bookings_court_id_date_start_time_key ON public.bookings USING btree (court_id, date, start_time);
+CREATE UNIQUE INDEX bookings_active_slot_unique ON public.bookings USING btree (court_id, date, start_time) WHERE (status = ANY (ARRAY['confirmed'::public."BookingStatus", 'completed'::public."BookingStatus", 'no_show'::public."BookingStatus"]));
 
 
 --
@@ -5075,4 +5077,6 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260704000002'),
     ('20260704000003'),
     ('20260704025913'),
-    ('20260704042005');
+    ('20260704042005'),
+    ('20260705050420'),
+    ('20260705050540');

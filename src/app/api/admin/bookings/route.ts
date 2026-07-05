@@ -22,7 +22,8 @@ export async function GET(request: NextRequest) {
     if (!venueId) return error("venueId is required", 400);
 
     const now = new Date();
-    // Always exclude expired pending holds that haven't been cleaned up by cron yet
+    // Exclude expired pending holds (un-cleaned by cron) and expired_hold records
+    // unless the caller explicitly asks for them (status=expired_hold or status=all).
     const where: Record<string, unknown> = {
       venueId,
       NOT: {
@@ -33,6 +34,9 @@ export async function GET(request: NextRequest) {
 
     if (status && status !== "all") {
       where.status = status;
+    } else if (!status || status === "all") {
+      // By default hide expired_hold noise; allow explicit filter to reveal them
+      (where as { status?: unknown }).status = { not: "expired_hold" };
     }
 
     if (paymentStatus && paymentStatus !== "all") {

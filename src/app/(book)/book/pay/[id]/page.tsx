@@ -94,7 +94,7 @@ export default function PaymentPage() {
       setSecondsLeft(left);
       if (left <= 0) {
         if (timerRef.current) clearInterval(timerRef.current);
-        portalFetch(`/api/public/bookings/${id}`, { method: "DELETE" }).catch(() => {});
+        portalFetch(`/api/public/bookings/${id}?reason=expired_hold`, { method: "DELETE" }).catch(() => {});
       }
     };
     tick();
