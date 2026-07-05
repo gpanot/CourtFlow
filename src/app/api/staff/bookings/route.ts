@@ -19,7 +19,8 @@ export async function GET(request: NextRequest) {
     if (!venueId) return error("venueId is required");
     if (!dateStr) return error("date is required");
 
-    const date = new Date(dateStr.split("T")[0]);
+    // Use noon local time for the date WHERE clause (workspace rule: no UTC midnight)
+    const date = new Date(dateStr.split("T")[0] + "T12:00:00+07:00");
 
     const now = new Date();
     const bookings = await prisma.booking.findMany({
@@ -81,8 +82,8 @@ export async function POST(request: NextRequest) {
     if (!durationCheck.valid) return error(durationCheck.error!, 400);
 
     const dateKey = body.date.split("T")[0];
+    // Use noon local time for both write and conflict-check query (workspace rule: no UTC midnight)
     const dateForWrite = new Date(dateKey + "T12:00:00+07:00");
-    const date = new Date(dateKey);
     const startTime = new Date(body.startTime);
     const durationMinutes = slotCount * GRID_GRANULARITY_MINUTES;
     const endTime = new Date(startTime.getTime() + durationMinutes * 60 * 1000);
@@ -93,7 +94,7 @@ export async function POST(request: NextRequest) {
     const conflicting = await prisma.booking.findFirst({
       where: {
         courtId: body.courtId,
-        date,
+        date: dateForWrite,
         status: { in: ["confirmed", "completed"] },
         startTime: { lt: endTime },
         endTime: { gt: startTime },

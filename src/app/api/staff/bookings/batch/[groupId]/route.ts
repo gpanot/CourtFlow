@@ -45,8 +45,8 @@ export async function PATCH(
     const dateKey = body.date
       ? body.date.split("T")[0]
       : group.date.toISOString().split("T")[0];
+    // Use noon local time for both write and conflict-check query (workspace rule: no UTC midnight)
     const dateForWrite = new Date(dateKey + "T12:00:00+07:00");
-    const dateForQuery = new Date(dateKey);
 
     const newStartTime = body.startTime ? new Date(body.startTime) : group.startTime;
     const existingDurationMs = group.endTime.getTime() - group.startTime.getTime();
@@ -87,7 +87,7 @@ export async function PATCH(
         const conflict = await tx.booking.findFirst({
           where: {
             courtId: cid,
-            date: dateForQuery,
+            date: dateForWrite,
             status: { in: ["confirmed", "completed"] },
             startTime: { lt: newEndTime },
             endTime: { gt: newStartTime },

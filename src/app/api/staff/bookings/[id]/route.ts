@@ -142,10 +142,8 @@ export async function PATCH(
     const venueTimezone = venue.timezone ?? "Asia/Ho_Chi_Minh";
     const config = getBookingConfig(venue.settings as Record<string, unknown>);
 
-    // dateForQuery: local midnight — correct for WHERE date comparisons via Prisma
-    // dateForWrite: noon local (T12:00:00+07:00) — avoids UTC-shift bug on Prisma @db.Date writes
+    // Use noon local time for both write and conflict-check query (workspace rule: no UTC midnight)
     const dateKey = dateStr ? dateStr.split("T")[0] : null;
-    const dateForQuery = dateKey ? new Date(dateKey) : existing.date;
     const dateForWrite = dateKey ? new Date(dateKey + "T12:00:00+07:00") : existing.date;
     const startTime = startTimeStr ? new Date(startTimeStr) : existing.startTime;
 
@@ -161,7 +159,7 @@ export async function PATCH(
       where: {
         id: { not: id },
         courtId,
-        date: dateForQuery,
+        date: dateForWrite,
         status: { in: ["confirmed", "completed"] },
         startTime: { lt: endTime },
         endTime: { gt: startTime },

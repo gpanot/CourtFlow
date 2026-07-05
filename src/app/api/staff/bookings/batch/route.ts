@@ -50,8 +50,8 @@ export async function POST(request: NextRequest) {
     }
 
     const dateKey = body.date.split("T")[0];
+    // Both write and query use noon local time to avoid UTC-midnight day-shift (workspace rule)
     const dateForWrite = new Date(dateKey + "T12:00:00+07:00");
-    const dateForQuery = new Date(dateKey);
 
     const refStart = new Date(courtsInput[0].startTime);
     const durationMinutes = courtsInput[0].slotCount * GRID_GRANULARITY_MINUTES;
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
         const conflict = await tx.booking.findFirst({
           where: {
             courtId: c.courtId,
-            date: dateForQuery,
+            date: dateForWrite,
             status: { in: ["confirmed", "completed"] },
             startTime: { lt: endTime },
             endTime: { gt: startTime },
