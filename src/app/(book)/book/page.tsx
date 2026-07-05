@@ -224,18 +224,17 @@ export default function VenueHomePage() {
   const allowMultiCourt = venue?.bookingConfig?.allowMultiCourtBookings ?? true;
   const maxCourts = venue?.bookingConfig?.maxCourtsPerBooking ?? 4;
 
-  /** Returns true if every slot in the selected time window has a matching available slot on the given court. */
+  /** Returns true if all slots in the current time window are available on the given court. */
   function courtWindowAvailable(additionalCourtId: string): boolean {
     if (sortedSelected.length === 0) return false;
     const courtData = grid.find((c) => c.courtId === additionalCourtId);
     if (!courtData) return false;
-    // Build a lookup of startTime → slot for the additional court
-    const slotMap = new Map(courtData.slots.map((s) => [s.startTime, s]));
-    // Every selected slot must have a corresponding available slot on the other court
-    return sortedSelected.every((sel) => {
-      const match = slotMap.get(sel.startTime);
-      return match !== undefined && match.available;
-    });
+    const winStart = sortedSelected[0].startTime;
+    const winEnd = sortedSelected[sortedSelected.length - 1].endTime;
+    const windowSlots = courtData.slots.filter(
+      (s) => s.startTime >= winStart && s.endTime <= winEnd
+    );
+    return windowSlots.length === sortedSelected.length && windowSlots.every((s) => s.available);
   }
 
   function toggleAdditionalCourt(courtId: string) {
@@ -264,8 +263,25 @@ export default function VenueHomePage() {
   function toggleSlot(courtId: string, slot: Slot) {
     if (!slot.available) return;
 
-    // Switching courts -> reset everything including additional courts
+    // Clicking on a court that isn't the current primary
     if (selectedCourtId && selectedCourtId !== courtId) {
+      // If multi-court is enabled AND the clicked slot is inside the current
+      // time window AND the court is fully available for that window →
+      // toggle it as an additional court instead of resetting the selection.
+      if (allowMultiCourt && sortedSelected.length > 0) {
+        const winStart = sortedSelected[0].startTime;
+        const winEnd = sortedSelected[sortedSelected.length - 1].endTime;
+        const slotInWindow = slot.startTime >= winStart && slot.endTime <= winEnd;
+        if (slotInWindow && courtWindowAvailable(courtId)) {
+          if (additionalCourtIds.includes(courtId)) {
+            setAdditionalCourtIds(additionalCourtIds.filter((c) => c !== courtId));
+          } else if (1 + additionalCourtIds.length < maxCourts) {
+            setAdditionalCourtIds([...additionalCourtIds, courtId]);
+          }
+          return;
+        }
+      }
+      // Outside the window or multi-court not available → switch primary
       setSelectedCourtId(courtId);
       setSelectedSlots([slot]);
       setAdditionalCourtIds([]);
