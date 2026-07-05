@@ -131,13 +131,25 @@ interface CourtInfo {
 }
 
 const vndToDisplay = (v: number) => v;
-const displayToVnd = (d: string) => parseInt(d.replace(/,/g, "") || "0", 10);
+const displayToVnd = (d: string) => parseInt(d.replace(/[^0-9]/g, "") || "0", 10);
 const formatPrice = (n: number) => new Intl.NumberFormat("vi-VN").format(n);
 const parseFormattedPrice = (raw: string) => {
   const digits = raw.replace(/[^0-9]/g, "");
   if (!digits) return "";
   return parseInt(digits, 10).toLocaleString("en-US");
 };
+
+/** Dev-only helper: log raw price string vs parsed VND value. */
+function debugPriceParse(label: string, raw: string) {
+  const parsed = displayToVnd(raw);
+  return { label, raw, parsed };
+}
+
+function debugCoachPackage(stage: string, payload: Record<string, unknown>) {
+  console.groupCollapsed(`[CoachPackage:debug] ${stage}`);
+  console.log(payload);
+  console.groupEnd();
+}
 
 const STATUS_COLORS: Record<string, string> = {
   confirmed: "bg-blue-600/20 text-blue-400",
@@ -309,6 +321,7 @@ function CoachesTab({ venueId }: { venueId: string }) {
   const fetchCoaches = useCallback(async () => {
     const c = await api.get<Coach[]>(`/api/admin/coaches?venueId=${venueId}`);
     setCoaches(c);
+    return c;
   }, [venueId]);
 
   useEffect(() => {
@@ -344,6 +357,21 @@ function CoachesTab({ venueId }: { venueId: string }) {
     setErr("");
     try {
       const isGroupPricing = pkgForm.lessonType === "group";
+      const priceParse = debugPriceParse("priceInDollars", pkgForm.priceInDollars);
+      const perExtraParse = debugPriceParse(
+        "pricePerAdditionalPlayer",
+        pkgForm.pricePerAdditionalPlayer || "0",
+      );
+
+      debugCoachPackage("Create clicked — raw form state", {
+        mode: pkgModal.mode,
+        coachId: pkgModal.coachId,
+        venueId,
+        pkgForm: { ...pkgForm },
+        priceParse,
+        perExtraParse,
+      });
+
       const data = {
         name: pkgForm.name,
         description: pkgForm.description || null,
@@ -360,18 +388,65 @@ function CoachesTab({ venueId }: { venueId: string }) {
           : { minPlayers: null, maxPlayers: null, pricePerAdditionalPlayer: null }),
       };
 
+      debugCoachPackage("Payload sent to API", data);
+
+      let saved: CoachPackage | undefined;
       if (pkgModal.mode === "create") {
-        await api.post("/api/admin/coach-packages", {
+        saved = await api.post<CoachPackage>("/api/admin/coach-packages", {
           ...data,
           coachId: pkgModal.coachId,
           venueId,
         });
       } else if (pkgModal.pkg) {
-        await api.patch(`/api/admin/coach-packages/${pkgModal.pkg.id}`, data);
+        saved = await api.patch<CoachPackage>(`/api/admin/coach-packages/${pkgModal.pkg.id}`, data);
       }
-      await fetchCoaches();
+
+      debugCoachPackage("API response — saved record", {
+        saved,
+        priceFields: saved
+          ? {
+              priceValue: saved.priceValue,
+              minPlayers: saved.minPlayers,
+              maxPlayers: saved.maxPlayers,
+              pricePerAdditionalPlayer: saved.pricePerAdditionalPlayer,
+              lessonType: saved.lessonType,
+            }
+          : null,
+      });
+
+      const refreshed = await fetchCoaches();
+      const savedInList = saved
+        ? refreshed.flatMap((c) => c.packages).find((p) => p.id === saved!.id)
+        : undefined;
+
+      debugCoachPackage("After refetch — package in coaches list", {
+        savedInList,
+        listPriceFields: savedInList
+          ? {
+              priceValue: savedInList.priceValue,
+              minPlayers: savedInList.minPlayers,
+              maxPlayers: savedInList.maxPlayers,
+              pricePerAdditionalPlayer: savedInList.pricePerAdditionalPlayer,
+              lessonType: savedInList.lessonType,
+            }
+          : null,
+        payloadVsSaved: saved
+          ? {
+              priceValue: { sent: data.priceValue, saved: saved.priceValue, match: data.priceValue === saved.priceValue },
+              pricePerAdditionalPlayer: isGroupPricing
+                ? {
+                    sent: data.pricePerAdditionalPlayer,
+                    saved: saved.pricePerAdditionalPlayer,
+                    match: data.pricePerAdditionalPlayer === saved.pricePerAdditionalPlayer,
+                  }
+                : "n/a (private)",
+            }
+          : null,
+      });
+
       setPkgModal(null);
     } catch (e) {
+      debugCoachPackage("Save failed", { error: (e as Error).message });
       setErr((e as Error).message);
     } finally {
       setSaving(false);
