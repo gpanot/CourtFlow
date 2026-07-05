@@ -237,18 +237,6 @@ export default function VenueHomePage() {
     return windowSlots.length === sortedSelected.length && windowSlots.every((s) => s.available);
   }
 
-  function toggleAdditionalCourt(courtId: string) {
-    if (!allowMultiCourt || sortedSelected.length === 0 || !selectedCourtId) return;
-    if (courtId === selectedCourtId) return;
-    if (additionalCourtIds.includes(courtId)) {
-      setAdditionalCourtIds(additionalCourtIds.filter((c) => c !== courtId));
-    } else {
-      if (1 + additionalCourtIds.length >= maxCourts) return;
-      if (!courtWindowAvailable(courtId)) return;
-      setAdditionalCourtIds([...additionalCourtIds, courtId]);
-    }
-  }
-
   function areConsecutive(slots: Slot[]) {
     if (slots.length <= 1) return true;
     const sorted = [...slots].sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
@@ -479,38 +467,7 @@ export default function VenueHomePage() {
                     {grid.map((court) => (
                       <tr key={court.courtId} className="border-t border-[var(--cm-border)]">
                         <td className="sticky left-0 bg-[var(--cm-bg)] z-10 px-3 py-2 font-medium">
-                          <div className="flex items-center gap-1.5">
-                            <span>{court.courtLabel}</span>
-                            {/* Multi-court toggle — shown when a time window is already selected on another court */}
-                            {allowMultiCourt && court.courtId !== selectedCourtId && sortedSelected.length > 0 && (
-                              (() => {
-                                const isAdded = additionalCourtIds.includes(court.courtId);
-                                const canAdd = isAdded || courtWindowAvailable(court.courtId);
-                                const atMax = !isAdded && 1 + additionalCourtIds.length >= maxCourts;
-                                return (
-                                  <button
-                                    onClick={() => toggleAdditionalCourt(court.courtId)}
-                                    disabled={!isAdded && (!canAdd || atMax)}
-                                    className={`rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold transition-colors ${
-                                      isAdded
-                                        ? "bg-[var(--cm-accent)] text-black"
-                                        : !canAdd || atMax
-                                        ? "bg-[var(--cm-bg-surface)] text-[var(--cm-text-muted)] cursor-not-allowed opacity-40"
-                                        : "bg-[var(--cm-bg-card)] text-[var(--cm-text-sec)] border border-[var(--cm-border)] hover:border-[var(--cm-accent)]"
-                                    }`}
-                                    title={
-                                      isAdded ? "Remove from group"
-                                      : atMax ? `Max ${maxCourts} courts`
-                                      : !canAdd ? "Not available in this time window"
-                                      : "Add to group"
-                                    }
-                                  >
-                                    {isAdded ? "−" : "+"}
-                                  </button>
-                                );
-                              })()
-                            )}
-                          </div>
+                          {court.courtLabel}
                         </td>
                         {court.slots.map((slot, slotIdx) => {
                           const isSel = isSlotSelected(court.courtId, slot);

@@ -235,6 +235,8 @@
   },
   "confirm": {
     "title": "สรุปการจอง",
+    "courtCount": "{{count}} สนาม ({{labels}})",
+    "pricePerCourt": "ราคาต่อสนาม",
     "duration": "{{hours}} ชม. ({{count}} ช่วงเวลา)",
     "duration_other": "{{hours}} ชม. ({{count}} ช่วงเวลา)",
     "freeCancellation": "ยกเลิกฟรีได้ก่อนเวลาเริ่ม 24 ชม.",

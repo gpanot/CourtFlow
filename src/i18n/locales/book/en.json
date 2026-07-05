@@ -246,6 +246,8 @@
   },
   "confirm": {
     "title": "Booking Summary",
+    "courtCount": "{{count}} courts ({{labels}})",
+    "pricePerCourt": "Price per court",
     "duration": "{{hours}}h ({{count}} slot)",
     "duration_other": "{{hours}}h ({{count}} slots)",
     "freeCancellation": "Free cancellation up to 24h before start time.",
