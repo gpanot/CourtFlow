@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
@@ -13,7 +13,7 @@ import { hasGroupPlayerPricing, calculateSessionPrice } from "@/lib/coach-packag
 import {
   GraduationCap,
   Package,
-  CalendarDays,
+  Calendar,
   Plus,
   Pencil,
   Trash2,
@@ -32,7 +32,6 @@ import {
   Loader2,
   ZoomIn,
   Filter,
-  Calendar,
   Download,
   UserPlus,
   Eye,
@@ -43,12 +42,6 @@ import {
   PaymentActionModal,
   type PaymentActionTarget,
 } from "@/components/admin/PaymentActionModal";
-import { StaffBookingModal, type InitialCourtSelection, type EditLessonBooking } from "@/components/admin/StaffBookingModal";
-import { type CourtAvailability, type BookingRecord } from "@/components/admin/BookingCourtGrid";
-import { VenueDayPlanner } from "@/components/admin/VenueDayPlanner";
-import { BookingSelectionBar } from "@/components/admin/BookingSelectionBar";
-import { CourtBlockModal, type CourtBlockFormState } from "@/components/admin/CourtBlockModal";
-import { useBookingSlotSelection } from "@/hooks/useBookingSlotSelection";
 
 export const dynamic = "force-dynamic";
 
@@ -94,42 +87,6 @@ interface Coach {
   lessonCount: number;
 }
 
-interface Player {
-  id: string;
-  name: string;
-  phone: string;
-}
-
-interface CoachLesson {
-  id: string;
-  venueId: string;
-  coachId: string;
-  playerId: string;
-  courtId: string | null;
-  packageId: string;
-  date: string;
-  startTime: string;
-  endTime: string;
-  status: "confirmed" | "completed" | "cancelled" | "no_show";
-  priceValue: number;
-  playerCount: number | null;
-  note: string | null;
-  paymentStatus: string;
-  paidAt: string | null;
-  paymentMethod: string | null;
-  proofUrl: string | null;
-  paymentNote: string | null;
-  coach: { id: string; name: string; coachPhoto: string | null };
-  player: { id: string; name: string; phone: string };
-  court: { id: string; label: string } | null;
-  package: { id: string; name: string; lessonType: string; durationMin: number };
-}
-
-interface CourtInfo {
-  id: string;
-  label: string;
-}
-
 const vndToDisplay = (v: number) => v;
 const displayToVnd = (d: string) => parseInt(d.replace(/[^0-9]/g, "") || "0", 10);
 const formatPrice = (n: number) => new Intl.NumberFormat("vi-VN").format(n);
@@ -158,27 +115,6 @@ function debugCoachPackage(stage: string, payload: Record<string, unknown>) {
   console.groupEnd();
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  confirmed: "bg-blue-600/20 text-blue-400",
-  completed: "bg-green-600/20 text-green-400",
-  cancelled: "bg-neutral-700/40 text-neutral-400",
-  no_show: "bg-red-600/20 text-red-400",
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  confirmed: "Confirmed",
-  completed: "Completed",
-  cancelled: "Cancelled",
-  no_show: "No Show",
-};
-
-function localDateISO(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
 /* ─── Main Page ─── */
 
 export default function CoachingPage() {
@@ -190,63 +126,12 @@ export default function CoachingPage() {
     venues,
   } = useAdminVenuePicker({ autoSelect: true });
 
-  const initialTab = (searchParams.get("tab") ?? "lessons") as "coaches" | "lessons" | "list";
+  const rawTab = searchParams.get("tab");
+  const initialTab = rawTab === "lessons" ? "list" : rawTab;
   const initialPaymentFilter = searchParams.get("paymentFilter") ?? "all";
-  const [tab, setTab] = useState<"coaches" | "lessons" | "list">(
-    ["coaches", "lessons", "list"].includes(initialTab) ? initialTab : "lessons"
+  const [tab, setTab] = useState<"coaches" | "list">(
+    initialTab === "coaches" || initialTab === "list" ? initialTab : "list"
   );
-  const [showStaffModal, setShowStaffModal] = useState(false);
-  const [staffModalMode, setStaffModalMode] = useState<"court" | "open_play" | "lesson">("court");
-  const [staffModalInitialSelection, setStaffModalInitialSelection] = useState<InitialCourtSelection | undefined>();
-  const [staffModalDate, setStaffModalDate] = useState<string | undefined>();
-  const [editLessonTarget, setEditLessonTarget] = useState<EditLessonBooking | null>(null);
-  const [lessonsSelectedDate, setLessonsSelectedDate] = useState(() => localDateISO(new Date()));
-  const lessonsRefreshRef = useRef<(() => Promise<void>) | null>(null);
-
-  const openStaffModal = (
-    mode: "court" | "open_play" | "lesson" = "court",
-    courtSelection?: InitialCourtSelection,
-    date?: string,
-  ) => {
-    setEditLessonTarget(null);
-    setStaffModalMode(mode);
-    setStaffModalInitialSelection(courtSelection);
-    setStaffModalDate(date);
-    setShowStaffModal(true);
-  };
-
-  const closeStaffModal = () => {
-    setShowStaffModal(false);
-    setStaffModalInitialSelection(undefined);
-    setStaffModalDate(undefined);
-    setEditLessonTarget(null);
-  };
-
-  const openEditLesson = (lesson: CoachLesson) => {
-    if (!lesson.courtId) return;
-    setEditLessonTarget({
-      id: lesson.id,
-      courtId: lesson.courtId,
-      courtLabel: lesson.court?.label ?? "",
-      date: lesson.date.split("T")[0],
-      startTime: lesson.startTime,
-      endTime: lesson.endTime,
-      status: lesson.status,
-      coachId: lesson.coachId,
-      packageId: lesson.packageId,
-      playerCount: lesson.playerCount,
-      note: lesson.note,
-      player: {
-        id: lesson.player.id,
-        name: lesson.player.name,
-        phone: lesson.player.phone,
-      },
-    });
-    setStaffModalMode("lesson");
-    setStaffModalInitialSelection(undefined);
-    setStaffModalDate(lesson.date.split("T")[0]);
-    setShowStaffModal(true);
-  };
 
   return (
     <div className="space-y-6">
@@ -268,7 +153,6 @@ export default function CoachingPage() {
       <div className="flex items-center justify-between border-b border-neutral-800">
         <div className="flex gap-1">
           {([
-            { key: "lessons" as const, label: t("coaching.tabLessons"), icon: CalendarDays },
             { key: "list" as const, label: "All Lessons", icon: TableProperties },
             { key: "coaches" as const, label: t("coaching.tabCoachesPackages"), icon: Package },
           ]).map((item) => (
@@ -287,54 +171,19 @@ export default function CoachingPage() {
             </button>
           ))}
         </div>
-        {tab === "lessons" && selectedVenueId && (
-          <div className="pb-2 flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => openStaffModal("court")}
-              className="flex items-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-sm font-medium text-white hover:bg-purple-500"
-            >
-              <Plus className="h-4 w-4" /> {t("bookings.newBooking")}
-            </button>
-          </div>
-        )}
       </div>
 
       {selectedVenueId && tab === "coaches" && (
         <CoachesTab venueId={selectedVenueId} />
       )}
-      {selectedVenueId && tab === "lessons" && (
-        <LessonsTab
-          venueId={selectedVenueId}
-          onSelectedDateChange={setLessonsSelectedDate}
-          lessonsRefreshRef={lessonsRefreshRef}
-          onBookFromSelection={(selection, date) => openStaffModal("court", selection, date)}
-          onEditLesson={openEditLesson}
-        />
-      )}
       {selectedVenueId && tab === "list" && (
         <AllLessonsTab venueId={selectedVenueId} initialPaymentFilter={initialPaymentFilter} />
-      )}
-
-      {showStaffModal && selectedVenueId && (
-        <StaffBookingModal
-          venueId={selectedVenueId}
-          initialDate={staffModalDate ?? lessonsSelectedDate}
-          initialCourtSelection={staffModalInitialSelection}
-          allowModes={["court", "open_play", "lesson"]}
-          initialMode={staffModalMode}
-          editLesson={editLessonTarget ?? undefined}
-          onClose={closeStaffModal}
-          onCreated={async () => {
-            closeStaffModal();
-            await lessonsRefreshRef.current?.();
-          }}
-        />
       )}
     </div>
   );
 }
 
-/* ─── Tab 1: Coaches & Packages ─── */
+/* ─── Tab: Coaches & Packages ─── */
 
 function CoachesTab({ venueId }: { venueId: string }) {
   const { t } = useTranslation("translation", { i18n: adminI18n });
@@ -801,407 +650,6 @@ function CoachesTab({ venueId }: { venueId: string }) {
           onSaved={() => {
             setProfileCoach(null);
             fetchCoaches();
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-/* ─── Tab 2: Lessons ─── */
-
-
-function LessonsTab({
-  venueId,
-  onSelectedDateChange,
-  lessonsRefreshRef,
-  onBookFromSelection,
-  onEditLesson,
-}: {
-  venueId: string;
-  onSelectedDateChange?: (date: string) => void;
-  lessonsRefreshRef?: React.MutableRefObject<(() => Promise<void>) | null>;
-  onBookFromSelection: (selection: InitialCourtSelection, date: string) => void;
-  onEditLesson: (lesson: CoachLesson) => void;
-}) {
-  const { t } = useTranslation("translation", { i18n: adminI18n });
-  const getBlockTypeLabel = (type: string) => {
-    const keys: Record<string, string> = {
-      maintenance: "bookings.maintenance",
-      private_event: "bookings.privateEvent",
-      private_competition: "bookings.privateCompetition",
-      open_play: "bookings.openPlay",
-      competition: "bookings.competition",
-    };
-    const key = keys[type];
-    return key ? t(key) : type;
-  };
-  const [venueTimezone, setVenueTimezone] = useState<string | undefined>(undefined);
-  const [selectedDate, setSelectedDate] = useState(() => localDateISO(new Date()));
-  const [lessons, setLessons] = useState<CoachLesson[]>([]);
-  const [viewMode, setViewMode] = useState<"court" | "time">(() => {
-    if (typeof window === "undefined") return "court";
-    return (localStorage.getItem("coaching-view-mode") as "court" | "time") || "court";
-  });
-  const [showBlockModal, setShowBlockModal] = useState(false);
-  const [blockModalInitial, setBlockModalInitial] = useState<Partial<CourtBlockFormState>>();
-  const [availability, setAvailability] = useState<CourtAvailability[]>([]);
-  const [courtBookings, setCourtBookings] = useState<BookingRecord[]>([]);
-
-  useEffect(() => {
-    api.get<{ id: string; timezone?: string }[]>("/api/admin/venues")
-      .then((list) => {
-        const v = list.find((x) => x.id === venueId);
-        if (v?.timezone) setVenueTimezone(v.timezone);
-      })
-      .catch(() => {});
-  }, [venueId]);
-
-  const fetchLessons = useCallback(async () => {
-    const l = await api.get<CoachLesson[]>(
-      `/api/admin/coach-lessons?venueId=${venueId}&date=${selectedDate}`
-    );
-    setLessons(l);
-  }, [venueId, selectedDate]);
-
-  const fetchAvailability = useCallback(async (date: string) => {
-    try {
-      const data = await api.get<CourtAvailability[]>(
-        `/api/bookings/availability?venueId=${venueId}&date=${date}`
-      );
-      setAvailability(data);
-    } catch {
-      setAvailability([]);
-    }
-  }, [venueId]);
-
-  const fetchCourtBookings = useCallback(async (date: string) => {
-    try {
-      const data = await api.get<BookingRecord[]>(
-        `/api/staff/bookings?venueId=${venueId}&date=${date}`
-      );
-      setCourtBookings(data);
-    } catch {
-      setCourtBookings([]);
-    }
-  }, [venueId]);
-
-  useEffect(() => {
-    fetchLessons().catch(console.error);
-  }, [fetchLessons]);
-
-  // Always fetch availability + court bookings for the selected date (for the calendar grid)
-  useEffect(() => {
-    fetchAvailability(selectedDate);
-    fetchCourtBookings(selectedDate);
-  }, [selectedDate, fetchAvailability, fetchCourtBookings]);
-
-  useEffect(() => {
-    onSelectedDateChange?.(selectedDate);
-  }, [selectedDate, onSelectedDateChange]);
-
-  useEffect(() => {
-    if (!lessonsRefreshRef) return;
-    lessonsRefreshRef.current = async () => {
-      await fetchLessons();
-      await fetchAvailability(selectedDate);
-      await fetchCourtBookings(selectedDate);
-    };
-  }, [lessonsRefreshRef, fetchLessons, fetchAvailability, fetchCourtBookings, selectedDate]);
-
-  const plannerSlotTimes = availability.length > 0 ? availability[0].slots : [];
-
-  const bookingsByCourtAndTime = useMemo(() => {
-    const map = new Map<string, BookingRecord>();
-    courtBookings.forEach((b) => {
-      if (b.status === "confirmed" || b.status === "completed") {
-        const start = new Date(b.startTime).getTime();
-        const end = new Date(b.endTime).getTime();
-        plannerSlotTimes.forEach((slot) => {
-          const st = new Date(slot.startTime).getTime();
-          if (st >= start && st < end) {
-            map.set(`${b.courtId}_${slot.startTime}`, b);
-          }
-        });
-      }
-    });
-    return map;
-  }, [courtBookings, plannerSlotTimes]);
-
-  const gridBookings = useMemo(
-    () =>
-      courtBookings.map((b) => ({
-        id: b.id,
-        courtId: b.courtId,
-        playerId: b.playerId,
-        startTime: b.startTime,
-        endTime: b.endTime,
-        status: b.status,
-        priceValue: b.priceValue,
-        player: b.player,
-      })),
-    [courtBookings],
-  );
-
-  const {
-    selectedSlots: plannerSelectedSlots,
-    toggleSlotSelection,
-    clearSelection: clearPlannerSelection,
-    selectionSummary,
-    gridSelectedSlots,
-  } = useBookingSlotSelection(availability, {
-    isSlotDisabled: (courtId, slot) =>
-      bookingsByCourtAndTime.has(`${courtId}_${slot.startTime}`),
-  });
-
-  const selectionCourtIds = Object.keys(plannerSelectedSlots);
-
-  const openCreateFromSelection = () => {
-    if (!selectionSummary?.canBook) return;
-    const cid = selectionCourtIds[0];
-    const entry = plannerSelectedSlots[cid];
-    const sorted = [...entry.slots].sort(
-      (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime(),
-    );
-    onBookFromSelection(
-      {
-        courtId: cid,
-        courtLabel: entry.courtLabel,
-        slots: sorted.map((s) => ({
-          startTime: s.startTime,
-          endTime: s.endTime,
-          hour: s.hour,
-        })),
-      },
-      selectedDate,
-    );
-    clearPlannerSelection();
-  };
-
-  const openBlockFromSelection = () => {
-    if (!selectionSummary) return;
-    setBlockModalInitial({
-      type: "maintenance",
-      title: "",
-      note: "",
-      courtIds: [...selectionCourtIds],
-      startHour: String(selectionSummary.startHour),
-      endHour: String(selectionSummary.endHour),
-    });
-    setShowBlockModal(true);
-  };
-
-  const fmtTime = (iso: string) => {
-    const d = new Date(iso);
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", ...(venueTimezone ? { timeZone: venueTimezone } : {}) });
-  };
-
-  const [paymentActionTarget, setPaymentActionTarget] = useState<PaymentActionTarget | null>(null);
-
-  const openPaymentModal = (lesson: CoachLesson) => {
-    setPaymentActionTarget({
-      type: "lesson",
-      entityId: lesson.id,
-      playerName: lesson.player.name,
-      playerPhone: lesson.player.phone,
-      detail: lesson.coach.name,
-      date: lesson.date,
-      startTime: lesson.startTime,
-      endTime: lesson.endTime,
-      priceValue: lesson.priceValue,
-      paymentStatus: lesson.paymentStatus,
-      paymentProofUrl: lesson.proofUrl,
-      bookingStatus: lesson.status,
-    });
-  };
-
-  const activeLessons = lessons.filter((l) => l.status !== "cancelled");
-  const cancelledLessons = lessons.filter((l) => l.status === "cancelled");
-
-  return (
-    <div className="space-y-4">
-      <VenueDayPlanner
-        availability={availability}
-        date={selectedDate}
-        onDateChange={setSelectedDate}
-        timezone={venueTimezone}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        viewModeStorageKey="coaching-view-mode"
-        bookings={gridBookings}
-        blockTypeLabel={getBlockTypeLabel}
-        selectedSlots={gridSelectedSlots}
-        onSlotClick={(courtId, _courtLabel, slot) => {
-          const court = availability.find((c) => c.courtId === courtId);
-          if (court) toggleSlotSelection(court, slot);
-        }}
-        onLessonClick={(lessonId) => {
-          const lesson = lessons.find((l) => l.id === lessonId);
-          if (lesson) onEditLesson(lesson);
-        }}
-        accentColor="teal"
-        toolbarExtra={
-          <BookingSelectionBar
-            summary={selectionSummary}
-            timezone={venueTimezone}
-            onBlock={openBlockFromSelection}
-            onBook={openCreateFromSelection}
-            onClear={clearPlannerSelection}
-          />
-        }
-        emptyHint={t("coaching.noLessons")}
-      />
-
-      <CourtBlockModal
-        open={showBlockModal}
-        onClose={() => {
-          setShowBlockModal(false);
-          clearPlannerSelection();
-        }}
-        venueId={venueId}
-        date={selectedDate}
-        timezone={venueTimezone}
-        availability={availability}
-        initialForm={blockModalInitial}
-        onCreated={async () => {
-          await fetchAvailability(selectedDate);
-          await fetchCourtBookings(selectedDate);
-          await fetchLessons();
-          clearPlannerSelection();
-        }}
-      />
-
-      {/* Lessons List — day detail section */}
-      <section className="space-y-3">
-        <h3 className="text-sm font-medium uppercase tracking-wider text-neutral-400">
-          {t("coaching.tabLessons")} {t("bookings.bookingsFor").toLowerCase()} {new Date(selectedDate + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
-        </h3>
-
-      {activeLessons.length === 0 && cancelledLessons.length === 0 && (
-        <p className="text-sm text-neutral-500">{t("coaching.noLessons")}</p>
-      )}
-      {activeLessons.length > 0 && (
-      <div className="space-y-2">
-        {activeLessons.map((lesson) => (
-          <div key={lesson.id} className="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <span className="font-semibold text-sm">{fmtTime(lesson.startTime)} – {fmtTime(lesson.endTime)}</span>
-                  <span className="text-xs text-neutral-500">
-                    {(() => {
-                      const mins = (new Date(lesson.endTime).getTime() - new Date(lesson.startTime).getTime()) / 60000;
-                      const h = Math.floor(mins / 60);
-                      const m = mins % 60;
-                      return h > 0 ? `${h}h${m > 0 ? `${m}m` : ""}` : `${m}m`;
-                    })()}
-                  </span>
-                  <span className={cn("rounded px-2 py-0.5 text-xs", STATUS_COLORS[lesson.status])}>
-                    {STATUS_LABELS[lesson.status]}
-                  </span>
-                  <span className={cn(
-                    "rounded px-2 py-0.5 text-xs",
-                    lesson.package.lessonType === "private" ? "bg-purple-600/20 text-purple-400" : "bg-blue-600/20 text-blue-400"
-                  )}>
-                    {lesson.package.lessonType === "private" ? t("coaching.private") : t("coaching.group")}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3 text-sm text-neutral-400 flex-wrap">
-                  <span className="flex items-center gap-1">
-                    <GraduationCap className="h-3.5 w-3.5 text-teal-400" />
-                    {lesson.coach.name}
-                  </span>
-                  <a
-                    href={`/admin/courtpass-players?playerId=${lesson.player.id}`}
-                    onClick={(e) => e.stopPropagation()}
-                    className="flex items-center gap-1 hover:text-purple-400 hover:underline transition-colors"
-                  >
-                    <User className="h-3.5 w-3.5" />
-                    {lesson.player.name}
-                  </a>
-                  {lesson.court && (
-                    <span className="text-neutral-500">{t("coaching.court")}: {lesson.court.label}</span>
-                  )}
-                  <span className="text-neutral-500">{formatPrice(vndToDisplay(lesson.priceValue))} VND</span>
-                  {lesson.playerCount != null && lesson.package.lessonType === "group" && (
-                    <span className="flex items-center gap-1 text-blue-400">
-                      <Users className="h-3.5 w-3.5" />
-                      {lesson.playerCount}
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-neutral-500 mt-1">{lesson.package.name}</p>
-                {lesson.note && <p className="text-xs text-neutral-500 mt-0.5 italic">{lesson.note}</p>}
-
-                {/* Payment row */}
-                <div className="flex items-center gap-2 mt-2 pt-2 border-t border-neutral-800 flex-wrap">
-                  <button
-                    onClick={() => openPaymentModal(lesson)}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium transition-colors",
-                      (lesson.paymentStatus === "PAID" || lesson.paymentStatus === "paid")
-                        ? "bg-green-600/15 text-green-400 hover:bg-green-600/25"
-                        : lesson.paymentStatus === "proof_submitted"
-                          ? "bg-orange-600/15 text-orange-400 hover:bg-orange-600/25"
-                          : "bg-amber-600/15 text-amber-400 hover:bg-amber-600/25"
-                    )}
-                  >
-                    <DollarSign className="h-3 w-3" />
-                    {(lesson.paymentStatus === "PAID" || lesson.paymentStatus === "paid")
-                      ? "Paid"
-                      : lesson.paymentStatus === "proof_submitted"
-                        ? "Proof submitted — Review"
-                        : t("coaching.unpaidRecordPayment")}
-                  </button>
-                </div>
-              </div>
-
-              <button
-                onClick={() => onEditLesson(lesson)}
-                className="rounded-lg p-2 text-neutral-500 hover:bg-neutral-800 hover:text-teal-400 shrink-0"
-                title="Edit Lesson"
-              >
-                <Pencil className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-      )}
-
-      {cancelledLessons.length > 0 && (
-        <div className="space-y-2">
-          <h4 className="text-sm font-medium text-neutral-500">{t("coaching.cancelled")}</h4>
-          {cancelledLessons.map((lesson) => (
-            <div key={lesson.id} className="rounded-xl border border-neutral-800/50 bg-neutral-900/50 p-3 opacity-60">
-              <div className="flex items-center gap-2 flex-wrap text-sm">
-                <span className="font-medium">{fmtTime(lesson.startTime)} – {fmtTime(lesson.endTime)}</span>
-                <span className="text-neutral-500">{lesson.coach.name}</span>
-                <span className="text-neutral-500">→</span>
-                <a
-                  href={`/admin/courtpass-players?playerId=${lesson.player.id}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="text-neutral-500 hover:text-purple-400 hover:underline transition-colors"
-                >
-                  {lesson.player.name}
-                </a>
-                <span className={cn("rounded px-2 py-0.5 text-xs", STATUS_COLORS.cancelled)}>{t("coaching.cancelled")}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      </section>
-
-
-      {/* Payment Action Modal */}
-      {paymentActionTarget && (
-        <PaymentActionModal
-          target={paymentActionTarget}
-          onClose={() => setPaymentActionTarget(null)}
-          onUpdated={async () => {
-            setPaymentActionTarget(null);
-            await fetchLessons();
           }}
         />
       )}
