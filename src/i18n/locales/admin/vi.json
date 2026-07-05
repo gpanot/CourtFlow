@@ -49,6 +49,8 @@
   "settings": {
     "title": "Cài đặt chung",
     "tabSettings": "Cài đặt",
+    "tabEmailCourtpass": "Email/Courtpass",
+    "selectVenueFirst": "Chọn venue để cấu hình CourtPass và thông báo email.",
     "languageTitle": "Ngôn ngữ",
     "languageDescription": "Chọn ngôn ngữ cho bảng quản trị.",
     "english": "English",
@@ -352,6 +354,7 @@
     "privateEvent": "Sự kiện riêng",
     "privateCompetition": "Thi đấu riêng",
     "maintenance": "Bảo trì",
+    "alobo": "Alobo",
     "titleOptional": "Tiêu đề (tuỳ chọn)",
     "courtResurfacingPlaceholder": "vd: Làm mới mặt sân",
     "teamBuildingPlaceholder": "vd: Team Building công ty ABC",

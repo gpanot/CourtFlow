@@ -44,7 +44,7 @@ export interface CourtBlockModalProps {
 }
 
 const DEFAULT_FORM: CourtBlockFormState = {
-  type: "maintenance",
+  type: "alobo",
   title: "",
   note: "",
   courtIds: [],
@@ -209,6 +209,7 @@ export function CourtBlockModal({
               onChange={(e) => setForm({ ...form, type: e.target.value })}
               className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
             >
+              <option value="alobo">{t("bookings.alobo")}</option>
               <option value="open_play">{t("bookings.openPlay")}</option>
               <option value="competition">{t("bookings.competition")}</option>
               <option value="private_event">{t("bookings.privateEvent")}</option>

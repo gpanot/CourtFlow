@@ -203,6 +203,7 @@ export function StaffBookingModal({
 
   const getBlockTypeLabel = (type: string) => {
     const keys: Record<string, string> = {
+      alobo: "bookings.alobo",
       maintenance: "bookings.maintenance",
       private_event: "bookings.privateEvent",
       private_competition: "bookings.privateCompetition",

@@ -49,6 +49,8 @@
   "settings": {
     "title": "General Settings",
     "tabSettings": "Settings",
+    "tabEmailCourtpass": "Email/Courtpass",
+    "selectVenueFirst": "Select a venue to configure CourtPass and notification settings.",
     "languageTitle": "Language",
     "languageDescription": "Choose the language for the admin dashboard.",
     "english": "English",
@@ -354,6 +356,7 @@
     "privateEvent": "Private Event",
     "privateCompetition": "Private Competition",
     "maintenance": "Maintenance",
+    "alobo": "Alobo",
     "titleOptional": "Title (optional)",
     "courtResurfacingPlaceholder": "e.g. Court resurfacing",
     "teamBuildingPlaceholder": "e.g. ABC Corp Team Building",

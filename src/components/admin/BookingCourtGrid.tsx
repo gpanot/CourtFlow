@@ -22,6 +22,7 @@ import {
   Calendar,
   Trophy,
   Users,
+  Ban,
 } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -200,6 +201,7 @@ export function formatDateInTz(d: Date, tz?: string): string {
 }
 
 const DEFAULT_BLOCK_LABELS: Record<string, string> = {
+  alobo: "Alobo",
   maintenance: "Maintenance",
   private_event: "Private Event",
   private_competition: "Private Competition",
@@ -602,6 +604,7 @@ export function BookingCourtGrid({
                       className={cn(
                         "absolute inset-x-1 top-1 rounded-lg border px-2 py-1.5 overflow-hidden flex flex-col justify-center z-[5]",
                         blockInfo.type === "maintenance" && "bg-neutral-600/20 border-neutral-500/30",
+                        blockInfo.type === "alobo" && "bg-violet-600/20 border-violet-500/30",
                         blockInfo.type === "private_event" && "bg-amber-600/20 border-amber-500/30",
                         blockInfo.type === "private_competition" && "bg-orange-600/20 border-orange-500/30",
                         blockInfo.type === "open_play" && "bg-emerald-600/20 border-emerald-500/30",
@@ -612,6 +615,7 @@ export function BookingCourtGrid({
                     >
                       <div className="flex items-center gap-1">
                         {blockInfo.type === "maintenance" && <Wrench className="h-3 w-3 text-neutral-400 shrink-0" />}
+                        {blockInfo.type === "alobo" && <Ban className="h-3 w-3 text-violet-400 shrink-0" />}
                         {blockInfo.type === "private_event" && <Calendar className="h-3 w-3 text-amber-400 shrink-0" />}
                         {blockInfo.type === "private_competition" && <Trophy className="h-3 w-3 text-orange-400 shrink-0" />}
                         {blockInfo.type === "open_play" && <Users className="h-3 w-3 text-emerald-400 shrink-0" />}
@@ -620,6 +624,7 @@ export function BookingCourtGrid({
                           className={cn(
                             "text-xs font-semibold truncate",
                             blockInfo.type === "maintenance" && "text-neutral-300",
+                            blockInfo.type === "alobo" && "text-violet-200",
                             blockInfo.type === "private_event" && "text-amber-200",
                             blockInfo.type === "private_competition" && "text-orange-200",
                             blockInfo.type === "open_play" && "text-emerald-200",
@@ -634,6 +639,7 @@ export function BookingCourtGrid({
                           className={cn(
                             "text-[10px]",
                             blockInfo.type === "maintenance" && "text-neutral-500",
+                            blockInfo.type === "alobo" && "text-violet-400/60",
                             blockInfo.type === "private_event" && "text-amber-400/60",
                             blockInfo.type === "private_competition" && "text-orange-400/60",
                             blockInfo.type === "open_play" && "text-emerald-400/60",

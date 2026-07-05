@@ -254,6 +254,7 @@ export default function BookingsPage() {
 
   const getBlockTypeLabel = (type: string) => {
     const keys: Record<string, string> = {
+      alobo: "bookings.alobo",
       maintenance: "bookings.maintenance",
       private_event: "bookings.privateEvent",
       private_competition: "bookings.privateCompetition",
@@ -528,7 +529,7 @@ export default function BookingsPage() {
     if (!selectionSummary) return;
     setEditBlockId(undefined);
     setBlockModalInitial({
-      type: presetType || "maintenance",
+      type: presetType || "alobo",
       title: "",
       note: "",
       courtIds: [...selectionCourtIds],
@@ -592,7 +593,7 @@ export default function BookingsPage() {
   const openBlockModal = (presetType?: string) => {
     setEditBlockId(undefined);
     setBlockModalInitial({
-      type: presetType || "maintenance",
+      type: presetType || "alobo",
       title: "",
       note: "",
       courtIds: [],
@@ -1069,6 +1070,7 @@ export default function BookingsPage() {
               <div key={bl.id} className={cn(
                 "flex items-center gap-3 rounded-xl border p-3",
                 bl.type === "maintenance" && "border-neutral-700 bg-neutral-800/50",
+                bl.type === "alobo" && "border-violet-800/30 bg-violet-900/10",
                 bl.type === "private_event" && "border-amber-800/30 bg-amber-900/10",
                 bl.type === "private_competition" && "border-orange-800/30 bg-orange-900/10",
                 bl.type === "open_play" && "border-emerald-800/30 bg-emerald-900/10",
@@ -1077,6 +1079,7 @@ export default function BookingsPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     {bl.type === "maintenance" && <Wrench className="h-3.5 w-3.5 text-neutral-400" />}
+                    {bl.type === "alobo" && <Ban className="h-3.5 w-3.5 text-violet-400" />}
                     {bl.type === "private_event" && <Calendar className="h-3.5 w-3.5 text-amber-400" />}
                     {bl.type === "private_competition" && <Trophy className="h-3.5 w-3.5 text-orange-400" />}
                     {bl.type === "open_play" && <Users className="h-3.5 w-3.5 text-emerald-400" />}

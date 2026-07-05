@@ -25,6 +25,7 @@ export interface BookingTimeGridProps {
 }
 
 const DEFAULT_BLOCK_LABELS: Record<string, string> = {
+  alobo: "Alobo",
   maintenance: "Maintenance",
   private_event: "Private Event",
   private_competition: "Private Competition",
@@ -150,7 +151,8 @@ export function BookingTimeGrid({
                     info.type === "booking" && "bg-purple-600/20 text-purple-300 font-medium",
                     info.type === "block" && info.sub === "open_play" && "bg-emerald-600/20 text-emerald-300",
                     info.type === "block" && info.sub === "maintenance" && "bg-neutral-600/20 text-neutral-400",
-                    info.type === "block" && info.sub !== "open_play" && info.sub !== "maintenance" && "bg-amber-600/20 text-amber-300",
+                    info.type === "block" && info.sub === "alobo" && "bg-violet-600/20 text-violet-300",
+                    info.type === "block" && info.sub !== "open_play" && info.sub !== "maintenance" && info.sub !== "alobo" && "bg-amber-600/20 text-amber-300",
                     info.type === "schedule" && info.sub === "open_play" && "bg-emerald-600/20 text-emerald-300",
                     info.type === "schedule" && info.sub !== "open_play" && "bg-blue-600/20 text-blue-300",
                     info.type === "lesson" && "bg-teal-600/20 text-teal-300",

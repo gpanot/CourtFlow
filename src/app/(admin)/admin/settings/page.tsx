@@ -3,14 +3,17 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import Link from "next/link";
-import { Globe, Clock, Check, Loader2, CheckCircle2, Building2 } from "lucide-react";
+import { Globe, Clock, Check, Loader2, CheckCircle2, Building2, Mail, Settings } from "lucide-react";
 import adminI18n, { ADMIN_I18N_STORAGE_KEY } from "@/i18n/admin-i18n";
 import { cn } from "@/lib/cn";
 import { api } from "@/lib/api-client";
 import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
+import { PortalToggle, NotificationEmailEditor } from "@/components/admin/VenueCourtpassSettings";
 import { useSessionStore } from "@/stores/session-store";
 
 export const dynamic = "force-dynamic";
+
+type SettingsTab = "settings" | "email-courtpass";
 
 type Language = "en" | "vi";
 
@@ -66,17 +69,15 @@ const COUNTRIES_MAP: Record<string, { name: string; flag: string }> = {
   NZ: { name: "New Zealand", flag: "🇳🇿" },
 };
 
-interface VenueBasic {
-  id: string;
-  name: string;
-  timezone: string;
-}
-
 interface VenueDetail {
   id: string;
   name: string;
   timezone: string;
   sportType: string;
+  portalEnabled: boolean;
+  settings: {
+    notificationEmail?: string | null;
+  };
   organization: {
     id: string;
     name: string;
@@ -89,6 +90,7 @@ interface VenueDetail {
 export default function GeneralSettingsPage() {
   const { t, i18n } = useTranslation("translation", { i18n: adminI18n });
   const [currentLang, setCurrentLang] = useState<Language>("en");
+  const [activeTab, setActiveTab] = useState<SettingsTab>("settings");
   const { venueId, setVenueId, venues } = useAdminVenuePicker({ autoSelect: true });
   const { role } = useSessionStore();
 
@@ -102,12 +104,11 @@ export default function GeneralSettingsPage() {
     setCurrentLang((stored === "vi" ? "vi" : "en") as Language);
   }, []);
 
-  const fetchVenueTimezone = useCallback(async () => {
-    if (!venueId) return;
+  const fetchVenueDetails = useCallback(async () => {
     try {
       const data = await api.get<VenueDetail[]>("/api/admin/venues");
       setVenueDetails(data);
-      const v = data.find((x) => x.id === venueId);
+      const v = venueId ? data.find((x) => x.id === venueId) : undefined;
       if (v) setVenueTimezone(v.timezone ?? "Asia/Ho_Chi_Minh");
     } catch {
       // ignore
@@ -120,9 +121,9 @@ export default function GeneralSettingsPage() {
   );
 
   useEffect(() => {
-    void fetchVenueTimezone();
+    void fetchVenueDetails();
     setTzMsg(null);
-  }, [fetchVenueTimezone]);
+  }, [fetchVenueDetails]);
 
   const handleLanguageChange = (lang: Language) => {
     setCurrentLang(lang);
@@ -151,19 +152,46 @@ export default function GeneralSettingsPage() {
   const regionOrder = ["Asia", "Europe", "Americas", "Oceania", "Other"];
 
   return (
-    <div className="space-y-6 max-w-2xl">
-      <h1 className="text-xl font-bold md:text-2xl">{t("settings.title")}</h1>
-
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-neutral-800">
-        <button
-          type="button"
-          className="border-b-2 border-purple-500 px-4 py-2 text-sm font-medium text-purple-400"
-        >
-          {t("settings.tabSettings")}
-        </button>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-xl font-bold md:text-2xl flex items-center gap-2">
+          <Settings className="h-6 w-6 text-purple-400" />
+          {t("settings.title")}
+        </h2>
+        <AdminVenuePicker
+          venueId={venueId}
+          venues={venues}
+          onChange={(id) => { setVenueId(id); setTzMsg(null); }}
+          className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
+        />
       </div>
 
+      <div className="flex items-center justify-between border-b border-neutral-800">
+        <div className="flex gap-1">
+          {([
+            { key: "settings" as const, label: t("settings.tabSettings"), icon: Settings },
+            { key: "email-courtpass" as const, label: t("settings.tabEmailCourtpass"), icon: Mail },
+          ]).map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              className={cn(
+                "flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px",
+                activeTab === tab.key
+                  ? "border-purple-500 text-white"
+                  : "border-transparent text-neutral-500 hover:text-neutral-300"
+              )}
+            >
+              <tab.icon className="h-4 w-4" />
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="max-w-2xl">
+      {activeTab === "settings" && (
       <div className="space-y-8">
         {/* Language section */}
         <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
@@ -256,17 +284,6 @@ export default function GeneralSettingsPage() {
             {t("settings.venueTimezoneDesc")}
           </p>
 
-          {/* Venue picker */}
-          <div className="mb-4">
-            <label className="block text-xs font-medium text-neutral-400 mb-1.5">{t("settings.venueLabel")}</label>
-            <AdminVenuePicker
-              venueId={venueId}
-              venues={venues}
-              onChange={(id) => { setVenueId(id); setTzMsg(null); }}
-              className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none w-full max-w-xs"
-            />
-          </div>
-
           {venueId && (
             <div>
               <label className="block text-xs font-medium text-neutral-400 mb-1.5">{t("settings.timezoneLabel")}</label>
@@ -329,6 +346,34 @@ export default function GeneralSettingsPage() {
             </p>
           </section>
         )}
+      </div>
+      )}
+
+      {activeTab === "email-courtpass" && (
+        <div className="space-y-6">
+          {!venueId ? (
+            <p className="text-sm text-neutral-500">{t("settings.selectVenueFirst")}</p>
+          ) : !selectedVenue ? (
+            <div className="flex items-center gap-2 text-sm text-neutral-500">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              {t("common.loading", { defaultValue: "Loading..." })}
+            </div>
+          ) : (
+            <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-5 space-y-8">
+              <PortalToggle
+                venueId={venueId}
+                enabled={selectedVenue.portalEnabled}
+                onRefresh={fetchVenueDetails}
+              />
+              <NotificationEmailEditor
+                venueId={venueId}
+                current={selectedVenue.settings?.notificationEmail ?? null}
+                onRefresh={fetchVenueDetails}
+              />
+            </section>
+          )}
+        </div>
+      )}
       </div>
     </div>
   );

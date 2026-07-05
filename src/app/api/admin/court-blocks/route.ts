@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       return error("venueId, type, courtIds, date, startTime, and endTime are required", 400);
     }
 
-    const validTypes = ["private_competition", "private_event", "maintenance", "open_play", "competition"];
+    const validTypes = ["private_competition", "private_event", "maintenance", "open_play", "competition", "alobo"];
     if (!validTypes.includes(body.type)) {
       return error("Invalid block type", 400);
     }

@@ -94,7 +94,8 @@ CREATE TYPE public."CourtBlockType" AS ENUM (
     'private_event',
     'maintenance',
     'open_play',
-    'competition'
+    'competition',
+    'alobo'
 );
 
 
@@ -5170,4 +5171,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260704042005'),
     ('20260705050420'),
     ('20260705050540'),
-    ('20260705122627');
+    ('20260705122627'),
+    ('20260706055400');
