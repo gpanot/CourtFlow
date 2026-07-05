@@ -203,7 +203,10 @@ export function SelfCheckInReturningFaceScanner({
 
   return (
     <View style={styles.root}>
-      <Text style={styles.hint}>{hint}</Text>
+      {/* Top zone — hint text hugs just above the vertically-centered circle */}
+      <View style={styles.topZone}>
+        <Text style={styles.hint}>{hint}</Text>
+      </View>
 
       <View
         style={[
@@ -231,37 +234,40 @@ export function SelfCheckInReturningFaceScanner({
         ) : null}
       </View>
 
-      {scanPhase === "capturing" ? (
-        <View style={styles.statusRow}>
-          <ActivityIndicator
-            color={isCourtPay ? COURTPAY_ACCENT.spinner : "#22c55e"}
+      {/* Bottom zone — status + actions hug just below the centered circle */}
+      <View style={styles.bottomZone}>
+        {scanPhase === "capturing" ? (
+          <View style={styles.statusRow}>
+            <ActivityIndicator
+              color={isCourtPay ? COURTPAY_ACCENT.spinner : "#22c55e"}
+            />
+            <Text style={styles.statusText}>{copy.scanning}</Text>
+          </View>
+        ) : scanPhase === "between_retries" ? (
+          <Text style={styles.retryHint}>{copy.retryAuto}</Text>
+        ) : (
+          <Text style={styles.readyHint}>
+            {cameraReady ? copy.cameraReady : copy.cameraStarting}
+          </Text>
+        )}
+
+        <TouchableOpacity style={styles.linkRow} onPress={onUsePhone}>
+          <Ionicons
+            name="call-outline"
+            size={18}
+            color={isCourtPay ? COURTPAY_ACCENT.link : "#3b82f6"}
           />
-          <Text style={styles.statusText}>{copy.scanning}</Text>
-        </View>
-      ) : scanPhase === "between_retries" ? (
-        <Text style={styles.retryHint}>{copy.retryAuto}</Text>
-      ) : (
-        <Text style={styles.readyHint}>
-          {cameraReady ? copy.cameraReady : copy.cameraStarting}
-        </Text>
-      )}
+          <Text
+            style={[styles.linkText, isCourtPay && { color: COURTPAY_ACCENT.link }]}
+          >
+            {copy.checkInWithPhone}
+          </Text>
+        </TouchableOpacity>
 
-      <TouchableOpacity style={styles.linkRow} onPress={onUsePhone}>
-        <Ionicons
-          name="call-outline"
-          size={18}
-          color={isCourtPay ? COURTPAY_ACCENT.link : "#3b82f6"}
-        />
-        <Text
-          style={[styles.linkText, isCourtPay && { color: COURTPAY_ACCENT.link }]}
-        >
-          {copy.checkInWithPhone}
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.textBtn} onPress={onBack}>
-        <Text style={styles.textBtnLabel}>{copy.back}</Text>
-      </TouchableOpacity>
+        <TouchableOpacity style={styles.textBtn} onPress={onBack}>
+          <Text style={styles.textBtnLabel}>{copy.back}</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -271,8 +277,24 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 16,
     paddingVertical: 12,
+  },
+  // Symmetric flex zones keep the circle at the exact vertical center of the
+  // screen, so it stays at the same level across scan / capture / preview.
+  topZone: {
+    alignSelf: "stretch",
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "flex-end",
+    paddingBottom: 16,
+  },
+  bottomZone: {
+    alignSelf: "stretch",
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "flex-start",
+    paddingTop: 16,
+    gap: 4,
   },
   center: {
     flex: 1,

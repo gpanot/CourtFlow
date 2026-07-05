@@ -56,6 +56,7 @@ export function VenueSelectScreen({
       loading={loading}
       onSelect={handleSelect}
       title={t("staffSelectVenue")}
+      onRefresh={refreshVenues}
     />
   );
 }

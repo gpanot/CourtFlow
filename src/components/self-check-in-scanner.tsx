@@ -748,14 +748,17 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
 
       {/* ── SCANNING (face scan for returning) ──── */}
       {step === "scanning" && (
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-4">
-          <p className="text-center text-lg text-neutral-300">
-            {scanPhase === "between_retries"
-              ? t("tablet.checkInScanner.noMatchYet")
-              : scanPhase === "adjust"
-                ? t("tablet.checkInScanner.positionFace")
-                : t("tablet.checkInScanner.holdStill")}
-          </p>
+        <div className="flex min-h-0 flex-1 flex-col items-center p-4">
+          {/* Top zone — hint hugs just above the vertically-centered frame */}
+          <div className="flex w-full flex-1 flex-col items-center justify-end pb-4">
+            <p className="text-center text-lg text-neutral-300">
+              {scanPhase === "between_retries"
+                ? t("tablet.checkInScanner.noMatchYet")
+                : scanPhase === "adjust"
+                  ? t("tablet.checkInScanner.positionFace")
+                  : t("tablet.checkInScanner.holdStill")}
+            </p>
+          </div>
           <div className="relative aspect-[8/9] w-full max-w-2xl overflow-hidden rounded-2xl border-2 border-green-600/40 bg-black shadow-lg shadow-green-900/20">
             <CameraCapture ref={cameraRef} active onError={onCameraError} className="h-full w-full" videoClassName="h-full w-full object-cover [transform:scaleX(-1)]" />
             {scanPhase === "between_retries" && retrySecondsLeft != null && (
@@ -765,18 +768,21 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
               </div>
             )}
           </div>
-          {cameraError ? (
-            <p className="text-center text-sm text-red-400">{cameraError}</p>
-          ) : scanPhase === "capturing" ? (
-            <div className="flex items-center gap-3 text-neutral-400">
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-neutral-600 border-t-green-500" />
-              <span>{t("tablet.checkInScanner.scanning")}</span>
-            </div>
-          ) : scanPhase === "between_retries" ? (
-            <p className="text-sm text-amber-200/90">{t("tablet.checkInScanner.retryAuto")}</p>
-          ) : (
-            <p className="text-sm text-neutral-500">{t("tablet.checkInScanner.cameraReady")}</p>
-          )}
+          {/* Bottom zone — status hugs just below the centered frame */}
+          <div className="flex w-full flex-1 flex-col items-center justify-start pt-4">
+            {cameraError ? (
+              <p className="text-center text-sm text-red-400">{cameraError}</p>
+            ) : scanPhase === "capturing" ? (
+              <div className="flex items-center gap-3 text-neutral-400">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-neutral-600 border-t-green-500" />
+                <span>{t("tablet.checkInScanner.scanning")}</span>
+              </div>
+            ) : scanPhase === "between_retries" ? (
+              <p className="text-sm text-amber-200/90">{t("tablet.checkInScanner.retryAuto")}</p>
+            ) : (
+              <p className="text-sm text-neutral-500">{t("tablet.checkInScanner.cameraReady")}</p>
+            )}
+          </div>
         </div>
       )}
 
@@ -973,43 +979,55 @@ export function SelfCheckInScanner({ venueId }: SelfCheckInScannerProps) {
 
       {/* ── REGISTRATION: FACE CAPTURE ──────────── */}
       {step === "reg_face_capture" && (
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-4">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold text-white">{t("tablet.checkInScanner.regTitle")}</h2>
-            <p className="mt-1 text-base text-neutral-400">{t("tablet.checkInScanner.regFaceHint")}</p>
+        <div className="flex min-h-0 flex-1 flex-col items-center p-4">
+          {/* Top zone — title hugs just above the centered circle */}
+          <div className="flex w-full flex-1 flex-col items-center justify-end pb-4">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-white">{t("tablet.checkInScanner.regTitle")}</h2>
+              <p className="mt-1 text-base text-neutral-400">{t("tablet.checkInScanner.regFaceHint")}</p>
+            </div>
           </div>
           <div className="relative aspect-square w-full max-w-sm overflow-hidden rounded-full border-4 border-green-600/40 bg-black">
             <CameraCapture ref={cameraRef} active onError={onCameraError} className="h-full w-full" videoClassName="h-full w-full object-cover [transform:scaleX(-1)]" />
           </div>
-          <button type="button" onClick={captureRegFace}
-            disabled={regFaceChecking}
-            className="flex items-center gap-2 rounded-2xl bg-green-600 px-10 py-4 text-xl font-bold text-white hover:bg-green-500 active:scale-[0.98] disabled:opacity-60">
-            {regFaceChecking && <Loader2 className="h-5 w-5 animate-spin" />}
-            {regFaceChecking ? t("tablet.checkInScanner.scanning") : "📸"}
-          </button>
-          <button type="button" onClick={resetToHome} className="text-sm text-neutral-500 hover:text-neutral-300">
-            <ArrowLeft className="mr-1 inline h-4 w-4" />
-            {t("tablet.checkInScanner.scanAgain")}
-          </button>
+          {/* Bottom zone — actions hug just below the centered circle */}
+          <div className="flex w-full flex-1 flex-col items-center justify-start gap-4 pt-4">
+            <button type="button" onClick={captureRegFace}
+              disabled={regFaceChecking}
+              className="flex items-center gap-2 rounded-2xl bg-green-600 px-10 py-4 text-xl font-bold text-white hover:bg-green-500 active:scale-[0.98] disabled:opacity-60">
+              {regFaceChecking && <Loader2 className="h-5 w-5 animate-spin" />}
+              {regFaceChecking ? t("tablet.checkInScanner.scanning") : "📸"}
+            </button>
+            <button type="button" onClick={resetToHome} className="text-sm text-neutral-500 hover:text-neutral-300">
+              <ArrowLeft className="mr-1 inline h-4 w-4" />
+              {t("tablet.checkInScanner.scanAgain")}
+            </button>
+          </div>
         </div>
       )}
 
       {/* ── REGISTRATION: FACE PREVIEW ──────────── */}
       {step === "reg_face_preview" && regImage && (
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-5 p-4">
-          <h2 className="text-3xl font-bold text-green-400">{t("tablet.checkInScanner.regGotPhoto")}</h2>
+        <div className="flex min-h-0 flex-1 flex-col items-center p-4">
+          {/* Top zone — title hugs just above the centered circle */}
+          <div className="flex w-full flex-1 flex-col items-center justify-end pb-5">
+            <h2 className="text-3xl font-bold text-green-400">{t("tablet.checkInScanner.regGotPhoto")}</h2>
+          </div>
           <div className="h-56 w-56 overflow-hidden rounded-full border-4 border-green-600/70 shadow-[0_0_40px_rgba(34,197,94,0.2)] sm:h-64 sm:w-64">
             <img src={`data:image/jpeg;base64,${regImage}`} alt="" className="h-full w-full object-cover [transform:scaleX(-1)]" />
           </div>
-          <div className="mt-1 flex w-full max-w-md gap-3">
-            <button type="button" onClick={() => goTo("reg_form")}
-              className="flex-1 rounded-2xl bg-green-600 px-6 py-4 text-xl font-bold text-white hover:bg-green-500">
-              {t("tablet.checkInScanner.regLooksGood")} →
-            </button>
-            <button type="button" onClick={() => { setRegImage(null); goTo("reg_face_capture"); }}
-              className="rounded-2xl bg-neutral-700 px-6 py-4 text-lg font-medium text-neutral-200 hover:bg-neutral-600">
-              {t("tablet.checkInScanner.regRetake")}
-            </button>
+          {/* Bottom zone — actions hug just below the centered circle */}
+          <div className="flex w-full flex-1 flex-col items-center justify-start pt-5">
+            <div className="flex w-full max-w-md gap-3">
+              <button type="button" onClick={() => goTo("reg_form")}
+                className="flex-1 rounded-2xl bg-green-600 px-6 py-4 text-xl font-bold text-white hover:bg-green-500">
+                {t("tablet.checkInScanner.regLooksGood")} →
+              </button>
+              <button type="button" onClick={() => { setRegImage(null); goTo("reg_face_capture"); }}
+                className="rounded-2xl bg-neutral-700 px-6 py-4 text-lg font-medium text-neutral-200 hover:bg-neutral-600">
+                {t("tablet.checkInScanner.regRetake")}
+              </button>
+            </div>
           </div>
         </div>
       )}

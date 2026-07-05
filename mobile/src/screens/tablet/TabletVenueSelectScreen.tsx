@@ -97,6 +97,7 @@ export function TabletVenueSelectScreen({
       title="Select Venue (Tablet)"
       onBack={handleBackToContinueAs}
       sessionStatuses={sessionStatuses}
+      onRefresh={refreshVenues}
     />
   );
 }

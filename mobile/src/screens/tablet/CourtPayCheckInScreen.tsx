@@ -1392,7 +1392,7 @@ export function CourtPayCheckInScreen({
         }
         return (
           <View style={styles.regCaptureScreen}>
-            <View style={[styles.regCaptureTopBar, { paddingTop: insets.top + 6 }]}>
+            <View style={[styles.regCaptureTopBarAbsolute, { top: insets.top + 6 }]}>
               <TouchableOpacity
                 style={styles.iconGhostBtn}
                 onPress={resetToHome}
@@ -1401,9 +1401,12 @@ export function CourtPayCheckInScreen({
                 <Ionicons name="arrow-back" size={22} color={isLight ? "#475569" : "#a3a3a3"} />
               </TouchableOpacity>
             </View>
-            <View style={[styles.centerContent, styles.regCaptureContent]}>
-              <Text style={[styles.regCaptureTitle, isLight && styles.regCaptureTitleLight]}>{t("regTitle")}</Text>
-              <Text style={[styles.regCaptureHint, isLight && styles.regCaptureHintLight]}>{t("regFaceHint")}</Text>
+            <View style={styles.faceScreenBody}>
+              {/* Top zone — title + hint hug just above the centered circle */}
+              <View style={styles.faceTopZone}>
+                <Text style={[styles.regCaptureTitle, isLight && styles.regCaptureTitleLight]}>{t("regTitle")}</Text>
+                <Text style={[styles.regCaptureHint, isLight && styles.regCaptureHintLight]}>{t("regFaceHint")}</Text>
+              </View>
               <View style={[styles.regCircleOuter, dyn.regCircleOuter]}>
                 <View style={styles.regCircleClip}>
                   <CameraView
@@ -1428,6 +1431,8 @@ export function CourtPayCheckInScreen({
                   ) : null}
                 </View>
               </View>
+              {/* Bottom spacer — mirrors the top zone so the circle is centered */}
+              <View style={styles.faceBottomZone} />
             </View>
           </View>
         );
@@ -1435,8 +1440,11 @@ export function CourtPayCheckInScreen({
       // ── REG: FACE PREVIEW ──────────────────────────────────────────────────
       case "reg_face_preview":
         return (
-          <View style={[styles.centerContent, { paddingHorizontal: 20 }]}>
-            <Text style={[styles.regGotPhotoTitle, dyn.regGotPhotoTitle]}>{t("regGotPhoto")}</Text>
+          <View style={styles.faceScreenBody}>
+            {/* Top zone — title hugs just above the centered circle */}
+            <View style={styles.faceTopZone}>
+              <Text style={[styles.regGotPhotoTitle, dyn.regGotPhotoTitle]}>{t("regGotPhoto")}</Text>
+            </View>
             {faceBase64 ? (
               <View style={[styles.regCircleOuter, dyn.regCircleOuter]}>
                 <Image
@@ -1446,32 +1454,35 @@ export function CourtPayCheckInScreen({
                 />
               </View>
             ) : null}
-            <View style={styles.regPreviewActions}>
-              <TouchableOpacity
-                style={[styles.regLooksGoodBtn, dyn.regLooksGoodBtn, regCheckingFace && styles.disabledBtn]}
-                onPress={() => void handleCaptureRegistrationFace()}
-                disabled={regCheckingFace}
-                activeOpacity={0.85}
-              >
-                {regCheckingFace ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.regLooksGoodText}>
-                    {t("regLooksGood")} →
-                  </Text>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.regRetakeBtn, isLight && styles.regRetakeBtnLight]}
-                onPress={() => {
-                  setFaceBase64(null);
-                  resetRegistrationCamera();
-                  setStep("reg_face_capture");
-                }}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.regRetakeText, isLight && styles.regRetakeTextLight]}>{t("regRetake")}</Text>
-              </TouchableOpacity>
+            {/* Bottom zone — actions hug just below the centered circle */}
+            <View style={styles.faceBottomZone}>
+              <View style={styles.regPreviewActions}>
+                <TouchableOpacity
+                  style={[styles.regLooksGoodBtn, dyn.regLooksGoodBtn, regCheckingFace && styles.disabledBtn]}
+                  onPress={() => void handleCaptureRegistrationFace()}
+                  disabled={regCheckingFace}
+                  activeOpacity={0.85}
+                >
+                  {regCheckingFace ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.regLooksGoodText}>
+                      {t("regLooksGood")} →
+                    </Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.regRetakeBtn, isLight && styles.regRetakeBtnLight]}
+                  onPress={() => {
+                    setFaceBase64(null);
+                    resetRegistrationCamera();
+                    setStep("reg_face_capture");
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.regRetakeText, isLight && styles.regRetakeTextLight]}>{t("regRetake")}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         );
@@ -2880,19 +2891,38 @@ const styles = StyleSheet.create({
 
   // ── REG CAMERA ────────────────────────────────────────────────────────────
   regCaptureScreen: { flex: 1, width: "100%" },
-  regCaptureTopBar: {
-    width: "100%",
+  // Absolute back button — keeps the capture screen the same full height as the
+  // scan / preview screens so the face circle centers at the identical level.
+  regCaptureTopBarAbsolute: {
+    position: "absolute",
+    left: 12,
+    zIndex: 20,
     minHeight: 48,
     justifyContent: "center",
-    paddingHorizontal: 12,
   },
-  regCaptureContent: {
+  // Shared full-height body used by every face screen (capture / preview).
+  // Symmetric top/bottom flex zones keep the circle at the exact vertical
+  // center, so it stays at the same level across the whole flow.
+  faceScreenBody: {
     flex: 1,
     width: "100%",
-    maxWidth: 420,
-    alignSelf: "center",
+    alignItems: "center",
     paddingHorizontal: 20,
-    justifyContent: "center",
+  },
+  faceTopZone: {
+    flex: 1,
+    alignSelf: "stretch",
+    alignItems: "center",
+    justifyContent: "flex-end",
+    paddingBottom: 16,
+    gap: 8,
+  },
+  faceBottomZone: {
+    flex: 1,
+    alignSelf: "stretch",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    paddingTop: 16,
   },
   regCaptureTitle: { fontSize: 24, fontWeight: "700", color: "#fff", textAlign: "center" },
   regCaptureTitleLight: { color: "#0f172a" },

@@ -564,19 +564,6 @@ export default function StaffPage() {
                     />
                   </button>
                 </div>
-
-                {form.isCoach && (
-                  <div className="mt-3">
-                    <label className="mb-1.5 block text-sm text-neutral-400">{t("staff.coachBio")}</label>
-                    <textarea
-                      placeholder={t("staff.coachBioPlaceholder")}
-                      value={form.coachBio}
-                      onChange={(e) => setForm({ ...form, coachBio: e.target.value })}
-                      rows={3}
-                      className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2.5 text-white placeholder:text-neutral-500 focus:border-teal-500 focus:outline-none resize-none"
-                    />
-                  </div>
-                )}
               </div>
             </div>
 

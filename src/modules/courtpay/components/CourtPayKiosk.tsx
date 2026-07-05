@@ -925,14 +925,17 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
 
       {/* ── SCANNING (face scan for returning) ──── */}
       {step === "scanning" && (
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-4">
-          <p className="text-center text-lg text-neutral-300">
-            {scanPhase === "between_retries"
-              ? "No match yet — retrying…"
-              : scanPhase === "adjust"
-                ? "Position your face in the frame"
-                : "Hold still…"}
-          </p>
+        <div className="flex min-h-0 flex-1 flex-col items-center p-4">
+          {/* Top zone — hint hugs just above the vertically-centered frame */}
+          <div className="flex w-full flex-1 flex-col items-center justify-end pb-4">
+            <p className="text-center text-lg text-neutral-300">
+              {scanPhase === "between_retries"
+                ? "No match yet — retrying…"
+                : scanPhase === "adjust"
+                  ? "Position your face in the frame"
+                  : "Hold still…"}
+            </p>
+          </div>
           <div className="relative aspect-[8/9] w-full max-w-2xl overflow-hidden rounded-2xl border-2 border-fuchsia-600/40 bg-black shadow-lg shadow-fuchsia-900/20">
             <CameraCapture ref={cameraRef} active onError={onCameraError} className="h-full w-full" videoClassName="h-full w-full object-cover [transform:scaleX(-1)]" />
             {scanPhase === "between_retries" && retrySecondsLeft != null && (
@@ -942,18 +945,21 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
               </div>
             )}
           </div>
-          {cameraError ? (
-            <p className="text-center text-sm text-red-400">{cameraError}</p>
-          ) : scanPhase === "capturing" ? (
-            <div className="flex items-center gap-3 text-neutral-400">
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-neutral-600 border-t-fuchsia-500" />
-              <span>Scanning…</span>
-            </div>
-          ) : scanPhase === "between_retries" ? (
-            <p className="text-sm text-amber-200/90">Will retry automatically</p>
-          ) : (
-            <p className="text-sm text-neutral-500">Camera ready</p>
-          )}
+          {/* Bottom zone — status hugs just below the centered frame */}
+          <div className="flex w-full flex-1 flex-col items-center justify-start pt-4">
+            {cameraError ? (
+              <p className="text-center text-sm text-red-400">{cameraError}</p>
+            ) : scanPhase === "capturing" ? (
+              <div className="flex items-center gap-3 text-neutral-400">
+                <div className="h-5 w-5 animate-spin rounded-full border-2 border-neutral-600 border-t-fuchsia-500" />
+                <span>Scanning…</span>
+              </div>
+            ) : scanPhase === "between_retries" ? (
+              <p className="text-sm text-amber-200/90">Will retry automatically</p>
+            ) : (
+              <p className="text-sm text-neutral-500">Camera ready</p>
+            )}
+          </div>
         </div>
       )}
 
@@ -1085,55 +1091,67 @@ export function CourtPayKiosk({ venueId }: CourtPayKioskProps) {
 
       {/* ── REGISTRATION: FACE CAPTURE ──────────── */}
       {step === "reg_face_capture" && (
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-4">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold text-white">New Player</h2>
-            <p className="mt-1 text-base text-neutral-400">Take a photo to register your face</p>
+        <div className="flex min-h-0 flex-1 flex-col items-center p-4">
+          {/* Top zone — title hugs just above the centered circle */}
+          <div className="flex w-full flex-1 flex-col items-center justify-end pb-4">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold text-white">New Player</h2>
+              <p className="mt-1 text-base text-neutral-400">Take a photo to register your face</p>
+            </div>
           </div>
           <div className="relative aspect-square w-full max-w-sm overflow-hidden rounded-full border-4 border-fuchsia-600/40 bg-black">
             <CameraCapture ref={cameraRef} active onError={onCameraError} className="h-full w-full" videoClassName="h-full w-full object-cover [transform:scaleX(-1)]" />
           </div>
-          <button type="button" onClick={captureRegFace}
-            disabled={regFaceChecking}
-            className="flex items-center gap-2 rounded-2xl bg-fuchsia-600 px-10 py-4 text-xl font-bold text-white hover:bg-fuchsia-500 active:scale-[0.98] disabled:opacity-60">
-            {regFaceChecking && <Loader2 className="h-5 w-5 animate-spin" />}
-            {regFaceChecking ? "Checking…" : "Capture"}
-          </button>
-          <button type="button" onClick={resetToHome} className="text-sm text-neutral-500 hover:text-neutral-300">
-            <ArrowLeft className="mr-1 inline h-4 w-4" />
-            Back
-          </button>
+          {/* Bottom zone — actions hug just below the centered circle */}
+          <div className="flex w-full flex-1 flex-col items-center justify-start gap-4 pt-4">
+            <button type="button" onClick={captureRegFace}
+              disabled={regFaceChecking}
+              className="flex items-center gap-2 rounded-2xl bg-fuchsia-600 px-10 py-4 text-xl font-bold text-white hover:bg-fuchsia-500 active:scale-[0.98] disabled:opacity-60">
+              {regFaceChecking && <Loader2 className="h-5 w-5 animate-spin" />}
+              {regFaceChecking ? "Checking…" : "Capture"}
+            </button>
+            <button type="button" onClick={resetToHome} className="text-sm text-neutral-500 hover:text-neutral-300">
+              <ArrowLeft className="mr-1 inline h-4 w-4" />
+              Back
+            </button>
+          </div>
         </div>
       )}
 
       {/* ── REGISTRATION: FACE PREVIEW ──────────── */}
       {step === "reg_face_preview" && regImage && (
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-5 p-4">
-          <h2 className="text-3xl font-bold text-fuchsia-400">Great photo!</h2>
+        <div className="flex min-h-0 flex-1 flex-col items-center p-4">
+          {/* Top zone — title hugs just above the centered circle */}
+          <div className="flex w-full flex-1 flex-col items-center justify-end pb-5">
+            <h2 className="text-3xl font-bold text-fuchsia-400">Great photo!</h2>
+          </div>
           <div className="h-56 w-56 overflow-hidden rounded-full border-4 border-fuchsia-600/70 shadow-[0_0_40px_rgba(192,38,211,0.28)] sm:h-64 sm:w-64">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={`data:image/jpeg;base64,${regImage}`} alt="" className="h-full w-full object-cover [transform:scaleX(-1)]" />
           </div>
-          <div className="mt-1 flex w-full max-w-md gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                if (process.env.NODE_ENV !== "production") {
-                  console.log("[CourtPayKiosk] Looks good clicked", {
-                    hasRegImage: !!regImage,
-                    regImageLength: regImage?.length ?? null,
-                  });
-                }
-                if (regImage) blurInBackground(regImage);
-                goTo("reg_form");
-              }}
-              className="flex-1 rounded-2xl bg-fuchsia-600 px-6 py-4 text-xl font-bold text-white hover:bg-fuchsia-500">
-              Looks good →
-            </button>
-            <button type="button" onClick={() => { setRegImage(null); setRegistrationQualityMessage(""); goTo("reg_face_capture"); }}
-              className="rounded-2xl bg-neutral-700 px-6 py-4 text-lg font-medium text-neutral-200 hover:bg-neutral-600">
-              Retake
-            </button>
+          {/* Bottom zone — actions hug just below the centered circle */}
+          <div className="flex w-full flex-1 flex-col items-center justify-start pt-5">
+            <div className="flex w-full max-w-md gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  if (process.env.NODE_ENV !== "production") {
+                    console.log("[CourtPayKiosk] Looks good clicked", {
+                      hasRegImage: !!regImage,
+                      regImageLength: regImage?.length ?? null,
+                    });
+                  }
+                  if (regImage) blurInBackground(regImage);
+                  goTo("reg_form");
+                }}
+                className="flex-1 rounded-2xl bg-fuchsia-600 px-6 py-4 text-xl font-bold text-white hover:bg-fuchsia-500">
+                Looks good →
+              </button>
+              <button type="button" onClick={() => { setRegImage(null); setRegistrationQualityMessage(""); goTo("reg_face_capture"); }}
+                className="rounded-2xl bg-neutral-700 px-6 py-4 text-lg font-medium text-neutral-200 hover:bg-neutral-600">
+                Retake
+              </button>
+            </div>
           </div>
         </div>
       )}

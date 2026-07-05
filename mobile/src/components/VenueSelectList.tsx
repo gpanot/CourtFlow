@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
+  RefreshControl,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -25,6 +26,8 @@ interface Props {
   onBack?: () => void;
   /** Map of venueId → session status for showing coloured dots */
   sessionStatuses?: Record<string, VenueSessionStatus>;
+  /** When provided, enables pull-to-refresh on the list. */
+  onRefresh?: () => void | Promise<void>;
 }
 
 // ── Blinking dot for open sessions ───────────────────────────────────────────
@@ -102,8 +105,20 @@ export function VenueSelectList({
   title = "Select Venue",
   onBack,
   sessionStatuses,
+  onRefresh,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    if (!onRefresh) return;
+    setRefreshing(true);
+    try {
+      await onRefresh();
+    } finally {
+      setRefreshing(false);
+    }
+  }, [onRefresh]);
 
   if (loading) {
     return (
@@ -143,6 +158,16 @@ export function VenueSelectList({
         )}
         ListEmptyComponent={
           <Text style={styles.empty}>No venues assigned to your account.</Text>
+        }
+        refreshControl={
+          onRefresh ? (
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={handleRefresh}
+              tintColor={C.blue500}
+              colors={[C.blue500]}
+            />
+          ) : undefined
         }
       />
     </View>

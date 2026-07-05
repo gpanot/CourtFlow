@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { json, error, parseBody } from "@/lib/api-helpers";
-import { requireStaff } from "@/lib/auth";
+import { requireSuperAdmin } from "@/lib/auth";
 import { checkInToClassInstance, ProgramPassError } from "@/lib/program-pass";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +21,7 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(request: NextRequest) {
   try {
-    requireStaff(request.headers);
+    requireSuperAdmin(request.headers);
 
     const body = await parseBody<{
       programPassId: string;

@@ -102,14 +102,32 @@ export function TabletModeSelectScreen({
 
   const isLight = themeMode === "light";
 
+  const handleBack = () => {
+    const state = navigation.getState();
+    if (state && state.index > 0) {
+      navigation.dispatch(StackActions.popToTop());
+    } else {
+      navigation.navigate("TabletVenueSelect");
+    }
+  };
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top + 40, backgroundColor: t.bg }]}>
-      <View style={styles.header}>
+    <View style={[styles.container, { paddingTop: insets.top + 24, backgroundColor: t.bg }]}>
+      <View style={styles.headerRow}>
+        <TouchableOpacity
+          style={styles.headerBackBtn}
+          onPress={handleBack}
+          hitSlop={10}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="arrow-back" size={22} color={t.subtle} />
+        </TouchableOpacity>
         <Text style={[styles.title, { color: t.text }]}>Select Tablet Mode</Text>
-        <Text style={[styles.subtitle, { color: t.muted }]}>
-          Choose how this device will be used
-        </Text>
+        <View style={styles.headerBackPlaceholder} />
       </View>
+      <Text style={[styles.subtitle, { color: t.muted }]}>
+        Choose how this device will be used
+      </Text>
 
       <View style={styles.cards}>
         <TouchableOpacity
@@ -184,22 +202,6 @@ export function TabletModeSelectScreen({
           style={{ marginTop: 20 }}
         />
       )}
-
-      <TouchableOpacity
-        style={styles.backBtn}
-        onPress={() => {
-          const state = navigation.getState();
-          if (state && state.index > 0) {
-            navigation.dispatch(StackActions.popToTop());
-          } else {
-            navigation.navigate("TabletVenueSelect");
-          }
-        }}
-        activeOpacity={0.7}
-      >
-        <Ionicons name="arrow-back" size={16} color={t.muted} />
-        <Text style={[styles.backText, { color: t.muted }]}>Back to Venues</Text>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -209,9 +211,23 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
   },
-  header: { marginBottom: 32, alignItems: "center" },
-  title: { fontSize: 26, fontWeight: "700" },
-  subtitle: { fontSize: 14, marginTop: 6 },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  headerBackBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerBackPlaceholder: {
+    width: 36,
+    height: 36,
+  },
+  title: { flex: 1, fontSize: 26, fontWeight: "700", textAlign: "center" },
+  subtitle: { fontSize: 14, marginTop: 6, marginBottom: 32, textAlign: "center" },
   cards: { gap: 14 },
   card: {
     borderRadius: 16,
@@ -312,15 +328,6 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
 
-  backBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    marginTop: 28,
-    padding: 14,
-  },
-  backText: { fontSize: 14 },
   pinContainer: {
     flex: 1,
     justifyContent: "center",
