@@ -238,136 +238,6 @@ export default function GeneralSettingsPage() {
       <div className="max-w-2xl">
       {activeTab === "settings" && (
       <div className="space-y-8">
-        {/* Organization section — read-only, role-scoped */}
-        {venueId && selectedVenue && (
-          <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <Building2 className="h-4 w-4 text-purple-400" />
-              <h2 className="text-sm font-semibold text-white">
-                {role === "superadmin" ? t("settings.organizationTitle") : t("settings.yourOrganization")}
-              </h2>
-            </div>
-            {selectedVenue.organization ? (
-              <>
-                <dl className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <dt className="text-neutral-400">{t("settings.orgName")}</dt>
-                    <dd className="text-white">{selectedVenue.organization.name}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-neutral-400">{t("settings.orgCountry")}</dt>
-                    <dd className="text-white">
-                      {COUNTRIES_MAP[selectedVenue.organization.country]?.flag ?? ""}{" "}
-                      {COUNTRIES_MAP[selectedVenue.organization.country]?.name ?? selectedVenue.organization.country}
-                    </dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-neutral-400">{t("settings.orgCurrency")}</dt>
-                    <dd className="text-white">{selectedVenue.organization.currency}</dd>
-                  </div>
-                  <div className="flex justify-between">
-                    <dt className="text-neutral-400">{t("settings.orgPaymentRegion")}</dt>
-                    <dd>
-                      <span className="rounded-full bg-neutral-700/50 px-2 py-0.5 text-xs text-neutral-300">
-                        {selectedVenue.organization.paymentRegion ?? PAYMENT_REGION_MAP[selectedVenue.organization.country] ?? "OTHER"}
-                      </span>
-                    </dd>
-                  </div>
-                </dl>
-                {role === "superadmin" && (
-                  <Link
-                    href="/admin/organizations"
-                    className="mt-3 inline-block text-xs text-purple-400 hover:text-purple-300"
-                  >
-                    {t("settings.manageOrganizations")}
-                  </Link>
-                )}
-              </>
-            ) : (
-              <p className="text-xs text-neutral-500">
-                {role === "superadmin" ? (
-                  <>{t("settings.noOrgLinked")}{" "}<Link href="/admin/organizations" className="text-purple-400 hover:text-purple-300">{t("settings.linkOrgInPage")}</Link></>
-                ) : (
-                  t("settings.contactAdminForOrg")
-                )}
-              </p>
-            )}
-          </section>
-        )}
-
-        {/* Timezone section */}
-        <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
-          <div className="flex items-center gap-2 mb-1">
-            <Clock className="h-4 w-4 text-purple-400" />
-            <h2 className="text-sm font-semibold text-white">{t("settings.venueTimezoneTitle")}</h2>
-          </div>
-          <p className="mb-4 text-xs text-neutral-400">
-            {t("settings.venueTimezoneDesc")}
-          </p>
-
-          {venueId && (
-            <div>
-              <label className="block text-xs font-medium text-neutral-400 mb-1.5">{t("settings.timezoneLabel")}</label>
-              <div className="relative max-w-xs">
-                <select
-                  value={venueTimezone}
-                  onChange={(e) => void handleTimezoneChange(e.target.value)}
-                  disabled={tzSaving}
-                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none appearance-none pr-8 disabled:opacity-60"
-                >
-                  {regionOrder.map((region) => {
-                    const opts = TIMEZONE_OPTIONS.filter((tz) => tz.region === region);
-                    if (!opts.length) return null;
-                    return (
-                      <optgroup key={region} label={region}>
-                        {opts.map((tz) => (
-                          <option key={tz.value} value={tz.value}>{tz.label}</option>
-                        ))}
-                      </optgroup>
-                    );
-                  })}
-                </select>
-                <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2">
-                  {tzSaving
-                    ? <Loader2 className="h-3.5 w-3.5 text-neutral-400 animate-spin" />
-                    : <span className="text-neutral-500 text-xs">▼</span>
-                  }
-                </div>
-              </div>
-
-              {tzMsg && (
-                <div className={cn("mt-2 flex items-center gap-1.5 text-xs", tzMsg.type === "ok" ? "text-emerald-400" : "text-red-400")}>
-                  {tzMsg.type === "ok" && <CheckCircle2 className="h-3.5 w-3.5" />}
-                  {tzMsg.text}
-                </div>
-              )}
-
-              <p className="mt-3 text-[11px] text-neutral-600">
-                {t("settings.currentSelection")} <span className="font-mono text-neutral-400">{venueTimezone}</span>
-              </p>
-            </div>
-          )}
-        </section>
-
-        {/* Venue Details section */}
-        {venueId && selectedVenue && (
-          <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-base">{SPORT_ICONS[selectedVenue.sportType] ?? "🏟️"}</span>
-              <h2 className="text-sm font-semibold text-white">{t("settings.venueDetailsTitle")}</h2>
-            </div>
-            <dl className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-neutral-400">{t("settings.sportLabel")}</dt>
-                <dd className="text-white capitalize">{selectedVenue.sportType}</dd>
-              </div>
-            </dl>
-            <p className="mt-3 text-[11px] text-neutral-600">
-              {t("settings.editSportHint")}
-            </p>
-          </section>
-        )}
-
         {/* Venue Contact & Location section */}
         {venueId && (
           <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
@@ -451,6 +321,136 @@ export default function GeneralSettingsPage() {
                 </div>
               )}
             </div>
+          </section>
+        )}
+
+        {/* Timezone section */}
+        <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <Clock className="h-4 w-4 text-purple-400" />
+            <h2 className="text-sm font-semibold text-white">{t("settings.venueTimezoneTitle")}</h2>
+          </div>
+          <p className="mb-4 text-xs text-neutral-400">
+            {t("settings.venueTimezoneDesc")}
+          </p>
+
+          {venueId && (
+            <div>
+              <label className="block text-xs font-medium text-neutral-400 mb-1.5">{t("settings.timezoneLabel")}</label>
+              <div className="relative max-w-xs">
+                <select
+                  value={venueTimezone}
+                  onChange={(e) => void handleTimezoneChange(e.target.value)}
+                  disabled={tzSaving}
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none appearance-none pr-8 disabled:opacity-60"
+                >
+                  {regionOrder.map((region) => {
+                    const opts = TIMEZONE_OPTIONS.filter((tz) => tz.region === region);
+                    if (!opts.length) return null;
+                    return (
+                      <optgroup key={region} label={region}>
+                        {opts.map((tz) => (
+                          <option key={tz.value} value={tz.value}>{tz.label}</option>
+                        ))}
+                      </optgroup>
+                    );
+                  })}
+                </select>
+                <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2">
+                  {tzSaving
+                    ? <Loader2 className="h-3.5 w-3.5 text-neutral-400 animate-spin" />
+                    : <span className="text-neutral-500 text-xs">▼</span>
+                  }
+                </div>
+              </div>
+
+              {tzMsg && (
+                <div className={cn("mt-2 flex items-center gap-1.5 text-xs", tzMsg.type === "ok" ? "text-emerald-400" : "text-red-400")}>
+                  {tzMsg.type === "ok" && <CheckCircle2 className="h-3.5 w-3.5" />}
+                  {tzMsg.text}
+                </div>
+              )}
+
+              <p className="mt-3 text-[11px] text-neutral-600">
+                {t("settings.currentSelection")} <span className="font-mono text-neutral-400">{venueTimezone}</span>
+              </p>
+            </div>
+          )}
+        </section>
+
+        {/* Organization section — read-only, role-scoped */}
+        {venueId && selectedVenue && (
+          <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Building2 className="h-4 w-4 text-purple-400" />
+              <h2 className="text-sm font-semibold text-white">
+                {role === "superadmin" ? t("settings.organizationTitle") : t("settings.yourOrganization")}
+              </h2>
+            </div>
+            {selectedVenue.organization ? (
+              <>
+                <dl className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <dt className="text-neutral-400">{t("settings.orgName")}</dt>
+                    <dd className="text-white">{selectedVenue.organization.name}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-neutral-400">{t("settings.orgCountry")}</dt>
+                    <dd className="text-white">
+                      {COUNTRIES_MAP[selectedVenue.organization.country]?.flag ?? ""}{" "}
+                      {COUNTRIES_MAP[selectedVenue.organization.country]?.name ?? selectedVenue.organization.country}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-neutral-400">{t("settings.orgCurrency")}</dt>
+                    <dd className="text-white">{selectedVenue.organization.currency}</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt className="text-neutral-400">{t("settings.orgPaymentRegion")}</dt>
+                    <dd>
+                      <span className="rounded-full bg-neutral-700/50 px-2 py-0.5 text-xs text-neutral-300">
+                        {selectedVenue.organization.paymentRegion ?? PAYMENT_REGION_MAP[selectedVenue.organization.country] ?? "OTHER"}
+                      </span>
+                    </dd>
+                  </div>
+                </dl>
+                {role === "superadmin" && (
+                  <Link
+                    href="/admin/organizations"
+                    className="mt-3 inline-block text-xs text-purple-400 hover:text-purple-300"
+                  >
+                    {t("settings.manageOrganizations")}
+                  </Link>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-neutral-500">
+                {role === "superadmin" ? (
+                  <>{t("settings.noOrgLinked")}{" "}<Link href="/admin/organizations" className="text-purple-400 hover:text-purple-300">{t("settings.linkOrgInPage")}</Link></>
+                ) : (
+                  t("settings.contactAdminForOrg")
+                )}
+              </p>
+            )}
+          </section>
+        )}
+
+        {/* Venue Details section */}
+        {venueId && selectedVenue && (
+          <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-base">{SPORT_ICONS[selectedVenue.sportType] ?? "🏟️"}</span>
+              <h2 className="text-sm font-semibold text-white">{t("settings.venueDetailsTitle")}</h2>
+            </div>
+            <dl className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <dt className="text-neutral-400">{t("settings.sportLabel")}</dt>
+                <dd className="text-white capitalize">{selectedVenue.sportType}</dd>
+              </div>
+            </dl>
+            <p className="mt-3 text-[11px] text-neutral-600">
+              {t("settings.editSportHint")}
+            </p>
           </section>
         )}
       </div>
