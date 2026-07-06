@@ -14,11 +14,9 @@ import {
   Clock,
   AlertTriangle,
   GraduationCap,
-  MapPin,
   ArrowRight,
   CalendarCheck,
   XCircle,
-  UserX,
   Banknote,
   Play,
 } from "lucide-react";
@@ -42,6 +40,18 @@ interface UpcomingBooking {
   playerAvatar: string;
   playerPhoto: string | null;
   courtLabel: string;
+  venueName: string;
+  startTime: string;
+  endTime: string;
+  priceValue: number;
+}
+
+interface UpcomingLesson {
+  id: string;
+  playerName: string;
+  playerAvatar: string;
+  playerPhoto: string | null;
+  coachName: string;
   venueName: string;
   startTime: string;
   endTime: string;
@@ -204,6 +214,7 @@ interface DashboardData {
     lessonsThisWeek: number;
     unpaidCount: number;
     unpaidAmount: number;
+    upcomingToday: UpcomingLesson[];
   };
   recentBookings: RecentBooking[];
   recentLessons: RecentLesson[];
@@ -772,14 +783,14 @@ export default function AdminOverview() {
         />
       )}
 
-      {/* Upcoming Today + Open Play Today — side by side */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* Upcoming Bookings Today */}
+      {/* Court Booking Today + Coach Lessons Today + Open Play Today — 3 columns */}
+      <div className="grid gap-4 md:grid-cols-3">
+        {/* Court Booking Today */}
         <section className="rounded-xl border border-neutral-800 bg-neutral-900 overflow-hidden">
           <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
             <h3 className="flex items-center gap-2 text-sm font-semibold">
               <CalendarCheck className="h-4 w-4 text-purple-400" />
-              {t("overview.upcomingToday")}
+              {t("overview.courtBookingToday")}
             </h3>
             <button
               onClick={() => router.push("/admin/bookings")}
@@ -823,6 +834,50 @@ export default function AdminOverview() {
               </p>
             </div>
           )}
+        </section>
+
+        {/* Coach Lessons Today */}
+        <section className="rounded-xl border border-neutral-800 bg-neutral-900 overflow-hidden">
+          <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
+            <h3 className="flex items-center gap-2 text-sm font-semibold">
+              <GraduationCap className="h-4 w-4 text-teal-400" />
+              {t("overview.coachLessonsToday")}
+            </h3>
+            <button
+              onClick={() => router.push("/admin/coaching")}
+              className="flex items-center gap-1 text-xs text-neutral-500 hover:text-white transition-colors"
+            >
+              {t("overview.allLessons")} <ArrowRight className="h-3 w-3" />
+            </button>
+          </div>
+          <div className="divide-y divide-neutral-800/50">
+            {(data.coaching.upcomingToday ?? []).length === 0 ? (
+              <p className="px-4 py-8 text-center text-sm text-neutral-500">
+                {t("overview.noLessonsToday")}
+              </p>
+            ) : (
+              (data.coaching.upcomingToday ?? []).map((l) => (
+                <div key={l.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <PlayerAvatarImg photo={l.playerPhoto} avatar={l.playerAvatar} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{l.playerName}</p>
+                    <p className="text-xs text-neutral-500 truncate">
+                      {l.coachName}
+                      {data.venues.length > 1 && ` · ${l.venueName}`}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-medium text-teal-400">
+                      {fmtTime(l.startTime)}
+                    </p>
+                    <p className="text-[10px] text-neutral-500">
+                      {fmtPrice(l.priceValue)}
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </section>
 
         {/* Open Play Today */}
@@ -896,102 +951,6 @@ export default function AdminOverview() {
         </section>
       </div>
 
-      {/* Weekly Summary — full width */}
-      <section className="rounded-xl border border-neutral-800 bg-neutral-900 overflow-hidden">
-        <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
-          <h3 className="flex items-center gap-2 text-sm font-semibold">
-            <TrendingUp className="h-4 w-4 text-blue-400" />
-            {t("overview.weeklySummary")}
-          </h3>
-        </div>
-        <div className="p-4 space-y-3">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <SummaryItem
-              icon={CalendarDays}
-              label={t("overview.bookings")}
-              value={String(data.bookings.weekCount)}
-              color="text-blue-400"
-            />
-            <SummaryItem
-              icon={DollarSign}
-              label={t("overview.revenue")}
-              value={fmtPrice(data.revenue.weekBookings)}
-              color="text-green-400"
-            />
-            <SummaryItem
-              icon={XCircle}
-              label={t("overview.cancelled")}
-              value={String(data.bookings.cancelledThisWeek)}
-              color="text-red-400"
-            />
-            <SummaryItem
-              icon={UserX}
-              label={t("overview.noShows")}
-              value={String(data.bookings.noShowThisWeek)}
-              color="text-amber-400"
-            />
-          </div>
-
-          {(data.coaching.lessonsToday > 0 || data.coaching.lessonsThisWeek > 0) && (
-            <div className="border-t border-neutral-800 pt-3">
-              <p className="text-xs text-neutral-500 mb-2">{t("overview.coaching")}</p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                <SummaryItem
-                  icon={GraduationCap}
-                  label={t("overview.today")}
-                  value={String(data.coaching.lessonsToday)}
-                  color="text-teal-400"
-                />
-                <SummaryItem
-                  icon={GraduationCap}
-                  label={t("overview.thisWeek")}
-                  value={String(data.coaching.lessonsThisWeek)}
-                  color="text-teal-400"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Venue info + Staff */}
-          <div className="border-t border-neutral-800 pt-3 grid sm:grid-cols-2 gap-4">
-            <div>
-              <p className="text-xs text-neutral-500 mb-2">{t("overview.venues")}</p>
-              <div className="space-y-1.5">
-                {data.venues.map((v) => (
-                  <div key={v.id} className="flex items-center justify-between text-sm">
-                    <span className="flex items-center gap-1.5">
-                      <MapPin className="h-3 w-3 text-neutral-500" />
-                      <span className="text-neutral-300">{v.name}</span>
-                    </span>
-                    <span className="text-xs text-neutral-500">
-                      {v.bookableCourts}/{v.totalCourts} {t("overview.courtsBookable")}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            {data.staff.totalCount > 0 && (
-              <div>
-                <p className="text-xs text-neutral-500 mb-2">{t("overview.staff")}</p>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="flex items-center gap-1.5">
-                    <Users className="h-3 w-3 text-neutral-500" />
-                    <span className="text-neutral-300">{t("overview.staffMembers", { count: data.staff.totalCount })}</span>
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* Quick Links */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-        <QuickLink label={t("overview.bookings")} icon={CalendarDays} onClick={() => router.push("/admin/bookings")} />
-        <QuickLink label={t("overview.memberships")} icon={Crown} onClick={() => router.push("/admin/memberships")} />
-        <QuickLink label={t("overview.coaching")} icon={GraduationCap} onClick={() => router.push("/admin/coaching")} />
-      </div>
-
     </div>
   );
 }
@@ -1045,28 +1004,6 @@ function MiniStat({
   );
 }
 
-function SummaryItem({
-  icon: Icon,
-  label,
-  value,
-  color,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: string;
-  color: string;
-}) {
-  return (
-    <div className="flex items-center gap-2.5 rounded-lg bg-neutral-800/40 px-3 py-2">
-      <Icon className={cn("h-3.5 w-3.5 shrink-0", color)} />
-      <div>
-        <p className="text-sm font-semibold">{value}</p>
-        <p className="text-[10px] text-neutral-500">{label}</p>
-      </div>
-    </div>
-  );
-}
-
 function AlertBanner({
   icon: Icon,
   color,
@@ -1095,26 +1032,6 @@ function AlertBanner({
       <span className={cn("flex items-center gap-1 text-xs font-medium", color)}>
         {action} <ArrowRight className="h-3 w-3" />
       </span>
-    </button>
-  );
-}
-
-function QuickLink({
-  label,
-  icon: Icon,
-  onClick,
-}: {
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex items-center gap-2 rounded-xl border border-neutral-800 bg-neutral-900 px-3 py-3 text-sm font-medium text-neutral-400 transition-colors hover:border-neutral-700 hover:text-white"
-    >
-      <Icon className="h-4 w-4" />
-      {label}
     </button>
   );
 }

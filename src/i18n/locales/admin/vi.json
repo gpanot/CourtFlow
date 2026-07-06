@@ -23,6 +23,7 @@
     "logErrors": "Nhật ký lỗi",
     "settings": "Cài đặt chung",
     "courtflowSocial": "CourtFlow - Xã hội",
+    "courtpassBooking": "CourtPass - Đặt sân",
     "courtpayCheckin": "CourtPay - Điểm danh",
     "logsErrors": "Nhật ký & Lỗi",
     "courtpassPlayers": "Người chơi CourtPass",
@@ -32,7 +33,7 @@
   "layout": {
     "adminPanel": "Bảng quản trị",
     "managerPanel": "Bảng quản lý",
-    "courtflow": "CourtPass",
+    "courtflow": "Chào mừng trở lại",
     "continueAs": "Tiếp tục với vai trò...",
     "signOut": "Đăng xuất",
     "switchToLight": "Chuyển sang giao diện sáng",
@@ -93,6 +94,10 @@
     "memberships": "Thành viên",
     "coaching": "Huấn luyện",
     "upcomingToday": "Sắp diễn ra hôm nay",
+    "courtBookingToday": "Đặt sân hôm nay",
+    "coachLessonsToday": "Buổi tập huấn viên hôm nay",
+    "noLessonsToday": "Không có buổi tập nào hôm nay",
+    "allLessons": "Tất cả buổi tập",
     "allBookings": "Tất cả đặt sân",
     "noBookingsToday": "Không còn đặt sân nào hôm nay",
     "tomorrow": "Ngày mai",
@@ -248,7 +253,7 @@
     "noOwner": "Không có chủ (nền tảng)",
     "saveOwner": "Lưu chủ sở hữu",
     "ownerHint": "Gán một quản lý để sở hữu địa điểm này. Quản lý chỉ có thể xem và quản lý các địa điểm họ sở hữu.",
-    "playerPortal": "Cổng đặt sân dành cho người chơi",
+    "playerPortal": "Cổng đặt sân dành cho người chơi (Chỉ Quản lý/Admin)",
     "portalEnabled": "Đang bật",
     "portalDisabled": "Đang tắt",
     "portalHint": "Khi bật, người chơi có thể đặt sân và đặt lịch huấn luyện tại địa điểm này qua cổng web.",
@@ -1543,7 +1548,10 @@
     "deselectAll": "Bỏ chọn tất cả",
     "none": "Không có",
     "confirmDelete": "Xác nhận xoá",
-    "deleting": "Đang xoá..."
+    "deleting": "Đang xoá...",
+    "managerOrSuperAdminRequired": "Yêu cầu quyền Quản lý hoặc Super Admin",
+    "superAdminRequired": "Yêu cầu quyền Super Admin",
+    "accessDeniedVenue": "Không có quyền truy cập địa điểm này"
   },
   "cancellation": {
     "title": "Huỷ đặt sân"
@@ -1624,6 +1632,7 @@
     "emailLabel": "Email",
     "portalLoginHint": "Dùng để đăng nhập vào cổng người chơi",
     "shareWithPlayer": "Chia sẻ thông tin này với người chơi để họ có thể đăng nhập",
+    "activationEmailHint": "Một lời mời để thiết lập tài khoản sẽ được gửi đến địa chỉ này",
     "resetPasswordLabel": "Đặt lại mật khẩu",
     "genderLabel": "Giới tính",
     "skillLevelLabel": "Trình độ",

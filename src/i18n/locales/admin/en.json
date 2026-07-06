@@ -23,6 +23,7 @@
     "logErrors": "Log Errors",
     "settings": "General Settings",
     "courtflowSocial": "CourtFlow - Social",
+    "courtpassBooking": "CourtPass - Booking",
     "courtpayCheckin": "CourtPay - Check-in",
     "logsErrors": "Logs & Errors",
     "courtpassPlayers": "CourtPass Players",
@@ -32,7 +33,7 @@
   "layout": {
     "adminPanel": "Admin Panel",
     "managerPanel": "Manager Panel",
-    "courtflow": "CourtPass",
+    "courtflow": "Welcome back",
     "continueAs": "Continue as...",
     "signOut": "Sign Out",
     "switchToLight": "Switch to light mode",
@@ -95,6 +96,10 @@
     "memberships": "Memberships",
     "coaching": "Coaching",
     "upcomingToday": "Upcoming Today",
+    "courtBookingToday": "Court Booking Today",
+    "coachLessonsToday": "Coach Lessons Today",
+    "noLessonsToday": "No upcoming lessons today",
+    "allLessons": "All lessons",
     "allBookings": "All bookings",
     "noBookingsToday": "No more bookings today",
     "tomorrow": "Tomorrow",
@@ -250,7 +255,7 @@
     "noOwner": "No owner (platform)",
     "saveOwner": "Save Owner",
     "ownerHint": "Assign a manager to own this venue. Managers can only see and manage venues they own.",
-    "playerPortal": "Player Booking Portal",
+    "playerPortal": "Player Booking Portal (Manager/Admin only)",
     "portalEnabled": "Enabled",
     "portalDisabled": "Disabled",
     "portalHint": "When enabled, players can book courts and coaches at this venue via the web portal.",
@@ -1551,7 +1556,10 @@
     "deselectAll": "Deselect All",
     "none": "None",
     "confirmDelete": "Yes, delete",
-    "deleting": "Deleting..."
+    "deleting": "Deleting...",
+    "managerOrSuperAdminRequired": "Manager or super admin access required",
+    "superAdminRequired": "Super admin access required",
+    "accessDeniedVenue": "Access denied to this venue"
   },
   "cancellation": {
     "title": "Cancellation"
@@ -1632,6 +1640,7 @@
     "emailLabel": "Email",
     "portalLoginHint": "Used to log in to the player portal",
     "shareWithPlayer": "Share this with the player so they can log in",
+    "activationEmailHint": "An invite to set up their account will be sent to this address",
     "resetPasswordLabel": "Reset password",
     "genderLabel": "Gender",
     "skillLevelLabel": "Skill level",

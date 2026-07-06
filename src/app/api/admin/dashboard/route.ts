@@ -70,6 +70,7 @@ export async function GET(request: NextRequest) {
       unpaidLessons,
       lessonsPaidThisMonth,
       recentLessons,
+      upcomingLessonsToday,
       todayOpenPlay,
       recentOpenPlay,
     ] = await Promise.all([
@@ -221,6 +222,22 @@ export async function GET(request: NextRequest) {
         orderBy: { createdAt: "desc" },
         take: 8,
       }),
+      // Today's upcoming coaching lessons (confirmed, after now)
+      prisma.coachLesson.findMany({
+        where: {
+          venueId: { in: venueIds },
+          date: { gte: todayStart, lte: todayEnd },
+          startTime: { gt: now },
+          status: "confirmed",
+        },
+        include: {
+          coach: { select: { name: true } },
+          player: { select: { name: true, avatar: true, avatarPhotoPath: true, facePhotoPath: true } },
+          venue: { select: { name: true } },
+        },
+        orderBy: { startTime: "asc" },
+        take: 10,
+      }),
       // Today's open play registrations (all statuses) — for the "Open Play Today" section
       prisma.openPlayRegistration.findMany({
         where: {
@@ -305,6 +322,17 @@ export async function GET(request: NextRequest) {
         lessonsThisWeek: weekLessons,
         unpaidCount: unpaidLessons.length,
         unpaidAmount: unpaidLessons.reduce((s, l) => s + l.priceValue, 0),
+        upcomingToday: upcomingLessonsToday.map((l) => ({
+          id: l.id,
+          playerName: l.player.name,
+          playerAvatar: l.player.avatar,
+          playerPhoto: l.player.avatarPhotoPath || l.player.facePhotoPath || null,
+          coachName: l.coach.name,
+          venueName: l.venue.name,
+          startTime: l.startTime,
+          endTime: l.endTime,
+          priceValue: l.priceValue,
+        })),
       },
       recentBookings: (() => {
         // Collapse group bookings: keep the first occurrence per bookingGroupId, aggregate court labels

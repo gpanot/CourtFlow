@@ -27,8 +27,6 @@ import {
   Users,
   CalendarDays,
   Loader2,
-  Eye,
-  EyeOff,
   GraduationCap,
   ChevronLeft,
   ChevronRight,
@@ -1351,11 +1349,9 @@ function NewPlayerModal({
     name: "",
     phone: "",
     email: "",
-    password: "",
     gender: "male" as "male" | "female",
     skillLevel: "beginner" as "beginner" | "intermediate" | "advanced" | "pro",
   });
-  const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
@@ -1367,8 +1363,6 @@ function NewPlayerModal({
     if (!form.phone.trim()) { setErr("Phone number is required"); return; }
     if (!form.email.trim()) { setErr("Email is required"); return; }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) { setErr("Invalid email address"); return; }
-    if (!form.password) { setErr("Password is required"); return; }
-    if (form.password.length < 8) { setErr("Password must be at least 8 characters"); return; }
     setSaving(true);
     setErr("");
     try {
@@ -1376,7 +1370,6 @@ function NewPlayerModal({
         name: form.name.trim(),
         phone: form.phone.trim(),
         email: form.email.trim().toLowerCase(),
-        password: form.password,
         gender: form.gender,
         skillLevel: form.skillLevel,
       });
@@ -1444,29 +1437,7 @@ function NewPlayerModal({
               placeholder="e.g. player@email.com"
               className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none"
             />
-            <p className="mt-1 text-[11px] text-neutral-500">Used to log in to the player portal</p>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-neutral-300">
-              Password <span className="text-red-400">*</span>
-            </label>
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                value={form.password}
-                onChange={(e) => update("password", e.target.value)}
-                placeholder="Min. 8 characters"
-                className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 pr-9 text-sm text-white placeholder:text-neutral-600 focus:border-purple-500 focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300"
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-            <p className="mt-1 text-[11px] text-neutral-500">Share this with the player so they can log in</p>
+            <p className="mt-1 text-[11px] text-neutral-500">An invite to set up their account will be sent to this address</p>
           </div>
           <div>
             <label className="mb-1.5 block text-xs font-medium text-neutral-300">Gender</label>
