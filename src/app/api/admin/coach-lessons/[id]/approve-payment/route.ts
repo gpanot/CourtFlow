@@ -16,6 +16,12 @@ export async function PATCH(
     const auth = await await requireAdminAccess(request.headers);
     const { id } = await params;
 
+    let body: { paymentMethod?: string } = {};
+    try {
+      const { parseBody } = await import("@/lib/api-helpers");
+      body = await parseBody(request);
+    } catch { /* no body is fine */ }
+
     const [lesson, approver] = await Promise.all([
       prisma.coachLesson.findUnique({ where: { id } }),
       prisma.staffMember.findUnique({ where: { id: auth.id }, select: { name: true } }),
@@ -30,7 +36,7 @@ export async function PATCH(
       data: {
         paymentStatus: "paid",
         paidAt: new Date(),
-        paymentMethod: "bank_transfer",
+        paymentMethod: body.paymentMethod || "bank_transfer",
         status: "confirmed",
       },
       include: {

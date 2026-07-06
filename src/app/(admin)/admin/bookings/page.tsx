@@ -10,6 +10,7 @@ import { cn } from "@/lib/cn";
 import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
 import {
   BookingStatusBadge,
+  PaymentMethodBadge,
   PaymentStatusBadge,
 } from "@/components/admin/EditBookingModal";
 import {
@@ -38,7 +39,6 @@ import {
   X,
   Filter,
   DollarSign,
-  CreditCard,
   Download,
 } from "lucide-react";
 import { CourtsManager } from "@/components/admin/CourtsManager";
@@ -87,6 +87,7 @@ interface BookingRecord {
   endTime: string;
   status: "confirmed" | "cancelled" | "completed" | "no_show";
   paymentStatus: string | null;
+  paymentMethod: string | null;
   paymentProofUrl: string | null;
   priceValue: number;
   coPlayerIds: string[];
@@ -155,6 +156,7 @@ interface OpenPlayRegRecord {
   endTime: string;
   status: "confirmed" | "cancelled" | "no_show";
   paymentStatus: string | null;
+  paymentMethod: string | null;
   paymentProofUrl: string | null;
   priceValue: number;
   player: { id: string; name: string; phone: string };
@@ -175,6 +177,7 @@ interface CoachLessonRecord {
   playerCount: number | null;
   note: string | null;
   paymentStatus: string;
+  paymentMethod: string | null;
   proofUrl: string | null;
   coach: { id: string; name: string };
   player: { id: string; name: string; phone: string };
@@ -870,6 +873,7 @@ export default function BookingsPage() {
                           endTime: b.endTime,
                           priceValue: b.priceValue,
                           paymentStatus: b.paymentStatus ?? "pending",
+                          paymentMethod: b.paymentMethod,
                           paymentProofUrl: b.paymentProofUrl,
                           bookingStatus: b.status,
                         })}
@@ -929,6 +933,7 @@ export default function BookingsPage() {
                           endTime: r.endTime,
                           priceValue: r.priceValue,
                           paymentStatus: r.paymentStatus ?? "pending",
+                          paymentMethod: r.paymentMethod,
                           paymentProofUrl: r.paymentProofUrl,
                           bookingStatus: r.status,
                         })}
@@ -991,6 +996,7 @@ export default function BookingsPage() {
                           endTime: lesson.endTime,
                           priceValue: lesson.priceValue,
                           paymentStatus: lesson.paymentStatus,
+                          paymentMethod: lesson.paymentMethod,
                           paymentProofUrl: lesson.proofUrl,
                           bookingStatus: lesson.status,
                         })}
@@ -1944,6 +1950,7 @@ interface AllBookingRow {
   endTime: string;
   status: "confirmed" | "cancelled" | "completed" | "no_show";
   paymentStatus: string | null;
+  paymentMethod: string | null;
   paymentProofUrl: string | null;
   priceValue: number;
   coPlayerIds: string[];
@@ -2281,16 +2288,19 @@ function AllBookingsTab({
                             endTime: row.endTime,
                             priceValue: row.priceValue,
                             paymentStatus: row.paymentStatus ?? "pending",
+                            paymentMethod: row.paymentMethod,
                             paymentProofUrl: row.paymentProofUrl,
                             bookingStatus: row.status,
                           }); }}
-                          className="flex items-center gap-1.5 group"
+                          className="flex flex-col items-start gap-0.5 group"
                           title="Manage payment"
                         >
                           <span className={cn("rounded px-2 py-0.5 text-xs font-medium group-hover:ring-1 group-hover:ring-white/20 transition-all", PAYMENT_STATUS_COLORS[row.paymentStatus ?? "pending"] ?? "bg-neutral-700/30 text-neutral-400")}>
                             {PAYMENT_STATUS_LABELS[row.paymentStatus ?? "pending"] ?? row.paymentStatus ?? "Unpaid"}
                           </span>
-                          {isPaid && <CreditCard className="h-3 w-3 text-green-500/60" />}
+                          {isPaid && row.paymentMethod && (
+                            <PaymentMethodBadge method={row.paymentMethod} size="md" />
+                          )}
                         </button>
                       </td>
                       <td className="px-4 py-3 text-right text-neutral-300 whitespace-nowrap">

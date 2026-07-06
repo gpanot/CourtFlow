@@ -23,8 +23,8 @@ export async function PATCH(
 
     await assertVenueAccess(auth, reg.venueId);
 
-    // Accept null / "pending" (staff walk-in) as well as "proof_submitted" (portal flow)
-    const allowedStatuses = [null, "pending", "proof_submitted"];
+    // Accept null / "pending" (staff walk-in), "proof_submitted" (portal flow), and "paid" (method correction)
+    const allowedStatuses = [null, "pending", "proof_submitted", "paid"];
     if (!allowedStatuses.includes(reg.paymentStatus)) {
       return error(`Cannot approve: payment status is "${reg.paymentStatus}"`, 400);
     }
@@ -34,6 +34,7 @@ export async function PATCH(
       data: {
         paymentStatus: "paid",
         holdExpiresAt: null,
+        ...(body.paymentMethod ? { paymentMethod: body.paymentMethod } : {}),
         ...(body.proofUrl !== undefined ? { paymentProofUrl: body.proofUrl } : {}),
       },
       include: { player: { select: { name: true, email: true } } },

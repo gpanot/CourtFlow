@@ -21,10 +21,11 @@ export async function PATCH(
     const booking = await prisma.booking.findUnique({ where: { id } });
     if (!booking) return error("Booking not found", 404);
 
-    // Allow approving from:
+    // Allow approving/updating from:
     //  - "proof_submitted" → player-portal flow (staff approves submitted proof)
     //  - null / "pending"  → staff walk-in / direct cash recording
-    const allowedStatuses = [null, "pending", "proof_submitted"];
+    //  - "paid"            → staff updating payment details (method correction)
+    const allowedStatuses = [null, "pending", "proof_submitted", "paid"];
     const effectiveStatus = booking.bookingGroupId
       ? null // group bookings: always allow (group may have different status)
       : booking.paymentStatus;
@@ -40,7 +41,10 @@ export async function PATCH(
       await prisma.$transaction(async (tx) => {
         await tx.booking.updateMany({
           where: { bookingGroupId: booking.bookingGroupId! },
-          data: { paymentStatus: "paid" },
+          data: {
+            paymentStatus: "paid",
+            ...(body.paymentMethod ? { paymentMethod: body.paymentMethod } : {}),
+          },
         });
         if (body.proofUrl !== undefined) {
           await tx.booking.update({ where: { id }, data: { paymentProofUrl: body.proofUrl } });
@@ -55,6 +59,7 @@ export async function PATCH(
         where: { id },
         data: {
           paymentStatus: "paid",
+          ...(body.paymentMethod ? { paymentMethod: body.paymentMethod } : {}),
           ...(body.proofUrl !== undefined ? { paymentProofUrl: body.proofUrl } : {}),
         },
       });

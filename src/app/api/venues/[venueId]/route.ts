@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, notFound, parseBody } from "@/lib/api-helpers";
-import { requireManagerOrSuperAdmin, requireSuperAdmin } from "@/lib/auth";
+import { requireAdminAccess, requireSuperAdmin } from "@/lib/auth";
 import { assertVenueAccess } from "@/lib/venue-scope";
 import { emitToVenue } from "@/lib/socket-server";
 import { Prisma } from "@prisma/client";
@@ -29,7 +29,7 @@ export async function PATCH(
   { params }: { params: Promise<{ venueId: string }> }
 ) {
   try {
-    const auth = requireManagerOrSuperAdmin(request.headers);
+    const auth = await requireAdminAccess(request.headers);
     const { venueId } = await params;
     await assertVenueAccess(auth, venueId);
 

@@ -214,11 +214,6 @@ function VenueCard({
   const { t } = useTranslation("translation", { i18n: adminI18n });
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(venue.name);
-  const [editLocation, setEditLocation] = useState(venue.location || "");
-  const [editContactPhone, setEditContactPhone] = useState(venue.contactPhone || "");
-  const [editContactWhatsApp, setEditContactWhatsApp] = useState(venue.contactWhatsApp || "");
-  const [editContactZalo, setEditContactZalo] = useState(venue.contactZalo || "");
-  const [editContactLine, setEditContactLine] = useState(venue.contactLine || "");
   const [editSportType, setEditSportType] = useState(venue.sportType ?? "pickleball");
   const [saving, setSaving] = useState(false);
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
@@ -230,11 +225,6 @@ function VenueCard({
     try {
       await api.patch(`/api/venues/${venue.id}`, {
         name: editName.trim(),
-        location: editLocation.trim() || null,
-        contactPhone: editContactPhone.trim() || null,
-        contactWhatsApp: editContactWhatsApp.trim() || null,
-        contactZalo: editContactZalo.trim() || null,
-        contactLine: editContactLine.trim() || null,
         sportType: editSportType,
       });
       setEditing(false);
@@ -249,11 +239,6 @@ function VenueCard({
   const cancelEdit = () => {
     setEditing(false);
     setEditName(venue.name);
-    setEditLocation(venue.location || "");
-    setEditContactPhone(venue.contactPhone || "");
-    setEditContactWhatsApp(venue.contactWhatsApp || "");
-    setEditContactZalo(venue.contactZalo || "");
-    setEditContactLine(venue.contactLine || "");
     setEditSportType(venue.sportType ?? "pickleball");
   };
 
@@ -284,61 +269,6 @@ function VenueCard({
                 onChange={(e) => setEditName(e.target.value)}
                 className="w-full rounded-lg border border-neutral-600 bg-neutral-800 px-3 py-1.5 text-white focus:border-purple-500 focus:outline-none"
                 autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") saveVenue();
-                  if (e.key === "Escape") cancelEdit();
-                }}
-              />
-              <input
-                type="text"
-                value={editLocation}
-                onChange={(e) => setEditLocation(e.target.value)}
-                placeholder={t("venues.locationPlaceholder")}
-                className="w-full rounded-lg border border-neutral-600 bg-neutral-800 px-3 py-1.5 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") saveVenue();
-                  if (e.key === "Escape") cancelEdit();
-                }}
-              />
-              <input
-                type="tel"
-                value={editContactPhone}
-                onChange={(e) => setEditContactPhone(e.target.value)}
-                placeholder={t("venues.contactPhonePlaceholder")}
-                className="w-full rounded-lg border border-neutral-600 bg-neutral-800 px-3 py-1.5 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") saveVenue();
-                  if (e.key === "Escape") cancelEdit();
-                }}
-              />
-              <input
-                type="tel"
-                value={editContactWhatsApp}
-                onChange={(e) => setEditContactWhatsApp(e.target.value)}
-                placeholder={t("venues.contactWhatsAppPlaceholder")}
-                className="w-full rounded-lg border border-neutral-600 bg-neutral-800 px-3 py-1.5 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") saveVenue();
-                  if (e.key === "Escape") cancelEdit();
-                }}
-              />
-              <input
-                type="text"
-                value={editContactZalo}
-                onChange={(e) => setEditContactZalo(e.target.value)}
-                placeholder={t("venues.contactZaloPlaceholder")}
-                className="w-full rounded-lg border border-neutral-600 bg-neutral-800 px-3 py-1.5 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") saveVenue();
-                  if (e.key === "Escape") cancelEdit();
-                }}
-              />
-              <input
-                type="text"
-                value={editContactLine}
-                onChange={(e) => setEditContactLine(e.target.value)}
-                placeholder={t("venues.contactLinePlaceholder")}
-                className="w-full rounded-lg border border-neutral-600 bg-neutral-800 px-3 py-1.5 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") saveVenue();
                   if (e.key === "Escape") cancelEdit();

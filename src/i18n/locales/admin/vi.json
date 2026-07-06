@@ -75,7 +75,13 @@
     "currentSelection": "Đang chọn:",
     "venueDetailsTitle": "Thông tin địa điểm",
     "sportLabel": "Môn thể thao",
-    "editSportHint": "Chỉnh sửa loại môn thể thao tại trang Địa điểm."
+    "editSportHint": "Chỉnh sửa loại môn thể thao tại trang Địa điểm.",
+    "venueContactTitle": "Liên hệ & Địa chỉ",
+    "venueContactDesc": "Số điện thoại và địa chỉ hiển thị cho người chơi trên cổng đặt sân.",
+    "locationLabel": "Địa chỉ",
+    "phoneLabel": "Điện thoại",
+    "saveContact": "Lưu",
+    "contactSaved": "Đã lưu thông tin liên hệ"
   },
   "overview": {
     "title": "Tổng quan",

@@ -166,3 +166,38 @@ export function PaymentStatusBadge({ status }: { status: string }) {
     </span>
   );
 }
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: "Cash",
+  vietqr: "QR",
+  bank_transfer: "Transfer",
+  other: "Other",
+};
+
+const PAYMENT_METHOD_COLORS: Record<string, string> = {
+  cash: "bg-amber-600/20 text-amber-400",
+  vietqr: "bg-sky-600/20 text-sky-400",
+  bank_transfer: "bg-violet-600/20 text-violet-400",
+  other: "bg-neutral-600/20 text-neutral-400",
+};
+
+export function PaymentMethodBadge({
+  method,
+  size = "sm",
+}: {
+  method: string;
+  size?: "sm" | "md";
+}) {
+  const label = PAYMENT_METHOD_LABELS[method] ?? method;
+  const colorCls = PAYMENT_METHOD_COLORS[method] ?? "bg-neutral-600/20 text-neutral-400";
+  const sizeCls =
+    size === "md"
+      ? "rounded px-2 py-0.5 text-xs"
+      : "rounded-full px-2 py-0.5 text-[10px]";
+
+  return (
+    <span className={cn("inline-block font-medium", sizeCls, colorCls)}>
+      {label}
+    </span>
+  );
+}

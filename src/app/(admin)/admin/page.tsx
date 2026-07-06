@@ -75,6 +75,7 @@ interface RecentBooking {
   status: string;
   paymentStatus: string | null;
   paymentProofUrl: string | null;
+  paymentMethod: string | null;
   holdExpiresAt: string | null;
   priceValue: number;
   createdAt: string;
@@ -98,6 +99,7 @@ interface RecentLesson {
   endTime: string;
   status: string;
   paymentStatus: string;
+  paymentMethod: string | null;
   proofUrl: string | null;
   holdExpiresAt: string | null;
   priceValue: number;
@@ -118,6 +120,7 @@ interface RecentOpenPlay {
   endTime: string;
   status: string;
   paymentStatus: string;
+  paymentMethod: string | null;
   paymentProofUrl: string | null;
   holdExpiresAt: string | null;
   priceValue: number;
@@ -131,6 +134,7 @@ interface OpenPlayTodayRegistration {
   playerAvatar: string;
   playerPhoto: string | null;
   paymentStatus: string;
+  paymentMethod: string | null;
   paymentProofUrl: string | null;
   status: string;
 }
@@ -162,6 +166,7 @@ interface RecentEntry {
   endTime: string;
   status: string;
   paymentStatus: string | null;
+  paymentMethod: string | null;
   paymentProofUrl: string | null;
   holdExpiresAt: string | null;
   priceValue: number;
@@ -351,6 +356,7 @@ export default function AdminOverview() {
       endTime: b.endTime,
       status: b.status,
       paymentStatus: b.paymentStatus ?? null,
+      paymentMethod: b.paymentMethod ?? null,
       paymentProofUrl: b.paymentProofUrl ?? null,
       holdExpiresAt: b.holdExpiresAt ?? null,
       priceValue: b.priceValue,
@@ -372,6 +378,7 @@ export default function AdminOverview() {
       endTime: l.endTime,
       status: l.status,
       paymentStatus: l.paymentStatus ?? null,
+      paymentMethod: l.paymentMethod ?? null,
       paymentProofUrl: l.proofUrl ?? null,
       holdExpiresAt: l.holdExpiresAt ?? null,
       priceValue: l.priceValue,
@@ -393,6 +400,7 @@ export default function AdminOverview() {
       endTime: r.endTime,
       status: r.status,
       paymentStatus: r.paymentStatus,
+      paymentMethod: r.paymentMethod ?? null,
       paymentProofUrl: r.paymentProofUrl ?? null,
       holdExpiresAt: r.holdExpiresAt ?? null,
       priceValue: r.priceValue,
@@ -600,6 +608,7 @@ export default function AdminOverview() {
                           id: entry.id,
                           status: entry.status,
                           paymentStatus: entry.paymentStatus,
+                          paymentMethod: entry.paymentMethod,
                           paymentProofUrl: entry.paymentProofUrl,
                           holdExpiresAt: entry.holdExpiresAt,
                           createdAt: entry.createdAt,
@@ -662,6 +671,7 @@ export default function AdminOverview() {
                         id: entry.id,
                         status: entry.status,
                         paymentStatus: entry.paymentStatus,
+                        paymentMethod: entry.paymentMethod,
                         paymentProofUrl: entry.paymentProofUrl,
                         holdExpiresAt: entry.holdExpiresAt,
                         createdAt: entry.createdAt,
@@ -748,6 +758,7 @@ export default function AdminOverview() {
                           endTime: openPlayDetailGroup.endTime,
                           priceValue: openPlayDetailGroup.priceValue,
                           paymentStatus: displayPaymentStatus(r.paymentStatus),
+                          paymentMethod: r.paymentMethod,
                           paymentProofUrl: r.paymentProofUrl,
                           bookingStatus: r.status,
                         });

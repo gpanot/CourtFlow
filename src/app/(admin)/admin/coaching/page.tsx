@@ -8,7 +8,7 @@ import adminI18n from "@/i18n/admin-i18n";
 import { api } from "@/lib/api-client";
 import { useSessionStore } from "@/stores/session-store";
 import { cn } from "@/lib/cn";
-import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
+import { PaymentMethodBadge } from "@/components/admin/EditBookingModal";
 import { hasGroupPlayerPricing, calculateSessionPrice } from "@/lib/coach-package-pricing";
 import {
   GraduationCap,
@@ -803,6 +803,7 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
       endTime: row.endTime,
       priceValue: row.priceValue,
       paymentStatus: row.paymentStatus,
+      paymentMethod: row.paymentMethod,
       paymentProofUrl: row.proofUrl,
       bookingStatus: row.status,
     });
@@ -1051,12 +1052,15 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
                       <td className="px-4 py-3 whitespace-nowrap">
                         <button
                           onClick={(e) => { e.stopPropagation(); openPaymentModal(row); }}
-                          className="flex items-center gap-1.5 group"
+                          className="flex flex-col items-start gap-0.5 group"
                           title="Manage payment"
                         >
                           <span className={cn("rounded px-2 py-0.5 text-xs font-medium group-hover:ring-1 group-hover:ring-white/20 transition-all", LESSON_PAYMENT_COLORS[row.paymentStatus] ?? "bg-neutral-700/30 text-neutral-400")}>
                             {LESSON_PAYMENT_LABELS[row.paymentStatus] ?? "Unpaid"}
                           </span>
+                          {isPaid && row.paymentMethod && (
+                            <PaymentMethodBadge method={row.paymentMethod} size="md" />
+                          )}
                         </button>
                       </td>
                       <td className="px-4 py-3 text-right text-neutral-300 whitespace-nowrap">

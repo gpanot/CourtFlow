@@ -343,6 +343,7 @@ export async function GET(request: NextRequest) {
           courtLabel: string; allCourtLabels: string[];
           venueName: string; date: Date; startTime: Date; endTime: Date;
           status: string; paymentStatus: string | null; paymentProofUrl: string | null;
+          paymentMethod: string | null;
           holdExpiresAt: Date | null; priceValue: number; createdAt: Date;
           bookingGroupId: string | null; groupPaymentStatus: string | null; groupTotalPrice: number | null;
           isGroup: boolean;
@@ -367,6 +368,7 @@ export async function GET(request: NextRequest) {
               status: b.status,
               paymentStatus: bid.bookingGroup?.paymentStatus ?? b.paymentStatus,
               paymentProofUrl: b.paymentProofUrl,
+              paymentMethod: b.paymentMethod ?? null,
               holdExpiresAt: b.holdExpiresAt,
               priceValue: bid.bookingGroup?.totalPriceValue ?? b.priceValue,
               createdAt: b.createdAt,
@@ -384,6 +386,7 @@ export async function GET(request: NextRequest) {
               allCourtLabels: [b.court.label],
               venueName: b.venue.name, date: b.date, startTime: b.startTime, endTime: b.endTime,
               status: b.status, paymentStatus: b.paymentStatus, paymentProofUrl: b.paymentProofUrl,
+              paymentMethod: b.paymentMethod ?? null,
               holdExpiresAt: b.holdExpiresAt,
               priceValue: b.priceValue, createdAt: b.createdAt,
               bookingGroupId: null, groupPaymentStatus: null, groupTotalPrice: null,
@@ -400,6 +403,7 @@ export async function GET(request: NextRequest) {
           allCourtLabels: b.allCourtLabels,
           venueName: b.venueName, date: b.date, startTime: b.startTime, endTime: b.endTime,
           status: b.status, paymentStatus: b.paymentStatus, paymentProofUrl: b.paymentProofUrl,
+          paymentMethod: b.paymentMethod,
           holdExpiresAt: resolveHoldExpiresAt({
             paymentStatus: b.paymentStatus, holdExpiresAt: b.holdExpiresAt,
             createdAt: b.createdAt, kind: "booking",
@@ -425,6 +429,7 @@ export async function GET(request: NextRequest) {
         endTime: l.endTime,
         status: l.status,
         paymentStatus: l.paymentStatus,
+        paymentMethod: l.paymentMethod ?? null,
         proofUrl: l.proofUrl ?? null,
         holdExpiresAt: resolveHoldExpiresAt({
           paymentStatus: l.paymentStatus,
@@ -471,6 +476,7 @@ export async function GET(request: NextRequest) {
               playerAvatar: r.player.avatar,
               playerPhoto: r.player.avatarPhotoPath || r.player.facePhotoPath || null,
               paymentStatus: r.paymentStatus,
+              paymentMethod: r.paymentMethod ?? null,
               paymentProofUrl: r.paymentProofUrl ?? null,
               status: r.status,
             })),
@@ -491,6 +497,7 @@ export async function GET(request: NextRequest) {
         endTime: r.endTime,
         status: r.status,
         paymentStatus: r.paymentStatus,
+        paymentMethod: r.paymentMethod ?? null,
         paymentProofUrl: r.paymentProofUrl ?? null,
         holdExpiresAt: resolveHoldExpiresAt({
           paymentStatus: r.paymentStatus,

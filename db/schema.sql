@@ -622,7 +622,8 @@ CREATE TABLE public.bookings (
     rejected_at timestamp(3) without time zone,
     rejected_by text,
     rejection_reason text,
-    booking_group_id text
+    booking_group_id text,
+    payment_method text
 );
 
 
@@ -1060,7 +1061,8 @@ CREATE TABLE public.open_play_registrations (
     rejected_at timestamp(3) without time zone,
     rejected_by text,
     rejection_reason text,
-    expired_at timestamp with time zone
+    expired_at timestamp with time zone,
+    payment_method text
 );
 
 
@@ -5218,4 +5220,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260705050540'),
     ('20260705122627'),
     ('20260705231856'),
+    ('20260706010731'),
     ('20260706055400');

@@ -27,6 +27,7 @@ export interface PaymentActionTarget {
   endTime: string;
   priceValue: number;
   paymentStatus: string;
+  paymentMethod?: string | null;
   paymentProofUrl: string | null;
   bookingStatus: string;
 }
@@ -62,6 +63,13 @@ const PAYMENT_LABEL_KEYS: Record<string, { key: string; color: string }> = {
   refunded: { key: "overview.statusRefunded", color: "text-blue-400" },
 };
 
+const METHOD_LABELS: Record<string, string> = {
+  cash: "Cash",
+  vietqr: "QR",
+  bank_transfer: "Transfer",
+  other: "Other",
+};
+
 const BOOKING_STATUS_KEYS: Record<string, { key: string; cls: string }> = {
   confirmed: { key: "overview.statusConfirmed", cls: "bg-green-600/20 text-green-400" },
   completed: { key: "overview.statusCompleted", cls: "bg-blue-600/20 text-blue-400" },
@@ -79,6 +87,7 @@ export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
 
   const [showProof, setShowProof] = useState(false);
   const [confirmingAction, setConfirmingAction] = useState<ConfirmingAction | null>(null);
+  const [approveMethod, setApproveMethod] = useState(target.paymentMethod || "vietqr");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
@@ -103,13 +112,13 @@ export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
     openplay: t("overview.openPlayPayment"),
   };
 
-  async function executeAction(action: ConfirmingAction) {
+  async function executeAction(action: ConfirmingAction, method?: string) {
     setSaving(true);
     setError(null);
     try {
       if (target.type === "booking") {
         if (action === "approve") {
-          await api.patch(`/api/admin/bookings/${target.entityId}/approve-payment`, {});
+          await api.patch(`/api/admin/bookings/${target.entityId}/approve-payment`, { paymentMethod: method });
         } else if (action === "cancel") {
           await api.patch(`/api/staff/bookings/${target.entityId}`, { status: "cancelled" });
         } else if (action === "no_show") {
@@ -117,7 +126,7 @@ export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
         }
       } else if (target.type === "lesson") {
         if (action === "approve") {
-          await api.patch(`/api/admin/coach-lessons/${target.entityId}/approve-payment`, {});
+          await api.patch(`/api/admin/coach-lessons/${target.entityId}/approve-payment`, { paymentMethod: method });
         } else if (action === "cancel") {
           await api.patch(`/api/admin/coach-lessons/${target.entityId}`, { status: "cancelled" });
         } else if (action === "no_show") {
@@ -125,7 +134,7 @@ export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
         }
       } else if (target.type === "openplay") {
         if (action === "approve") {
-          await api.patch(`/api/admin/open-play/${target.entityId}`, { action: "approve_payment" });
+          await api.patch(`/api/admin/open-play/${target.entityId}/approve-payment`, { paymentMethod: method });
         } else if (action === "cancel") {
           await api.patch(`/api/admin/open-play/${target.entityId}`, { action: "cancel" });
         } else if (action === "no_show") {
@@ -183,7 +192,7 @@ export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
         amountValue: target.priceValue,
         currentStatus: normalizedPayment === "paid" ? "PAID" : "UNPAID",
         existingProofUrl: target.paymentProofUrl,
-        paymentMethod: null,
+        paymentMethod: target.paymentMethod ?? null,
         paidAt: null,
         note: null,
       }
@@ -251,6 +260,11 @@ export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
               <div className="rounded-xl bg-neutral-800/50 px-3 py-2.5">
                 <p className="text-[10px] text-neutral-500 uppercase tracking-wide mb-0.5">{t("overview.payment")}</p>
                 <p className={cn("text-sm font-medium", ps.color)}>{ps.label}</p>
+                {normalizedPayment === "paid" && target.paymentMethod && (
+                  <p className="text-[10px] text-neutral-500 mt-0.5">
+                    {METHOD_LABELS[target.paymentMethod] ?? target.paymentMethod}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -283,7 +297,14 @@ export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
             {normalizedPayment === "paid" && (
               <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 px-3 py-2.5">
                 <CheckCircle className="h-4 w-4 text-emerald-400 shrink-0" />
-                <p className="text-sm text-emerald-400 font-medium">{t("overview.paymentConfirmed")}</p>
+                <div>
+                  <p className="text-sm text-emerald-400 font-medium">{t("overview.paymentConfirmed")}</p>
+                  {target.paymentMethod && (
+                    <p className="text-xs text-emerald-400/70 mt-0.5">
+                      {METHOD_LABELS[target.paymentMethod] ?? target.paymentMethod}
+                    </p>
+                  )}
+                </div>
               </div>
             )}
 
@@ -313,9 +334,24 @@ export function PaymentActionModal({ target, onClose, onUpdated }: Props) {
                 {confirmingAction === "approve" && proofUrl && (
                   <p className="text-xs text-neutral-500">{t("overview.reviewProofBeforeConfirm")}</p>
                 )}
+                {confirmingAction === "approve" && (
+                  <div>
+                    <label className="block text-xs text-neutral-400 mb-1.5">{t("overview.methodLabel")}</label>
+                    <select
+                      value={approveMethod}
+                      onChange={(e) => setApproveMethod(e.target.value)}
+                      className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-emerald-500 focus:outline-none"
+                    >
+                      <option value="cash">{t("overview.methodCash")}</option>
+                      <option value="vietqr">{t("overview.methodQR")}</option>
+                      <option value="bank_transfer">{t("overview.methodBankTransfer")}</option>
+                      <option value="other">{t("overview.methodOther")}</option>
+                    </select>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <button
-                    onClick={() => executeAction(confirmingAction)}
+                    onClick={() => executeAction(confirmingAction, confirmingAction === "approve" ? approveMethod : undefined)}
                     disabled={saving}
                     className={cn(
                       "flex-1 rounded-xl py-2.5 text-sm font-semibold text-white transition-colors disabled:opacity-40",

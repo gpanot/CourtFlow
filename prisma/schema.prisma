@@ -100,61 +100,61 @@ model PlayerIdentity {
 }
 
 model Player {
-  id                           String                         @id @default(cuid())
-  name                         String
-  phone                        String                         @unique
-  avatar                       String                         @default("🏓")
-  skillLevel                   SkillLevel                     @default(beginner) @map("skill_level")
-  gender                       Gender
-  gamePreference               GamePreference                 @default(no_preference) @map("game_preference")
-  notificationsEnabled         Boolean                        @default(false) @map("notifications_enabled")
-  createdAt                    DateTime                       @default(now()) @map("created_at")
-  faceSubjectId                String?                        @map("face_subject_id")
+  id                    String                     @id @default(cuid())
+  name                  String
+  phone                 String                     @unique
+  avatar                String                     @default("🏓")
+  skillLevel            SkillLevel                 @default(beginner) @map("skill_level")
+  gender                Gender
+  gamePreference        GamePreference             @default(no_preference) @map("game_preference")
+  notificationsEnabled  Boolean                    @default(false) @map("notifications_enabled")
+  createdAt             DateTime                   @default(now()) @map("created_at")
+  faceSubjectId         String?                    @map("face_subject_id")
   /// Public URL path served from /uploads (e.g. /uploads/players/{id}.jpg) — set on first face check-in enrollment
-  facePhotoPath                String?                        @map("face_photo_path")
-  rankingScore                 Int                            @default(200) @map("ranking_score")
-  rankingCount                 Int                            @default(0) @map("ranking_count")
-  lastRankedAt                 DateTime?                      @map("last_ranked_at")
+  facePhotoPath         String?                    @map("face_photo_path")
+  rankingScore          Int                        @default(200) @map("ranking_score")
+  rankingCount          Int                        @default(0) @map("ranking_count")
+  lastRankedAt          DateTime?                  @map("last_ranked_at")
   /// Player-uploaded avatar photo, takes priority over facePhotoPath for display
-  avatarPhotoPath              String?                        @map("avatar_photo_path")
-  isWalkIn                     Boolean                        @default(false) @map("is_walk_in")
-  reclubUserId                 Int?                           @map("reclub_user_id")
-  registrationAt               DateTime?                      @map("registration_at")
-  registrationVenueId          String?                        @map("registration_venue_id")
-  coachStaffId                 String?                        @map("coach_staff_id")
-  email                        String?                        @unique @map("email")
-  password_hash                String?
-  playerIdentityId             String?                        @map("player_identity_id")
+  avatarPhotoPath       String?                    @map("avatar_photo_path")
+  isWalkIn              Boolean                    @default(false) @map("is_walk_in")
+  reclubUserId          Int?                       @map("reclub_user_id")
+  registrationAt        DateTime?                  @map("registration_at")
+  registrationVenueId   String?                    @map("registration_venue_id")
+  coachStaffId          String?                    @map("coach_staff_id")
+  email                 String?                    @unique @map("email")
+  password_hash         String?
+  playerIdentityId      String?                    @map("player_identity_id")
   /// Blurred + compressed copy of the first-registration check-in photo, generated async after registration for quality verification (served from /uploads/players/blurred/{id}.jpg)
-  blurredFacePhotoPath         String?                        @map("blurred_face_photo_path")
-  bookingGroups                BookingGroup[]
-  bookings                     Booking[]
-  programPasses                ProgramPass[]
-  coachLessons                 CoachLesson[]
-  faceAttempts                 FaceAttempt[]
-  faceRecognitionLogs          FaceRecognitionLog[]
-  memberships                  Membership[]
-  openPlayRegistrations        OpenPlayRegistration[]
-  pendingPayments              PendingPayment[]
-  accounts                     PlayerAccount[]
-  appAuthLogs                  PlayerAppAuthLog[]
-  coachCredits                 PlayerCoachCredit[]
-  customPrices                 PlayerCustomPrice[]
-  magicTokens                  PlayerMagicToken[]
-  playerNotes                  PlayerNote[]
-  passwordResetTokens          PlayerPasswordResetToken[]
-  playerRankings               PlayerRanking[]
-  stickerPacks                 PlayerStickerPack[]
-  stickerPhotos                PlayerStickerPhoto[]
-  stickerResults               PlayerStickerResult[]
-  coachStaff                   StaffMember?                   @relation("PlayerCoachLink", fields: [coachStaffId], references: [id], onUpdate: NoAction)
-  playerIdentity               PlayerIdentity?                @relation(fields: [playerIdentityId], references: [id])
-  registrationVenue            Venue?                         @relation("PlayerRegistrationVenue", fields: [registrationVenueId], references: [id])
-  pushSubscriptions            PushSubscription[]
-  queueEntries                 QueueEntry[]
-  signupDuplicateLogs          SignupDuplicateLog[]
-  stickerJobs                  StickerJobQueue[]
-  stickerSessions              StickerSession[]
+  blurredFacePhotoPath  String?                    @map("blurred_face_photo_path")
+  bookingGroups         BookingGroup[]
+  bookings              Booking[]
+  programPasses         ProgramPass[]
+  coachLessons          CoachLesson[]
+  faceAttempts          FaceAttempt[]
+  faceRecognitionLogs   FaceRecognitionLog[]
+  memberships           Membership[]
+  openPlayRegistrations OpenPlayRegistration[]
+  pendingPayments       PendingPayment[]
+  accounts              PlayerAccount[]
+  appAuthLogs           PlayerAppAuthLog[]
+  coachCredits          PlayerCoachCredit[]
+  customPrices          PlayerCustomPrice[]
+  magicTokens           PlayerMagicToken[]
+  playerNotes           PlayerNote[]
+  passwordResetTokens   PlayerPasswordResetToken[]
+  playerRankings        PlayerRanking[]
+  stickerPacks          PlayerStickerPack[]
+  stickerPhotos         PlayerStickerPhoto[]
+  stickerResults        PlayerStickerResult[]
+  coachStaff            StaffMember?               @relation("PlayerCoachLink", fields: [coachStaffId], references: [id], onUpdate: NoAction)
+  playerIdentity        PlayerIdentity?            @relation(fields: [playerIdentityId], references: [id])
+  registrationVenue     Venue?                     @relation("PlayerRegistrationVenue", fields: [registrationVenueId], references: [id])
+  pushSubscriptions     PushSubscription[]
+  queueEntries          QueueEntry[]
+  signupDuplicateLogs   SignupDuplicateLog[]
+  stickerJobs           StickerJobQueue[]
+  stickerSessions       StickerSession[]
 
   @@index([registrationVenueId])
   @@index([playerIdentityId])
@@ -507,6 +507,7 @@ model Booking {
   rejectedBy      String?       @map("rejected_by")
   rejectionReason String?       @map("rejection_reason")
   bookingGroupId  String?       @map("booking_group_id")
+  paymentMethod   String?       @map("payment_method")
   bookingGroup    BookingGroup? @relation(fields: [bookingGroupId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   court           Court         @relation(fields: [courtId], references: [id])
   player          Player        @relation(fields: [playerId], references: [id])
@@ -1186,6 +1187,7 @@ model OpenPlayRegistration {
   rejectedBy      String?   @map("rejected_by")
   rejectionReason String?   @map("rejection_reason")
   expiredAt       DateTime? @map("expired_at") @db.Timestamptz(6)
+  paymentMethod   String?   @map("payment_method")
   player          Player    @relation(fields: [playerId], references: [id])
   venue           Venue     @relation(fields: [venueId], references: [id])
 
@@ -1416,7 +1418,7 @@ model PlayerPasswordResetToken {
   expiresAt DateTime  @map("expires_at")
   usedAt    DateTime? @map("used_at")
   createdAt DateTime  @default(now()) @map("created_at")
-  player    Player    @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  player    Player    @relation(fields: [playerId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@index([playerId])
   @@map("player_password_reset_tokens")

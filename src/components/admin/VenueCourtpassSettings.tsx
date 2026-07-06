@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import adminI18n from "@/i18n/admin-i18n";
 import { api } from "@/lib/api-client";
+import { translateAdminApiError } from "@/lib/admin-api-errors";
 import { cn } from "@/lib/cn";
 import { Check, HelpCircle } from "lucide-react";
 
@@ -25,7 +26,7 @@ export function PortalToggle({
       await api.patch(`/api/venues/${venueId}`, { portalEnabled: !enabled });
       await onRefresh();
     } catch (e) {
-      alert((e as Error).message);
+      alert(translateAdminApiError((e as Error).message, t));
     } finally {
       setSaving(false);
     }
@@ -95,7 +96,7 @@ export function NotificationEmailEditor({
       setTimeout(() => setSaved(false), 2000);
       await onRefresh();
     } catch (e) {
-      alert((e as Error).message);
+      alert(translateAdminApiError((e as Error).message, t));
     } finally {
       setSaving(false);
     }

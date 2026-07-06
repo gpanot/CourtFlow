@@ -28,6 +28,7 @@ const PLAYER_JWT_SECRET =
   "courtflow-dev-secret-change-in-production";
 
 const RESET_TOKEN_TTL_SECONDS = 15 * 60; // 15 minutes
+const ACTIVATION_TOKEN_TTL_SECONDS = 72 * 60 * 60; // 72 hours
 const RATE_LIMIT_SECONDS = 2 * 60; // 2 minutes between requests
 
 const FROM = "noreply_bookings@thecourtflow.com";
@@ -80,6 +81,81 @@ function buildResetEmailHtml(resetUrl: string, playerName: string): string {
   </div>
 </body>
 </html>`.trim();
+}
+
+function buildActivationEmailHtml(activationUrl: string, playerName: string): string {
+  const name = playerName || "there";
+  return `
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /></head>
+<body style="margin:0;padding:0;background:#f9fafb;font-family:sans-serif;">
+  <div style="max-width:480px;margin:40px auto;background:#ffffff;border-radius:12px;padding:32px;border:1px solid #e5e7eb;">
+    <p style="margin:0 0 16px 0;font-size:15px;color:#111827;">Hi ${name},</p>
+    <p style="margin:0 0 24px 0;font-size:15px;color:#374151;">
+      A booking account has been created for you on CourtPass. Click the button below to set your password and access your bookings online. This link expires in <strong>72 hours</strong>.
+    </p>
+    <a href="${activationUrl}" style="display:inline-block;background:#22c55e;color:#000000;font-weight:600;font-size:15px;text-decoration:none;padding:12px 28px;border-radius:10px;">
+      Set up my account
+    </a>
+    <p style="margin:24px 0 0 0;font-size:13px;color:#6b7280;">
+      If you weren't expecting this, you can safely ignore this email.
+    </p>
+    <p style="margin-top:32px;border-top:1px solid #e5e7eb;padding-top:16px;font-size:13px;color:#6b7280;">
+      Powered by <a href="https://www.thecourtflow.com/" target="_blank" style="color:#7c3aed;text-decoration:none;font-weight:600;">CourtPass</a>
+    </p>
+  </div>
+</body>
+</html>`.trim();
+}
+
+/**
+ * Send an account activation email to a player whose account was just created
+ * by a staff member. Uses the same player_password_reset_tokens table as the
+ * regular reset flow, but with a 72-hour TTL and welcome-flavored copy.
+ */
+export async function sendAccountActivationEmail(
+  playerId: string,
+  email: string,
+  playerName: string
+): Promise<void> {
+  const normalizedEmail = email.toLowerCase().trim();
+
+  const jti = randomUUID();
+  const expiresAt = new Date(Date.now() + ACTIVATION_TOKEN_TTL_SECONDS * 1000);
+
+  const payload: ResetTokenPayload = {
+    playerId,
+    type: TOKEN_TYPE_RESET,
+    jti,
+  };
+
+  const token = jwt.sign(payload, PLAYER_JWT_SECRET, {
+    expiresIn: ACTIVATION_TOKEN_TTL_SECONDS,
+  });
+
+  await prisma.playerPasswordResetToken.create({
+    data: { id: randomUUID(), playerId, jti, expiresAt },
+  });
+
+  const activationUrl = `${getBaseUrl()}/book/reset-password/confirm?token=${token}`;
+
+  try {
+    const resend = getResendClient();
+    const result = await resend.emails.send({
+      from: FROM,
+      to: normalizedEmail,
+      subject: "Set up your CourtPass account",
+      html: buildActivationEmailHtml(activationUrl, playerName),
+    });
+    if (result.error) {
+      console.error("[sendAccountActivationEmail] Resend error:", result.error);
+    } else {
+      console.log(`[sendAccountActivationEmail] Sent activation link to ${normalizedEmail} id=${result.data?.id}`);
+    }
+  } catch (err) {
+    console.error("[sendAccountActivationEmail] Failed to send email:", err);
+  }
 }
 
 /**

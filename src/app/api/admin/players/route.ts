@@ -7,6 +7,8 @@ import { requireAdminAccess } from "@/lib/auth";
 import { getAuthorizedVenueIds } from "@/lib/venue-scope";
 import { enqueueStickerJobIfNeeded } from "@/lib/sticker-queue";
 import bcrypt from "bcryptjs";
+import { randomUUID } from "crypto";
+import { sendAccountActivationEmail } from "@/lib/player-reset-password";
 
 export const dynamic = "force-dynamic";
 interface AdminPlayersStatsPayload {
@@ -439,20 +441,17 @@ export async function POST(request: NextRequest) {
       skillLevel?: string;
       avatar?: string;
       email?: string;
-      password?: string;
     }>(request);
 
     if (!body.name?.trim()) return error("Name is required", 400);
     if (!body.phone?.trim()) return error("Phone is required", 400);
     if (!body.gender) return error("Gender is required", 400);
 
-    // If email/password provided, validate them before touching the DB
+    // Validate email format and uniqueness before touching the DB
     const normalizedEmail = body.email?.toLowerCase().trim() ?? null;
     if (normalizedEmail !== null) {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail))
         return error("Invalid email address", 400);
-      if (!body.password || body.password.length < 8)
-        return error("Password must be at least 8 characters", 400);
 
       const existingAccount = await prisma.playerAccount.findUnique({
         where: {
@@ -484,9 +483,10 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Create login account if email + password were supplied
-    if (normalizedEmail && body.password) {
-      const passwordHash = await bcrypt.hash(body.password, 12);
+    // If email provided, create a portal account with a random password hash.
+    // The player sets their own password via the activation email.
+    if (normalizedEmail) {
+      const randomHash = await bcrypt.hash(randomUUID(), 12);
       await prisma.playerAccount.create({
         data: {
           playerId: player.id,
@@ -494,10 +494,12 @@ export async function POST(request: NextRequest) {
           providerAccountId: normalizedEmail,
           email: normalizedEmail,
           name: body.name.trim(),
-          passwordHash,
+          passwordHash: randomHash,
           emailVerified: false,
         },
       });
+      sendAccountActivationEmail(player.id, normalizedEmail, player.name ?? "")
+        .catch((e) => console.error("[POST /api/admin/players] activation email failed:", (e as Error).message));
     }
 
     enqueueStickerJobIfNeeded(player.id, player.gender).catch(console.error);

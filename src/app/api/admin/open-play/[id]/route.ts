@@ -33,7 +33,11 @@ export async function PATCH(
       }
       const updated = await prisma.openPlayRegistration.update({
         where: { id },
-        data: { paymentStatus: "paid", holdExpiresAt: null },
+        data: {
+          paymentStatus: "paid",
+          holdExpiresAt: null,
+          ...(body.paymentMethod ? { paymentMethod: body.paymentMethod } : {}),
+        },
       });
       return json(updated);
     }

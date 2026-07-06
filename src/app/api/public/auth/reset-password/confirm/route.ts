@@ -29,14 +29,16 @@ export async function POST(request: NextRequest) {
 
     const passwordHash = await bcrypt.hash(password, 12);
 
-    await prisma.playerAccount.updateMany({
-      where: { playerId, provider: "credentials" },
-      data: { passwordHash },
-    });
-
+    // Also mark emailVerified: true — the player clicked an emailed link,
+    // which implicitly proves they own the address (both for activation and reset flows).
     const account = await prisma.playerAccount.findFirst({
       where: { playerId, provider: "credentials" },
-      select: { providerAccountId: true },
+      select: { id: true, providerAccountId: true },
+    });
+
+    await prisma.playerAccount.update({
+      where: { id: account!.id },
+      data: { passwordHash, emailVerified: true },
     });
 
     return json({ ok: true, email: account?.providerAccountId ?? null });

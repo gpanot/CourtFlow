@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import adminI18n from "@/i18n/admin-i18n";
-import { PaymentStatusBadge } from "@/components/admin/EditBookingModal";
+import { PaymentMethodBadge, PaymentStatusBadge } from "@/components/admin/EditBookingModal";
 import { PaymentHoldTimer } from "@/components/admin/PaymentHoldTimer";
 import type { PaymentActionTarget } from "@/components/admin/PaymentActionModal";
 import {
@@ -16,6 +16,7 @@ interface EntryForPayment {
   id: string;
   status: string;
   paymentStatus: string | null;
+  paymentMethod: string | null | undefined;
   paymentProofUrl: string | null;
   holdExpiresAt: string | null;
   createdAt: string;
@@ -86,13 +87,18 @@ export function DashboardPaymentCell({ kind, entry, onManage }: Props) {
           endTime: entry.endTime,
           priceValue: entry.priceValue,
           paymentStatus: status,
+          paymentMethod: entry.paymentMethod,
           paymentProofUrl: entry.paymentProofUrl,
           bookingStatus: entry.status,
         })
       }
       title={t(titleKey)}
+      className="flex flex-col items-start gap-0.5"
     >
       <PaymentStatusBadge status={status} />
+      {status === "paid" && entry.paymentMethod && (
+        <PaymentMethodBadge method={entry.paymentMethod} />
+      )}
     </button>
   );
 }

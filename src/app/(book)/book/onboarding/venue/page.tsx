@@ -15,7 +15,7 @@ interface PortalVenue {
 }
 
 export default function OnboardingVenuePage() {
-  const { session, status, authHeader } = usePlayerSession();
+  const { session, status } = usePlayerSession();
   const router = useRouter();
   const { t } = useTranslation();
 
@@ -23,11 +23,8 @@ export default function OnboardingVenuePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [debugInfo, setDebugInfo] = useState<{
-    filtered: PortalVenue[];
-    all: PortalVenue[];
-    account: Record<string, unknown> | null;
-  } | null>(null);
+
+  const sessionToken = session?.token ?? null;
 
   useEffect(() => {
     if (status === "loading") return;
@@ -35,37 +32,30 @@ export default function OnboardingVenuePage() {
       router.replace("/book/login");
       return;
     }
-    const headers: Record<string, string> = session?.token
-      ? { Authorization: `Bearer ${session.token}` }
+    const headers: Record<string, string> = sessionToken
+      ? { Authorization: `Bearer ${sessionToken}` }
       : {};
     Promise.all([
       fetch("/api/public/venues").then((r) => r.json()),
       fetch("/api/public/venues?allCountries=true").then((r) => r.json()),
       fetch("/api/public/account", { headers, credentials: "include" }).then((r) => r.json()),
     ])
-      .then(([filtered, all, account]: [PortalVenue[], PortalVenue[], Record<string, unknown>]) => {
+      .then(([filtered]: [PortalVenue[], PortalVenue[], Record<string, unknown>]) => {
         setVenues(filtered);
-        setDebugInfo({ filtered, all, account });
-        console.log("[DEBUG venue picker] filtered:", filtered);
-        console.log("[DEBUG venue picker] all:", all);
-        console.log("[DEBUG venue picker] account country:", account?.country);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [status, router, session]);
+  }, [status, router, sessionToken]);
 
   async function handleSelect(venueId: string) {
     if (!session) return;
     setSaving(venueId);
     setError(null);
-    console.log("[DEBUG venue picker] handleSelect — venueId:", venueId, "session.token:", session.token ? "present" : "missing");
     try {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         ...(session.token ? { Authorization: `Bearer ${session.token}` } : {}),
       };
-      // venueOnly=true: phone was already validated & saved in the profile step.
-      // Skip all phone conflict checks — just set registrationVenueId.
       const res = await fetch("/api/public/account/onboarding", {
         method: "POST",
         headers,
@@ -73,20 +63,9 @@ export default function OnboardingVenuePage() {
         body: JSON.stringify({ venueId, venueOnly: true }),
       });
       const data = await res.json();
-      console.log("[DEBUG venue picker] onboarding POST response:", res.status, JSON.stringify(data));
       if (!res.ok) throw new Error(data.error || t("onboarding.errors.saveFailed"));
-
-      // DEBUG: verify the save actually persisted
-      const verifyRes = await fetch("/api/public/account", { headers: { ...(session.token ? { Authorization: `Bearer ${session.token}` } : {}) }, credentials: "include" });
-      const verifyData = await verifyRes.json();
-      console.log("[DEBUG venue picker] account AFTER venue save:", {
-        registrationVenueId: verifyData?.registrationVenueId,
-        venue: verifyData?.venue,
-      });
-
       router.push("/book");
     } catch (e) {
-      console.error("[DEBUG venue picker] handleSelect error:", (e as Error).message);
       setError((e as Error).message);
       setSaving(null);
     }

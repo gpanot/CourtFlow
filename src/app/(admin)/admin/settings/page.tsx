@@ -3,8 +3,8 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import Link from "next/link";
-import { Globe, Clock, Check, Loader2, CheckCircle2, Building2, Mail, Settings } from "lucide-react";
-import adminI18n, { ADMIN_I18N_STORAGE_KEY } from "@/i18n/admin-i18n";
+import { Clock, Loader2, CheckCircle2, Building2, Mail, Settings, Phone } from "lucide-react";
+import adminI18n from "@/i18n/admin-i18n";
 import { cn } from "@/lib/cn";
 import { api } from "@/lib/api-client";
 import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
@@ -14,8 +14,6 @@ import { useSessionStore } from "@/stores/session-store";
 export const dynamic = "force-dynamic";
 
 type SettingsTab = "settings" | "email-courtpass";
-
-type Language = "en" | "vi";
 
 // Must stay in sync with the server-side SUPPORTED_TIMEZONES list
 const TIMEZONE_OPTIONS: { value: string; label: string; region: string }[] = [
@@ -75,6 +73,11 @@ interface VenueDetail {
   timezone: string;
   sportType: string;
   portalEnabled: boolean;
+  location: string | null;
+  contactPhone: string | null;
+  contactWhatsApp: string | null;
+  contactZalo: string | null;
+  contactLine: string | null;
   settings: {
     notificationEmail?: string | null;
   };
@@ -88,8 +91,7 @@ interface VenueDetail {
 }
 
 export default function GeneralSettingsPage() {
-  const { t, i18n } = useTranslation("translation", { i18n: adminI18n });
-  const [currentLang, setCurrentLang] = useState<Language>("en");
+  const { t } = useTranslation("translation", { i18n: adminI18n });
   const [activeTab, setActiveTab] = useState<SettingsTab>("settings");
   const { venueId, setVenueId, venues } = useAdminVenuePicker({ autoSelect: true });
   const { role } = useSessionStore();
@@ -99,17 +101,28 @@ export default function GeneralSettingsPage() {
   const [tzMsg, setTzMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [venueDetails, setVenueDetails] = useState<VenueDetail[]>([]);
 
-  useEffect(() => {
-    const stored = localStorage.getItem(ADMIN_I18N_STORAGE_KEY);
-    setCurrentLang((stored === "vi" ? "vi" : "en") as Language);
-  }, []);
+  // Contact fields state
+  const [contactLocation, setContactLocation] = useState("");
+  const [contactPhone, setContactPhone] = useState("");
+  const [contactWhatsApp, setContactWhatsApp] = useState("");
+  const [contactZalo, setContactZalo] = useState("");
+  const [contactLine, setContactLine] = useState("");
+  const [contactSaving, setContactSaving] = useState(false);
+  const [contactMsg, setContactMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
   const fetchVenueDetails = useCallback(async () => {
     try {
       const data = await api.get<VenueDetail[]>("/api/admin/venues");
       setVenueDetails(data);
       const v = venueId ? data.find((x) => x.id === venueId) : undefined;
-      if (v) setVenueTimezone(v.timezone ?? "Asia/Ho_Chi_Minh");
+      if (v) {
+        setVenueTimezone(v.timezone ?? "Asia/Ho_Chi_Minh");
+        setContactLocation(v.location ?? "");
+        setContactPhone(v.contactPhone ?? "");
+        setContactWhatsApp(v.contactWhatsApp ?? "");
+        setContactZalo(v.contactZalo ?? "");
+        setContactLine(v.contactLine ?? "");
+      }
     } catch {
       // ignore
     }
@@ -120,16 +133,27 @@ export default function GeneralSettingsPage() {
     [venueDetails, venueId]
   );
 
+  const contactDirty = useMemo(() => {
+    if (!selectedVenue) return false;
+    const saved = (v: string | null | undefined) => v ?? "";
+    return (
+      contactLocation !== saved(selectedVenue.location) ||
+      contactPhone !== saved(selectedVenue.contactPhone) ||
+      contactWhatsApp !== saved(selectedVenue.contactWhatsApp) ||
+      contactZalo !== saved(selectedVenue.contactZalo) ||
+      contactLine !== saved(selectedVenue.contactLine)
+    );
+  }, [selectedVenue, contactLocation, contactPhone, contactWhatsApp, contactZalo, contactLine]);
+
   useEffect(() => {
     void fetchVenueDetails();
     setTzMsg(null);
+    setContactMsg(null);
   }, [fetchVenueDetails]);
 
-  const handleLanguageChange = (lang: Language) => {
-    setCurrentLang(lang);
-    void i18n.changeLanguage(lang);
-    localStorage.setItem(ADMIN_I18N_STORAGE_KEY, lang);
-  };
+  useEffect(() => {
+    if (contactDirty) setContactMsg(null);
+  }, [contactDirty]);
 
   const handleTimezoneChange = async (tz: string) => {
     if (!venueId || tz === venueTimezone) return;
@@ -148,6 +172,27 @@ export default function GeneralSettingsPage() {
     }
   };
 
+  const handleContactSave = async () => {
+    if (!venueId) return;
+    setContactSaving(true);
+    setContactMsg(null);
+    try {
+      await api.patch(`/api/venues/${venueId}`, {
+        location: contactLocation.trim() || null,
+        contactPhone: contactPhone.trim() || null,
+        contactWhatsApp: contactWhatsApp.trim() || null,
+        contactZalo: contactZalo.trim() || null,
+        contactLine: contactLine.trim() || null,
+      });
+      setContactMsg({ type: "ok", text: t("settings.contactSaved") });
+      await fetchVenueDetails();
+    } catch (e) {
+      setContactMsg({ type: "err", text: (e as Error).message });
+    } finally {
+      setContactSaving(false);
+    }
+  };
+
   // Group timezones by region for the select
   const regionOrder = ["Asia", "Europe", "Americas", "Oceania", "Other"];
 
@@ -161,7 +206,7 @@ export default function GeneralSettingsPage() {
         <AdminVenuePicker
           venueId={venueId}
           venues={venues}
-          onChange={(id) => { setVenueId(id); setTzMsg(null); }}
+          onChange={(id) => { setVenueId(id); setTzMsg(null); setContactMsg(null); }}
           className="rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
         />
       </div>
@@ -193,30 +238,6 @@ export default function GeneralSettingsPage() {
       <div className="max-w-2xl">
       {activeTab === "settings" && (
       <div className="space-y-8">
-        {/* Language section */}
-        <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
-          <div className="flex items-center gap-2 mb-1">
-            <Globe className="h-4 w-4 text-purple-400" />
-            <h2 className="text-sm font-semibold text-white">{t("settings.languageTitle")}</h2>
-          </div>
-          <p className="mb-4 text-xs text-neutral-400">{t("settings.languageDescription")}</p>
-
-          <div className="flex gap-3">
-            <LanguageButton
-              label={t("settings.english")}
-              sublabel="English"
-              active={currentLang === "en"}
-              onClick={() => handleLanguageChange("en")}
-            />
-            <LanguageButton
-              label={t("settings.vietnamese")}
-              sublabel="Tiếng Việt"
-              active={currentLang === "vi"}
-              onClick={() => handleLanguageChange("vi")}
-            />
-          </div>
-        </section>
-
         {/* Organization section — read-only, role-scoped */}
         {venueId && selectedVenue && (
           <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
@@ -346,6 +367,92 @@ export default function GeneralSettingsPage() {
             </p>
           </section>
         )}
+
+        {/* Venue Contact & Location section */}
+        {venueId && (
+          <section className="rounded-xl border border-neutral-800 bg-neutral-900 p-5">
+            <div className="flex items-center gap-2 mb-1">
+              <Phone className="h-4 w-4 text-purple-400" />
+              <h2 className="text-sm font-semibold text-white">{t("settings.venueContactTitle")}</h2>
+            </div>
+            <p className="mb-4 text-xs text-neutral-400">{t("settings.venueContactDesc")}</p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-neutral-400 mb-1">{t("settings.locationLabel")}</label>
+                <input
+                  type="text"
+                  value={contactLocation}
+                  onChange={(e) => setContactLocation(e.target.value)}
+                  placeholder={t("venues.locationPlaceholder")}
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-neutral-400 mb-1">{t("settings.phoneLabel")}</label>
+                <input
+                  type="tel"
+                  value={contactPhone}
+                  onChange={(e) => setContactPhone(e.target.value)}
+                  placeholder={t("venues.contactPhonePlaceholder")}
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-neutral-400 mb-1">WhatsApp</label>
+                <input
+                  type="tel"
+                  value={contactWhatsApp}
+                  onChange={(e) => setContactWhatsApp(e.target.value)}
+                  placeholder={t("venues.contactWhatsAppPlaceholder")}
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-neutral-400 mb-1">Zalo</label>
+                <input
+                  type="text"
+                  value={contactZalo}
+                  onChange={(e) => setContactZalo(e.target.value)}
+                  placeholder={t("venues.contactZaloPlaceholder")}
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-neutral-400 mb-1">Line</label>
+                <input
+                  type="text"
+                  value={contactLine}
+                  onChange={(e) => setContactLine(e.target.value)}
+                  placeholder={t("venues.contactLinePlaceholder")}
+                  className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white placeholder:text-neutral-500 focus:border-purple-500 focus:outline-none"
+                />
+              </div>
+
+              {(contactDirty || contactSaving || contactMsg) && (
+                <div className="flex items-center gap-3 pt-1">
+                  {(contactDirty || contactSaving) && (
+                    <button
+                      type="button"
+                      onClick={() => void handleContactSave()}
+                      disabled={contactSaving}
+                      className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {contactSaving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                      {t("settings.saveContact")}
+                    </button>
+                  )}
+                  {contactMsg && (
+                    <div className={cn("flex items-center gap-1.5 text-xs", contactMsg.type === "ok" ? "text-emerald-400" : "text-red-400")}>
+                      {contactMsg.type === "ok" && <CheckCircle2 className="h-3.5 w-3.5" />}
+                      {contactMsg.text}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
       </div>
       )}
 
@@ -379,39 +486,3 @@ export default function GeneralSettingsPage() {
   );
 }
 
-function LanguageButton({
-  label,
-  sublabel,
-  active,
-  onClick,
-}: {
-  label: string;
-  sublabel: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "relative flex items-center gap-3 rounded-xl border px-4 py-3 text-left transition-all w-44",
-        active
-          ? "border-purple-500 bg-purple-600/10"
-          : "border-neutral-700 bg-neutral-800 hover:border-neutral-600 hover:bg-neutral-700"
-      )}
-    >
-      {active && (
-        <span className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full bg-purple-600">
-          <Check className="h-2.5 w-2.5 text-white" />
-        </span>
-      )}
-      <div>
-        <p className={cn("text-sm font-medium", active ? "text-purple-300" : "text-neutral-200")}>
-          {label}
-        </p>
-        <p className="text-xs text-neutral-500">{sublabel}</p>
-      </div>
-    </button>
-  );
-}

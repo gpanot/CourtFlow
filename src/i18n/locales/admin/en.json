@@ -75,7 +75,13 @@
     "currentSelection": "Current selection:",
     "venueDetailsTitle": "Venue Details",
     "sportLabel": "Sport",
-    "editSportHint": "Edit sport type from the Venues page."
+    "editSportHint": "Edit sport type from the Venues page.",
+    "venueContactTitle": "Venue Contact & Location",
+    "venueContactDesc": "Phone numbers and location shown to players in the booking portal.",
+    "locationLabel": "Location",
+    "phoneLabel": "Phone",
+    "saveContact": "Save",
+    "contactSaved": "Contact info saved"
   },
   "overview": {
     "title": "Dashboard",

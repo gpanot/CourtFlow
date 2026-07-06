@@ -29,22 +29,24 @@ interface NavSection {
   items: NavItem[];
 }
 
-const topNavItems: NavItem[] = [
-  { href: "/admin", label: "nav.overview", icon: LayoutDashboard },
-  { href: "/admin/venues", label: "nav.venues", icon: MapPin },
-  { href: "/admin/organizations", label: "nav.organizations", icon: Building2, superadminOnly: true },
-  { href: "/admin/bookings", label: "nav.bookings", icon: CalendarDays },
-  { href: "/admin/coaching", label: "nav.coaching", icon: GraduationCap },
-  { href: "/admin/memberships", label: "nav.memberships", icon: Crown },
-  { href: "/admin/program-passes", label: "nav.programPasses", icon: Ticket, superadminOnly: true },
-  { href: "/admin/courtpass-players", label: "nav.courtpassPlayers", icon: UserCircle },
-  { href: "/admin/staff", label: "nav.staff", icon: Users },
-  { href: "/admin/venue-analytics", label: "nav.venueAnalytics", icon: PieChart },
-  { href: "/admin/my-billing", label: "nav.myBilling", icon: Wallet, superadminOnly: false },
-  { href: "/admin/settings", label: "nav.settings", icon: Settings },
-];
-
 const navSections: NavSection[] = [
+  {
+    label: "nav.courtpassBooking",
+    items: [
+      { href: "/admin", label: "nav.overview", icon: LayoutDashboard },
+      { href: "/admin/venues", label: "nav.venues", icon: MapPin },
+      { href: "/admin/organizations", label: "nav.organizations", icon: Building2, superadminOnly: true },
+      { href: "/admin/bookings", label: "nav.bookings", icon: CalendarDays },
+      { href: "/admin/coaching", label: "nav.coaching", icon: GraduationCap },
+      { href: "/admin/memberships", label: "nav.memberships", icon: Crown },
+      { href: "/admin/program-passes", label: "nav.programPasses", icon: Ticket, superadminOnly: true },
+      { href: "/admin/courtpass-players", label: "nav.courtpassPlayers", icon: UserCircle },
+      { href: "/admin/staff", label: "nav.staff", icon: Users },
+      { href: "/admin/venue-analytics", label: "nav.venueAnalytics", icon: PieChart },
+      { href: "/admin/my-billing", label: "nav.myBilling", icon: Wallet, superadminOnly: false },
+      { href: "/admin/settings", label: "nav.settings", icon: Settings },
+    ],
+  },
   {
     label: "nav.courtflowSocial",
     requiresApp: "courtflow",
@@ -89,7 +91,6 @@ function getFilteredNav(
     return app === "courtflow" ? appAccess.hasCourtflow : appAccess.hasCourtpay;
   };
 
-  const filteredTop = topNavItems.filter((item) => isSuperAdmin || !item.superadminOnly);
   const filteredSections = navSections
     .filter((section) => (isSuperAdmin || !section.superadminOnly) && appFilter(section.requiresApp))
     .map((section) => ({
@@ -97,8 +98,8 @@ function getFilteredNav(
       items: section.items.filter((item) => isSuperAdmin || !item.superadminOnly),
     }))
     .filter((section) => section.items.length > 0);
-  const allItems = [...filteredTop, ...filteredSections.flatMap((s) => s.items)];
-  return { topNavItems: filteredTop, navSections: filteredSections, allNavItems: allItems };
+  const allItems = filteredSections.flatMap((s) => s.items);
+  return { navSections: filteredSections, allNavItems: allItems };
 }
 
 /** True when this role always has admin access regardless of appAccess. */
@@ -158,7 +159,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       });
   }, [token, role]);
 
-  const { topNavItems: visibleTopItems, navSections: visibleSections, allNavItems: visibleAllItems } = getFilteredNav(role ?? "", appAccess);
+  const { navSections: visibleSections, allNavItems: visibleAllItems } = getFilteredNav(role ?? "", appAccess);
 
   const toggleSection = (label: string) => {
     setCollapsedSections((prev) => {
@@ -273,30 +274,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
 
         <nav className="space-y-1">
-          {visibleTopItems.map((item) => {
-            const active = pathname === item.href;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                  active
-                    ? "bg-purple-600/20 text-purple-400"
-                    : "text-neutral-400 hover:bg-neutral-800 hover:text-white"
-                )}
-              >
-                <item.icon className="h-4 w-4" />
-                {t(item.label)}
-              </Link>
-            );
-          })}
-
-          {visibleSections.map((section) => {
+          {visibleSections.map((section, sectionIndex) => {
             const isCollapsed = collapsedSections[section.label] ?? false;
             const hasActive = section.items.some((item) => pathname === item.href);
             return (
-              <div key={section.label} className="pt-3 mt-2 border-t border-neutral-800">
+              <div
+                key={section.label}
+                className={cn(sectionIndex > 0 && "pt-3 mt-2 border-t border-neutral-800")}
+              >
                 <button
                   type="button"
                   onClick={() => toggleSection(section.label)}
@@ -393,30 +378,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="fixed inset-x-0 top-[57px] z-30 max-h-[min(70vh,calc(100dvh-9rem))] overflow-y-auto border-b border-neutral-800 bg-neutral-950/98 p-4 pb-6 backdrop-blur-sm md:hidden">
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-500">{t("layout.pages")}</p>
           <nav className="space-y-0.5">
-            {visibleTopItems.map((item) => {
-              const active = pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                    active
-                      ? "bg-purple-600/20 text-purple-400"
-                      : "text-neutral-300 hover:bg-neutral-800 hover:text-white"
-                  )}
-                >
-                  <item.icon className="h-4 w-4 shrink-0" />
-                  {t(item.label)}
-                </Link>
-              );
-            })}
-
-            {visibleSections.map((section) => {
+            {visibleSections.map((section, sectionIndex) => {
               const isCollapsed = collapsedSections[section.label] ?? false;
               const hasActive = section.items.some((item) => pathname === item.href);
               return (
-                <div key={section.label} className="pt-3 mt-2 border-t border-neutral-800">
+                <div
+                  key={section.label}
+                  className={cn(sectionIndex > 0 && "pt-3 mt-2 border-t border-neutral-800")}
+                >
                   <button
                     type="button"
                     onClick={() => toggleSection(section.label)}
