@@ -62,6 +62,7 @@ export async function POST(request: NextRequest) {
       startTime: string;
       slotCount?: number;
       coPlayerIds?: string[];
+      discountPct?: number;
     }>(request);
 
     const court = await prisma.court.findFirst({
@@ -92,6 +93,14 @@ export async function POST(request: NextRequest) {
 
     const totalPrice = resolveBookingPrice(config, startTime, durationMinutes, venueTimezone);
 
+    // Apply optional staff discount
+    const discountPct = typeof body.discountPct === "number" && body.discountPct > 0 && body.discountPct <= 100
+      ? body.discountPct
+      : 0;
+    const finalPrice = discountPct > 0
+      ? Math.round(totalPrice * (100 - discountPct) / 100)
+      : totalPrice;
+
     // Full span conflict check
     const conflicting = await prisma.booking.findFirst({
       where: {
@@ -113,7 +122,7 @@ export async function POST(request: NextRequest) {
         startTime,
         endTime,
         status: "confirmed",
-        priceValue: totalPrice,
+        priceValue: finalPrice,
         coPlayerIds: body.coPlayerIds || [],
         paymentStatus: "pending",
       },

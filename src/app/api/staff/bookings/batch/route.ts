@@ -20,6 +20,7 @@ export async function POST(request: NextRequest) {
       playerId: string;
       date: string;
       courts: { courtId: string; startTime: string; slotCount: number }[];
+      discountPct?: number;
     }>(request);
 
     if (!body.venueId || !body.playerId || !body.date || !Array.isArray(body.courts)) {
@@ -60,6 +61,13 @@ export async function POST(request: NextRequest) {
 
     const pricing = resolveGroupBookingPrice(config, courtsInput, venueTimezone);
 
+    // Apply optional staff discount
+    const discountPct = typeof body.discountPct === "number" && body.discountPct > 0 && body.discountPct <= 100
+      ? body.discountPct
+      : 0;
+    const applyDiscount = (price: number) =>
+      discountPct > 0 ? Math.round(price * (100 - discountPct) / 100) : price;
+
     const result = await prisma.$transaction(async (tx) => {
       // Conflict-check each court (skip expired holds)
       for (const c of courtsInput) {
@@ -87,7 +95,7 @@ export async function POST(request: NextRequest) {
           date: dateForWrite,
           startTime: refStart,
           endTime: refEnd,
-          totalPriceValue: pricing.total,
+          totalPriceValue: applyDiscount(pricing.total),
           paymentStatus: null,
           status: "confirmed",
         },
@@ -105,7 +113,7 @@ export async function POST(request: NextRequest) {
               startTime: new Date(c.startTime),
               endTime: new Date(new Date(c.startTime).getTime() + durationMinutes * 60 * 1000),
               status: "confirmed",
-              priceValue: courtPrice,
+              priceValue: applyDiscount(courtPrice),
               coPlayerIds: [],
               paymentStatus: null,
               bookingGroupId: group.id,

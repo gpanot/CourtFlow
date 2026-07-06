@@ -168,7 +168,8 @@ export async function createOpenPlayRegistration(
   playerId: string,
   venueId: string,
   scheduleEntryId: string,
-  date: Date
+  date: Date,
+  discountPct?: number
 ) {
   const localMidnight = new Date(date);
   localMidnight.setHours(0, 0, 0, 0);
@@ -201,7 +202,10 @@ export async function createOpenPlayRegistration(
     throw Object.assign(new Error("This session does not accept bookings"), { status: 400 });
   }
 
-  const priceValue = entry.priceValue ?? 0;
+  const basePrice = entry.priceValue ?? 0;
+  const priceValue = discountPct && discountPct > 0
+    ? Math.round(basePrice * (100 - discountPct) / 100)
+    : basePrice;
   const holdExpiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
   // Generate payment ref before the transaction to avoid nested Prisma client calls

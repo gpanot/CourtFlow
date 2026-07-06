@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
       scheduleEntryId: string;
       date: string;
       playerId: string;
+      discountPct?: number;
     }>(request);
 
     if (!body.venueId) return error("venueId required", 400);
@@ -36,7 +37,8 @@ export async function POST(request: NextRequest) {
       body.playerId,
       body.venueId,
       body.scheduleEntryId,
-      date
+      date,
+      body.discountPct
     );
 
     // Send staff_confirmed notification to player with payment link (non-fatal)

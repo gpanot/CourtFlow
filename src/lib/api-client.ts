@@ -115,3 +115,42 @@ export const api = {
     request<T>(url, { method: "DELETE", body: body ? JSON.stringify(body) : undefined }),
   upload: <T>(url: string, formData: FormData) => uploadRequest<T>(url, formData),
 };
+
+/** Download a binary file (e.g. PDF) with staff auth — plain <a href> won't send the token. */
+export async function downloadFile(url: string, filename: string): Promise<void> {
+  const token = typeof window !== "undefined"
+    ? useSessionStore.getState().token
+    : null;
+
+  const res = await fetch(`${BASE}${url}`, {
+    credentials: "include",
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+
+  if (!res.ok) {
+    let message = res.statusText || "Download failed";
+    const ct = res.headers.get("content-type") || "";
+    if (ct.includes("application/json")) {
+      try {
+        const data = (await res.json()) as { error?: string };
+        if (data.error) message = data.error;
+      } catch { /* ignore */ }
+    } else {
+      const text = await res.text();
+      if (text) message = text;
+    }
+    throw new Error(message);
+  }
+
+  const blob = await res.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectUrl;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
+}

@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdminAccess } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { resolveBookingRef } from "@/lib/booking-reference";
 
 export const dynamic = "force-dynamic";
 
@@ -104,11 +105,15 @@ export async function GET(request: NextRequest) {
       court: { select: { label: true } },
       player: { select: { name: true, phone: true } },
       venue: { select: { name: true } },
+      bookingGroup: { select: { paymentRef: true, invoiceNumber: true } },
     },
     orderBy: { startTime: "desc" },
   });
 
-  const header = ["Date", "Time", "Player", "Phone", "Court", "Venue", "Status", "Payment", "Payment Method", "Price (VND)"];
+  const header = [
+    "Date", "Time", "Player", "Phone", "Court", "Venue", "Status", "Payment",
+    "Payment Method", "Booking ref", "Invoice ref", "Price (VND)",
+  ];
   const rows = bookings.map((b) => [
     fmtDate(b.date),
     `${fmtTime(b.startTime)} – ${fmtTime(b.endTime)}`,
@@ -119,6 +124,8 @@ export async function GET(request: NextRequest) {
     b.status,
     b.paymentStatus ?? "pending",
     fmtPaymentMethod(b.paymentMethod),
+    resolveBookingRef(b) ?? "",
+    b.invoiceNumber ?? b.bookingGroup?.invoiceNumber ?? "",
     b.priceValue,
   ]);
 

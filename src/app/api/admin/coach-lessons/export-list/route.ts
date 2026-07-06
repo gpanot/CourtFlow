@@ -116,7 +116,8 @@ export async function GET(request: NextRequest) {
   const header = [
     "Date", "Start", "End", "Duration (hrs)",
     "Player", "Phone", "Coach", "Package", "Type",
-    "Court", "Venue", "Status", "Payment", "Payment Method", "Price (VND)",
+    "Court", "Venue", "Status", "Payment", "Payment Method",
+    "Booking ref", "Invoice ref", "Price (VND)",
   ];
 
   const rows = lessons.map((l) => [
@@ -134,6 +135,8 @@ export async function GET(request: NextRequest) {
     l.status,
     l.paymentStatus,
     fmtPaymentMethod(l.paymentMethod),
+    l.paymentRef ?? "",
+    l.invoiceNumber ?? "",
     l.priceValue,
   ]);
 

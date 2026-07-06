@@ -41,8 +41,8 @@ import {
   Filter,
   DollarSign,
   Download,
-  FileDown,
 } from "lucide-react";
+import { InvoiceDownloadButton } from "@/components/admin/InvoiceDownloadButton";
 import { CourtsManager } from "@/components/admin/CourtsManager";
 import {
   PaymentActionModal,
@@ -2357,15 +2357,11 @@ function AllBookingsTab({
                       <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-1 justify-end">
                           {isPaid && (row.invoiceNumber ?? row.bookingGroup?.invoiceNumber) && (
-                            <a
-                              href={`/api/admin/invoices/booking/${row.id}/pdf`}
-                              download
-                              title={`Download invoice ${row.invoiceNumber ?? row.bookingGroup?.invoiceNumber}`}
-                              className="rounded-lg p-1.5 text-neutral-500 hover:bg-green-900/30 hover:text-green-400 transition-colors"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <FileDown className="h-3.5 w-3.5" />
-                            </a>
+                            <InvoiceDownloadButton
+                              type="booking"
+                              entityId={row.id}
+                              invoiceNumber={row.invoiceNumber ?? row.bookingGroup!.invoiceNumber!}
+                            />
                           )}
                           <button
                             onClick={() => onEditBooking(row)}

@@ -250,6 +250,9 @@ export function StaffBookingModal({
   const [loadingAvail, setLoadingAvail] = useState(false);
   const [gridBookings, setGridBookings] = useState<BookingRecord[]>([]);
 
+  // Discount
+  const [discountPct, setDiscountPct] = useState(0);
+
   // Selected player
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerResult | null>(
     editBooking?.player ?? editLesson?.player ?? initialPlayer ?? null,
@@ -478,6 +481,11 @@ export function StaffBookingModal({
     return sum + price;
   }, 0);
 
+  // After-discount price shown in the modal and sent to the API
+  const courtDiscountedPrice = discountPct > 0
+    ? Math.round(courtSelectionPrice * (100 - discountPct) / 100)
+    : courtSelectionPrice;
+
   const submitCourt = async () => {
     if (!selectedPlayer || selectedSlots.length === 0) {
       setErr("Time slot and player are required");
@@ -513,6 +521,7 @@ export function StaffBookingModal({
             startTime: first.startTime,
             slotCount: selectedSlots.length,
           })),
+          ...(discountPct > 0 ? { discountPct } : {}),
         });
       } else {
         await api.post("/api/staff/bookings", {
@@ -522,6 +531,7 @@ export function StaffBookingModal({
           date: bookDate,
           startTime: first.startTime,
           slotCount: selectedSlots.length,
+          ...(discountPct > 0 ? { discountPct } : {}),
         });
       }
       onCreated();
@@ -564,6 +574,7 @@ export function StaffBookingModal({
         scheduleEntryId: selectedSessionId,
         date: bookDate,
         playerId: selectedPlayer.id,
+        ...(discountPct > 0 ? { discountPct } : {}),
       });
       onCreated();
     } catch (e) { setErr((e as Error).message); }
@@ -729,18 +740,6 @@ export function StaffBookingModal({
     return !lessonCoachId || !lessonPackageId || selectedSlots.length === 0;
   };
 
-  const emailPreview = useMemo(
-    () =>
-      previewStaffBookingEmail({
-        mode,
-        isCourtEditMode,
-        isLessonEditMode,
-        hasAdditionalCourts: additionalCourtIds.length > 0,
-        playerEmail: selectedPlayer?.email,
-      }),
-    [mode, isCourtEditMode, isLessonEditMode, additionalCourtIds.length, selectedPlayer?.email],
-  );
-
   // ─── Court booking grid (shown for court + lesson modes) ──────────────────
 
   const showGrid = mode === "lesson" || mode === "court";
@@ -882,16 +881,26 @@ export function StaffBookingModal({
                     </p>
                     {courtSelectionPrice > 0 && (() => {
                       const totalCourts = 1 + additionalCourtIds.length;
-                      const total = courtSelectionPrice * totalCourts;
+                      const total = courtDiscountedPrice * totalCourts;
+                      const original = courtSelectionPrice * totalCourts;
+                      const hasDiscount = discountPct > 0;
                       return totalCourts > 1 ? (
-                        <div className="flex items-baseline gap-1.5 pt-0.5">
-                          <span className="text-xs text-neutral-500">{fmtPrice(courtSelectionPrice)} × {totalCourts} =</span>
+                        <div className="flex items-baseline gap-1.5 pt-0.5 flex-wrap">
+                          <span className="text-xs text-neutral-500">{fmtPrice(courtDiscountedPrice)} × {totalCourts} =</span>
                           <span className="text-sm font-semibold text-purple-300">{fmtPrice(total)} VND</span>
+                          {hasDiscount && (
+                            <span className="text-[10px] text-neutral-500 line-through">{fmtPrice(original)} VND</span>
+                          )}
                         </div>
                       ) : (
-                        <p className="text-xs text-purple-400 font-medium pt-0.5">
-                          {fmtPrice(courtSelectionPrice)} VND
-                        </p>
+                        <div className="flex items-center gap-1.5 pt-0.5 flex-wrap">
+                          <p className="text-xs text-purple-400 font-medium">
+                            {fmtPrice(courtDiscountedPrice)} VND
+                          </p>
+                          {hasDiscount && (
+                            <span className="text-[10px] text-neutral-500 line-through">{fmtPrice(courtSelectionPrice)} VND</span>
+                          )}
+                        </div>
                       );
                     })()}
                   </div>
@@ -1191,44 +1200,46 @@ export function StaffBookingModal({
             </div>
           </div>
 
-          {/* Email debug — mirrors server sendBookingEmail behaviour */}
-          <div className="mx-5 mb-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2.5 text-xs">
-            <p className="font-semibold text-amber-400 mb-1.5">Email debug</p>
-            <div className="space-y-1 text-neutral-400">
-              <p>
-                <span className="text-neutral-500">On {isEditMode ? "save" : "book"}: </span>
-                <span className={emailPreview.willSend ? "text-emerald-400 font-medium" : "text-neutral-300"}>
-                  {emailPreview.willSend ? "Yes — email will be sent" : "No — no email"}
-                </span>
-              </p>
-              {emailPreview.emailType && (
-                <p>
-                  <span className="text-neutral-500">Type: </span>
-                  <span className="text-neutral-200">{emailPreview.emailType}</span>
-                  {emailPreview.subjectHint && (
-                    <span className="text-neutral-500"> · “{emailPreview.subjectHint}”</span>
-                  )}
+          {/* Discount — court + open_play modes only, not in edit */}
+          {(mode === "court" || mode === "open_play") && !isEditMode && (
+            <div className="px-5 pb-3">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm text-neutral-400">Discount</label>
+                {discountPct > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setDiscountPct(0)}
+                    className="text-[10px] text-neutral-500 hover:text-red-400 transition-colors"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {[5, 10, 15, 20].map((pct) => (
+                  <button
+                    key={pct}
+                    type="button"
+                    onClick={() => setDiscountPct(discountPct === pct ? 0 : pct)}
+                    className={cn(
+                      "flex-1 rounded-lg border py-1.5 text-xs font-semibold transition-colors",
+                      discountPct === pct
+                        ? "border-purple-500 bg-purple-600/20 text-purple-300"
+                        : "border-neutral-700 bg-neutral-800 text-neutral-400 hover:border-purple-600/50 hover:text-purple-300"
+                    )}
+                  >
+                    {pct}%
+                  </button>
+                ))}
+              </div>
+              {discountPct > 0 && courtSelectionPrice > 0 && (
+                <p className="mt-2 text-[11px] text-purple-400 font-medium">
+                  {discountPct}% off — {fmtPrice(Math.round(courtSelectionPrice * (100 - discountPct) / 100 * (1 + additionalCourtIds.length)))} VND
+                  <span className="text-neutral-500 ml-1 line-through">{fmtPrice(courtSelectionPrice * (1 + additionalCourtIds.length))} VND</span>
                 </p>
               )}
-              <p>
-                <span className="text-neutral-500">Player email: </span>
-                <span className={emailPreview.recipient ? "text-neutral-200" : "text-red-400"}>
-                  {emailPreview.recipient ?? "— no email on player"}
-                </span>
-              </p>
-              {emailPreview.recipients && emailPreview.recipients.length > 1 && (
-                <p>
-                  <span className="text-neutral-500">Recipients: </span>
-                  <span className="text-neutral-200">{emailPreview.recipients.join(", ")}</span>
-                </p>
-              )}
-              <p>
-                <span className="text-neutral-500">API: </span>
-                <span className="font-mono text-[11px] text-neutral-300">{emailPreview.apiRoute}</span>
-              </p>
-              <p className="text-neutral-500 leading-snug">{emailPreview.reason}</p>
             </div>
-          </div>
+          )}
 
           {/* CTA footer */}
           <div className="px-5 pb-5 pt-3 border-t border-neutral-800 space-y-2">
