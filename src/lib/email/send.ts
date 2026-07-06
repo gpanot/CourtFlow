@@ -4,7 +4,7 @@ import { getResendClient } from "./client";
 const FROM = "noreply_bookings@thecourtflow.com";
 
 type BookingType = "court" | "open_play" | "coach";
-type EmailType = "pending" | "approved" | "rejected" | "cancelled" | "auto_confirmed";
+type EmailType = "pending" | "approved" | "rejected" | "cancelled" | "auto_confirmed" | "staff_confirmed";
 type RecipientRole = "student" | "coach" | "staff";
 
 export interface SendBookingEmailParams {
@@ -26,6 +26,8 @@ export interface SendBookingEmailParams {
     /** ISO strings used to generate Add-to-Calendar links */
     startTimeISO?: string;
     endTimeISO?: string;
+    /** Payment link for staff-created bookings pending payment */
+    paymentUrl?: string;
   };
 }
 
@@ -225,6 +227,28 @@ function buildEmail(params: SendBookingEmailParams): { subject: string; html: st
         subject: `${refPrefix}[Auto-confirmed] ${label} confirmed via Sepay`,
         html: `<p>${greeting}</p><p>A <strong>${label}</strong> was automatically confirmed via Sepay payment.</p>${detailsBlock}${signature(details.venueName)}`,
       };
+
+    case "staff_confirmed": {
+      const payButton = details.paymentUrl
+        ? `
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;">
+  <tr>
+    <td align="center">
+      <a href="${details.paymentUrl}"
+         style="display:inline-block;background:#7c3aed;color:#fff;font-size:15px;font-weight:700;
+                padding:14px 32px;border-radius:10px;text-decoration:none;letter-spacing:0.01em;">
+        Pay now
+      </a>
+      <p style="margin-top:10px;font-size:12px;color:#6b7280;">Payment is required to confirm your spot.</p>
+    </td>
+  </tr>
+</table>`
+        : "";
+      return {
+        subject: `${refPrefix}Your ${label} is booked — payment pending`,
+        html: `<p>${greeting}</p><p>A staff member has created a <strong>${label}</strong> for you. Your spot is reserved and payment is pending.</p>${detailsBlock}${payButton}<p style="margin-top:24px;">If you have any questions, please contact the venue directly.</p>${signature(details.venueName)}`,
+      };
+    }
   }
 }
 

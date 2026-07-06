@@ -8,6 +8,7 @@ import {
   validateBookingDuration,
   GRID_GRANULARITY_MINUTES,
 } from "@/lib/booking";
+import { sendBookingEmail } from "@/lib/email/send";
 
 export const dynamic = "force-dynamic";
 
@@ -113,12 +114,36 @@ export async function POST(request: NextRequest) {
         status: "confirmed",
         priceValue: totalPrice,
         coPlayerIds: body.coPlayerIds || [],
+        paymentStatus: "pending",
       },
       include: {
         court: { select: { id: true, label: true } },
-        player: { select: { id: true, name: true, phone: true } },
+        player: { select: { id: true, name: true, phone: true, email: true } },
+        venue: { select: { name: true } },
       },
     });
+
+    // Send confirmation email with payment link (non-fatal)
+    if (booking.player.email) {
+      const appUrl = process.env.APP_URL ?? "";
+      const paymentUrl = `${appUrl}/book/pay/${booking.id}`;
+      const dateStr = booking.date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+      const timeStr = `${booking.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} – ${booking.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+      void sendBookingEmail({
+        to: booking.player.email,
+        playerName: booking.player.name,
+        bookingType: "court",
+        emailType: "staff_confirmed",
+        recipientRole: "student",
+        details: {
+          venueName: booking.venue.name,
+          date: dateStr,
+          time: timeStr,
+          amount: totalPrice,
+          paymentUrl,
+        },
+      });
+    }
 
     return json(booking, 201);
   } catch (e) {

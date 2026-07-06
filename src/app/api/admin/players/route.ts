@@ -369,6 +369,7 @@ export async function GET(request: NextRequest) {
         id: player.id,
         name: player.name,
         phone: player.phone,
+        email: player.email ?? null,
         avatar: player.avatar,
         hasFace: !!player.faceSubjectId,
         faceSubjectId: player.faceSubjectId,
