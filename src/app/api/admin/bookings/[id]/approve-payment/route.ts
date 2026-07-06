@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireAuth } from "@/lib/auth";
 import { sendBookingEmail } from "@/lib/email/send";
+import { allocateInvoiceNumber } from "@/lib/invoice-number";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,8 @@ export async function PATCH(
     }
 
     if (booking.bookingGroupId) {
+      const invoiceNumber = await allocateInvoiceNumber(booking.venueId, "BK");
+      const invoicedAt = new Date();
       // Group booking: update all courts + the group record atomically
       await prisma.$transaction(async (tx) => {
         await tx.booking.updateMany({
@@ -51,14 +54,17 @@ export async function PATCH(
         }
         await tx.bookingGroup.update({
           where: { id: booking.bookingGroupId! },
-          data: { paymentStatus: "paid" },
+          data: { paymentStatus: "paid", invoiceNumber, invoicedAt },
         });
       });
     } else {
+      const invoiceNumber = await allocateInvoiceNumber(booking.venueId, "BK");
       await prisma.booking.update({
         where: { id },
         data: {
           paymentStatus: "paid",
+          invoiceNumber,
+          invoicedAt: new Date(),
           ...(body.paymentMethod ? { paymentMethod: body.paymentMethod } : {}),
           ...(body.proofUrl !== undefined ? { paymentProofUrl: body.proofUrl } : {}),
         },

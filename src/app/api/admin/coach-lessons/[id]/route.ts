@@ -2,7 +2,8 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireAdminAccess } from "@/lib/auth";
-import { sendBookingEmail } from "@/lib/email/send";
+import { buildLessonEmailContext, sendBookingEmail, sendLessonEventEmails } from "@/lib/email/send";
+import { allocateInvoiceNumber } from "@/lib/invoice-number";
 
 export const dynamic = "force-dynamic";
 export async function PATCH(
@@ -61,6 +62,10 @@ export async function PATCH(
       data.paymentStatus = normalised;
       if (normalised === "paid" && !body.paidAt) {
         data.paidAt = new Date();
+      }
+      if (normalised === "paid" && !existing.invoiceNumber) {
+        data.invoiceNumber = await allocateInvoiceNumber(existing.venueId, "CL");
+        data.invoicedAt = new Date();
       }
       if (normalised === "pending") {
         data.paidAt = null;
@@ -125,14 +130,24 @@ export async function PATCH(
       },
     });
 
-    if (body.status === "cancelled" && lesson.player.email) {
-      await sendBookingEmail({
-        to: lesson.player.email,
-        playerName: lesson.player.name,
-        bookingType: "coach",
-        emailType: "cancelled",
-        details: {},
-      });
+    console.log(`[staffEditLesson] lessonId=${lesson.id} player="${lesson.player.name}" email=${lesson.player.email ?? "NONE"} status=${body.status ?? "unchanged"} rescheduled=${!!(body.date || body.startTime || body.endTime)}`);
+
+    if (body.status === "cancelled") {
+      // Cancellation: notify all roles
+      void (async () => {
+        const ctx = await buildLessonEmailContext(lesson.id);
+        if (ctx) {
+          await sendLessonEventEmails(ctx, "cancelled");
+        }
+      })();
+    } else if (body.date || body.startTime || body.endTime || body.coachId) {
+      // Reschedule or coach change: notify player + coach
+      void (async () => {
+        const ctx = await buildLessonEmailContext(lesson.id);
+        if (ctx) {
+          await sendLessonEventEmails(ctx, "staff_confirmed");
+        }
+      })();
     }
 
     return json(lesson);
@@ -157,19 +172,13 @@ export async function DELETE(
       data: { status: "cancelled", cancelledAt: new Date() },
     });
 
-    const player = await prisma.player.findUnique({
-      where: { id: existing.playerId },
-      select: { name: true, email: true },
-    });
-    if (player?.email) {
-      await sendBookingEmail({
-        to: player.email,
-        playerName: player.name,
-        bookingType: "coach",
-        emailType: "cancelled",
-        details: {},
-      });
-    }
+    console.log(`[staffDeleteLesson] lessonId=${id} — sending cancellation emails`);
+    void (async () => {
+      const ctx = await buildLessonEmailContext(id);
+      if (ctx) {
+        await sendLessonEventEmails(ctx, "cancelled");
+      }
+    })();
 
     return json({ success: true });
   } catch (e) {

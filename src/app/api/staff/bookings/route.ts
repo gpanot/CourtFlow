@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
       include: {
         court: { select: { id: true, label: true } },
         player: { select: { id: true, name: true, phone: true, avatar: true } },
+        bookingGroup: { select: { paymentRef: true, invoiceNumber: true } },
       },
       orderBy: { startTime: "asc" },
     });

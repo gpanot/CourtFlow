@@ -5,6 +5,7 @@ import { requireAdminAccess } from "@/lib/auth";
 import { buildLessonEmailContext, sendLessonEventEmails } from "@/lib/email/send";
 import { sendCoachLessonPushFromCtx } from "@/lib/staff-push";
 import { createCalendarEvent } from "@/lib/google-calendar";
+import { allocateInvoiceNumber } from "@/lib/invoice-number";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,7 @@ export async function PATCH(
       return error(`Cannot approve: payment status is "${lesson.paymentStatus}", expected "proof_submitted"`, 400);
     }
 
+    const invoiceNumber = await allocateInvoiceNumber(lesson.venueId, "CL");
     const updated = await prisma.coachLesson.update({
       where: { id },
       data: {
@@ -38,6 +40,8 @@ export async function PATCH(
         paidAt: new Date(),
         paymentMethod: body.paymentMethod || "bank_transfer",
         status: "confirmed",
+        invoiceNumber,
+        invoicedAt: new Date(),
       },
       include: {
         coach: {

@@ -508,6 +508,8 @@ model Booking {
   rejectionReason String?       @map("rejection_reason")
   bookingGroupId  String?       @map("booking_group_id")
   paymentMethod   String?       @map("payment_method")
+  invoiceNumber   String?       @unique @map("invoice_number")
+  invoicedAt      DateTime?     @map("invoiced_at") @db.Timestamptz(6)
   bookingGroup    BookingGroup? @relation(fields: [bookingGroupId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   court           Court         @relation(fields: [courtId], references: [id])
   player          Player        @relation(fields: [playerId], references: [id])
@@ -582,6 +584,8 @@ model CoachLesson {
   rejectedBy      String?           @map("rejected_by")
   rejectionReason String?           @map("rejection_reason")
   googleEventId   String?           @map("google_event_id")
+  invoiceNumber   String?           @unique @map("invoice_number")
+  invoicedAt      DateTime?         @map("invoiced_at") @db.Timestamptz(6)
   coach           StaffMember       @relation(fields: [coachId], references: [id])
   court           Court?            @relation(fields: [courtId], references: [id])
   package         CoachPackage      @relation(fields: [packageId], references: [id])
@@ -1188,6 +1192,8 @@ model OpenPlayRegistration {
   rejectionReason String?   @map("rejection_reason")
   expiredAt       DateTime? @map("expired_at") @db.Timestamptz(6)
   paymentMethod   String?   @map("payment_method")
+  invoiceNumber   String?   @unique @map("invoice_number")
+  invoicedAt      DateTime? @map("invoiced_at") @db.Timestamptz(6)
   player          Player    @relation(fields: [playerId], references: [id])
   venue           Venue     @relation(fields: [venueId], references: [id])
 
@@ -1402,6 +1408,8 @@ model BookingGroup {
   status          String    @default("confirmed")
   createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
   cancelledAt     DateTime? @map("cancelled_at") @db.Timestamp(6)
+  invoiceNumber   String?   @unique @map("invoice_number")
+  invoicedAt      DateTime? @map("invoiced_at") @db.Timestamptz(6)
   player          Player    @relation(fields: [playerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   venue           Venue     @relation(fields: [venueId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   bookings        Booking[]
@@ -1422,6 +1430,17 @@ model PlayerPasswordResetToken {
 
   @@index([playerId])
   @@map("player_password_reset_tokens")
+}
+
+model InvoiceSequence {
+  id      Int    @id @default(autoincrement())
+  venueId String @map("venue_id")
+  type    String
+  year    Int
+  lastSeq Int    @default(0) @map("last_seq")
+
+  @@unique([venueId, type, year])
+  @@map("invoice_sequences")
 }
 
 enum SkillLevel {

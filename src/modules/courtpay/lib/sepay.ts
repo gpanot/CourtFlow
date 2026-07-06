@@ -3,6 +3,7 @@ import { emitToVenue } from "@/lib/socket-server";
 import { sendPaymentPushToStaff, sendCoachLessonPushFromCtx } from "@/lib/staff-push";
 import { extractPaymentRef } from "./payment-reference";
 import { checkInSubscriber } from "./check-in";
+import { allocateInvoiceNumber } from "@/lib/invoice-number";
 import { getActiveSubscription } from "./subscription";
 import { sendBookingEmail, buildLessonEmailContext, sendLessonEventEmails } from "@/lib/email/send";
 import { createCalendarEvent } from "@/lib/google-calendar";
@@ -109,10 +110,11 @@ async function handlePortalBookingPayment(
     if (payload.transferAmount < group.totalPriceValue) return { matched: false };
     if (!(await checkVenueAutoPayment(group.venueId))) return { matched: false };
 
+    const groupInvoiceNumber = await allocateInvoiceNumber(group.venueId, "BK");
     await prisma.$transaction([
       prisma.bookingGroup.update({
         where: { id: group.id },
-        data: { paymentStatus: "paid", holdExpiresAt: null },
+        data: { paymentStatus: "paid", holdExpiresAt: null, invoiceNumber: groupInvoiceNumber, invoicedAt: new Date() },
       }),
       prisma.booking.updateMany({
         where: { bookingGroupId: group.id },
@@ -143,9 +145,10 @@ async function handlePortalBookingPayment(
   if (payload.transferAmount < booking.priceValue) return { matched: false };
   if (!(await checkVenueAutoPayment(booking.venueId))) return { matched: false };
 
+  const singleInvoiceNumber = await allocateInvoiceNumber(booking.venueId, "BK");
   await prisma.booking.update({
     where: { id: booking.id },
-    data: { paymentStatus: "paid" },
+    data: { paymentStatus: "paid", invoiceNumber: singleInvoiceNumber, invoicedAt: new Date() },
   });
 
   const player = await prisma.player.findUnique({
@@ -174,6 +177,7 @@ async function handlePortalLessonPayment(
   if (payload.transferAmount < lesson.priceValue) return { matched: false };
   if (!(await checkVenueAutoPayment(lesson.venueId))) return { matched: false };
 
+  const clInvoiceNumber = await allocateInvoiceNumber(lesson.venueId, "CL");
   const updated = await prisma.coachLesson.update({
     where: { id: lesson.id },
     data: {
@@ -181,6 +185,8 @@ async function handlePortalLessonPayment(
       paidAt: new Date(),
       paymentMethod: "vietqr",
       status: "confirmed",
+      invoiceNumber: clInvoiceNumber,
+      invoicedAt: new Date(),
     },
     include: {
       coach: {
@@ -232,9 +238,10 @@ async function handlePortalOpenPlayPayment(
   if (payload.transferAmount < reg.priceValue) return { matched: false };
   if (!(await checkVenueAutoPayment(reg.venueId))) return { matched: false };
 
+  const opInvoiceNumber = await allocateInvoiceNumber(reg.venueId, "OP");
   await prisma.openPlayRegistration.update({
     where: { id: reg.id },
-    data: { paymentStatus: "paid", holdExpiresAt: null },
+    data: { paymentStatus: "paid", holdExpiresAt: null, invoiceNumber: opInvoiceNumber, invoicedAt: new Date() },
   });
 
   const player = await prisma.player.findUnique({

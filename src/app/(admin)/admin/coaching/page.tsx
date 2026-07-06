@@ -678,6 +678,8 @@ interface AllLessonRow {
   paymentMethod: string | null;
   proofUrl: string | null;
   paymentNote: string | null;
+  paymentRef: string | null;
+  invoiceNumber: string | null;
   coach: { id: string; name: string; coachPhoto: string | null };
   player: { id: string; name: string; phone: string };
   court: { id: string; label: string } | null;
@@ -1046,23 +1048,33 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
                         {fmtTime(row.startTime)} – {fmtTime(row.endTime)}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <span className={cn("rounded px-2 py-0.5 text-xs font-medium", LESSON_STATUS_COLORS[row.status] ?? "bg-neutral-700 text-neutral-400")}>
-                          {row.status === "no_show" ? "No show" : row.status.charAt(0).toUpperCase() + row.status.slice(1)}
-                        </span>
+                        <div>
+                          <span className={cn("rounded px-2 py-0.5 text-xs font-medium", LESSON_STATUS_COLORS[row.status] ?? "bg-neutral-700 text-neutral-400")}>
+                            {row.status === "no_show" ? "No show" : row.status.charAt(0).toUpperCase() + row.status.slice(1)}
+                          </span>
+                          {row.paymentRef && (
+                            <p className="text-[10px] text-neutral-500 mt-0.5 font-mono">{row.paymentRef}</p>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); openPaymentModal(row); }}
-                          className="flex flex-row flex-wrap items-center gap-1 group"
-                          title="Manage payment"
-                        >
-                          <span className={cn("rounded px-2 py-0.5 text-xs font-medium group-hover:ring-1 group-hover:ring-white/20 transition-all", LESSON_PAYMENT_COLORS[row.paymentStatus] ?? "bg-neutral-700/30 text-neutral-400")}>
-                            {LESSON_PAYMENT_LABELS[row.paymentStatus] ?? "Unpaid"}
-                          </span>
-                          {isPaid && row.paymentMethod && (
-                            <PaymentMethodBadge method={row.paymentMethod} size="md" />
+                        <div>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); openPaymentModal(row); }}
+                            className="flex flex-row flex-wrap items-center gap-1 group"
+                            title="Manage payment"
+                          >
+                            <span className={cn("rounded px-2 py-0.5 text-xs font-medium group-hover:ring-1 group-hover:ring-white/20 transition-all", LESSON_PAYMENT_COLORS[row.paymentStatus] ?? "bg-neutral-700/30 text-neutral-400")}>
+                              {LESSON_PAYMENT_LABELS[row.paymentStatus] ?? "Unpaid"}
+                            </span>
+                            {isPaid && row.paymentMethod && (
+                              <PaymentMethodBadge method={row.paymentMethod} size="md" />
+                            )}
+                          </button>
+                          {row.invoiceNumber && (
+                            <p className="text-[10px] text-neutral-500 mt-0.5 font-mono">{row.invoiceNumber}</p>
                           )}
-                        </button>
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-right text-neutral-300 whitespace-nowrap">
                         {formatPrice(row.priceValue)}

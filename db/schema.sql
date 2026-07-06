@@ -594,7 +594,9 @@ CREATE TABLE public.booking_groups (
     hold_expires_at timestamp without time zone,
     status text DEFAULT 'confirmed'::text NOT NULL,
     created_at timestamp without time zone DEFAULT now() NOT NULL,
-    cancelled_at timestamp without time zone
+    cancelled_at timestamp without time zone,
+    invoice_number text,
+    invoiced_at timestamp with time zone
 );
 
 
@@ -623,7 +625,9 @@ CREATE TABLE public.bookings (
     rejected_by text,
     rejection_reason text,
     booking_group_id text,
-    payment_method text
+    payment_method text,
+    invoice_number text,
+    invoiced_at timestamp with time zone
 );
 
 
@@ -784,7 +788,9 @@ CREATE TABLE public.coach_lessons (
     rejected_at timestamp(3) without time zone,
     rejected_by text,
     rejection_reason text,
-    google_event_id text
+    google_event_id text,
+    invoice_number text,
+    invoiced_at timestamp with time zone
 );
 
 
@@ -931,6 +937,39 @@ CREATE TABLE public.face_recognition_logs (
 
 
 --
+-- Name: invoice_sequences; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.invoice_sequences (
+    id integer NOT NULL,
+    venue_id text NOT NULL,
+    type text NOT NULL,
+    year integer NOT NULL,
+    last_seq integer DEFAULT 0 NOT NULL
+);
+
+
+--
+-- Name: invoice_sequences_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.invoice_sequences_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: invoice_sequences_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.invoice_sequences_id_seq OWNED BY public.invoice_sequences.id;
+
+
+--
 -- Name: kiosk_devices; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1062,7 +1101,9 @@ CREATE TABLE public.open_play_registrations (
     rejected_by text,
     rejection_reason text,
     expired_at timestamp with time zone,
-    payment_method text
+    payment_method text,
+    invoice_number text,
+    invoiced_at timestamp with time zone
 );
 
 
@@ -2212,6 +2253,13 @@ CREATE TABLE shadow_temp.venues (
 
 
 --
+-- Name: invoice_sequences id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.invoice_sequences ALTER COLUMN id SET DEFAULT nextval('public.invoice_sequences_id_seq'::regclass);
+
+
+--
 -- Name: _prisma_migrations _prisma_migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2252,6 +2300,14 @@ ALTER TABLE ONLY public.billing_line_items
 
 
 --
+-- Name: booking_groups booking_groups_invoice_number_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.booking_groups
+    ADD CONSTRAINT booking_groups_invoice_number_key UNIQUE (invoice_number);
+
+
+--
 -- Name: booking_groups booking_groups_payment_ref_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2265,6 +2321,14 @@ ALTER TABLE ONLY public.booking_groups
 
 ALTER TABLE ONLY public.booking_groups
     ADD CONSTRAINT booking_groups_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: bookings bookings_invoice_number_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bookings
+    ADD CONSTRAINT bookings_invoice_number_key UNIQUE (invoice_number);
 
 
 --
@@ -2340,6 +2404,14 @@ ALTER TABLE ONLY public.coach_holidays
 
 
 --
+-- Name: coach_lessons coach_lessons_invoice_number_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.coach_lessons
+    ADD CONSTRAINT coach_lessons_invoice_number_key UNIQUE (invoice_number);
+
+
+--
 -- Name: coach_lessons coach_lessons_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2412,6 +2484,22 @@ ALTER TABLE ONLY public.face_recognition_logs
 
 
 --
+-- Name: invoice_sequences invoice_sequences_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.invoice_sequences
+    ADD CONSTRAINT invoice_sequences_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: invoice_sequences invoice_sequences_venue_id_type_year_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.invoice_sequences
+    ADD CONSTRAINT invoice_sequences_venue_id_type_year_key UNIQUE (venue_id, type, year);
+
+
+--
 -- Name: kiosk_devices kiosk_devices_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2457,6 +2545,14 @@ ALTER TABLE ONLY public.membership_tiers
 
 ALTER TABLE ONLY public.memberships
     ADD CONSTRAINT memberships_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: open_play_registrations open_play_registrations_invoice_number_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.open_play_registrations
+    ADD CONSTRAINT open_play_registrations_invoice_number_key UNIQUE (invoice_number);
 
 
 --
@@ -5221,4 +5317,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20260705122627'),
     ('20260705231856'),
     ('20260706010731'),
-    ('20260706055400');
+    ('20260706055400'),
+    ('20260706074030');

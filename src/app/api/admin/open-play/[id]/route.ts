@@ -4,6 +4,7 @@ import { json, error } from "@/lib/api-helpers";
 import { requireAdminAccess } from "@/lib/auth";
 import { assertVenueAccess } from "@/lib/venue-scope";
 import { sendBookingEmail } from "@/lib/email/send";
+import { allocateInvoiceNumber } from "@/lib/invoice-number";
 
 export const dynamic = "force-dynamic";
 
@@ -31,11 +32,14 @@ export async function PATCH(
       if (!allowedStatuses.includes(reg.paymentStatus)) {
         return error(`Cannot approve: payment status is "${reg.paymentStatus}"`, 400);
       }
+      const invoiceNumber = await allocateInvoiceNumber(reg.venueId, "OP");
       const updated = await prisma.openPlayRegistration.update({
         where: { id },
         data: {
           paymentStatus: "paid",
           holdExpiresAt: null,
+          invoiceNumber,
+          invoicedAt: new Date(),
           ...(body.paymentMethod ? { paymentMethod: body.paymentMethod } : {}),
         },
       });

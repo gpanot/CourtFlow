@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { useSessionStore } from "@/stores/session-store";
 import { cn } from "@/lib/cn";
+import { resolveBookingRef } from "@/lib/booking-reference";
 import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
 import {
   BookingStatusBadge,
@@ -93,6 +94,9 @@ interface BookingRecord {
   coPlayerIds: string[];
   cancelledAt: string | null;
   bookingGroupId: string | null;
+  paymentRef: string | null;
+  invoiceNumber: string | null;
+  bookingGroup?: { paymentRef: string | null; invoiceNumber?: string | null } | null;
   court: { id: string; label: string };
   player: { id: string; name: string; phone: string; avatar?: string };
 }
@@ -159,6 +163,8 @@ interface OpenPlayRegRecord {
   paymentMethod: string | null;
   paymentProofUrl: string | null;
   priceValue: number;
+  paymentRef: string | null;
+  invoiceNumber: string | null;
   player: { id: string; name: string; phone: string };
 }
 
@@ -179,6 +185,8 @@ interface CoachLessonRecord {
   paymentStatus: string;
   paymentMethod: string | null;
   proofUrl: string | null;
+  paymentRef: string | null;
+  invoiceNumber: string | null;
   coach: { id: string; name: string };
   player: { id: string; name: string; phone: string };
   court: { id: string; label: string } | null;
@@ -859,28 +867,35 @@ export default function BookingsPage() {
                       {b.player.name}
                     </a>
                     <span className="text-xs text-neutral-500">{b.player.phone}</span>
-                    <BookingStatusBadge status={b.status} />
+                    <BookingStatusBadge status={b.status} bookingRef={resolveBookingRef(b)} />
                     {b.status !== "cancelled" && (
-                      <button
-                        onClick={() => setPaymentActionTarget({
-                          type: "booking",
-                          entityId: b.id,
-                          playerName: b.player.name,
-                          playerPhone: b.player.phone,
-                          detail: b.court.label,
-                          date: b.date,
-                          startTime: b.startTime,
-                          endTime: b.endTime,
-                          priceValue: b.priceValue,
-                          paymentStatus: b.paymentStatus ?? "pending",
-                          paymentMethod: b.paymentMethod,
-                          paymentProofUrl: b.paymentProofUrl,
-                          bookingStatus: b.status,
-                        })}
-                        title="Manage payment"
-                      >
-                        <PaymentStatusBadge status={b.paymentStatus ?? "pending"} />
-                      </button>
+                      <div className="flex flex-col items-start gap-0.5">
+                        <button
+                          onClick={() => setPaymentActionTarget({
+                            type: "booking",
+                            entityId: b.id,
+                            playerName: b.player.name,
+                            playerPhone: b.player.phone,
+                            detail: b.court.label,
+                            date: b.date,
+                            startTime: b.startTime,
+                            endTime: b.endTime,
+                            priceValue: b.priceValue,
+                            paymentStatus: b.paymentStatus ?? "pending",
+                            paymentMethod: b.paymentMethod,
+                            paymentProofUrl: b.paymentProofUrl,
+                            bookingStatus: b.status,
+                          })}
+                          title="Manage payment"
+                        >
+                          <PaymentStatusBadge status={b.paymentStatus ?? "pending"} />
+                        </button>
+                        {(b.invoiceNumber ?? b.bookingGroup?.invoiceNumber) && (
+                          <span className="text-[10px] text-neutral-500 font-mono">
+                            {b.invoiceNumber ?? b.bookingGroup?.invoiceNumber}
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
                   <div className="flex items-center gap-3 mt-1 text-xs text-neutral-400">
@@ -919,28 +934,33 @@ export default function BookingsPage() {
                       {r.player.name}
                     </a>
                     <span className="text-xs text-neutral-500">{r.player.phone}</span>
-                    <BookingStatusBadge status={r.status} />
+                    <BookingStatusBadge status={r.status} bookingRef={r.paymentRef} />
                     {r.status !== "cancelled" && (
-                      <button
-                        onClick={() => setPaymentActionTarget({
-                          type: "openplay",
-                          entityId: r.id,
-                          playerName: r.player.name,
-                          playerPhone: r.player.phone,
-                          detail: "Open Play",
-                          date: r.date,
-                          startTime: r.startTime,
-                          endTime: r.endTime,
-                          priceValue: r.priceValue,
-                          paymentStatus: r.paymentStatus ?? "pending",
-                          paymentMethod: r.paymentMethod,
-                          paymentProofUrl: r.paymentProofUrl,
-                          bookingStatus: r.status,
-                        })}
-                        title="Manage payment"
-                      >
-                        <PaymentStatusBadge status={r.paymentStatus ?? "pending"} />
-                      </button>
+                      <div className="flex flex-col items-start gap-0.5">
+                        <button
+                          onClick={() => setPaymentActionTarget({
+                            type: "openplay",
+                            entityId: r.id,
+                            playerName: r.player.name,
+                            playerPhone: r.player.phone,
+                            detail: "Open Play",
+                            date: r.date,
+                            startTime: r.startTime,
+                            endTime: r.endTime,
+                            priceValue: r.priceValue,
+                            paymentStatus: r.paymentStatus ?? "pending",
+                            paymentMethod: r.paymentMethod,
+                            paymentProofUrl: r.paymentProofUrl,
+                            bookingStatus: r.status,
+                          })}
+                          title="Manage payment"
+                        >
+                          <PaymentStatusBadge status={r.paymentStatus ?? "pending"} />
+                        </button>
+                        {r.invoiceNumber && (
+                          <span className="text-[10px] text-neutral-500 font-mono">{r.invoiceNumber}</span>
+                        )}
+                      </div>
                     )}
                   </div>
                   <div className="flex items-center gap-3 mt-1 text-xs text-neutral-400">
@@ -971,12 +991,17 @@ export default function BookingsPage() {
                       {formatTime(lesson.startTime, venueTimezone)} – {formatTime(lesson.endTime, venueTimezone)}
                     </span>
                     <span className="text-xs text-neutral-500">{lessonDurationLabel(lesson.startTime, lesson.endTime)}</span>
-                    <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", LESSON_STATUS_COLORS[lesson.status])}>
-                      {lesson.status === "no_show" ? t("overview.statusNoShow") :
-                       lesson.status === "confirmed" ? t("overview.statusConfirmed") :
-                       lesson.status === "completed" ? t("overview.statusCompleted") :
-                       lesson.status}
-                    </span>
+                    <div>
+                      <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", LESSON_STATUS_COLORS[lesson.status])}>
+                        {lesson.status === "no_show" ? t("overview.statusNoShow") :
+                         lesson.status === "confirmed" ? t("overview.statusConfirmed") :
+                         lesson.status === "completed" ? t("overview.statusCompleted") :
+                         lesson.status}
+                      </span>
+                      {lesson.paymentRef && (
+                        <p className="text-[10px] text-neutral-500 mt-0.5 font-mono">{lesson.paymentRef}</p>
+                      )}
+                    </div>
                     <span className={cn(
                       "rounded-full px-2 py-0.5 text-[10px] font-medium",
                       lesson.package.lessonType === "private" ? "bg-purple-600/20 text-purple-400" : "bg-blue-600/20 text-blue-400"
@@ -984,26 +1009,31 @@ export default function BookingsPage() {
                       {lesson.package.lessonType === "private" ? t("coaching.private") : t("coaching.group")}
                     </span>
                     {lesson.status !== "cancelled" && (
-                      <button
-                        onClick={() => setPaymentActionTarget({
-                          type: "lesson",
-                          entityId: lesson.id,
-                          playerName: lesson.player.name,
-                          playerPhone: lesson.player.phone,
-                          detail: `${lesson.coach.name}${lesson.court ? ` · ${lesson.court.label}` : ""}`,
-                          date: lesson.date,
-                          startTime: lesson.startTime,
-                          endTime: lesson.endTime,
-                          priceValue: lesson.priceValue,
-                          paymentStatus: lesson.paymentStatus,
-                          paymentMethod: lesson.paymentMethod,
-                          paymentProofUrl: lesson.proofUrl,
-                          bookingStatus: lesson.status,
-                        })}
-                        title={t("overview.manageLessonPayment")}
-                      >
-                        <PaymentStatusBadge status={normalizeLessonPaymentStatus(lesson.paymentStatus)} />
-                      </button>
+                      <div className="flex flex-col items-start gap-0.5">
+                        <button
+                          onClick={() => setPaymentActionTarget({
+                            type: "lesson",
+                            entityId: lesson.id,
+                            playerName: lesson.player.name,
+                            playerPhone: lesson.player.phone,
+                            detail: `${lesson.coach.name}${lesson.court ? ` · ${lesson.court.label}` : ""}`,
+                            date: lesson.date,
+                            startTime: lesson.startTime,
+                            endTime: lesson.endTime,
+                            priceValue: lesson.priceValue,
+                            paymentStatus: lesson.paymentStatus,
+                            paymentMethod: lesson.paymentMethod,
+                            paymentProofUrl: lesson.proofUrl,
+                            bookingStatus: lesson.status,
+                          })}
+                          title={t("overview.manageLessonPayment")}
+                        >
+                          <PaymentStatusBadge status={normalizeLessonPaymentStatus(lesson.paymentStatus)} />
+                        </button>
+                        {lesson.invoiceNumber && (
+                          <span className="text-[10px] text-neutral-500 font-mono">{lesson.invoiceNumber}</span>
+                        )}
+                      </div>
                     )}
                   </div>
                   <div className="flex items-center gap-3 mt-1 text-xs text-neutral-400 flex-wrap">
@@ -1332,6 +1362,7 @@ function GeneralSettingsSection({
               <option value={240}>240 min (4h)</option>
               <option value={360}>360 min (6h)</option>
               <option value={480}>480 min (8h)</option>
+              <option value={720}>720 min (12h)</option>
             </select>
           </div>
         </div>
@@ -1389,7 +1420,7 @@ function parseCfg(settings: VenueSettings) {
     cancellationHours: (raw.cancellationHours as number) ?? 24,
     allow30MinBookings: (raw.allow30MinBookings as boolean) ?? false,
     defaultDurationMinutes: (raw.defaultDurationMinutes as number) ?? 60,
-    maxDurationMinutes: (raw.maxDurationMinutes as number) ?? 480,
+    maxDurationMinutes: (raw.maxDurationMinutes as number) ?? 720,
     allowMultiCourtBookings: (raw.allowMultiCourtBookings as boolean) ?? true,
     maxCourtsPerBooking: (raw.maxCourtsPerBooking as number) ?? 4,
   };
@@ -1955,6 +1986,9 @@ interface AllBookingRow {
   priceValue: number;
   coPlayerIds: string[];
   cancelledAt: string | null;
+  paymentRef: string | null;
+  invoiceNumber: string | null;
+  bookingGroup?: { paymentRef: string | null; invoiceNumber?: string | null } | null;
   court: { id: string; label: string };
   player: { id: string; name: string; phone: string; avatar?: string; avatarPhotoPath?: string; facePhotoPath?: string };
 }
@@ -2247,6 +2281,7 @@ function AllBookingsTab({
                 {rows.map((row) => {
                   const isPaid = row.paymentStatus === "paid" || row.paymentStatus === "PAID";
                   const isProof = row.paymentStatus === "proof_submitted";
+                  const bookingRef = resolveBookingRef(row);
                   return (
                     <tr
                       key={row.id}
@@ -2271,37 +2306,49 @@ function AllBookingsTab({
                         {fmtTime(row.startTime)} – {fmtTime(row.endTime)}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <span className={cn("rounded px-2 py-0.5 text-xs font-medium", BOOKING_STATUS_COLORS[row.status] ?? "bg-neutral-700 text-neutral-400")}>
-                          {row.status === "no_show" ? "No show" : row.status.charAt(0).toUpperCase() + row.status.slice(1)}
-                        </span>
+                        <div>
+                          <span className={cn("rounded px-2 py-0.5 text-xs font-medium", BOOKING_STATUS_COLORS[row.status] ?? "bg-neutral-700 text-neutral-400")}>
+                            {row.status === "no_show" ? "No show" : row.status.charAt(0).toUpperCase() + row.status.slice(1)}
+                          </span>
+                          {bookingRef && (
+                            <p className="text-[10px] text-neutral-500 mt-0.5 font-mono">{bookingRef}</p>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setPaymentActionTarget({
-                            type: "booking",
-                            entityId: row.id,
-                            playerName: row.player.name,
-                            playerPhone: row.player.phone,
-                            detail: row.court.label,
-                            date: row.startTime,
-                            startTime: row.startTime,
-                            endTime: row.endTime,
-                            priceValue: row.priceValue,
-                            paymentStatus: row.paymentStatus ?? "pending",
-                            paymentMethod: row.paymentMethod,
-                            paymentProofUrl: row.paymentProofUrl,
-                            bookingStatus: row.status,
-                          }); }}
-                          className="flex flex-row flex-wrap items-center gap-1 group"
-                          title="Manage payment"
-                        >
-                          <span className={cn("rounded px-2 py-0.5 text-xs font-medium group-hover:ring-1 group-hover:ring-white/20 transition-all", PAYMENT_STATUS_COLORS[row.paymentStatus ?? "pending"] ?? "bg-neutral-700/30 text-neutral-400")}>
-                            {PAYMENT_STATUS_LABELS[row.paymentStatus ?? "pending"] ?? row.paymentStatus ?? "Unpaid"}
-                          </span>
-                          {isPaid && row.paymentMethod && (
-                            <PaymentMethodBadge method={row.paymentMethod} size="md" />
+                        <div>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setPaymentActionTarget({
+                              type: "booking",
+                              entityId: row.id,
+                              playerName: row.player.name,
+                              playerPhone: row.player.phone,
+                              detail: row.court.label,
+                              date: row.startTime,
+                              startTime: row.startTime,
+                              endTime: row.endTime,
+                              priceValue: row.priceValue,
+                              paymentStatus: row.paymentStatus ?? "pending",
+                              paymentMethod: row.paymentMethod,
+                              paymentProofUrl: row.paymentProofUrl,
+                              bookingStatus: row.status,
+                            }); }}
+                            className="flex flex-row flex-wrap items-center gap-1 group"
+                            title="Manage payment"
+                          >
+                            <span className={cn("rounded px-2 py-0.5 text-xs font-medium group-hover:ring-1 group-hover:ring-white/20 transition-all", PAYMENT_STATUS_COLORS[row.paymentStatus ?? "pending"] ?? "bg-neutral-700/30 text-neutral-400")}>
+                              {PAYMENT_STATUS_LABELS[row.paymentStatus ?? "pending"] ?? row.paymentStatus ?? "Unpaid"}
+                            </span>
+                            {isPaid && row.paymentMethod && (
+                              <PaymentMethodBadge method={row.paymentMethod} size="md" />
+                            )}
+                          </button>
+                          {(row.invoiceNumber ?? row.bookingGroup?.invoiceNumber) && (
+                            <p className="text-[10px] text-neutral-500 mt-0.5 font-mono">
+                              {row.invoiceNumber ?? row.bookingGroup?.invoiceNumber}
+                            </p>
                           )}
-                        </button>
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-right text-neutral-300 whitespace-nowrap">
                         {fmtPrice(row.priceValue)}
