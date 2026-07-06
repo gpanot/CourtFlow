@@ -55,7 +55,14 @@ async function buildInvoiceNumber(venueId: string, type: InvoiceType, paidAt: Da
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAdminAccess(request.headers);
+    const cronSecret = process.env.CRON_SECRET;
+    const authHeader = request.headers.get("authorization")?.replace("Bearer ", "");
+    const querySecret = request.nextUrl.searchParams.get("secret");
+    const cronAuthorized = cronSecret && (authHeader === cronSecret || querySecret === cronSecret);
+
+    if (!cronAuthorized) {
+      await requireAdminAccess(request.headers);
+    }
 
     const log: string[] = [];
 
