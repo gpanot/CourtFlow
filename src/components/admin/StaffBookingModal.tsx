@@ -119,6 +119,8 @@ export interface EditLessonBooking {
 export interface StaffBookingModalProps {
   venueId: string;
   initialDate?: string;
+  /** Pre-select player when opening from CourtPass player profile. */
+  initialPlayer?: PlayerResult;
   /** Which tabs to show. Defaults to all three. */
   allowModes?: BookingMode[];
   /** Which tab to start on. Defaults to allowModes[0]. */
@@ -181,6 +183,7 @@ const LESSON_STATUS_LABELS: Record<string, string> = {
 export function StaffBookingModal({
   venueId,
   initialDate,
+  initialPlayer,
   allowModes = ["court", "open_play", "lesson"],
   initialMode,
   initialCourtSelection,
@@ -247,7 +250,7 @@ export function StaffBookingModal({
 
   // Selected player
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerResult | null>(
-    editBooking?.player ?? editLesson?.player ?? null,
+    editBooking?.player ?? editLesson?.player ?? initialPlayer ?? null,
   );
   const [playerSearch, setPlayerSearch] = useState("");
   const [playerResults, setPlayerResults] = useState<PlayerResult[]>([]);

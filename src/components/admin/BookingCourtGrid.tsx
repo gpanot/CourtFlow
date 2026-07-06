@@ -575,25 +575,22 @@ export function BookingCourtGrid({
                     <div
                       onClick={() => booking.status === "confirmed" && onBookingClick?.(booking)}
                       className={cn(
-                        "group absolute inset-x-1 top-1 rounded-lg border px-2 py-1.5 overflow-hidden flex flex-col justify-center transition-colors z-[5]",
+                        "group absolute inset-x-1 top-1 rounded-lg border px-2 py-1 overflow-hidden flex flex-col justify-center gap-0.5 transition-colors z-[5]",
                         booking.status === "confirmed"
                           ? "bg-purple-600/20 border-purple-500/30 cursor-pointer hover:bg-purple-600/30"
                           : "bg-neutral-800/40 border-neutral-700/30 opacity-50",
                       )}
                       style={{ height: ROW_H * bookingSlotSpan - 8 }}
                     >
-                      <p className="text-xs font-semibold text-purple-200 truncate">
+                      <p className="text-xs font-semibold text-purple-200 truncate leading-none">
                         {booking.player.name}
                       </p>
-                      <p className="text-[10px] text-purple-400/70">
+                      <p className="text-[10px] text-purple-400/70 leading-none truncate">
                         {formatTime(booking.startTime, timezone)} –{" "}
                         {formatTime(booking.endTime, timezone)}
+                        {" · "}
+                        {fmtPrice(booking.priceValue)}
                       </p>
-                      {bookingSlotSpan > 1 && (
-                        <p className="text-[10px] text-purple-400/50">
-                          {fmtPrice(booking.priceValue)}
-                        </p>
-                      )}
                     </div>
                   ) : isContinuationSlot ? null : isBlockStart && blockInfo ? (
                     <div

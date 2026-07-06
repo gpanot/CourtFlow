@@ -8,6 +8,7 @@ import { api } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
 import { PlayerAvatarThumb } from "@/components/player-avatar-thumb";
+import { StaffBookingModal } from "@/components/admin/StaffBookingModal";
 import { useSessionStore } from "@/stores/session-store";
 import {
   Search,
@@ -460,177 +461,6 @@ function CancelBookingModal({
           </button>
           <button onClick={onClose} className="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-400 hover:text-white hover:bg-neutral-800">
             {t("courtpassPlayers.keepBooking")}
-          </button>
-        </div>
-      </div>
-    </Modal>
-  );
-}
-
-// ─── New Booking Modal ────────────────────────────────────────────────────────
-
-function NewBookingModal({
-  venueId,
-  playerId,
-  courts,
-  onSuccess,
-  onClose,
-}: {
-  venueId: string;
-  playerId: string;
-  courts: VenueCourt[];
-  onSuccess: () => void;
-  onClose: () => void;
-}) {
-  const { t } = useTranslation("translation", { i18n: adminI18n });
-  const [selectedCourtIds, setSelectedCourtIds] = useState<string[]>([courts[0]?.id ?? ""]);
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
-  // startTime stored as "HH:MM" (e.g. "08:00", "08:30")
-  const [startTime, setStartTime] = useState("08:00");
-  // slotCount is now in 30-min cells
-  const [slotCount, setSlotCount] = useState(2);
-  const [notes, setNotes] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState("");
-
-  // Generate HH:MM options in 30-min steps from 06:00 to 23:30
-  const timeOptions: string[] = [];
-  for (let h = 6; h <= 23; h++) {
-    timeOptions.push(`${h.toString().padStart(2, "0")}:00`);
-    if (h < 23) timeOptions.push(`${h.toString().padStart(2, "0")}:30`);
-  }
-
-  const toggleCourt = (cid: string) => {
-    setSelectedCourtIds((prev) =>
-      prev.includes(cid) ? (prev.length > 1 ? prev.filter((c) => c !== cid) : prev) : [...prev, cid]
-    );
-  };
-
-  async function submit() {
-    setSaving(true);
-    setErr("");
-    try {
-      const d = new Date(`${date}T${startTime.padStart(5, "0")}:00+07:00`);
-      if (selectedCourtIds.length > 1) {
-        await api.post("/api/staff/bookings/batch", {
-          venueId,
-          playerId,
-          date,
-          courts: selectedCourtIds.map((cid) => ({
-            courtId: cid,
-            startTime: d.toISOString(),
-            slotCount,
-          })),
-        });
-      } else {
-        await api.post("/api/staff/bookings", {
-          courtId: selectedCourtIds[0],
-          venueId,
-          playerId,
-          date,
-          startTime: d.toISOString(),
-          slotCount,
-        });
-      }
-      onSuccess();
-      onClose();
-    } catch (e) {
-      setErr((e as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Modal open onClose={onClose} title={t("courtpassPlayers.newBookingModalTitle")}>
-      <div className="space-y-4">
-        <div>
-          <label className="mb-1 block text-xs text-neutral-400">{t("courtpassPlayers.courtLabel")}</label>
-          <div className="flex flex-wrap gap-2">
-            {courts.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => toggleCourt(c.id)}
-                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
-                  selectedCourtIds.includes(c.id)
-                    ? "border-purple-500 bg-purple-600/20 text-purple-300"
-                    : "border-neutral-700 bg-neutral-800 text-neutral-300 hover:border-neutral-600"
-                }`}
-              >
-                {c.label}
-              </button>
-            ))}
-          </div>
-          {selectedCourtIds.length > 1 && (
-            <p className="mt-1 text-[11px] text-purple-400">{selectedCourtIds.length} courts — group booking</p>
-          )}
-        </div>
-
-        <div>
-          <label className="mb-1 block text-xs text-neutral-400">{t("courtpassPlayers.dateLabel")}</label>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="mb-1 block text-xs text-neutral-400">{t("courtpassPlayers.startTimeLabel")}</label>
-            <select
-              value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
-              className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
-            >
-              {timeOptions.map((tm) => (
-                <option key={tm} value={tm}>{tm}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs text-neutral-400">{t("courtpassPlayers.durationSlots")}</label>
-            <select
-              value={slotCount}
-              onChange={(e) => setSlotCount(Number(e.target.value))}
-              className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none"
-            >
-              {[1, 2, 3, 4, 5, 6, 8].map((n) => {
-                const mins = n * 30;
-                const h = Math.floor(mins / 60);
-                const m = mins % 60;
-                const label = m === 0 ? `${h}h` : `${h}h${m}`;
-                return <option key={n} value={n}>{label}</option>;
-              })}
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <label className="mb-1 block text-xs text-neutral-400">{t("courtpassPlayers.notesLabel")}</label>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={2}
-            className="w-full rounded-lg border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none resize-none"
-          />
-        </div>
-
-        {err && <p className="rounded-lg border border-red-800/50 bg-red-900/20 px-3 py-2 text-xs text-red-300">{err}</p>}
-
-        <div className="flex gap-2 pt-1">
-          <button
-            onClick={submit}
-            disabled={saving || !selectedCourtIds[0]}
-            className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-purple-600 py-2 text-sm font-medium text-white hover:bg-purple-500 disabled:opacity-50"
-          >
-            {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            {saving ? "Booking…" : "Book court"}
-          </button>
-          <button onClick={onClose} className="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-400 hover:text-white hover:bg-neutral-800">
-            Cancel
           </button>
         </div>
       </div>
@@ -1718,12 +1548,20 @@ export default function CourtPassPlayersPage() {
         />
       )}
       {detail && showNewBooking && (
-        <NewBookingModal
+        <StaffBookingModal
           venueId={venueId}
-          playerId={detail.player.id}
-          courts={detail.venueCourts}
-          onSuccess={() => { void fetchList(); }}
+          initialMode="court"
+          initialPlayer={{
+            id: detail.player.id,
+            name: detail.player.name,
+            phone: detail.player.phone,
+          }}
           onClose={() => setShowNewBooking(false)}
+          onCreated={() => {
+            setShowNewBooking(false);
+            void fetchList();
+            if (selectedId) void fetchDetail(selectedId);
+          }}
         />
       )}
       {detail && showMembership && (
