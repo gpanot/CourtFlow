@@ -127,7 +127,7 @@ export function EditBookingModal({
   );
 }
 
-export function BookingStatusBadge({ status }: { status: string }) {
+export function BookingStatusBadge({ status, bookingRef }: { status: string; bookingRef?: string | null }) {
   const { t } = useTranslation("translation", { i18n: adminI18n });
   const label =
     status === "no_show" ? t("overview.statusNoShow") :
@@ -137,16 +137,21 @@ export function BookingStatusBadge({ status }: { status: string }) {
     status === "pending_approval" ? t("overview.statusPendingApproval") :
     status;
   return (
-    <span className={cn(
-      "inline-block rounded-full px-2 py-0.5 text-[10px] font-medium capitalize",
-      status === "confirmed" && "bg-green-600/20 text-green-400",
-      status === "cancelled" && "bg-red-600/20 text-red-400",
-      status === "completed" && "bg-blue-600/20 text-blue-400",
-      status === "no_show" && "bg-amber-600/20 text-amber-400",
-      status === "pending_approval" && "bg-yellow-600/20 text-yellow-400",
-    )}>
-      {label}
-    </span>
+    <div>
+      <span className={cn(
+        "inline-block rounded-full px-2 py-0.5 text-[10px] font-medium capitalize",
+        status === "confirmed" && "bg-green-600/20 text-green-400",
+        status === "cancelled" && "bg-red-600/20 text-red-400",
+        status === "completed" && "bg-blue-600/20 text-blue-400",
+        status === "no_show" && "bg-amber-600/20 text-amber-400",
+        status === "pending_approval" && "bg-yellow-600/20 text-yellow-400",
+      )}>
+        {label}
+      </span>
+      {bookingRef && (
+        <p className="text-[10px] text-neutral-500 mt-0.5 font-mono">{bookingRef}</p>
+      )}
+    </div>
   );
 }
 
