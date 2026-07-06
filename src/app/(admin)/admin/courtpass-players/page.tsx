@@ -45,6 +45,8 @@ import {
   GraduationCap,
   Users,
   User,
+  Trash2,
+  AlertTriangle,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -847,6 +849,8 @@ function EditPlayerModal({
   const [showPassword, setShowPassword] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+  const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0); // 0=hidden 1=first confirm 2=final confirm
+  const [deleting, setDeleting] = useState(false);
 
   const update = (field: string, value: string) =>
     setForm((f) => ({ ...f, [field]: value }));
@@ -872,6 +876,21 @@ function EditPlayerModal({
       setErr((e as Error).message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function deletePlayer() {
+    setDeleting(true);
+    setErr("");
+    try {
+      await api.delete(`/api/admin/courtpass-players/${player.id}`);
+      onSuccess();
+      onClose();
+    } catch (e) {
+      setErr((e as Error).message);
+      setDeleteStep(0);
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -940,6 +959,85 @@ function EditPlayerModal({
           <button onClick={onClose} className="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-400 hover:text-white hover:bg-neutral-800">
             {t("common.cancel")}
           </button>
+        </div>
+
+        {/* ── Delete player ── */}
+        <div className="border-t border-neutral-800 pt-3 mt-1">
+          {deleteStep === 0 && (
+            <button
+              type="button"
+              onClick={() => setDeleteStep(1)}
+              className="flex items-center gap-2 text-xs text-neutral-600 hover:text-red-400 transition-colors"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete player account
+            </button>
+          )}
+
+          {deleteStep === 1 && (
+            <div className="rounded-lg border border-red-800/50 bg-red-900/10 p-3 space-y-2">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-red-300">Delete player account?</p>
+                  <p className="text-[11px] text-neutral-400 mt-0.5">
+                    This will permanently delete <span className="font-semibold text-white">{player.name}</span>&apos;s
+                    account and all associated data (bookings, membership, lessons). This cannot be undone.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteStep(2)}
+                  className="flex-1 rounded-lg bg-red-700 py-1.5 text-xs font-semibold text-white hover:bg-red-600 transition-colors"
+                >
+                  Yes, I understand — continue
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeleteStep(0)}
+                  className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {deleteStep === 2 && (
+            <div className="rounded-lg border border-red-600 bg-red-900/20 p-3 space-y-2">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-red-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-red-300">Final confirmation</p>
+                  <p className="text-[11px] text-neutral-400 mt-0.5">
+                    Permanently delete <span className="font-semibold text-white">{player.name}</span> ({player.phone})?
+                    There is no way to recover this account.
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={deletePlayer}
+                  disabled={deleting}
+                  className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-red-600 py-1.5 text-xs font-bold text-white hover:bg-red-500 disabled:opacity-50 transition-colors"
+                >
+                  {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                  {deleting ? "Deleting…" : "Delete permanently"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDeleteStep(0)}
+                  disabled={deleting}
+                  className="rounded-lg border border-neutral-700 px-3 py-1.5 text-xs text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </Modal>

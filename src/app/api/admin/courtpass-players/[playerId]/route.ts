@@ -416,3 +416,58 @@ export async function GET(
     return error((e as Error).message, 500);
   }
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ playerId: string }> }
+) {
+  try {
+    const auth = requireStaff(request.headers);
+    if (auth.role !== "manager" && auth.role !== "superadmin") {
+      return error("Forbidden", 403);
+    }
+
+    const { playerId } = await params;
+
+    const player = await prisma.player.findUnique({ where: { id: playerId } });
+    if (!player) return notFound("Player not found");
+
+    // Delete in the correct dependency order to avoid FK violations.
+    // Many relations already have onDelete: Cascade on the FK side, so those
+    // will be cleaned up automatically when we delete the Player row. The ones
+    // below do NOT cascade and must be handled explicitly first.
+    await prisma.$transaction(async (tx) => {
+      // Coach lessons — delete (player is being fully wiped, FK is non-nullable)
+      await tx.coachLesson.deleteMany({ where: { playerId } });
+
+      // Bookings: delete individual bookings first, then booking groups
+      await tx.booking.deleteMany({ where: { playerId } });
+      await tx.bookingGroup.deleteMany({ where: { playerId } });
+
+      // Open play registrations
+      await tx.openPlayRegistration.deleteMany({ where: { playerId } });
+
+      // Membership payments → memberships
+      const memberships = await tx.membership.findMany({
+        where: { playerId },
+        select: { id: true },
+      });
+      if (memberships.length) {
+        await tx.membershipPayment.deleteMany({
+          where: { membershipId: { in: memberships.map((m) => m.id) } },
+        });
+        await tx.membership.deleteMany({ where: { playerId } });
+      }
+
+      // Program passes (payments + check-ins cascade automatically via FK)
+      await tx.programPass.deleteMany({ where: { playerId } });
+
+      // Finally delete the player (remaining cascade relations auto-delete)
+      await tx.player.delete({ where: { id: playerId } });
+    });
+
+    return json({ success: true });
+  } catch (e) {
+    return error((e as Error).message, 500);
+  }
+}
