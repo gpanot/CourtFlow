@@ -134,6 +134,8 @@ export default function VenueHomePage() {
   const [additionalCourtIds, setAdditionalCourtIds] = useState<string[]>([]);
 
   const [openPlayModal, setOpenPlayModal] = useState<OpenPlaySession | null>(null);
+  // Slot granularity toggle — default 1h, 30min shows all half-hour columns
+  const [gridView, setGridView] = useState<"1h" | "30min">("1h");
 
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [dates, setDates] = useState<Date[]>([]);
@@ -246,6 +248,107 @@ export default function VenueHomePage() {
       }
     }
     return true;
+  }
+
+  // --- 1h / 30min grid-view helpers ---
+
+  /** Returns only the slots to display as columns (all in 30min mode, :00-only in 1h mode). */
+  function getDisplayedSlots(allSlots: Slot[]): Slot[] {
+    if (gridView === "30min") return allSlots;
+    return allSlots.filter((s) => new Date(s.startTime).getMinutes() === 0);
+  }
+
+  /** Finds the :30 partner of a :00 slot in the same court's slot list. */
+  function getHalfSlot(allSlots: Slot[], hourSlot: Slot): Slot | null {
+    const idx = allSlots.findIndex((s) => s.startTime === hourSlot.startTime);
+    if (idx < 0 || idx + 1 >= allSlots.length) return null;
+    const next = allSlots[idx + 1];
+    return new Date(next.startTime).getMinutes() === 30 ? next : null;
+  }
+
+  /** In 1h mode a slot is usable only if both :00 and :30 are available. */
+  function isHourAvailable(allSlots: Slot[], hourSlot: Slot): boolean {
+    if (!hourSlot.available) return false;
+    const half = getHalfSlot(allSlots, hourSlot);
+    return half ? half.available : false;
+  }
+
+  /**
+   * Toggle a full hour in 1h-view mode.
+   * Clicking selects / deselects the :00+:30 pair as a unit.
+   */
+  function toggleHourSlot(courtId: string, hourSlot: Slot, allCourtSlots: Slot[]) {
+    const halfSlot = getHalfSlot(allCourtSlots, hourSlot);
+    const pair = halfSlot ? [hourSlot, halfSlot] : [hourSlot];
+    if (!pair.every((s) => s.available)) return;
+
+    // Clicking on a court that isn't the current primary
+    if (selectedCourtId && selectedCourtId !== courtId) {
+      // Multi-court: if the clicked hour is fully inside the current time window
+      // and the court is available for that window → add/remove as additional court.
+      if (allowMultiCourt && sortedSelected.length > 0) {
+        const winStart = sortedSelected[0].startTime;
+        const winEnd = sortedSelected[sortedSelected.length - 1].endTime;
+        const pairInWindow =
+          hourSlot.startTime >= winStart &&
+          (halfSlot?.endTime ?? hourSlot.endTime) <= winEnd;
+        if (pairInWindow && courtWindowAvailable(courtId)) {
+          if (additionalCourtIds.includes(courtId)) {
+            setAdditionalCourtIds(additionalCourtIds.filter((c) => c !== courtId));
+          } else if (1 + additionalCourtIds.length < maxCourts) {
+            setAdditionalCourtIds([...additionalCourtIds, courtId]);
+          }
+          return;
+        }
+      }
+      // Outside the window or multi-court not available → switch primary
+      setSelectedCourtId(courtId);
+      setSelectedSlots(pair);
+      setAdditionalCourtIds([]);
+      return;
+    }
+
+    const hourAlreadySel = selectedSlots.some((s) => s.startTime === hourSlot.startTime);
+
+    if (hourAlreadySel) {
+      const remaining = selectedSlots.filter(
+        (s) => !pair.some((p) => p.startTime === s.startTime)
+      );
+      if (remaining.length === 0) {
+        setSelectedCourtId(null);
+        setSelectedSlots([]);
+        setAdditionalCourtIds([]);
+      } else if (areConsecutive(remaining)) {
+        setSelectedSlots(remaining);
+      } else {
+        const sorted = [...remaining].sort(
+          (a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
+        );
+        const head: typeof sorted = [sorted[0]];
+        for (let i = 1; i < sorted.length; i++) {
+          if (new Date(sorted[i].startTime).getTime() === new Date(head[head.length - 1].endTime).getTime()) {
+            head.push(sorted[i]);
+          } else break;
+        }
+        setSelectedSlots(head);
+      }
+    } else {
+      if (!selectedCourtId) setSelectedCourtId(courtId);
+      const maxSlots = venue?.bookingConfig?.maxDurationMinutes
+        ? Math.floor(venue.bookingConfig.maxDurationMinutes / GRID_GRANULARITY_MINUTES)
+        : DEFAULT_MAX_SLOTS;
+      if (selectedSlots.length + pair.length > maxSlots) return;
+      const candidate = [...selectedSlots, ...pair];
+      if (areConsecutive(candidate)) setSelectedSlots(candidate);
+    }
+  }
+
+  function switchGridView(view: "1h" | "30min") {
+    setGridView(view);
+    // Clear any selection that may have :30-only slots to avoid broken state
+    setSelectedCourtId(null);
+    setSelectedSlots([]);
+    setAdditionalCourtIds([]);
   }
 
   function toggleSlot(courtId: string, slot: Slot) {
@@ -456,7 +559,7 @@ export default function VenueHomePage() {
                       <th className="sticky left-0 bg-[var(--cm-bg-surface)] z-10 px-3 py-2 text-left font-medium text-[var(--cm-text-sec)] min-w-[80px]">
                         {t("common.court")}
                       </th>
-                      {grid[0]?.slots.map((s) => (
+                      {getDisplayedSlots(grid[0]?.slots ?? []).map((s) => (
                         <th key={s.startTime} className="px-2 py-2 text-center font-medium text-[var(--cm-text-sec)] min-w-[48px]">
                           {formatSlotTime(s.startTime)}
                         </th>
@@ -469,9 +572,30 @@ export default function VenueHomePage() {
                         <td className="sticky left-0 bg-[var(--cm-bg)] z-10 px-3 py-2 font-medium">
                           {court.courtLabel}
                         </td>
-                        {court.slots.map((slot, slotIdx) => {
+                        {getDisplayedSlots(court.slots).map((slot) => {
                           const isSel = isSlotSelected(court.courtId, slot);
-                          const isLonely = isLonelySlot(court.slots, slotIdx);
+                          if (gridView === "1h") {
+                            const available = isHourAvailable(court.slots, slot);
+                            return (
+                              <td key={slot.startTime} className="px-1 py-1 text-center">
+                                <button
+                                  onClick={() => available && toggleHourSlot(court.courtId, slot, court.slots)}
+                                  disabled={!available}
+                                  className={`w-10 h-8 rounded-lg text-[10px] font-medium transition-colors ${
+                                    isSel
+                                      ? "bg-[var(--cm-accent)] text-black"
+                                      : !available
+                                      ? "bg-[var(--cm-bg-surface)] text-[var(--cm-text-muted)] cursor-not-allowed"
+                                      : "bg-[var(--cm-green)]/15 text-[var(--cm-green)] hover:bg-[var(--cm-green)]/25"
+                                  }`}
+                                >
+                                  {available ? formatSlotTime(slot.startTime) : "—"}
+                                </button>
+                              </td>
+                            );
+                          }
+                          // 30-min mode — original behaviour
+                          const isLonely = isLonelySlot(court.slots, court.slots.findIndex(s => s.startTime === slot.startTime));
                           const effectivelyUnavailable = !slot.available || isLonely;
                           return (
                             <td key={slot.startTime} className="px-1 py-1 text-center">
@@ -499,10 +623,36 @@ export default function VenueHomePage() {
                   </tbody>
                 </table>
               </div>
-              <div className="flex gap-4 mt-2 text-[10px] text-[var(--cm-text-muted)]">
-                <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-[var(--cm-green)]/15" /> {t("home.available")}</span>
-                <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-[var(--cm-bg-surface)]" /> {t("home.booked")}</span>
-                <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-[var(--cm-accent)]" /> {t("home.selected")}</span>
+              <div className="flex items-center justify-between mt-2">
+                <div className="flex gap-4 text-[10px] text-[var(--cm-text-muted)]">
+                  <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-[var(--cm-green)]/15" /> {t("home.available")}</span>
+                  <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-[var(--cm-bg-surface)]" /> {t("home.booked")}</span>
+                  <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-[var(--cm-accent)]" /> {t("home.selected")}</span>
+                </div>
+                <div className="flex items-center bg-[var(--cm-bg-surface)] border border-[var(--cm-border)] rounded-lg p-0.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => switchGridView("1h")}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                      gridView === "1h"
+                        ? "bg-[var(--cm-accent)] text-black shadow-sm"
+                        : "text-[var(--cm-text-sec)] hover:text-[var(--cm-text)]"
+                    }`}
+                  >
+                    1h
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => switchGridView("30min")}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors ${
+                      gridView === "30min"
+                        ? "bg-[var(--cm-accent)] text-black shadow-sm"
+                        : "text-[var(--cm-text-sec)] hover:text-[var(--cm-text)]"
+                    }`}
+                  >
+                    30m
+                  </button>
+                </div>
               </div>
               {hasSelection && (
                 <p className="text-xs text-[var(--cm-text-sec)] mt-2">
