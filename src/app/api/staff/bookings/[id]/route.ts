@@ -60,7 +60,7 @@ export async function PATCH(
       if (body.status === "cancelled") {
         const venue = await prisma.venue.findUnique({
           where: { id: existing.venueId },
-          select: { settings: true },
+          select: { settings: true, name: true },
         });
         const settings = (venue?.settings as Record<string, unknown>) ?? {};
         const policy = (settings.cancellationPolicy as {
@@ -95,12 +95,18 @@ export async function PATCH(
         });
 
         if (booking.player.email) {
+          const dateStr = booking.date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+          const timeStr = `${booking.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} – ${booking.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
           await sendBookingEmail({
             to: booking.player.email,
             playerName: booking.player.name,
             bookingType: "court",
             emailType: "cancelled",
-            details: {},
+            details: {
+              venueName: venue?.name,
+              date: dateStr,
+              time: timeStr,
+            },
           });
         }
 
@@ -181,9 +187,33 @@ export async function PATCH(
       },
       include: {
         court: { select: { id: true, label: true } },
-        player: { select: { id: true, name: true, phone: true } },
+        player: { select: { id: true, name: true, phone: true, email: true } },
+        venue: { select: { name: true } },
       },
     });
+
+    // Notify player of the rescheduled booking
+    console.log(`[staffEditBooking] bookingId=${booking.id} player="${booking.player.name}" email=${booking.player.email ?? "NONE"}`);
+    if (booking.player.email) {
+      const appUrl = process.env.APP_URL ?? "";
+      const paymentUrl = `${appUrl}/book/pay/${booking.id}`;
+      const dateStr = booking.date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+      const timeStr = `${booking.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} – ${booking.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+      console.log(`[staffEditBooking] sending reschedule email to=${booking.player.email}`);
+      void sendBookingEmail({
+        to: booking.player.email,
+        playerName: booking.player.name,
+        bookingType: "court",
+        emailType: "staff_confirmed",
+        details: {
+          venueName: booking.venue.name,
+          date: dateStr,
+          time: timeStr,
+          amount: newPrice,
+          paymentUrl,
+        },
+      });
+    }
 
     return json(booking);
   } catch (e) {

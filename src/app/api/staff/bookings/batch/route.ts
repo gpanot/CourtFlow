@@ -9,6 +9,7 @@ import {
   GRID_GRANULARITY_MINUTES,
   type MultiCourtEntry,
 } from "@/lib/booking";
+import { sendBookingEmail } from "@/lib/email/send";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
@@ -27,7 +28,7 @@ export async function POST(request: NextRequest) {
 
     const venue = await prisma.venue.findUniqueOrThrow({
       where: { id: body.venueId },
-      select: { settings: true, timezone: true },
+      select: { settings: true, timezone: true, name: true },
     });
     const venueTimezone = venue.timezone ?? "Asia/Ho_Chi_Minh";
     const config = getBookingConfig(venue.settings as Record<string, unknown>);
@@ -116,6 +117,44 @@ export async function POST(request: NextRequest) {
 
       return { group, bookings: bookingRows };
     });
+
+    // Send staff_confirmed email with payment link to the player (non-fatal)
+    const player = await prisma.player.findUnique({
+      where: { id: body.playerId },
+      select: { name: true, email: true },
+    });
+
+    console.log(
+      `[staffBatchBooking] groupId=${result.group.id} courts=${result.bookings.length} ` +
+      `player="${player?.name}" email=${player?.email ?? "NONE"} paymentStatus=pending`
+    );
+
+    if (player?.email) {
+      const appUrl = process.env.APP_URL ?? "";
+      const courtLabels = result.bookings.map((b) => b.court.label).join(", ");
+      const dateStr = result.group.date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+      const timeStr =
+        `${result.group.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} – ` +
+        `${result.group.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+      // Link to the first booking so the player can pay
+      const paymentUrl = `${appUrl}/book/pay/${result.bookings[0].id}`;
+      console.log(`[staffBatchBooking] sending email to=${player.email} courts="${courtLabels}" paymentUrl=${paymentUrl}`);
+      void sendBookingEmail({
+        to: player.email,
+        playerName: player.name,
+        bookingType: "court",
+        emailType: "staff_confirmed",
+        details: {
+          venueName: venue?.name,
+          date: dateStr,
+          time: timeStr,
+          amount: result.group.totalPriceValue,
+          paymentUrl,
+        },
+      });
+    } else {
+      console.log(`[staffBatchBooking] no email on player "${player?.name}" — skipping confirmation email`);
+    }
 
     return json(result, 201);
   } catch (e) {
