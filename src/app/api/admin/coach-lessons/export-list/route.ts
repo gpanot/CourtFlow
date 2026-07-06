@@ -30,6 +30,18 @@ function csvEscape(val: string | number | null | undefined): string {
   return s;
 }
 
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: "Cash",
+  vietqr: "QR",
+  bank_transfer: "Transfer",
+  other: "Other",
+};
+
+function fmtPaymentMethod(method: string | null): string {
+  if (!method) return "";
+  return PAYMENT_METHOD_LABELS[method] ?? method;
+}
+
 export async function GET(request: NextRequest) {
   try {
     await requireAdminAccess(request.headers);
@@ -104,7 +116,7 @@ export async function GET(request: NextRequest) {
   const header = [
     "Date", "Start", "End", "Duration (hrs)",
     "Player", "Phone", "Coach", "Package", "Type",
-    "Court", "Venue", "Status", "Payment", "Price (VND)",
+    "Court", "Venue", "Status", "Payment", "Payment Method", "Price (VND)",
   ];
 
   const rows = lessons.map((l) => [
@@ -121,6 +133,7 @@ export async function GET(request: NextRequest) {
     l.venue.name,
     l.status,
     l.paymentStatus,
+    fmtPaymentMethod(l.paymentMethod),
     l.priceValue,
   ]);
 

@@ -26,6 +26,18 @@ function csvEscape(val: string | number | null | undefined): string {
   return s;
 }
 
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: "Cash",
+  vietqr: "QR",
+  bank_transfer: "Transfer",
+  other: "Other",
+};
+
+function fmtPaymentMethod(method: string | null): string {
+  if (!method) return "";
+  return PAYMENT_METHOD_LABELS[method] ?? method;
+}
+
 export async function GET(request: NextRequest) {
   try {
     await requireAdminAccess(request.headers);
@@ -96,7 +108,7 @@ export async function GET(request: NextRequest) {
     orderBy: { startTime: "desc" },
   });
 
-  const header = ["Date", "Time", "Player", "Phone", "Court", "Venue", "Status", "Payment", "Price (VND)"];
+  const header = ["Date", "Time", "Player", "Phone", "Court", "Venue", "Status", "Payment", "Payment Method", "Price (VND)"];
   const rows = bookings.map((b) => [
     fmtDate(b.date),
     `${fmtTime(b.startTime)} – ${fmtTime(b.endTime)}`,
@@ -106,6 +118,7 @@ export async function GET(request: NextRequest) {
     b.venue.name,
     b.status,
     b.paymentStatus ?? "pending",
+    fmtPaymentMethod(b.paymentMethod),
     b.priceValue,
   ]);
 

@@ -93,7 +93,7 @@ export function DashboardPaymentCell({ kind, entry, onManage }: Props) {
         })
       }
       title={t(titleKey)}
-      className="flex flex-col items-start gap-0.5"
+      className="flex flex-row flex-wrap items-center gap-1"
     >
       <PaymentStatusBadge status={status} />
       {status === "paid" && entry.paymentMethod && (

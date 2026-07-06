@@ -8,6 +8,7 @@ import adminI18n from "@/i18n/admin-i18n";
 import { api } from "@/lib/api-client";
 import { useSessionStore } from "@/stores/session-store";
 import { cn } from "@/lib/cn";
+import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
 import { PaymentMethodBadge } from "@/components/admin/EditBookingModal";
 import { hasGroupPlayerPricing, calculateSessionPrice } from "@/lib/coach-package-pricing";
 import {
@@ -1052,7 +1053,7 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
                       <td className="px-4 py-3 whitespace-nowrap">
                         <button
                           onClick={(e) => { e.stopPropagation(); openPaymentModal(row); }}
-                          className="flex flex-col items-start gap-0.5 group"
+                          className="flex flex-row flex-wrap items-center gap-1 group"
                           title="Manage payment"
                         >
                           <span className={cn("rounded px-2 py-0.5 text-xs font-medium group-hover:ring-1 group-hover:ring-white/20 transition-all", LESSON_PAYMENT_COLORS[row.paymentStatus] ?? "bg-neutral-700/30 text-neutral-400")}>

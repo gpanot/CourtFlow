@@ -2292,7 +2292,7 @@ function AllBookingsTab({
                             paymentProofUrl: row.paymentProofUrl,
                             bookingStatus: row.status,
                           }); }}
-                          className="flex flex-col items-start gap-0.5 group"
+                          className="flex flex-row flex-wrap items-center gap-1 group"
                           title="Manage payment"
                         >
                           <span className={cn("rounded px-2 py-0.5 text-xs font-medium group-hover:ring-1 group-hover:ring-white/20 transition-all", PAYMENT_STATUS_COLORS[row.paymentStatus ?? "pending"] ?? "bg-neutral-700/30 text-neutral-400")}>
