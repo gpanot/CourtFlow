@@ -28,7 +28,7 @@ interface AnalyticsData {
     totalAvailableHours: number;
     bookingRevenue: number;
     bookingsByDate: Record<string, number>;
-    perCourt: { label: string; bookings: number; hours: number }[];
+    perCourt: { label: string; bookings: number; hours: number; availableHours: number; utilizationPct: number }[];
     peakHours: Record<number, Record<number, number>>;
     repeatBookerPct: number;
     uniqueBookers: number;
@@ -176,6 +176,31 @@ function ChartTooltip({ active, payload, label, suffix }: { active?: boolean; pa
   );
 }
 
+function CourtUtilTooltip({ active, payload }: { active?: boolean; payload?: { payload: { name: string; hours: number; availableHours: number; utilizationPct: number; bookings: number } }[] }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  return (
+    <div className="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs shadow-lg space-y-0.5">
+      <p className="font-semibold text-white">{d.name}</p>
+      <p className="text-neutral-400">{d.hours}h booked / {d.availableHours}h available</p>
+      <p className="text-neutral-400">{d.bookings} booking{d.bookings !== 1 ? "s" : ""}</p>
+      <p className={d.utilizationPct >= 70 ? "text-emerald-400" : d.utilizationPct >= 40 ? "text-amber-400" : "text-red-400"}>
+        {d.utilizationPct}% utilization
+      </p>
+    </div>
+  );
+}
+
+function CourtUtilLabel({ x, y, width, height, value }: { x?: number; y?: number; width?: number; height?: number; value?: number }) {
+  if (value === undefined || width === undefined || (width as number) < 30) return null;
+  return (
+    <text x={(x ?? 0) + (width ?? 0) + 4} y={(y ?? 0) + (height ?? 0) / 2} dominantBaseline="middle" fontSize={10}
+      fill={value >= 70 ? "#10b981" : value >= 40 ? "#f59e0b" : "#ef4444"}>
+      {value}%
+    </text>
+  );
+}
+
 export default function VenueAnalyticsPage() {
   const { t } = useTranslation("translation", { i18n: adminI18n });
   const {
@@ -316,7 +341,13 @@ export default function VenueAnalyticsPage() {
 
   const courtChartData = useMemo(() => {
     if (!data) return [];
-    return data.courtBookings.perCourt.map((c) => ({ name: c.label, hours: Math.round(c.hours * 10) / 10, bookings: c.bookings }));
+    return data.courtBookings.perCourt.map((c) => ({
+      name: c.label,
+      hours: c.hours,
+      bookings: c.bookings,
+      availableHours: c.availableHours,
+      utilizationPct: c.utilizationPct,
+    }));
   }, [data]);
 
   const tierChartData = useMemo(() => {
@@ -480,16 +511,23 @@ export default function VenueAnalyticsPage() {
               )}
               {courtChartData.length > 0 && (
                 <ChartCard title={t("venueAnalytics.hoursPerCourt")}>
-                  <ResponsiveContainer width="100%" height={200}>
+                  <ResponsiveContainer width="100%" height={Math.max(160, courtChartData.length * 44)}>
                     <BarChart data={courtChartData} layout="vertical">
                       <XAxis type="number" tick={{ fill: "#737373", fontSize: 10 }} tickLine={false} axisLine={false} />
                       <YAxis dataKey="name" type="category" tick={{ fill: "#a3a3a3", fontSize: 11 }} tickLine={false} axisLine={false} width={60} />
-                      <Tooltip content={<ChartTooltip suffix="h" />} cursor={{ fill: "rgba(99,102,241,0.08)" }} />
-                      <Bar dataKey="hours" radius={[0, 4, 4, 0]} maxBarSize={20}>
-                        {courtChartData.map((_, i) => <Cell key={i} fill="#6366f1" />)}
+                      <Tooltip content={<CourtUtilTooltip />} cursor={{ fill: "rgba(99,102,241,0.08)" }} />
+                      <Bar dataKey="hours" radius={[0, 4, 4, 0]} maxBarSize={24} label={<CourtUtilLabel />}>
+                        {courtChartData.map((c, i) => (
+                          <Cell key={i} fill={c.utilizationPct >= 70 ? "#10b981" : c.utilizationPct >= 40 ? "#f59e0b" : "#ef4444"} />
+                        ))}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
+                  <div className="flex items-center gap-4 mt-2 text-[10px] text-neutral-500">
+                    <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-emerald-500" />≥70% utilized</span>
+                    <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-amber-500" />40–69%</span>
+                    <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-sm bg-red-500" />&lt;40% under-utilized</span>
+                  </div>
                 </ChartCard>
               )}
             </div>

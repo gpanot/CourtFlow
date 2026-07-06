@@ -277,13 +277,18 @@ export async function GET(request: NextRequest) {
     }
 
     // Per-court usage
-    const perCourt: Record<string, { label: string; bookings: number; hours: number }> = {};
-    for (const c of courts) perCourt[c.id] = { label: c.label, bookings: 0, hours: 0 };
+    const perCourt: Record<string, { label: string; bookings: number; hours: number; availableHours: number; utilizationPct: number }> = {};
+    const availableHoursPerCourt = hoursPerDayPerCourt * totalDays;
+    for (const c of courts) perCourt[c.id] = { label: c.label, bookings: 0, hours: 0, availableHours: availableHoursPerCourt, utilizationPct: 0 };
     for (const b of confirmedBookings) {
       if (perCourt[b.courtId]) {
         perCourt[b.courtId].bookings++;
         perCourt[b.courtId].hours += (new Date(b.endTime).getTime() - new Date(b.startTime).getTime()) / 3600000;
       }
+    }
+    for (const c of Object.values(perCourt)) {
+      c.hours = Math.round(c.hours * 10) / 10;
+      c.utilizationPct = availableHoursPerCourt > 0 ? Math.round((c.hours / availableHoursPerCourt) * 100) : 0;
     }
 
     // Peak hours heatmap (hour -> day-of-week -> count)
