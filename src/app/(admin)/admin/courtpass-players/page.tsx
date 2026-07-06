@@ -9,6 +9,14 @@ import { cn } from "@/lib/cn";
 import { AdminVenuePicker, useAdminVenuePicker } from "@/components/admin/AdminVenuePicker";
 import { PlayerAvatarThumb } from "@/components/player-avatar-thumb";
 import { StaffBookingModal } from "@/components/admin/StaffBookingModal";
+import {
+  PaymentActionModal,
+  type PaymentActionTarget,
+} from "@/components/admin/PaymentActionModal";
+import {
+  BookingStatusBadge,
+  PaymentStatusBadge,
+} from "@/components/admin/EditBookingModal";
 import { useSessionStore } from "@/stores/session-store";
 import {
   Search,
@@ -34,6 +42,9 @@ import {
   RotateCcw,
   Eye,
   EyeOff,
+  GraduationCap,
+  Users,
+  User,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -106,6 +117,10 @@ interface PaymentRecord {
   amount: number;
   status: string;
   date: string;
+  startTime?: string;
+  endTime?: string;
+  bookingStatus?: string;
+  courtLabel?: string;
   paidAt: string | null;
   paymentMethod: string | null;
   note: string | null;
@@ -115,10 +130,15 @@ interface CoachingLesson {
   id: string;
   coachName: string;
   note: string | null;
+  date: string;
   startTime: string;
   endTime: string;
   status: string;
   paymentStatus: string;
+  priceValue: number;
+  courtLabel: string | null;
+  packageName: string;
+  lessonType: string;
 }
 
 interface StaffNote {
@@ -195,6 +215,26 @@ function fmtCurrency(val: number): string {
   if (val === 0) return "0";
   return val.toLocaleString();
 }
+
+function lessonDurationLabel(startTime: string, endTime: string): string {
+  const mins = (new Date(endTime).getTime() - new Date(startTime).getTime()) / 60000;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h > 0 ? `${h}h${m > 0 ? `${m}m` : ""}` : `${m}m`;
+}
+
+function normalizeLessonPaymentStatus(status: string): string {
+  if (status === "PAID") return "paid";
+  if (status === "UNPAID") return "pending";
+  return status;
+}
+
+const LESSON_STATUS_COLORS: Record<string, string> = {
+  confirmed: "bg-blue-600/20 text-blue-400",
+  completed: "bg-green-600/20 text-green-400",
+  cancelled: "bg-neutral-700/40 text-neutral-400",
+  no_show: "bg-amber-600/20 text-amber-400",
+};
 
 function getInitials(name: string): string {
   return name
@@ -943,6 +983,7 @@ export default function CourtPassPlayersPage() {
   const [showMembership, setShowMembership] = useState(false);
   const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [showEditPlayer, setShowEditPlayer] = useState(false);
+  const [paymentActionTarget, setPaymentActionTarget] = useState<PaymentActionTarget | null>(null);
 
   const searchRef = useRef<HTMLInputElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1458,16 +1499,65 @@ export default function CourtPassPlayersPage() {
                   {detail.payments.length === 0 ? (
                     <EmptyState message={t("courtpassPlayers.noPayments")} />
                   ) : (
-                    <div className="space-y-1.5">
+                    <div className="space-y-2">
                       {detail.payments.map((p) => (
-                        <div key={p.id} className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-800/20 px-3 py-2">
+                        <div key={p.id} className={cn(
+                          "flex items-center gap-3 rounded-xl border p-3",
+                          p.type === "booking"
+                            ? "border-neutral-800 bg-neutral-900"
+                            : "border-purple-900/30 bg-purple-900/5",
+                        )}>
                           <div className="flex-1 min-w-0">
-                            <div className="text-sm text-white truncate">{p.description}</div>
-                            <div className="text-xs text-neutral-500">{fmtDate(p.date)}</div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={cn(
+                                "text-[10px] rounded-full px-2 py-0.5 font-medium",
+                                p.type === "booking"
+                                  ? "bg-purple-600/20 text-purple-400"
+                                  : "bg-amber-600/20 text-amber-400",
+                              )}>
+                                {p.type === "booking" ? "Booking" : "Membership"}
+                              </span>
+                              <span className="font-medium text-sm text-white">{p.description}</span>
+                              {p.bookingStatus && (
+                                <BookingStatusBadge status={p.bookingStatus} />
+                              )}
+                              {p.type === "booking" && p.bookingStatus && p.bookingStatus !== "cancelled" && p.startTime ? (
+                                <button
+                                  onClick={() => setPaymentActionTarget({
+                                    type: "booking",
+                                    entityId: p.id,
+                                    playerName: detail.player.name,
+                                    playerPhone: detail.player.phone,
+                                    detail: p.courtLabel ?? p.description,
+                                    date: p.date,
+                                    startTime: p.startTime!,
+                                    endTime: p.endTime!,
+                                    priceValue: p.amount,
+                                    paymentStatus: p.status?.toLowerCase() === "unpaid" ? "pending" : (p.status?.toLowerCase() ?? "pending"),
+                                    paymentMethod: p.paymentMethod,
+                                    paymentProofUrl: null,
+                                    bookingStatus: p.bookingStatus ?? "confirmed",
+                                  })}
+                                  title="Manage payment"
+                                >
+                                  <PaymentStatusBadge status={p.status?.toLowerCase() === "unpaid" ? "pending" : (p.status?.toLowerCase() ?? "pending")} />
+                                </button>
+                              ) : (
+                                <PaymentBadge status={p.status} />
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 mt-1 text-xs text-neutral-400 flex-wrap">
+                              <span className="flex items-center gap-1"><Calendar className="h-3 w-3" />{fmtDate(p.date)}</span>
+                              {p.startTime && p.endTime && (
+                                <span className="flex items-center gap-1"><Clock className="h-3 w-3" />{fmtTime(p.startTime)} – {fmtTime(p.endTime)}</span>
+                              )}
+                              {p.paymentMethod && (
+                                <span className="capitalize">{p.paymentMethod}</span>
+                              )}
+                            </div>
                           </div>
-                          <div className="text-right ml-3 shrink-0">
-                            <div className="text-sm font-medium text-white">{fmtCurrency(p.amount)} VND</div>
-                            <PaymentBadge status={p.status} />
+                          <div className="text-right shrink-0">
+                            <div className="text-sm font-semibold text-white">{fmtCurrency(p.amount)}</div>
                           </div>
                         </div>
                       ))}
@@ -1480,16 +1570,84 @@ export default function CourtPassPlayersPage() {
                   {detail.coachingLessons.length === 0 ? (
                     <EmptyState message={t("courtpassPlayers.noCoaching")} />
                   ) : (
-                    <div className="space-y-1.5">
+                    <div className="space-y-2">
                       {detail.coachingLessons.map((l) => (
-                        <div key={l.id} className="flex items-center justify-between rounded-lg border border-neutral-800 bg-neutral-800/20 px-3 py-2">
-                          <div>
-                            <div className="text-sm text-white">{l.coachName}</div>
-                            <div className="text-xs text-neutral-500">{fmtDate(l.startTime)} · {fmtTime(l.startTime)} – {fmtTime(l.endTime)}</div>
+                        <div key={l.id} className={cn(
+                          "flex items-center gap-3 rounded-xl border p-3",
+                          l.status === "confirmed" && "border-teal-800/30 bg-teal-900/5",
+                          l.status === "no_show" && "border-amber-800/30 bg-amber-900/10",
+                          l.status === "completed" && "border-green-800/30 bg-green-900/10",
+                          l.status === "cancelled" && "border-neutral-800/50 bg-neutral-900/50 opacity-60",
+                        )}>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-[10px] rounded-full px-2 py-0.5 bg-teal-600/20 text-teal-400 font-medium">
+                                Lesson
+                              </span>
+                              <span className="font-medium text-sm">
+                                {fmtTime(l.startTime)} – {fmtTime(l.endTime)}
+                              </span>
+                              <span className="text-xs text-neutral-500">{lessonDurationLabel(l.startTime, l.endTime)}</span>
+                              <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-medium", LESSON_STATUS_COLORS[l.status])}>
+                                {l.status === "no_show" ? "No Show" :
+                                 l.status === "confirmed" ? "Confirmed" :
+                                 l.status === "completed" ? "Completed" :
+                                 l.status}
+                              </span>
+                              <span className={cn(
+                                "rounded-full px-2 py-0.5 text-[10px] font-medium",
+                                l.lessonType === "private" ? "bg-purple-600/20 text-purple-400" : "bg-blue-600/20 text-blue-400"
+                              )}>
+                                {l.lessonType === "private" ? "Private" : "Group"}
+                              </span>
+                              {l.status !== "cancelled" && (
+                                <button
+                                  onClick={() => setPaymentActionTarget({
+                                    type: "lesson",
+                                    entityId: l.id,
+                                    playerName: detail.player.name,
+                                    playerPhone: detail.player.phone,
+                                    detail: `${l.coachName}${l.courtLabel ? ` · ${l.courtLabel}` : ""}`,
+                                    date: l.date,
+                                    startTime: l.startTime,
+                                    endTime: l.endTime,
+                                    priceValue: l.priceValue,
+                                    paymentStatus: normalizeLessonPaymentStatus(l.paymentStatus),
+                                    paymentMethod: null,
+                                    paymentProofUrl: null,
+                                    bookingStatus: l.status,
+                                  })}
+                                  title="Manage payment"
+                                >
+                                  <PaymentStatusBadge status={normalizeLessonPaymentStatus(l.paymentStatus)} />
+                                </button>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 mt-1 text-xs text-neutral-400 flex-wrap">
+                              <span className="flex items-center gap-1">
+                                <GraduationCap className="h-3 w-3 text-teal-400" />
+                                {l.coachName}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <User className="h-3 w-3" />
+                                {detail.player.name}
+                              </span>
+                              {l.courtLabel && <span>{l.courtLabel}</span>}
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {fmtCurrency(l.priceValue)}
+                              </span>
+                            </div>
+                            <p className="text-xs text-neutral-500 mt-1">{l.packageName}</p>
+                            {l.note && <p className="text-xs text-neutral-500 mt-0.5 italic">{l.note}</p>}
                           </div>
-                          <span className={cn("text-[10px] font-semibold uppercase", l.status === "completed" ? "text-emerald-400" : l.status === "cancelled" ? "text-red-400" : "text-neutral-400")}>
-                            {l.status}
-                          </span>
+                          <button
+                            onClick={() => window.open(`/admin/coaching?tab=lessons&date=${l.date.slice(0, 10)}`, "_blank")}
+                            className="rounded-lg p-2 text-neutral-500 hover:bg-neutral-800 hover:text-teal-400 shrink-0"
+                            title="Edit lesson"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -1592,6 +1750,16 @@ export default function CourtPassPlayersPage() {
             if (selectedId) void fetchDetail(selectedId);
           }}
           onClose={() => setShowEditPlayer(false)}
+        />
+      )}
+      {paymentActionTarget && (
+        <PaymentActionModal
+          target={paymentActionTarget}
+          onClose={() => setPaymentActionTarget(null)}
+          onUpdated={() => {
+            setPaymentActionTarget(null);
+            if (selectedId) void fetchDetail(selectedId);
+          }}
         />
       )}
     </div>
