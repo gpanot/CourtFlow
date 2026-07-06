@@ -47,6 +47,8 @@ interface Kpis {
   subscriptionRevenue: number;
   avgRevenuePerSession: number;
   partyCount: number;
+  qrCount: number;
+  cashCount: number;
 }
 
 interface MonthRow extends Kpis {
@@ -262,7 +264,7 @@ function StatCard({
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
-  value: string;
+  value: React.ReactNode;
   sub?: string;
   color: string;
   tooltip?: string;
@@ -270,7 +272,7 @@ function StatCard({
   return (
     <div className="relative rounded-xl border border-neutral-800 bg-neutral-900 p-3 md:p-4">
       <Icon className={cn("mb-1.5 h-4 w-4 md:h-5 md:w-5", color)} />
-      <p className="text-lg font-bold tabular-nums md:text-2xl">{value}</p>
+      <div className="text-lg font-bold tabular-nums md:text-2xl">{value}</div>
       <p className="text-[11px] text-neutral-400 md:text-xs">{label}</p>
       {sub && <p className="mt-0.5 text-[10px] text-neutral-500">{sub}</p>}
       {tooltip && (
@@ -294,7 +296,7 @@ function KpiGrid({ kpis }: { kpis: Kpis }) {
     ? Math.round(kpis.totalRevenue / totalPaidParty)
     : 0;
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-7">
       <StatCard
         icon={Calendar}
         label={t("courtpayAnalytics.sessions")}
@@ -308,6 +310,24 @@ function KpiGrid({ kpis }: { kpis: Kpis }) {
         value={`${formatVND(kpis.totalRevenue)}`}
         color="text-purple-400"
         tooltip={t("courtpayAnalytics.tooltipRevenue")}
+      />
+      <StatCard
+        icon={CreditCard}
+        label={t("courtpayAnalytics.paymentMethod")}
+        value={
+          <div className="flex items-baseline gap-4">
+            <span>
+              <span>{kpis.qrCount}</span>{" "}
+              <span className="text-xs font-normal text-neutral-500">QR</span>
+            </span>
+            <span>
+              <span>{kpis.cashCount}</span>{" "}
+              <span className="text-xs font-normal text-neutral-500">Cash</span>
+            </span>
+          </div>
+        }
+        color="text-blue-400"
+        tooltip={t("courtpayAnalytics.tooltipPaymentMethod")}
       />
       <StatCard
         icon={Users}

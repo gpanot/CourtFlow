@@ -244,6 +244,18 @@ function buildEmail(params: SendBookingEmailParams): { subject: string; html: st
   </tr>
 </table>`
         : "";
+      if (recipientRole === "coach") {
+        return {
+          subject: `${refPrefix}New lesson booked — ${details.studentName ?? playerName}`,
+          html: `<p>${greeting}</p><p>A <strong>${label}</strong> has been booked for you by a staff member.</p>${detailsBlock}${calendarButtons}<p style="margin-top:20px;">The student will be notified to complete payment.</p>${signature(details.venueName)}`,
+        };
+      }
+      if (recipientRole === "staff") {
+        return {
+          subject: `${refPrefix}[New booking] ${label} created — ${details.studentName ?? playerName}`,
+          html: `<p>${greeting}</p><p>A <strong>${label}</strong> has been created by a staff member.</p>${detailsBlock}<p>The player has been notified to complete payment.</p>${signature(details.venueName)}`,
+        };
+      }
       return {
         subject: `${refPrefix}Your ${label} is booked — payment pending`,
         html: `<p>${greeting}</p><p>A staff member has created a <strong>${label}</strong> for you. Your spot is reserved and payment is pending.</p>${detailsBlock}${payButton}<p style="margin-top:24px;">If you have any questions, please contact the venue directly.</p>${signature(details.venueName)}`,

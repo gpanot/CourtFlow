@@ -1,9 +1,11 @@
 import { NextRequest } from "next/server";
+import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireAdminAccess } from "@/lib/auth";
 import { assertVenueAccess } from "@/lib/venue-scope";
 import { createOpenPlayRegistration } from "@/lib/open-play";
 import { parseDateKey } from "@/lib/date";
+import { sendBookingEmail } from "@/lib/email/send";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +38,37 @@ export async function POST(request: NextRequest) {
       body.scheduleEntryId,
       date
     );
+
+    // Send staff_confirmed notification to player with payment link (non-fatal)
+    const [player, venue] = await Promise.all([
+      prisma.player.findUnique({ where: { id: body.playerId }, select: { name: true, email: true } }),
+      prisma.venue.findUnique({ where: { id: body.venueId }, select: { name: true } }),
+    ]);
+
+    console.log(`[staffOpenPlayRegister] regId=${reg.id} player="${player?.name}" email=${player?.email ?? "NONE"}`);
+
+    if (player?.email) {
+      const appUrl = process.env.APP_URL ?? "";
+      const paymentUrl = `${appUrl}/book/open-play/pay/${reg.id}`;
+      const dateStr = reg.date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+      const timeStr = `${reg.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} – ${reg.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+      console.log(`[staffOpenPlayRegister] sending email to=${player.email} paymentUrl=${paymentUrl}`);
+      void sendBookingEmail({
+        to: player.email,
+        playerName: player.name,
+        bookingType: "open_play",
+        emailType: "staff_confirmed",
+        details: {
+          venueName: venue?.name,
+          date: dateStr,
+          time: timeStr,
+          amount: reg.priceValue,
+          paymentUrl,
+        },
+      });
+    } else {
+      console.log(`[staffOpenPlayRegister] no email on player "${player?.name}" — skipping confirmation email`);
+    }
 
     return json(reg, 201);
   } catch (e) {

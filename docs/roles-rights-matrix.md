@@ -206,7 +206,68 @@ Coach Portal APIs (`/api/admin/coach-portal/*`) use `requireStaff` but always sc
 
 ---
 
+---
+
+## Email Notifications Matrix
+
+> **Canonical reference:** [`docs/email-notifications.md`](./email-notifications.md) — full trigger list, subject lines, debugging, and source files.
+
+Last audited: 2026-07-06
+
+All transactional emails are sent via Resend using `sendBookingEmail` / `sendLessonEventEmails` from `src/lib/email/send.ts`.  
+**Non-fatal** — email errors are logged but never cause API failures.
+
+### Court Bookings
+
+| Trigger | API Route | Email type | Recipients | Notes |
+|---|---|---|---|---|
+| Staff creates single-court booking | `POST /api/staff/bookings` | `staff_confirmed` | Player | Includes "Pay now" button → `/book/pay/:id`. Skipped if player has no email. |
+| Staff creates multi-court batch | `POST /api/staff/bookings/batch` | `staff_confirmed` | Player | Pay link → first booking id. Skipped if no email. |
+| Staff reschedules booking | `PATCH /api/staff/bookings/:id` (no status) | `staff_confirmed` | Player | Sends updated details + pay link. Skipped if no email. |
+| Staff cancels booking | `PATCH /api/staff/bookings/:id` (status=cancelled) | `cancelled` | Player | Includes venue, date, time. Skipped if no email. |
+| Player submits payment proof | `POST /api/public/bookings/:id/proof` | `pending` | Player | Acknowledgement email. |
+| Admin approves payment | `POST /api/admin/bookings/:id/approve-payment` | `approved` | Player | — |
+| Admin rejects payment | `POST /api/admin/bookings/:id/reject-payment` | `rejected` | Player | Includes rejection reason. |
+| SePay auto-confirms payment | `src/modules/courtpay/lib/sepay.ts` | `auto_confirmed` | Player | Triggered by SePay webhook. |
+| Player self-cancels | `PATCH /api/public/bookings/:id` (cancel) | `cancelled` | Player | — |
+
+### Open Play Sessions
+
+| Trigger | API Route | Email type | Recipients | Notes |
+|---|---|---|---|---|
+| Staff registers player | `POST /api/admin/open-play/register` | `staff_confirmed` | Player | Pay link → `/book/open-play/pay/:id`. Skipped if no email. |
+| Player self-registers | `POST /api/public/open-play` (via public flow) | `pending` | Player | — |
+| Player submits payment proof | `POST /api/public/open-play/:id/proof` | `pending` | Player | — |
+| Admin approves payment | `POST /api/admin/open-play/:id/approve-payment` | `approved` | Player | — |
+| Admin rejects payment | `POST /api/admin/open-play/:id/reject-payment` | `rejected` | Player | — |
+| Admin cancels registration | `PATCH /api/admin/open-play/:id` (action=cancel) | `cancelled` | Player | — |
+
+### Coach Lessons
+
+| Trigger | API Route | Email type | Recipients | Notes |
+|---|---|---|---|---|
+| Staff creates lesson | `POST /api/admin/coach-lessons` | `staff_confirmed` | Player + Coach + Staff (venue email) | Uses `sendLessonEventEmails`. Coach gets a distinct "new booking" subject. |
+| Staff reschedules lesson | `PATCH /api/admin/coach-lessons/:id` (date/time/coach change) | `staff_confirmed` | Player + Coach + Staff | Fires when `date`, `startTime`, `endTime`, or `coachId` changes. |
+| Staff cancels lesson (status=cancelled) | `PATCH /api/admin/coach-lessons/:id` | `cancelled` | Player + Coach + Staff | — |
+| Staff deletes lesson | `DELETE /api/admin/coach-lessons/:id` | `cancelled` | Player + Coach + Staff | — |
+| Player submits payment proof | `POST /api/public/coach-sessions/:id/proof` | `pending` | Player | — |
+| Admin approves payment | `POST /api/admin/coach-lessons/:id/approve-payment` | `approved` | Player + Coach + Staff | — |
+| Admin rejects payment | `POST /api/admin/coach-lessons/:id/reject-payment` | `rejected` | Player + Coach + Staff | — |
+| SePay auto-confirms | `src/modules/courtpay/lib/sepay.ts` | `auto_confirmed` | Player + Coach | — |
+
+### Known gaps / not yet emailed
+
+| Scenario | Status |
+|---|---|
+| Staff marks booking as `no_show` | No email sent (intentional — player doesn't need to know) |
+| Batch booking edit / cancel | Batch edit not in UI yet. Cancellation of individual bookings in a group goes through single booking cancel (emails player). |
+| Player cancels own open play registration | `DELETE /api/public/open-play/:id` sends `cancelled` email (not sent for expired holds) |
+| Coach edits own lesson via Coach Portal | No email sent; staff creates/edits lessons. |
+
+---
+
 ## Related docs
 
+- [`docs/email-notifications.md`](./email-notifications.md) — full email notifications reference
 - [`docs/ROLES.md`](./ROLES.md) — shorter roles reference
 - [`docs/management-levels.md`](./management-levels.md) — manager vs superadmin design decisions and schema

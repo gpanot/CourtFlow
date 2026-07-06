@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
             slotDurationMinutes: 60,
             allow30MinBookings: false,
             defaultDurationMinutes: 60,
-            maxDurationMinutes: 480,
+            maxDurationMinutes: 720,
             bookingStartHour: 8,
             bookingEndHour: 22,
             defaultPriceValue: 0,

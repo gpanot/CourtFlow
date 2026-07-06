@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { json, error, parseBody } from "@/lib/api-helpers";
 import { requireAdminAccess } from "@/lib/auth";
 import { hasGroupPlayerPricing, calculateSessionPrice } from "@/lib/coach-package-pricing";
+import { buildLessonEmailContext, sendLessonEventEmails } from "@/lib/email/send";
 
 export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
@@ -231,6 +232,15 @@ export async function POST(request: NextRequest) {
         package: { select: { id: true, name: true, lessonType: true, durationMin: true } },
       },
     });
+
+    // Send staff_confirmed notification to player, coach, and venue staff (non-fatal)
+    console.log(`[staffLesson] created lessonId=${lesson.id} player="${lesson.player.name}" coach="${lesson.coach.name}"`);
+    void (async () => {
+      const ctx = await buildLessonEmailContext(lesson.id);
+      if (ctx) {
+        await sendLessonEventEmails(ctx, "staff_confirmed");
+      }
+    })();
 
     return json(lesson, 201);
   } catch (e) {

@@ -44,7 +44,7 @@ export interface BookingConfig {
   allow30MinBookings: boolean;
   /** Minimum booking duration in minutes for players. 60 (default) or 30 when allow30Min is on. */
   defaultDurationMinutes: number;
-  /** Maximum booking duration in minutes. Default 480 (8h). */
+  /** Maximum booking duration in minutes. Default 720 (12h). */
   maxDurationMinutes: number;
   /** Allow players to book multiple courts in one group booking. Default true. */
   allowMultiCourtBookings: boolean;
@@ -61,7 +61,7 @@ export const DEFAULT_BOOKING_CONFIG: BookingConfig = {
   cancellationHours: 24,
   allow30MinBookings: false,
   defaultDurationMinutes: 60,
-  maxDurationMinutes: 480,
+  maxDurationMinutes: 720,
   allowMultiCourtBookings: true,
   maxCourtsPerBooking: 4,
 };

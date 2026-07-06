@@ -248,6 +248,16 @@ export interface AggregateKpis {
   subscriptionRevenue: number;
   avgRevenuePerSession: number;
   partyCount: number;
+  qrCount: number;
+  cashCount: number;
+}
+
+function isSubscriptionPayment(p: { paymentMethod: string; type: string }): boolean {
+  return (
+    p.paymentMethod === "subscription" ||
+    p.type === "subscription" ||
+    p.type === "subscription_renewal"
+  );
 }
 
 export interface SessionCandidate {
@@ -318,13 +328,12 @@ export function computeKpis(
   const confirmed = payments.filter((p) => p.status === "confirmed");
   const totalRevenue = confirmed.reduce((s, p) => s + p.amount, 0);
   const subscriptionRevenue = confirmed
-    .filter(
-      (p) =>
-        p.paymentMethod === "subscription" ||
-        p.type === "subscription" ||
-        p.type === "subscription_renewal"
-    )
+    .filter(isSubscriptionPayment)
     .reduce((s, p) => s + p.amount, 0);
+  const cashCount = confirmed.filter((p) => p.paymentMethod === "cash").length;
+  const qrCount = confirmed.filter(
+    (p) => p.paymentMethod !== "cash" && !isSubscriptionPayment(p)
+  ).length;
   const sessionCount = sessionIds.size;
   // Count distinct players from all payments (confirmed + cancelled) in this scope
   const uniquePlayers = new Set(
@@ -345,5 +354,7 @@ export function computeKpis(
     avgRevenuePerSession:
       sessionCount > 0 ? Math.round(totalRevenue / sessionCount) : 0,
     partyCount,
+    qrCount,
+    cashCount,
   };
 }

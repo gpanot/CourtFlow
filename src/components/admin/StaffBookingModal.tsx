@@ -41,6 +41,7 @@ import {
   fmtLessonDuration,
   fmtLessonSummary,
 } from "@/lib/lesson-slot-selection";
+import { previewStaffBookingEmail } from "@/lib/staff-booking-email-preview";
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
@@ -482,6 +483,14 @@ export function StaffBookingModal({
       setErr("Time slot and player are required");
       return;
     }
+    const preview = previewStaffBookingEmail({
+      mode: "court",
+      isCourtEditMode,
+      isLessonEditMode: false,
+      hasAdditionalCourts: additionalCourtIds.length > 0,
+      playerEmail: selectedPlayer.email,
+    });
+    console.log("[StaffBookingModal] court submit — email preview:", preview);
     setSaving(true);
     setErr("");
     try {
@@ -539,6 +548,14 @@ export function StaffBookingModal({
       setErr("Session and player are required");
       return;
     }
+    const preview = previewStaffBookingEmail({
+      mode: "open_play",
+      isCourtEditMode: false,
+      isLessonEditMode: false,
+      hasAdditionalCourts: false,
+      playerEmail: selectedPlayer.email,
+    });
+    console.log("[StaffBookingModal] open play submit — email preview:", preview);
     setSaving(true);
     setErr("");
     try {
@@ -633,6 +650,14 @@ export function StaffBookingModal({
       }
     }
 
+    const preview = previewStaffBookingEmail({
+      mode: "lesson",
+      isCourtEditMode: false,
+      isLessonEditMode,
+      hasAdditionalCourts: false,
+      playerEmail: selectedPlayer.email,
+    });
+    console.log("[StaffBookingModal] lesson submit — email preview:", preview);
     setSaving(true);
     setErr("");
     try {
@@ -703,6 +728,18 @@ export function StaffBookingModal({
     if (mode === "open_play") return !selectedSessionId;
     return !lessonCoachId || !lessonPackageId || selectedSlots.length === 0;
   };
+
+  const emailPreview = useMemo(
+    () =>
+      previewStaffBookingEmail({
+        mode,
+        isCourtEditMode,
+        isLessonEditMode,
+        hasAdditionalCourts: additionalCourtIds.length > 0,
+        playerEmail: selectedPlayer?.email,
+      }),
+    [mode, isCourtEditMode, isLessonEditMode, additionalCourtIds.length, selectedPlayer?.email],
+  );
 
   // ─── Court booking grid (shown for court + lesson modes) ──────────────────
 
@@ -1151,6 +1188,45 @@ export function StaffBookingModal({
                   )}
                 </div>
               ) : null}
+            </div>
+          </div>
+
+          {/* Email debug — mirrors server sendBookingEmail behaviour */}
+          <div className="mx-5 mb-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2.5 text-xs">
+            <p className="font-semibold text-amber-400 mb-1.5">Email debug</p>
+            <div className="space-y-1 text-neutral-400">
+              <p>
+                <span className="text-neutral-500">On {isEditMode ? "save" : "book"}: </span>
+                <span className={emailPreview.willSend ? "text-emerald-400 font-medium" : "text-neutral-300"}>
+                  {emailPreview.willSend ? "Yes — email will be sent" : "No — no email"}
+                </span>
+              </p>
+              {emailPreview.emailType && (
+                <p>
+                  <span className="text-neutral-500">Type: </span>
+                  <span className="text-neutral-200">{emailPreview.emailType}</span>
+                  {emailPreview.subjectHint && (
+                    <span className="text-neutral-500"> · “{emailPreview.subjectHint}”</span>
+                  )}
+                </p>
+              )}
+              <p>
+                <span className="text-neutral-500">Player email: </span>
+                <span className={emailPreview.recipient ? "text-neutral-200" : "text-red-400"}>
+                  {emailPreview.recipient ?? "— no email on player"}
+                </span>
+              </p>
+              {emailPreview.recipients && emailPreview.recipients.length > 1 && (
+                <p>
+                  <span className="text-neutral-500">Recipients: </span>
+                  <span className="text-neutral-200">{emailPreview.recipients.join(", ")}</span>
+                </p>
+              )}
+              <p>
+                <span className="text-neutral-500">API: </span>
+                <span className="font-mono text-[11px] text-neutral-300">{emailPreview.apiRoute}</span>
+              </p>
+              <p className="text-neutral-500 leading-snug">{emailPreview.reason}</p>
             </div>
           </div>
 
