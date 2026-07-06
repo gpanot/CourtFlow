@@ -124,11 +124,13 @@ export async function POST(request: NextRequest) {
     });
 
     // Send confirmation email with payment link (non-fatal)
+    console.log(`[staffBooking] created bookingId=${booking.id} player="${booking.player.name}" email=${booking.player.email ?? "NONE"} paymentStatus=pending`);
     if (booking.player.email) {
       const appUrl = process.env.APP_URL ?? "";
       const paymentUrl = `${appUrl}/book/pay/${booking.id}`;
       const dateStr = booking.date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
       const timeStr = `${booking.startTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} – ${booking.endTime.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+      console.log(`[staffBooking] sending confirmation email to=${booking.player.email} paymentUrl=${paymentUrl}`);
       void sendBookingEmail({
         to: booking.player.email,
         playerName: booking.player.name,
@@ -143,6 +145,8 @@ export async function POST(request: NextRequest) {
           paymentUrl,
         },
       });
+    } else {
+      console.log(`[staffBooking] no email on player "${booking.player.name}" — skipping confirmation email`);
     }
 
     return json(booking, 201);
