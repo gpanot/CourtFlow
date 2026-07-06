@@ -37,6 +37,7 @@ import {
   UserPlus,
   Eye,
   EyeOff,
+  FileDown,
 } from "lucide-react";
 import { CoachProfileEditor } from "@/components/admin/CoachProfileEditor";
 import {
@@ -1079,7 +1080,21 @@ function AllLessonsTab({ venueId, initialPaymentFilter = "all" }: { venueId: str
                       <td className="px-4 py-3 text-right text-neutral-300 whitespace-nowrap">
                         {formatPrice(row.priceValue)}
                       </td>
-                      <td className="px-4 py-3 whitespace-nowrap" />
+                      <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-1 justify-end">
+                          {isPaid && row.invoiceNumber && (
+                            <a
+                              href={`/api/admin/invoices/lesson/${row.id}/pdf`}
+                              download
+                              title={`Download invoice ${row.invoiceNumber}`}
+                              className="rounded-lg p-1.5 text-neutral-500 hover:bg-green-900/30 hover:text-green-400 transition-colors"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <FileDown className="h-3.5 w-3.5" />
+                            </a>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
