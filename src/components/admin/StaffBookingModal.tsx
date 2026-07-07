@@ -261,6 +261,7 @@ export function StaffBookingModal({
   const [playerResults, setPlayerResults] = useState<PlayerResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [showNewPlayerModal, setShowNewPlayerModal] = useState(false);
+  const [playerCreatedInSession, setPlayerCreatedInSession] = useState(false);
 
   // Grid granularity toggle — uses the same localStorage key as VenueDayPlanner
   // (viewModeStorageKey="bookings-view-mode" → key = "bookings-view-mode-granularity")
@@ -463,6 +464,7 @@ export function StaffBookingModal({
     setSelectedPlayer(null);
     setPlayerSearch("");
     setPlayerResults([]);
+    setPlayerCreatedInSession(false);
     setSelectedSlots([]);
     setSelectedCourtId("");
     setSelectedSessionId("");
@@ -486,6 +488,23 @@ export function StaffBookingModal({
     ? Math.round(courtSelectionPrice * (100 - discountPct) / 100)
     : courtSelectionPrice;
 
+  const courtOriginalTotal = courtSelectionPrice * (1 + additionalCourtIds.length);
+  const courtFinalTotal = discountPct > 0
+    ? Math.round(courtOriginalTotal * (100 - discountPct) / 100)
+    : courtOriginalTotal;
+
+  const selectedOpenPlaySession = openPlaySessions.find((s) => s.entryId === selectedSessionId);
+  const openPlayOriginalPrice = selectedOpenPlaySession?.priceValue ?? 0;
+  const openPlayFinalPrice = discountPct > 0
+    ? Math.round(openPlayOriginalPrice * (100 - discountPct) / 100)
+    : openPlayOriginalPrice;
+
+  const emailPreviewBase = () => ({
+    playerEmail: selectedPlayer?.email,
+    isNewPlayerCreated: playerCreatedInSession,
+    discountPct: discountPct > 0 ? discountPct : null,
+  });
+
   const submitCourt = async () => {
     if (!selectedPlayer || selectedSlots.length === 0) {
       setErr("Time slot and player are required");
@@ -496,7 +515,9 @@ export function StaffBookingModal({
       isCourtEditMode,
       isLessonEditMode: false,
       hasAdditionalCourts: additionalCourtIds.length > 0,
-      playerEmail: selectedPlayer.email,
+      ...emailPreviewBase(),
+      originalPrice: courtOriginalTotal,
+      finalPrice: courtFinalTotal,
     });
     console.log("[StaffBookingModal] court submit — email preview:", preview);
     setSaving(true);
@@ -563,7 +584,9 @@ export function StaffBookingModal({
       isCourtEditMode: false,
       isLessonEditMode: false,
       hasAdditionalCourts: false,
-      playerEmail: selectedPlayer.email,
+      ...emailPreviewBase(),
+      originalPrice: openPlayOriginalPrice,
+      finalPrice: openPlayFinalPrice,
     });
     console.log("[StaffBookingModal] open play submit — email preview:", preview);
     setSaving(true);
@@ -666,7 +689,9 @@ export function StaffBookingModal({
       isCourtEditMode: false,
       isLessonEditMode,
       hasAdditionalCourts: false,
-      playerEmail: selectedPlayer.email,
+      ...emailPreviewBase(),
+      originalPrice: selectedPkg?.priceValue ?? null,
+      finalPrice: selectedPkg?.priceValue ?? null,
     });
     console.log("[StaffBookingModal] lesson submit — email preview:", preview);
     setSaving(true);
@@ -1157,7 +1182,7 @@ export function StaffBookingModal({
                   </div>
                   {!isEditMode && (
                     <button
-                      onClick={() => { setSelectedPlayer(null); setPlayerSearch(""); }}
+                      onClick={() => { setSelectedPlayer(null); setPlayerSearch(""); setPlayerCreatedInSession(false); }}
                       className="text-neutral-400 hover:text-white shrink-0"
                     >
                       <X className="h-4 w-4" />
@@ -1182,7 +1207,7 @@ export function StaffBookingModal({
                       {playerResults.map((p) => (
                         <button
                           key={p.id}
-                          onClick={() => { setSelectedPlayer(p); setPlayerSearch(""); setPlayerResults([]); }}
+                          onClick={() => { setSelectedPlayer(p); setPlayerSearch(""); setPlayerResults([]); setPlayerCreatedInSession(false); }}
                           className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-neutral-700"
                         >
                           <User className="h-3.5 w-3.5 text-neutral-500 shrink-0" />
@@ -1419,6 +1444,7 @@ export function StaffBookingModal({
           <NewPlayerModal
             onSuccess={(p) => {
               setSelectedPlayer(p);
+              setPlayerCreatedInSession(true);
               setPlayerSearch("");
               setPlayerResults([]);
               setShowNewPlayerModal(false);
@@ -1469,7 +1495,7 @@ function NewPlayerModal({
         gender: form.gender,
         skillLevel: form.skillLevel,
       });
-      onSuccess({ id: player.id, name: player.name, phone: player.phone });
+      onSuccess({ id: player.id, name: player.name, phone: player.phone, email: form.email.trim().toLowerCase() });
     } catch (e) {
       setErr((e as Error).message);
     } finally {

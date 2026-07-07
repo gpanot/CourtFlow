@@ -151,7 +151,7 @@ export async function POST(request: NextRequest) {
           venueName: booking.venue.name,
           date: dateStr,
           time: timeStr,
-          amount: totalPrice,
+          amount: finalPrice,
           paymentUrl,
         },
       });
